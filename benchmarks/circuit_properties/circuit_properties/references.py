@@ -10,8 +10,8 @@ products.
   `AttnDotStep`s, activation by activation, and are not counted.
 
 `configs` are the served workloads' configurations (b1's `B0_CONFIG`, `B1_CONFIG`, `SMOL360_CONFIG`) and two shapes with
-no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's shapes, which are benchmarks/rho's
-(its `data/models.toml`, read through `rho.instances`, imported by path).
+no served workload, b1's Definitions bound at Qwen2.5-7B's and Llama-3.1-405B's shapes, which are benchmarks/slowdown's
+(its `data/models.toml`, read through `slowdown.instances`, imported by path).
 """
 
 from __future__ import annotations
@@ -37,19 +37,19 @@ def boolean_gemm(K: int, N: int) -> Program:
     return Program(bind(BG.Gemm, K=K, N=N, **BG.GEMM_AMPERE), registered=("w",), theta=("w",))
 
 
-def rho_models() -> dict:
-    """benchmarks/rho's models by name (`rho.instances.models`). Its directory goes last on the path: it holds a `run.py`
+def slowdown_models() -> dict:
+    """benchmarks/slowdown's models by name (`slowdown.instances.models`). Its directory goes last on the path: it holds a `run.py`
     and a `tests`, as this package's does, and must shadow neither."""
-    rho = str(Path(__file__).resolve().parents[2] / "rho")
-    if rho not in sys.path:
-        sys.path.append(rho)
-    from rho import instances
+    calculator = str(Path(__file__).resolve().parents[2] / "slowdown")
+    if calculator not in sys.path:
+        sys.path.append(calculator)
+    from slowdown import instances
     return instances.models()
 
 
 def shape(model) -> dict:
-    """A rho model's shape in b1's configuration keys: a dense model with grouped-query attention and a SwiGLU MLP."""
-    from rho import instances
+    """The shape of one of the slowdown calculator's models in b1's configuration keys: a dense model with grouped-query attention and a SwiGLU MLP."""
+    from slowdown import instances
     a = model.attention
     if a.get("kind") != "gqa" or set(model.matrices) != {"attention", "dense", "head"}:
         raise ValueError(f"{model.name}: b1's layer is a dense one with grouped-query attention")
@@ -62,7 +62,7 @@ def shape(model) -> dict:
 def configs() -> dict[str, tuple[dict, str]]:
     """name -> (b1 configuration, where its shape comes from)."""
     from verity.definitions.registry import b1
-    models = rho_models()
+    models = slowdown_models()
     qwen7 = b1.B1_CONFIG | shape(models["qwen25-7b"]) | {"model": "Qwen/Qwen2.5-7B"}
     llama = b1.B1_CONFIG | shape(models["llama3-405b"]) | {"model": "meta-llama/Llama-3.1-405B", "EPS": 1e-5,
                                                             "BIAS": False}
@@ -70,8 +70,8 @@ def configs() -> dict[str, tuple[dict, str]]:
         "smollm2-135m": (b1.B0_CONFIG, "served: b1.B0_CONFIG"),
         "smollm2-360m": (b1.SMOL360_CONFIG, "served: b1.SMOL360_CONFIG"),
         "qwen25-1b5": (b1.B1_CONFIG, "served: b1.B1_CONFIG"),
-        "qwen25-7b": (qwen7, "constructed: b1's layer Definitions at Qwen2.5-7B's shapes, rho's models.toml (no served workload)"),
-        "llama3-405b": (llama, "constructed: b1's layer Definitions at Llama-3.1-405B's shapes, rho's models.toml (no served workload)"),
+        "qwen25-7b": (qwen7, "constructed: b1's layer Definitions at Qwen2.5-7B's shapes, the slowdown calculator's models.toml (no served workload)"),
+        "llama3-405b": (llama, "constructed: b1's layer Definitions at Llama-3.1-405B's shapes, the slowdown calculator's models.toml (no served workload)"),
     }
 
 

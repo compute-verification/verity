@@ -4,7 +4,7 @@
     node_parameters(phi, wrapper, *, M, pos0 | LP, T) -> NodeParameters      its parameters alone, no forward built
 
 A rank's Program (`build.build_program`) takes the other ranks' partials as Inputs, world - 1 `peers_<k>` per collective, so an
-isolation block over it reads them as novel: 3.1·10¹⁰ bits a GLM-5.3 B1 rank. The node's Program has no
+inference block over it reads them as novel: 3.1·10¹⁰ bits a GLM-5.3 B1 rank. The node's Program has no
 peer Input. It runs the world's rank forwards, each the one its rank's Program runs (`build.decoder`, `common.drive`), into one
 Builder, one rank at a time in rank order, each up to its next collective. Collective k of every rank then reads every rank's own
 rows at k, in rank order, as `tp_links.json`'s `binding` states the rank's peer Inputs. Joined call by call, the ranks' Programs
@@ -16,7 +16,7 @@ weights record
 rank's samples, rank-major: each rank samples from the same gathered logits and feeds its own sample to its next forward.
 
 The body is one Definition (`NodeResult.node_fn`), and the Program's function (`Node`, bound to it) calls it once, so the root is
-the parameters' input nodes and one Call. `NciCheck.Desc` summarizes a Definition once and keeps a root node's reads as pieces of
+the parameters' input nodes and one Call. `InferenceOnlyCheck.Desc` summarizes a Definition once and keeps a root node's reads as pieces of
 gates, so it reads the node through that Call; a root holding the body's ~10⁷ nodes itself would be ~10¹⁰ pieces on GLM-5.3 B1.
 `NodeResult.spans` says which rank emitted each run of the body's nodes.
 """

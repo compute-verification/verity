@@ -15,6 +15,6 @@ untraced = ["tests/test_mains.py"]
 # and what whole_run.py imports: sampled proofs' difftest module, with the reference verifier and the circuits under it,
 # and the difftest harness's Python (`verity_difftest`) it speaks to the Lean through.
 inputs = ["verity/protocols/proofs/flock/verifier/lakefile.toml",
-          "verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml",
+          "verity/protocols/policy/inference_only/verifier/lean/lakefile.toml",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml",
           "verity", "tools/difftest/python/verity_difftest"]

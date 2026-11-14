@@ -1177,7 +1177,7 @@ path = "../../pouw/window"
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Proofs.Properties.Pouw",
-  "Properties.Nci", "Proofs.Properties.Nci"]
+  "Properties.InferenceOnly", "Proofs.Properties.InferenceOnly"]
 '''
 
 
@@ -1196,21 +1196,21 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     def req(n):
         return f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
-    tail = '"Proofs.Properties.Nci"]'
-    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]')
+    tail = '"Proofs.Properties.InferenceOnly"]'
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]')
     theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
-        tail, '"Proofs.Properties.Nci", "Properties.Network"]')
+        tail, '"Proofs.Properties.InferenceOnly", "Properties.Network"]')
     text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
     assert left == 0, text
     doc = tomllib.loads(text)
     assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
-    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.Nci",
-                                           "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"]
+    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.InferenceOnly",
+                                           "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"]
     assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())
     gone = LAKEFILE.replace(', "Proofs.Properties.Pouw"', "")
-    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]'), theirs)
+    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]'), theirs)
     assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
-        "Properties.Pouw", "Properties.Nci", "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"], text
+        "Properties.Pouw", "Properties.InferenceOnly", "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"], text
     def comment(s):
         return LAKEFILE.replace("the code's properties.", s)
     text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
@@ -1809,7 +1809,7 @@ _uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parent 
 U = importlib.util.module_from_spec(_uspec)
 _uspec.loader.exec_module(U)
 UNREAD = f"{M.DIR}/{M.UNREAD_CAPS}"
-FL, PW, NCI, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/Nci", "Proofs/Hash"
+FL, PW, INFERENCE_ONLY, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/InferenceOnly", "Proofs/Hash"
 
 
 def unread(**areas: tuple[int, int]) -> str:
@@ -1866,21 +1866,21 @@ def test_an_unread_area_one_side_adds_or_drops_and_a_count_below_zero(tmp_path):
     """An area the base lacks counts 0 there: one side adds is that side's, and one both add holds both. An area a side
     lacks counts 0 on that side: one the lock run dropped (its modules all read) while the other side raised it keeps only
     that raise. No count goes below 0, and an area left with no modules is dropped, as `ratchet` drops it."""
-    base = unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
-                   unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4))) == (
-        0, unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
-                   unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(1, 3))) == (
-        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(3, 12)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(2, 7))) == (
-        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 3)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))) == (
+    base = unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(274, 2310), Proofs_InferenceOnly=(1, 4))) == (
+        0, unread(Proofs_Flock=(274, 2310), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(1, 3))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(3, 12)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(2, 7))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 3)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4))) == (
         0, unread(Proofs_Flock=(273, 2309)))
-    assert _unread(tmp_path, unread(Proofs_Nci=(3, 10)), unread(Proofs_Nci=(2, 2)), unread(Proofs_Nci=(3, 3))) == (
-        0, unread(Proofs_Nci=(2, 0)))
-    assert _unread(tmp_path, unread(Proofs_Nci=(2, 5)), unread(), unread(Proofs_Nci=(1, 2))) == (0, unread())
-    assert _unread(tmp_path, "", unread(Proofs_Nci=(1, 2)), unread(Proofs_Nci=(2, 3))) == (0, unread(Proofs_Nci=(3, 5)))
+    assert _unread(tmp_path, unread(Proofs_InferenceOnly=(3, 10)), unread(Proofs_InferenceOnly=(2, 2)), unread(Proofs_InferenceOnly=(3, 3))) == (
+        0, unread(Proofs_InferenceOnly=(2, 0)))
+    assert _unread(tmp_path, unread(Proofs_InferenceOnly=(2, 5)), unread(), unread(Proofs_InferenceOnly=(1, 2))) == (0, unread())
+    assert _unread(tmp_path, "", unread(Proofs_InferenceOnly=(1, 2)), unread(Proofs_InferenceOnly=(2, 3))) == (0, unread(Proofs_InferenceOnly=(3, 5)))
 
 
 def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict(tmp_path, capsys):

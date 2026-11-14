@@ -1,8 +1,8 @@
 """Every number the Notion page "The compute dampener: claims, model and tiers" quotes from ``tiers.py``, ``exposure.py``,
 ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
-cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``rho.theorem.multiple_bound`` in Lean's
-form (``Nci.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
+cheating share. D is the slowdown calculator's hardware multiple at MFU_0, ``slowdown.theorem.multiple_bound`` in Lean's
+form (``InferenceOnly.Slowdown.remoteSlowdown``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
 the reference-efficiency assumption; every scenario is a set of overrides on
 ``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
 closed-form memory cap, which the page's memory rungs cite.
@@ -24,13 +24,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "slowdown"))
 
 import exposure as X  # noqa: E402
 import fit as F  # noqa: E402
 import kappa as K  # noqa: E402
 import tiers as T  # noqa: E402
-from rho.theorem import multiple_bound  # noqa: E402
+from slowdown.theorem import multiple_bound  # noqa: E402
 
 MB = 8e6
 TODAY = {"residual": 1.0}
@@ -219,7 +219,7 @@ def symbols() -> list[dict]:
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
         ("ε′", "aggregation slack (δ_win / ε′: 2.7e-8 if δ_win were 3·2^-40, which has no value yet)", p["eps_agg"]),
-        ("r = r̂ + ε_W W_cert/C + ε′", "the residual DampenerRemote bounds, under the floor credit",
+        ("r = r̂ + ε_W W_cert/C + ε′", "the residual SlowdownRemote bounds, under the floor credit",
          T.residual_share(p)),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
@@ -485,7 +485,7 @@ def render(s: dict) -> str:
     dirty = " (with uncommitted changes in benchmarks/nci)" if s["uncommitted"] else ""
     out = ["# The compute dampener: the page's numbers", "",
            f"Rendered by `benchmarks/nci/statement.py` at commit `{s['commit']}`{dirty}. D is "
-           "`rho.theorem.multiple_bound` in Lean's form (`remoteDampener`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
+           "`slowdown.theorem.multiple_bound` in Lean's form (`remoteSlowdown`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
            "terms, the residual training at MFU_0 (the reference-efficiency assumption), the hardware multiple at MFU_0 = "
            f"{num(T.DEFAULTS['mfu'])}; every case is a set of overrides on `tiers.DEFAULTS`. D by the fit bound "
            "(`fit_dampener`) puts the fit bound at central w_e in place of the closed-form memory cap.", "",

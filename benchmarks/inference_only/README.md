@@ -2,7 +2,7 @@
 
 One command prints the inference-only policy of Llama 3.2 1B as served, and one number for it: the least slowdown of
 training run inside the policy's inference blocks, under the min-cut bound
-(`benchmarks/rho/rho/min_cut.py`, whose `HE` names its Lean statement).
+(`benchmarks/slowdown/slowdown/min_cut.py`, whose `HE` names its Lean statement).
 
 ~~~sh
 uv run verity bench inference_only --stated-only     # the served policy and its number, from its stated numbers alone
@@ -88,8 +88,8 @@ serves it and this tree builds no circuit of it. Its number with every word tied
   many a block of a phase, over the phases the period has. They enter the count over the period
   (`min_cut.bound_charged`) under three readings, each printed under its name (`Charged.reading`): one `β_x` with the
   threshold at which the figure is largest, one `β_x` at the top budget with no block charged, and a `β_x` a block.
-- **The uncredited share** `s`: a developer gets that share of a block's work whole, so each number `ρ` is printed
-  with its limit at `s`, `1 / (s + 1/ρ)` (`min_cut.capped`), and the pooled total in gates is at that limit. The
+- **The uncredited share** `s`: a developer gets that share of a block's work whole, so each number `slowdown` is printed
+  with its limit at `s`, `1 / (s + 1/slowdown)` (`min_cut.capped`), and the pooled total in gates is at that limit. The
   words that work computes are tied by nothing either: a fourth reading counts them as fresh input, `k + 32 u` with
   `u` the most words the share's MACs feed (a word of a linear's output is fed by at least the least fan-in of the
   model's linears).
@@ -99,7 +99,7 @@ compute: the blocks, their gates and the untied words; then under each reading t
 its limit at `s`, and the training the blocks hold at most at that limit, in gates (the gates `c` counts) and as a share
 of the blocks' gates. A node's bound on its untied words doesn't grow with the period, so one phase's figure is the
 weakest, and is printed beside the periods', which are the result. Three lines say what is proved (each count's
-statement with the standing the locks give it, `rho.lean.status`; a `β_x` a block is no Lean statement, and no limit is
+statement with the standing the locks give it, `slowdown.lean.status`; a `β_x` a block is no Lean statement, and no limit is
 proved, being arithmetic on the typed share), what is a premise (the share, the tie, the bound on the untied words, (H)
 and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it would print the number alone.
 
@@ -108,14 +108,14 @@ and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it wo
 The number is a block's ratio under two assumptions, on a check that Lean does not yet accept for any class.
 
 - **Two assumptions.** The bound holds under (H), the cut's hardness, and (E), its exports, conjectures
-  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are rho's
-  (`benchmarks/rho/data/premises.toml`).
+  (`min_cut.HARDNESS` and `min_cut.EXPORTS` are their Lean names). The values of (H)'s β by `k` are the slowdown calculator's
+  (`benchmarks/slowdown/data/premises.toml`).
 - **No class passes the check.** The Lean count is given the session Program with no θ and no dataflow, so it counts
   every row a unit reads as fresh and refuses the policy on `k`. A built policy's `c` and `k` are the Python count of
   the record's description, which the Lean check does not establish; a stated policy's are not checked here at all.
 - **A block, not a deployment.** The periods table multiplies one block's ratio through the blocks a fleet holds at its
   data sheet's rate. What a deployment registers, what it leaves free and what its proofs miss are the slowdown
-  calculator's (`uv run python benchmarks/rho/periods.py`).
+  calculator's (`uv run python benchmarks/slowdown/periods.py`).
 - **Units, not converted.** `N` and `limit` are in the policy's own MACs, which count a MAC of the layers' linears as one
   and a BF16 MAC (attention, the LM head) as two, the card's dense int8 rate against its BF16 rate. The bound is at
   `F = 1`, which charges at most two of a training step's three kinds of product; the two thirds that leaves of a step

@@ -14,23 +14,23 @@ inputs = [
   "verity/__init__.py",
   "verity/circuits",
   "security/lean-audit.json",
-  "security/Definitions/Nci/Assumptions/Layered.lean",
-  "security/Definitions/Nci/Guarantees/Layered.lean",
+  "security/Definitions/InferenceOnly/Assumptions/Layered.lean",
+  "security/Definitions/InferenceOnly/Guarantees/Layered.lean",
   "verity/circuits/ops/boolean/gemm.py",
   # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ PoUW's H1 record (test_tiers.py)
   "security/Definitions/Core/Accel/Sm120.lean",
   "verity/protocols/accounting/pouw/prover/circuit/h1device.py",
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
-  "benchmarks/rho/rho/__init__.py",
-  "benchmarks/rho/rho/theorem.py",
+  "benchmarks/slowdown/slowdown/__init__.py",
+  "benchmarks/slowdown/slowdown/theorem.py",
   # a model's shape is the slowdown calculator's (kappa.py reads its models, imported by path), whose registry reads
   # core's monitoring periods and per-window delta
-  "benchmarks/rho/rho/instances.py",
-  "benchmarks/rho/rho/params.py",
-  "benchmarks/rho/data",
+  "benchmarks/slowdown/slowdown/instances.py",
+  "benchmarks/slowdown/slowdown/params.py",
+  "benchmarks/slowdown/data",
   "verity/__init__.py",
   "verity/errors.py",
   "verity/protocol.py",
   "verity/channel.py",
   "verity/protocols/proofs/spot/verifier/profile.py",
-          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py", "verity/circuits/ops/__init__.py", "verity/protocols/policy/inference_only/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/circuits/ops/boolean/__init__.py", "benchmarks/rho/__init__.py", "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/accounting/pouw/prover/circuit/__init__.py"]
+          "verity/definitions/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py", "verity/circuits/ops/__init__.py", "verity/protocols/policy/inference_only/__init__.py", "verity/protocols/accounting/pouw/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/circuits/ops/boolean/__init__.py", "benchmarks/slowdown/__init__.py", "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/accounting/pouw/prover/circuit/__init__.py"]

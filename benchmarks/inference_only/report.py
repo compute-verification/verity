@@ -24,7 +24,7 @@ from typing import Any
 import built as B
 import policy as P
 import tied as T
-from rho import lean, min_cut
+from slowdown import lean, min_cut
 from verity_bench import kit
 from verity_config.settings import SHARED
 
@@ -32,8 +32,8 @@ UNIT = ("the least slowdown of training run inside one inference block of the po
         "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
 #: the metric's id (benchmarks/inference_only/metrics.toml), the name the served policy's value is written under in the run's result
 METRIC = "training/inference-only-slowdown"
-#: rho's command for a deployment's slowdown per monitoring period
-CALCULATOR = "uv run python benchmarks/rho/periods.py"
+#: the slowdown calculator's command for a deployment's slowdown per monitoring period
+CALCULATOR = "uv run python benchmarks/slowdown/periods.py"
 #: the tied policy's label: what its figures are and what they rest on
 TIED_LABEL = "The served class under the value tie: NOT SERVED, and every figure of it RESTS ON NO PoUW VERDICT"
 #: `lean.status` as what the lock says of a statement
@@ -335,7 +335,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
                for row in P.periods(p["work"]["N"], p["bound"]["macs_a_block"])]
     print("\nOver a monitoring period, all of a fleet's compute in the policy's blocks at capacity: the training the blocks "
           "hold at most, in MACs and as a share of that compute")
-    print("  (the slowdown calculator's fleets and periods, benchmarks/rho; a fleet's rate is its "
+    print("  (the slowdown calculator's fleets and periods, benchmarks/slowdown; a fleet's rate is its "
           "cards' data-sheet dense int8 rate)")
     head = ("policy", "where", "period", "blocks", "training MACs at most", "share of the compute at most")
     table = [head] + [(r["policy"], r["where"], r["period"], _g(r["blocks"]), _g(r["training_macs"]),

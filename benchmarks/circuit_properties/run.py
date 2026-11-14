@@ -1,11 +1,11 @@
-"""Measure the reference circuits' structural properties and set them beside benchmarks/rho's shape-derived ones.
+"""Measure the reference circuits' structural properties and set them beside benchmarks/slowdown's shape-derived ones.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
 For each configuration in `references.configs()`, one b1 layer at T positions on bits (`references.layer`) is measured
 (`measure.measure`) under `references.GEMM_PRODUCTS`, and so is the Boolean GEMM `Gemm_v3{K=32,N=4}`. Beside each layer's
-a_out, a_in and |𝒥| per position: rho's `fanout`, `legs` and active layer products, as recorded for the model in
-benchmarks/rho/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
+a_out, a_in and |𝒥| per position: the slowdown calculator's `fanout`, `legs` and active layer products, as recorded for the model in
+benchmarks/slowdown/data/models.toml when it has a row, and as `derived_fanout` / `derived_legs` derive them from the
 config's own matrices (q, k, v, o, gate, up, down) otherwise and always. Each circuit's products are also checked
 whole-in-block (`measure.whole`) under two partitions: one block per root activation, and the gates cut in half. Writes
 DIR/properties.json (DIR defaults to $OUT) and prints one line per circuit.
@@ -23,15 +23,15 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "rho"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "slowdown"))
 
 from circuit_properties import references as R
 from circuit_properties.measure import Blocks, describe, measure, whole
 
 
-def rho_shapes(name: str, C: dict) -> dict:
-    from rho import instances as I
-    from rho.params import Registry
+def slowdown_shapes(name: str, C: dict) -> dict:
+    from slowdown import instances as I
+    from slowdown.params import Registry
     H, NH, KVH, D, IM, NL = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["NL"]
     own = I.Model(name, 0, 0, H, NL, C["V"], 0, 0, matrices={
         "attention": tuple(I.Matrix(n, a, b, NL, NL) for n, a, b in
@@ -47,7 +47,7 @@ def rho_shapes(name: str, C: dict) -> dict:
     return out
 
 
-def row(name: str, program, source: str, T: int, rho: dict | None) -> dict:
+def row(name: str, program, source: str, T: int, shapes: dict | None) -> dict:
     t = time.time()
     m = measure(program, R.GEMM_PRODUCTS)
     out = {"circuit": name, "source": source, "positions": T, "program_fn": program.fn.id[:120],
@@ -59,10 +59,10 @@ def row(name: str, program, source: str, T: int, rho: dict | None) -> dict:
         w = whole(program, R.GEMM_PRODUCTS, blocks)
         out["whole"][part] = {"per_block": {str(b): c for b, c in w.per_block.items()}, "split": w.split,
                               "split_at": [describe(program, g) for g, _ in w.split_examples[:2]]}
-    if rho is not None:
-        out["rho"] = rho
+    if shapes is not None:
+        out["rho"] = shapes
         cmp = {}
-        for src, r in rho.items():
+        for src, r in shapes.items():
             cmp[src] = {"a_out": m.a_out == r.get("fanout"), "a_in": m.a_in == r.get("legs"),
                         "products": m.products // T == r["layer_products"]}
             if "derived_fanout" in r:
@@ -86,7 +86,7 @@ def main() -> int:
         t = time.time()
         program = R.layer(C, a.T)
         built = round(time.time() - t, 2)
-        r = row(name, program, source, a.T, rho_shapes(name, C))
+        r = row(name, program, source, a.T, slowdown_shapes(name, C))
         r["build_seconds"] = built
         r["maxrss_gb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2)
         rows.append(r)

@@ -9,11 +9,11 @@ novel data a token brings, and any decoding work. A model (``models.json``) is a
 (``calibrations.json``), queried with the training data either committed (free to read) or novel (``b_tok`` bits per
 token).
 
-``construct`` is ``slowdown.search``: one family of compliant constructions, in which a block covers a slice of every
+``construct`` is ``bracket.search``: one family of compliant constructions, in which a block covers a slice of every
 token's computation, reads its slice's state, the activations crossing into it and the tokens' data, and is padded to
 ``Gamma``. The board (``rows.json``) and the library use the same search.
 
-``lower`` is the thread theorem (``slowdown.thread_lower``) on the same profile. It is 1 when the algorithm is not one
+``lower`` is the thread theorem (``bracket.thread_lower``) on the same profile. It is 1 when the algorithm is not one
 the theorem covers, and 1 when the data is committed, since its premise ``ThetaRegistered`` then fails (the coverage
 gap).
 
@@ -35,7 +35,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import catalog  # noqa: E402
-import slowdown  # noqa: E402
+import bracket  # noqa: E402
 
 TRAITS = {
     "theorem_applies": "the thread theorem covers it (end-to-end training of the reference circuit)",
@@ -114,8 +114,8 @@ def profile(alg: dict, model: dict, policy: dict, data: str, convention: str = "
 
 
 def construct(p: Profile, K: float, Gamma: float) -> dict:
-    """The cheapest construction in ``slowdown.search``'s family, with its reads broken down per block."""
-    return slowdown.search(p.U_slice_total, p.splits, p.flops, p.w, p.t, p.decode, K, Gamma)
+    """The cheapest construction in ``bracket.search``'s family, with its reads broken down per block."""
+    return bracket.search(p.U_slice_total, p.splits, p.flops, p.w, p.t, p.decode, K, Gamma)
 
 
 def _theorem_inputs(alg: dict, model: dict, p: Profile, convention: str) -> dict:
@@ -138,8 +138,8 @@ def lower(alg: dict, model: dict, policy: dict, data: str, convention: str = "at
     # A block that holds a token's whole state generates the tokens it does not read (rollouts), so a thread value
     # costs it no more than the novel data per token.
     token_rate = p.t if p.U_slice_total <= policy["K"] else policy["b_tok"]
-    return slowdown.thread_lower(_theorem_inputs(alg, model, p, convention), policy["K"], policy["Gamma"], token_rate), \
-        slowdown.THREAD_THEOREM
+    return bracket.thread_lower(_theorem_inputs(alg, model, p, convention), policy["K"], policy["Gamma"], token_rate), \
+        bracket.THREAD_THEOREM
 
 
 def query(alg_id: str, model_id: str, policy_id: str, data: str = "novel", convention: str = "attacker") -> dict:

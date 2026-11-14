@@ -9,7 +9,7 @@ wholly inside one block. Each is defined for an arbitrary Boolean circuit and a 
 A circuit is a Program in `verity-ir/descriptor/v1` (`verity/circuits/PROTOCOL.md`) in the Boolean profile (§9),
 read through its canonical layout (§6): a `verity.circuits.program.Program`, or `codec.decode_program`'s result. It is
 the format the inference-only policy's check reads gate by gate
-(`verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Check.lean`) and `Nci.Cover.Circuit` formalizes (`security/Definitions/Nci/Cover.lean`, `BitView.lean`), and the one the served workloads lower
+(`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Check.lean`) and `InferenceOnly.Cover.Circuit` formalizes (`security/Definitions/InferenceOnly/Cover.lean`, `BitView.lean`), and the one the served workloads lower
 to on bits. A word circuit has no per-product gates (one tensor-core step gate computes 16 products), so s_× and
 whole-in-block are defined only on the Boolean lowering; `ops.NotSeparable` refuses a word op.
 
@@ -22,7 +22,7 @@ fan-in is read at. `references.GEMM_PRODUCTS` is the GEMMs' products: each lane 
 `Gemm`, fan-in at each `GemmCoordinate`.
 
 - m(p), product p's subcircuit: the gates of its activation that read lane k's operands and nothing else
-  (`ops.OpShape`). They are disjoint, nonempty and computed, as `Nci.Cover.MulBlocks` requires.
+  (`ops.OpShape`). They are disjoint, nonempty and computed, as `InferenceOnly.Cover.MulBlocks` requires.
 - |𝒥| (`products`), s_× (`s_x`): the products, and the fewest gates in any m(p).
 - a_out: the most counted products any one activation value (a gate) feeds. Constants are counted apart
   (`constant_leaves`).
@@ -92,13 +92,13 @@ m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 
 `references.layer(C, T)` is one b1 layer (σ(`LayerPre_v1`), the Boolean `Attention_v3`, σ(`LayerPost_v1`)) at T
 positions; `references.configs()` lists the served configurations and two shapes with no served workload (Qwen2.5-7B,
-Llama-3.1-405B), labeled as constructed, whose shapes are benchmarks/rho's (its `models.toml`, read through
-`rho.instances.models`). The circuits are forward layers: the Programs declare no training (backward, optimizer)
+Llama-3.1-405B), labeled as constructed, whose shapes are benchmarks/slowdown's (its `models.toml`, read through
+`slowdown.instances.models`). The circuits are forward layers: the Programs declare no training (backward, optimizer)
 circuit.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
-measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho's `fanout`, `legs` and layer products
+measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/slowdown's `fanout`, `legs` and layer products
 (its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
 `Blocks.by_root` and a cut at the middle gate, and writes `properties.json`.
 
@@ -106,7 +106,7 @@ measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho
 
 The package reads `verity.circuits` (Programs, the canonical layout) and `verity.definitions` (the Boolean GEMM and
 the served b1 Definitions on bits). For a model's shapes it loads the slowdown calculator where it sits, with
-`benchmarks/rho` put on `sys.path`: `rho.instances`, and `rho.params` for the registry, which
+`benchmarks/slowdown` put on `sys.path`: `slowdown.instances`, and `slowdown.params` for the registry, which
 loads the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`). The suite
 names what it reads of both among its `inputs`.
 
@@ -114,6 +114,6 @@ The runner prints one JSON line a circuit and, with `--out DIR` (or `$OUT`), wri
 either it writes no file.
 
 The training benchmark's suite loads `work` by path, to hold it beside its own reading. What it measured of a training step (`s_×`, `a_out`, `a_in`) sits in
-`benchmarks/rho/data/circuits.toml` as data, each number with its source.
+`benchmarks/slowdown/data/circuits.toml` as data, each number with its source.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/circuit_properties`.

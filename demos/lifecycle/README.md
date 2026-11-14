@@ -79,7 +79,7 @@ chained through the state wire. The monitoring period is three execution phases 
    with the rows, and the wipe holds them to the fill. PoUW's answer is its window's remote and its period's onsite, one
    declaration at a time. Both composites run the
    inference-only policy's check (`inference_only`), which reads no coins: the record names the block's Program, and the
-   policy's Python check (`nci_reference.check_desc`, the reference `NciCheck` is held to) finds that the block divides
+   policy's Python check (`inference_only_reference.check_desc`, the reference `InferenceOnlyCheck` is held to) finds that the block divides
    into inference blocks, one per request (19,620 gates reading 48 bits of fresh input: its input and the state word),
    within Γ = 2^15 gates and α = 1/256 fresh-input bits per gate, with theta registered. Each subprotocol answers in
    `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols, after
@@ -177,7 +177,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   field names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
   appended after the ones before it, reading their gates along the state wire (block k's state input is block k − 1's
   state output, not an input gate); d.θ, the registered information, is theta's and the initial state's input gates, the
-  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
+  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are fresh input gates.
 - **State crosses execution blocks as a committed value.** A sampled proof block at the start of block k opens block k − 1's
   last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
   one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and

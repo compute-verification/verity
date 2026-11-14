@@ -1,11 +1,11 @@
 """A served run's inference-only verdict: its declared circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `NciCheck.Count`'s rule (`verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Count.lean`), against a policy the run
+by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
         [--serve PHI] [--pearl-tables SCHEME] --out POLICY
     inference_only.py verdict --policy POLICY --serve-run D --circuit RECORD --registration REGISTRATION
-        [--pins WEIGHTS_REGISTRATION] --out VERDICT --private FULL [--lean NCI_CHECK [--lean-timeout S]] [--retroactive WHY]
+        [--pins WEIGHTS_REGISTRATION] --out VERDICT --private FULL [--lean INFERENCE_ONLY_CHECK [--lean-timeout S]] [--retroactive WHY]
 
 **The policy** (`policy`, `POLICY_FORMAT`) is written before the serve from the run's settings alone, before its lease
 unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and its source:
@@ -40,12 +40,12 @@ policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is 
 by the table, and its fresh bits at the verifier's pins (``--pins``, the weights registration) and the window's roots
 (``--registration``), as `block_counts` counts them; and the serve dir's sealed windows, each of which the class takes
 (`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Its rows
-are `NciCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
+are `InferenceOnlyCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
 class with a block at most c gates and k fresh bits, and the blocks at most n. Anything the rule can't decide refuses
 (`Undecided`): no policy, a serve dir that records no start, a policy written once the serve had begun (unless
 ``--retroactive`` says why it's read anyway), a record with no inference blocks, an unpriced primitive, a closed window
 with no seal, or a sealed window the class doesn't take.
-With ``--lean``, `nci-check --count` runs on one window's session Program (`lean_count`), with ``--detail`` where the
+With ``--lean``, `inference-only-check --count` runs on one window's session Program (`lean_count`), with ``--detail`` where the
 binary takes it, as its usage says (`takes_detail`): such a binary prints only ``{complies}`` without it and its whole
 verdict with it, as one that doesn't take it prints by default. A block's gates that differ from its own refuse too.
 That Program's inputs are positional (`Input<w>`), so its θ is empty: every input bit, the weights' too, is fresh to it,
@@ -57,8 +57,8 @@ whole call.
 ``--out`` is the public verdict: the judgment against (c, k, n) and no count, of blocks or of windows, in any form. It
 holds the verdict, ``complies``, ``failure`` and ``reason``, each block class's session and its gates and fresh bits a
 block (``classes``), the class's slots and positions, and ``counts`` saying that n was judged on the exact count, which
-it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the exact counts (``blocks``, `NciCheck.Count`'s
-rows, and ``total``), each window the class doesn't take and why, and the `nci-check --count` call (``lean_detail``).
+it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the exact counts (``blocks``, `InferenceOnlyCheck.Count`'s
+rows, and ``total``), each window the class doesn't take and why, and the `inference-only-check --count` call (``lean_detail``).
 """
 from __future__ import annotations
 
@@ -90,8 +90,8 @@ VERDICT_FORMAT = "verity-bench/inference-only-verdict/v4"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
-NCI_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
-NCI_REFERENCE = NCI_PACKAGE / "scripts" / "nci_reference.py"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/lean"
+INFERENCE_ONLY_REFERENCE = INFERENCE_ONLY_PACKAGE / "scripts" / "inference_only_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
 CAP = 64
 #: the H200 an int8 serve's ``serve.json`` names (`serve_seal.target_of` on the card: ``TargetProfile.from_device`` with
@@ -352,9 +352,9 @@ def class_windows(serve_dir: Path, cls: Mapping[str, int]) -> tuple[int, dict[in
 
 
 def judge(rows: Sequence[Sequence[Any]], c: int, k: int, n: int) -> dict[str, Any]:
-    """`NciCheck.Count`'s verdict on its rows (``[key, gates, fresh, blocks]``): it complies when every row with a block
+    """`InferenceOnlyCheck.Count`'s verdict on its rows (``[key, gates, fresh, blocks]``): it complies when every row with a block
     has at most ``c`` gates and ``k`` fresh bits and the blocks are at most ``n``; ``failure`` the first that fails,
-    ``[row, "gates"|"fresh"]``, else ``[None, "count"]`` (`nci_reference.evaluate_count`)."""
+    ``[row, "gates"|"fresh"]``, else ``[None, "count"]`` (`inference_only_reference.evaluate_count`)."""
     total = sum(r[3] for r in rows)
     failure = next(([i, "gates" if g > c else "fresh"] for i, (_, g, x, m) in enumerate(rows) if m > 0 and (g > c or x > k)),
                    None)
@@ -364,14 +364,14 @@ def judge(rows: Sequence[Sequence[Any]], c: int, k: int, n: int) -> dict[str, An
 
 
 def _reference():
-    spec = importlib.util.spec_from_file_location("nci_reference", NCI_REFERENCE)
+    spec = importlib.util.spec_from_file_location("inference_only_reference", INFERENCE_ONLY_REFERENCE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
 def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int) -> dict[str, Any]:
-    """`NciCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
+    """`InferenceOnlyCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
     Program, `population.population_program`) with no θ, its block that Definition."""
     from verity.circuits import codec
     from verity.circuits.population import population_program
@@ -390,7 +390,7 @@ def takes_detail(exe: Path, timeout_s: int) -> bool:
 
 
 def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int = 1800) -> dict[str, Any]:
-    """`nci-check --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
+    """`inference-only-check --count` on ``inst``, in ``scratch``, with ``--detail`` where ``exe`` takes it (`takes_detail`): its
     ``flags`` and the JSON object it printed (``out``), its whole verdict or its refusal, else ``error``, why it printed
     none, and where it said something, its tail (``said``). All of it is private; `lean_said` is what the public verdict
     takes."""
@@ -403,17 +403,17 @@ def lean_count(exe: Path, inst: Mapping[str, Any], scratch: Path, timeout_s: int
             flags.append("--detail")
         p = subprocess.run([str(exe), *flags, path], capture_output=True, text=True, timeout=timeout_s)
     except subprocess.TimeoutExpired:
-        return {"flags": flags, "error": f"nci-check {' '.join(flags)} gave no verdict within {timeout_s} s"}
+        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} gave no verdict within {timeout_s} s"}
     finally:
         os.unlink(path)
     if p.returncode != 0:
-        return {"flags": flags, "error": f"nci-check {' '.join(flags)} exit {p.returncode}", "said": p.stderr.strip()[-300:]}
+        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} exit {p.returncode}", "said": p.stderr.strip()[-300:]}
     try:
         out = json.loads(p.stdout)
         if not isinstance(out, dict):
             raise ValueError("not an object")
     except ValueError:
-        return {"flags": flags, "error": f"nci-check {' '.join(flags)} printed no JSON object",
+        return {"flags": flags, "error": f"inference-only-check {' '.join(flags)} printed no JSON object",
                 "said": p.stdout.strip()[-300:]}
     return {"flags": flags, "out": out}
 
@@ -429,7 +429,7 @@ def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
         return {key: out[key] for key in ("error", "message") if key in out}
     rows = out.get("blocks")
     if not (isinstance(rows, list) and len(rows) == 1 and isinstance(rows[0], list) and len(rows[0]) == 4):
-        return {"error": f"nci-check {' '.join(call['flags'])} printed no row of the block"}
+        return {"error": f"inference-only-check {' '.join(call['flags'])} printed no row of the block"}
     _, g, x, _ = rows[0]
     return {"gates": g, "agrees_on_gates": g == gates, "with_theta_empty": {"fresh": x, "complies": out.get("complies")}}
 
@@ -494,7 +494,7 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
             private["lean_detail"] = call
             base["lean"] = said = lean_said(call, row["gates"])
             if "gates" in said and not said["agrees_on_gates"]:
-                raise Undecided(f"nci-check --count counts {said['gates']} gates a block, and this {row['gates']}")
+                raise Undecided(f"inference-only-check --count counts {said['gates']} gates a block, and this {row['gates']}")
         if got["complies"]:
             base |= {"verdict": "accept", "reason": None}
         else:
@@ -530,8 +530,8 @@ def line(v: Mapping[str, Any]) -> str:
         return f"{v['verdict']}: {v['reason']}"
     (d, g, x), = v["classes"]
     lean = v.get("lean")
-    said = ("" if lean is None else f"; nci-check --count: {lean['error']}" if "error" in lean else
-            f"; nci-check --count: {lean['gates']} gates a block ({'agrees' if lean['agrees_on_gates'] else 'DIFFERS'})")
+    said = ("" if lean is None else f"; inference-only-check --count: {lean['error']}" if "error" in lean else
+            f"; inference-only-check --count: {lean['gates']} gates a block ({'agrees' if lean['agrees_on_gates'] else 'DIFFERS'})")
     return (f"{v['verdict']}{'' if v['reason'] is None else ': ' + v['reason']}: session {d[:16]}… "
             f"({'the registered one' if v.get('registered_session') else 'not the registered one'}), {g} gates and {x} "
             f"fresh bits a block, against c {v['c']}, k {v['k']}, n {v['n']} (no count published: n is judged on the "
@@ -561,8 +561,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     v.add_argument("--circuit", type=Path, required=True, help="the picked window's circuit record at the policy's class")
     v.add_argument("--registration", type=Path, required=True, help="the window's registration (its roots)")
     v.add_argument("--pins", type=Path, default=None, help="the weights registration, the verifier's pins")
-    v.add_argument("--lean", type=Path, default=None, help="nci-check, to run --count on one window's session Program")
-    v.add_argument("--lean-timeout", type=int, default=1800, help="nci-check --count's limit in seconds (default 1800)")
+    v.add_argument("--lean", type=Path, default=None, help="inference-only-check, to run --count on one window's session Program")
+    v.add_argument("--lean-timeout", type=int, default=1800, help="inference-only-check --count's limit in seconds (default 1800)")
     v.add_argument("--retroactive", default=None, help="why a policy written after the serve began is read anyway")
     v.add_argument("--out", type=Path, required=True)
     v.add_argument("--private", type=Path, required=True)

@@ -531,7 +531,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `Flock.Stmt`: becomes its spec (one block R1CS statement) (lean)",
     "security/Definitions/Flock/Statement.lean::FlockSoundness.Model.Witness":
         "duplicate of `Verity.TC.Relation.Witness`: becomes one Core witness (lean)",
-    "security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":
+    "security/Definitions/InferenceOnly/Cover.lean::InferenceOnly.Cover.Circuit":
         "duplicate of `Verity.Circuit`: becomes it, with registered parameters (compute-accounting)",
     "security/Definitions/NetworkCertifier/Run.lean::NetTiming.Program":
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
@@ -716,10 +716,10 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
-    "benchmarks/rho/rho/circuits.py::Circuit":
+    "benchmarks/slowdown/slowdown/circuits.py::Circuit":
         "homonym, a benchmark row naming a Definition at its size: rename (training)",
-    "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
-    "benchmarks/rho/rho/theorem.py::Partition":
+    "benchmarks/slowdown/slowdown/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
+    "benchmarks/slowdown/slowdown/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
     "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",

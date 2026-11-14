@@ -10,7 +10,7 @@ word maps of `tools/move/`, which name the words they retire; and of a `.lean` f
 (``lean_prose``, the lane-text lint's reader), where every site is held to its file's count in ``LEAN_LIST``: a file past
 its count, or with a site and no entry, fails, and the ratchet gate holds the list's total from rising, so it only shrinks
 (``--prune`` lowers it to what the tree holds). A term matches case-insensitively as two words, hyphenated, or wrapped onto
-the next line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+the next line (behind a comment marker or not). Every file under `benchmarks/slowdown/`, `benchmarks/network_traces/` and the
 network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
 them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
@@ -21,6 +21,14 @@ The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name th
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
+
+The slowdown's older name, "rho" and ρ, is held at zero by path (``SLOWDOWN_HOME``: the slowdown calculator, the benchmarks
+that read it and the two documents that state the slowdown bound), in each file's whole text: there the word only ever
+named the slowdown, while in the rest of the tree it is another quantity's (Flock's coins, Pearl-C's statistic, a clock
+sync's rate, SPOT's risk, the ACCEL model's resource rate) and stays. What may stay there is a stored key, renamed with
+its schema, and another quantity's symbol (``SLOWDOWN_KEPT``, one reason each). The calculator's directories before its
+moves, `inference_only/rho` and `benchmarks/rho`, are named nowhere but in the records of moves already made
+(``MOVE_RECORDS``), which a tool reads to map a stored old path to today's and which are exempt by path.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
@@ -47,7 +55,7 @@ _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
 #: Retired in every file under INCORRECT too, and what to write instead.
-INCORRECT = ("benchmarks/rho/", "benchmarks/network_traces/", "verity/protocols/accounting/certifier/verifier/network/tests/")
+INCORRECT = ("benchmarks/slowdown/", "benchmarks/network_traces/", "verity/protocols/accounting/certifier/verifier/network/tests/")
 INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
                    "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
                    "faulty window, wrong unit": "incorrect window, incorrect proof block",
@@ -220,7 +228,7 @@ ALLOWED: dict[str, str] = {
     "report-proof-service-": "a cited note's id",
     "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
                                             "it; renamed after it lands",
-    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/slowdown/slowdown/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
@@ -468,6 +476,79 @@ def test_spot_s_older_name_only_falls():
           "Older names): `git diff -U0 origin/main | grep -i -E 'sampled.?proofs'` shows it")
 
 
+#: Where "rho" and ρ only ever named the slowdown (GLOSSARY.md, Older names), so no file there says either.
+SLOWDOWN_HOME = ("benchmarks/slowdown/", "benchmarks/circuit_properties/", "benchmarks/inference_only/",
+                 "security/README.md", "verity/protocols/compose/verifier/remote/README.md")
+#: the word alone or as one part of a name (`rho_worst`, `RHO_MODEL`, `Overhead.rho`, `rhos`), and the symbol
+_RHO = re.compile(r"(?<![A-Za-z])(?:rho|Rho|RHO)s?(?![A-Za-z])|ρ")
+#: What stays under SLOWDOWN_HOME, each spelling with its reason; an entry that matches nothing fails too.
+SLOWDOWN_KEPT: dict[str, str] = {
+    'search(*case)["rho"]': "the board's key (`nci.bracket.search`'s), which the calculator's test reads: renamed with its schema",
+    'the board\'s `"rho"`': "the calculator's README, naming that key",
+    'out["rho"]': "the key of the circuit properties' output, renamed with its schema",
+    "`ln(1/δ) / ρ(1)` blocks": "SPOT's risk ρ(m), the integrity profile's",
+    "`ρ(1) = -ln(1 - q)`": "SPOT's risk ρ(m), the integrity profile's",
+    "level.rho(1)": "SPOT's risk ρ(m): the integrity profile's method",
+}
+#: the calculator's directories before its moves
+_SLOWDOWN_OLD_PATH = re.compile(r"(?:inference_only|benchmarks)/rho(?![A-Za-z0-9_])")
+#: The records of moves already made: data a tool reads to map a stored old path to today's, so they keep the old paths.
+MOVE_RECORDS = (MAPS, "tools/move/layout_maps.json", "tools/research/src/research/store/moves.json")
+
+
+def slowdown_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]], set[str]]:
+    """(file, line, what it says) for each "rho" or ρ in a file under SLOWDOWN_HOME and each mention of the calculator's old
+    path in any scanned file outside MOVE_RECORDS, and the SLOWDOWN_KEPT spellings used."""
+    out, used = [], set()
+    for f in scanned(files):
+        if f.startswith(MOVE_RECORDS) or (text := read(f)) is None:
+            continue
+        found = list(_SLOWDOWN_OLD_PATH.finditer(text))
+        if f.startswith(SLOWDOWN_HOME) and ("rho" in text.lower() or "ρ" in text):
+            kept = [(m.start(), m.end(), s) for s in SLOWDOWN_KEPT for m in re.finditer(re.escape(s), text)]
+            for m in _RHO.finditer(text):
+                if spelling := next((s for a, b, s in kept if a <= m.start() and m.end() <= b), None):
+                    used.add(spelling)
+                elif not any(o.start() <= m.start() < o.end() for o in found):
+                    found.append(m)
+        out += [(f, text.count("\n", 0, m.start()) + 1, m[0]) for m in sorted(found, key=lambda m: m.start())]
+    return out, used
+
+
+def test_the_slowdown_s_older_name_is_gone():
+    """The training-cost ratio is the slowdown: no "rho" or ρ where the word only ever named it, and no mention of the
+    calculator's old directory outside the records of moves already made."""
+    bad, used = slowdown_offenders(_tracked())
+    assert not bad, (
+        f'"rho", ρ or the calculator\'s older directory for the slowdown: under {", ".join(SLOWDOWN_HOME)} say "the slowdown" in prose '
+        "(the package is the slowdown calculator), `slowdown` in a name and in a formula (`slowdown >= ...`), and "
+        f"`{SLOWDOWN_HOME[0]}` for the calculator's directory ({GLOSSARY}, Older names). A stored key "
+        "that keeps the word until its schema changes, or another quantity's symbol, goes in SLOWDOWN_KEPT with its reason. "
+        f"The records of moves already made ({', '.join(MOVE_RECORDS)}) map stored old paths to today's: they keep the old "
+        "path and are exempt by path:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
+    unused = set(SLOWDOWN_KEPT) - used
+    assert not unused, f"SLOWDOWN_KEPT entries that match nothing any more: {sorted(unused)}"
+
+
+def test_the_slowdown_scan_reads_each_form():
+    """On toy files: under the calculator's directory the word counts alone, as a part of a name and as the symbol, a kept
+    spelling and a word that only holds the letters don't; outside it only the calculator's old path counts, and a record
+    of a move keeps it."""
+    home = SLOWDOWN_HOME[0]
+    # spelled from today's, so that the map that moved the directory, run again, leaves this file as it is
+    old = home.removesuffix("slowdown/") + "rho/"
+    toy = {home + "a.py": ('"""rho is ρ = m c / |C|; `Overhead.rho`."""\nrho_worst, RHO_MODEL, rhos = 1, 2, []\n'
+                           'x = search(*case)["rho"]  # a rhombus, a throw\n'),
+           "b.py": f"rho = coins()  # ρ, Flock's; see {old}README.md\n",
+           "c.py": f"# {old.rstrip('/')}_notes is another path\n",
+           "tools/move/old_map.toml": f'"{old}" = "{home}"\n',
+           MOVE_RECORDS[-1]: f'{{"{old}run.py": "{home}run.py"}}\n'}
+    found, used = slowdown_offenders(list(toy), read=toy.get)
+    assert found == [("b.py", 1, old.rstrip("/")), (home + "a.py", 1, "rho"), (home + "a.py", 1, "ρ"),
+                     (home + "a.py", 1, "rho"), (home + "a.py", 2, "rho"), (home + "a.py", 2, "RHO"), (home + "a.py", 2, "rhos")]
+    assert used == {'search(*case)["rho"]'}
+
+
 def test_the_spot_scan_reads_each_form():
     """On toy files: the words count in either case and wrapped behind a comment marker, a sampled proof block doesn't,
     and each code spelling counts under its own key, never under the words."""
@@ -512,21 +593,21 @@ def test_the_scan_reads_each_form():
     assert used == {"N, the round's proof units", "verity/proof-service/"}
 
 
-def test_the_scan_reads_rho_terms():
-    """`benchmarks/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+def test_the_scan_reads_the_slowdown_calculators_terms():
+    """`benchmarks/slowdown`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
     a faulty node, link or device, and the same words outside it stay."""
     docs = {
-        "benchmarks/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+        "benchmarks/slowdown/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
                                 'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
                                 "link or device\n"),
-        "benchmarks/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "benchmarks/slowdown/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
         "c.py": "# faulty outputs and faulty blocks outside it\n",
     }
     assert offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("benchmarks/rho/a.py", 1, "faulty-outputs"), ("benchmarks/rho/a.py", 1, "faulty step"),
-        ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
-        ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
-        ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
+        ("benchmarks/slowdown/a.py", 1, "faulty-outputs"), ("benchmarks/slowdown/a.py", 1, "faulty step"),
+        ("benchmarks/slowdown/a.py", 2, "faulty ingress unit"), ("benchmarks/slowdown/a.py", 2, "faulty set"),
+        ("benchmarks/slowdown/data/b.toml", 1, "Faulty outputs"), ("benchmarks/slowdown/data/b.toml", 1, "faulty proof block"),
+        ("benchmarks/slowdown/data/b.toml", 1, "faulty blocks")]
 
 
 def test_the_scan_reads_the_network_terms():
@@ -548,7 +629,7 @@ def test_the_scan_reads_the_network_terms():
 
 def test_the_scan_reads_the_incorrect_ands():
     """`sampling_plan`'s incorrect ANDs, on toy files, in every file: an AND gate in another sense stays."""
-    docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside rho\n"}
+    docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside the calculator\n"}
     assert offenders(list(docs), read=docs.__getitem__)[0] == [("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty # ANDs")]
 
 

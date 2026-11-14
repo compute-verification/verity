@@ -7,7 +7,7 @@ its scans' δ. It is the one calculator of K, and it scales K in two ways:
   (At a scope's load, below);
 * by links (`per_link`, `datacenter`, `at_link_rate`): one link at the rate a run certified, and as many of them
   summed, whatever the scope they stand for serves. `chain_record.py leak` reads it on a network certifier run, and
-  the slowdown ρ is derived from both bounds.
+  the slowdown is derived from both bounds.
 
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
 second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
@@ -36,7 +36,7 @@ scans' knowledge and collision errors. K takes one of two forms:
   with at most δ beside ε. It is conditional: hesc and hleak await SampledKSLive and P2.
 
 **At a scope's load.** A scope (`scopes`) is a node, one machine of the world fleet's GPUs; the census's reference
-datacenter; or the world, rho's world fleet, which is the census's inference at the fleet's serving MFU. Each machine
+datacenter; or the world, the slowdown calculator's world fleet, which is the census's inference at the fleet's serving MFU. Each machine
 is behind one network certifier. Over a monitoring period a scope serves GPU-seconds × MFU × a GPU's peak FLOP/s /
 (a request's tokens × 2 × the served MACs a token) requests of the served model (`MODEL`), the rule
 `benchmarks/spot_figures/figure1.py`'s `scopes` plans with, each on one connection. Which request that is is one of
@@ -138,16 +138,16 @@ JITTER_BOUND = 2
 JITTER = "J assumed at D_j = 2; at D_j = 1 not met (next-bucket host-state channel)"
 ROOT = Path(__file__).resolve().parents[2]
 CENSUS = ROOT / "benchmarks" / "census"
-#: the files the scale is read from: the census's world, reference datacenter and GPU peak, rho's world fleet and its
+#: the files the scale is read from: the census's world, reference datacenter and GPU peak, the slowdown calculator's world fleet and its
 #: machine's GPUs, and the served model's workload card
 ADVERSARY, DEPLOYMENTS, HARDWARE = (f"benchmarks/census/{name}.json"
                                     for name in ("adversary", "deployments", "hardware"))
-RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
+SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORKLOAD = "benchmarks/spot_figures/cards/workload.glm-5.3.json"
 #: the break-even planner the sampling plan is computed with, and the case of it a request is read on: the proof
 #: server's line at its last step, at the 128k serving plan's request
 PLANNER, PLAN_CASE = "benchmarks/spot_figures/breakeven", "P5+poolwin600"
-#: the served model, rho's world fleet and the census's GPU peak, the H200's dense FP8 rate
+#: the served model, the slowdown calculator's world fleet and the census's GPU peak, the H200's dense FP8 rate
 MODEL, WORLD, PEAK = "GLM-5.3", "world-h200", "h100-sxm5-80gb/e4m3"
 #: a GB's bits, and FP4's bits a parameter
 GB, FP4 = 8 * 10 ** 9, 4
@@ -405,9 +405,9 @@ def datacenter_links() -> int:
 
 
 def world_links() -> int:
-    """The world's links: the machines of rho's world fleet (`RHO`'s ``fleet.world-h200``, the census's inference at
+    """The world's links: the machines of the slowdown calculator's world fleet (`SLOWDOWN`'s ``fleet.world-h200``, the census's inference at
     the fleet's serving MFU), one network certifier on each machine's uplink."""
-    return round(_toml(RHO)["fleet"][WORLD]["count"]["value"])
+    return round(_toml(SLOWDOWN)["fleet"][WORLD]["count"]["value"])
 
 
 def link(cls: Any, rate: float | Fraction, *, T: int | None = None, tau: float | Fraction = TAU,
@@ -674,8 +674,8 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
            ingress_buckets: int | None = None) -> dict[str, Input]:
     """Every input of the scaling by requests, each marked (`MARKS`) with its source.
 
-    The scale is read from the files: the world's machines and their serving MFU (rho's world fleet), a machine's
-    GPUs (rho's hardware), the reference datacenter's machines and a GPU's peak (the census), and the weights (the
+    The scale is read from the files: the world's machines and their serving MFU (the slowdown calculator's world fleet), a machine's
+    GPUs (the slowdown calculator's hardware), the reference datacenter's machines and a GPU's peak (the census), and the weights (the
     workload card). The world's requests a year follow from them and a request's tokens and served MACs a token:
     the sampling plan's (``requests`` = ``plan``, read from the planner by `plan`) or the census's tokens at the
     workload card's MACs (``census``); or they are ``world_requests`` where a caller gives them, whatever
@@ -698,24 +698,24 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     counted = "given" if world_requests is not None else requests
     census, dc = _reference("adversary.json"), _reference("deployments.json")
     peak = next(e for e in _json(HARDWARE) if e["id"] == PEAK)
-    fleet, card = _toml(RHO)["fleet"][WORLD], _json(WORKLOAD)
+    fleet, card = _toml(SLOWDOWN)["fleet"][WORLD], _json(WORKLOAD)
     count, mfu = fleet["count"], fleet["mfu_serve"]
-    gpus = _toml(RHO_HARDWARE)["location"][fleet["location"]]["devices"]
+    gpus = _toml(SLOWDOWN_HARDWARE)["location"][fleet["location"]]["devices"]
     if dc["gpus_per_machine"] != gpus["value"]:
         raise ValueError(f"a machine has one count of GPUs: {DEPLOYMENTS} gives {dc['gpus_per_machine']} and "
-                         f"{RHO_HARDWARE} {gpus['value']}")
+                         f"{SLOWDOWN_HARDWARE} {gpus['value']}")
     work = "" if not card["provisional"] else ", provisional"
     macs = card["value"]["served_macs_per_token"]
     chosen = inspect.signature(calibration.choose_sync_set).parameters
     out = {
         "world_machines": Input(round(count["value"]), "machine", _MARK[count["status"]],
-                                f"{RHO} fleet.{WORLD}.count: {count['source']}"),
+                                f"{SLOWDOWN} fleet.{WORLD}.count: {count['source']}"),
         "datacenter_machines": Input(dc["machines"], "machine", "modeled", f"{DEPLOYMENTS} {dc['id']}.machines"),
         "machine_gpus": Input(gpus["value"], "GPU", _MARK[gpus["status"]],
-                              f"{RHO_HARDWARE} location.{fleet['location']}.devices, the data sheet's: "
+                              f"{SLOWDOWN_HARDWARE} location.{fleet['location']}.devices, the data sheet's: "
                               f"{gpus['source']}"),
         "mfu_serve": Input(mfu["value"], "", _MARK[mfu["status"]],
-                           f"{RHO} fleet.{WORLD}.mfu_serve, {mfu['low']} to {mfu['high']}: {mfu['source']}"),
+                           f"{SLOWDOWN} fleet.{WORLD}.mfu_serve, {mfu['low']} to {mfu['high']}: {mfu['source']}"),
         "peak_flops": Input(peak["flop_per_second"], "FLOP/s", "assumed",
                             f"{HARDWARE} {PEAK}.flop_per_second: the data sheet's dense FP8 peak, the H200's too "
                             "(one die, one clock)"),

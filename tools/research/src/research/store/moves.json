@@ -2415,6 +2415,80 @@
       "paths": {
         "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
+        "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Proofs/Properties/Nci/Novel.lean": "security/Proofs/Properties/Nci/Fresh.lean"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/Nci/Assumptions/Baseline.lean": "security/Definitions/Nci/Assumptions/Theta.lean",
+        "security/Proofs/Properties/Nci/Baseline.lean": "security/Proofs/Properties/Nci/Theta.lean",
+        "security/Proofs/Properties/Nci/BaselineSteps.lean": "security/Proofs/Properties/Nci/ThetaSteps.lean",
+        "security/Properties/Nci/Baseline.lean": "security/Properties/Nci/Theta.lean",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_baseline_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_theta_difftest.py",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Baseline.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Theta.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/BaselineDifftest.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/ThetaDifftest.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/BaselineDifftestMain.lean": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/ThetaDifftestMain.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/baseline_difftest_vectors.py": "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/theta_difftest_vectors.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/verifier_cost/nci_cost.py": "benchmarks/verifier_cost/inference_only_cost.py",
+        "benchmarks/verifier_cost/nci_cost.sh": "benchmarks/verifier_cost/inference_only_cost.sh",
+        "benchmarks/verifier_cost/nci_glm.py": "benchmarks/verifier_cost/inference_only_glm.py",
+        "benchmarks/verifier_cost/nci_glm.sh": "benchmarks/verifier_cost/inference_only_glm.sh",
+        "benchmarks/verifier_cost/nci_phases/": "benchmarks/verifier_cost/inference_only_phases/",
+        "security/Definitions/Nci.lean": "security/Definitions/InferenceOnly.lean",
+        "security/Definitions/Nci/": "security/Definitions/InferenceOnly/",
+        "security/Proofs/Nci.lean": "security/Proofs/InferenceOnly.lean",
+        "security/Proofs/Nci/": "security/Proofs/InferenceOnly/",
+        "security/Proofs/Properties/Nci.lean": "security/Proofs/Properties/InferenceOnly.lean",
+        "security/Proofs/Properties/Nci/": "security/Proofs/Properties/InferenceOnly/",
+        "security/Properties/Nci.lean": "security/Properties/InferenceOnly.lean",
+        "security/Properties/Nci/": "security/Properties/InferenceOnly/",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_count_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_count_difftest.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_desc_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_desc_difftest.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_desc_fuzz.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_desc_fuzz.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_desc_liveness.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_desc_liveness.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_lean_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_lean_difftest.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_record_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_record_difftest.py",
+        "verity/protocols/accounting/certifier/verifier/network/tests/test_nci_theta_difftest.py": "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_theta_difftest.py",
+        "verity/protocols/policy/inference_only/verifier/nci/": "verity/protocols/policy/inference_only/verifier/inference_only/",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck.lean": "verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck.lean",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/": "verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_record_reference.py": "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_record_reference.py",
+        "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py": "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Guarantees/Actual/Dampener.lean": "security/Definitions/Accounting/Guarantees/Actual/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Assumptions/Dampener.lean": "security/Definitions/InferenceOnly/Assumptions/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Dampener.lean": "security/Definitions/InferenceOnly/Slowdown.lean",
+        "security/Definitions/InferenceOnly/Guarantees/Dampener.lean": "security/Definitions/InferenceOnly/Guarantees/Slowdown.lean",
+        "security/Proofs/Accounting/Actual/Dampener.lean": "security/Proofs/Accounting/Actual/Slowdown.lean",
+        "security/Proofs/InferenceOnly/Dampener.lean": "security/Proofs/InferenceOnly/Slowdown.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/rho/": "benchmarks/slowdown/",
+        "benchmarks/rho/rho/": "benchmarks/slowdown/slowdown/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/policy/inference_only/verifier/inference_only/": "verity/protocols/policy/inference_only/verifier/"
+      }
     }
   ]
 }

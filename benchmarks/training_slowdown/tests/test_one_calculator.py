@@ -1,4 +1,4 @@
-"""The benchmark reaches the slowdown calculator (`benchmarks/rho`) through one module,
+"""The benchmark reaches the slowdown calculator (`benchmarks/slowdown`) through one module,
 `training_slowdown.calculator`, and computes a slowdown in one function of it, `calculator.slowdown`.
 
 - One door: no other module or test under this directory imports a module of the calculator or names its directory
@@ -13,6 +13,7 @@
   that is not the entry point's is Fit's c/(c − d), where a training fits one block (`formalism.at`)."""
 import ast
 import math
+import re
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,15 +31,19 @@ PACKAGE = calculator.CALCULATOR.name
 #: the calculator's modules as its directory on the import path names them, and its directory's name: a part of every
 #: path to it, and alone a key of the benchmark's own records too
 MODULES, DIRECTORY = {PACKAGE, "periods"}, PACKAGE
+#: the directory in a path written whole: its name as a whole part, after the directory it is in or a step up to it
+WHOLE = re.compile(rf"(?:^|[^\w.-])(?:{re.escape(calculator.CALCULATOR.parent.name)}|\.\.)"
+                   rf"/{re.escape(DIRECTORY)}(?![\w.-])")
 #: files that name the calculator's directory in a message and read nothing of it, each with why. It only shrinks.
 NAMED_ONLY = {"training_slowdown/config.py": "its refusal of a policy says where the registry's tables are"}
 
 
 def reaches(source: str) -> list[str]:
     """`line: what` for each place `source` reaches the calculator: an import of one of its modules, or a string
-    outside a docstring that names its directory as a part of a path: one of the parts of a path written whole
-    (`benchmarks/rho/data`), or the name alone where `/` joins it (a path in parts). The name alone anywhere else is the
-    benchmark's own key."""
+    outside a docstring that names its directory as a part of a path: in a path written whole, the part after the
+    directory it is in (`benchmarks/slowdown/data`) or after a step up, or the name alone where `/` joins it (a path in
+    parts). The name anywhere else is the benchmark's own: a key, or the first part of an id, as `slowdown/v1`, the
+    grade's schema, is not a path."""
     tree = ast.parse(source)
     scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     docstrings = {id(n.body[0].value) for n in ast.walk(tree) if isinstance(n, scopes) and n.body
@@ -51,9 +56,9 @@ def reaches(source: str) -> list[str]:
             out += [(n.lineno, f"import {a.name}") for a in n.names if a.name.split(".")[0] in MODULES]
         elif isinstance(n, ast.ImportFrom) and not n.level and (n.module or "").split(".")[0] in MODULES:
             out.append((n.lineno, f"from {n.module} import"))
-        elif (isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings
-              and DIRECTORY in n.value.split("/") and ("/" in n.value or id(n) in joined)):
-            out.append((n.lineno, repr(n.value[:60])))
+        elif isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings:
+            if WHOLE.search(n.value) or (n.value == DIRECTORY and id(n) in joined):
+                out.append((n.lineno, repr(n.value[:60])))
     return [f"{line}: {what}" for line, what in sorted(out)]
 
 
@@ -71,8 +76,8 @@ def test_only_the_one_module_reaches_the_calculator():
 def test_a_reach_is_found():
     """The check above isn't vacuous: an import by name, one behind a path put on the import path (a path written
     whole), a module loaded from its file and a path in parts (its directory, then its package, each an operand of
-    `/`) are each found, and a docstring, a relative import of this package, a dictionary's `rho` key or a
-    subscript's is not."""
+    `/`) are each found, as is a path that steps up to it, and a docstring, a relative import of this package, a
+    dictionary's key of the directory's name, a subscript's or an id that begins with it is not."""
     home = calculator.CALCULATOR.relative_to(HERE.parents[1]).as_posix()
     assert reaches(f"import sys\nsys.path.insert(0, '{home}')\nimport periods\n"
                    f"from {PACKAGE} import min_cut\nimport {PACKAGE}.params\n") == [
@@ -84,6 +89,8 @@ def test_a_reach_is_found():
                    f'from .{PACKAGE} import x\n\ndef f():\n    """As {home}/data says."""\n    {PACKAGE} = 1\n') == []
     assert reaches(f'got = {{"{PACKAGE}": 1.0}}\n') == []
     assert reaches(f'half = got["{PACKAGE}"] / 2\n') == []
+    assert reaches(f"import sys\nsys.path[:0] = ['../{PACKAGE}']\n") == [f"2: '../{PACKAGE}'"]
+    assert reaches(f'SCHEMA = "{PACKAGE}/v1"\n') == []
 
 
 def test_the_products_term_is_the_calculators(monkeypatch):
@@ -205,8 +212,8 @@ STATES = {
         "`rho`: Fit's c/(c − d) where the training fits one block, the one ratio that is no bound of the "
         "calculator's, else the entry point's slowdown",
     ("training_slowdown/formalism.py", "published"): "`at`'s `rho`",
-    ("training_slowdown/grade.py", "rho_of"): "`published`'s `rho`, or none with the reason",
-    ("training_slowdown/grade.py", "grade"): "`rho_of`'s `rho`, and `S`, p times it",
+    ("training_slowdown/grade.py", "slowdown_of"): "`published`'s `rho`, or none with the reason",
+    ("training_slowdown/grade.py", "grade"): "`slowdown_of`'s `rho`, and `S`, p times it",
     ("training_slowdown/library.py", "bound"): "the entry point's slowdown, or none with its reason",
     ("training_slowdown/library.py", "row"): "`bound`'s slowdown",
 }
@@ -302,18 +309,18 @@ def test_every_slowdown_the_benchmark_states_is_the_entry_points(monkeypatch):
                    decoder_gates=0.0, products=work.products_of_trace(work.priced(traced(k))))
     honest = F.published(m, c, k)["rho"]
     assert honest == real(pol, traced(k))["slowdown"] > 1
-    for give, rho, binding in (({"slowdown": 7.25, "term": 3.5, "binds": "products"}, 7.25, "products"),
+    for give, slowdown, binding in (({"slowdown": 7.25, "term": 3.5, "binds": "products"}, 7.25, "products"),
                                ({"slowdown": 1.0, "term": 0.5, "binds": "none"}, 1.0, "none"),
                                ({"slowdown": None, "term": None, "binds": "unmeasured", "why": "unmeasured: said so"},
                                 None, "unmeasured")):
         given.clear()
         given.update(give)
         b, one = F.bound(m, c, k), F.published(m, c, k)
-        assert b["entry"]["slowdown"] == rho and b["terms"]["products"] == give["term"]
-        assert F.at(m, c, k)["rho"] == rho and (one["rho"], one["binding_kind"]) == (rho, binding)
+        assert b["entry"]["slowdown"] == slowdown and b["terms"]["products"] == give["term"]
+        assert F.at(m, c, k)["rho"] == slowdown and (one["rho"], one["binding_kind"]) == (slowdown, binding)
         row = library.bound(traced(k), c, k)
-        assert row["slowdown"] == rho
-        if rho is None:
+        assert row["slowdown"] == slowdown
+        if slowdown is None:
             assert b["unmeasured"]["products"] == row["binds"] == "unmeasured: said so"
     fits = F.Measured((F.Part(gates=1e12, tokens=1e3, token_gates=0.8e12, affected_gates=0.4e12, delta_grad_bits=1e5),),
                       tau_bits=32, a_bits=8192, u=F.even(1e5), u_in=F.even(1e5), delta_bits=1e5, decoder_gates=1e12)

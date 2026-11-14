@@ -1,5 +1,5 @@
 """No composite composes a protocol that publishes private data in the clear (`IN_THE_CLEAR`) unless `KNOWN` lists it
-with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`NciCheck.Protocol.protocol`),
+with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`InferenceOnlyCheck.Protocol.protocol`),
 publishes the division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; both
 composites compose it for one run of record only, a stated exception, and v1's private form replaces it. The
 composites' subprotocols are read wherever they are listed: their Lean (`Core.Onsite.components` and
@@ -32,11 +32,11 @@ KNOWN = {"verity/inference-only/v0": "a stated exception for one run of record; 
 
 
 def v0_names() -> set[str]:
-    """v0's Lean names: `NciCheck.Protocol.protocol` while its `protocolId` is v0."""
-    text = (ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Protocol.lean").read_text()
+    """v0's Lean names: `InferenceOnlyCheck.Protocol.protocol` while its `protocolId` is v0."""
+    text = (ROOT / "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Protocol.lean").read_text()
     m = re.search(r'^def protocolId : String := "([^"]*)"', text, re.M)
-    assert m, "NciCheck/Protocol.lean no longer defines `protocolId` as a string literal: read v0's id where it now is"
-    return {"NciCheck.Protocol.protocol"} if m[1] == V0 else set()
+    assert m, "InferenceOnlyCheck/Protocol.lean no longer defines `protocolId` as a string literal: read v0's id where it now is"
+    return {"InferenceOnlyCheck.Protocol.protocol"} if m[1] == V0 else set()
 
 
 def lean_components(path: Path) -> tuple[list[str], list[str]]:

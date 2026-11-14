@@ -7,7 +7,7 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # The runner loads the calculator of K by its file, benchmarks/network_traces/leak_bounds.py. It imports the network
 # certifier's classes and calibration and the reporting δ, with the modules of `verity` those import (the circuits, the
-# commitments, SPOT), and reads rho's world fleet and hardware data and the census; a scope's requests are by
+# commitments, SPOT), and reads the slowdown calculator's world fleet and hardware data and the census; a scope's requests are by
 # default the break-even planner's case, built from Figure 1's lines and the cards they read. The result is written by
 # the harness kit's writer, which reads its settings through verity_config, and capacity is read from a registration
 # log through the log's Python (registration's verifier, with the two package files above it) and the Site.
@@ -47,6 +47,6 @@ inputs = [
     "verity/protocol.py",
     "verity/protocols/accounting/certifier",
     "verity/protocols/proofs/spot",
-    "benchmarks/rho/data/reference.toml",
-    "benchmarks/rho/data/hardware.toml",
+    "benchmarks/slowdown/data/reference.toml",
+    "benchmarks/slowdown/data/hardware.toml",
 ]

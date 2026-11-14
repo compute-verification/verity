@@ -1,8 +1,8 @@
-"""The slowdown calculator (`benchmarks/rho`) as this package reads it: the one module here that
+"""The slowdown calculator (`benchmarks/slowdown`) as this package reads it: the one module here that
 names it, and the benchmark's one entry point to a slowdown.
 
 `slowdown(policy, step, run=None)` is that entry point: from a policy's block and a step's record to the lower bound
-on the slowdown and what binds. The grade (`formalism.bound`, which `grade.rho_of` reads) and the library's table
+on the slowdown and what binds. The grade (`formalism.bound`, which `grade.slowdown_of` reads) and the library's table
 (`library.bound`) both call it, and nothing else of this benchmark computes a slowdown from a step
 (`tests/test_one_calculator.py`). It reads the work the record states (`training_slowdown.work`: M, the products whose
 two operands both depend on the update), chooses the subset of M the bound is largest on, and asks the calculator's
@@ -37,7 +37,7 @@ from . import work as W
 from .gates import per_and, per_mac
 
 #: the calculator's directory, whose name is its package's too
-CALCULATOR = Path(__file__).resolve().parents[2] / "rho"
+CALCULATOR = Path(__file__).resolve().parents[2] / "slowdown"
 DEPLOYMENTS = Path(__file__).resolve().parents[2] / "census" / "deployments.json"
 #: the precision the registry's locations state their peak rate at: the census's dense FP8 E4M3
 FLEET_PRECISION = "e4m3"
@@ -67,7 +67,7 @@ def _calculator():
     if sys.path[0] != str(CALCULATOR):
         sys.path.insert(0, str(CALCULATOR))
     import periods
-    from rho import envelopes, hardware, params
+    from slowdown import envelopes, hardware, params
 
     return periods, envelopes, hardware, params, params.Registry.load()
 

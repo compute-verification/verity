@@ -4,10 +4,10 @@ detection with probability above δ, against proof overhead, at each share of co
 itself plots the same model against total cost (`total_cost.py`).
 
 Every input is a card marked measured or modeled with its source: the model's `spot-card/v1` cards (`cards.py`), the
-census and rho's reference.  The output carries them all beside every plotted series (`figure1_overhead.json`), which
+census and the slowdown calculator's reference.  The output carries them all beside every plotted series (`figure1_overhead.json`), which
 the console reads.
 
-**Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
+**Workload.**  A scope's compute is its GPUs (the world: the slowdown calculator's `world-h200` fleet, the census's `world-inference-2027`;
 a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`verity.protocol`'s `MONITORING_PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
@@ -15,7 +15,7 @@ proof blocks as the card has them; the captions give the share of MACs in no pro
 That is the `assumed` reading of serving's rate, the default.  Under `serving="measured"` (`SERVING`) a scope serves
 at the model's `serving_rate` card's computed tokens a GPU-second instead: its requests are its GPU-seconds times the
 rate over a request's tokens, a replay takes the request's tokens over the rate, and no MACs a token enters either;
-the scope's GPUs stay rho's.  The output then says which rate it read (`serving`), every caption says so too
+the scope's GPUs stay the slowdown calculator's.  The output then says which rate it read (`serving`), every caption says so too
 (`reading_note`), and each exfiltration row names the rate beside the rate at which its bound would reach `SERVING_GOAL`
 (`at_reading`).
 
@@ -66,7 +66,7 @@ sets' form, and request-level sampling (`MAIN`), and an appendix figure every de
 card's request.  Skipped work is the work in incorrect proof blocks, under one-stage and request-level sampling: the
 two-stage design's interior commitments come after its first stage, so they don't show the work was done at serve
 time.  Infiltration is a panel of its own, plotted from the model's `infiltration` card and pending without one.  Each
-panel names the deployment it assumes (`DEPLOYMENT`).  The horizontal lines are rho's reference objects
+panel names the deployment it assumes (`DEPLOYMENT`).  The horizontal lines are the slowdown calculator's reference objects
 (`REFERENCES`, its reference model's; SparseLoCo's syncs scaled to the served model's parameters where its `workload`
 card gives them), the model's checkpoint and every `references` card's.  `figures.py` writes it with Figure 1 and
 Figures 2 and 3.
@@ -94,7 +94,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
 ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
                                     "benchmarks/census/hardware.json")
-RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
+SLOWDOWN, SLOWDOWN_HARDWARE = "benchmarks/slowdown/data/reference.toml", "benchmarks/slowdown/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
 PEAK = "h100-sxm5-80gb/e4m3"
@@ -132,7 +132,7 @@ def returned_bits(served: float) -> int:
 
 #: a request's tokens: the census's mean, or the `workload` card's request
 REQUESTS = ("census", "workload")
-#: where serving's rate comes from: rho's fleet utilization on the dense peak, or the model's `serving_rate` card, the
+#: where serving's rate comes from: the slowdown calculator's fleet utilization on the dense peak, or the model's `serving_rate` card, the
 #: engine's measured computed tokens a GPU-second, read only when asked for
 SERVING = ("assumed", "measured")
 #: the exfiltration capacity a row at the measured reading is held against, in bits: 300 GB
@@ -157,9 +157,9 @@ TRUST = ("Every bound is soundness alone, resting on SHA-512's collision resista
 #: the share of compute the infiltration caption compares the two panels' bounds at
 RATIO_BUDGET = 0.01
 SCHEMA = "spot-figure1/v1"
-#: rho's reference model, whose pretraining run, optimizer step and SparseLoCo syncs its references are
-REF_MODEL, RHO_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
-#: the reference objects rho's reference rules, as cards: (table, key, field)
+#: the slowdown calculator's reference model, whose pretraining run, optimizer step and SparseLoCo syncs its references are
+REF_MODEL, SLOWDOWN_MODEL = "DeepSeek-V4-Pro", "deepseek-v4-pro"
+#: the reference objects the slowdown calculator's reference rules, as cards: (table, key, field)
 REFERENCES = {"ref_sparseloco": ("exfil", "sparseloco-1000", "bits"), "ref_rollouts": ("exfil", "rl-rollouts", "bits"),
               "ref_pretrain": ("work", "v4-pretrain", "flops"), "ref_step": ("work", "v4-step", "flops")}
 #: the circuit-check pin a MAC's AND gates are read from: the Hopper dot's FP8 MoE coordinate
@@ -214,11 +214,11 @@ def _card(c: dict, value, unit: str, field: str) -> InputCard:
 
 
 def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assumed") -> dict[str, InputCard]:
-    """Every input: the model's slot cards', those read from the census and rho's reference, and the bits a request
+    """Every input: the model's slot cards', those read from the census and the slowdown calculator's reference, and the bits a request
     serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
     the census's mean or, under `request="workload"`, the `workload` card's.  Under `serving="measured"` the inputs
     hold the `serving_rate` card's rate (`serving_rate`), which the lines that price serving then read in place of
-    rho's utilization; under the default they hold none, whatever cards exist."""
+    the slowdown calculator's utilization; under the default they hold none, whatever cards exist."""
     if request not in REQUESTS:
         raise ValueError(f"a request is one of {REQUESTS}, not {request!r}")
     sc = slot_cards(model, serving)
@@ -237,12 +237,12 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
                                       ("ranks", "tokens", "strata", "served_macs_per_token")}, "", "strata")}
     census, dc = _entry(ADVERSARY, CENSUS_WORLD), _entry(DEPLOYMENTS, DATACENTER)
     peak = _entry(HARDWARE, PEAK)
-    rho = _toml(RHO)
-    fleet = rho["fleet"][WORLD]
-    devices = _toml(RHO_HARDWARE)["location"][fleet["location"]]["devices"]["value"]
+    registry = _toml(SLOWDOWN)
+    fleet = registry["fleet"][WORLD]
+    devices = _toml(SLOWDOWN_HARDWARE)["location"][fleet["location"]]["devices"]["value"]
 
-    def from_rho(name: str, value, unit: str, where: str, entry: dict) -> None:
-        out[name] = InputCard(value, unit, "modeled", f"{RHO} {where}: {entry['source']}")
+    def from_registry(name: str, value, unit: str, where: str, entry: dict) -> None:
+        out[name] = InputCard(value, unit, "modeled", f"{SLOWDOWN} {where}: {entry['source']}")
 
     pin, coordinate = AND_PIN
     ands = json.loads((ROOT / pin).read_text())["definitions"][coordinate]["and"]
@@ -263,16 +263,16 @@ def cards(model: str = "GLM-5.3", request: str = "census", serving: str = "assum
                                   f"{pin} {coordinate}: {ands:,} ANDs over its K MACs, the pinned Boolean lowering "
                                   "nearest GLM-5.3's FP8 MoE coordinates, taken for every MAC"),
     }
-    session = rho["policy"]["v4-pro-session"]["k"]
-    from_rho("output_cap", session["value"], "bit", "policy.v4-pro-session.k", session)
-    from_rho("world_gpus", fleet["count"]["value"] * devices, "GPU", f"fleet.{WORLD}, its locations' devices",
+    session = registry["policy"]["v4-pro-session"]["k"]
+    from_registry("output_cap", session["value"], "bit", "policy.v4-pro-session.k", session)
+    from_registry("world_gpus", fleet["count"]["value"] * devices, "GPU", f"fleet.{WORLD}, its locations' devices",
              fleet["count"])
-    from_rho("mfu_serve", fleet["mfu_serve"]["value"], "", f"fleet.{WORLD}.mfu_serve", fleet["mfu_serve"])
+    from_registry("mfu_serve", fleet["mfu_serve"]["value"], "", f"fleet.{WORLD}.mfu_serve", fleet["mfu_serve"])
     for name, (table, key, field) in REFERENCES.items():
-        entry = rho[table][key][field]
-        from_rho(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
-    basis = rho["model"][RHO_MODEL]["n_total"]
-    from_rho("ref_params", basis["value"], "param", f"model.{RHO_MODEL}.n_total, the reference model's", basis)
+        entry = registry[table][key][field]
+        from_registry(name, entry["value"], entry["unit"], f"{table}.{key}", entry)
+    basis = registry["model"][SLOWDOWN_MODEL]["n_total"]
+    from_registry("ref_params", basis["value"], "param", f"model.{SLOWDOWN_MODEL}.n_total, the reference model's", basis)
     if work["value"].get("params") is not None:
         out["params"] = _card(work, work["value"]["params"], "param", "params")
     elif model == REF_MODEL:
@@ -377,7 +377,7 @@ PRIMARY, SECONDARY = "world year", "datacenter year"
 
 
 def token_seconds(c: dict[str, InputCard], served_macs: float) -> float:
-    """The GPU-seconds serving takes a computed token: its FLOP at rho's fleet utilization on the dense peak, or under
+    """The GPU-seconds serving takes a computed token: its FLOP at the slowdown calculator's fleet utilization on the dense peak, or under
     the measured reading the `serving_rate` card's rate inverted, with no MACs a token in it."""
     if "serving_rate" in c:
         return 1 / c["serving_rate"].value
@@ -385,9 +385,9 @@ def token_seconds(c: dict[str, InputCard], served_macs: float) -> float:
 
 
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
-    """Each scope's GPU-seconds and the requests it serves in them: at rho's fleet utilization on the dense peak, or
+    """Each scope's GPU-seconds and the requests it serves in them: at the slowdown calculator's fleet utilization on the dense peak, or
     under the measured reading at the `serving_rate` card's tokens a GPU-second over a request's own tokens.  The
-    GPUs are rho's and the census's under either."""
+    GPUs are the slowdown calculator's and the census's under either."""
     flop_request = c["tokens_per_request"].value * 2 * part.served_macs
     rate = c.get("serving_rate")
     out = []
@@ -445,7 +445,7 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
 
 def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
     """What an output at the measured reading says of the rate it read: the `serving_rate` card's value, whether the
-    card is provisional, and beside it the rate rho's utilization comes to on this circuit, which the assumed
+    card is provisional, and beside it the rate the slowdown calculator's utilization comes to on this circuit, which the assumed
     reading serves at."""
     card = sc["serving_rate"]
     return {"reading": "measured", **card["value"], "provisional": card["provisional"],
@@ -474,7 +474,7 @@ def reading_note(serving: dict) -> str:
     goal = f"{SERVING_GOAL / 8e9:,.0f} GB"
     floor = ("" if serving["saturated"] else f" Each bound here is then a lower bound on the bound at the engine's own "
              f"rate: one under {goal} does not show that {goal} is met.")
-    return (f"Serving is planned at the measured {rate:,.5g} computed tokens a GPU-second ({what}), not at rho's "
+    return (f"Serving is planned at the measured {rate:,.5g} computed tokens a GPU-second ({what}), not at the slowdown calculator's "
             f"fleet utilization, {assumed:,.5g} on this circuit: the scope's GPUs are the same, and its requests "
             f"{rate / assumed:.2g} of that reading's.{floor} {REGISTRATION_NOTE}")
 
@@ -699,9 +699,9 @@ def overheads(c: dict[str, InputCard], points: int) -> list[float]:
 
 
 def references(c: dict[str, InputCard], model: str, refs: list[dict] = ()) -> dict[str, list[dict]]:
-    """The panels' horizontal lines, in the panel's unit (bits, or FLOP for skipped work): rho's reference objects, the
-    served model's weights, and every `references` card's lines, a line that depends on the scope by scope.  rho's
-    references are its reference model's; SparseLoCo's sync goes as the parameters, so it is scaled to the served
+    """The panels' horizontal lines, in the panel's unit (bits, or FLOP for skipped work): the slowdown calculator's reference objects, the
+    served model's weights, and every `references` card's lines, a line that depends on the scope by scope.  The
+    slowdown calculator's references are its reference model's; SparseLoCo's sync goes as the parameters, so it is scaled to the served
     model's where its `workload` card gives them."""
     def ref(label: str, name: str, scale: float = 1.0) -> dict:
         return {"label": label, "value": c[name].value * scale, "input": name}
