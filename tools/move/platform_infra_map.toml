@@ -42,11 +42,37 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
 include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json"]
+# The control pod's watchers run from `/data/watchers/src` (`$D/src` in `watchers.sh`, `{tmp_path}/src` in its test): a
+# `git archive` of the paths `infra/control/README.md`'s deploy names, which this move rewrites, so the tree's paths
+# follow it there; `/data/guard-src` is not one of them (below).
+root_prefixes = ["/data/watchers/src/", "$D/src/", "{tmp_path}/src/"]
 
 [rewrite.keep_in]
 # The shell hook's test hands the hook sample commands, whose `../..` is relative to the scratch directory the command
 # runs in (`cd {T}/.. && git -C ../.. push origin main`), not to the test's own file.
 "infra/agent-guard/tests/test_shell_hook.py" = ["tools"]
+# `tools/move/NAME.toml` in a move line (`Move:`, `Layout-move:`) names a map as the move's base holds it, and the landing
+# code reads the move tool at a commit (`git cat-file`, `git ls-tree`), where before this move it is a directory and after
+# it a link, which git doesn't follow: these readers keep the path as `tools/move/`'s own scripts do.
+"tools/verity/check/move_check.py" = ["tools/move", "tools/move/*"]
+"infra/research/src/research/queue.py" = ["tools/move", "tools/move/*"]
+"infra/research/src/research/carry.py" = ["tools/move", "tools/move/*"]
+"adapters/vllm/tools/ratchet_gate.py" = ["tools/move", "tools/move/*"]
+"adapters/vllm/tests/tools/test_ratchet_gate.py" = ["tools/move", "tools/move/*"]
+"infra/research/src/research/vqueue*.py" = ["tools/move", "tools/move/*"]
+"infra/research/tests/test_queue.py" = ["tools/move", "tools/move/*"]
+"infra/research/tests/test_queue_cross.py" = ["tools/move", "tools/move/*"]
+"infra/research/tests/test_queue_moves_carry.py" = ["tools/move", "tools/move/*"]
+"infra/research/tests/test_vqueue*.py" = ["tools/move", "tools/move/*"]
+"infra/research/tests/test_carry.py" = ["tools/move", "tools/move/*"]
+"infra/research/tests/test_landing.py" = ["tools/move", "tools/move/*"]
+"tools/verity/check/tests/test_lean_audit.py" = ["tools/move", "tools/move/*"]
+# Node 1's custody copy of research is installed at `/workspace/custody/tools/research/` (deploy.toml's `path`, the
+# machine's layout, which this move doesn't change), and the custody scripts name it from `$SRC`; so do the control pod's
+# budget guard tree (`/data/guard-src`, made on the pod) and its boot script, which runs from it.
+"infra/research/src/research/pods/nebius/n1_custody.sh" = ["tools/research", "tools/research/*"]
+"infra/research/src/research/pods/nebius/n2_custody.sh" = ["tools/research", "tools/research/*"]
+"infra/control/post_start.sh" = ["tools/research", "tools/research/*"]
 
 [modules]
 # the renames [paths] and [roots] imply (`layout.py --modules`): the directories as dotted paths, which nothing imports by
