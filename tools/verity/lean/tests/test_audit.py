@@ -8486,7 +8486,8 @@ def test_a_replay_checks_each_listed_module_in_a_step_of_its_own_and_the_last_st
     list does, with no `-j`. The stats count each stored module as checked, so the modules checked, the
     failures and the cache's entries are the one step's. A listed step the kernel rejects stores nothing, so the last
     step checks its module with the rest and fails as the one step does. A second replay plans no step. Without a cache
-    it may write, the replay is the one step and says so."""
+    it may write, the replay takes the same steps, keeping what they passed in its own memory: no listed module is
+    replayed beside the rest, nothing is written to a cache, and nothing a cache it may not write holds is reused."""
     graph = {"Init": [], "P.A": ["Init"], "P.Heavy": ["P.A"], "P.Wide": ["Init"], "P.B": ["P.Heavy", "P.Wide"]}
     facts = {"graph": {m: {"imports": i} for m, i in graph.items()}, "modules": ["P.A", "P.Heavy", "P.Wide", "P.B"],
              "axioms": []}
@@ -8538,10 +8539,21 @@ def test_a_replay_checks_each_listed_module_in_a_step_of_its_own_and_the_last_st
     assert fails == stats["first"][1]["failures"] and stats["checked"] == 4 and entries == ["P.A", "P.B", "P.Wide"]
     rejected.clear()
 
+    steps = [("8", ["P.Wide"], []), ("2", ["P.Heavy"], []), (None, ["P.A", "P.B"], ["P.Heavy", "P.Wide"])]
+    (tmp_path / "unwritten").mkdir()
+    A.store_replay(tmp_path / "unwritten", "P.A", "P.A")
     for cache, kw in ((None, {}), ("unwritten", {"store": False})):
         fails, stats, entries, ran = replay(cache, **kw)
-        assert ran == [(None, ["P.A", "P.Heavy", "P.Wide", "P.B"], [])] and stats["first"].startswith("not used: ")
-        assert fails == [] and stats["checked"] == 4 and not entries
+        assert ran == steps and stats["first_kept"].startswith("this run's memory")
+        assert [(s["module"], s["stored"]) for s in stats["first"]] == [("P.Wide", True), ("P.Heavy", True)]
+        assert fails == [] and (stats["checked"], stats["reused"]) == (4, 0)
+        assert entries in (None, ["P.A"]), "a run's own steps write no cache"
+    rejected.add("P.Heavy")
+    fails, stats, _, ran = replay(None)
+    assert ran == [*steps[:2], (None, ["P.A", "P.Heavy", "P.B"], ["P.Wide"])] and stats["checked"] == 4
+    assert fails == ["replay: the kernel rejected a declaration under P, in P.Heavy (exit 1):"]
+    rejected.clear()
+    assert replay("listed")[1]["first_kept"] == "the replay cache"
 
 
 @pytest.mark.slow

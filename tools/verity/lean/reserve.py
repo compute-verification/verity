@@ -25,8 +25,9 @@ FIGURES = json.loads(DATA.read_text())
 BUILD_HEAVY_GIB = FIGURES["BUILD_HEAVY_GIB"]
 #: a build of a package that pins neither, and the replay of one that doesn't pin ArkLib
 LIGHT_GIB = FIGURES["LIGHT_GIB"]
-#: the whole kernel replay of a package that pins ArkLib, one process run alone: a figure of the tree that grows with what
-#: the replay checks, so raise it when a replay warns
+#: the whole kernel replay of a package that pins ArkLib, one process run alone, once the modules `replay-first.json` lists
+#: for it have each passed in a step of their own (`check.replay_in_steps`, which every replay takes): a figure of the tree
+#: that grows with what the replay checks, so raise it when a replay warns
 REPLAY_ARKLIB_GIB = FIGURES["REPLAY_ARKLIB_GIB"]
 #: a heavy replay's threads: one per this many GiB of what its run reserved, since nothing else bounds what it holds
 REPLAY_PER_THREAD_GIB = FIGURES["REPLAY_PER_THREAD_GIB"]

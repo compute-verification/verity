@@ -5264,6 +5264,12 @@ def store_replay(replay_cache: Path, key: str, module: str) -> None:
     write_atomic(replay_cache / f"{key}.json", json.dumps({"schema": REPLAY_SCHEMA, "module": module, "key": key}).encode())
 
 
+def has_replay(replay_cache: Path | set[str], key: str) -> bool:
+    """Whether ``replay_cache`` holds a pass under ``key``: a directory's entry (`store_replay`), or a key in the set a run
+    keeps in its own memory (`replay_in_steps`)."""
+    return key in replay_cache if isinstance(replay_cache, set) else (replay_cache / f"{key}.json").is_file()
+
+
 def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
     """Mark the entries of ``modules`` used now, so the cache's eviction (`lean_audit.prune_replays`, by mtime) keeps what
     every replay reuses, Mathlib's and ArkLib's modules first, rather than dropping it as the oldest stored. Returns how many
@@ -5277,7 +5283,7 @@ def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
     return evicted
 
 
-def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
+def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | set[str] | None,
                 closure: bool = False, search: list[str] | None = None, digest=None, store: bool = True,
                 prefix: tuple[str, ...] = (), held: bool = False, threads: int | None = None) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
@@ -5292,12 +5298,14 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     `replay_in_steps`): `lean`'s `-j`, the one count the pool of its tasks is sized from, which is the machine's without
     it whatever `LEAN_NUM_THREADS` says. ``store`` is false for an unsealed audit (a control, a stubbed test),
     whose keys are hashed from the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict
-    can never poison a sealed run."""
+    can never poison a sealed run. A set for ``replay_cache`` is a run's own (`replay_in_steps`): the keys of the modules
+    it passed, held in its memory, which nothing touches or evicts."""
     found = work / "replay.json"
     found.unlink(missing_ok=True)
-    keys = replay_keys(facts, toolchain, digest) if replay_cache else {}
+    own = isinstance(replay_cache, set)
+    keys = replay_keys(facts, toolchain, digest) if replay_cache is not None else {}
     def passed(m):
-        return m in keys and (replay_cache / f"{keys[m]}.json").is_file()
+        return m in keys and has_replay(replay_cache, keys[m])
     n = replay_threads(pkg)
     alone = n is not None and not held                 # a heavy replay runs alone, whatever threads a step states
     n = n if threads is None else threads
@@ -5311,7 +5319,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
         evicted = 0
-        if keys and store:
+        if keys and store and not own:
             fresh = {*facts["modules"], *deps_checked}
             evicted = touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
         rc, text = run([*prefix, *([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
@@ -5323,7 +5331,9 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
         accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
             if keys and (rc == 0 or (rc == 1 and "rejected" in doc)) else []
-        if accepted and store:
+        if accepted and store and own:
+            replay_cache.update(keys[m] for m in accepted)
+        elif accepted and store:
             replay_cache.mkdir(parents=True, exist_ok=True)
             for m in accepted:
                 store_replay(replay_cache, keys[m], m)
@@ -5421,11 +5431,15 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
     the rest, so it covers the same modules, reads the same files and gives the same failures and axioms as one step
     does. A listed step only moves when a module is checked and at how many threads.
 
-    The steps need a cache to carry their verdicts: an audit that has none, or may not write it (``store``), runs the one
-    step, and its stats say so (`first`). The stats are the last step's, with each module a listed step stored counted as
-    checked rather than reused, the highest peak of any step (`peak_gib`), and the listed steps (`first`: each with its
-    module, threads, seconds, peak, phases, whether it was stored, and its failures but for the axioms it does not
-    compare)."""
+    The steps need a cache to carry their verdicts, since a listed module replayed beside the rest holds more than the
+    replay's figure (`reserve.REPLAY_ARKLIB_GIB`, which holds only when the listed modules go first). An audit that has
+    none, or may not write it (``store``), keeps them in a set of its own, in this process's memory alone, under the same
+    `replay_keys` keys: no other process can read or write it, the last step reuses a module from it only where the key
+    it computes is there, as from a node's cache, and it ends with the audit. Such an audit reuses nothing a node's cache
+    holds. The stats are the last step's, with each module a listed step stored counted as checked rather than reused,
+    the highest peak of any step (`peak_gib`), the listed steps (`first`: each with its module, threads, seconds, peak,
+    phases, whether it was stored, and its failures but for the axioms it does not compare) and where they were kept
+    (`first_kept`)."""
     def last():
         return replay_step(pkg, policy, facts, toolchain, work, replay_cache, closure, search, digest, store)
     try:
@@ -5434,13 +5448,12 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
         return [Failure("lean", None, f"lean: {e}")], {"checked": 0, "reused": 0}
     if not first:
         return last()
+    kept = "the replay cache"
     if replay_cache is None or not store:
-        fails, stats = last()
-        return fails, stats | {"first": "not used: this audit has no replay cache it may write, so one step checks every "
-                                        "module"}
+        replay_cache, store, kept = set(), True, "this run's memory: it has no replay cache it may write"
     keys = replay_keys(facts, toolchain, digest)
     def passed(m):
-        return (replay_cache / f"{keys[m]}.json").is_file()
+        return has_replay(replay_cache, keys[m])
     threads = replay_threads(pkg) or int(lake_env()["LEAN_NUM_THREADS"])
     steps = []
     for i, (mods, n) in enumerate(replay_plan(facts["modules"], first, passed, threads)[:-1]):
@@ -5456,7 +5469,7 @@ def replay_in_steps(pkg: Path, policy: dict, facts: dict, toolchain: str, work: 
     fails, stats = last()
     stored = sum(s["stored"] for s in steps)
     return fails, stats | {"checked": stats["checked"] + stored, "reused": stats["reused"] - stored, "first": steps,
-                           "peak_gib": max([stats["peak_gib"], *(s["peak_gib"] for s in steps)])}
+                           "first_kept": kept, "peak_gib": max([stats["peak_gib"], *(s["peak_gib"] for s in steps)])}
 
 
 #: a pipelined batch starts only with this much memory free (`free_gib`): about a heavy replay's peak (44 to 138 GiB in
