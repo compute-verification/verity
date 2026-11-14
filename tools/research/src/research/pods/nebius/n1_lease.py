@@ -95,9 +95,12 @@ def iso(t: float) -> str:
 
 
 def epoch(s: str | None) -> float | None:
+    if not s:
+        return None
     try:
-        return datetime.strptime(s or "", "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
-    except ValueError:
+        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+    except ValueError as e:
+        print(f"n1_lease: {s[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -154,9 +157,12 @@ def owner_fields(line: str) -> dict[str, str]:
 
 def foreign_on(i: int) -> list[dict[str, str]]:
     """What gpu-lease last found holding GPU i's memory under no lease (`$GPU_LEASE_DIR/<i>.foreign`), its processes still alive."""
+    if not (DIR / f"{i}.foreign").exists():
+        return []
     try:
         lines = (DIR / f"{i}.foreign").read_text().splitlines()
-    except OSError:
+    except OSError as e:
+        print(f"n1_lease: GPU {i}'s foreign file unread, so it shows none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     found = [owner_fields(line) for line in lines if line.strip()]
     return [f for f in found if f.get("pid", "").isdigit() and Path(f"/proc/{f['pid']}").exists()]
@@ -310,7 +316,8 @@ def waiters() -> list[dict]:
             if not locked(f):
                 continue
             w = owner_fields(f.read_text().strip())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"n1_lease: {f.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out.append({"file": f.name, **w, "n": int(w.get("n", 1))})
     return out
@@ -431,8 +438,8 @@ class Controller:
                         first = kubectl("logs", pod).strip().splitlines()
                         if first and first[0].startswith("GPU-"):
                             self.uuid_of_pod[pod] = first[0].strip()
-                    except subprocess.CalledProcessError:
-                        pass
+                    except subprocess.CalledProcessError as e:
+                        print(f"n1_lease: kubectl logs {pod} exited {e.returncode}, so its GPU is not known yet", file=sys.stderr, flush=True)
                 i = self.table.get(self.uuid_of_pod.get(pod, ""))
                 if i is not None:
                     pool[i] = name
@@ -466,8 +473,9 @@ class Controller:
             gpus.append(g)
         want = waiters()
         try:
-            blocked = (DIR / "blocked").read_text().strip() or "blocked"
-        except OSError:
+            blocked = ((DIR / "blocked").read_text().strip() or "blocked") if (DIR / "blocked").exists() else None
+        except OSError as e:
+            print(f"n1_lease: {DIR / 'blocked'} unread, so leasing is not blocked ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             blocked = None
         brain = self.ask_brain(t, gpus, want, pending) if BRAIN and not blocked else None
         for g in gpus:

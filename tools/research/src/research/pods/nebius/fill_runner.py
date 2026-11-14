@@ -187,8 +187,9 @@ def fences(t: float | None = None) -> list[dict]:
     t = time.time() if t is None else t
     out = []
     try:
-        lines = (FILL / "fences").read_text().splitlines()
-    except OSError:
+        lines = (FILL / "fences").read_text().splitlines() if (FILL / "fences").exists() else []
+    except OSError as e:
+        print(f"fill: {FILL / 'fences'} unread, so no fence holds ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return out
     for line in lines:
         f = line.split("#")[0].split()
@@ -196,7 +197,8 @@ def fences(t: float | None = None) -> list[dict]:
             continue
         try:
             until = utc(f[3])
-        except ValueError:
+        except ValueError as e:
+            print(f"fill: fence {line[:80]!r} skipped: its until is not a time ({e})", file=sys.stderr, flush=True)
             continue
         if until > t:
             out.append({"owner": f[0], "gpu": int(f[1]), "cpus": f[2], "until": until, "jobs": f[4] if len(f) == 6 else None,
@@ -219,8 +221,9 @@ def max_min_exception(name: str, t: float | None = None) -> int | None:
     if f and f["until"] - t >= 60:
         return min(f["minutes"], int((f["until"] - t) // 60))
     try:
-        lines = (FILL / "max-min").read_text().splitlines()
-    except OSError:
+        lines = (FILL / "max-min").read_text().splitlines() if (FILL / "max-min").exists() else []
+    except OSError as e:
+        print(f"fill: {FILL / 'max-min'} unread, so no job's minutes are bounded by it ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     for line in lines:
         f = line.split("#")[0].split()
@@ -228,7 +231,8 @@ def max_min_exception(name: str, t: float | None = None) -> int | None:
             continue
         try:
             left = int((utc(f[2]) - t) // 60)
-        except ValueError:
+        except ValueError as e:
+            print(f"fill: max-min {line[:80]!r} skipped: its until is not a time ({e})", file=sys.stderr, flush=True)
             continue
         if left >= 1:
             return min(int(f[1]), left)
@@ -239,8 +243,9 @@ def timing_owners() -> list[str]:
     """FILL_DIR/timing-owners: the owners whose jobs may be timing jobs, one glob per line (`network-accounting  # who, why`),
     written by infra.  A timing job holds a GPU and whole cores that nothing preempts, so without the file nobody's may."""
     try:
-        lines = (FILL / "timing-owners").read_text().splitlines()
-    except OSError:
+        lines = (FILL / "timing-owners").read_text().splitlines() if (FILL / "timing-owners").exists() else []
+    except OSError as e:
+        print(f"fill: {FILL / 'timing-owners'} unread, so nobody's job may be a timing job ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     return [f[0] for f in (line.split("#")[0].split() for line in lines) if f]
 
@@ -252,7 +257,8 @@ def mem_share(n: int) -> int:
         return int(per)
     try:
         kb = next(int(l.split()[1]) for l in Path("/proc/meminfo").read_text().splitlines() if l.startswith("MemTotal:"))
-    except (OSError, StopIteration, IndexError, ValueError):
+    except (OSError, StopIteration, IndexError, ValueError) as e:
+        print(f"fill: MemTotal unread, so a GPU's memory is {CPU_MEM_GB} GB ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return CPU_MEM_GB
     return int(kb * 0.9 / 2**20 / max(n, 1))
 
@@ -312,8 +318,9 @@ def cpu_sets() -> dict[str, dict]:
     """FILL_DIR/cpu-sets: owners whose CPU jobs get CPUs of their own (such as verifies on 0-47)."""
     out = {}
     try:
-        lines = (FILL / "cpu-sets").read_text().splitlines()
-    except OSError:
+        lines = (FILL / "cpu-sets").read_text().splitlines() if (FILL / "cpu-sets").exists() else []
+    except OSError as e:
+        print(f"fill: {FILL / 'cpu-sets'} unread, so no owner has CPUs of its own ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return out
     for line in lines:
         f = line.split("#")[0].split()
@@ -326,8 +333,10 @@ def mem_peak_gb(pid: int) -> float | None:
     """The peak memory of the cgroup `pid` runs in (its scope), in GB."""
     try:
         cg = Path(f"/proc/{pid}/cgroup").read_text().strip().split("::", 1)[1]
-        return round(int((Path(CGROUP_ROOT) / cg.lstrip("/") / "memory.peak").read_text()) / 1e9, 2)
-    except (OSError, IndexError, ValueError):
+        peak = Path(CGROUP_ROOT) / cg.lstrip("/") / "memory.peak"
+        return round(int(peak.read_text()) / 1e9, 2) if peak.exists() else None
+    except (OSError, IndexError, ValueError) as e:
+        print(f"fill: pid {pid}'s memory peak unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -381,7 +390,8 @@ def waiters() -> list[int]:
     for f in sorted(LEASE_DIR.glob("wait.*")):
         try:
             fd = os.open(f, os.O_RDONLY)
-        except OSError:
+        except OSError as e:
+            print(f"fill: {f.name} skipped, gone while the waits were listed ({type(e).__name__})", file=sys.stderr, flush=True)
             continue
         try:
             try:
@@ -417,7 +427,9 @@ def scope_populated(j: dict) -> bool:
         return "populated 1" in (Path(CGROUP_ROOT) / TIMING_SLICE / f"{j['unit']}.scope" / "cgroup.events").read_text()
     except FileNotFoundError:
         return False
-    except OSError:
+    except OSError as e:
+        print(f"fill: {j['unit']}.scope's cgroup.events unread, so it counts as holding a process ({type(e).__name__}: {e})",
+              file=sys.stderr, flush=True)
         return True
 
 
@@ -438,7 +450,7 @@ def stop(name: str, why: str, requeue: bool = True) -> None:
         os.killpg(j["pid"], signal.SIGCONT)
         os.killpg(j["pid"], signal.SIGTERM)
     except ProcessLookupError:
-        pass
+        print(f"fill: {name}'s group {j['pid']} was gone before SIGTERM", file=sys.stderr, flush=True)
     kill(name, j, "SIGTERM")
     j["stopping"], j["stop_at"], j["requeue"], j["why"] = True, time.monotonic(), requeue, why
     event("stop", name, why=why)
@@ -548,8 +560,10 @@ def keep_free(n: int, fs: list[dict] | None = None) -> set[int]:
     only a fence's own jobs run."""
     fs = fences() if fs is None else fs
     try:
-        kept = gpu_set((FILL / "keep-free").read_text().split("#")[0].strip() or None, n) or set()
-    except OSError:
+        kept = (gpu_set((FILL / "keep-free").read_text().split("#")[0].strip() or None, n) or set()
+                if (FILL / "keep-free").exists() else set())
+    except OSError as e:
+        print(f"fill: {FILL / 'keep-free'} unread, so it keeps no GPU free ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         kept = set()
     return kept | {f["gpu"] for f in fs if f["gpu"] < n}
 
@@ -581,7 +595,8 @@ def local_cpus(i: int) -> set[int]:
     if i not in _local:
         try:
             _local[i] = gpu_cpus(i)
-        except (OSError, ValueError, subprocess.SubprocessError):
+        except (OSError, ValueError, subprocess.SubprocessError) as e:
+            print(f"fill: GPU {i}'s local CPUs unread, so none for now ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             return set()
     return _local[i]
 
@@ -591,7 +606,8 @@ def siblings(c: int) -> frozenset[int]:
     """CPU c's core: its SMT siblings (CPU_ROOT/cpu<c>/topology/thread_siblings_list); none when that can't be read."""
     try:
         return frozenset(gpu_set((CPU_ROOT / f"cpu{c}" / "topology" / "thread_siblings_list").read_text().strip(), 1 << 16) or ())
-    except OSError:
+    except OSError as e:
+        print(f"fill: CPU {c}'s siblings unread, so none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return frozenset()
 
 
@@ -624,7 +640,8 @@ def timing_free(fs: list[dict]) -> set[int]:
             own = d.name != TIMING_SLICE and (d / "cpuset.cpus").read_text().strip()
             for c in [d] if own else [c for c in d.iterdir() if c.is_dir() and populated(c)] or [d]:
                 free -= gpu_set((c / "cpuset.cpus.effective").read_text().strip(), 1 << 16) or set()
-    except OSError:
+    except OSError as e:
+        print(f"fill: the cgroups' CPUs unread, so none counts as free ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return set()
     return free
 
@@ -666,16 +683,18 @@ def windows() -> list[tuple[float, float]]:
     """The timed windows booked in FILL_DIR/windows, as (start, end) in epoch seconds."""
     out = []
     try:
-        lines = (FILL / "windows").read_text().splitlines()
-    except OSError:
+        lines = (FILL / "windows").read_text().splitlines() if (FILL / "windows").exists() else []
+    except OSError as e:
+        print(f"fill: {FILL / 'windows'} unread, so no timed window is booked ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return out
     for line in lines:
         f = line.split("#")[0].split()
         try:
             t = datetime.fromisoformat(f[0]).timestamp()
             out.append((t, t + 60 * float(f[1] if len(f) > 1 else 30)))
-        except (IndexError, ValueError):
-            continue
+        except (IndexError, ValueError) as e:
+            if f:
+                print(f"fill: window {line[:80]!r} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out
 
 
@@ -708,9 +727,11 @@ def tries(name: str) -> int:
 
 def exit_status(name: str) -> int | None:
     """The status a job's wrapper wrote as it exited (RC_WRAP), or None when there is none."""
+    rc = FILL / "running" / f".{name}.rc"
     try:
-        return int((FILL / "running" / f".{name}.rc").read_text().strip())
-    except (OSError, ValueError):
+        return int(rc.read_text().strip()) if rc.exists() else None
+    except (OSError, ValueError) as e:
+        print(f"fill: {rc} unread, so {name} has no exit status yet ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -742,7 +763,7 @@ def reap() -> None:
                 try:
                     os.killpg(j["pid"], signal.SIGKILL)
                 except ProcessLookupError:
-                    pass
+                    print(f"fill: {name}'s group {j['pid']} was gone before SIGKILL", file=sys.stderr, flush=True)
                 kill(name, j, "SIGKILL")
             continue
         if scope(j, "kill", "--signal=SIGKILL"):
@@ -883,7 +904,8 @@ def numa0_gb() -> dict:
             parts = line.split()
             if len(parts) >= 4 and parts[2].rstrip(":") in ("MemFree", "Inactive(file)", "AnonPages"):
                 kb[parts[2].rstrip(":")] = int(parts[3])
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"fill: {NODE_MEMINFO} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return {"numa0_reclaimable_gb": round((kb.get("MemFree", 0) + kb.get("Inactive(file)", 0)) / 2**20, 1),
             "numa0_anon_gb": round(kb.get("AnonPages", 0) / 2**20, 1)}
@@ -946,7 +968,7 @@ def tick(n: int) -> str:
                     j["paused_s"] = j.get("paused_s", 0.0) + time.monotonic() - j["paused_at"]; j["paused"] = False
                     event("resume", k)
             except ProcessLookupError:
-                pass
+                print(f"fill: {k}'s group {j['pid']} was gone before it was paused or resumed", file=sys.stderr, flush=True)
         if not j.get("stopping") and not j["paused"] and active_s(j) > 60 * j["h"]["max_min"]:
             stop(k, "max_min")
     queued = []
@@ -959,8 +981,8 @@ def tick(n: int) -> str:
                     event("failed", p.name, owner=h["owner"], why=f"header: {h['bad']}")
                     continue
                 queued.append((p, h, p.stat().st_mtime))
-            except OSError:
-                pass
+            except OSError as e:
+                print(f"fill: {p.name} not queued this tick ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     started = False
     # a window blocked by another lease: fill backfills, admitted by gpu-lease --max-min only if it ends before the window can start
     backfill = window and blockers > 0
@@ -1077,11 +1099,14 @@ def adopt() -> None:
         # a job that ended while no runner ran is adopted too: the first tick files it by its wrapper's status
         try:
             stopped = Path(f"/proc/{pgid}/stat").read_text().rsplit(")", 1)[1].split()[0] == "T"
-        except OSError:
+        except OSError as e:
+            print(f"fill: {p.name}'s group {pgid} unread, so it counts as not stopped ({type(e).__name__})", file=sys.stderr, flush=True)
             stopped = False
+        unit_file = FILL / "running" / f".{p.name}.unit"
         try:
-            unit = (FILL / "running" / f".{p.name}.unit").read_text().strip() or None
-        except OSError:
+            unit = (unit_file.read_text().strip() or None) if unit_file.exists() else None
+        except OSError as e:
+            print(f"fill: {unit_file} unread, so {p.name} has no unit ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             unit = None
         h = header(p)
         if unit and unit.startswith("fill-lent-"):
@@ -1094,8 +1119,9 @@ def adopt() -> None:
             # CPUs it may hold that no record names are all taken, so no later job, nor a fence, shares them
             cpus = FILL / "running" / f".{p.name}.cpus"
             try:
-                h["timing_cpus"] = cpus.read_text().strip() or TIMING_CPU_SET
-            except OSError:
+                h["timing_cpus"] = (cpus.read_text().strip() if cpus.exists() else "") or TIMING_CPU_SET
+            except OSError as e:
+                print(f"fill: {cpus} unread, so {p.name} holds {TIMING_CPU_SET} ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 h["timing_cpus"] = TIMING_CPU_SET
             cpus.write_text(f"{h['timing_cpus']}\n")
         if h["gpus"] and not unit and not h["timing"]:
@@ -1167,7 +1193,8 @@ def fence(argv: list[str], t: float | None = None) -> int:
             for p in (FILL / "running").glob(".*.cpus"):
                 try:
                     theirs = gpu_set(p.read_text().strip(), 1 << 16) or set()
-                except OSError:
+                except OSError as e:
+                    print(f"fill: {p.name} skipped, gone while listed ({type(e).__name__})", file=sys.stderr, flush=True)
                     continue
                 if cpus & theirs:
                     return refuse(f"timing job {p.name[1:-len('.cpus')]} has cores {cpu_list(theirs)} until its max_min")

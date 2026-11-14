@@ -98,17 +98,23 @@ def run_of(chain: list[int]) -> str | None:
 
 
 def lane_of(run: str | None) -> str | None:
+    if not run or not (RUNS / run / "job.json").exists():
+        return None
     try:
-        return (json.loads((RUNS / run / "job.json").read_text()).get("ownership") or {}).get("lane") if run else None
-    except (OSError, ValueError):
+        return (json.loads((RUNS / run / "job.json").read_text()).get("ownership") or {}).get("lane")
+    except (OSError, ValueError) as e:
+        print(f"gpu_adopt: {RUNS / run / 'job.json'} unread, so its run has no lane ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
 def lease_run(i: int) -> str | None:
     """The run id GPU i's owner line names, else None."""
+    if not (LEASE_DIR / f"{i}.owner").exists():
+        return None
     try:
         m = re.search(r"\brun=(r\d{8}-\d{6}-[0-9a-f]{4})\b", (LEASE_DIR / f"{i}.owner").read_text())
-    except OSError:
+    except OSError as e:
+        print(f"gpu_adopt: GPU {i}'s owner line unread, so it names no run ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return m.group(1) if m else None
 
@@ -116,9 +122,12 @@ def lease_run(i: int) -> str | None:
 def lease_owner(i: int) -> int | None:
     """The owner pid of a lease held on GPU i, else None (the lock is free)."""
     lock = LEASE_DIR / f"{i}.lock"
+    if not lock.exists():
+        return None
     try:
         fd = os.open(lock, os.O_RDONLY)
-    except OSError:
+    except OSError as e:
+        print(f"gpu_adopt: {lock} unopened, so GPU {i} counts as free ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     try:
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
@@ -126,7 +135,8 @@ def lease_owner(i: int) -> int | None:
     except BlockingIOError:
         try:
             m = re.search(r"\bpid=(\d+)", (LEASE_DIR / f"{i}.owner").read_text())
-        except OSError:
+        except OSError as e:
+            print(f"gpu_adopt: GPU {i} is held but its owner line is unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             return -1
         return int(m.group(1)) if m else -1
     finally:

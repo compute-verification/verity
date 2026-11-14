@@ -24,6 +24,7 @@ import os
 import re
 import shlex
 import subprocess
+import sys
 import threading
 import time
 from typing import Any
@@ -79,9 +80,12 @@ def render(clusterqueues: dict, pods: dict, ready: dict[str, int], ok: bool = Tr
 
 def ready_counts(root: str) -> dict[str, int]:
     out: dict[str, int] = {}
+    if not os.path.isdir(root):
+        return out
     try:
         lanes = sorted(os.listdir(root))
-    except OSError:
+    except OSError as e:
+        print(f"vy_exporter: {root} unlisted, so no lane has ready marks ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return out
     for lane in lanes:
         d = os.path.join(root, lane)

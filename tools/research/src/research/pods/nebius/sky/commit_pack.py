@@ -118,9 +118,12 @@ def batch(entry: dict) -> int:
 
 def learned() -> dict[str, float]:
     """The pacer's learned GB per (batch x tokens) per model, or {} while SIZES is missing or unreadable."""
+    if not SIZES.exists():
+        return {}
     try:
         return {k: float(v) for k, v in json.loads(SIZES.read_text()).items()}
-    except (OSError, ValueError, AttributeError):
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"commit_pack: {SIZES} unread, so no size is learned yet ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -255,7 +258,8 @@ class Mps:
                     f.seek(self.offsets.get(p, 0))
                     new = f.read().decode("utf-8", "replace")
                     self.offsets[p] = f.tell()
-            except OSError:
+            except OSError as e:
+                print(f"commit_pack: MPS log {p} unread this pass ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 continue
             for line in new.splitlines():
                 if MPS_LOG_FAULT.search(line) and not MPS_LOG_CLIENT_EXIT.search(line):
@@ -448,8 +452,8 @@ def main() -> int:
             report(c, None, True, "stopped: the pilot is exiting")
         try:
             mps.stop()
-        except (OSError, subprocess.SubprocessError):
-            pass
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"commit_pack: the MPS daemon did not stop ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         for p in sorted(mps.logs.glob("*.log")):
             print(f"--- {p.name}\n{tail(p, 16 * 1024)}", flush=True)
         shutil.rmtree(scratch, ignore_errors=True)

@@ -34,6 +34,7 @@ import json
 import os
 import sqlite3
 import subprocess
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -112,7 +113,8 @@ def attempts_by_job(since: str) -> dict[str, list[tuple]]:
         with sqlite3.connect(f"file:{STORE_DB}?mode=ro", uri=True) as c:
             rows = c.execute("select a.host, a.state, a.rc, a.validation, (select count(*) from attempt_outputs o where o.attempt = a.id)"
                              " from attempts a where a.start_utc >= ?", (since,)).fetchall()
-    except sqlite3.Error:
+    except sqlite3.Error as e:
+        print(f"pool_n1: node 1's store unread, so no attempt is known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     out: dict[str, list[tuple]] = {}
     for host, *rest in rows:
@@ -158,9 +160,12 @@ def delivery(obs: dict) -> list[dict]:
 
 def lease_pool() -> dict[int, dict]:
     """n1_lease.py's GPUs in the lease pool (index -> its record), when its state is fresh; else none."""
+    if not LEASE_STATE.exists():
+        return {}
     try:
         s = json.loads(LEASE_STATE.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"pool_n1: {LEASE_STATE} unread, so the lease pool reads as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     if time.time() - datetime.strptime(s["t"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp() > 120:
         return {}

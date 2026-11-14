@@ -131,7 +131,8 @@ def leases() -> dict[int, list[tuple[Path, int]]]:
                 continue
             try:
                 owner = (d / f"{lock.stem}.owner").read_text()
-            except OSError:
+            except OSError as e:
+                print(f"gpu_stray: {d / f'{lock.stem}.owner'} unread, so its held lock is skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
                 continue
             m = re.search(r"\bpid=(\d+)", owner)
             if m and FENCE_CMD not in owner:

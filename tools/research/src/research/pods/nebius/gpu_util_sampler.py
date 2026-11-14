@@ -33,9 +33,12 @@ QUERY = "index,uuid,utilization.gpu,utilization.memory,memory.used,power.draw,cl
 
 def num(s: str):
     s = s.strip()
+    if s in ("", "N/A", "[N/A]", "[Not Supported]", "[Unknown Error]"):
+        return None
     try:
         return float(s) if "." in s else int(s)
-    except ValueError:
+    except ValueError as e:
+        print(f"gpu_util_sampler: {s[:40]!r} is not a number, read as none ({e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -83,7 +86,8 @@ def lease_owner(i: int) -> str | None:
     lock, owner = LEASE_DIR / f"{i}.lock", LEASE_DIR / f"{i}.owner"
     try:
         r = subprocess.run(["flock", "-n", "-s", str(lock), "true"], capture_output=True, timeout=5)
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"gpu_util_sampler: GPU {i}'s lock not probed, so it has no owner ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     if r.returncode == 0:
         return None
@@ -121,8 +125,8 @@ def wait_files() -> list[str]:
         try:
             if subprocess.run(["flock", "-n", "-s", str(f), "true"], capture_output=True, timeout=5).returncode != 0:
                 out.append(f.read_text().strip())
-        except Exception:  # noqa: BLE001
-            pass
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"gpu_util_sampler: {f.name} skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return out
 
 
