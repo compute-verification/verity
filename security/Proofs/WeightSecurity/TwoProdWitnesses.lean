@@ -22,7 +22,7 @@ import Proofs.WeightSecurity.TwoProdPeriod
 * `periodTwoLead_nontrivial`, `periodTwoProd_nontrivial`: at `sksLTwo`'s verification phases, which accept after one
   round and sample nothing, both statements fail at the committed boundary trace and `δ = 1/2`. One verification phase,
   played by `twoStrat` at the silent prover, is accepted surely and samples no proof block
-  (`acceptedSampledAt_sksLTwo`: the hypothesis holds at `ε = 0`), while its escape is `0` (`escAt_sksLTwo`: its
+  (`acceptedSampledAt_sksLTwo`: the hypothesis holds at `ε = 0`), while its missProb is `0` (`escAt_sksLTwo`: its
   committed boundary trace opens nothing, so its replay block holds an incorrect proof block at every interior): the
   event holds surely and the bound is `1/2`.
 * `sksLTwo_not_sessions`: so `sksLTwo` does not meet the two-stage contract, the premise `compilerPeriodTwoProd` takes.
@@ -42,7 +42,7 @@ open scoped ENNReal
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
 /-- **A period of one two-stage verification phase**, played by `twoStrat`: the run flips the phase's coins and
-records the phase at the count and the escape its release, statement and prover fix. -/
+records the phase at the count and the missProb its release, statement and prover fix. -/
 theorem twoAtRun_twoStrat (H : Msg → Msg) (L : CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (m : (O → V) × Tick × Adv)
     (x : Msg) (P : Prover Unit) :
@@ -51,26 +51,26 @@ theorem twoAtRun_twoStrat (H : Msg → Msg) (L : CompiledTwo Coin A)
         .ret [twoAtRec H L (val 0 m x P) (regCountAt L x (val 0 m x P)) (escAt L x (val 0 m x P)) (m, ⟨x, P, r⟩)] :=
   rfl
 
-/-- One verification phase whose sample holds none of its incorrect proof blocks and whose escape is `0` leaves
+/-- One verification phase whose sample holds none of its incorrect proof blocks and whose missProb is `0` leaves
 escapes that multiply below every `δ > 0`. -/
 theorem undetectedBelow_one {w : ServedEsc O V Tick Adv} {δ : ℝ} (hδ : 0 < δ) (hs : ¬ w.sampledIncorrect)
-    (he : w.escape = 0) : ServedEsc.UndetectedBelow δ [w] := by
+    (he : w.missProb = 0) : ServedEsc.UndetectedBelow δ [w] := by
   refine Or.inr ?_
-  have h0 : ServedEsc.leadEscape [w] = 0 := by simp [ServedEsc.leadEscape, hs, he]
+  have h0 : ServedEsc.leadMissProb [w] = 0 := by simp [ServedEsc.leadMissProb, hs, he]
   rw [h0]
   exact ENNReal.ofReal_pos.2 hδ
 
-/-- One accepted verification phase whose escape is `0` is a period whose phases are all accepted and whose escapes
+/-- One accepted verification phase whose missProb is `0` is a period whose phases are all accepted and whose escapes
 multiply below every `δ > 0`. -/
-theorem prodBelow_one {w : ServedEsc O V Tick Adv} {δ : ℝ} (hδ : 0 < δ) (ha : w.accepted) (he : w.escape = 0) :
-    (∀ r ∈ [w], r.accepted) ∧ ([w].map ServedEsc.escape).prod < ENNReal.ofReal δ := by
+theorem prodBelow_one {w : ServedEsc O V Tick Adv} {δ : ℝ} (hδ : 0 < δ) (ha : w.accepted) (he : w.missProb = 0) :
+    (∀ r ∈ [w], r.accepted) ∧ ([w].map ServedEsc.missProb).prod < ENNReal.ofReal δ := by
   refine ⟨fun r hr => ?_, ?_⟩
   · rw [List.mem_singleton.1 hr]
     exact ha
   · rw [List.map_singleton, List.prod_singleton, he]
     exact ENNReal.ofReal_pos.2 hδ
 
-/-- **A period of one verification phase that samples no incorrect proof block and whose escape is `0`** leaves
+/-- **A period of one verification phase that samples no incorrect proof block and whose missProb is `0`** leaves
 escapes below every `δ > 0` undetected surely. -/
 theorem value_undetectedBelow_one (H : Msg → Msg) (L : CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (m : (O → V) × Tick × Adv)
@@ -81,7 +81,7 @@ theorem value_undetectedBelow_one (H : Msg → Msg) (L : CompiledTwo Coin A)
   rw [twoAtRun_twoStrat, Verity.Game.value_coin_ret]
   exact Verity.ValueSalts.prCoin_of_forall fun r => undetectedBelow_one hδ (hs r) he
 
-/-- **A period of one verification phase that is accepted surely and whose escape is `0`** is accepted throughout,
+/-- **A period of one verification phase that is accepted surely and whose missProb is `0`** is accepted throughout,
 with escapes that multiply below every `δ > 0`, surely. -/
 theorem value_prodBelow_one (H : Msg → Msg) (L : CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (m : (O → V) × Tick × Adv)
@@ -90,7 +90,7 @@ theorem value_prodBelow_one (H : Msg → Msg) (L : CompiledTwo Coin A)
     (he : escAt L x (val 0 m x P) = 0) :
     Verity.Game.value
         (fun l : List (ServedEsc O V Tick Adv) =>
-          (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal δ)
+          (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.missProb).prod < ENNReal.ofReal δ)
         (twoAtRun H (fun _ => L) val 1 (twoStrat L m x P)) = 1 := by
   rw [twoAtRun_twoStrat, Verity.Game.value_coin_ret]
   exact Verity.ValueSalts.prCoin_of_forall fun r => prodBelow_one hδ (ha r) he
@@ -117,7 +117,7 @@ theorem toyTwo_paBestAt {val : ℕ → Option Bool} (hv : val 0 = none) :
   exact toyTwo_Pa (toy_footprintAt hv _)
 
 open Classical in
-/-- `sksLTwo`'s escape is `0` at boundary values that commit nothing at the input. -/
+/-- `sksLTwo`'s missProb is `0` at boundary values that commit nothing at the input. -/
 theorem escAt_sksLTwo (x : Msg) {val : ℕ → Option Bool} (hv : val 0 = none) : escAt (sksLTwo Bool) x val = 0 := by
   have hval : escAt (sksLTwo Bool) x val = ENNReal.ofReal (toyTwo.PaBestAt toyStmt toyPart val) :=
     ite_eq_left inScopeTwo_toy
@@ -136,14 +136,14 @@ theorem acceptedSampledAt_sksLTwo (H : Msg → Msg) (x : Msg) (P : Prover Unit) 
   unfold acceptedSampledAt
   exact Eq.trans (Pr_congr fun r => iff_false_intro fun h => sksLTwo_samples_none H x P val r h.2) Pr_false
 
-/-- `sksLTwo`'s escape at its committed boundary trace, at the empty statement and the silent prover, is `0`: the
+/-- `sksLTwo`'s missProb at its committed boundary trace, at the empty statement and the silent prover, is `0`: the
 trace opens nothing (`sksL_regVal`). -/
 theorem escAt_sksLTwo_regVal :
     escAt (sksLTwo Bool) [] ((sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ()) = 0 :=
   escAt_sksLTwo [] (val := (sksLTwo Bool).regVal FlockDeploy.sha512 silentP [] ()) (sksL_regVal _ silentP [] () 0)
 
 /-- **`PeriodTwoLead` fails** at `sksLTwo`'s verification phases, the committed boundary trace and `δ = 1/2`: one
-verification phase, at the empty statement and the silent prover, samples nothing and has escape `0`, so its escapes
+verification phase, at the empty statement and the silent prover, samples nothing and has missProb `0`, so its escapes
 multiply below `1/2` surely, while the bound is `1/2`. -/
 theorem periodTwoLead_nontrivial :
     ¬ PeriodTwoLead (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
@@ -163,7 +163,7 @@ theorem periodTwoLead_nontrivial :
   norm_num at h1
 
 /-- **`PeriodTwoProd` fails** at `sksLTwo`'s verification phases, the committed boundary trace and `δ = 1/2`: one
-verification phase, at the empty statement and the silent prover, is accepted surely with escape `0`, while the bound
+verification phase, at the empty statement and the silent prover, is accepted surely with missProb `0`, while the bound
 is `1/2`. -/
 theorem periodTwoProd_nontrivial :
     ¬ PeriodTwoProd (O := Unit) (V := Unit) (Tick := Unit) (Adv := Unit) FlockDeploy.sha512 (fun _ => sksLTwo Bool)
@@ -172,7 +172,7 @@ theorem periodTwoProd_nontrivial :
   let m : (Unit → Unit) × Unit × Unit := (fun _ => (), (), ())
   have hv : Verity.Game.value
       (fun l : List (ServedEsc Unit Unit Unit Unit) =>
-        (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.escape).prod < ENNReal.ofReal (1 / 2))
+        (∀ r ∈ l, r.accepted) ∧ (l.map ServedEsc.missProb).prod < ENNReal.ofReal (1 / 2))
       (twoAtRun FlockDeploy.sha512 (fun _ => sksLTwo Bool)
         (fun _ _ x P => (sksLTwo Bool).regVal FlockDeploy.sha512 P x ()) 1
         (twoStrat (sksLTwo Bool) m [] silentP)) = 1 :=

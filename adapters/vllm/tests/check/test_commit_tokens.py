@@ -117,7 +117,7 @@ def _no_match(w: World) -> dict:
 
 
 def _match_dir(tmp_path, *, gm_verdict: str = "PASS") -> str:
-    """This world's Match record on a full row: <row>/match/capture/tokens.json (m1_capture's names) and <row>/global_match.json (GM-01's)."""
+    """This world's Match record on a full row: <row>/match/capture/tokens.json (match_capture's names) and <row>/global_match.json (GM-01's)."""
     row = tmp_path / "row"
     (row / "match" / "capture").mkdir(parents=True)
     lens = {r: {"served_output_len": len(s), "executed_prefix_len": len(s) + LAG if len(s) < CAP else CAP, "cap": CAP, "cap_exhausted": len(s) == CAP}

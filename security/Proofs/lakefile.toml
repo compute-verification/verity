@@ -48,8 +48,8 @@ path = "../Properties"
 
 [[lean_lib]]
 name = "Proofs"
-roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Pous", "Proofs.Pouw", "Proofs.Certifier",
-  "Proofs.Flock", "Proofs.Accounting", "Proofs.Hash", "Proofs.Spot", "Proofs.WeightSecurity",
+roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowdown", "Proofs.Pous", "Proofs.Pouw",
+  "Proofs.Certifier", "Proofs.Flock", "Proofs.Accounting", "Proofs.Hash", "Proofs.Spot", "Proofs.WeightSecurity",
   "Proofs.Flock.SpotFlock.AddressFacts.Row", "Proofs.Flock.SpotFlock.AddressFacts.RowRead",
   "Proofs.Flock.SpotFlock.AddressFacts.RowKind", "Proofs.Flock.SpotFlock.AddressFacts.RowGive",
   "Proofs.Flock.SpotFlock.AddressFacts.RowLeaf", "Proofs.Flock.SpotFlock.AddressFacts.RowInstance",
@@ -178,7 +178,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Pous"
   "Proofs.Properties.Verity.Sampled.Window.Trees", "Proofs.Properties.Verity.Sampled.Window.Record",
   "Proofs.Properties.Verity.Sampled.Window.Counts", "Proofs.Properties.Verity.Sampled.Window.Closing",
   "Proofs.Properties.Verity.Sampled.Window.Steps", "Proofs.Properties.Verity.Sampled.Window.Read",
-  "Proofs.Properties.Verity.Sampled.Window.Instance", "Proofs.Properties.Verity.WindowFiles",
+  "Proofs.Properties.Verity.Sampled.Window.Instance", "Proofs.Properties.Verity.ExecutionPhaseFiles",
   "Proofs.Properties.Verity.Sampled.Window.Unbound", "Proofs.Properties.Verity.Sampled.Window.UnboundMember",
   "Proofs.Properties.Verity.Sampled.Window.UnboundLaid", "Proofs.Flock.SpotFlock.HeldOfReads",
   "Proofs.Flock.SpotFlock.ReadsCheck", "Proofs.Properties.Verity.SampledTwo.Messages",

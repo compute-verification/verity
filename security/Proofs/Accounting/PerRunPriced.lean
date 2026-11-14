@@ -60,7 +60,7 @@ theorem budgetAbortPearlC_of_oblivious (CM : PearlC.CostModel Q R S)
 theorem abortPearlC {CM : PearlC.CostModel Q R S} (hCM : BudgetAbortPearlC CM) (A : PearlC.Adversary CM)
     (U : PearlC.Workload) {q : ℕ} (hq : CallsWithinPearlC A U q) {b : ℝ} (hb : 0 ≤ b) :
     ∃ A' : PearlC.Adversary CM, A'.Bounded U b q ∧
-      ∀ H s, onlineCostPearlC A U H s ≤ b → A'.transcript U H s = A.transcript U H s := by
+      ∀ H s, onlineCostPearlC A U H s ≤ b → A'.trace U H s = A.trace U H s := by
   obtain ⟨prog', h⟩ := hCM.2 A.online U A.act b hb
   refine ⟨⟨A.pre, prog', A.act⟩, fun H s => ⟨(h H _ s).1, ?_⟩, fun H s hc => (h H _ s).2.2 hc⟩
   exact (Nat.add_le_add_left (h H _ s).2.1 _).trans (hq H s)
@@ -68,7 +68,7 @@ theorem abortPearlC {CM : PearlC.CostModel Q R S} (hCM : BudgetAbortPearlC CM) (
 /-- A run whose correct units carry all but `ε_s` of the tickets' weight, at units whose `W_ref` is `κ·w`, and whose
 cost is below `(1 − g)(1 − ε_s)·∑ W_ref`, wins Pearl-C's gap-gap game. -/
 theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (H : Q → R) (s : S)
-    (τ : PearlC.Transcript) {w : ℕ → ℕ} {κ g T εs : ℝ} (hκ : 0 ≤ κ)
+    (τ : PearlC.Trace) {w : ℕ → ℕ} {κ g T εs : ℝ} (hκ : 0 ≤ κ)
     (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) (hg : g < 1)
     (hT : T < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
     (hbad : ∑ u ∈ Finset.range U.layout.N \ PearlC.correctSet P U H s τ, (w u : ℝ) ≤
@@ -105,14 +105,14 @@ theorem pearlC_endToEnd [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM 
     (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) {T : ℝ} (hT : 0 ≤ T) {q : ℕ} (hq : q ≤ 2 ^ 64)
     {A : PearlC.Adversary CM} (hA : A.Bounded U T q) (t : ℕ) {εs : ℝ} (hεs : εs ≤ 1) :
     pr (fun x : PearlCCoins Q R S U w t =>
-        AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+        AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
         T < (1 - g) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
       ≤ (1 - εs) ^ t + δ q U.layout.N := by
-  let K := fun y : (Q → R) × S => PearlC.correctSet P U y.1 y.2 (A.transcript U y.1 y.2)
+  let K := fun y : (Q → R) × S => PearlC.correctSet P U y.1 y.2 (A.trace U y.1 y.2)
   let G := fun y : ((Q → R) × S) × (Fin t → Ticket w U.layout.N) => AuditAccepts (K y.1) y.2 ∧
     εs * ∑ u ∈ Finset.range U.layout.N, (w u : ℝ) < ∑ u ∈ Finset.range U.layout.N \ K y.1, (w u : ℝ)
   let E1 := fun x : PearlCCoins Q R S U w t => G ((x.1, x.2.1), x.2.2)
-  let E2 := fun y : (Q → R) × S => PearlC.Wins P U g T (A.transcript U y.1 y.2) y.1 y.2
+  let E2 := fun y : (Q → R) × S => PearlC.Wins P U g T (A.trace U y.1 y.2) y.1 y.2
   have h1 : pr E1 ≤ (1 - εs) ^ t :=
     (pr_equiv (Equiv.prodAssoc _ _ _).symm G).le.trans
       (Pouw.Proofs.workWeightedSampling ((Q → R) × S) w U.layout.N t K εs hεs)
@@ -240,7 +240,7 @@ theorem PearlCEndToEndPerRun : Accounting.Guarantees.PearlCEndToEndPerRun := by
   intro Q R S _ _ _ _ CM P D γ η hγ hG hCM U hU w κ hκ hw q hq A hA t εs hεs
   refine pr_lt_of_abort
     (fun (A' : PearlC.Adversary CM) (x : PearlCCoins Q R S U w t) =>
-      AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A'.transcript U x.1 x.2.1)) x.2.2)
+      AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A'.trace U x.1 x.2.1)) x.2.2)
     (fun A' T => A'.Bounded U T q) A (fun x => onlineCostPearlC A U x.1 x.2.1) _ _ (fun x => hCM.1 _ _ _ _ _ _)
     (fun A' T hT hA' => pearlC_endToEnd hγ hG hU hκ hw hT hq hA' t hεs)
     fun b hb => ?_

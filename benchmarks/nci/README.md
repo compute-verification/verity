@@ -10,23 +10,20 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `bracket.py`).
 
 Nothing in `verity` reads this directory. The theorem it cites is in `security/`: `InferenceOnly.SecurityProofs.ThreadedTraining`
-(`security/Definitions/InferenceOnly/Guarantees/Threads.lean`).
+(`security/Definitions/Slowdown/Guarantees/Threads.lean`).
 
 The slowdown lower bound's numbers come from [`benchmarks/slowdown`](../slowdown/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is the slowdown calculator's
 `slowdown.theorem.multiple_bound` in Lean's form (`InferenceOnly.Slowdown.remoteSlowdown` at the reference's MFU), which `statement.py`
 and `fit.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
-`host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
+`host_share` is 0 and free compute trains at MFU₀ (`tiers.evaluate`'s `free_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
-where every unit is proved (T1 to T4), and the slowdown calculator's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`residual` 1) both are 1.
+where every unit is proved (T1 to T4), and the slowdown calculator's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`free` 1) both are 1.
 Without the reference-efficiency assumption they are 1.21 and 1.22, without the
 hosts assumption 2.19 and 2.80, and without both 1 and 1.12. For the slowdown's terms, the code and its outputs keep older names (`GLOSSARY.md`, Older names) in the names built on
 these stems: `rho` for the slowdown (`bracket.py`'s stored key `"rho"`); `efficiency` or `eta` for the older efficiency
 term, written η in older text and replaced by the slowdown (`tiers.py`'s `efficiency`, `exposure.py`'s `eta`; today's η is
-the success threshold, and `exposure.py`'s docstring says 1/eta is not the slowdown D); `residual` for free compute
-(`residual_share`, `memory_caps_residual`); `unmonitored` for unregistered hardware's share, ε_unreg (`tiers.py`'s key
-`unmonitored`); and `dampener` for the slowdown, in functions and prose (`fit.py`'s `dampener`), with the output keys that
-begin `D_` in `fit.py` and `statement.py` and `statement.py`'s key `D`. These are not older names: `tiers.py`'s `rho_T`,
+the success threshold, and `exposure.py`'s docstring says 1/eta is not the slowdown D). These are not older names: `tiers.py`'s `rho_T`,
 `rho_PoS` and `rho_NCI`, which are rates; `exposure.py`'s `wipe_residual`, the memory the fill misses; `kappa.py`'s
 `RESIDUAL`, the model's residual stream; `fit.py`'s `D_max` and its loop variable `D` over `DATA_LIMITS`, token counts in
 the loss law; `kappa.py`'s `c.D` and the `D` of its softmax comment; `reference_efficiency`, the reference-efficiency

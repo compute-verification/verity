@@ -88,7 +88,7 @@ open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs.HonestH1
 of one window, one session a window, the deployed check accepts the window on every path, and its layer is sound at
 `0`. -/
 theorem CheckProofSystemSound_honest : CheckProofSystemSoundHonest :=
-  ⟨circuit.rounds, prm, windows 1, fun x w => accepted_all 1 x w,
+  ⟨circuit.rounds, prm, executionPhases 1, fun x w => accepted_all 1 x w,
     fun _ _ => le_of_eq
       (Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest.prob_none fun _ h => h.2 fun _ _ _ => trivial)⟩
 
@@ -96,7 +96,7 @@ theorem CheckProofSystemSound_honest : CheckProofSystemSoundHonest :=
 one window the deployed check accepts and publishes a sampled proof block on every path, so with relations that every opening
 fails `ServiceSound` fails at `0`. -/
 theorem CheckProofSystemSound_nontrivial : CheckProofSystemSoundNontrivial := by
-  refine ⟨circuit.rounds, prm, windows 1, fun h => ?_⟩
+  refine ⟨circuit.rounds, prm, executionPhases 1, fun h => ?_⟩
   have : Nonempty (Paths Ω1 1) := ⟨((Paths.const true _, (Equiv.refl _, ())), ())⟩
   refine absurd (h 0) (not_le.2 (lt_of_lt_of_le one_pos
     ((Accounting.SecurityProofs.FillerLuck.Cell.prob_all (Ω := Paths Ω1 1)).symm.le.trans
