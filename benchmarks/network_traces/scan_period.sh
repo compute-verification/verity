@@ -45,7 +45,7 @@ for run in honest late; do
   log "period: the $run run, scan_zk.sh rc ${rc[$run]}: $(grep -h '^SCZK .*answers:' "$OUT/$run/sczk.log" | cut -c1-600)"
 done
 NP=$P/verity/protocols/certifier/verifier/lean/.lake/build/bin/network-period
-PYTHONPATH=$PYTHONPATH:$SRC/verity/difftest/python "$PY" benchmarks/network_traces/scan_period.py \
+PYTHONPATH=$PYTHONPATH:$SRC/tools/difftest/python "$PY" benchmarks/network_traces/scan_period.py \
   --mirror "$P/verity/protocols/certifier/verifier/network/tests/period_case.py" --lean "$NP" --out "$OUT/period" \
   "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
   "tampered=$OUT/honest/warden,$OUT/honest/sczk,tampered" "chain=$OUT/honest/warden,$OUT/honest/sczk,chain" \
