@@ -4633,7 +4633,7 @@
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/registration.py", "count": 23},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/served.py", "count": 2},
     {"file": "verity/protocols/proofs/spot/verifier/one_stage/verifier.py", "count": 56},
-    {"file": "verity/protocols/proofs/spot/prover/optimize.py", "count": 96},
+    {"file": "verity/protocols/proofs/spot/prover/optimize.py", "count": 73},
     {"file": "verity/protocols/proofs/spot/verifier/parties.py", "count": 67},
     {"file": "verity/protocols/proofs/spot/prover/plancheck.py", "count": 7},
     {"file": "verity/protocols/proofs/spot/verifier/pyproject.toml", "count": 1},
