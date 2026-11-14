@@ -52,7 +52,7 @@ open Properties.Challenger
 open Properties.Challenger.Plain (PlainStr PlainAt canonical_canon)
 open Properties.Challenger.Bodies (read_str)
 open Properties.Challenger.Withheld (Play)
-open Properties.NetworkCertifier.Bytes (hash_size)
+open Properties.Certifier.Bytes (hash_size)
 open PouwCheck.Credit (digest? commitOf? isHexBytes callsRoot COMMIT_FORMAT DRAW_TAG Internal.creditedRoot
   Internal.creditedDraw Internal.credited)
 
