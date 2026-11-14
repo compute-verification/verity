@@ -14,10 +14,7 @@ from pathlib import Path
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE))
-
-import stall_probe as sp  # noqa: E402
+from verity.protocols.accounting.certifier.device import stall_probe as sp
 
 ORIGIN = 10.0
 #: the process label the relay's serve program gives the probe
@@ -147,7 +144,7 @@ def test_summary_is_what_warden_json_keeps_each_labels_faults_summed():
 def test_the_probe_process_samples_this_process_for_the_samples_asked(tmp_path):
     out = tmp_path / "stalls.json"
     me = threading.get_native_id()
-    got = subprocess.run([sys.executable, str(HERE / "stall_probe.py"), "--out", str(out), "--origin", "0",
+    got = subprocess.run([sys.executable, sp.__file__, "--out", str(out), "--origin", "0",
                           "--samples", "30", f"--label={me}=main", f"test={os.getpid()}"],
                          capture_output=True, text=True)
     assert got.returncode == 0, got.stderr
