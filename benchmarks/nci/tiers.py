@@ -239,7 +239,7 @@ def block_cap(p: dict, S: float, threaded: bool) -> float:
 
 
 def chord(p: dict, bits: float = math.inf) -> float:
-    """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` novel bits
+    """Counted multiplications per injected bit when ``bits`` of them go into inference blocks reading ``K`` fresh input bits
     each: the steepest secant from ``K`` of ``block_cap``, out to ``K + bits``, with (d, e)-threading only up to
     ``thread_bits``. The cap is convex between its kinks, so the secants peak at their ends, and concentrating the bits
     on few blocks is the adversary's best. At the defaults the steepest secant is to ``S_1 = sqrt(2 b_w b_a block_mults
