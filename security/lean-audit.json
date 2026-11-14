@@ -3003,6 +3003,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
+   "owner": "@compute-accounting",
+   "digest": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1W1": {
    "owner": "@compute-accounting",
    "digest": "9df58bce6b2a066570e29c40d9ef15f15ad7434557aeb3f2202bc6af2e3fb801",
@@ -3018,6 +3024,12 @@
   "Pouw.PearlC.Assumptions.TileProofSoundAll": {
    "owner": "@compute-accounting",
    "digest": "68fa374e6e32105f7e0fb6ac933a3494270054495536d060d6015fc6a3e4a6d5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Pouw.PearlC.Assumptions.W1CompleteH100": {
+   "owner": "@compute-accounting",
+   "digest": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -23987,6 +23999,54 @@
    "type_hash": "7f5c86ff7e8461c527b2e590fab0e2953e3ab07a368fa5f28e6ae51fb277d1d2",
    "unfolded_hash": "1d1e3320c6aaaf28a6421a6a77edd67bd9615b89dc9d72b2c3d4c85081cfba98"
   },
+  "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b : Pouw.Guarantees.PearlC.SampledH100Rev1S8Llama32_1b"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8",
+     "Pouw.PearlC.Assumptions.W1CompleteH100",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1",
+     "Pouw.PearlC.Assumptions.TTOutTileW1",
+     "Pouw.PearlC.CostModel.DominatedWithin",
+     "Pouw.PearlC.W1.W1Device.s8H100Best"
+    ]
+   },
+   "type_hash": "52e3280840ec061a3bb2e6a746632595df6ab017e28137c778dfe4a2e63e60a2",
+   "unfolded_hash": "8ab6becfe0800807523dcb179623343b49f3dcfff907dbbf7164647543e9d513"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": {
+   "owner": "@compute-accounting",
+   "signature": ["Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192 : Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Pouw.PearlC.Adversary.Bounded",
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8",
+     "Pouw.PearlC.Assumptions.W1CompleteH100",
+     "Pouw.PearlC.Workload.InDomain"
+    ],
+    "reads": [
+     "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1",
+     "Pouw.PearlC.Assumptions.TTOutTileW1",
+     "Pouw.PearlC.CostModel.DominatedWithin",
+     "Pouw.PearlC.W1.W1Device.s8H100Best"
+    ]
+   },
+   "type_hash": "ce3335ef19a90b8475150d1906ef156c32d814329a9b7361da556d3637056808",
+   "unfolded_hash": "63912189a013c50ed87f6e6350c3313aaab35d73495f8919d53ed63577bfd029"
+  },
   "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384 : Pouw.Guarantees.PearlC.SampledH100Rev1_16384"],
@@ -28265,9 +28325,20 @@
    "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
+   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
+   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record."
   },
   "conjectures": {
+   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": {
+    "status": "open",
+    "test": "benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py::test_cross_group_joint_skips_stay_within_the_gap",
+    "why": "TT_OUT(1/400) per audit tile at the H100 rev1's tensor-clock record (devH100Tensor), over W1 on the H100 with INT8 at zero SHA-512 and fetch prices (tt-out-tile-pearl-c-h100-rev1); an open premise, not a named assumption. No program beats the bound on the census's known skip classes that its file replays: cross-group joint skips (this test) and the first promotion (test_first_promotion_skip_is_outside_rev1s_credit). TT_OUT rev1 is refuted by the proofs red team's rating."
+   },
+   "Pouw.PearlC.Assumptions.W1CompleteH100": {
+    "status": "falsified",
+    "why": "W1 on the H100 with INT8 at the data sheets' prices per second at the tensor clock dominates the card's cost model within every bound on rev1's audit tiles (w1-complete-h100); an open premise, falsified on the H200: the H200's measured FP32 adds beside the tensor pipe refute both data-sheet readings of an FP32 instruction's price, the per-clock 32 and the tensor-clock 976/33 (29.58)."
+   },
    "Pous.P2.Assumptions.P2RingAuditSecure": {
     "status": "open",
     "test": "verity/protocols/accounting/pous/verifier/tests/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
@@ -39058,6 +39129,15 @@
     "Pouw.PearlC.pearlCTilesDevRev1KRowCap": "bb8b060e2a730ffb3d8561cdab8cc6ff646998428045966eb230d50e4e22ecb0"
    }
   },
+  "Definitions.Pouw.Assumptions.PearlC.TTOutS8": {
+   "digest": "02c5a71042c95c9ae2579b9a46e77676e93b15e026c6ddcdd8efe6e4b3046637",
+   "definitions": {
+    "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": "fe49e3195baf9dcbb880188e2a3bfa38957e336380ee55aed4a2002134f3a6a8",
+    "Pouw.PearlC.Assumptions.W1CompleteH100": "e029c467f886f9078b0a54daeda2c7bb0a099079f92edaaee8a89feba807a286",
+    "Pouw.PearlC.CostModel.DominatedWithin": "38b733b0a1bade47cc584f180c4d73fae9ad09b590d6b87ee40fe7597184ca8f",
+    "Pouw.PearlC.W1.W1Device.s8H100Best": "8de5c71192e3bf6f3a11e89901258ab8dfc6baeb7f01f053679fd233668cd49f"
+   }
+  },
   "Definitions.Pouw.Assumptions.PearlC.TTOutUOnly": {
    "digest": "29190317245ec61a572ddcd4ca659b2dff055f640c445149e6f2c42fa022a371",
    "definitions": {
@@ -39763,6 +39843,13 @@
     "Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "0187629268af06a4a34ab965b8d481611d2d1a0afa2550c7328227d1df6d6a14"
    }
   },
+  "Definitions.Pouw.Guarantees.PearlCS8": {
+   "digest": "b5792ba885a5f583b5456d9a12f7eb66cceeaec1409b923fe9ff43d6faa34d2d",
+   "definitions": {
+    "Pouw.Guarantees.PearlC.SampledH100Rev1S8Llama32_1b": "ab1d3693ef0f747ac9abba8d3abb6dd3c1c9e3a85403be3f8814a8a54ce1a7e3",
+    "Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192": "ed679440d4d67f358e8a00f0e30e14efec09b31badbb8e5f0846653f8a1f5f80"
+   }
+  },
   "Definitions.Pouw.Guarantees.PearlCTileCheck": {
    "digest": "dd384e9f3daaab587b10bb07a105ec3a8e5150ebb60236b515793b900c481a8d",
    "definitions": {
@@ -40204,7 +40291,7 @@
    }
   },
   "Definitions.Pouw.PearlC.Device": {
-   "digest": "1457f057d3bfadac30b6e3897ed288b484307f25f98af8eff144e9c18cd0fd22",
+   "digest": "5b663ee62abecd0602a0572b4623c0dc41390b1c36010823ba90cf6885f6a159",
    "definitions": {
     "Pouw.PearlC.PearlCDevice": "49b0746e634512b0ba15501dae4a8e1e7f5a92906eccf6db5291f7ed68f2dfd0",
     "Pouw.PearlC.PearlCDevice.G": "dbfc86330607b7c4760f02bf16a71635ec8b1b7775a76ee3bb4ebfcdf645e58b",
@@ -40221,12 +40308,16 @@
     "Pouw.PearlC.Prices.bf16": "0fa6711404e6117909176b090564e8b07f6a46acfdc89907f884b34b40278aeb",
     "Pouw.PearlC.Prices.costs": "e80c4e8e8d468ed4a4719b334755cef2f56cbe52697ed93e61b638ac25299993",
     "Pouw.PearlC.Prices.h100": "11e0f5cea3d574b561d311c463d384e45ea08ad98a0bdf43587da1063a2611ca",
+    "Pouw.PearlC.Prices.h100Tensor": "fc2627f60d7c35a1999aff37654c62a427e2ff615fb17a38208cb45bef0e2c75",
     "Pouw.PearlC.creditDev": "9afb51c265a332ac45a85411f9a4127dd9e9d9a99d85fee925a8562d2621addb",
     "Pouw.PearlC.debitDev": "5d35649e7854f34640190f26b02bf5e94e0be15469e978a3536b4ca2a1ad68b7",
     "Pouw.PearlC.devAt": "94a05321199e2480ef9144b73ac8172e53414bb0afd06fb9647b9568ceea03e6",
     "Pouw.PearlC.devH100": "5a43c1efe07cc2ac628095c95c6a205e1e584a4c451a1c7c0a8199510578dd0b",
+    "Pouw.PearlC.devH100Tensor": "7ff16414a22082392574a51c3b8819abb810358d0abc866c2374fded91c7be8f",
     "Pouw.PearlC.devSm120v1": "e8683e11423332331304d0a3f6ed4662ea00f45d4231727cd607dcd9712e8d34",
     "Pouw.PearlC.devSm120v2": "4f59d45fd7215c5db0568e89746297fc170061906445f41b418d7022ac26153a",
+    "Pouw.PearlC.h100SmMHz": "0f51528688f38ae5a08967cd1984ee94d52aacd585f7770743cf22c4b0334799",
+    "Pouw.PearlC.h100TensorMHz": "77b428dca9314f67b69b858e786bf9eba4b63a33a4627a10762d913c4c8c4cd6",
     "Pouw.PearlC.llama31_8bLinears": "33576ad425f7422cc95800869f043984dd86cf55d803af807f76e2b00f4a6ed3",
     "Pouw.PearlC.pearlCDomainDev": "30f9d9afd030d0011715c64c3eb31415ae766561630de7ad5b5ceeb3b57cf36b",
     "Pouw.PearlC.pearlCDomainDevAt": "402ff5676e5550b47d1280a8f49978fa59d12520c6d93eceb5d2a4b3eb81c6c9",
@@ -41042,7 +41133,7 @@
    }
   },
   "Definitions.Pouw.PearlC.W1": {
-   "digest": "c2d4f7d166ef643f29d68f5ec246f84e7032fd3219a77b7aa6d73e3ec9e12fb8",
+   "digest": "e28e0f8975e852e46b7986f75069ecc78865fcc7ebdf968882b7767356578cc4",
    "definitions": {
     "Pouw.PearlC.W1.Addr": "f874d9f13c441c566c9eb13426b94122d70bc31ea9e1d646825e675de38e9c30",
     "Pouw.PearlC.W1.Addr.off": "55814166b9f20bad081bb03f147091dee7afcfb346d37f30c4beea6d432a3704",
@@ -41141,6 +41232,8 @@
     "Pouw.PearlC.W1.W1Device.h100At": "5eb0e996a6e380b3198b0fadd5d32d6966c16e50e2e2cbd497b6320e61c6e9aa",
     "Pouw.PearlC.W1.W1Device.has": "166d9aac4c2896bdaf18f658d538fa61080babd63f651a4f92e3d5acb5bc4281",
     "Pouw.PearlC.W1.W1Device.prices": "c1d76fa7b3c71c021b7d908ca28b7ebfa3b47c20f191a06e03083d8e9f78ee7a",
+    "Pouw.PearlC.W1.W1Device.s8H100At": "b8756492bacdeba83527637058a342527429182a4d5ae24a1aadce51bf140e17",
+    "Pouw.PearlC.W1.W1Device.s8H100Tensor": "df9227b7a84e556d89ebf6e235c5ca69442a7da35792a6c9a55f38952e6e3b25",
     "Pouw.PearlC.W1.W1Device.sm120": "b6c2e3b7e130758d5f07928e43ec6a24241f847e8c165351a97980a011b6252f",
     "Pouw.PearlC.W1.W1Device.sm120At": "19918e107d38a42e531e594770615d5c8188c6a3321fa2662bf3db8914139d5a",
     "Pouw.PearlC.W1.W1Device.sm120Loop": "268947dfd9f2596bd5e05387b8fa2161fc0fe10f113408fe78402646449bfc60",
@@ -41150,6 +41243,7 @@
     "Pouw.PearlC.W1.W1Prices.fp32": "cf0cced6538038df65423a289b211163e6c19ae268b12085bb5345d25d456094",
     "Pouw.PearlC.W1.W1Prices.fp4Sm120": "6c30ae5b45668564cf16efdbff216789a631fd1d514b7c93ddbc9f2f87aac165",
     "Pouw.PearlC.W1.W1Prices.h100": "12f7d46475640f769f1f1c4fe8e147e320b438c79b282a1f755202f0fbe38232",
+    "Pouw.PearlC.W1.W1Prices.h100Tensor": "3590b58fb4ee967bc30f9c1ff58692ffab4cae1b09d84e0ff5741b5338aefdd0",
     "Pouw.PearlC.W1.W1Prices.int32": "9c7f3a6f9decc4fb3791972b1a8499d221a2707abc4057862756c020aece2a96",
     "Pouw.PearlC.W1.W1Prices.mac": "a2f761e8bfd914c9738487f9e5816cd94be9d08047104b636a3f69bcb8ef60af",
     "Pouw.PearlC.W1.W1Prices.scale": "8063474a6885488cb0512513d2a29ffeb356b9c1e9c36585b53e5da5f37d51d2",
@@ -41163,6 +41257,7 @@
     "Pouw.PearlC.W1.field": "5a34513a6efe273245594bc96b2173f00a581c1fcc4aba122914c0f8b509b9ad",
     "Pouw.PearlC.W1.final": "58bc1bc27c36508c1ff4a8cebc85ab9eb8dc9cc1ca07abfa7d6aca7cc6d2cbe7",
     "Pouw.PearlC.W1.h100Frags": "a6a43a2e8add496ea0eb9bba66be067d15b50e82ab62272fe9805bb0ca3dafcf",
+    "Pouw.PearlC.W1.h100S8Frags": "91c907525637a5e7c40e84c0918dd6c00addcc691c7174279c531fa351e4aba8",
     "Pouw.PearlC.W1.init": "867a7fb2cfb0683e359b3dcfabf728b4e674dfa029f97db13da0880756f9407c",
     "Pouw.PearlC.W1.instDecidableEqFmt": "a6920800a55fe1bc0609ecd6c25c6c5e09a05cf34cee4d8a246aca24772c8e5c",
     "Pouw.PearlC.W1.instDecidableEqFrag": "265e3aaba85cb63c012baa40b1e3c0169c0e49c04a4664d8b55a4b1023d49091",

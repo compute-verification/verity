@@ -20,6 +20,8 @@ are H100 W1 prices. A device record makes each of them a parameter, as the schem
   (`PearlCSem.OperandOK`) are E4M3's, and `sem` still carries the noise, the forming chain and the scales.
 - `devH100`: today's H100 record. `pearlCProtocolDev devH100 = pearlCProtocol · Costs.adopted`
   (`pearlCProtocolDev_h100`, `DeviceGap.lean`), so TT_OUT at the H100 record is the granted `TTOutPearlC`.
+- `devH100Tensor`: the same maps at `Prices.h100Tensor`, the SM pipes priced per second at the tensor clock
+  (`h100TensorMHz / h100SmMHz`), the record the H100 statements over W1 with INT8 take.
 
 - `devAt p G pr`: the record at any captured FP8 step `p` (a `Pipeline`), from the FP8 lane's twins: `Accum.chainAt`,
   `PeelExactP.peelExactValP`, `SkipP.unitFlagsAt` and `FormingP.saltDeadP`. At `hopperE4m3K32`, 4 and `Prices.h100` it
@@ -49,6 +51,25 @@ structure Prices where
 /-- The H100's prices (Rounds 10–11): an FP32 add costs 32, a BF16 MAC 2, and §5's forming `Costs.adopted`. -/
 def Prices.h100 : Prices := ⟨32, 2, Costs.adopted⟩
 
+/-- The H100's SM clock, 1980 MHz: `clock.sm` in `verity/hardware/cards/h200-sxm-141gb.toml` (the H200 is the same
+GH100), from NVIDIA's H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, the boost clock its FP32 and FP64
+non-tensor peaks are quoted at. -/
+def h100SmMHz : ℚ := 1980
+
+/-- The H100's tensor clock, 1830 MHz: `clock.tensor` in the same card file, from the whitepaper's Table 3, the boost
+clock for FP8, FP16, BF16 and TF32 tensor-core operations, which the H200 data sheet's dense tensor peaks are quoted
+at. -/
+def h100TensorMHz : ℚ := 1830
+
+/-- **The H100's prices per second at the tensor clock**: a unit is a dense FP8 MAC's time at `h100TensorMHz`, and the
+SM pipes' prices are `Prices.h100`'s times `h100TensorMHz / h100SmMHz = 61/66`. An FP32 add costs `976/33`, a BF16 MAC
+2, and the forming `fs = ⌈32 + 976/33⌉ = 62` (the noise atom and half a cast at `1952/33`) and `qa = ⌈122/33⌉ = 4`,
+`W1.W1Prices.h100Tensor`'s coarse record (`Proofs.Pouw.PearlC.W1Checks.toPrices_h100Tensor`). A unit is an FP8 MAC's
+time at the tensor clock. An SM-pipe instruction takes 32 MACs' time at the SM clock, which is `32 · 1830/1980 = 976/33`
+(29.58) of those units with the tensor pipe at 1830 MHz beside SM pipes at 1980 MHz, exactly its charge here; with both
+pipes at one clock it takes 32 units, more than its charge. -/
+def Prices.h100Tensor : Prices := ⟨32 * h100TensorMHz / h100SmMHz, 2, ⟨62, 4⟩⟩
+
 /-- **A device record** for Pearl-C: the promotion period `G` (0: none), the prices, and the device's maps on a unit's
 noisy codes (A′, B̃): the ticket words C̃, the useful words U from the codes, F's codes and the peel's noise rows, the
 debit's flags per word and atom, and P3's salt-dead predicate at the rows' scales. -/
@@ -69,6 +90,9 @@ def devH100 : PearlCDevice where
   useful := fun A B FA FB beA beB => PeelExact.peelExactVal A B FA FB beA beB
   flags := fun A B => Skip.unitFlags A B
   saltDead := SaltDead.saltDead
+
+/-- **The H100 record per second at the tensor clock**: `devH100`'s maps at `Prices.h100Tensor`. -/
+def devH100Tensor : PearlCDevice := { devH100 with prices := Prices.h100Tensor }
 
 /-- **The record at a captured FP8 step `p`**, promotion period `G` and prices `pr`: the FP8 lane's twins at `p`. -/
 def devAt (p : Pipeline) (G : ℕ) (pr : Prices) : PearlCDevice where

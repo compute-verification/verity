@@ -72,6 +72,9 @@ records, one NVFP4 MAC for the FP4 record):
   price per register meets the nominal one (m64n8k32 measured 144 per register). INT8's 1 is also the data sheets'
   (the H100 whitepaper's Table 1 and the H200 data sheet: INT8 TOPS equal to FP8 TFLOPS); only `W1Device.s8H100` has
   its fragments, and it is the H200's setting too.
+- `W1Prices.h100Tensor`: `h100` per second at the tensor clock, FP32, a cast and INT32 times `61/66` (the card file's
+  1830 MHz tensor clock over its 1980 MHz SM clock), so a cost bounds a program's time whichever clock each pipe holds;
+  `W1Device.s8H100Tensor` is the INT8 setting at it.
 - `W1Prices.fp4Sm120`: `sm120Loop` in FP4 units (an FP8 unit is 2), the record `devFp4Sm120` uses.
 
 `sha512` (a compression) and `fetch` (a first-fetched word) are unmeasured on both devices, so the records take them as
@@ -195,6 +198,19 @@ def W1Prices.h100 (sha fetch : ℚ) : W1Prices where
   sha512 := sha
   fetch := fetch
 
+/-- **The H100's W1 prices per second at the tensor clock**: `W1Prices.h100` with FP32, a cast and INT32 times
+`h100TensorMHz / h100SmMHz` (1830/1980 = 61/66, the card file's `clock.tensor` over `clock.sm`): FP32 `976/33`, a cast
+`1952/33` per instruction and INT32 `1952/33`; the tensor-core prices, a compression and a first fetch are
+`W1Prices.h100`'s. A unit is an FP8 MAC's time at the tensor clock. An SM-pipe instruction takes 32 MACs' time at the
+SM clock, which is `32 · 1830/1980 = 976/33` (29.58) of those units with the tensor pipe at 1830 MHz beside SM pipes at
+1980 MHz, exactly its charge here; with both pipes at one clock it takes 32 units, more than its charge. So a program's
+time is at least its cost at either reading. -/
+def W1Prices.h100Tensor (sha fetch : ℚ) : W1Prices :=
+  { W1Prices.h100 sha fetch with
+    fp32 := 32 * h100TensorMHz / h100SmMHz
+    cvt := 64 * h100TensorMHz / h100SmMHz
+    int32 := 64 * h100TensorMHz / h100SmMHz }
+
 /-- Every price times `c` (a change of unit). -/
 def W1Prices.scale (c : ℚ) (pr : W1Prices) : W1Prices :=
   ⟨fun f => c * pr.mac f, c * pr.fp32, c * pr.cvt, c * pr.int32, c * pr.sha512, c * pr.fetch⟩
@@ -286,6 +302,10 @@ def W1Device.s8H100At (pr : W1Prices) : W1Device := ⟨pr, hopperE4m3K32, hopper
 
 /-- The Hopper INT8 setting, at `W1Prices.h100`: S8 and E4M3 1, BF16 2 per MAC. -/
 def W1Device.s8H100 (sha fetch : ℚ) : W1Device := W1Device.s8H100At (W1Prices.h100 sha fetch)
+
+/-- The Hopper INT8 setting per second at the tensor clock, at `W1Prices.h100Tensor`: S8 and E4M3 1, BF16 2 per MAC, the
+SM pipes at `61/66` of `W1Prices.h100`'s. -/
+def W1Device.s8H100Tensor (sha fetch : ℚ) : W1Device := W1Device.s8H100At (W1Prices.h100Tensor sha fetch)
 
 /-! ## Memory -/
 
