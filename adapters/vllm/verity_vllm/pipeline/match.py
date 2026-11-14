@@ -40,7 +40,6 @@ and writes the `gates.FOLD_SUMMARY_SCHEMA` summary.
 
 from __future__ import annotations
 
-import hashlib
 import importlib
 import json
 import shlex
@@ -272,13 +271,6 @@ def profile_config(name: str) -> dict | None:
 # ---------------------------------------------------------------------------------------------------------
 # running
 # ---------------------------------------------------------------------------------------------------------
-
-
-def _sha256_file(p: Path) -> str | None:
-    try:
-        return hashlib.sha256(p.read_bytes()).hexdigest()
-    except OSError:
-        return None
 
 
 def _hf_config_of(a: Options, C: dict | None) -> dict | None:

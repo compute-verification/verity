@@ -110,7 +110,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         doc["kernels"][arm] = kernels(eng.llm, X.PROMPTS)
     print(f"[rope] kernels {json.dumps(doc['kernels'])}", flush=True)
     dig = Digests(model)
-    passes = []
+    passes: list[dict[str, Any]] = []
     for arm in ("fused", "unfused", "fused"):
         R.uninstall()
         arms[arm]()

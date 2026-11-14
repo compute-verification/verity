@@ -23,6 +23,7 @@ ON_DISK = {
     "COMMITTED_STORE_SCHEMA": "verity-vllm/committed-store/v1",
     "COMMIT_PLAN_SCHEMA": "verity-vllm/commit-plan/v1",
     "COMMIT_TOKENS_SCHEMA": "verity-vllm/commit-tokens/v1",
+    "COMPILED_STEPS_SCHEMA": "verity-vllm/compiled-steps/v2",
     "CONFIGURATION_CARD_SCHEMA": "verity-gen/card/v1",
     "CONFIG_RECORD_SCHEMA": "verity-vllm/config-record/v1",
     "CONSTRUCTION_MANIFEST_SCHEMA": "cb-a/construction_manifest/v3",
