@@ -10,7 +10,8 @@ have no plan yet: they still select their modules by `native_host`'s class table
                     recorded in the plan's `correspondence` block, never silent) and the runtime's module tree (`RuntimeTree`)
 - `install`         hooks from the plan (module path -> hook kind -> slot); the committer adapter
 - `stage`           the plan at a GPU phase's entry
-- `gate`            the CPU gate (the plan of a row, and plan-vs-plan comparison) as a CLI / function
+- `gate`            the CPU gate of a row: its plan (a function), and whether every call-boundary identity of its manifest
+                    has a source its Commit attaches (a CLI)
 - `sources`         the acquisition sources the plan's hooks feed (attention, MoE, compiled kernels, rank partials, ...)
 - `served`          the served-compiled Program and its required-value manifest, with `served_device`, `served_moe`,
                     `served_artifact` and Inductor's kernels as templates (`inductor_templates`, `inductor_texts`)

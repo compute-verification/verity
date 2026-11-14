@@ -30,7 +30,7 @@ CANARY = BENCH / "canary.sh"
 
 def _canary_flipweight_line() -> str:
     lines = CANARY.read_text().splitlines()
-    i = next(i for i, l in enumerate(lines) if "negative flipweight exit3" in l)
+    i = next(i for i, line in enumerate(lines) if "negative flipweight exit3" in line)
     return lines[i] + " " + lines[i + 1].strip()
 
 

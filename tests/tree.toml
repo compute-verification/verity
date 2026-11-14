@@ -319,12 +319,6 @@ owner = "proofs"
 day = "2026-11-18"
 
 [[not_yet]]
-path = "verity/protocols/accounting/pouw/clear/"
-to = "verity/protocols/accounting/pouw/verifier/"
-owner = "compute-accounting"
-day = "2026-11-19"
-
-[[not_yet]]
 path = "verity/protocols/proofs/flock/sigma/"
 to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
 owner = "proofs"
