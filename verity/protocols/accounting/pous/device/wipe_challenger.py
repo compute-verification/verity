@@ -18,20 +18,31 @@ finishes with `wipe_party.report` (private: what it signs is witness), refused b
 leaves (`closed`), sends a frame the wire refuses, or answers a batch with another count of labels (`schema`);
 parameters that name the reads are refused `schema` before any fill. It streams the fill `WINDOW` frames at a time,
 letting the prover take each window before the next, so neither side holds more of it than that. `PROTOCOL` declares
-its one role.
+its one role, and `start` how a deployment starts it on the auditor's host: first, in its state directory, its key,
+refused unless the configuration pins it for the wipe (`onsite.signer`), then its session log and the wipe's request
+(`wipe_parties.deployed_request`).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from pathlib import Path
 from typing import Any
 
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
-from verity.protocol import ProtocolDef
+from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
+from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.pous.verifier.wipe_parties import CHALLENGER, MANIFEST, PROVER
+from verity.protocols.accounting.pous.verifier.wipe_parties import (
+    CHALLENGER,
+    COMPONENT,
+    MANIFEST,
+    PROVER,
+    deployed_request,
+)
 
 WINDOW = 8
 """Fill frames sent before the challenger lets the prover take them."""
@@ -152,7 +163,16 @@ class MemoryChallengerParty:
         return [Finish(WP.report(self.c, self.signer.public_key), refused, kind="private")]
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: MemoryChallengerParty})
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The challenger's start on the auditor's host (`ProtocolDef.starts`, module docstring)."""
+    signer = onsite.signer(state, onsite.pin(configuration, CHALLENGER, COMPONENT))
+    if not (state / "sessions").exists():
+        mc.SessionLog.create(state / "sessions")
+    log = mc.SessionLog(state / "sessions")
+    return Start(deployed_request(configuration, bound), {"signer": signer, "log": log, "reads": WP.READS})
 
 
-__all__ = ["PROTOCOL", "WINDOW", "MemoryChallengerParty"]
+PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: MemoryChallengerParty}, {CHALLENGER: start})
+
+
+__all__ = ["PROTOCOL", "WINDOW", "MemoryChallengerParty", "start"]

@@ -3,10 +3,12 @@ module
 public import CoreProtocol.Protocol
 public import CoreProtocol.Site
 public import CoreProtocol.SiteExample
+public import RegistrationLog.SiteCheck
 public import Base.Hash
 meta import CoreProtocol.Protocol
 meta import CoreProtocol.Site
 meta import CoreProtocol.SiteExample
+meta import RegistrationLog.SiteCheck
 meta import Base.Hash
 
 /-!

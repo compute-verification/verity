@@ -17,6 +17,7 @@ import torch
 from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period, setup
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.runtime.stream import Side
 
 from tests import fake_vllm
@@ -182,7 +183,7 @@ def _lean(monkeypatch, tmp_path):
     as ``say["setup"]``.  Returns ``say``, the Python's runs and what was served, each in order."""
     session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CR, "session", session)
-    audit, runs, served = period.audit, [], []
+    audit, runs, served = period_prover.audit, [], []
     say: dict[str, Any] = {"run": lambda answer: answer | {"reason": "the Lean's words"}, "setup": {"verdict": "accept"}}
 
     def audited(*args, **kw):
@@ -193,7 +194,7 @@ def _lean(monkeypatch, tmp_path):
         served.append((exe, list(cases)))
         return [say["run"](runs[-1].answer) if exe == "RUN" else say["setup"]]
 
-    monkeypatch.setattr(period, "audit", audited)
+    monkeypatch.setattr(period_prover, "audit", audited)
     monkeypatch.setattr(period, "serve", serve)
     return say, runs, served
 

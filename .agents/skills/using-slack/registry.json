@@ -265,6 +265,7 @@
         "adapters/vllm/verity_vllm/acquire/",
         "adapters/vllm/verity_vllm/commit/",
         "adapters/vllm/verity_vllm/properties/",
+        "adapters/vllm/verity_vllm/definitions/",
         "adapters/vllm/verity_vllm/pipeline/build.py",
         "adapters/vllm/verity_vllm/pipeline/match.py",
         "adapters/vllm/verity_vllm/pipeline/commit.py",
@@ -312,9 +313,9 @@
         "verity/protocols/accounting/pouw/prover/",
         "security/Definitions/Pouw/",
         "security/Proofs/Pouw/",
-        "security/Definitions/Nci.lean",
-        "security/Definitions/Nci/",
-        "security/Proofs/Nci/",
+        "security/Definitions/InferenceOnly.lean",
+        "security/Definitions/InferenceOnly/",
+        "security/Proofs/InferenceOnly/",
         "benchmarks/pouw/",
         "verity/protocols/accounting/pouw/prover/clear/",
         "benchmarks/machine_model/",
@@ -412,7 +413,7 @@
         "security/Properties/Pouw/",
         "security/Properties/Accounting/Compose.lean",
         "security/Properties/Accounting/RegisteredCircuit.lean",
-        "security/Proofs/Nci.lean"
+        "security/Proofs/InferenceOnly.lean"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -436,7 +437,7 @@
       "linear": "CMP",
       "linear_label": "lane:compute-research",
       "owns": [
-        "verity/hardware/",
+        "verity/tests/tests/test_cards.py", "verity/tests/tests/test_imports.py", "verity/tests/tests/test_nodes.py", "verity/tests/tests/test_sheet_lean.py",
         "hardware/",
         "benchmarks/pouw/tensor_kinds/",
         "benchmarks/pouw/opcode_probe/",
@@ -663,7 +664,7 @@
       ],
       "linear": "NET",
       "owns": [
-        "verity/protocols/policy/inference_only/verifier/nci/",
+        "verity/protocols/policy/inference_only/verifier/",
         "verity/protocols/accounting/certifier/",
         "verity/protocols/accounting/certifier/prover/",
         "verity/protocols/accounting/certifier/device/",
@@ -689,10 +690,10 @@
         "security/Properties/NetworkPeriod.lean",
         "security/Properties/NetworkScan.lean",
         "security/Properties/NetworkScan/",
-        "security/Properties/Nci.lean",
-        "security/Properties/Nci/",
-        "security/Proofs/Properties/Nci.lean",
-        "security/Proofs/Properties/Nci/"
+        "security/Properties/InferenceOnly.lean",
+        "security/Properties/InferenceOnly/",
+        "security/Proofs/Properties/InferenceOnly.lean",
+        "security/Proofs/Properties/InferenceOnly/"
       ],
       "branch_suffixes": [
         "728f",
@@ -856,7 +857,7 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
-        "demos/README.md",
+        "demos/",
         "tools/verity/cli/tests/lifecycle/",
         "benchmarks/tree/",
         "benchmarks/communication/",
@@ -959,7 +960,7 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "benchmarks/rho/",
+        "benchmarks/slowdown/",
         "benchmarks/circuit_properties/",
         "benchmarks/inference_only/",
         "benchmarks/training_slowdown/",
@@ -973,12 +974,12 @@
         "security/Proofs/Accounting/Coverage.lean",
         "security/Proofs/Accounting/ServingBlocks.lean",
         "security/Proofs/Accounting/ServingBlocks/",
-        "security/Properties/Nci/Threads.lean",
-        "security/Properties/Nci/Desc/Cover.lean",
-        "security/Properties/Nci/Desc/Verdict.lean",
-        "security/Properties/Nci/Record.lean",
-        "security/Proofs/Properties/Nci/DescVerdict.lean",
-        "security/Proofs/Properties/Nci/Agrees.lean"
+        "security/Properties/InferenceOnly/Threads.lean",
+        "security/Properties/InferenceOnly/Desc/Cover.lean",
+        "security/Properties/InferenceOnly/Desc/Verdict.lean",
+        "security/Properties/InferenceOnly/Record.lean",
+        "security/Proofs/Properties/InferenceOnly/DescVerdict.lean",
+        "security/Proofs/Properties/InferenceOnly/Agrees.lean"
       ],
       "branch_suffixes": [
         "4207"

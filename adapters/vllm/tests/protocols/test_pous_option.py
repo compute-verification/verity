@@ -19,18 +19,19 @@ from concurrent import futures
 
 import pytest
 import torch
-
-from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import period, setup
 from verity.protocols.accounting.pous.prover import challenger_prover as CR
+from verity.protocols.accounting.pous.prover import period_prover
+from verity.protocols.accounting.pous.prover import weight_store as ws
+from verity.protocols.accounting.pous.verifier import period, setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
+from verity.runtime.stream import Side
+
 from verity_vllm import config
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
-from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity_vllm.protocols import pous
 
 P2 = "p2-16448/v4"
@@ -168,7 +169,7 @@ def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
         held = s.held()                                                                     # the verifier's setup check of C*
         period.tie(held.point, held.published, period.setup_inputs(held.setup_case))
         assert held.published.root.hex() == c["storage_root"]
-        assert [b for seg in period.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
+        assert [b for seg in period_prover.encode(q, s.salt, w) for b in seg] == [held.blocks[i] for i in range(q.blocks)]
 
         plain = opt.weights()                                                               # tied weights: encoded once, one tensor
         assert {n: t.numpy().tobytes() for n, t in plain.items()} == {
@@ -237,20 +238,41 @@ def _in_process_party(signer, log):
     return session, calls
 
 
-def _period_dir(tmp_path, n: int):
+def _period_dir(tmp_path, n: int, tools: dict[str, str] | None = None):
     d = tmp_path / "periods" / f"p{n}"
     d.mkdir(parents=True)
     (d / "period.json").write_text(json.dumps({"challenger_host": AUDITOR, "challenger": {"pous": {
         "command": ["ssh", AUDITOR, "uv", "run", "python", "-m", CS.MODULE, "--device", "pous-challenger",
-                    "--listen", "0.0.0.0:7710"], "address": f"{AUDITOR}:7710"}}}))
+                    "--listen", "0.0.0.0:7710"], "address": f"{AUDITOR}:7710"}}} | ({"tools": tools} if tools else {})))
     return d
+
+
+#: stand-ins for the period's Lean tools, which `_judges` answers for
+JUDGES = {"pous-run-protocol": "RUN", "pous-setup": "SETUP"}
+
+
+def _judges(monkeypatch) -> list:
+    """`period.serve` answering for `JUDGES` as the Lean does of an honest period: the run tool with the Python's
+    answer, the setup tool with an accept. Returns the Python's runs, in order."""
+    audit, runs = period_prover.audit, []
+
+    def audited(*args, **kw):
+        runs.append(audit(*args, **kw))
+        return runs[-1]
+
+    monkeypatch.setattr(period_prover, "audit", audited)
+    monkeypatch.setattr(period, "serve", lambda exe, cases: [runs[-1].answer if exe == "RUN" else {"verdict": "accept"}])
+    return runs
 
 
 def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_it_certifies(toy, tmp_path, monkeypatch):
     """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
-    the setup case and its check; an accepted period says plainly that this point certifies 0 bits."""
+    the setup case and its check; an accepted period says plainly that this point certifies 0 bits, and that its setup
+    was checked by the developer, not the auditor. The Lean's tools are stand-ins that answer as the Python
+    (`_judges`)."""
     session, calls = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CR, "session", session)
+    _judges(monkeypatch)
 
     def side_of(doc, node, key, local, what=None):
         assert (key, what) == ("pous", None), "PoUS's side is period.json's challenger.pous"
@@ -260,16 +282,34 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
         opt = comp.get("pous")
         for n in (0, 1):
             out = tmp_path / f"out{n}"
-            got = opt.leg(_period_dir(tmp_path, n), NODE, out, side_of=side_of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+            got = opt.leg(_period_dir(tmp_path, n, JUDGES), NODE, out, side_of=side_of, schemes=ts.SCHEMES,
+                          protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
-            assert got["profile"]["placement"]["trusted-device"].startswith(f"holds: the memory challenger ran on {AUDITOR}")
+            assert got["profile"]["placement"]["trusted-device"] == (   # period.json names no deployment
+                f"{mc.UNCOMMITTED} (no configuration); the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
             doc = json.loads((out / "pous.json").read_text())
+            assert doc["placement"]["kind"] == "own-host" and doc["placement"]["setup"] == CS.SETUP
+            assert got["profile"]["placement"]["setup"] == "setup checked by the developer, not the auditor"
             assert doc["s_bits"] == 0 and doc["rounds_answered"] == period.K + CS.WARMUPS and doc["setup"]["fresh"] == (n == 0)
             assert (out / "pous.case.json").exists() and (out / "pous-setup.case.json").exists() == (n == 0)
         party, request = calls[0]
         assert party.host == AUDITOR and party.address == (AUDITOR, 7710)
         assert request == CS.request_of(NODE, opt.store.point, opt.store.root) and opt.periods == 2
+
+
+def test_a_period_whose_tools_name_no_lean_is_undecided_where_the_python_accepts(toy, tmp_path, monkeypatch):
+    """`PousOption.leg` with no ``pous-run-protocol`` among the period's tools: the Python's accept of an honest period
+    decides nothing alone, so the answer is undecided with `period.NO_JUDGE`, no public outputs and no profile."""
+    session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
+    monkeypatch.setattr(CR, "session", session)
+    runs = _judges(monkeypatch)
+    with PO.install(toy, _ctx(ENTRY)) as comp:
+        got = comp.get("pous").leg(_period_dir(tmp_path, 0), NODE, tmp_path / "out", side_of=Side.of,
+                                   schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+    assert runs[0].answer["verdict"] == "accept", runs[0].answer["reason"]
+    assert got["verdict"] == "undecided" and got["reason"] == period.NO_JUDGE
+    assert got["public"] is None and got["profile"] is None
 
 
 def test_a_dropped_block_rejects(toy, tmp_path):
@@ -296,7 +336,7 @@ def test_a_dropped_block_rejects(toy, tmp_path):
         short = [list(seg) for seg in period.setup_inputs(held.setup_case)[2]]
         del short[1][3]
         bad = dataclasses.replace(held, setup_case=period.setup_case(q, held.published.commitment, held.published.salt, short))
-        got = period.audit(NODE, bad, COINS, log=ts.session_log(tmp_path), prover=opt.prover, **run)
+        got = period_prover.audit(NODE, bad, COINS, log=ts.session_log(tmp_path), prover=opt.prover, **run)
         assert got.verdict == "reject" and got.answer["reason"] == f"setup: segment 1 of C* is not 8 blocks of {q.block_bytes} bytes"
 
 

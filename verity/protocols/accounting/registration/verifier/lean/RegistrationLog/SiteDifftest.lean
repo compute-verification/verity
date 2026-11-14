@@ -1,6 +1,7 @@
 module
 
 public import CoreProtocol.Site
+public import RegistrationLog.SiteCheck
 
 /-!
 # The Site's difftest: `Core.Site` behind `Difftest.serve`

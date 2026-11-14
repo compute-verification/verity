@@ -2,8 +2,8 @@
 
 `benchmarks/` holds measurement only: each directory measures something, or holds the data measurements are computed
 against. A benchmark is never the verifier, writes no verdict and computes no number a guarantee reads, and
-nothing outside `benchmarks/` reads it. End-to-end demos, what a person runs to serve and audit a workload, are in
-`demos/`. This file is the directory's interface: its entry points, the shared harness, what a benchmark may import
+nothing outside `benchmarks/` reads it. A demo is one configuration file in `demos/`, which `verity run`
+reads. This file is the directory's interface: its entry points, the shared harness, what a benchmark may import
 and write, and the index of every directory.
 
 ## Entry points
@@ -18,7 +18,7 @@ says. These are the directories that have one:
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network certifier's term for GLM-5.3 at a scope's load, in bits and GB |
 | `verity bench certifier_timing` | the bits an interval a server moves through when the network certifier releases its bytes: `run`, `guard`, `serve`, `observe`, `score`, `table` and `target` |
-| `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside `rho`'s shape-derived ones |
+| `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
 | `verity bench dsa_topk` | the canonical top-k on one GPU node: its outputs run to run and in two processes at once, the plugin as vLLM loads it, and its cost |
@@ -99,7 +99,7 @@ for a new benchmark.
 ## Metrics
 
 Each benchmark or loop declares the numbers a lead is held to in a `metrics.toml` beside the script its command runs
-(the first `.py` or `.sh` under `benchmarks/`, `demos/`, `infra/` or `tools/` the command names:
+(the first `.py` or `.sh` under `benchmarks/`, `infra/` or `tools/` the command names:
 `benchmarks/serve_tax/run.sh`'s in `benchmarks/serve_tax/metrics.toml`, and a loop's, such as
 `infra/control/store_index.sh`, beside the loop), one `[[metric]]` table per number. Each row's `owner` owns its file:
 the longest `owns` entry in `.agents/skills/using-slack/registry.json` covering the file names that handle, so a lead's
@@ -168,6 +168,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
+| `demo_minutes/` | a demo's minutes from its first command to its verdict, read off its runs' records: remote's served run (`minutes.py`) and onsite's two `verity run` runs (`onsite_minutes.py`) | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
@@ -175,7 +176,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `prod_repro/` | one command over the serving cost benchmark's serve, load and replay: what the serve turned on (prefix caching, speculative decoding, the context limit), whether the replayed window's tokens are the served ones, what our changes cost over stock with its interval, and the advice a request, each measured or said not to be | maintained |
 | `vllm_encoded/` | Llama-3.1-8B in vLLM with its weights and KV cache held as codec words and receipted by PoUB, as `verity-bench` arms beside the plain stack | maintained |
 | `inference_only/` | the inference-only policy of Llama 3.2 1B as served, stated, and of the class this tree builds, with the Lean count's verdict on it, and each one's number: the least slowdown of training run inside the policy's inference blocks, under the min-cut bound | maintained |
-| `rho/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
+| `slowdown/` | a lower bound on the slowdown a training run pays under the regime, and the time to its target, per scenario and monitoring period | maintained |
 | `nci/` | the sources, parameters and policies the inference-only policy's bounds rest on, and a board of training methods with their slowdown brackets | maintained |
 | `training_slowdown/` | the grader (`grader/`): a training step's matrix products, their multiply-adds and output wires, and the circuit's size, read off the Boolean circuit a lane hands over, beside training's slowdown code's trace of the same step; `verity bench training-slowdown CONFIG`, an attack config's jobs, each found by its label and run where it is missing | maintained |
 
@@ -257,7 +258,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `pous/` | every PoUS implementation on one dataset, by its effective weight bandwidth | maintained |
 | `bandwidth/` | the device ceilings PoUB's timing cites: how fast a card and a host write labels, and the chip's on-chip stores; and a node's own report of its interfaces' line rates, its disks' interfaces and its cards' usable memory | maintained |
-| `remote_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is the vLLM demo, not this | maintained |
+| `remote_session/` | PoUB's session harness: a verifier's and a prover's process over TCP, end to end. The remote protocol's demo is `demos/remote.toml`, not this | maintained |
 | `memory/` | `verity bench memory`, the front door for the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, at the data sheet's read bandwidth, from a gate run on the whole node, a recorded run or a loopback | maintained |
 | `kv_filler/` | the filler top-up beside vLLM serving, and what it costs inference | maintained |
 | `stacked_share/` | the share of a node's live KV a prover could hold as encoded carriers inside the audit's compute budget | maintained |

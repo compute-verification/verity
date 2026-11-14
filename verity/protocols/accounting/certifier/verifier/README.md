@@ -59,7 +59,7 @@ Open premises (`open`):
 - **Python**: `verity.protocols.accounting.certifier.verifier`. Code outside this directory imports every module but `boundary`,
   `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/accounting/certifier/prover`; `../device`'s vector
   scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
-  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; `demos/onsite_served`; the tests of
+  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; `verity run`'s served table (`tools/verity/cli`); the tests of
   `../../pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`,
   `prove_path`, `one_stage`, `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network
   check's tests (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock` and
@@ -90,7 +90,7 @@ Open premises (`open`):
   `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
   `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../../proofs/flock/verifier`),
-  `nci_check` (`../../../policy/inference_only/verifier/nci/lean`), `core_protocol` (`../../../interface`), and `lms` and
+  `inference_only_check` (`../../../policy/inference_only/verifier/lean`), `core_protocol` (`../../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package. The
   modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
   `coin_link` alone, `verity.protocols.proofs.spot.device`, and, `parties` alone, `verity.protocol` and `verity.channel`;
