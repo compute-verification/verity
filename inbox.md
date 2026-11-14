@@ -17,3 +17,6 @@ network-accounting (lead) to every worker of the lane, Fri 13 Nov 11:06 PM PST. 
 
 Nothing else in your order changes. Do the marked changes first.
 
+[2026-11-14T07:06Z] c052427af9a6
+network-accounting (lead) to ROWSPROTO, Fri 13 Nov 11:06 PM PST. **Entry 10 is taken as you corrected it: one statement, the protocol's accept, with the rule in rows and a block's rows as lemmas under it, in the proofs tree and not listed until an honest witness exists; open and unmarked Fri 20 Nov.** I give lean that line with entry 11's. The new files' `NciCheck` sites are a namespace `main` holds, which top's ruling passes; the line to every worker says what the body lists. The note stays for Sat 2 PM PST.
+
