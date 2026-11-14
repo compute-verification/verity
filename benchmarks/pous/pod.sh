@@ -5,9 +5,9 @@
 #   bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=<commit> [WS=qwen2.5-0.5b/linears+head] [AUDITS=20]
 #   bash benchmarks/pous/pod.sh IMPL=reference [WS=...] [MAX_SEGMENTS=N]
 #   ... -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=...] [NVME_DIR=/workspace/nvme] [SCHEME=dense-chain/v1]
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu [WS=...] [NVME_DIR=...]       # P2 v1 (builds p2_store's libp2v1.so with CGBN)
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v1-gpu P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' TOKENS=1,8,32,2048,4096  # v4 keys
-#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v4 on the same library, audited by protocol.TimedAudit
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu [WS=...] [NVME_DIR=...]       # p2-16448/v4 (builds p2_store's libp2v1.so with CGBN),
+#                                                                               audited by protocol.TimedAudit
+#   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-gpu P2FAST='-DP2_FAST -DP2_KEYS4 -DP2SQ_KARA' TOKENS=1,8,32,2048,4096  # v4 keys
 #   ... -- bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu [WS=...] [NVME_DIR=...]    # the same, audited by the memory challenger,
 #                                                                               signed with S1's key in $W/pous-mc-lms (MC_SIGNER=test: the test signer),
 #                                                                               its session ids in $W/pous-mc-session-log (a key that predates
@@ -22,7 +22,7 @@
 #          p2_store/store.py's command after the literal --, run on the library with every GPU the run sees (`encode`, `verify
 #          --decode`, `spot`); --out is $OUT, and DIR, the store, is scratch outside the run directory
 #
-# On a shared node (band-gpu, p2-v1-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
+# On a shared node (band-gpu, p2-v3-gpu, side-by-side): WORK=<dir> holds the venvs and builds, VCPU and RCPU the verifier's and
 # the responder's cores (default: the 3rd and 4th physical cores), WORKERS the reference gate's processes (default nproc).
 # POUS_BUILD=<dir> is the pous_native JIT build directory (default $W/pous_build). A timed run needs a directory no other run
 # builds into: a rebuild inside a timed lease is a compile the node's ops daemon stops.
@@ -48,7 +48,7 @@
 #   gpu-lease 1 --on 7 --max-min M --timed -- QUIET bash benchmarks/pous/pod.sh IMPL=band-gpu GATE_ROLE=memory-challenger \
 #     GATE_CORES=124-127 GATE_PEERS=worker:NODE=PLACEMENT.json GATE_ABSENT='ZK server challenger'
 #
-# GATES_ONLY=1 (band-gpu, p2-v1-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
+# GATES_ONLY=1 (band-gpu, p2-v3-gpu, side-by-side) builds the kernels for the device, runs the kernel gates (the pinned vector
 # on the device, the reference segments or blocks, the round trip) and stops: nothing is timed and nothing is published.
 #
 # HW, the census id recorded with the result, is the pod's GPU: the H100 SXM, the L40S, the RTX 4090 and the RTX PRO 6000
@@ -74,7 +74,8 @@ export PATH=$HOME/.local/bin:/opt/elan/bin:$HOME/.elan/bin:$PATH
 export PYTHONPATH=$REPO:$REPO/tools/research/src:$REPO/tools/difftest/python
 # PREPARE=1 builds the Lean verdict a timed run serves, which it must not compile under its lease, and exits: for
 # p2-v3-mc-gpu the memory challenger's (memory-challenger-verdict, live.py's judge), for p2-v3-gpu pous_check's
-# (pous-timed-audit, band_gpu's judge) where its lakefile declares one. Run it from a clone (--cwd clone: the build writes
+# (pous-timed-audit, timed_audit.py's judge, which p2_v1/harness.py builds again, a no-op after this) where its lakefile
+# declares one. Run it from a clone (--cwd clone: the build writes
 # the package's .lake) before the lease, in the same job:
 #   bash -c 'bash benchmarks/pous/pod.sh PREPARE=1 IMPL=p2-v3-mc-gpu && \
 #     gpu-lease 1 --on N --max-min M -- QUIET env ... bash benchmarks/pous/pod.sh IMPL=p2-v3-mc-gpu ...'
@@ -215,7 +216,7 @@ elif [ "$IMPL" = band-gpu ]; then
   RC=$?
   clocks after
   exit $RC
-elif [ "$IMPL" = p2-v1-gpu ] || [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-by-side ] \
+elif [ "$IMPL" = p2-v3-gpu ] || [ "$IMPL" = p2-v3-mc-gpu ] || [ "$IMPL" = side-by-side ] \
      || [ "$IMPL" = p2-scale ] || [ "$IMPL" = p2-store ]; then
   gpu_env || exit 3
   record_host
