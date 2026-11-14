@@ -971,7 +971,7 @@ KNOWN: dict[str, str] = {
     "verity/commitments/windows/interface.py::Window":
         "duplicate of the execution block (no canonical yet): becomes the builder's output for it (proofs)",
     # verity/
-    "verity/settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",
+    "tools/config/verity_config/verity_settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",
 }
 
 _REASON = re.compile(r"^(?:duplicate of .+?: becomes .+|homonym, .+?: rename.*) \(([\w-]+)\)$")
