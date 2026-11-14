@@ -187,7 +187,7 @@ reads. Proved:
   protocol's advantage is ε = Ω_max/(1 − g₀) − 1, and an audit of t work-weighted samples accepts while
   (1 + ε)/(1 − ε_s)·T < W with probability at most (1 − ε_s)^t + δ, for every share ε_s < 1 of the reference work W);
   NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`; Pearl-C's at 8192³ on the RTX PRO 6000 (sm_120) at an inert-work
-  share of 1/1,000, `Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192` (ε = 1648180439/444424569561, 0.371%);
+  share of 1/1,000, `Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1InertShare1000_8192` (ε = 1648180439/444424569561, 0.371%);
   and Pearl-C4's at 8192³, `Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192` (ε = 9875013901/1366788186099, 0.723%). Each
   follows from its gap form below. Neither Pearl-C figure is the served point's. What is served is Llama 3.2 1B on an
   H200, credited under the H100 record at an inert-work share of 1/400, and its gap is a lemma, not yet a listed
@@ -203,8 +203,8 @@ reads. Proved:
   `Pouw.SecurityProofs.PearlCSampledByDeadline`.
 - **The schemes' gaps:** NCP's `Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1`; Pearl-C's at 8192³ on the RTX PRO 6000
   (the served point's is the lemma above),
-  `Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
-  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`. The row seed's reduction and the barrier
+  `Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1InertShare1000_8192` and its sampled twin
+  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1InertShare1000_8192`. The row seed's reduction and the barrier
   are lemmas, in `security/Proofs/Pouw/Lemmas/PearlC.lean` and `security/Proofs/Pouw/Lemmas/Barrier.lean`.
 - **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
   `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap`.

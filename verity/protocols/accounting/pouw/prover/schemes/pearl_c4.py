@@ -55,7 +55,7 @@ NaN; one a_E per row).  A block is screened when (clean amax_b)² > 90·ρ² (9.
 its salt-dead codes are charged per element (items 3 and 4), so a row with many screened blocks is rejected only when
 its tile's inert work passes the bound.  Items 3 and 4 charge the reference's witness alone,
 not every element of a screened block: F1′ charges a screened block's
-near-certain codes at their own p_t.  A sampled tile's inert work is replayed over its credited words (`tile_debit`):
+near-certain codes at their own p_t.  A sampled tile's inert work is replayed over its credited words (`tile_inert_work`):
 
 ~~~text
 1  F1′ split     per row and aligned 128 of k: 128·S_w, κ = min(c·M_w, 0.125) inside S_w's expectation, on every word
@@ -82,7 +82,7 @@ count, pinned per shape (`int8_depth_cost`, `pearl_c4_c_L`). They are the rows
 int8 route's saving per sampled tile), which replace `no-base-split/fp4-sm120` and the retired domain claim
 `scale-flatness/nvfp4`.  A tile whose inert work passes the bound fails the tile rule outright (`clear_work.check_opened`),
 and D-SK stays.  **R1**: a row whose own F1′ per word passes ρ·(its cell credit) is uncredited, declared by the prover
-(`r1_rows`, through `clear_work.declare`) and checked on sampled tiles (`row_over_debit`, through
+(`r1_rows`, through `clear_work.declare`) and checked on sampled tiles (`row_over_inert_work`, through
 `clear_work.check_opened`); it is still formed, checked and hashed.
 
 A code is *salt-dead* unless two samples in the noise support give it two values (`salt_dead`), so forming's inert work is
@@ -177,7 +177,7 @@ BF16_MAC_UNITS, FP32_UNITS = 4, 16
 #: bit-exact price: f_s = 98 (the noise atom 64, the dense k64's full shape; the block-scale operations about 1; the cast
 #: 32.8, FMUL and F2FP).  Uncredited, 19: the noisy amax (one FMNMX, 17) and ρ's every-8th accumulate (2), in W_ref alone.
 FORMING_CREDITED, FORMING_UNCREDITED = 98, 19
-CAP = Fraction(1, 400)
+INERT_SHARE = Fraction(1, 400)
 SPAN_K = 128                       # D-24: one mma.sp m16n8k128 takes 16 rows x 128 of k
 SPREAD_X5 = 79                     # D-SS: spread ≤ 2^15.8, as spread^5 ≤ 2^79
 GROUP_MAX = 2304                   # the largest |group dot| in quarters: 16 products of 6 x 6
@@ -539,7 +539,7 @@ def dnf(beta: int) -> bool:
 def row_passes(fmt: Fmt, x: Sequence[int]) -> bool:
     """Admission, per row and salt-free: every word a finite widened BF16 word (its low 16 bits zero, as `parse_row`
     writes them; Lean's `Fp4Sem.RowOK`), and D-NF (`dnf`).  A row's screened blocks are charged in its tiles' inert work
-    (`tile_debit`), and the tile's bound rejects them."""
+    (`tile_inert_work`), and the tile's bound rejects them."""
     if any(w & 0xFFFF or (w >> 23) & 0xFF == 0xFF for w in x):
         return False
     try:
@@ -1010,7 +1010,7 @@ def word_replay(fmt: Fmt, a_codes: Sequence[int], b_codes: Sequence[int], a_scal
 
 
 @dataclass(frozen=True)
-class Debit:
+class InertWork:
     """A sampled tile's replayed inert work over its credited words in FP4 units, by item (module docstring), and the counts
     behind it and behind the domain checks."""
 
@@ -1060,9 +1060,9 @@ def row_terms(fmt: Fmt, memo: RowTerms, label: str, side: Formed, e_rows: Sequen
     return memo[label, pos]
 
 
-def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequence[int], n: int,
+def tile_inert_work(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequence[int], n: int,
                e_a: Sequence[Sequence[int]], e_b: Sequence[Sequence[int]], m: int | None = None,
-               f1: RowF1 | None = None, memo: RowTerms | None = None) -> Debit:
+               f1: RowF1 | None = None, memo: RowTerms | None = None) -> InertWork:
     """The inert work over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b, with
     this salt's E lines e_a and e_b), for a unit of m x k x n (m defaults to n).  `f1` evaluates a row's F1′; a verifier
     may pass a faster evaluation that charges at least the rule's (`benchmarks/pouw/pearl_c4/f1_fast.py`).  `memo` holds
@@ -1106,7 +1106,7 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
               "dss_spread_rows": sum(not spread_ok(fmt, a.scales[i]) for i in rows)
               + sum(not spread_ok(fmt, b.scales[j]) for j in cols),
               "words": len(rows) * len(cols)}
-    return Debit(split, int8, ATOM * identity, pairs, Fraction(FORMING_CREDITED * elements * len(cols), n),
+    return InertWork(split, int8, ATOM * identity, pairs, Fraction(FORMING_CREDITED * elements * len(cols), n),
                  fmt.block * subgrid, windows, counts)
 
 
@@ -1117,7 +1117,7 @@ class PearlC4:
     test instance.  ``hashing`` h3 names the scheme ``…-h3``: `pearl_c`'s -h3 on this scheme, SHA-512 trees, leaf and
     tickets, and each row of A sampling its E_A line from its own seed (`row_seeds`); h3 is the default, and h0 is named."""
 
-    cap = CAP
+    cap = INERT_SHARE
 
     def __init__(self, fmt: str = "nvfp4", k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE),
                  f1: RowF1 | None = None, n_min: int = B_OVF_MIN_N, hashing: str = "h3") -> None:
@@ -1137,7 +1137,7 @@ class PearlC4:
         self.contrast = self.fmt is MXFP4
         self.r1_tolerance = R1_TOLERANCE
         self.k_min, self.tile, self.n_min = k_min, tile, n_min
-        self.last_debit: Debit | None = None
+        self.last_inert_work: InertWork | None = None
         self._encoded: tuple | None = None
         self._rows: tuple[C.Ops | None, RowF1 | None, RowTerms] = (None, None, {})
         self.certificate = Certificate(
@@ -1160,7 +1160,7 @@ class PearlC4:
                 "the noisy block amax (17 units per element) and ρ over every 8th position (2) are in W_ref, not credited",
                 ("savings no replay reaches (cross-atom cancellation, gathering across blocks, adaptive regrouping after "
                  "the salt beyond F1′'s κ-inside route choice) are TT_OUT-FP4's; the replay charges the rest as inert "
-                 "work (tile_debit), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
+                 "work (tile_inert_work), and B̃'s layout chosen after the salt is covered by B-OVF's measured credit discount "
                  "(B_OVF, credit_of)"),
                 "the unscale is glue outside the checked values",
             ),
@@ -1238,38 +1238,38 @@ class PearlC4:
     def row_passes(self, words: Sequence[int]) -> bool:
         return row_passes(self.fmt, words)
 
-    def tile_cap(self, record: UnitRecord, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
-        """(inert work, its bound) over the credited words at tile positions rows x cols: `tile_debit`'s total, and ρ times
+    def tile_inert_bound(self, record: UnitRecord, ops: C.Ops, rows: Sequence[int], cols: Sequence[int]) -> tuple[Fraction, Fraction]:
+        """(inert work, its bound) over the credited words at tile positions rows x cols: `tile_inert_work`'s total, and ρ times
         the credited cells' share of creditOf (each row's `credit_of` at |K|, over n).  The breakdown stays in
-        `last_debit`."""
+        `last_inert_work`."""
         s = record.matmul.shape
-        self.last_debit = tile_debit(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m, self.f1,
+        self.last_inert_work = tile_inert_work(self.fmt, ops.a, ops.b, rows, cols, s.n, ops.e_a, ops.e_b, s.m, self.f1,
                                      self._memo(ops))
         cell = Fraction(self.credit_of(Shape(1, record.k_kept, s.n)), s.n)
-        return self.last_debit.total, CAP * cell * len(rows) * len(cols)
+        return self.last_inert_work.total, INERT_SHARE * cell * len(rows) * len(cols)
 
     def _memo(self, ops: C.Ops) -> RowTerms:
-        """The encoded tile's `row_terms`, shared by R1 (`row_debit_ratio`) and the inert work (`tile_cap`), so a sampled tile's
+        """The encoded tile's `row_terms`, shared by R1 (`row_inert_work_ratio`) and the inert work (`tile_inert_bound`), so a sampled tile's
         rows are evaluated once; a new tile or a new `f1` starts a new one."""
         if self._rows[0] is not ops or self._rows[1] is not self.f1:
             self._rows = (ops, self.f1, {})
         return self._rows[2]
 
-    def _r1_cap(self, k_kept: int, n: int) -> Fraction:
-        return CAP * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
+    def _r1_inert_bound(self, k_kept: int, n: int) -> Fraction:
+        return INERT_SHARE * Fraction(self.credit_of(Shape(1, k_kept, n)), n)
 
-    def row_debit_ratio(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> Fraction:
+    def row_inert_work_ratio(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> Fraction:
         """R1's reading: the F1′ per word of the row at
         tile position `pos` of A′ ("A") or B̃ ("B"), over ρ·(its cell credit).  Over 1 the row must be declared
         excluded; `clear_work.check_opened` allows either declaration within `R1_TOLERANCE` of 1.  An excluded row is
         still formed, checked and hashed; it earns nothing."""
         formed, e_rows = (ops.a, ops.e_a) if side == "A" else (ops.b, ops.e_b)
         units = row_terms(self.fmt, self._memo(ops), side, formed, e_rows, pos, self.f1)[1]
-        return units / self._r1_cap(record.k_kept, record.matmul.shape.n)
+        return units / self._r1_inert_bound(record.k_kept, record.matmul.shape.n)
 
-    def row_over_debit(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> bool:
+    def row_over_inert_work(self, record: UnitRecord, ops: C.Ops, side: str, pos: int) -> bool:
         """Whether R1 requires the row excluded (its ratio over 1)."""
-        return self.row_debit_ratio(record, ops, side, pos) > 1
+        return self.row_inert_work_ratio(record, ops, side, pos) > 1
 
     def r1_rows(self, ctx: Context, a_rows: Sequence[bytes], b_rows: Sequence[bytes], k_kept: int) -> tuple[set[int], set[int]]:
         """R1 over a whole unit, for an honest prover's declaration (`clear_work.declare`): the A rows and the weight's
@@ -1288,7 +1288,7 @@ class PearlC4:
         role_e, role_f, seed_e = (ROLE_EA, ROLE_FA, noise.seed_a) if side == "A" else (ROLE_EB, ROLE_FB, noise.seed_b)
         lines = self._lines_a(ctx, noise, [row], [index]) if side == "A" else None
         formed, e = self._side([row], [index], role_e, role_f, seed_e, noise.seed_b, k, lines)
-        return row_terms(self.fmt, {}, side, formed, e, 0, self.f1)[1] > self._r1_cap(k_kept, ctx.matmul.shape.n)
+        return row_terms(self.fmt, {}, side, formed, e, 0, self.f1)[1] > self._r1_inert_bound(k_kept, ctx.matmul.shape.n)
 
     def _side(self, rows: Sequence[bytes], idx: Sequence[int], role_e: int, role_f: int, seed_e: bytes, seed_b: bytes,
               k: int, e: list[list[int]] | None = None) -> tuple[Formed, list[list[int]]]:
@@ -1344,10 +1344,10 @@ __all__ = ["ATOM", "B_OVF", "B_OVF_MIN_N", "DEAD_RHO_SQ", "DELTA", "DENSE_CORREC
            "INT8_PATCH_SLOTS", "K_BETA", "LABELS", "LABEL_BLOCKS", "LINES_PER_BLOCK", "MXFP4", "NAMES", "NOISE_F_SCALE",
            "NVFP4", "ONE", "PEEL_K", "R", "R1_TOLERANCE", "REGISTRATION_STACKS", "ROLE_EA", "ROLE_EB", "ROLE_FA",
            "ROLE_FB", "ROTATION_8", "SIXTH", "SPAN_K", "TILE", "TOP", "UE4M3_MIN", "UE4M3_NORMAL", "UE4M3_TOP",
-           "VO_ROTATION", "Debit", "Fmt", "Formed", "PearlC4", "b_ovf", "basis", "bf16_row", "block_scale", "chain",
+           "VO_ROTATION", "InertWork", "Fmt", "Formed", "PearlC4", "b_ovf", "basis", "bf16_row", "block_scale", "chain",
            "change_probabilities", "change_probabilities_exact", "check_registration", "check_scale_bytes", "clean",
            "dead_blocks", "dnf", "e2m1", "e2m1_value", "e_tilde", "form", "gram", "hw_scales", "int8_depth_cost",
            "int8_saving", "labelled", "line", "line_block", "modal_byte", "noise_atom", "noise_sigma", "pair_excess",
            "parse_row", "peel_factors_a", "peel_factors_b", "pow2_word", "quantize", "row_f1", "row_passes", "row_seed",
            "salt_dead", "scale_bytes_ok", "scale_dyadic", "scale_value", "seed_b", "split_saving", "split_units",
-           "stats", "tile_debit", "two_four_windows", "ue4m3", "ue4m3_word", "ue8m0_up", "unit_seed_a", "word_replay"]
+           "stats", "tile_inert_work", "two_four_windows", "ue4m3", "ue4m3_word", "ue8m0_up", "unit_seed_a", "word_replay"]

@@ -17,8 +17,8 @@ both. Its key is
   n, k        a linear's (n, k) at any batch m, for a twin stated on `pearlCDomainDevNK` (``_n6144k4096``), its shape None
   layout      a served layout's linears, for a twin stated on `pearlCDomainDevShapes` (``_llama31_8b`` on
               `llama31_8bLinears`), the gap the max over them; its shape, n and k None
-  cap         FP8 v1 and v2's debit cap ρ, read off the protocol the statement is about (``Rev1`` is v1 at 1/400, ``Cap1000``
-              and ``Rev1Cap1000`` are 1/1,000); a lookup reads the statement's cap (`CAPS`), and the others are history
+  cap         FP8 v1 and v2's debit cap ρ, read off the protocol the statement is about (``Rev1`` is v1 at 1/400, ``InertShare1000``
+              and ``Rev1InertShare1000`` are 1/1,000); a lookup reads the statement's cap (`INERT_SHARES`), and the others are history
 
 Rounded twins (a record's own cast under the loop price, an upper bound) and U-only messages have no priced path and are
 left out. Each twin keeps its pin's name, type hash and source, and is ``pinned`` when the Lean store's lean-audit.json
@@ -73,18 +73,18 @@ CAST_VALUES = {"cast-8": Fraction(8), "cast-8.72": Fraction(218, 25), "cast-16":
 READINGS = {None: "forming-credited", "ChainOnly": "chain-only", "Chain": "chain-cap"}
 RULED_SIZING = "publicConst64"
 #: each FP8 statement's debit cap ρ
-CAPS = {"pearl-c-sm120/v1": Fraction(1, 1000), "pearl-c-sm120/v2": Fraction(1, 1000)}
-NAME_CAPS = {"Rev1": Fraction(1, 400), "Cap1000": Fraction(1, 1000), "Rev1Cap1000": Fraction(1, 1000)}
+INERT_SHARES = {"pearl-c-sm120/v1": Fraction(1, 1000), "pearl-c-sm120/v2": Fraction(1, 1000)}
+NAME_INERT_SHARES = {"Rev1": Fraction(1, 400), "InertShare1000": Fraction(1, 1000), "Rev1InertShare1000": Fraction(1, 1000)}
 
 _RAT = r"(\d+)(?: / (\d+))?"
 #: `Pouw.PearlC.`, which a signature prints and a `Guarantees` definition's source may leave to its `open`
 _NS = r"(?:Pouw\.PearlC\.)?"
 _FP8 = re.compile(r"pearlC(?P<kind>Gap|Gamma|Sampled)Sm120(?P<ver>v1|v2)(?P<loop>Loop)?(?:Cast(?P<cast>8p72|32p06|16|32|8))?"
-                  r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1Cap1000|Rev1|Cap1000)"
+                  r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1InertShare1000|Rev1|InertShare1000)"
                   r"_(?:(?P<shape>8192|16384)|n(?P<n>\d+)k(?P<k>\d+)|(?P<layout>[a-z][a-z0-9_]*))")
 _LIFTED = re.compile(r"(\S+) : (Pouw\.Guarantees\.\S+)")
 _DEV = re.compile(_NS + r"devSm120(v1|v2) " + _NS + r"Prices\.(sm120Loop|sm120)\b")
-_CAP_ARG = re.compile(_NS + r"pearlCProtocolDev\w* \(" + _NS + r"devSm120v[12] " + _NS + r"Prices\.\w+\) "
+_INERT_SHARE_ARG = re.compile(_NS + r"pearlCProtocolDev\w* \(" + _NS + r"devSm120v[12] " + _NS + r"Prices\.\w+\) "
                       r"\w+ \(" + _RAT + r"\)")
 _HOT = re.compile(r"(?:gap|gamma)Hot(?P<rev>Rev1)?(?P<read>ChainOnly)?_sm120(?P<ver>v1|v2)Hot(?P<loop>Loop)?Cast(?P<cast>8p72|32p06|16|32|8)"
                   r"_(?P<sizing>[A-Za-z0-9]+)_(?P<shape>8192|16384)")
@@ -180,12 +180,12 @@ def _row(name: str, short: str, sig: str) -> dict | None:
         lit = _GAMMA_LITERAL.search(sig) or _GAMMA_SOURCE.search(sig)
         if lit is None:
             return None
-        rho = _CAP_ARG.search(sig)
-        if rho is None or _q(rho[1], rho[2]) != NAME_CAPS[m["cap"]]:
-            raise TwinError(f"{name}: its signature's protocol isn't at its name's cap {NAME_CAPS[m['cap']]}")
+        rho = _INERT_SHARE_ARG.search(sig)
+        if rho is None or _q(rho[1], rho[2]) != NAME_INERT_SHARES[m["cap"]]:
+            raise TwinError(f"{name}: its signature's protocol isn't at its name's cap {NAME_INERT_SHARES[m['cap']]}")
         row = {"statement": f"pearl-c-sm120/{m['ver']}", "path": path, "fadd": Fraction(1047, 125) if loop else Fraction(8),
                "reading": READINGS[m["read"]], "kind": "tile" if m["kind"] == "Sampled" else "unit",
-               "shape": int(m["shape"]) if m["shape"] else None, "sizing": None, "cap": NAME_CAPS[m["cap"]],
+               "shape": int(m["shape"]) if m["shape"] else None, "sizing": None, "cap": NAME_INERT_SHARES[m["cap"]],
                "gamma": _q(lit[1], lit[2])}
         if m["n"]:
             dom = _DOMAIN_NK.search(sig)
@@ -317,10 +317,10 @@ def statement(line: str | None, version: str | None) -> str | None:
 def lookup(twins: list[dict], statement_: str | None, path: str | None, n: int | None, k: int | None,
            reading: str = "forming-credited", cap: Fraction | None = None, layout: str | None = None) -> dict:
     """The gap at both FP32 prices for one attempt: the twins of its statement, priced path and shape, at the statement's cap
-    (`CAPS`; ``cap`` reads another, as history), the larger published.  The shape is the cube n³ when n = k is 8192 or
+    (`INERT_SHARES`; ``cap`` reads another, as history), the larger published.  The shape is the cube n³ when n = k is 8192 or
     16384, else the linear (n, k) at any m; ``layout`` (``llama31_8b``) reads a served layout's twin instead, whose gap
     is the max over its linears.  ``missing`` says what kept it from publishing."""
-    cap = CAPS.get(statement_ or "") if cap is None else Fraction(cap)
+    cap = INERT_SHARES.get(statement_ or "") if cap is None else Fraction(cap)
     out: dict = {"statement": statement_, "path": path, "reading": reading, "cap": None if cap is None else str(cap),
                  "by_price": {}, "published": None, "published_at": None, "missing": []}
     if statement_ is None:

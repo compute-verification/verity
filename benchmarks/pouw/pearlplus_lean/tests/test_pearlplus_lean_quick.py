@@ -43,13 +43,13 @@ def test_the_lean_parses_the_options_the_cases_pass():
                              "--test-instance": False, "--tie": True, "--of-record": False}
 
 
-def test_the_over_cap_rules_and_default_are_verify_runs():
+def test_the_over_inert_bound_rules_and_default_are_verify_runs():
     check = (LEAN / "Check.lean").read_text()
-    names = dict(re.findall(r'\| \.(\w+) => "([a-z]+)"', _block(check, "def OverCap.name ")))
-    parsed = {n: c for n, c in re.findall(r'\| "([a-z]+)" => some \.(\w+)', _block(check, "def OverCap.ofName? "))}
-    assert set(names.values()) == set(parsed) == set(VR.OVER_CAP)
+    names = dict(re.findall(r'\| \.(\w+) => "([a-z]+)"', _block(check, "def OverInertBound.name ")))
+    parsed = {n: c for n, c in re.findall(r'\| "([a-z]+)" => some \.(\w+)', _block(check, "def OverInertBound.ofName? "))}
+    assert set(names.values()) == set(parsed) == set(VR.OVER_INERT_BOUND)
     assert all(names[c] == n for n, c in parsed.items())
-    default = re.search(r"overCap : OverCap := \.(\w+)", _block((LEAN / "Main.lean").read_text(), "structure Args ")).group(1)
+    default = re.search(r"overInertBound : OverInertBound := \.(\w+)", _block((LEAN / "Main.lean").read_text(), "structure Args ")).group(1)
     assert names[default] == inspect.signature(VR.verify_passes).parameters["over_cap"].default == VR.UNCREDITED
 
 

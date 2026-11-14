@@ -1279,9 +1279,9 @@
    "honest": ["Properties.Pouw.PearlPlus.tileAcceptMeans_honest", "Properties.Pouw.PearlPlus.tileAcceptMeans_derived"],
    "nontrivial": "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial"
   },
-  "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
-   "honest": ["Properties.Pouw.PearlPlus.tileKeepsTheCap_honest"],
-   "nontrivial": "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
+  "Properties.Pouw.PearlPlus.tileKeepsTheInertBound": {
+   "honest": ["Properties.Pouw.PearlPlus.tileKeepsTheInertBound_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.tileKeepsTheInertBound_nontrivial"
   },
   "Properties.Pouw.PearlPlus.yIsTheUnscale": {
    "honest": ["Properties.Pouw.PearlPlus.yIsTheUnscale_honest"],
@@ -12400,7 +12400,7 @@
     "function": "PouwCheck.PearlPlus.checkTile",
     "outcome": "accept"
    },
-   "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
+   "Properties.Pouw.PearlPlus.tileKeepsTheInertBound": {
     "function": "PouwCheck.PearlPlus.Rule.checkOpened",
     "outcome": "accept"
    },

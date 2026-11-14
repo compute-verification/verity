@@ -741,15 +741,15 @@ noncomputable def formCredit (fs : ℕ) (v : ValueFn r) (S : Support r) (α β :
   fs * ((live v S α β X).filter fun il => Needed flag il.1 il.2).card
 
 /-- **The forming debit**: `creditOf`'s forming term `fs·m·k` less the forming credit. -/
-noncomputable def formDebit (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
+noncomputable def formInertWork (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
     (flag : Flags m n) : ℚ :=
   fs * m * k - formCredit fs v S α β X flag
 
 open Classical in
 /-- The debit counts each element once, whether salt-dead or not needed. -/
-theorem formDebit_eq_card (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
+theorem formInertWork_eq_card (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ)
     (flag : Flags m n) :
-    formDebit fs v S α β X flag =
+    formInertWork fs v S α β X flag =
       fs * (Finset.univ.filter fun il : Fin m × Fin k => ¬(il ∈ live v S α β X ∧ Needed flag il.1 il.2)).card := by
   have hf : ((live v S α β X).filter fun il => Needed flag il.1 il.2) =
       Finset.univ.filter fun il : Fin m × Fin k => il ∈ live v S α β X ∧ Needed flag il.1 il.2 := by
@@ -761,7 +761,7 @@ theorem formDebit_eq_card (fs : ℕ) (v : ValueFn r) (S : Support r) (α β : Fi
       (Finset.univ.filter fun il : Fin m × Fin k => ¬(il ∈ live v S α β X ∧ Needed flag il.1 il.2)).card : ℕ) : ℚ) =
       ((m * k : ℕ) : ℚ) := by rw [hc]
   push_cast at hq
-  rw [formDebit, formCredit, hf]
+  rw [formInertWork, formCredit, hf]
   linear_combination (-(fs : ℚ)) * hq
 
 /-- The credit loses at most `fs` per element not needed. -/
@@ -789,11 +789,11 @@ def saltDead (v : ValueFn r) (S : Support r) (alpha beta : (k : ℕ) → (Fin k 
   fun k x l => ¬SaltLiveVal v S (alpha k x) (x l) (beta k x)
 
 open Classical in
-/-- **The debit in `unitDebit`'s form**: with the rows' own scales, `formDebit = fs·#{saltDead ∨ flagged in every
+/-- **The debit in `unitInertWork`'s form**: with the rows' own scales, `formInertWork = fs·#{saltDead ∨ flagged in every
 word}`. -/
-theorem formDebit_eq_elems (fs : ℕ) (v : ValueFn r) (S : Support r) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ)
+theorem formInertWork_eq_elems (fs : ℕ) (v : ValueFn r) (S : Support r) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ)
     (X : Matrix (Fin m) (Fin k) ℚ) (flag : Flags m n) :
-    formDebit fs v S (fun i => alpha k (X i)) (fun i => beta k (X i)) X flag =
+    formInertWork fs v S (fun i => alpha k (X i)) (fun i => beta k (X i)) X flag =
       fs * (Finset.univ.filter fun e : Fin m × Fin k =>
         saltDead v S alpha beta k (X e.1) e.2 ∨ ∀ j : Fin n, flag e.1 j (e.2.val / 32) = true).card := by
   have h : (Finset.univ.filter fun il : Fin m × Fin k =>
@@ -803,7 +803,7 @@ theorem formDebit_eq_elems (fs : ℕ) (v : ValueFn r) (S : Support r) (alpha bet
     refine Finset.filter_congr fun e _ => ?_
     simp only [live, saltDead, Needed, Finset.mem_filter, Finset.mem_univ, true_and, not_and_or, not_exists,
       Bool.not_eq_false]
-  rw [formDebit_eq_card, h]
+  rw [formInertWork_eq_card, h]
 
 /-! ### Π's salt-dead predicate (`SaltDead.saltDead`) -/
 
@@ -816,7 +816,7 @@ at it. -/
 theorem flatPairs_support : FlatPairs SaltDead.support := fun s s' => ⟨s, s', rfl⟩
 
 /-- **The link:** `SaltDead.saltDead` is `saltDead` at Π, the atom-mix over `SaltDead.support` (not `SaltLiveVal`), so
-`formDebit_eq_elems` reads it as `unitDebit` does. -/
+`formInertWork_eq_elems` reads it as `unitInertWork` does. -/
 theorem saltDead_pi (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ) :
     SaltDead.saltDead alpha beta = saltDead FormChain.atomMix.value SaltDead.support alpha beta := by
   funext k x l
@@ -966,10 +966,10 @@ theorem card_notNeeded_le (flag : Flags m n) (hk : 32 ∣ k) :
   exact Finset.sum_le_sum fun i _ => card_allFlagged_le flag i
 
 /-- **(ii) The debit under the flags**: whatever salt-dead budget `D` the chain's (c) gives,
-`formDebit ≤ D + (32·fs/n)·(flagged atoms)`. -/
-theorem formDebit_le (fs : ℕ) {v : ValueFn r} {S : Support r} {α β : Fin m → ℚ} {X : Matrix (Fin m) (Fin k) ℚ}
+`formInertWork ≤ D + (32·fs/n)·(flagged atoms)`. -/
+theorem formInertWork_le (fs : ℕ) {v : ValueFn r} {S : Support r} {α β : Fin m → ℚ} {X : Matrix (Fin m) (Fin k) ℚ}
     (flag : Flags m n) (hk : 32 ∣ k) (hn : 0 < n) {D : ℚ} (hD : (fs : ℚ) * m * k - D ≤ fs * (live v S α β X).card) :
-    formDebit fs v S α β X flag ≤ D + 32 * fs * flagCount k flag / n := by
+    formInertWork fs v S α β X flag ≤ D + 32 * fs * flagCount k flag / n := by
   have h1 := formCredit_ge fs v S α β X flag
   have hn' : (0 : ℚ) < n := by exact_mod_cast hn
   have h2 : (n : ℚ) * (notNeeded flag : Finset (Fin m × Fin k)).card ≤ 32 * flagCount k flag := by
@@ -977,16 +977,16 @@ theorem formDebit_le (fs : ℕ) {v : ValueFn r} {S : Support r} {α β : Fin m �
   have h3 : (fs : ℚ) * (notNeeded flag : Finset (Fin m × Fin k)).card ≤ 32 * fs * flagCount k flag / n := by
     rw [le_div_iff₀ hn']
     nlinarith [Nat.cast_nonneg (α := ℚ) fs]
-  unfold formDebit
+  unfold formInertWork
   linarith
 
-/-- **(ii) at Π's parameters**: `formDebit ≤ ρ_D·fs·m·k + (32·fs/n)·(flagged atoms)`, `ρ_D = 1/64`. -/
-theorem formDebit_pi (fs : ℕ) (s : Shape) (hk : 32 ∣ s.k) (hn : 0 < s.n) {v : ValueFn Params.pi.r}
+/-- **(ii) at Π's parameters**: `formInertWork ≤ ρ_D·fs·m·k + (32·fs/n)·(flagged atoms)`, `ρ_D = 1/64`. -/
+theorem formInertWork_pi (fs : ℕ) (s : Shape) (hk : 32 ∣ s.k) (hn : 0 < s.n) {v : ValueFn Params.pi.r}
     {S : Support Params.pi.r} {α β ρ : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (flag : Flags s.m s.n)
     (hcov : ∀ i l, |X i l| < 8 * Params.pi.σ * ρ i → SaltLiveVal v S (α i) (X i l) (β i))
     (hlive : LiveOperand Params.pi.σ ρ X) :
-    formDebit fs v S α β X flag ≤ rhoD * fs * s.m * s.k + 32 * fs * flagCount s.k flag / s.n :=
-  formDebit_le fs flag hk hn (by linarith [(rhoD_pi fs s hcov hlive).1])
+    formInertWork fs v S α β X flag ≤ rhoD * fs * s.m * s.k + 32 * fs * flagCount s.k flag / s.n :=
+  formInertWork_le fs flag hk hn (by linarith [(rhoD_pi fs s hcov hlive).1])
 
 /-! ### (iii) Soundness: the hypotheses the flags must satisfy
 
@@ -1016,11 +1016,11 @@ theorem not_needed_of_avoidable (hc : FlagsComplete skippable flag) {i : Fin m} 
 
 open Classical in
 /-- **(iii) The debit covers every avoidable element** when the flags are complete. -/
-theorem formDebit_ge_avoidable (hc : FlagsComplete skippable flag) (fs : ℕ) (v : ValueFn r) (S : Support r)
+theorem formInertWork_ge_avoidable (hc : FlagsComplete skippable flag) (fs : ℕ) (v : ValueFn r) (S : Support r)
     (α β : Fin m → ℚ) (X : Matrix (Fin m) (Fin k) ℚ) :
     (fs : ℚ) * (Finset.univ.filter fun il : Fin m × Fin k => Avoidable skippable il.1 il.2).card ≤
-      formDebit fs v S α β X flag := by
-  rw [formDebit_eq_card]
+      formInertWork fs v S α β X flag := by
+  rw [formInertWork_eq_card]
   refine mul_le_mul_of_nonneg_left ?_ (Nat.cast_nonneg fs)
   have hsub : (Finset.univ.filter fun il : Fin m × Fin k => Avoidable skippable il.1 il.2) ⊆
       Finset.univ.filter fun il : Fin m × Fin k => ¬(il ∈ live v S α β X ∧ Needed flag il.1 il.2) := by

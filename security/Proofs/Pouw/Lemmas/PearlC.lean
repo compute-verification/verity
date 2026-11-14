@@ -40,7 +40,7 @@ a correct one-row unit whose credit is the row's (C0, C1), and the error is the 
 One-row units are in the domain (`pearlCDomainDev_split`). -/
 def _root_.Pouw.Guarantees.PearlC.TTOutRowSeedOfTTOut : Prop :=
   ∀ {Q R S : Type} {sem sem' : PearlCSem Q R S} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S} {d : PearlCDevice} {ρ : ℚ} (hTT : TTOutPearlCDevRev1 CM d sem ρ) (hN : RowSeedNoise sem sem') (hCM : CM.SplitClosed) (hd : d.RowLocal) (hρ : ρ ≤ 1) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16),
-    TTOutRowSeed CM (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCDomainDev d) (1 / 400)
+    TTOutRowSeed CM (pearlCProtocolDevRev1RowInertBound d sem' ρ) (pearlCDomainDev d) (1 / 400)
 
 end Pouw.PearlC
 

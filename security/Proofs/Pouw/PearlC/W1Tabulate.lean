@@ -189,7 +189,7 @@ def tabP : Protocol Unit Unit Unit where
   actOK := fun _ _ => True
   fixedOK := fun _ _ _ => True
   credit := fun _ _ _ _ _ => 1
-  capOK := fun _ _ _ _ _ => True
+  inertBoundOK := fun _ _ _ _ _ => True
   Wref := fun _ _ => 1
 
 /-- The empty program: one node of text, within W1's bound. -/

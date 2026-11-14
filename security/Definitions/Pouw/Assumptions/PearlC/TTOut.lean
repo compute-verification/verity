@@ -37,11 +37,11 @@ def TTOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q 
 may skip, yet `creditOf` and `wrefOf` price it (`TTOutRev1.lean`). rev1 (`TTOutPearlCDevRev1`, `TTOutPearlCH100Rev1`) is
 its repair.
 
-- **The credit is debited per unit.** It is `creditOf` minus the unit's replayed debit (`PearlCSem.unitDebit`): every atom
+- **The credit is debited per unit.** It is `creditOf` minus the unit's replayed debit (`PearlCSem.unitInertWork`): every atom
   of a one-group joint skip, per output word, on the noisy codes under the ticket's schedule (P1's `jointFlags`), and
   every forming element that is salt-dead or needed by no unflagged atom (P3). So the assumption is not about work the
   replay proves skippable.
-- **The cap `ρ`.** A unit whose debit exceeds `ρ·creditOf` is rejected (`capOK`, in `Correct`). It enters neither sum.
+- **The cap `ρ`.** A unit whose debit exceeds `ρ·creditOf` is rejected (`inertBoundOK`, in `Correct`). It enters neither sum.
 - **Cross-group joint skips are the second hole, and this assumption carries them.** Sets of atoms from different groups
   whose rounding effects cancel can be jointly skippable while no group-local flag is set (`joint_cross_group`: the chain
   `+1 ×4 | −1 ×4`). No replay count bounds them, and neither `pearlCDomain` nor the cap does. By counting, such sets exist
@@ -109,7 +109,7 @@ tiles `pearlCTiles sem c ρ` (the audit's `64 × 64` grid), `pearlCDomain Params
   wrong or over the cap. So it also speaks about partial units, where `TTOutPearlC` credits only whole correct units.
 - **Credited rows, per row.** A tile's rows that pass Π's rules are credited; a row that fails them stays in its unit,
   bound, and earns no credit (the plan's one per-row rule). `TTOutPearlC` credits nothing of a unit with such a row.
-- **The cap per tile.** A tile is good only if its own replayed debit on its credited rows (`PearlCSem.tileDebit`: P1's
+- **The cap per tile.** A tile is good only if its own replayed debit on its credited rows (`PearlCSem.tileInertWork`: P1's
   flags over their words, and the forming their words don't need) is at most `ρ·creditOf` times their share. On a whole
   unit, the tiles' debits add up to at least the unit's.
 - **A fixed credit.** A good tile earns `(1 − ρ)·creditOf` times its credited rows' share, whatever its debit. Within the

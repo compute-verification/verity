@@ -83,7 +83,7 @@ its domain rules on committed activations and on each fixed-operand row, and its
 - `credit H s U u act`: what the named assumption credits for unit `u`. The reference computes it from the committed
   activations `act`, the fixed operands and the realized noise `(H, s)`, by the same replay that checks the unit; it never reads
   the transcript's claimed ticket or useful words.
-- `capOK H s U u act`: the unit's replayed debit is within the cap. It is part of `Correct`: a unit above the cap is
+- `inertBoundOK H s U u act`: the unit's replayed debit is within the cap. It is part of `Correct`: a unit above the cap is
   rejected, so it is in neither TT_OUT's credit sum nor `GGap`'s win sum. `Correct` is the game's idealized check of every
   unit; a verifier that checks sampled tiles decides the cap per tile (`Tile.lean`: `TileGood`, `GGapSampled`).
 - `Wref`: the honest reference's cost of the unit, read from the layout (excluding hash calls; the model's own clean
@@ -94,7 +94,7 @@ structure Protocol (Q R S : Type) where
   actOK : Shape → Codes → Prop
   fixedOK : Shape → Codes → ℕ → Prop
   credit : (Q → R) → S → Workload → ℕ → Codes → ℝ
-  capOK : (Q → R) → S → Workload → ℕ → Codes → Prop
+  inertBoundOK : (Q → R) → S → Workload → ℕ → Codes → Prop
   Wref : Layout → ℕ → ℝ
 
 variable {Q R S : Type}
@@ -113,7 +113,7 @@ def Workload.FixedOK (P : Protocol Q R S) (U : Workload) : Prop :=
 the rules, and every ticket and useful word on its `m × n` entries has the reference FP32 value (bit for bit up to the sign
 of zero). -/
 def Correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) (c : Commit) : Prop :=
-  P.actOK (U.layout.shape u) c.act ∧ P.capOK H s U u c.act ∧
+  P.actOK (U.layout.shape u) c.act ∧ P.inertBoundOK H s U u c.act ∧
     (∀ j < (U.layout.shape u).n, P.fixedOK (U.layout.shape u) (U.fixed (U.layout.fixedId u)) j) ∧
     ∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n,
       wordQ (c.ticket i j) = P.ticket H s U u c.act i j ∧ wordQ (c.useful i j) = P.useful H s U u c.act i j
@@ -210,13 +210,13 @@ def creditOf (p : Params) (c : Costs) (s : Shape) : ℚ :=
 joint skip that leaves the word unchanged); `elems`, its forming elements that are salt-dead or needed by no unflagged
 atom (P3). Cross-group joint skips are in neither: no replay-local count bounds them (`joint_cross_group`), and the named
 assumption carries them. -/
-structure Debit where
+structure InertWork where
   atoms : ℕ
   elems : ℕ
 
 /-- The debit in H100 units: per flagged atom-word its 32 MACs and its share `32/G` of the promotion adds, and `fs` per
 debited element. -/
-def debitOf (p : Params) (c : Costs) (d : Debit) : ℚ :=
+def inertWorkOf (p : Params) (c : Costs) (d : InertWork) : ℚ :=
   (32 + (if p.G = 0 then 0 else 32 / p.G)) * d.atoms + (c.fs : ℚ) * d.elems
 
 /-- The honest reference's work: the credited work plus the forming that depends on the activations alone. Neither this
@@ -234,7 +234,7 @@ def gapOf (g₀ Ω : ℚ) : ℚ := 1 - (1 - g₀) / Ω
 credited at least `(1 − ρ)·creditOf`. -/
 def PearlCAccounting (P : Protocol Q R S) (p : Params) (c : Costs) (ρ : ℚ) : Prop :=
   (∀ (L : Layout) (u : ℕ), P.Wref L u = (wrefOf p c (L.shape u) : ℝ)) ∧
-    ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), P.capOK H s U u act →
+    ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), P.inertBoundOK H s U u act →
       (((1 - ρ) * creditOf p c (U.layout.shape u) : ℚ) : ℝ) ≤ P.credit H s U u act
 
 /-- Pearl-C's shape domain: positive dimensions, a whole number of promotion groups, `k ≤ 2^16`, and promotion every

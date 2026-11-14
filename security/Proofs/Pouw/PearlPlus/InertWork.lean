@@ -7,12 +7,12 @@ public import Proofs.Pouw.PearlC.Freeze
 public import Proofs.Pouw.PearlC.AccumProofs
 
 /-!
-# Pearl+'s bridge, part (c), the inert-work replay: `word_debit` counts the game's flags and later +0 promotions
+# Pearl+'s bridge, part (c), the inert-work replay: `word_inert_work` counts the game's flags and later +0 promotions
 
-`Rule.wordDebit` replays a word's inert work on its two rows of codes: each promotion group's `2^G` masked words
+`Rule.wordInertWork` replays a word's inert work on its two rows of codes: each promotion group's `2^G` masked words
 (`Rule.masked`), the running totals, from the last group back the band of keys a total may take before each group and
 still promote to the word's total (`least` and `carried`), and per group the nonzero masks whose promoted word lands in
-the next group's band. `debitIsTheReplay` proves its two counts are the game's: a mask is kept exactly when `Skip.keeps`
+the next group's band. `inertWorkIsTheReplay` proves its two counts are the game's: a mask is kept exactly when `Skip.keeps`
 holds, since a key in the band is a total the later promotions carry to the word's total (`KeyBand`), so the flagged
 atoms are `Skip.unitFlags`'; and the later promotions into a +0 total are `laterZeroPromos`' at the H100 record. It reads
 the keys' three statements (`Keys`); a group of finite atoms has a word below 2⁴⁶ in magnitude (`Freeze.tame_inWord`),
@@ -20,7 +20,7 @@ the range `carried` is the rounded add on, and an atom the replay steps finitely
 
 `replayReadsTheCodes` puts the replay on the semantics' codes. Where a word's rows are whole promotion groups and pass the
 rules, the check's A′ and B̃ rows are `pc8Sem`'s codes at the H100 atom bit for bit (`formRow_quant8`: the forming reads
-a −0 word as +0 and its atom never steps to −0), and these are `unitChain`'s at `semH3`'s noise. Elsewhere `word_debit`
+a −0 word as +0 and its atom never steps to −0), and these are `unitChain`'s at `semH3`'s noise. Elsewhere `word_inert_work`
 refuses both words alike.
 -/
 
@@ -30,7 +30,7 @@ namespace Pouw.PearlPlus.Bridge
 
 open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 
-namespace DebitSim
+namespace InertWorkSim
 
 /-! ## Loops in `Except` -/
 
@@ -789,9 +789,9 @@ theorem count_push (c : Array Bool) (b : Bool) (N : ℕ) (q : ℕ → Bool)
   · rw [ite_eq_left rfl, ite_eq_left rfl, Finset.card_insert_of_notMem]
     simp
 
-end DebitSim
+end InertWorkSim
 
-open DebitSim in
+open InertWorkSim in
 /-- **The atom flags the check replays are the game's**, from the keys' three statements: where `word_flags` is a value
 on a word's two rows of codes, its flags are `Skip.unitFlags`' at each of the row's `k/32` atom blocks, so many of them
 are set as the game flags, and its later promotions into a +0 total are `laterZeroPromos`' at the H100 record. -/
@@ -961,11 +961,11 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
       rw [ticket_prefix A B i j (g + 1) h', ← hgs, ← hq.2] at h0
       exact AccumProofs.wordQ_zero_word hq.1 h0
 
-/-- **The inert-work replay is the game's**, from the keys' three statements: `word_debit` counts `word_flags`' flags. -/
-theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedIsTheAdd) :
-    DebitIsTheReplay := by
+/-- **The inert-work replay is the game's**, from the keys' three statements: `word_inert_work` counts `word_flags`' flags. -/
+theorem inertWorkIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedIsTheAdd) :
+    InertWorkIsTheReplay := by
   intro m n k A B i j f z h
-  unfold Rule.wordDebit at h
+  unfold Rule.wordInertWork at h
   obtain ⟨⟨fl, z'⟩, hw, h⟩ := WordsSim.bind_ok h
   have hfz := WordsSim.pure_ok h
   simp only [Prod.mk.injEq] at hfz
@@ -983,10 +983,10 @@ theorem wordFlagsIsTheReplay {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B 
   wordFlagsIsTheReplayOf keyIsTheValue leastIsTheThreshold carriedIsTheAdd A B i j h
 
 /-- **(c) The inert-work replay is the game's.** -/
-theorem debitIsTheReplay : DebitIsTheReplay :=
-  debitIsTheReplayOf keyIsTheValue leastIsTheThreshold carriedIsTheAdd
+theorem inertWorkIsTheReplay : InertWorkIsTheReplay :=
+  inertWorkIsTheReplayOf keyIsTheValue leastIsTheThreshold carriedIsTheAdd
 
-namespace DebitSim
+namespace InertWorkSim
 
 /-! ## The check's codes -/
 
@@ -1001,10 +1001,10 @@ theorem wordFlags_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
   · rename_i hcond
     exact (hcond (by simp [h])).elim
 
-/-- `word_debit` refuses a word whose first row is not whole promotion groups. -/
-theorem wordDebit_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
-    Rule.wordDebit a b = .error "a word's rows are whole promotion groups" := by
-  unfold Rule.wordDebit
+/-- `word_inert_work` refuses a word whose first row is not whole promotion groups. -/
+theorem wordInertWork_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
+    Rule.wordInertWork a b = .error "a word's rows are whole promotion groups" := by
+  unfold Rule.wordInertWork
   rw [wordFlags_ungrouped h]
   rfl
 
@@ -1094,13 +1094,13 @@ theorem encode_codes {m n k u : ℕ} {act wt : Codes} {z : Noise m n k Params.pi
   · rw [Array.getElem_ofFn]
     exact (getElem!_pos (b.codes[y]!) t h1).symm.trans (hcodB ⟨t, h1.trans_eq hky⟩)
 
-end DebitSim
+end InertWorkSim
 
-open DebitSim in
+open InertWorkSim in
 /-- **(c) The replay reads the semantics' codes.** The check's A′ and B̃ rows of a word have `k` codes; where `k` is
 whole promotion groups, on rows that pass the rules (`row8OK_of_floor`), they are `pc8Sem`'s codes at `semH3`'s noise,
 whose lines and bases are the check's (`seedsAreTheSpec`, `lineIsTheSpec`, `fixedNoiseIsTheSpec`), and so
-`unitChain`'s; where it isn't, `word_debit` refuses both words. -/
+`unitChain`'s; where it isn't, `word_inert_work` refuses both words. -/
 theorem replayReadsTheCodes : ReplayReadsTheCodes := by
   intro Q R S saltOf rootOf H s U u act salt rootB wn rows cols ops hsalt hroot hk _ _ hact hwt hW hwn henc x y i j
     hxi hyj hR
@@ -1136,6 +1136,6 @@ theorem replayReadsTheCodes : ReplayReadsTheCodes := by
     have h2 : (Array.ofFn fun l => (((semH3 saltOf rootOf : PearlCSem Q R S).unitChain H s U u act).1 i l).val).size %
         128 ≠ 0 := by
       rw [Array.size_ofFn]; exact hk128
-    rw [wordDebit_ungrouped h1, wordDebit_ungrouped h2]
+    rw [wordInertWork_ungrouped h1, wordInertWork_ungrouped h2]
 
 end Pouw.PearlPlus.Bridge

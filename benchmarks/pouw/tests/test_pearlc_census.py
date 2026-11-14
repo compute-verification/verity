@@ -33,7 +33,7 @@ def test_s5_forming_rules():
     assert not rows["zero-row"]["rules_ok"] and "noise-floor-A" in rows["zero-row"]["rejected_by"]
 
 
-def test_debit_flags_joint_skips_inside_a_group():
+def test_inert_work_flags_joint_skips_inside_a_group():
     import numpy as np
     a, b = np.zeros((1, 128), dtype=np.uint8), np.zeros((1, 128), dtype=np.uint8)
     a[0, 0], b[0, 0] = 0x38, 0x38            # 1 * 1
@@ -50,8 +50,8 @@ def test_aligned_spikes_pass_the_rules_and_freeze_words():
     assert g4[0]["rules_ok"] and g4[0]["word_identity"] > 0.5
 
 
-def test_pm1_background_skips_whole_atoms_and_the_debit_covers_them():
-    rows = [r for r in C.cell("aligned-spikes-pm1-r444", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0, with_debit=True)
+def test_pm1_background_skips_whole_atoms_and_the_inert_work_covers_them():
+    rows = [r for r in C.cell("aligned-spikes-pm1-r444", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0, with_inert_work=True)
             if r["layout"] == "G4"]
     assert rows[0]["rules_ok"] and rows[0]["tile_identity_atoms"] > 0
     assert rows[0]["debit_share"] >= rows[0]["tile_identity_atoms"] / rows[0]["atoms"]
@@ -68,7 +68,7 @@ def test_cross_group_finds_cancelling_groups():
 
 
 def test_transfer_test_runs_and_reports():
-    rows = [r for r in C.cell("outliers-groupstart", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0, with_debit=True,
+    rows = [r for r in C.cell("outliers-groupstart", 1024, 1.0, 4, 2, run=1, forming="s5", line_norm=16.0, with_inert_work=True,
                               cross_words=2, transfer_words=2) if r["layout"] == "G4"]
     r = rows[0]
     assert r["transfer_words"] == 2 and 0 <= r["transfer_hits"] <= r["transfer_nonempty_sim_sets"] <= 2

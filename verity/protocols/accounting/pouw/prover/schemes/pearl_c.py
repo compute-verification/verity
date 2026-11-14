@@ -71,7 +71,7 @@ it, while every row passes every rule.  h0's seed_A reads A's root as well (`uni
 the unit first and closes that attack, but forming then waits on the whole unit's tree.  Keyed on its own digest, each
 candidate row costs an oracle query, and forming waits on that row's digest alone.
 -h3 also bounds each credited row's inert work at ρ times
-its cells' credit (4ρ at a census k, `row_cap_at`) beside the tile's: that is (C2), under which
+its cells' credit (4ρ at a census k, `row_inert_share_at`) beside the tile's: that is (C2), under which
 `Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut` reduces the row-seeded TT_OUT to the per-unit one, and an aggregate bound
 doesn't transfer.  The registered -h3 schemes are ``pearl-c-sm120-v1-h3`` (the served default) and ``pearl-c-h100-v1-h3``.
 
@@ -125,9 +125,9 @@ ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
 #: each hashing format's frame hash for the row and transcript trees (`verity.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
 #: the per-row inert-work bound at a census k, as a multiple of ρ: there each credited row's inert work
-#: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; the gap rests on
-#: TT_OUT per tile at ρr, `pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`); at k >= k_min a row's bound is ρ, (C2)'s
-CENSUS_ROW_CAP = 4
+#: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowInertBoundAt` at ρr = 4ρ; the gap rests on
+#: TT_OUT per tile at ρr, `pearlCSampledH100v1RowSeedCodeRowInertShare100_6144x256`); at k >= k_min a row's bound is ρ, (C2)'s
+CENSUS_ROW_INERT_SHARE_MULTIPLE = 4
 
 
 #: Forming v0 (Pearl v4's, as ported) per operand element: 240–320 for the port, at the upper end
@@ -476,7 +476,7 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h3") -> list[bytes]
 
 class PearlC:
     """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
-    and -h3 the device record's `census_ks` below it (each row bounded at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3,
+    and -h3 the device record's `census_ks` below it (each row bounded at 4ρ there, `row_inert_share_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3,
     the default (h0, Pearl's keyed-BLAKE3 seeds, lines and tickets, is taken by name), names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A sampling its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
     `row_digest`), the work sampling design checking the inert-work bound per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the count of inert work read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
@@ -497,9 +497,9 @@ class PearlC:
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
         #: the ks below k_min the domain takes: the device record's census-passed ks, whose census ran §5's forming (v1)
-        #: under a row-bounded format (-h3), where a row's inert-work bound there is `CENSUS_ROW_CAP`·ρ (`row_cap_at`)
+        #: under a row-bounded format (-h3), where a row's inert-work bound there is `CENSUS_ROW_INERT_SHARE_MULTIPLE`·ρ (`row_inert_share_at`)
         self.census_ks = (tuple(k for k in device.census_ks if k < k_min)
-                          if forming == "v1" and HASH_FORMATS[hashing].row_cap else ())
+                          if forming == "v1" and HASH_FORMATS[hashing].row_inert_bound else ())
         #: ρ, the device record's: the tile rule's inert-work bound and the credit's (1 − ρ) (`clear_work`)
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
@@ -525,8 +525,8 @@ class PearlC:
                         *(f"stand-in: {s}" for s in device.standins))
         if self.census_ks:
             hardware += (f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
-                         f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's debit within ρr of its cells' credit and the "
-                         f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
+                         f"ρr = {CENSUS_ROW_INERT_SHARE_MULTIPLE * rho}, each credited row's debit within ρr of its cells' credit and the "
+                         f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowInertShare100_6144x256`)",)
         self.certificate = Certificate(
             conjecture="tt-out",
             gap0=None,
@@ -541,13 +541,13 @@ class PearlC:
                         ("atom", device.atom.name), ("peel", device.peel.name), ("g", device.g), ("hashing", hashing),
                         ("prices", prices.device), ("cap", str(device.cap)),
                         ("census_ks", self.census_ks),
-                        *((("census_row_cap", str(CENSUS_ROW_CAP * device.cap)),) if self.census_ks else ())),
+                        *((("census_row_cap", str(CENSUS_ROW_INERT_SHARE_MULTIPLE * device.cap)),) if self.census_ks else ())),
         )
 
-    def row_cap_at(self, k: int) -> Fraction:
-        """A credited row's inert-work bound at depth ``k``, as a share of its cells' credit: `CENSUS_ROW_CAP`·ρ at a census k,
-        else ρ.  The tile's bound is ρ at every k.  Only a row-bounded format (`HashFormat.row_cap`) applies it."""
-        return CENSUS_ROW_CAP * self.cap if k in self.census_ks else self.cap
+    def row_inert_share_at(self, k: int) -> Fraction:
+        """A credited row's inert-work bound at depth ``k``, as a share of its cells' credit: `CENSUS_ROW_INERT_SHARE_MULTIPLE`·ρ at a census k,
+        else ρ.  The tile's bound is ρ at every k.  Only a row-bounded format (`HashFormat.row_inert_bound`) applies it."""
+        return CENSUS_ROW_INERT_SHARE_MULTIPLE * self.cap if k in self.census_ks else self.cap
 
     def check(self, matmul: Matmul) -> None:
         """The domain: whole promotion groups, whole column tiles, and down the rows whole ticket subtiles (whole tiles, for

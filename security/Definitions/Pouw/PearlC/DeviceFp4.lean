@@ -20,7 +20,7 @@ same fields and no promotion (`G = 0`):
   with its FP32 FMA chain, and the four BF16 K16 steps (`HOPPER_BF16_M16N8K16`, `PeelExact.k16Step`) are `PeelExact`'s
   `paRow?`, `pbRow?` and `uWord?` as they stand.
 * **The flags** (`Fp4Skip.fp4PureFlags`, debit (2)): firing `t` of word `(i, j)`'s chain from `+0` is flagged when the
-  chain is in the model and its lone skip leaves the word unchanged (`debit_pure` at the FP4 atom; soundness
+  chain is in the model and its lone skip leaves the word unchanged (`inert_work_pure` at the FP4 atom; soundness
   `Fp4Freeze.fp4PureFlags_iff`); `false` where a row's forming left the model.
 * **The salt-dead predicate** (`Fp4Dev.saltDead4`): of `PearlCSem.saltDead`'s type, on the E2M1 code's value under
   `formRow`, over every noise sample. The ρ_D bound on it is `Fp4Dev.RhoDFp4`, a named `Prop` that
@@ -35,8 +35,8 @@ same fields and no promotion (`G = 0`):
   (SHA-512 of the label block and the message, its first 32 bytes; `pearl_c4.labelled`), and `B̃ = form(B, E_B, F_B)`
   with `E_B`, `F_B` sampled from `seed_B`. The verifier forms `B̃` itself on every sampled tile and rejects when the checked
   values differ. It is a condition of the domain.
-* **The debit** (`Fp4Sem.tileDebit`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
-  units). Its executable reference is `pearl_c4.tile_debit` (`9363e5012`), and each term carries the
+* **The debit** (`Fp4Sem.tileInertWork`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
+  units). Its executable reference is `pearl_c4.tile_inert_work` (`9363e5012`), and each term carries the
   reference's name for it:
   - (0) D-24's 2:4 windows (`windows`), 64 per (row, aligned 128 of `k`, word the row feeds), for A′'s rows and B̃'s. A
     window is 2:4 by the hardware's pair rule: of each aligned 8-chunk's four pairs, at most two hold a nonzero code
@@ -67,7 +67,7 @@ same fields and no promotion (`G = 0`):
   charges at least this debit once its `two_four_windows` reads the pair rule (term (0)).
 * **The base-split fix** (§6.2–6.5, with its FP4 conditions). It adds terms (1), (6) and (7), and changes no forming,
   credit, `fs`, `qa` or `W_ref`. A tile whose credited rows' debit exceeds `ρ` (`1/400`, §6.6) is rejected by the cap,
-  not debited: `pearlCTilesFp4`'s `capOK`, and `pearlCProtocolFp4`'s per unit.
+  not debited: `pearlCTilesFp4`'s `inertBoundOK`, and `pearlCProtocolFp4`'s per unit.
   - *Replay (protocol side).* The verifier replays F1′, F2 and R1 from the sampled tile's own forming: its `E` rows, its
     realised scale bytes, and the clean rows and scales that the sampling design given `E` reads. The sampled-tile budget prices
     F1′'s pass, about one chain replay per tile.
@@ -172,7 +172,7 @@ def screenDead {k : ℕ} (x : Fin k → ℚ) (b : ℕ) : Prop :=
   negative, so no honest row changes verdict.
 - D-SS's scale clauses follow from D-NF and the design's floor, so they add no condition. D-SS's one-in-64 dead-block
   cap is no longer an admission rule. The debit charges a row's salt-dead codes per element instead
-  (`Fp4Sem.tileDebit`, terms (3) and (4)), and the tile's cap rejects a tile that this pushes past `ρ`. -/
+  (`Fp4Sem.tileInertWork`, terms (3) and (4)), and the tile's cap rejects a tile that this pushes past `ρ`. -/
 def RowAdmit4 (beta : (k : ℕ) → (Fin k → ℚ) → ℚ) (k : ℕ) (x : Fin k → ℚ) : Prop :=
   0 ≤ beta k x ∧ 8 ≤ (e4m3 (beta k x)).val ∧ (e4m3 (beta k x)).val < 128
 
@@ -777,7 +777,7 @@ noncomputable def Fp4Sem.unitUseful (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q 
 
 open Classical in
 /-- **A tile's replayed debit at an FP4 record** (theory §2, with §6.2–6.5's base-split fix under its FP4 conditions;
-`pearl_c4.tile_debit` at `9363e5012` is the executable reference), in FP4 units, over the words `rows × cols` of unit
+`pearl_c4.tile_inert_work` at `9363e5012` is the executable reference), in FP4 units, over the words `rows × cols` of unit
 `u`, from the committed activations, the weights and the realized noise (the `unitForm` the ticket reads, and its lines
 `E_A`, `E_B`):
 - (0) D-24's 2:4 windows (`windows`): per row and aligned 128 of `k` that is 2:4 (`Fp4Dev.rowWin24`), 64 per word the
@@ -806,10 +806,10 @@ open Classical in
   them, so here the charge counts toward the cap: the credit is at most the rule's, and a tile of at most 64 credited
   rows holding such a row is rejected (its charge is at least `1/64` of the tile's credit).
 
-The cap (condition (5)) is the protocol's and the tiles' `capOK`: a tile whose debit exceeds `ρ` times its credit is
+The cap (condition (5)) is the protocol's and the tiles' `inertBoundOK`: a tile whose debit exceeds `ρ` times its credit is
 rejected, not debited. The verifier replays (1), (6) and (7) from the sampled tile's own forming, as it does (2) and (5)
 (condition (7)). -/
-noncomputable def Fp4Sem.tileDebit (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
+noncomputable def Fp4Sem.tileInertWork (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
@@ -842,9 +842,9 @@ noncomputable def Fp4Sem.tileDebit (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q �
     f2 + r1
 
 /-- **The unit's replayed debit at an FP4 record**: the tile debit over all its words. -/
-noncomputable def Fp4Sem.unitDebit (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
+noncomputable def Fp4Sem.unitInertWork (sem : Fp4Sem Q R S) (d : Fp4Device) (H : Q → R) (s : S) (U : Workload) (u : ℕ)
     (act : Codes) : ℚ :=
-  sem.tileDebit d H s U u (range (U.layout.shape u).m) (range (U.layout.shape u).n) act
+  sem.tileInertWork d H s U u (range (U.layout.shape u).m) (range (U.layout.shape u).n) act
 
 /-! ## The protocol, the domain and the tiles -/
 
@@ -855,8 +855,8 @@ noncomputable def pearlCProtocolFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : �
   useful := fun H s U u act => atNat (sem.unitUseful d H s U u act)
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
   fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
-  credit := fun H s U u act => ((creditFp4 d (U.layout.shape u) - sem.unitDebit d H s U u act : ℚ) : ℝ)
-  capOK := fun H s U u act => sem.unitDebit d H s U u act ≤ ρ * creditFp4 d (U.layout.shape u)
+  credit := fun H s U u act => ((creditFp4 d (U.layout.shape u) - sem.unitInertWork d H s U u act : ℚ) : ℝ)
+  inertBoundOK := fun H s U u act => sem.unitInertWork d H s U u act ≤ ρ * creditFp4 d (U.layout.shape u)
   Wref := fun L u => (wrefFp4 d (L.shape u) : ℝ)
 
 /-- **D₄'s shapes**: the reference's (`PearlC4.check`) with `n ≥ 4096` in place of its
@@ -877,7 +877,7 @@ def pearlCDomainFp4At (sem : Fp4Sem Q R S) (s : Shape) (L : Layout) : Prop :=
   pearlCDomainFp4 sem L ∧ ∀ u < L.N, L.shape u = s
 
 /-- **Pearl-C4's audit tiles at an FP4 record**, as `pearlCTilesDev` (credit on the credited rows), with `creditFp4`,
-`tileDebit` and `wrefFp4`. -/
+`tileInertWork` and `wrefFp4`. -/
 noncomputable def pearlCTilesFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) : TileRules Q R S where
   tiling := auditTiling 64 64
   rowOK := fun sh act i => sem.RowOK sh.m sh.k act i
@@ -885,10 +885,10 @@ noncomputable def pearlCTilesFp4 (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ)
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
     (((1 - ρ) * creditFp4 d sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) : ℚ) : ℝ)
-  capOK := fun H s U g act =>
+  inertBoundOK := fun H s U g act =>
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
-    sem.tileDebit d H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
+    sem.tileInertWork d H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
       ρ * creditFp4 d sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g)
   Wref := fun L g =>
     let tl := auditTiling 64 64 L

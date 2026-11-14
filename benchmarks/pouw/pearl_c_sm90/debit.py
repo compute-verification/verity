@@ -1,9 +1,9 @@
-"""The words' inert-work counts of a Pearl-C call on the H100 or H200: `fast_tile.word_debits` on every word of A′'s
+"""The words' inert-work counts of a Pearl-C call on the H100 or H200: `fast_tile.words_inert_work` on every word of A′'s
 rows by B̃'s, from debit_sm90.cubin (debit_sm90.cu; build.sh builds it into its tree's debit/) through the driver API
 (run.py's `Dev`).
 
-  Debit(cubin_bytes).words(a, b) -> (atoms, zeros, bad)
-  Debit(cubin_bytes).resident(a, b) -> body, words()'s launches alone on operands put once (for `run.Dev.timed`)
+  InertWork(cubin_bytes).words(a, b) -> (atoms, zeros, bad)
+  InertWork(cubin_bytes).resident(a, b) -> body, words()'s launches alone on operands put once (for `run.Dev.timed`)
   python benchmarks/pouw/pearl_c_sm90/debit.py --cubin debit_sm90.cubin [--shape R:N:K ...] [--timed R:N:K ...]
       [--resident R:N:K ...] [--reps N] [--out F]
 
@@ -41,7 +41,7 @@ def _driver():
 run = _driver()
 
 
-class Debit:
+class InertWork:
     def __init__(self, cubin: bytes, budget: int = 16 << 30):
         self.dev = run.Dev(cubin)
         self.dev.open()
@@ -149,20 +149,20 @@ def codes(rng: np.random.Generator, rows: int, k: int) -> np.ndarray:
 
 def check(cubin: bytes, shapes: list[tuple[int, int, int]], timed: list[tuple[int, int, int]], seed: int,
           resident: list[tuple[int, int, int]] = (), reps: int = 5) -> dict:
-    """The device's counts against `fast_tile.word_debits` on `codes` at each (rows, n, k) of `shapes`, its seconds at
+    """The device's counts against `fast_tile.words_inert_work` on `codes` at each (rows, n, k) of `shapes`, its seconds at
     each of `timed` (a words() call on the host's clock, copies included), and at each of `resident` the milliseconds of
-    `reps` bodies of `Debit.resident` between events (the launches alone)."""
+    `reps` bodies of `InertWork.resident` between events (the launches alone)."""
     import time
 
     sys.path.insert(0, os.path.join(HERE, "..", "pearl_c_vllm"))
     import fast_tile as FT
-    from verity.protocols.accounting.pouw.prover.schemes import pearl_c_debit as D
+    from verity.protocols.accounting.pouw.prover.schemes import pearl_c_inert_work as D
 
-    d, rng, out = Debit(cubin), np.random.default_rng(seed), {"shapes": [], "timed": [], "resident": []}
+    d, rng, out = InertWork(cubin), np.random.default_rng(seed), {"shapes": [], "timed": [], "resident": []}
     for rows, n, k in shapes:
         a, b = codes(rng, rows, k), codes(rng, n, k)
         atoms, zeros, bad = d.words(a, b)
-        want = FT.word_debits(a.tolist(), b.tolist(), D.H100)
+        want = FT.words_inert_work(a.tolist(), b.tolist(), D.H100)
         same = (atoms == want[0]) & (zeros == want[1])
         out["shapes"].append({"rows": rows, "n": n, "k": k, "words": int(same.size), "differ": int((~same).sum()),
                               "bad": int(bad.sum()), "atoms": int(want[0].sum()), "zeros": int(want[1].sum())})
@@ -185,7 +185,7 @@ def check(cubin: bytes, shapes: list[tuple[int, int, int]], timed: list[tuple[in
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
-    ap = argparse.ArgumentParser(description="the device's word counts against fast_tile.word_debits, and its seconds")
+    ap = argparse.ArgumentParser(description="the device's word counts against fast_tile.words_inert_work, and its seconds")
     ap.add_argument("--cubin", required=True)
     ap.add_argument("--shape", nargs="*", default=["64:32:128", "192:96:2048", "128:64:8192"], help="ROWS:N:K, checked")
     ap.add_argument("--timed", nargs="*", default=["8192:16384:2048", "8192:2048:8192"], help="ROWS:N:K, timed only")
