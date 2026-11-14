@@ -11,10 +11,18 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from verity.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Tuple as TupleT
 
 from tests.query.test_module_body import W, _call
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
+from verity_vllm.query.program_view import (
+    CallView,
+    InputView,
+    Port,
+    ProgramView,
+    ports_of_type,
+)
 from verity_vllm.query.required import (
     Q_MODULE_BODY_ID,
     Q_WORD_ID,
@@ -87,6 +95,54 @@ def test_a_population_prescribes_its_programs_record_fields_and_supplied_inputs_
         policy = Population(P, Correspondence(P), query=q).policy
         assert policy.prescribed_inputs == {R(-1, EMBED_W), R(-1, A_W), R(-3, "values")}, "the prompt and the cached rows are not"
         assert policy.prescribed_inputs < set(P.inputs)
+
+
+def test_a_call_that_may_not_read_the_schedule_witness_is_refused_under_the_implementations_path():
+    """The `schedule` parameter is the witness under either query, and a Call of another family that reads it is a fault that
+    names the family and the module by the implementation's path.  The manifest is then incomplete, and the read is no token id."""
+    sched = InputView(-3, "schedule", "Array<4,Value<32>>", (Port("schedule", 0, 4, 4, 32),))
+    P = _program(_weights(EMBED_W, A_W), (_call(1, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(-1, A_W), R(-3, "schedule")]),), sched)
+    fault = (f"Gemm_v1 under {IMPL}.a reads the `schedule` witness (only ['MoeAlignRanks_v1'] may: the replay binds a reader's keys to "
+             "its own committed rank)")
+    for q in (Q_WORD_ID, Q_MODULE_BODY_ID):
+        pop = Population(P, _corr(P), query=q)
+        assert (pop.witness, pop.witness_readers, pop.tp_faults) == ({R(-3, "schedule")}, [1], [fault])
+    m = _manifest(P)
+    assert not m["complete"] and m["unmodelled"] == {fault: 1}
+    assert [x["op_path"] for x in _rows(m, "input_token_ids")] == [f"{IMPL}.embed"]
+
+
+def _typed(pid: int, name: str, ty: Type) -> InputView:
+    """The parameter a view makes of a type: the type's own text and its ports."""
+    return InputView(pid, name, repr(ty), ports_of_type(ty))
+
+
+def test_a_parameter_is_a_record_by_its_type_or_by_its_ports_and_a_supplied_input_is_never_one():
+    """Today's answer, held as that.  A record of one field is a record parameter by its type, and a tuple of two fields by its
+    ports: its fields are prescribed under their positions, and the manifest lists a weight at "0" and at "1".  A tuple of one
+    field is neither, so the Call that reads it is listed as reading token ids.  A supplied input of two fields is supplied and
+    no record."""
+    row, only_w = Array(N, Value(16)), f"{W}.only.weight"
+    one, pair = _typed(-3, "one", RecordType((only_w, row))), _typed(-4, "pair", TupleT(row, row))
+    single, run = _typed(-5, "single", TupleT(row)), _typed(-6, "run_0", RecordType(("a", row), ("b", row)))
+    assert [(p.type_repr[:1], p.ports) for p in (one, pair, single, run)] == [("{", (only_w,)), ("(", ("0", "1")), ("(", ("0",)), ("{", ("a", "b"))]
+
+    def program(*reads: ValueRef) -> ProgramView:
+        return _program(_weights(EMBED_W, A_W), (_call(1, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(-1, A_W), *reads]),), one, pair, single, run)
+
+    others = (R(-3, only_w), R(-4, "0"), R(-4, "1"), R(-6, "a"), R(-6, "b"))
+    P = program(*others, R(-5, "0"))
+    fields = {R(-1, EMBED_W): EMBED_W, R(-1, A_W): A_W, R(-3, only_w): only_w, R(-4, "0"): "0", R(-4, "1"): "1"}
+    for q in (Q_WORD_ID, Q_MODULE_BODY_ID):
+        pop = Population(P, Correspondence(P), query=q)
+        assert [p.name for p in pop.record_params] == ["weights", "one", "pair"]
+        assert (pop.record_fields, pop.supplied) == (fields, {R(-6, "a"): "a", R(-6, "b"): "b"})
+        assert pop.policy.prescribed_inputs == {*fields, R(-6, "a"), R(-6, "b")}
+    m = _manifest(P)
+    assert m["complete"]
+    assert [x["op_path"] for x in _rows(m, "weights")] == ["0", "1", f"{IMPL}.a.weight", f"{IMPL}.embed.weight", f"{IMPL}.only.weight"]
+    assert [x["op_path"] for x in _rows(m, "input_token_ids")] == [f"{IMPL}.a", f"{IMPL}.embed"]
+    assert [x["op_path"] for x in _rows(_manifest(program(*others)), "input_token_ids")] == [f"{IMPL}.embed"], "without the tuple of one field"
 
 
 @pytest.mark.parametrize(("read", "owners"), [((TIED_W,), 0), ((A_W, B_W), 2)])
