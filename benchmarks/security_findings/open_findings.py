@@ -83,15 +83,15 @@ def no_public_address(root: Path, finding: Mapping) -> tuple[bool, str]:
 
 def outside_checkout(command: str, names: set[str]) -> bool:
     """Whether a hook's shell `command` runs the guard from outside the checkout: it splits into plain words (nothing the
-    shell expands, joins or redirects), the first a file directly under `GUARD_ROOT`, and no other word is a path or names
+    shell expands, joins or redirects), the first a file directly under `GUARD_ROOT`, and no other word is a path, `.` or names
     one of the checkout's top-level `names`. Anything else, a command that won't split included, counts as inside."""
     try:
         first, *rest = shlex.split(command)
     except ValueError:
         return False
-    if not _GUARD_FILE.fullmatch(first) or ".." in command:
+    if not _GUARD_FILE.fullmatch(first):
         return False
-    return all(_PLAIN.fullmatch(w) and not set(re.split(r"[=:,]", w)) & names for w in rest)
+    return all(_PLAIN.fullmatch(w) and ".." not in w and not set(re.split(r"[=:,]", w)) & (names | {"."}) for w in rest)
 
 
 def guard_outside_checkout(root: Path, finding: Mapping) -> tuple[bool, str]:
