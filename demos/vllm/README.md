@@ -89,7 +89,9 @@ doesn't control.
   varied traffic.
 - `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and
   workload dirs, and the flags the run recorder starts each run with, among them the gate PoUW's coins come from.
-  `run.sh` hands a run's script its node's paths as its environment, so no script names a node.
+  `run.sh` hands a run's script its node's paths as its environment, so no script names a node. It holds no machine's
+  address: the gate's value names the variable that holds the challenger host's (`VY_CHALLENGER_1_HOST`), which
+  `run.sh` fills from the environment the demo is launched in, and without it the window run starts nothing and says so.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the demo doesn't serve.
 
 ## Commands

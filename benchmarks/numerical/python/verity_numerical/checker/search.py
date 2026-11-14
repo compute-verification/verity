@@ -25,6 +25,8 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass, field
 
+from .. import settings
+from . import reference
 from .ctx import IntCtx, Table, Z3Ctx
 from .gadgets import (
     AlignProduct,
@@ -42,8 +44,6 @@ from .gadgets import (
     SignedSum,
     StateOut,
 )
-from .. import settings
-from . import reference
 from .params import REAL, TINY, Params, Reject
 from .step import check_step_expr, gen_step
 

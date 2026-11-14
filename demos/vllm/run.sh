@@ -18,6 +18,8 @@
 #   serve    the endpoint alone, serving until UNTIL (serve.sh)
 # Further FLAGs go to `research run` (`--env WC_TIMEOUT=45m`, `--env PP_CHALLENGER=...`); --dry-run prints the command and
 # starts nothing. It returns once the run starts, 0, or 1 where it can't start it: `research status RUN` checks on it.
+# A placement value's ${NAME} is an address, which this environment holds and no file does (the window run's H1_GATE
+# names VY_CHALLENGER_1_HOST, the challenger host's): with NAME unset nothing starts, unless a FLAG sets that value.
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 cd "$HERE/../.."
@@ -25,9 +27,11 @@ RUN=window
 case ${1:-} in window|commit|serve) RUN=$1; shift;; esac
 DRY=0
 if [ "${1:-}" = --dry-run ]; then DRY=1; shift; fi
-mapfile -t ARGV < <(python3 - "$HERE" "$RUN" <<'EOF'
+mapfile -t ARGV < <(python3 - "$HERE" "$RUN" "$@" <<'EOF'
 import hashlib
 import json
+import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -36,6 +40,20 @@ from pathlib import Path
 here, run = Path(sys.argv[1]), sys.argv[2]
 script = {"window": "benchmarks/one_stage/served_verdicts.sh", "commit": "demos/vllm/commit.sh", "serve": "demos/vllm/serve.sh"}[run]
 placement = tomllib.loads((here / "placement.toml").read_text())
+r = placement["run"][run]
+node = placement["node"][r["node"]]
+placed = {**{k: v for k, v in node.items() if not isinstance(v, dict)}, **(node.get("serving", {}) if run != "commit" else {}),
+          **r.get("env", {})}
+flags = {a.split("=", 1)[0] for f, a in zip(sys.argv[3:], sys.argv[4:]) if f == "--env"}
+for key, value in list(placed.items()):
+    unset = [name for name in re.findall(r"\$\{(\w+)\}", str(value)) if not os.environ.get(name)]
+    if unset and key in flags:
+        del placed[key]  # the FLAG's value is the run's
+    elif unset:
+        sys.exit(f"run.sh: {unset[0]} is unset: placement.toml's {key} names it, so set it where the demo is launched, "
+                 f"or give --env {key}=VALUE")
+    else:
+        placed[key] = re.sub(r"\$\{(\w+)\}", lambda m: os.environ[m[1]], str(value))
 row, rows = placement["row"], here.parents[1] / "adapters" / "vllm" / "workloads"
 sums = {name.lstrip("*"): h for h, name in (line.split() for line in (rows / "SHA256SUMS").read_text().splitlines() if line.strip())}
 if (want := sums.get(f"{row}.json")) is None:
@@ -46,10 +64,7 @@ if not f.is_file():
 if (got := hashlib.sha256(f.read_bytes()).hexdigest()) != want:
     sys.exit(f"run.sh: {f}: SHA-256 {got} is not the {want} SHA256SUMS lists; `research data fetch-fixtures {f}` restores it")
 doc = json.loads(f.read_text())
-r = placement["run"][run]
-node = placement["node"][r["node"]]
-env = {**{k: v for k, v in node.items() if not isinstance(v, dict)}, **(node.get("serving", {}) if run != "commit" else {}),
-       **r.get("env", {}), "REPO": doc["model"], "REV": doc["engine"]["revision"], "ROLE": doc["case"],
+env = {**placed, "REPO": doc["model"], "REV": doc["engine"]["revision"], "ROLE": doc["case"],
        "ROW": row if run == "commit" else f"{node['LLAMA_ROOT']}/{node['COMMIT_RUN']}/{row}"}
 print("\n".join(["research", "run", "--on", r["node"], "--project", "verity", "--source", ".", *r["research"],
                  *(x for k, v in env.items() for x in ("--env", f"{k}={v}")), "--", *r.get("wrap", []), "bash", script]))
