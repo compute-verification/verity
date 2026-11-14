@@ -78,21 +78,24 @@ class Given:
 
 def test_setup_window_reads_every_input_of_each_sampled_unit():
     """Each unit reads its block of ``store`` and its row of ``weights`` at their leaves, and its own row of the supplied
-    base (72 leaves) and slot (one leaf); the circuit names both as supplied, which proofs' `Registered` refuses until
-    the window gives them (`proofs/zero-knowledge`); a sample past the store is refused first."""
+    base (72 leaves) and slot (one leaf), and every unit's ok output the supplied ok's one row; the circuit names the
+    three as supplied, which proofs' `Registered` refuses until the window gives them (`proofs/zero-knowledge`); a
+    sample past the store is refused first."""
     _, _, integ = setup_case()
     assert [(r.port, r.param, r.at, r.base) for r in integ.reads()] == [
         x for i, u in enumerate(SAMPLE) for x in (("block", "store", i, 4 * u), ("row", "weights", i, 8 * (u // 3)),
-                                                  ("base", V.BASE, i, 72 * i), ("slot", V.SLOT, i, i))]
+                                                  ("base", V.BASE, i, 72 * i), ("slot", V.SLOT, i, i))] + [
+        ("o0", V.OK, 0, 0)]
+    assert (integ.reads()[-1].radix, integ.reads()[-1].step) == ((len(SAMPLE),), (0,))
     with pytest.raises(NotImplementedError, match=r"^proofs/zero-knowledge: .*Registered.supplied \['setup/base', "
-                                                  r"'setup/slot'\]"):
+                                                  r"'setup/slot', 'setup/ok'\]"):
         integ.circuit()
     with pytest.raises(ValueError, match="one of the store's 12"):
         WIN.SetupIntegration(64, 189, 16, 4, 4, [12]).circuit()
 
 
 def test_setup_run_gives_the_verifiers_rows_and_records_each_units_bit():
-    """`run` gives the window the base and slot rows the verifier makes (`setup_proof.supplied`'s bytes, under the
+    """`run` gives the window the base, slot and ok rows the verifier makes (`setup_proof.supplied`'s bytes, under the
     caller's module), records every input by reference, and each unit's bit: a 1, and a 0 where its row of W is not the
     store's. On a real window it raises through proofs' `Window.give`."""
     params, salt, integ = setup_case()
@@ -100,7 +103,8 @@ def test_setup_run_gives_the_verifiers_rows_and_records_each_units_bit():
     integ.run(win)
     want = V.supplied(params, salt, 16, SAMPLE)
     assert win.given == {v: ([bytes.fromhex(r[0]["bytes"]) for r in want[v]], "one_stage.registered")
-                         for v in (V.BASE, V.SLOT)}
+                         for v in (V.BASE, V.SLOT, V.OK)}
+    assert win.given[V.OK][0] == [b"\x00\x01"]
     ((_, inputs, outputs),) = win.recorded
     assert inputs == [None] * 4 and outputs[0].tolist() == [1] * len(SAMPLE)
     _, _, wrong = setup_case(lambda rows: [rows[0], bytes(16), *rows[2:]])
@@ -140,3 +144,51 @@ def test_supplied_rows_read_the_verifiers_bytes_as_the_words_the_units_ports_hol
     assert slot_leaves == [[s >> i & 1 for i in range(SC.SLOT_BITS)] for s in slots]
     assert [RG.bit_words(r, 1, 16) for r in slot_leaves] == [[s] for s in slots]
     assert all(len(b) == 144 for b in bases) and integ.supplied_rows()[V.BASE] == [V.leaf_bytes(b) for b in bases]
+
+
+def test_a_unit_whose_ok_is_0_opens_no_root_the_verifier_pins():
+    """Every unit's ``o0`` reads the supplied ok, which SPOT reads from the verifier's hex as the word 1 (`supplied_rows`,
+    at the bit leaves of the output's zero-padded word or a 16-bit leaf), and which the period commits each unit's ``o0``
+    under (`Window.close`: an output row a registered read names stays the unit's own, under the value's salt). The
+    stand-in for the Lean verifier's opening of a registered read, which `Window.give` keeps from running: a unit row's
+    root under the supplied salts, against the root of the verifier's own row. The units whose ok is 1 open it; the unit
+    whose row of W is wrong records ok 0, whose row opens another root, so its proof is refused."""
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+
+    params, salt, _ = setup_case()
+    _, _, wrong = setup_case(lambda rows: [rows[0], bytes(16), *rows[2:]])
+    win = Given()
+    wrong.run(win)
+    ok = win.recorded[0][2][0].tolist()
+    assert ok == [1, 0, 1, 0, 1]
+    params_of, out = SP.setup_unit(64, 189, 16).signature()
+    word = dict(params_of)["slot"]
+
+    class Unit:
+        fn = type("Fn", (), {"signature": staticmethod(lambda: (((V.OK, word),), out))})
+
+    (row,) = RG.sources(V.supplied(params, salt, 16, SAMPLE))[V.OK]
+    (leaves,) = RG.supplied_rows(Unit, V.OK, [row], {})
+    assert RG.bit_words(leaves, 1, 16) == [1] and RG.leaves_of(bytes.fromhex(row[0][1]), 16) == [1]
+    prog = "ab" * 64
+    salts = RG.supplied_salts(prog, V.OK, 1)
+    pinned = RG.Registered.commit(prog, V.OK, [[1]], salts).root
+    opens = [RG.Registered.commit(prog, V.OK, [[o]], salts).root == pinned for o in ok]
+    assert opens == [True, False, True, False, True]
+
+
+def test_register_hands_the_challenger_the_verifiers_supplied_rows():
+    """`register` hands the proof system's challenger (`Stream.register`'s form) the docket, the layout's ports, the
+    registered values and the rows the verifier makes from the salt and the sample."""
+    params, salt, _ = setup_case()
+
+    class Stream:
+        def register(self, record, ports, **copies):
+            self.got = (record, ports, copies)
+            return "receipt"
+
+    s = Stream()
+    assert V.register(s, {"format": "x"}, {"block": {}}, {"store": 48, "weights": 32}, params, salt, 16,
+                      SAMPLE) == "receipt"
+    assert s.got == ({"format": "x"}, {"block": {}}, {"registered": {"store": 48, "weights": 32},
+                                                       "supplied": V.supplied(params, salt, 16, SAMPLE)})
