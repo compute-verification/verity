@@ -11,8 +11,8 @@ from fractions import Fraction
 import numpy as np
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "accounting" / "pouw" / "prover" / "clear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "accounting" / "pouw" / "verifier" / "tests"))
 import f1_fast as Q
 import pearl_c4_vectors as V
 import test_pouw_pearl_c4 as T

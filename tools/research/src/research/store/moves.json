@@ -2793,6 +2793,21 @@
       "paths": {
         "benchmarks/pouw/commit_gpu/": "verity/commitments/cuda/commit_gpu/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/pearl_c4/": "verity/protocols/experimental/pearl_c4/prover/kernels/",
+        "benchmarks/pouw/pearl_c4/f1_fast.py": "verity/protocols/experimental/pearl_c4/prover/f1_fast.py",
+        "benchmarks/pouw/pearl_c4/README.md": "benchmarks/pouw/pearl_c4/README.md",
+        "benchmarks/pouw/pearl_c4/ship.sh": "benchmarks/pouw/pearl_c4/ship.sh",
+        "benchmarks/pouw/pearl_c4/replay.py": "benchmarks/pouw/pearl_c4/replay.py",
+        "benchmarks/pouw/pearl_c4/real.py": "benchmarks/pouw/pearl_c4/real.py",
+        "benchmarks/pouw/pearl_c4/real_table.py": "benchmarks/pouw/pearl_c4/real_table.py",
+        "benchmarks/pouw/tests/test_pearl_c4_f1_fast.py": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_f1_fast.py",
+        "benchmarks/pouw/tests/test_pearl_c4_fixture.py": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_fixture.py",
+        "benchmarks/pouw/tests/test_pearl_c4_sass.py": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_sass.py",
+        "benchmarks/pouw/tests/test_pearl_c4_twin.py": "verity/protocols/experimental/pearl_c4/tests/test_pearl_c4_twin.py"
+      }
     }
   ]
 }

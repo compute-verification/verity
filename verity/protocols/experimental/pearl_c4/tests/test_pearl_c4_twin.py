@@ -1,4 +1,4 @@
-"""Pearl-C4's numpy twin (benchmarks/pouw/pearl_c4/twin.py) against the scalar reference `verity.protocols.accounting.pouw.prover.schemes.pearl_c4`: the
+"""Pearl-C4's numpy twin (verity/protocols/experimental/pearl_c4/prover/kernels/twin.py) against the scalar reference `verity.protocols.accounting.pouw.prover.schemes.pearl_c4`: the
 vectorized casts on grids through every rounding case, and whole tiles (forming, C̃, U, the peel factors, the leaf and the
 tickets) for both formats."""
 

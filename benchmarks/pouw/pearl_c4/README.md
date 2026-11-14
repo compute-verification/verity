@@ -11,7 +11,7 @@ ran. Its timing is self-timing for development; a number of record is the GPU ha
 the shipped tree, which is built off the GPU machine, so nothing is compiled on the card:
 
 ~~~text
-bash benchmarks/pouw/pearl_c4/build.sh [OUT]        # with CUDA 12.9's nvcc; OUT defaults to /tmp/pearl-c4-ship
+bash verity/protocols/experimental/pearl_c4/prover/kernels/build.sh [OUT]        # with CUDA 12.9's nvcc; OUT defaults to /tmp/pearl-c4-ship
 bash benchmarks/pouw/pearl_c4/ship.sh [OUT] [REPO]  # OUT as a one-commit repository for `research run --source`
 bash run.sh [check]                                 # in the shipped tree, on the card
 bash run.sh time [MxNxK ...]
