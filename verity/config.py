@@ -23,7 +23,7 @@ What a protocol declares (`Component`: its id, the workload hooks it needs, the 
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
 service laws it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s, its
 parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
-name (`verity.configuration.wire.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
+name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
 needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
 declared ones, and a placement the declarations forbid.
 
@@ -42,8 +42,8 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from verity.configuration.deploy.manifest import Channel, Role
-from verity.configuration.wire import Refused
+from verity.protocol import Channel, Role
+from verity.channel import Refused
 
 FORMAT = "verity/config/v0"
 #: the transport-only fields, by table: hashed out, so that they can change without changing the configuration

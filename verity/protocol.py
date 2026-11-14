@@ -8,7 +8,7 @@ to a deployment configuration (`config.Component`), which is where it says what 
   rest capabilities such as `gpu` or `signing-key`);
 - its channels (`Channel`): who may send which messages to whom, under what latency bound, whether they carry coins,
   and the messages sent before them (`after`);
-- its messages: the wire schemas (`verity.configuration.wire.Schema`), each with its kind.
+- its messages: the wire schemas (`verity.channel.Schema`), each with its kind.
 
 `place` checks a binding of the parties to a site's machines: each party's principal owns its machine (`principal`), the
 machine provides what the party needs (`needs`), a coin-carrying channel passes no developer-owned machine (`coins-hop`),
@@ -24,7 +24,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.configuration.wire import NAME, MessageTypes, Refused, Schema
+from verity.channel import NAME, MessageTypes, Refused, Schema
 
 PRINCIPALS = ("developer", "auditor", "anyone")
 OWNERS = ("developer", "auditor")
