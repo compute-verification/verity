@@ -341,7 +341,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert prof["placement"]["salt"].startswith(f"drawn by the memory challenger on {AUDITOR} from its OS")
 
     doc = json.loads((served.out / "pous.json").read_text())
-    assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["setup"] == CS.SETUP
+    assert doc["key_pinned"] and doc["key_pin"] == "configuration" and doc["setup"] == CS.SETUP
     assert not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
     assert doc["decided_by"] == {"program": JUDGE, "host": socket.gethostname()} and doc["lean_s"] >= 0
     run = json.loads((served.private / "run.json").read_text())
