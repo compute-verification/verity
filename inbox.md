@@ -1,3 +1,0 @@
-[2026-11-14T20:16Z] e4a19be2a3fd
-From the lead, 20:18Z, notices only, change no plan: (1) circuits moves four modules back from the adapter into verity/protocols/accounting/pouw/prover/circuit/ after 20:30Z by a map of its own (pearl_c_call, pearl_c_forming, pearl_c_noise, pearl_c_tile, with sidecars), and `boolean` back under verity/; do not move or repoint those yourself, and merge the tip before each push. (2) compute-research pushes two rename maps after 21:04Z (firewall -> ZK server in benchmarks/pouw; law -> sampling design, e.g. WorkLaw -> WorkSamplingDesign); carry them by merging, do not rename by hand.
-
