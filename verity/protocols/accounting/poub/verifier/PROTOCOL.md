@@ -176,7 +176,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 - **The prover** is the node. It registers a store and runs chained passes (inference reads every weight block and the
   live KV pages once a decode step, topped up with filler reads). It sends each pass's plan with the root of its
   receipts, and opens what the verifier samples.
-- **The challenger** is the proof system's one challenger (`spot.challenger`, on the auditor's host through
+- **The challenger** is the proof system's one challenger (`spot.challenger`, on the auditor's device through
   `spot.remote` when it is remote). It flips every coin of a session, commits to them before the session,
   and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.SessionCoins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
@@ -389,7 +389,7 @@ the same challenger. Each coin leaves once, after the root the verifier
 recorded for it, and the challenger logs both before the coin leaves its host and signs the log when the session ends.
 The verifier holds that log to its own record (`AuditRun.released_reason`): the commitment it used, the same roots in
 the same order, chal_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened
-before its window's root is refused. On the auditor's host the session is the one window \(\{R\}\) of the auditor's
+before its window's root is refused. On the auditor's device the session is the one window \(\{R\}\) of the auditor's
 signed ledger (`remote.trusted_session`), which opens one challenger session a root, ever, and the window one of the
 audit's period's (`coins.trusted`'s `period`): a session whose coins came from a second challenger session for the same
 (period, registration), or whose window the ledger holds in another period, is refused, so a prover can't run two and

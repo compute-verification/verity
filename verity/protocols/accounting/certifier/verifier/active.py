@@ -97,7 +97,7 @@ one registration of p, made within the deadline after p's work. `check_salts` is
 ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
 **The reveal over the network** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the certifier runs on
-the link, off the developer's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
+the link, off the developer's node, and the auditor's challenger on an auditor device. With the keys, `reveal` and
 `committed` take the challenger's `request`: its LMS signature under `challenger_key`, the key the auditor's
 deployment record (never the prover's configuration) registered for it, over `reveal_request_message(signer.key_id,
 run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy

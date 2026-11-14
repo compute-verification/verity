@@ -1,4 +1,4 @@
-"""The auditor host's verifier service: PoUB's verifier
+"""The auditor device's verifier service: PoUB's verifier
 (`verity/protocols/accounting/poub/verifier/session/verifier.py`, the Lean verifier deciding) runs only as the `auditor` user,
 from a tree infra pinned, one run at a time, each run's parameters a lane's request held to a fixed whitelist.
 

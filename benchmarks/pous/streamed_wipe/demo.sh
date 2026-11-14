@@ -25,7 +25,7 @@
 #                        --reads 5231 --streamer build'); without them it runs on this node, a rehearsal
 #   --trusted-sha512 HEX the SHA-512 of the memory challenger's public key, in 128 lowercase hex digits: the one key
 #                        the verifier trusts, a session signed under another rejected. --challenger takes it; a
-#                        challenger here signs under a key this run makes, trusted without it. trusted-host holds only
+#                        challenger here signs under a key this run makes, trusted without it. trusted-device holds only
 #                        under the key wipe_party.AUDITOR_KEYS pins for the challenger's host; under any other the
 #                        record reads "rehearsal: key not the auditor's pinned key, no bound"
 #   --simulated          the memory challenger here, named the stand-in for one on its own host (placement

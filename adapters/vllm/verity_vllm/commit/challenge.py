@@ -1,7 +1,7 @@
 """The integration's one challenge module: every sample over committed values.
 
 A sample on `verity.commitments.randomness` derives through its `derive` from a `source`, the run's live coin
-(`pipeline.commit_coins`: the auditor host's challenger opens it after the run's root), with the run root and the sample's
+(`pipeline.commit_coins`: the auditor device's challenger opens it after the run's root), with the run root and the sample's
 other bindings as context.  Such a sample without its coin is refused by name:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
@@ -16,7 +16,7 @@ moves every sample taken from it.  Every replay of the Commit takes a legacy see
 alone, with no coin: the prover fixes the root, so it steers the sample by committing again, in about the lesser of 1/p
 and 2^64 tries, p the chance one sample misses its faults, and a replay under it is a measurement.
 `legacy_replay_seed` hashes a challenge string with the root through SHA-256 and keeps 8 bytes: it is a coin's only
-when the auditor host's challenger issued that string.
+when the auditor device's challenger issued that string.
 """
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ def identity_picker(run_root: bytes, map_digest: str, salt: bytes = b"", *, sour
 
 def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
     """The legacy replay seed under a challenge string: sha256(challenge || "|" || run_root)[:8], SHA-256 cut to 64 bits.
-    It is a coin's only when the auditor host's challenger issued the string after the root (the served C2 under a
+    It is a coin's only when the auditor device's challenger issued the string after the root (the served C2 under a
     challenger gate); under a flag's string or the process's own bytes the replay is a measurement.  Its non-legacy form
     is `replay_key`."""
     return int.from_bytes(hashlib.sha256(challenge.encode("utf-8") + b"|" + bytes(run_root)).digest()[:8], "big")

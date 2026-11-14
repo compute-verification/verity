@@ -133,7 +133,7 @@ def _decided(case: dict) -> dict:
 def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> None:
     """In the serve's lease, before its engine loads: the card checked idle, the wipe of it, and DIR/answer.json the
     accepted core answer of verity/wipe/v0 that the case decides, the challenger the one WIPE_COMMAND starts on
-    vy-auditor-2 (its stand-in's key pinned by the run, not the tree's, so trusted-host's premise reads a rehearsal's
+    vy-auditor-2 (its stand-in's key pinned by the run, not the tree's, so trusted-device's premise reads a rehearsal's
     whatever the host is named), the window's serve dir and the card in served.json, and the
     piece's last line its `WIPE` headline. The case, which holds the signed session, is the serve dir's, private, with the
     composite's piece beside it (served_case.py's `CASE` line before the headline), and DIR keeps none of it."""
@@ -293,7 +293,7 @@ def test_a_run_that_pins_no_key_trusts_vy_auditor_2s_wipe_party_and_no_other(nod
 
 def test_the_wrappers_default_pin_is_the_trees_auditor_key() -> None:
     """served_wipe.sh's default WIPE_KEY_SHA512 is the key `wipe_party.AUDITOR_KEYS` pins for vy-auditor-2, the one
-    under which the record says trusted-host holds."""
+    under which the record says trusted-device holds."""
     line, = [x for x in WRAPPER.read_text().splitlines() if x.startswith("TRUSTED_SHA512=")]
     assert line.removeprefix("TRUSTED_SHA512=") == AUDITOR_PIN
 

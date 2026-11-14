@@ -61,7 +61,7 @@ nothing the verdict accepts.
 **The run's sample** (`verify_passes`' ``draw``) is one source S, and the samples' key is
 ``derive(S, RUN_DRAW_DOMAIN, {"run": C})`` over the run's commitment C (`run_commitment`, 64 bytes).  S comes from one of:
 - ``challenger`` (`bench_arm.LiveDraw`, `served_passes.py verify` under ``PEARLC_CHALLENGER_GATE``): a sample session of
-  its own on the auditor host's challenger (`window.DRAW_FAMILIES`, its one coin ``pouw/draw`` 0), reserved withheld
+  its own on the auditor device's challenger (`window.DRAW_FAMILIES`, its one coin ``pouw/draw`` 0), reserved withheld
   through the lane's gate once the lane has no period open (so it joins none, and the Pearl-C period's close lists the
   salt sessions alone) and, given the period the salt session joined, as the lane's first reserve after that period
   closed (`pouw_h1_window.after_close`, held before its coin is asked), opened on C, its coin released only after C and
@@ -503,7 +503,7 @@ WEIGHTS_UNTIED = "weights untied (W v1)"
 V1_WEIGHTS = "W states no version (version 1), whose values are the calls' alone, and registers"
 #: the coin record's schema (module docstring, "The coin record")
 COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
-#: the coin record's ``draw.from``: a sample session's coin on the auditor host's challenger, or this node's coins
+#: the coin record's ``draw.from``: a sample session's coin on the auditor device's challenger, or this node's coins
 DRAW_CHALLENGER, DRAW_NODE = "challenger", "node"
 #: the claim instance the node's sample source rests on (`pouw.verifier.coins`)
 NODE_CLAIM = "uniform/io-getrandombytes"
