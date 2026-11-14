@@ -296,8 +296,9 @@ def result_here(monkeypatch):
 
 
 def test_periods_writes_the_onsite_lower_bound_under_its_metrics_id(tmp_path, monkeypatch, capsys, result_here):
-    """The onsite scenario's lower bound in each fleet and period goes into the run's result under the id
-    `metrics.toml` declares, modeled, with its period and its `over`, the world's year last in the row's unit."""
+    """The onsite scenario's lower bound over a year of the world's compute goes into the run's result under the id
+    `metrics.toml` declares, modeled, in the row's unit, as the run's one measurement: the other fleets and periods
+    stay in `periods.json`."""
     import periods
 
     (row,) = tomllib.loads((Path(periods.__file__).parent / "metrics.toml").read_text())["metric"]
@@ -305,21 +306,22 @@ def test_periods_writes_the_onsite_lower_bound_under_its_metrics_id(tmp_path, mo
     periods.main()
     capsys.readouterr()
     rows = json.loads((tmp_path / "periods.json").read_text())["rows"]
-    got = json.loads((tmp_path / "result.json").read_text())["measurements"]
-    assert row["id"] == periods.METRIC and len(got) == len(periods.FLEETS) * len(periods.PERIODS)
-    assert [(m["name"], m["value"], m["mark"], m["period"], m["over"]) for m in got] == [
-        (row["id"], x["slowdown"], "modeled", x["period"], periods.OVER[x["fleet"]][0]) for x in rows]
-    assert (got[-1]["period"], got[-1]["over"], got[-1]["unit"]) == ("year", "world", row["unit"])
+    (x,) = (x for x in rows if (x["fleet"], x["period"]) == ("world-h200", "year"))
+    (got,) = json.loads((tmp_path / "result.json").read_text())["measurements"]
+    assert len(rows) == len(periods.FLEETS) * len(periods.PERIODS)
+    assert (got["name"], got["value"], got["unit"], got["mark"], got["period"], got["over"]) == (
+        row["id"], x["slowdown"], row["unit"], "modeled", "year", "world")
 
 
 def test_periods_writes_no_measurement_off_the_registry_or_without_the_onsite_scenario(tmp_path, monkeypatch, capsys,
                                                                                        result_here):
-    """A run with `--set` gives no lower bound of the registry as it is, even at a value the registry has, and one
-    without the onsite scenario gives none of its: neither writes a measurement."""
+    """A run with `--set` (even at a value the registry has), `--bounds` or `--measured` gives no lower bound of the
+    registry as it is, and one without the onsite scenario gives none of its: none writes a measurement."""
     import periods
 
-    for i, args in enumerate((["--scenario", periods.METRIC_SCENARIO, "--set", "bounds.lock_only=true"],
-                              ["--scenario", "reference-remote-h200"])):
+    onsite = ["--scenario", periods.METRIC_SCENARIO]
+    for i, args in enumerate(([*onsite, "--set", "bounds.lock_only=true"], [*onsite, "--bounds", "cover"],
+                              [*onsite, "--measured", "smollm2-135m-step"], ["--scenario", "reference-remote-h200"])):
         out = tmp_path / str(i)
         monkeypatch.setattr(sys, "argv", ["periods.py", *args, "--out", str(out)])
         periods.main()
