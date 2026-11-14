@@ -19,11 +19,11 @@ Each launcher takes one leased GPU for a bounded time, writes under `$RESEARCH_R
 its script:
 
 ~~~text
-RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/kbench.sh                 # gate, then kbench.py
-RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO KSCRIPT=kgate.py bash benchmarks/hash/exactlin/kbench.sh  # the gate alone
-RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/served.sh \
+RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/kbench.sh                 # gate, then kbench.py
+RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO KSCRIPT=kgate.py bash benchmarks/kernels/exactlin/kbench.sh  # the gate alone
+RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/served.sh \
   --arms stock,exact,exact-fused --gate --ops decode --t 64                                       # served
-RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/share.sh                  # uncredited share
+RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/share.sh                  # uncredited share
 ~~~
 
 A failed gate times nothing and exits 4.
@@ -81,5 +81,5 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
     quantizer, lm_head, attention, norms and elementwise, sampling and the gaps.
 
 Outside this directory, `benchmarks/hash/dither/sbench.py`'s `exact` and `exact-fused` arms are one engine, the ops'
-CUDA bodies as registered, and `benchmarks/torch_gpu/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`,
+CUDA bodies as registered, and `benchmarks/kernels/s8_linear` times `int8_fused` with `kbench.py`'s helpers (`timed`,
 `copies_for`, `nvml`).

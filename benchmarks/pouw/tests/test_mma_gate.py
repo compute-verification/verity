@@ -24,7 +24,7 @@ FIX = Path(__file__).resolve().parent / "fixtures"
 VERDICTS = FIX / "mma_gate" / "verdicts.json"
 GATES = {"pearl_c_sm90": ("benchmarks/pouw/pearl_c_sm90/sass_gate.py", None),
          "pearl_c_sm120": ("benchmarks/pouw/pearl_c_sm120/sass_gate.py", None),
-         "s8_linear": ("benchmarks/torch_gpu/s8_linear/sass_gate.py", None)}
+         "s8_linear": ("benchmarks/kernels/s8_linear/sass_gate.py", None)}
 #: the arch each gate's real-listing cases are reported for
 REAL_ARCH = {"pearl_c_sm90": "sm_90a", "pearl_c_sm120": "sm_120a", "s8_linear": "sm_90a"}
 

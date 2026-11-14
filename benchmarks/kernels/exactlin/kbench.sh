@@ -3,7 +3,7 @@
 # minutes; KSCRIPT=kgate.py runs the gate alone, KSCRIPT=ksweep.py the GEMM config sweep.  Extra arguments go to the
 # script (e.g. --reps 15 --shapes decode).  Under `research run --gpus 1` (GPU_LEASE_UUID set) the run already holds its
 # GPU, and the script runs on it without a second lease.
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/exactlin/kbench.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/kbench.sh
 # Runs on an RTX PRO 6000, an H200 or a B200 (PY, else benchmarks/harness/env.sh's).
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
@@ -26,7 +26,7 @@ if [ -n "${GPU_LEASE_UUID:-}" ]; then
 else
   echo "kbench: asking for one GPU at $(date -u +%H:%M:%SZ)"
 fi
-"${LEASE[@]}" timeout $((60 * MAX_MIN - 30)) "$PY" "$ROOT/benchmarks/hash/exactlin/${KSCRIPT:-kbench.py}" --out "$OUT" "$@"
+"${LEASE[@]}" timeout $((60 * MAX_MIN - 30)) "$PY" "$ROOT/benchmarks/kernels/exactlin/${KSCRIPT:-kbench.py}" --out "$OUT" "$@"
 rc=$?
 kill "$SMI" 2>/dev/null
 echo "kbench: exited $rc at $(date -u +%H:%M:%SZ)"

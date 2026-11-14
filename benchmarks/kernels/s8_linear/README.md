@@ -47,9 +47,9 @@ roofline analysis to synthetic curves (CPU).
 
 ~~~text
 # from the tree's root, on a CPU node with CUDA 13's nvcc
-bash benchmarks/torch_gpu/s8_linear/build.sh /tmp/s8-linear-ship
+bash benchmarks/kernels/s8_linear/build.sh /tmp/s8-linear-ship
 tar -C /tmp/s8-linear-ship -cf /tmp/s8-ship.tar .
 # on an H200 with CUDA torch, vLLM and `gpu-lease`
-OUT=DIR S8_SHIP=/tmp/s8-ship.tar bash benchmarks/torch_gpu/s8_linear/run.sh "run.py" "tune.py" \
+OUT=DIR S8_SHIP=/tmp/s8-ship.tar bash benchmarks/kernels/s8_linear/run.sh "run.py" "tune.py" \
   "bench.py --configs @OUT@/2-tune/best.json"
 ~~~
