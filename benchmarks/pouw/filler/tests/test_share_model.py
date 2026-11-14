@@ -1,7 +1,7 @@
 """share.py's `Model` and its tables on the lines of a made-up dcap run: what the model fits (the read clock, the DRAM
 rate, lm_head's and the linears' curves, the attention's line, the step's δ, FA2's efficiency), what it reads back
-from the fit (a step's and a prompt's time, and a row of the tables' ratios), a filler beside a step, the τ table and
-the decode grid. Each number is chosen so the fit can be stated by hand."""
+from the fit (a step's and a prompt's time, and a row of the tables' ratios), a filler beside a step, the τ table,
+the decode grid, the serving mixes and the headline's rows. Each number is chosen so the fit can be stated by hand."""
 
 from __future__ import annotations
 
@@ -49,6 +49,14 @@ def m():
 
 def _att(p, eta):
     return S.causal(p) / (eta * PEAK) * 1e3  # a causal prompt's attention at a share eta of the peak, ms
+
+
+def _chat(m):
+    """Chat (a prompt of 1,024 tokens, an answer of 256) at a batch of 32 with FA2: a request's MACs, its prefill and
+    one of its steps, ms. The step is at the answer's mean context, 1,152, where the attention's line gives 5 ms;
+    from 16 rows to 256 the linears and lm_head both grow as the square root of the rows, from 3 ms and from 1 ms."""
+    n = 1024 * S.LIN_TOK + S.LM_TOK + S.causal(1024) + 256 * S.decode_n(1, 1152)
+    return n, m.prefill_ms(1024, m.eta_fa2), 4 * 2 ** 0.5 + 5.0 + 0.4 + 1.09
 
 
 def test_the_fit_of_a_runs_lines(m):
@@ -168,3 +176,80 @@ def test_the_grid_is_a_decode_step_at_each_batch_and_context_alone_and_beside_ea
         assert r["filler quarter"] == pytest.approx(beside)
         assert r["filler quarter"]["nominal/capacity"] == pytest.approx(r["nominal/capacity"] / 1.25 + 0.25)
     assert grid[(16, 2048)]["nominal/capacity"] == pytest.approx(16 * 8_041_529_344 / (PEAK * 0.01039))
+
+
+def test_each_mix_is_at_32_and_at_the_pools_batch_with_each_attention_kernel_and_each_schedule(m, monkeypatch):
+    monkeypatch.setattr(S, "FILLER", {})
+    rows = S.mixes(m)
+    # the larger batch is the whole requests (P + D tokens) that the pool's 1,220,703 tokens hold, 256 at most
+    assert [(r["mix"], r["P"], r["D"], r["B"]) for r in rows[::4]] == [
+        ("chat", 1024, 256, 32), ("chat", 1024, 256, 256), ("RAG", 8192, 256, 32), ("RAG", 8192, 256, 144),
+        ("code / agents", 24576, 512, 32), ("code / agents", 24576, 512, 48),
+        ("reasoning", 1024, 8192, 32), ("reasoning", 1024, 8192, 132)]
+    assert len(rows) == 32
+    assert [(r["attention"], r["schedule"][:8]) for r in rows[:4]] == [
+        ("FA2", "separate"), ("FA2", "chunked,"), ("int8 FA", "separate"), ("int8 FA", "chunked,")]
+    # chunked, a step carries its B rows of decode and B·P/D tokens of prompt
+    assert [r["schedule"] for r in rows[1::4]] == [
+        f"chunked, M = {rows_a_step}" for rows_a_step in (160, 1280, 1056, 4752, 1568, 2352, 36, 148)]
+
+
+def test_a_mix_is_a_requests_prefill_and_its_decode_steps_at_the_answers_mean_context(m, monkeypatch):
+    monkeypatch.setattr(S, "FILLER", {"quarter": QUARTER})
+    separate, chunked = (r for r in S.mixes(m) if (r["mix"], r["B"], r["attention"]) == ("chat", 32, "FA2"))
+    n, pre, step = _chat(m)
+    # a request's 256 steps are each shared by the batch's 32: eight steps' time a request
+    assert separate["schedule"] == "separate"
+    assert separate["prefill_time_share"] == pytest.approx(pre / (pre + 8 * step))
+    assert {k: separate[k] for k in m.row(n, 1.0)} == pytest.approx(m.row(n, pre + 8 * step))
+    # the filler is beside decode alone: a quarter of the peak over decode's time, which is a quarter longer
+    slowed = pre + 10 * step
+    beside = m.row(n + 0.25 * PEAK * 10 * step * 1e-3, slowed, 0.25 * 10 * step / slowed)
+    assert separate["filler quarter"] == pytest.approx({**beside, "time": slowed / (pre + 8 * step)})
+    # chunked: a step's 32 rows of decode carry 128 tokens of prompt, so its linears have 160 rows, 32 of them with
+    # lm_head, and its attention is decode's and an eighth of a prompt's; no filler is beside it
+    a_step = 3 * 10 ** 0.5 + 2 ** 0.5 + 5.0 + 0.4 + _att(1024, m.eta_fa2) / 8 + 1.09
+    assert chunked["schedule"] == "chunked, M = 160" and chunked["prefill_time_share"] is None
+    assert {k: chunked[k] for k in m.row(n, 1.0)} == pytest.approx(m.row(n, 8 * a_step))
+    assert "filler quarter" not in chunked
+
+
+def test_a_mixs_step_is_the_models_where_one_was_measured_and_no_step_is_chunked_past_8192_rows(m, monkeypatch):
+    monkeypatch.setattr(S, "FILLER", {})
+    monkeypatch.setattr(S, "POOL_TOK", 16 * 3072)  # a pool of 16 requests of 3,072 tokens: one batch, of 16
+    monkeypatch.setattr(S, "MIXES", [("short", 1024, 2048), ("at 8,192", 3066, 6), ("past it", 3069, 3)])
+    rows = S.mixes(m)
+    assert {r["B"] for r in rows} == {16}
+    assert [(r["mix"], r["schedule"]) for r in rows if r["attention"] == "FA2"] == [
+        ("short", "separate"), ("short", "chunked, M = 24"), ("at 8,192", "separate"),
+        ("at 8,192", "chunked, M = 8192"), ("past it", "separate")]
+    assert len(rows) == 10
+    # the short mix's mean context is 2,048, where the run measured a step of 16 rows: 9.3 ms, and the model's is 8.9
+    n = 1024 * S.LIN_TOK + S.LM_TOK + S.causal(1024) + 2048 * S.decode_n(1, 2048)
+    pre, step = m.prefill_ms(1024, m.eta_fa2), 4.0 + 4.5 + 0.4 + 1.09
+    assert rows[0]["prefill_time_share"] == pytest.approx(pre / (pre + 128 * step))
+    assert rows[0]["nominal/capacity"] == pytest.approx(n / (PEAK * (pre + 128 * step) * 1e-3))
+
+
+def test_the_headline_is_four_decode_points_and_five_mixes_alone_and_beside_each_named_filler(m, monkeypatch):
+    monkeypatch.setattr(S, "FILLER", {"quarter": QUARTER, "unnamed": S.Filler([(1, 0.5, 2.0)])})
+    res = {"grid": S.grid(m), "mixes": S.mixes(m)}
+    head = S.headline(res, ["quarter"])
+    assert [h["row"] for h in head] == [
+        "decode B = 1, L = 2K", "decode B = 32, L = 8K", "decode B = 128, L = 2K", "decode B = 256, L = 2K",
+        "chat, B = 32", "chat, B = 256", "RAG, B = 144", "code / agents, B = 48", "reasoning, B = 132"]
+    assert all(list(h) == ["row", "N/C", "cert/C", "quarter"] for h in head)
+    assert all(list(h) == ["row", "N/C", "cert/C"] for h in S.headline(res, []))
+    # a decode point: the grid's, and the time beside the filler over the time alone
+    ms, n = 16.0 + 64.5 + 0.4 + 38.37 / 32, S.decode_n(256, 2048)
+    alone, beside = n / (PEAK * ms * 1e-3), n / (PEAK * 1.25 * ms * 1e-3) + 0.25
+    assert (head[3]["N/C"], head[3]["cert/C"]) == pytest.approx((alone, 0.99 * alone))
+    assert head[3]["quarter"] == pytest.approx({"N/C": beside, "cert/C": 0.99 * beside, "time": 1.25})
+    # a mix: its row with prefill apart and FA2, and the mix's time beside the filler over its time alone
+    n, pre, step = _chat(m)
+    alone, slowed = n / (PEAK * (pre + 8 * step) * 1e-3), pre + 10 * step
+    beside = (n + 0.25 * PEAK * 10 * step * 1e-3) / (PEAK * slowed * 1e-3)
+    assert (head[4]["N/C"], head[4]["cert/C"]) == pytest.approx((alone, 0.99 * alone))
+    assert head[4]["quarter"] == pytest.approx({"N/C": beside, "cert/C": 0.99 * beside,
+                                                "time": slowed / (pre + 8 * step)})
+
