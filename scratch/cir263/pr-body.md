@@ -22,7 +22,7 @@ GLM-5.3's recipe serves with five draft tokens from one MTP draft layer. At vLLM
 
 ## What the captures of record gave
 
-Node A, card 0, cores 0-9, Fri 13 Nov 15:45Z to 15:52Z, one lease each with `glm53_mtp_capture_card.sh`, at branch head `ce09de03c318f40d29efbec7cca2536a8b7cf735`. The card held no compute process and 0 MiB at each start. Each record sealed with `ok` true, its digest recomputed from the fetched file, and each names vLLM `0.28.1rc1.dev472+gd9105ea80` [run]. A word is compared with the Definition's NumPy twin; the Definition's own evaluator runs on a sample and equals the twin on all of it [run].
+One H200 card, each run read on its node, Fri 13 Nov 15:45Z to 15:52Z, one lease each with `glm53_mtp_capture_card.sh`, at branch head `ce09de03c318f40d29efbec7cca2536a8b7cf735`. The card held no compute process and 0 MiB at each start. Each record sealed with `ok` true, its digest recomputed from the fetched file, and each names vLLM `0.28.1rc1.dev472+gd9105ea80` [run]. A word is compared with the Definition's NumPy twin; the Definition's own evaluator runs on a sample and equals the twin on all of it [run].
 
 - `r20261113-154513-8180`, `eh_proj`, digest `41442bea4181c34d43a40ac11596b2e9bb85456f2b8c8376e24ebaee2cef5e1b` [run].
   - Route scanned at every M from 1 to 8,192 tokens: split-K 2 at M 105-111, 129-159, 161-223, 272, 288 and 336, no split elsewhere [run].
