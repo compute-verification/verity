@@ -1,0 +1,128 @@
+module
+
+public import Properties.Nci.Opening
+public import Properties.Flock.Circuit.UnitInst
+public import Properties.Verity.Sha512
+public import Definitions.Hash.EmbeddingRead
+public import Flock.Hm96
+public import Flock.ReadNet.Template
+
+/-!
+# A pinned reader's unit returns its table's row: the statements
+
+`PinnedReadAt`, a pinned read as a check holds it and its circuit file lays it out, at a verdict bit; `PinnedRead`, at
+the verdict bit 1; `ReturnsRow`, that the unit returns its table's row, the fill row, or a SHA-512 collision;
+`PinnedReadBinds`, that a pinned read returns its row; and `PinnedReadNontrivial`, that at the verdict bit 0 some
+pinned read does not. The proofs, and the statements that read the check's own form, are
+`Proofs.Properties.Nci.Lemmas.Opening`'s.
+-/
+
+@[expose] public section
+
+namespace NciCheck.Properties.Record
+
+open Lean (Json)
+open Flock.Program (Prog Defn)
+open NciCheck.RecordText (Row Held)
+open Accounting
+
+/-- **A pinned read at the verdict bit `ok`, as a check holds it and its circuit file lays it out**: the hypotheses of
+`PinnedReadBinds`, in its order, with the verdict bit `ok`. The check reads the record and holds its row `r` as an
+opening under a pin; the reader's Definition `dfn` has the roles `ro`, the output row `out` being the row it returns;
+the file `bytes` parses to the templated statement `ct` with the unit template `tu`, which the read's check accepts;
+the file's unit `u` is `r`'s, with the read unit's gates `q`; the unit's constant is registered as 1, `u` is correct
+in `Yc` with its registered constants there, its verdict bit is `ok`, and `table` is committed under the root and
+domain id its gates hold. -/
+def PinnedReadAt (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn)
+    (ro : Roles) (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    (ct : Flock.Circuit) (tu : Flock.TmplUnit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
+    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening) (ok : Bool) : Prop :=
+  F.read j tr = .ok c ∧
+    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P ∧
+    F.held c r = some (.opened name p pin) ∧
+    P.index[r.tid]? = some k ∧ P.defs[k]? = some dfn ∧
+    F.layout dfn = some ro ∧
+    Flock.Desc.parseStmt tags bytes tables = .ok (.tmpl ct) ∧
+    ct.tmpl = some tu ∧ Flock.ReadNet.check q.count q.words tu.t = true ∧ ct.outNet = ct.unitNet ∧
+    laidOutAs ct P r.tid u.val r.unit = true ∧
+    portsOf ct hB n dfn r.unit ro out q.count q.words = some q ∧
+    consts (Flock.Bridge.constGate (.tmpl ct) hB n u) = some true ∧
+    (Flock.Bridge.partsOf (.tmpl ct) hB n).Correct Yc u ∧
+    (∀ g ∈ (Flock.Bridge.partsOf (.tmpl ct) hB n).io u, ∀ b, consts g = some b → ReadUnit.bit Yc g = b) ∧
+    q.okOf Yc = ok ∧
+    ∀ i < q.count, Hash.RowLeaf.accepts Verity.sha512 Verity.sha512
+      (q.verifier Flock.Hm96.Default512.key.data.toList (q.domainOf Yc)) (q.rootOf Yc) i (table i)
+
+/-- **A pinned read**: `PinnedReadAt` with the verdict bit 1. -/
+def PinnedRead (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn)
+    (ro : Roles) (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    (ct : Flock.Circuit) (tu : Flock.TmplUnit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
+    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening) : Prop :=
+  PinnedReadAt F c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table true
+
+/-- **The unit returns its table's row**: the row `u` returns in its local evaluation is `table`'s row at the index its
+index gates hold there, or the fill row where the index is at or past the table's count (`Hash.EmbeddingRead.h`), or
+SHA-512 collides on what the unit's check and `table`'s opening at the index hashed. -/
+def ReturnsRow (ct : Flock.Circuit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening) : Prop :=
+  q.hOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) =
+      Hash.EmbeddingRead.h q.count q.words (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))
+        (table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))) ∨
+    Hash.CollisionIn Verity.sha512
+      (Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512
+          (q.verifier Flock.Hm96.Default512.key.data.toList (q.domainOf Yc))
+          (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))
+          (q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ++
+        Hash.RowLeaf.outerHashed Verity.sha512 Verity.sha512
+          (q.verifier Flock.Hm96.Default512.key.data.toList (q.domainOf Yc))
+          (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))
+          (table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)))) ∨
+    Hash.CollisionIn Verity.sha512
+      (Hash.RowLeaf.innerHashed Verity.sha512
+          (q.verifier Flock.Hm96.Default512.key.data.toList (q.domainOf Yc))
+          (q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ++
+        Hash.RowLeaf.innerHashed Verity.sha512
+          (q.verifier Flock.Hm96.Default512.key.data.toList (q.domainOf Yc))
+          (table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))))
+
+/-- **A pinned reader's unit returns its table's row.** Let a check read a record and hold its row `r` as an opening
+under a pin, the reader's Definition having the roles `ro`. Let the circuit file `bytes` parse to the templated
+statement `ct`, as the verifier reads it, with the unit template `tu`; let the read's check accept `tu` for a table of
+`q.count` rows of `q.words` words, and the unit return the circuit's outputs. Let the file's unit `u` be `r`'s unit,
+and `q` be the read unit's gates there at the roles and the output row `out` the reader returns. Let the unit's
+constant be registered as 1. Let `u` be correct in the transcript `Yc` and the registered constants hold there; let
+the verdict bit be 1; and let `table` be committed under the root and the domain id the root and domain gates hold
+(`PinnedRead`). Then the row `u` returns in its local evaluation is `table`'s row at the key its key gates hold
+there, or the fill row where the key is at or past the table's count (`Hash.EmbeddingRead.h`), or SHA-512 collides on
+what the unit's check and `table`'s opening at the key hashed (`ReturnsRow`). A read inside a fused block is outside it:
+its row goes straight into the block's GEMM and never leaves the unit, so `portsOf` gives no gates for it. -/
+def PinnedReadBinds : Prop :=
+  ∀ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
+    (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
+    (tu : Flock.TmplUnit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
+    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening),
+    PinnedRead F c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table →
+      ReturnsRow ct hB n u q Yc table
+
+/-- **The verdict bit does the work**: some form, record, circuit file and transcript meet every hypothesis of
+`PinnedRead` but the verdict bit, which is 0 (`PinnedReadAt` at `false`), and the unit returns neither its table's row
+nor the fill row, with no collision (`¬ ReturnsRow`). Not proved: it needs a circuit file that parses and a template
+the read's check accepts, runs of code on a file, which the kernel does not evaluate. -/
+def PinnedReadNontrivial : Prop :=
+  ∃ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
+    (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
+    (tu : Flock.TmplUnit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
+    (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
+    (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
+    (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening),
+    PinnedReadAt F c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table false ∧
+      ¬ ReturnsRow ct hB n u q Yc table
+
+end NciCheck.Properties.Record
