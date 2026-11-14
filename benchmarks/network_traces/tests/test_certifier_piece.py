@@ -167,7 +167,8 @@ def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), 
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
     (witness / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
-        {"window": w, "answer": {"verdict": "accept"}, "registrations": list(registrations)}]}))
+        {"window": w, "registration": {"program": "ab" * 64}, "answer": {"verdict": "accept"},
+         "registrations": list(registrations)}]}))
     (out / "scan" / "joint" / "program.json").write_text("{}")
     return d
 
@@ -349,7 +350,7 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
     return a
 
 
-def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_period_are_rejects(tmp_path, warden):
+def test_a_refused_chain_a_request_off_the_scans_phase_and_a_rejected_period_are_rejects(tmp_path, warden):
     d = _serve_dir(tmp_path / "serve", warden)
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, _chain_out(tmp_path / "chain", "refused", warden["w"]), {}))
     got = S.pieces(d, K, tmp_path / "pieces", env=env)
@@ -362,7 +363,7 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
     assert a["verdict"] == "reject" and f"not the period's {warden['w'] + 1} alone" in a["reason"]
     if warden["others"]:
         a = _decide(tmp_path / "mixed", warden, records=[*warden["records"][:1], warden["others"][0]])
-        assert a["verdict"] == "reject" and "spans link-windows" in a["reason"]
+        assert a["verdict"] == "reject" and "spans execution phases" in a["reason"]
     rejected = CP.answer("reject", "window 0: certificates")
     assert _decide(tmp_path / "period", warden, check=lambda c, p: rejected) == rejected
 
@@ -836,7 +837,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     assert report["verdict"] == "accepted" and set(report["steps"]) == {
         "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
     assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
-    assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
+    assert report["steps"]["scan"]["eps_at_delta"]["units"] == 2 * 30 + 1
     assert report["stubbed"] == list(CR.WARDEN_SERVED_STUBBED)
     for rel in ("endpoint/report.json", "scan/answers.json"):
         (hold / "chain" / rel).parent.mkdir()
@@ -1014,7 +1015,7 @@ def test_each_steps_time_limit_names_its_own():
             CP.ended(limit)(signal.SIGTERM, None)
 
 
-def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
+def test_n2_and_the_tie_take_every_phase_of_a_short_run_unless_named():
     assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
     assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
@@ -1051,7 +1052,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
     assert json.loads((out / "session.json").read_text())["gate"] == LIVE_GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
-    assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+    assert "past one execution phase" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
     assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",

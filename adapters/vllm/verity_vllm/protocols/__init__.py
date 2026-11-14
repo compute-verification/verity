@@ -44,7 +44,7 @@ protocol package has a circuit for its scheme (``traced_as``).
 executed call).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
 gives the Commit the circuit of each executed call.  An executor with none whose calls commit tables a window's circuit
 can be cut at (an adapter's ``cuts``: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
-sampled-proofs setting ``cut`` (`CUT`) names it: serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose
+SPOT setting ``cut`` (`CUT`) names it: serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose
 window-commit cuts each window's circuit at its linears and reads Pearl+'s tables there (`window_class.PearlTables`).  A
 row's Commit (`at_row`, `commit_context`) replays the row's request Programs, which are never cut, and refuses ``cut``.
 """
@@ -76,7 +76,7 @@ __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Cont
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
 #: protocol -> its package here that serving drives by flag rather than as an option (`driver`): PoUB's session
 #: (``--remote-verifier``)
-DRIVERS = {"remote-bandwidth": "remote_bandwidth"}
+DRIVERS = {"poub": "remote_bandwidth"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
 #: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  SPOT commits at the
@@ -86,7 +86,7 @@ SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 #: protocol -> the module of its protocol package that says what SPOT traces its executed computation as:
 #: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
 CIRCUITS = {"pouw": "verity.protocols.accounting.pouw.prover.circuit"}
-#: the sampled-proofs setting naming the executor whose sites the window's circuit is cut at (`refusals`)
+#: the SPOT setting naming the executor whose sites the window's circuit is cut at (`refusals`)
 CUT = "cut"
 RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
 

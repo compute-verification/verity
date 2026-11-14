@@ -1,7 +1,7 @@
 """The block record's certifier entry (`block_certifier`): `block_leg` turns a period's accepted answer (the
 fixture's period, a run's) into the block record's certifier leg, K held at each δ its exact eps is at most, and refuses
 a rejected answer, another protocol, a source other than real or fixture, and no run; each leg fits
-``verity/block-record/v2``'s schema, is `block_record.leg`'s of the runner's row, reproduces its fixture's certifier leg
+``verity/block-record/v2``'s schema, is `block_record.subprotocol`'s of the runner's row, reproduces its fixture's certifier leg
 from that leg's answer, and a fixture record carrying it checks clean.
 """
 from __future__ import annotations
@@ -65,7 +65,7 @@ def test_a_period_answer_is_the_block_records_certifier_leg():
                                                             "1/1000000": _not_held("1/500000", "1/1000000")}
     answer = ANSWERS[ROWS_RUN]["answers"]["1/100"]
     with pytest.raises(ValueError, match="certifies no K"):
-        BC.block_leg(answer | {"verdict": "reject", "reason": "certificates: a link-window"}, server="n",
+        BC.block_leg(answer | {"verdict": "reject", "reason": "certificates: an execution phase"}, server="n",
                      runs=[ROWS_RUN])
     with pytest.raises(ValueError, match="not verity/certifier/v0"):
         BC.block_leg(answer | {"protocol": "verity/sampled-proofs/one-stage/v1"}, server="n", runs=[ROWS_RUN])
@@ -86,7 +86,7 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
             got = BC.block_leg(a, server=x["node"], runs=[run], owner=OWNER)
             leg_schema.validate(got)
             row = {"answer": a, "quantity": a["public"], "owner": OWNER, "runs": [run]}
-            assert B.leg("certifier", row, server=x["node"], runs=[run]) == got
+            assert B.subprotocol("certifier", row, server=x["node"], runs=[run]) == got
     rec = json.loads((E2E / "tests" / "fixtures" / "block-record-r2-period0.json").read_text())
     fx = rec["legs"]["certifier"]
     assert BC.block_leg({**fx["answer"], "protocol": fx["protocol"]}, server=fx["server"], runs=fx["runs"],

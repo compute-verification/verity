@@ -66,7 +66,7 @@ def Code.SecondSamples (c : Code) (two : AuditStatement → Option Claims.Sampli
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∀ (r : Fin (c.V.k x) → FlockDeploy.Coin) (B : Finset ℕ),
       Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin =>
-          ∀ u ∈ (c.checked x (forkOn (c.stage2 x) r e)).take (units c x), u ∉ B) ≤
+          ∀ u ∈ (c.checked x (forkOn (c.secondStage x) r e)).take (units c x), u ∉ B) ≤
         ∏ ρ ∈ (Finset.range d.part.blocks.length).filter (· ∈ rs x r),
           ∏ t ∈ Finset.range Pt.strata.length,
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (B ∩ cell Pt d.part ρ t).card
@@ -76,7 +76,7 @@ def Code.ReplayCap (H : Msg → Msg) (c : Code) (two : AuditStatement → Option
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) (cap : Msg → ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∀ (Ω : Type) (P : Prover Ω) ω (r e : Fin (c.V.k x) → FlockDeploy.Coin),
-      (run H P c.V x ω (forkOn (c.stage2 x) r e)).out = .acc → (sampleBlocks Pt d.part (rs x r)).card ≤ cap x
+      (run H P c.V x ω (forkOn (c.secondStage x) r e)).out = .acc → (sampleBlocks Pt d.part (rs x r)).card ≤ cap x
 
 /-- **Refuses at two stages**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
 def Code.RefusesTwo (H : Msg → Msg) (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two) : Prop :=

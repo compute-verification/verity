@@ -115,17 +115,17 @@ theorem run_facts {S : RunSetup} {log : List Release} {pk : ByteArray} {r : Prop
 
 /-! ## The history -/
 
-/-- Whether the parameters' two windows are one (`windowsOf`); one where they name none. -/
+/-- Whether the parameters' two windows are one (`executionPhasesOf`); one where they name none. -/
 def oneExecutionPhase (θ : ByteArray) : Bool :=
-  match windowsOf θ with
+  match executionPhasesOf θ with
   | some (w₁, w₂) => decide (w₁ = w₂)
   | none => true
 
-theorem oneExecutionPhase_true {θ : ByteArray} {w₁ w₂ : String} (hw : windowsOf θ = some (w₁, w₂)) (h : w₁ = w₂) :
+theorem oneExecutionPhase_true {θ : ByteArray} {w₁ w₂ : String} (hw : executionPhasesOf θ = some (w₁, w₂)) (h : w₁ = w₂) :
     oneExecutionPhase θ = true := by
   simp [oneExecutionPhase, hw, h]
 
-theorem oneExecutionPhase_false {θ : ByteArray} {w₁ w₂ : String} (hw : windowsOf θ = some (w₁, w₂)) (h : w₁ ≠ w₂) :
+theorem oneExecutionPhase_false {θ : ByteArray} {w₁ w₂ : String} (hw : executionPhasesOf θ = some (w₁, w₂)) (h : w₁ ≠ w₂) :
     oneExecutionPhase θ = false := by
   simp [oneExecutionPhase, hw, h]
 
@@ -215,7 +215,7 @@ theorem ledger_two (S₁ S₂ : Exchange → RunSetup) (cut : List Release → �
 prints the whole log; on two, the first `cut o.log` releases and the rest, each printed by its setup's run, where the
 ledger opens neither session's run on the other's window (`Apart`). `Apart` is taken, not proved. -/
 theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (o : Exchange) {w₁ w₂ : String}
-    (hw : windowsOf o.params = some (w₁, w₂)) (hA : w₁ ≠ w₂ → Apart (S₁ o) (S₂ o) w₁ w₂) :
+    (hw : executionPhasesOf o.params = some (w₁, w₂)) (hA : w₁ ≠ w₂ → Apart (S₁ o) (S₂ o) w₁ w₂) :
     PrintsTwo (dev₂ S₁ S₂ cut o) w₁ w₂ o.log := by
   unfold PrintsTwo
   by_cases hww : w₁ = w₂
@@ -245,7 +245,7 @@ theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release
 its log on the parameters' two windows (`printsTwo_dev₂`), where the setups' ledger lines open neither session's run
 on the other's window (`Apart`). `Apart` is taken, not proved. -/
 theorem binds_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (θ : ByteArray)
-    (hA : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
+    (hA : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
       Apart (S₁ o) (S₂ o) w₁ w₂) :
     Binds (dev₂ S₁ S₂ cut) θ :=
   binds_of_accepts (dev₂ S₁ S₂ cut) θ fun o hθ w₁ w₂ hw =>
@@ -675,7 +675,7 @@ read finder's collision plus the forger's forgery over both sessions. `Apart` is
 theorem cut_dev₂ (V : Vocab d α) (k : Verity.Registration.Composite) (P : Deployment)
     (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (hw : Wired V k θ)
-    (hA : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
+    (hA : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
       Apart (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) w₁ w₂)
     (hD : V.signer θ = P.signer fs₁ fs₂ cut θ) :
     CutBound V k θ F c σ LogIsDevice (terms V (devOf P fs₁ fs₂ cut) θ F c σ) :=

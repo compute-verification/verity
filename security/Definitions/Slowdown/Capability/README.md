@@ -25,7 +25,7 @@ min-cut theorem (`security/README.md`, Start here); the bounds here bound what a
 | Overlap weights | ω | `Slowdown.Capability.Consumers.OverlapWeights` | per-consumer weights summing to at most 1 over the regions holding any gate |
 | Weighted total | Ω | | the counted work at its weights, such as the consumers' ω; with every weight 1, the plain count |
 | Block yield | q | | the most of the weighted total one block can do |
-| Coverage | Core, Ω_*, T_max, η | `InferenceOnly.Assumptions.CoversEfficientMethods` | cheap successful methods carry at least Ω_* covered work |
+| Coverage | Core, Ω_*, T_max, η | `Slowdown.Assumptions.CoversEfficientMethods` | cheap successful methods carry at least Ω_* covered work |
 
 ## The shape of every bound
 
@@ -120,7 +120,7 @@ candidate sufficient condition, not part of the repertoire.
 | Recompute by gates | weights | recomputed ≤ c/g | `Slowdown.Guarantees.RecomputeByGates` | proved |
 | Recompute by state | budget | recomputed = 0 | `Slowdown.Guarantees.RecomputeByState` | proved |
 | Counting | a block yield | \|C\| ≥ c·Ω/q | `Verity.Guarantees.Counting` | proved |
-| Coverage floor | coverage | Pr[success below the floor] ≤ η | `InferenceOnly.Guarantees.CapabilityFloor` | proved |
+| Coverage floor | coverage | Pr[success below the floor] ≤ η | `Slowdown.Guarantees.CapabilityFloor` | proved |
 
 `HeldBudget` takes an evaluator of at most a_blk bits per held selection. With one evaluator for every selection, the
 empty selection would force the decoder to output nothing on every block's program, and the premises could hold only

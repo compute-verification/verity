@@ -45,6 +45,7 @@ sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
 from verity.protocols.proofs.spot.prover.audit import window_audit as a5  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
@@ -112,7 +113,7 @@ def audited(a: argparse.Namespace, mine: CS.Binding, of: dict, root: str, rule: 
         return {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {"kind": w.get("kind"), "run": w.get("run")}}
 
     a.rule, a.window_root = rule, root
-    manager, a.coins, finisher = AC.start("local", root, [0], out / "challenger", a.main)
+    manager, a.coins, finisher = AC.start("local", root, [0], out / "challenger", a.main, local=LC.Local)
     try:
         s, ok = a5.audit(a, {}, out / "rank0", mine, out / "window", source, a.port, {"rank": 0, "standin": of}, rank=0)
     finally:

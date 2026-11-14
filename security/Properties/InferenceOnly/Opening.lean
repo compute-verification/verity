@@ -2,7 +2,7 @@ module
 
 public import Properties.InferenceOnly.Record
 public import Properties.Flock.Circuit.CircuitOf
-public import Definitions.Poub.ReadUnit
+public import Definitions.Accounting.ReadUnit
 public import Spot.Bits
 
 /-!

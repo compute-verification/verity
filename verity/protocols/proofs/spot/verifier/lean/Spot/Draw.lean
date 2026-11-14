@@ -279,11 +279,11 @@ def flockSamplingDesign (samplingDesign : Json) (population : Nat) : Except Stri
       let some (a, b) := probability? p | throw "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
       pure (.bernoulli a b)
     | "stratified" | "work" =>
-      if keys? samplingDesign != some (sortStrings #["law", "k", "strata"]) then throw s!"a {kind} samplingDesign is exactly \{samplingDesign, k, strata}"
+      if keys? samplingDesign != some (sortStrings #["law", "k", "strata"]) then throw s!"a {kind} law is exactly \{law, k, strata}"
       let (some k, .arr ss) := (nat? (getD samplingDesign "k"), getD samplingDesign "strata")
-        | throw s!"a {kind} samplingDesign's k is a natural number and its strata a list"
-      if strataProblem samplingDesign population then throw s!"the {kind} samplingDesign's strata are not well formed over {population} units"
-      let some strata := ss.mapM (stratum? (kind == "work")) | throw s!"the {kind} samplingDesign's strata"
+        | throw s!"a {kind} law's k is a natural number and its strata a list"
+      if strataProblem samplingDesign population then throw s!"the {kind} law's strata are not well formed over {population} units"
+      let some strata := ss.mapM (stratum? (kind == "work")) | throw s!"the {kind} law's strata"
       pure (if kind == "work" then .work k strata else .stratified k (strata.map (·.toStratum)))
     | _ => throw "a one-stage law is subset, bernoulli, stratified or work"
 

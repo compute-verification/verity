@@ -5,7 +5,7 @@ public import Spot.Json
 /-!
 # An output field's leaves, each written once by dense reads (`Spot.BoundaryWritten`)
 
-Round 1's `link-written`: a window circuit's boundary reads (`verity.commitments.windows.interface.Circuit.boundary_reads`)
+Round 1's `link-written`: a window circuit's boundary reads (`verity.commitments.periods.interface.Circuit.boundary_reads`)
 that name an output field `o<j>` of the replay Definition write each of the field's leaves exactly once. A read covers
 reader index `i < Π radix`, whose source is leaf `base + Σ d_k · step_k` (`d` the digits of `i` in mixed radix `radix`), and
 the row there holds `row` leaves from its source on (16-bit leaves, the field's leaf order).

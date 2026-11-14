@@ -1,6 +1,6 @@
 module
 
-public import PouwCommit.Draws
+public import PouwCommit.Samples
 public import PouwCommit.Rows
 
 /-!

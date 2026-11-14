@@ -5,16 +5,16 @@ run recorded.
 
 * **Index.** `one-stage-run/v0` rows (the store's selection of every run that holds one-stage docket or audit
   records): each run's art, the docket formats it holds and the Python verdicts it recorded.
-* **Case.** For each recorded audit, the case `sampled-proofs-one-stage serve` reads: the verifier's parameters as
+* **Case.** For each recorded audit, the case `spot-one-stage serve` reads: the verifier's parameters as
   `OneStage.paramsOfJson` reads them (its own program descriptor, query, sampling design, scheme, ports, leaf layer, log, partition,
   delta), the docket as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the sample, the
   proved units, the instance count, the receipt, the statement, the verdicts, the sessions and their roots, the served
   sample), each from the run's own files or the verifier's own copies (the program rebuilt from the input set the run
   names, at the population program's version the record holds, v1 or v0; the domains derived again), and how each was
   found (`provenance`). Floats in verdicts and statements, which neither side reads, are written as strings. The
-  registered roots the record's `registered` check reads are the verdicts' own, for the docket's own values
-  (`audit.session_registered(verdicts, registration)`), less the reads of its own ports at their own roots
-  (`audit.less_own_reads`), on both sides.
+  registered roots the record's `registered` check reads are the verdicts' own, for the docket's own values,
+  less the reads of its own ports at their own roots, with the reads of the window values the parameters name
+  (`window_values`) less those at their window entries' roots (`audit.held_reads`), on both sides.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
   the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
   recorded refusal, by the verifier's Lean (`one_stage.verifier.lean`) and the current Python.
@@ -570,7 +570,7 @@ def public_outcome(v: dict) -> dict:
 
 
 def lean_public(c: Case) -> dict:
-    """The verifier's Lean (`sampled-proofs-verifier`) on a public-file case."""
+    """The verifier's Lean (`spot-verifier`) on a public-file case."""
     got = V.lean("matches_public", c.case()["input"])
     if "refused" in got:
         return {"verdict": "error", "reason": got["refused"]}
@@ -602,7 +602,7 @@ def python(c: Case) -> dict:
         return out("reject", f"draw: {', '.join(dv.codes)}")
     a = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                            e["verdicts"], delta, e["sessions"], e["served"], e["session_roots"],
-                           audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec))
+                           audit.held_reads(e["verdicts"], rec, p.get("window_values") or ()))
     failed = [k for k in CHECKS if k in a["checks"] and not a["checks"][k]["ok"]]
     if failed:
         return out("reject", f"the audit's checks failed: {', '.join(failed)}")
@@ -639,7 +639,8 @@ def whole_record(c: Case) -> dict | None:
     except (P.QueryRefused, ValueError):
         return None
     r = V.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"], e["verdicts"],
-                       float(Fraction(p["delta"])), e["sessions"], e["served"], e["session_roots"])
+                       float(Fraction(p["delta"])), e["sessions"], e["served"], e["session_roots"],
+                       window_values=p.get("window_values") or ())
     v = r["verifiers"]
     out = {"agree": v["agree"], "lean": v["lean"], "python": v["python"]}
     if not v["agree"]:
@@ -2258,8 +2259,8 @@ def main() -> int:
     ap.add_argument("--runs", required=True, help="the runs' files, one directory per run (the art's first 8 hex digits)")
     ap.add_argument("--fetch", action="store_true", help="fetch what --runs lacks from the store (`wanted` files, and each "
                                                          "distinct set.tar's manifests)")
-    ap.add_argument("--lean", required=True, help="sampled-proofs-one-stage (the record and the public file go through "
-                                                  "`one_stage.verifier`, which builds its own sampled-proofs-verifier)")
+    ap.add_argument("--lean", required=True, help="spot-one-stage (the record and the public file go through "
+                                                  "`one_stage.verifier`, which builds its own spot-verifier)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", nargs="*", default=None, help="run ids (8 hex digits)")
     a = ap.parse_args()

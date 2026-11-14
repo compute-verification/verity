@@ -114,7 +114,7 @@ untraced = [
 # reference decode it imports) and imports the store's load (load.py, with the library's wrapper gpu.py); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
-# `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
+# `spot-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `poub-verifier`.
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py),
@@ -141,7 +141,7 @@ inputs = ["verity", "adapters/vllm/verity_vllm/definitions", "adapters/torch/ver
           "benchmarks/remote_session/store_layout.py", "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json",
           "verity/protocols/compose/device/live_challenger/models.py", "verity/protocols/accounting/pouw/prover/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "verity/protocols/accounting/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
-          "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py",
+          "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/tensors.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
           "benchmarks/one_stage/glm53_prefill_tp8_step0.json", "benchmarks/one_stage/glm53_prefill_tp8_step0_core.json",
           "benchmarks/one_stage/glm53_moe_w13_tp8_step16.json", "benchmarks/one_stage/glm53_moe_w2_tp8_step16.json",
@@ -344,7 +344,7 @@ paths = ["adapters/vllm/verity_vllm/definitions"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/protocols/test_pous_option.py"]
-paths = ["benchmarks/pous/p2_v1", "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
+paths = ["benchmarks/pous/p2_v1", "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/tensors.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
          "verity/protocols/accounting/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py"]
 
 [[tool.verity.tests.reads]]
@@ -376,3 +376,7 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["tests/commit/test_census_and_memory_map.py"]
 paths = ["verity/circuits/requirement", "tools/difftest"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_serve_h1.py"]
+paths = ["adapters/torch/tests/pouw/test_pouw_h1_receipts.py"]

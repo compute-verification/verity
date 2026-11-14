@@ -1,7 +1,7 @@
 module
 
 public import PouwCommit.Rows
-public import PouwCommit.Draws
+public import PouwCommit.Samples
 public import Identity.Domains.Pouw
 
 /-!

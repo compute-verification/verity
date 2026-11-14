@@ -17,7 +17,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   which f32 rounding doesn't commute with, and its bf16 bias add maps -0 to +0. So it is a Definition of its own,
   `PouwZyDequant_v2`, circuits' three Boolean pieces in that order (`S32ToF32Rn_v2`, two `F32Mul_v4`, `F2fpBf16_v2`, the
   epilogue of `ScaledMmS8Coordinate_v2`), its word view `PouwZyDequant_v1` on their words (`dequant`). Every NaN is 0x7FFF
-  (``cvt.rn.bf16.f32``); torch's CPU cast gives 0x7FC0, the one encoding where the CPU oracle and the GPU differ.
+  (``cvt.rn.bf16.f32``); the device library's CPU cast gives 0x7FC0, the one encoding where the CPU oracle and the GPU differ.
 * **The scales.** A unit's A row is its K codes and then its f32 s_a, little-endian (its A table leaf, `ROW`), and its
   B row the K weight codes and then their f32 s_w: each scale is committed with its row, so a unit reads the A row's scale
   at the A row's position and the weight row's at the weight row's (`Accounting.Served.DequantOf`: s_a with the A row, s_w

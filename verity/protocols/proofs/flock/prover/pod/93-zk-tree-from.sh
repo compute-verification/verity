@@ -15,7 +15,7 @@
 #                 challenger
 # and the audit of each session's record against its challenger's release log (challenger.sh's `challenger_audit` and
 # `challenger_cases`: `challenger.sessions_tree_reason`, and the Lean's `challenger_session_trees`, which
-# `sampled-proofs-one-stage-zk` runs): the tree-from and plain-tree sessions'
+# `spot-one-stage-zk` runs): the tree-from and plain-tree sessions'
 # pass; the own-tree session's, both --zk sessions at once, and the tree-from record with one round's coin or one link
 # point changed are refused, the Lean's reason the Python's. Lean's verity-verify-proof accepts every session (the verdict reads
 # no challenger). Kept in $OUT: challenger/ and challenger-plain/ (record, key, releases.jsonl, hellos.jsonl,

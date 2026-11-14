@@ -13,10 +13,10 @@ record (H1's own W, or none) is refused before any composite, so neither product
 name the window's tables as values ahead of its templates', and a Program that isn't that population is refused.
 
 On a toy window (two templates of four slots each, as a served window's population program holds its class's
-templates) v1's Lean (`sampled-proofs-one-stage check`) accepts an audit of it whose verdict of record accepted, rejects
+templates) v1's Lean (`spot-one-stage check`) accepts an audit of it whose verdict of record accepted, rejects
 one whose verdict refused, and names the record's digest either way; the inference-only case is accepted by the policy's
 Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
-check's profile at no budget), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
+check's profile at no budget), and refused one gate or one bit under; v2's Lean (`spot-one-stage-zk check`)
 names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs), and so
 does SPOT's Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
 form by name. A
@@ -30,8 +30,8 @@ answer's reason. The slow test makes the inference-only case on the 4,32,4 class
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
+import re
 import shutil
 import stat
 import sys
@@ -57,11 +57,7 @@ from verity.commitments.crypto import lms
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import served_cases as SC  # noqa: E402
-
-_spec = importlib.util.spec_from_file_location("one_stage_replay", HERE.parent / "replay.py")
-RP = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = RP
-_spec.loader.exec_module(RP)
+from v1_case import RP, v1_case  # noqa: E402
 
 LAKE = shutil.which("lake") is not None
 lean = pytest.mark.skipif(not LAKE, reason="no Lean toolchain")
@@ -82,21 +78,6 @@ SUBSET = {"k": 1, "law": "subset"}
 #: The one statement's refusal of a stratified design (`Spot.OneStageZk.SUBSET_ONLY`)
 SUBSET_ONLY = ("the sampling design is stratified, which the one-statement audit's soundness statement doesn't cover: it "
                "covers a subset sampling design")
-
-
-def v1_case(program, query, previous: str | None = None, design: dict | None = None) -> dict:
-    """v1's case as a5 writes it (`replay.Case.case`'s params, a v2 record, its evidence) for ``program``, sampled by
-    ``design`` (one unit of each stratum when None)."""
-    part = P.partition(program, query)
-    ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    sampling_design = design or {"law": "stratified", "k": 1}
-    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
-                   {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
-                   registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
-    params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=part)
-    evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
-    return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
-            "params": params}
 
 
 def audited_v1_case(program, query, accepted: bool = True) -> dict:
@@ -190,6 +171,26 @@ def stand_ins(tmp_path: Path, case: dict, **answers: dict | None) -> list:
     got = {"v1": answer(V1, d), "sampled": answer(SAMPLED, d), "reg": answer(INF, d)} | answers
     return ["--v1-exe", stand_in(tmp_path, "v1", got["v1"]), "--sampled-exe", stand_in(tmp_path, "sampled", got["sampled"]),
             "--inference-only-exe", stand_in(tmp_path, "reg", got["reg"])]
+
+
+@pytest.fixture(autouse=True)
+def scope(tmp_path, monkeypatch) -> Path:
+    """The host's memory scope, a stand-in: a command that appends the limit it was given to ``scope.seen`` (the file
+    returned, a line a check) and runs the check, on a host taken to make scopes; none of the limits' variables set."""
+    exe, seen = tmp_path / "scope", tmp_path / "scope.seen"
+    exe.write_text(f"#!{sys.executable}\nimport os, sys\na = sys.argv[1:]\ni = a.index('--')\n"
+                   f"open({str(seen)!r}, 'a').write(' '.join(a[:i]) + '\\n')\nos.execv(a[i + 1], a[i + 1:])\n")
+    exe.chmod(0o755)
+    monkeypatch.setattr(SC, "SCOPE", (str(exe),))
+    monkeypatch.setattr(SC, "scope_here", lambda: True)
+    for k in ("CHECK_SCOPE", "CHECK_MEM_GB", "CHECK_BLOBS_GB"):
+        monkeypatch.delenv(k, raising=False)
+    return seen
+
+
+def not_started(out: str) -> list[dict]:
+    """The NOT_STARTED lines' objects among what `served_cases.main` printed."""
+    return [json.loads(x.split(" ", 1)[1]) for x in out.splitlines() if x.startswith("NOT_STARTED ")]
 
 
 def run(capsys, *argv) -> tuple[int, list[dict], list[dict], str]:
@@ -364,6 +365,109 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
         assert secret not in out
 
 
+def test_each_check_is_one_process_in_a_scope_of_its_own_under_the_memory_limit(tmp_path, capsys, scope, monkeypatch):
+    """Every check `lean_answer` starts runs behind the host's scope command with its memory limit and no swap, one
+    scope a check: `CHECK_MEM_GB` by default, ``CHECK_MEM_GB``'s in the environment, and its CASE line says nothing of
+    memory. A check that answers no line says the limit it ran under."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    argv = ["--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1]
+    v2 = ["--v2", "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1)))]
+    rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1), *v2)
+    assert (rc, refused) == (0, []) and [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.V2], out
+    assert not any("memory" in c for c in cases)
+    assert scope.read_text().splitlines() == [f"-p MemoryMax={SC.CHECK_MEM_GB}G -p MemorySwapMax=0"] * 4
+    scope.unlink()
+    monkeypatch.setenv("CHECK_MEM_GB", "8")
+    rc, _cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1, sampled=None))
+    assert scope.read_text().splitlines() == ["-p MemoryMax=8G -p MemorySwapMax=0"] * 3
+    assert rc == 1 and [r["protocol"] for r in refused] == [SAMPLED], out
+    assert refused[0]["reason"].endswith("answered no line (exit 0) under its own scope, MemoryMax 8G, no swap")
+    monkeypatch.setenv("CHECK_MEM_GB", "a lot")
+    rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1))
+    assert rc == 1 and cases == [] and {r["reason"] for r in refused} == {
+        "CHECK_BLOBS_GB and CHECK_MEM_GB are whole numbers of GB"}, out
+
+
+def test_a_check_whose_blob_files_sum_past_the_limit_is_not_started_and_its_line_names_both(tmp_path, capsys, scope,
+                                                                                            monkeypatch):
+    """A case whose blob files sum past ``CHECK_BLOBS_GB`` is not handed to its executable, which would read every blob
+    into memory first: its NOT_STARTED line names the count, the sum and the limit, in bytes, nothing is written for
+    it, and the cases under the limit are checked and written as ever. At the limit the check runs."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    audit = audit_dir(tmp_path, v1)
+    blobs = json.loads((audit / "window" / "case-v2.json").read_text())["blobs"]
+    with open(blobs[0], "r+b") as fh:
+        fh.truncate(2 * 10**9)                                  # sparse: its size alone is read
+    total = 2 * 10**9 + len(Path(blobs[1]).read_bytes())
+    argv = ["--audit", audit, "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1]
+    v2 = ["--v2", "--v2-exe", stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1)))]
+    monkeypatch.setenv("CHECK_BLOBS_GB", "2")
+    rc, cases, refused, out = run(capsys, *argv, *stand_ins(tmp_path, v1), *v2)
+    left = not_started(out)
+    assert rc == 1 and refused == [] and [c["protocol"] for c in cases] == [V1, INF], out
+    assert [(x["protocol"], x["blobs"], x["blob_bytes"], x["limit_bytes"]) for x in left] == [
+        (SAMPLED, 2, total, 2 * 10**9), (SC.V2, 2, total, 2 * 10**9)]
+    assert all(x["reason"] == f"the case's 2 blob files sum to {total:,} bytes, past the 2,000,000,000 a check is "
+               "started on (CHECK_BLOBS_GB): the executable reads every blob into memory before it checks anything"
+               for x in left)
+    assert not (tmp_path / "sampled.seen").exists() and not (tmp_path / "v2.seen").exists()
+    assert not any((tmp_path / "private" / SC.DIRS[id]).exists() for id in (SAMPLED, SC.V2))
+    assert len(scope.read_text().splitlines()) == 2
+    with pytest.raises(SC.NotStarted) as e:
+        SC.lean_answer(tmp_path / "sampled", SC.sampled_case(audit), tmp_path / "s", SC.SAMPLED_CMD,
+                       SC.Limits(total - 1, 1, ()))
+    assert e.value.line == {"blobs": 2, "blob_bytes": total, "limit_bytes": total - 1}
+    got, _line = SC.lean_answer(tmp_path / "sampled", SC.sampled_case(audit), tmp_path / "s", SC.SAMPLED_CMD,
+                                SC.Limits(total, 1, ()))
+    assert got["protocol"] == SAMPLED and (tmp_path / "sampled.seen").exists()
+
+
+def test_a_host_that_makes_no_scope_starts_no_check_unless_it_says_so(tmp_path, capsys, scope, monkeypatch):
+    """No check runs outside a memory limit of its own: on a host that makes no scope none is started, each line
+    saying so, and nothing is written. ``CHECK_SCOPE=none`` runs them under no limit, a development host's choice, and
+    each CASE line then says it."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    argv = ["--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1,
+            *stand_ins(tmp_path, v1)]
+    monkeypatch.setattr(SC, "scope_here", lambda: False)
+    rc, cases, refused, out = run(capsys, *argv)
+    left = not_started(out)
+    assert rc == 1 and cases == refused == [] and [x["protocol"] for x in left] == [V1, SAMPLED, INF], out
+    assert all(x["reason"] == SC.NO_SCOPE_HERE for x in left) and [x["blobs"] for x in left] == [0, 2, 0]
+    assert not any((tmp_path / f"{n}.seen").exists() for n in ("v1", "sampled", "reg")) and not scope.exists()
+    monkeypatch.setenv("CHECK_SCOPE", SC.NO_SCOPE)
+    rc, cases, refused, out = run(capsys, *argv)
+    assert rc == 0 and not_started(out) == [] and [c["memory"] for c in cases] == [SC.UNLIMITED] * 3, out
+    assert all((tmp_path / f"{n}.seen").exists() for n in ("v1", "sampled", "reg")) and not scope.exists()
+
+
+def test_a_v2_case_in_the_per_member_form_is_not_asked(tmp_path, capsys, scope):
+    """A v2 case whose proofs are several members' statements, not one statement's sessions, is the form one-stage v2
+    refuses once it has read every blob: neither SPOT's check nor the bare v2 check is started on it, each
+    line saying so beside the blobs' sum and the limit, and no answer is written in the Lean's place."""
+    program, query = toy()
+    v1 = v1_case(program, query)
+    audit = audit_dir(tmp_path, v1)
+    f = audit / "window" / "case-v2.json"
+    case = json.loads(f.read_text())
+    evidence = json.loads(bytes.fromhex(case["evidence"]))
+    evidence["proofs"] = {"statements": [{"member": "m0", **evidence["proofs"]}, {"member": "m1", "sessions": []}]}
+    f.write_text(json.dumps({**case, "evidence": codec.canonical_json(evidence).hex()}, sort_keys=True))
+    rc, cases, refused, out = run(capsys, "--audit", audit, "--private", tmp_path / "private", "--alpha", "1", "--gamma", 1,
+                                  *stand_ins(tmp_path, v1), "--v2", "--v2-exe",
+                                  stand_in(tmp_path, "v2", answer(SC.V2, digest_of(v1))))
+    total = sum(len(Path(b).read_bytes()) for b in case["blobs"])
+    assert rc == 1 and refused == [] and [c["protocol"] for c in cases] == [V1, INF], out
+    assert not_started(out) == [{"protocol": id, "reason": SC.PER_MEMBER, "blobs": 2, "blob_bytes": total,
+                                 "limit_bytes": SC.CHECK_BLOBS_GB * 10**9} for id in (SAMPLED, SC.V2)]
+    assert not (tmp_path / "sampled.seen").exists() and not (tmp_path / "v2.seen").exists()
+    assert sorted(p.name for p in (tmp_path / "private").iterdir()) == sorted([SC.DIRS[V1], SC.DIRS[INF], "scratch"])
+    assert len(scope.read_text().splitlines()) == 2
+
+
 def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
     """Without ``--v2`` no bare v2 case is made and v2's Lean never runs. A window whose a5 wrote no v2 case (a plain
     audit's) has no SPOT case either, which is refused saying why (remote's composite then names SPOT missing), and v1's and the inference-only case are still written."""
@@ -400,7 +504,7 @@ def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name
 @lean
 @pytest.mark.parametrize("accepted, verdict", [(True, "accept"), (False, "reject")])
 def test_v1s_lean_checks_the_audits_case_and_names_the_records_digest(tmp_path, capsys, v1_exe, accepted, verdict):
-    """`sampled-proofs-one-stage check` on a5's case of a whole audit of the toy (its record, sample, receipt and
+    """`spot-one-stage check` on a5's case of a whole audit of the toy (its record, sample, receipt and
     verdict of record): it accepts when the verdict of record accepted and rejects when it refused, and names the
     record's digest either way, so its verdict is the case's (a failed proof is a visible failure, never a missing
     case)."""
@@ -481,7 +585,7 @@ def test_the_lean_check_refuses_a_tampered_inference_only_case(tmp_path, inferen
 
 @lean
 def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path, capsys, v2_exe):
-    """`sampled-proofs-one-stage-zk check` reads the toy's v2 case through its commitment and names the record's digest,
+    """`spot-one-stage-zk check` reads the toy's v2 case through its commitment and names the record's digest,
     the one `registration.digest` computes; the toy's v2 case holds no coins and no proofs, so it rejects, and that
     rejection is the case's verdict (a failed proof is a visible failure, never a missing case). The case is sampled
     by a subset design: v2 refuses any other at its parameters, before it reads the record."""
@@ -787,30 +891,40 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     assert not (serve / "private" / "pouw-period").exists()
 
 
-def pearlplus_parts(serve: Path) -> tuple[Path, dict]:
+def pearlplus_parts(serve: Path, w: dict | None = None) -> tuple[Path, dict]:
     """Pearl+'s case's parts as `served_passes.py case` writes them in the serve dir (`PEARL_PLUS_PIECE`): one pass's
-    manifest (its salt key among its fields), the one file its opened tile reads by the blob holding it, and the Lean
-    verdict of record's verdict, tiles sampled and work."""
+    manifest (its salt key among its fields), the window record W the pass is held to as round 1 of a retention that
+    dropped round 0 (``w``, else a record of no entries), the one file its opened tile reads by the blob holding it, and
+    the Lean verdict of record's verdict, tiles sampled and work, in the grid form with the exact work beside it."""
     piece = serve / SC.PEARL_PLUS_PIECE
     (piece / "blobs").mkdir(parents=True)
     blob = b"the pass's rows"
     (piece / "blobs" / hashlib.sha512(blob).hexdigest()).write_bytes(blob)
     parts = {"schema": "verity-pouw/pearl-plus-case-parts/v1", "delta": "1/100",
              "params": {"coins": {"epoch": 0, "root": "c0" * 64, "scheme": "s"}, "draws": 3,
-                        "record": {"commitment": "d0" * 64, "source": "e0" * 32}},
+                        "record": {"commitment": "d0" * 64, "source": "e0" * 32, "schema": "verity-pouw/pearl-plus-coin/v2",
+                                   "draw": {"from": "challenger"}}},
              "manifests": [{"hm96_salt_key": "5a" * 32, "run": "r"}],
+             "window": {"dropped": [0], "rounds": [1],
+                        "record": w or {"window": {"version": 2}, "registered": [], "previous": None}},
              "evidence": {"files": [{"pearl/w0/rows.bin": hashlib.sha512(blob).hexdigest()}]},
-             "lean": {"verdict": "accept", "reason": None, "drawn": 3, "work": {"credited": 7, "macs": 9}}}
+             "lean": {"verdict": "accept", "reason": None, "drawn": 3,
+                      "work": {"credited": 4, "credited_tiles": 2, "macs": 16, "rho": "1/4", "epsilon": "1/8",
+                               "over_cap_draws": 0, "give_up": 8},
+                      "exact_work": {"credited": 7, "credited_tiles": 1, "macs": 9}}}
     (piece / "parts.json").write_text(json.dumps(parts, sort_keys=True))
     return piece, parts
 
 
 def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_path, capsys):
     """Pearl+'s run case from the parts its piece wrote (`served_passes.py case`): its params as written, its commitment
-    the retained manifests and R's digest (the tie remote's composite of record checks against the policy's record), as
-    canonical JSON, its evidence each pass's files by blob digest and its blobs the parts' own; its answer the Lean verdict
-    of record's under the commitment's digest, SHA-512(tag ‖ 0 ‖ commitment). Nothing of the commitment is printed. A
-    part naming a blob that isn't a file is refused saying so, and the other cases are still written."""
+    the retained manifests, R's digest (the tie remote's composite of record checks against the policy's record) and the
+    window, W with its rounds and dropped rounds (the tie it checks against the record R is chained after), as
+    canonical JSON, exactly the three keys the protocol's decoder takes; its evidence each pass's files by blob digest
+    and its blobs the parts' own; its answer the Lean verdict of record's under the commitment's digest, SHA-512(tag ‖ 0
+    ‖ commitment), its public the exact work the protocol's check publishes, never the grid form's give-up. Nothing of
+    the commitment is printed. A part naming a blob that isn't a file is refused saying so, and so are parts with no
+    window, or one that isn't the protocol's; the other cases are still written."""
     serve, v1, _ = tied_serve(tmp_path / "serve")
     piece, parts = pearlplus_parts(serve)
     private = serve / "private"
@@ -823,14 +937,18 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in got.iterdir()} == {"case.json": 0o600, "answer.json": 0o600}
     case = json.loads((got / "case.json").read_text())
     commitment = bytes.fromhex(case["commitment"])
-    assert commitment == codec.canonical_json({"manifests": parts["manifests"], "record": digest_of(v1)})
+    assert commitment == codec.canonical_json({"manifests": parts["manifests"], "record": digest_of(v1),
+                                               "window": parts["window"]})
+    assert sorted(json.loads(commitment)) == ["manifests", "record", "window"]
+    assert sorted(case["params"]["record"]) == ["commitment", "draw", "schema", "source"]
     assert (case["params"], bytes.fromhex(case["evidence"])) == (parts["params"], codec.canonical_json(parts["evidence"]))
     h = parts["evidence"]["files"][0]["pearl/w0/rows.bin"]
     assert case["blobs"] == [str(piece / "blobs" / h)]
     assert json.loads((got / "answer.json").read_text()) == {
         "protocol": SC.PEARL_PLUS, "verdict": "accept", "reason": None,
         "commitment": hashlib.sha512(b"verity/pouw/pearl-plus/manifests/v1\0" + commitment).hexdigest(),
-        "public": {"credited": 7, "macs": 9, "delta": "1/100"}, "profile": {"draws": 3, "drawn": 3, "passes": 1}}
+        "public": {"credited": 7, "credited_tiles": 1, "macs": 9, "rho": "1/4", "epsilon": "1/8", "delta": "1/100"},
+        "profile": {"draws": 3, "drawn": 3, "passes": 1}}
     assert "5a" * 32 not in out and case["commitment"] not in out
     (piece / "blobs" / h).unlink()
     rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
@@ -838,6 +956,15 @@ def test_pearl_plus_s_case_is_its_piece_s_parts_naming_the_records_digest(tmp_pa
     assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED, INF, SC.PERIOD], out
     assert [r["protocol"] for r in refused] == [SC.PEARL_PLUS], refused
     assert "the parts name 1 blob(s) that aren't files" in refused[0]["reason"] and h not in out
+    (piece / "blobs" / h).write_bytes(b"the pass's rows")
+    for n, bad in enumerate(({k: v for k, v in parts.items() if k != "window"},
+                             {**parts, "window": {**parts["window"], "record": "ab" * 64}},
+                             {**parts, "window": {"record": parts["window"]["record"]}})):
+        (piece / "parts.json").write_text(json.dumps(bad, sort_keys=True))
+        rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"w{n}", "--alpha", "1",
+                                      "--gamma", 1, *stand_ins(tmp_path, v1))
+        assert rc == 1 and [r["protocol"] for r in refused] == [SC.PEARL_PLUS], (n, refused)
+        assert "parts" in refused[0]["reason"], (n, refused)
 
 
 def test_period_names_the_period_case_to_check_against_the_audits_record(tmp_path, capsys):
@@ -877,17 +1004,214 @@ def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_p
     SC._chain([w0, r0, w1], r1)
 
 
+def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first_record_before_it(tmp_path):
+    """A serve whose window record is Pearl+'s has no H1 log: the log before R is the W Pearl+'s case's parts hold, which
+    R is chained right after, and before it the serve's first registration record where W is chained after one, each
+    taken by the digest the next names. A W chained after nothing is the whole log, whatever first record the serve dir
+    holds; an R naming no previous record has none. Parts holding another W than R names, a W naming a first record the
+    serve dir doesn't hold, and one naming another than it holds are refused: the log would not chain from the
+    deployment's first record."""
+    first = FIRST
+    w, alone = h1_docket(R.digest(first)), h1_docket()
+
+    def serve(name: str, held: dict, start: dict | None) -> tuple[Path, Path]:
+        d = tmp_path / name
+        (d / SC.PEARL_PLUS_PIECE).mkdir(parents=True)
+        (d / SC.PEARL_PLUS_PIECE / "parts.json").write_text(json.dumps({"window": {"record": held}}))
+        if start is not None:
+            (d / SC.DEPLOYMENT).write_text(json.dumps(start, sort_keys=True))
+        return d, d / SC.PEARL_PLUS_PIECE
+
+    def after(x: dict) -> dict:
+        return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
+
+    assert SC.pearl_log(*serve("chained", w, first), after(w)) == [first, w]
+    SC._chain([first, w], after(w))
+    assert SC.pearl_log(*serve("alone", alone, first), after(alone)) == [alone]
+    assert SC.pearl_log(*serve("no-first", alone, None), after(alone)) == [alone]
+    assert SC.pearl_log(*serve("unchained", w, first), {**after(w), "previous": None}) == []
+    for name, held, start in (("other-w", alone, first), ("first-gone", w, None),
+                              ("other-first", w, {**first, "registered": [{"value": "x"}]})):
+        with pytest.raises(SC.Refused, match="doesn't chain from the deployment's first record"):
+            SC.pearl_log(*serve(name, held, start), after(w))
+
+
+def test_without_an_h1_log_the_policys_case_takes_its_log_from_pearl_plus_parts(tmp_path, capsys):
+    """Through the command: a serve dir with Pearl+'s parts and no H1 log writes the policy's case with its log the W
+    the parts hold, which R is chained right after, and Pearl+'s case commits to that same W; parts holding another W
+    refuse the policy's case alone."""
+    serve, v1, w = tied_serve(tmp_path / "serve")
+    (serve / "h1" / "log.jsonl").unlink()
+    piece, parts = pearlplus_parts(serve, w)
+    private = serve / "private"
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
+                                  *stand_ins(tmp_path, v1))
+    assert (rc, refused) == (0, []), out
+    assert json.loads((private / "inference-only" / "case.json").read_text())["params"]["log"] == [w]
+    pearl = json.loads((private / "pouw-pearl-plus" / "case.json").read_text())
+    assert json.loads(bytes.fromhex(pearl["commitment"]))["window"]["record"] == w
+    other = {**parts, "window": {**parts["window"], "record": h1_docket(entry=5)}}
+    (piece / "parts.json").write_text(json.dumps(other, sort_keys=True))
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / "p2", "--alpha", "1",
+                                  "--gamma", 1, *stand_ins(tmp_path, v1))
+    assert rc == 1 and [r["protocol"] for r in refused] == [INF], refused
+    assert "doesn't chain from the deployment's first record" in refused[0]["reason"]
+
+
+FIRST = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
+         "previous": None}
+
+
+def handed_serve(root: Path, w: dict | None, first: dict | None = FIRST) -> tuple[Path, dict]:
+    """A copy of a compose hand-off of a serve tied to Pearl+, as far as the cases read it: V3c's audit of the window's
+    record R with R beside its case, the serve's first registration record and the window's W where the hand-off lists
+    them (`SC.DEPLOYMENT`, `SC.RECORDS`), and nothing else: no H1 log and no part of Pearl+'s case. R is chained right
+    after `h1_docket`'s W over ``first``; ``w`` is what the W file holds (None: no such file). The dir and v1's
+    case."""
+    v1 = tied_v1_case(h1_docket(R.digest(first) if first is not None else None))
+    audit = audit_dir(root / "v3c-w0-4-27-2", v1)
+    (audit / "window" / "registration.json").write_text(bytes.fromhex(v1["commitment"]).decode())
+    if first is not None:
+        (root / SC.DEPLOYMENT).write_text(json.dumps(first, indent=1))
+    if w is not None:
+        (root / "pearlplus" / "w0").mkdir(parents=True)
+        (root / "pearlplus" / "w0" / "registration.json").write_text(json.dumps(w, indent=1))
+    return root, v1
+
+
+def test_a_copy_of_the_compose_hand_off_alone_writes_the_policys_case_with_the_w_it_lists(tmp_path, capsys):
+    """Through the command, in a directory that holds only what a compose hand-off carries (no H1 log, no part of
+    Pearl+'s case): the policy's case is written and its check runs, its log the serve's first registration record and
+    the W the hand-off lists, each taken by the digest the next names, and its commitment v1's own, the record R. A
+    hand-off whose W file holds another W than R names, or none, refuses the policy's case alone, before its check
+    runs."""
+    w = h1_docket(R.digest(FIRST))
+    serve, v1 = handed_serve(tmp_path / "serve", w)
+    assert sorted(p.name for p in serve.iterdir()) == ["deployment-registration.json", "pearlplus", "v3c-w0-4-27-2"]
+    private = tmp_path / "private"
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
+                                  *stand_ins(tmp_path, v1))
+    assert (rc, refused) == (0, []), out
+    assert [c["verdict"] for c in cases if c["protocol"] == INF] == ["accept"]
+    case = json.loads((private / "inference-only" / "case.json").read_text())
+    assert case["params"]["log"] == [FIRST, w] and case["commitment"] == v1["commitment"]
+    assert json.loads((tmp_path / "reg.seen").read_text())["commitment"] == v1["commitment"]
+    for name, held in (("other-w", h1_docket(R.digest(FIRST), entry=5)), ("no-w", None)):
+        (tmp_path / "reg.seen").unlink(missing_ok=True)
+        serve, v1 = handed_serve(tmp_path / name, held)
+        rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"private-{name}",
+                                      "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
+        assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED], out
+        assert [r["protocol"] for r in refused] == [INF], refused
+        assert (f"none is the record of digest {R.digest(w)[:16]}…, which the record names as its previous, so its log "
+                "doesn't chain from the deployment's first record") in refused[0]["reason"]
+        assert not (tmp_path / f"private-{name}" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
+
+
+def test_the_log_is_walked_back_to_the_deployments_first_record_however_long_and_refused_at_a_missing_link(tmp_path):
+    """The walk assumes no length: from R's ``previous`` it takes each record by the digest the one after it names,
+    among the serve's first record and every window's W and R the serve dir holds, until a record whose ``previous`` is
+    null. A log of four records (the first, a window's W and R, the next window's W) is found whole, and a shorter one
+    for the earlier window's R. Where a link is missing, the first record's or one in the middle, it refuses at that
+    link, naming the digest no record answers; a record nobody names is no part of any log."""
+    def after(x: dict) -> dict:
+        return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
+
+    w0 = h1_docket(R.digest(FIRST))
+    r0 = after(w0)
+    w1 = h1_docket(R.digest(r0), entry=1)
+    r1 = after(w1)
+    files = {SC.DEPLOYMENT: FIRST, "pearlplus/w0/registration.json": w0, "pearlplus/w1/registration.json": w1,
+             "v3c-w0-4-27-2/audit/window/registration.json": r0, "v3c-w1-4-27-2/audit/window/registration.json": r1,
+             "pearlplus/w9/registration.json": h1_docket(entry=9)}
+
+    def serve(name: str, *without) -> Path:
+        for f, rec in files.items():
+            if f not in without:
+                (tmp_path / name / f).parent.mkdir(parents=True, exist_ok=True)
+                (tmp_path / name / f).write_text(json.dumps(rec, sort_keys=True))
+        return tmp_path / name
+
+    whole = serve("whole")
+    assert SC.pearl_log(whole, None, r1) == [FIRST, w0, r0, w1]
+    SC._chain([FIRST, w0, r0, w1], r1)
+    assert SC.pearl_log(whole, None, r0) == [FIRST, w0]
+    assert SC.pearl_log(whole, None, {**r1, "previous": None}) == []
+    for gone, at, who in ((SC.DEPLOYMENT, FIRST, "the earliest of them found"),
+                          ("v3c-w0-4-27-2/audit/window/registration.json", r0, "the earliest of them found"),
+                          ("pearlplus/w1/registration.json", w1, "the record")):
+        with pytest.raises(SC.Refused) as e:
+            SC.pearl_log(serve(f"without-{R.digest(at)[:8]}", gone), None, r1)
+        assert (f"none is the record of digest {R.digest(at)[:16]}…, which {who} names as its previous, so its log doesn't "
+                "chain from the deployment's first record") in str(e.value)
+
+
+def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deployments_first_record_must(tmp_path):
+    """An empty or a truncated file under `SC.RECORDS` beside a whole log is skipped, as a record nobody names is, so the
+    walk gives the same log, and a walk refused at a missing link names each skipped file; the serve's first
+    registration record (`SC.DEPLOYMENT`) truncated is still refused."""
+    w0 = h1_docket(R.digest(FIRST))
+    r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
+    files = {SC.DEPLOYMENT: json.dumps(FIRST), Path("pearlplus/w0/registration.json"): json.dumps(w0),
+             Path("pearlplus/w9/registration.json"): "",
+             Path("v3c-w9-4-27-2/audit/window/registration.json"): '{"format": '}
+
+    def serve(name: str, changed: dict[Path, str] | None = None) -> Path:
+        for f, text in {**files, **(changed or {})}.items():
+            (tmp_path / name / f).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / name / f).write_text(text)
+        return tmp_path / name
+
+    assert SC.pearl_log(serve("beside"), None, r0) == [FIRST, w0]
+    with pytest.raises(SC.Refused) as e:
+        SC.pearl_log(serve("beside"), None, {**r0, "previous": "ab" * 64})
+    assert str(e.value).endswith("; no record either, since they don't parse: pearlplus/w9/registration.json "
+                                 "(JSONDecodeError), v3c-w9-4-27-2/audit/window/registration.json (JSONDecodeError)")
+    with pytest.raises(SC.Refused, match="deployment-registration.json: JSONDecodeError"):
+        SC.pearl_log(serve("first", {SC.DEPLOYMENT: json.dumps(FIRST)[:-3]}), None, r0)
+
+
+def test_the_hand_off_lists_the_records_by_the_patterns_the_walk_reads():
+    """`SC.RECORDS` and the hand-off's list of the serve's docket records (`served_verdicts.sh`'s
+    `handoff_inputs`) are two copies of the same patterns, in the same order."""
+    text = (HERE.parent / "served_verdicts.sh").read_text()
+    said = re.findall(r"""printf '%s\\n' ((?:\S+/registration\.json ?)+)\)""", text)
+    assert [tuple(x.split()) for x in said] == [SC.RECORDS]
+
+
+@lean
+def test_the_lean_check_refuses_a_log_whose_w_is_not_the_record_r_names(tmp_path, inference_only_exe):
+    """The verifier's own refusal, not the producer's: `inference-only check` accepts the policy's case over R with its
+    log the serve's first registration record and the W that R names, and handed in that W's place another W chained
+    after the same first record, alone or after it, or the right W without the first record before it, it rejects
+    ``trusted``: whoever hands the log over, the check holds each record's ``previous`` to the digest of the one before
+    it, R's included, and the first's to null."""
+    w = h1_docket(R.digest(FIRST))
+    v1 = tied_v1_case(w)
+    case = SC.inference_only_case(v1, *SC.UNBOUNDED, [FIRST, w])
+    got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
+    assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), "accept"), got
+    other = h1_docket(R.digest(FIRST), entry=5)
+    for log in ([FIRST, other], [other], [w]):
+        case["params"]["log"] = log
+        got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
+        assert (got["protocol"], got["verdict"], got["reason"].split(":")[0]) == (INF, "reject", "trusted"), (log, got)
+
+
 @pytest.mark.parametrize("change, reason", [
     ("other-file", "the serve's H1 log names w0/registration.json as the record of digest"),
     ("no-file", "a line of the serve's H1 log names no record file and digest"),
     ("unchained", "the record's previous is no record the serve's H1 log names"),
     ("not-json", "the record names a previous record, and the serve's H1 log isn't readable: JSONDecodeError"),
-    ("no-log", "the record names a previous record, so pass the deployment's log (--log)"),
+    ("no-log", "which the record names as its previous, so its log doesn't chain from the deployment's first record: "
+               "pass the deployment's log (--log)"),
 ])
 def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_record(tmp_path, capsys, change, reason):
     """The policy's log is read off the serve's H1 log only as it names its records: a line whose file isn't the record
-    of its digest, a line naming none, a log that never reaches R's previous or isn't JSON, or no log for an R naming
-    one, refuses the policy's case alone (one-stage's and the period's are still written)."""
+    of its digest, a line naming none, or a log that never reaches R's previous or isn't JSON refuses the policy's case
+    alone (one-stage's and the period's are still written). So does a serve dir with no H1 log for an R naming a
+    previous record: its log is then walked among the serve's own docket records, which hold none of that
+    digest."""
     serve, v1, w = tied_serve(tmp_path / "serve")
     h1 = serve / "h1"
     if change == "other-file":

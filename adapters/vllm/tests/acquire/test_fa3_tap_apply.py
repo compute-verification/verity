@@ -1,8 +1,8 @@
 """`verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py`, the script a pod runs to turn the `hopper` directory of the pinned
 FlashAttention tree into the FA3-tapped one, without that tree.
 
-The script is run whole, as `ops/pod_fa3_tap.sh` starts it: with the directory to edit and this directory as its two
-arguments. The directory is a stand-in. Each of the four files the script reads holds lines of the pinned tree's file, in
+The script is run whole, as `ops/pod_fa3_tap.sh` starts it: `verity-vllm fa3-tap-apply` with the directory to edit
+(`--hopper`) and this directory (`--src-dir`). The directory is a stand-in. Each of the four files the script reads holds lines of the pinned tree's file, in
 that file's order: the lines the script looks for, and at three places what an edit must leave as it is. Those are the
 pinned `scale_apply_exp2`, whose arithmetic the script writes a second time; `finalize_aux`, which ends as `finalize`
 does and gets no tap; and the branch without `IntraWGOverlap`. So a script that asked for a line these lack is refused
@@ -13,17 +13,16 @@ from __future__ import annotations
 
 import difflib
 import hashlib
-import runpy
-import sys
+import logging
 from pathlib import Path
 
 import pytest
 
 import verity_vllm.acquire.fa3_tap_src.build_fa3_ext as BUILD
+from verity_vllm.pipeline import cli
 
 #: the tap's directory: the script's second argument on a pod, and the build's own `--src-dir`
 MINE = Path(BUILD.__file__).parent
-SCRIPT = MINE / "apply_fa3_tap.py"
 HEADERS = ("verity_tap_fa3.h", "verity_tap_params.h")
 SOFTMAX_H = "softmax.h"
 MAINLOOP_HPP = "mainloop_fwd_sm90_tma_gmma_ws.hpp"
@@ -266,8 +265,9 @@ SAID = [
     f"[fa3_tap] {MAINLOOP_HPP}: patched",
     "[fa3_tap] flash_fwd_launch_template.h: patched",
     "[fa3_tap] fa3_torch_lib_verity.cpp: written",
-    "[fa3_tap] OK",
 ]
+#: what a whole run writes on stdout, after it has logged `SAID`
+DONE = "[fa3_tap] OK\n"
 
 
 def _tree(root: Path, changed: dict[str, str] | None = None) -> Path:
@@ -283,8 +283,7 @@ def _read(root: Path) -> dict[str, str]:
 
 
 def _apply(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), str(root), str(MINE)])
-    runpy.run_path(str(SCRIPT), run_name="__main__")
+    cli.main(["fa3-tap-apply", "--hopper", str(root), "--src-dir", str(MINE)])
 
 
 def _changed(before: str, after: str) -> tuple[list[str], list[str]]:
@@ -346,6 +345,18 @@ def _from(name: str, first: str, length: int) -> str:
     return STAND_IN[name][at:at + length]
 
 
+@pytest.fixture(autouse=True)
+def _info(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.INFO, logger="verity_vllm")
+
+
+def _said(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """What the script logged since the last read; the log is read empty."""
+    said = [r.getMessage() for r in caplog.records]
+    caplog.clear()
+    return said
+
+
 @pytest.fixture
 def tapped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     """The stand-in's files after one run of the script."""
@@ -355,7 +366,7 @@ def tapped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
 
 
 def test_the_script_makes_the_tapped_directory_of_a_pinned_one_and_says_each_edit(
-        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """It copies this directory's two headers in, edits three files, and writes the tapped library file beside the pinned
     one, which it leaves. Each of the four is held whole, by digest; the tests below say what the edits are. The last
     assertion is the line `ops/pod_fa3_tap.sh` looks for before it builds."""
@@ -364,7 +375,7 @@ def test_the_script_makes_the_tapped_directory_of_a_pinned_one_and_says_each_edi
     _apply(root, monkeypatch)
 
     after = _read(root)
-    assert capsys.readouterr().out.splitlines() == SAID
+    assert capsys.readouterr().out == DONE and _said(caplog) == SAID
     assert sorted(after) == sorted([*STAND_IN, *HEADERS, TAPPED_CPP])
     assert all(after[name] == (MINE / name).read_text() for name in HEADERS)
     assert after[LIBRARY_CPP] == LIBRARY
@@ -425,27 +436,29 @@ def test_the_library_file_defines_declares_and_registers_the_same_eight_ops(tapp
 
 
 def test_a_second_run_edits_nothing_again_and_writes_the_headers_and_the_library_file_again(
-        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """Each edit stands behind a mark of its own in the file it edits, so the script may be run on its own result. What
     it copies and what it writes whole, it copies and writes on every run."""
     root = _tree(tmp_path / "hopper")
     _apply(root, monkeypatch)
     once = _read(root)
     capsys.readouterr()
+    _said(caplog)
     for name in (HEADERS[0], TAPPED_CPP):
         (root / name).write_text("// a file of an earlier day\n")
 
     _apply(root, monkeypatch)
 
     assert _read(root) == once
-    assert capsys.readouterr().out.splitlines() == [line.replace(": patched", ": already patched") for line in SAID]
+    assert capsys.readouterr().out == DONE
+    assert _said(caplog) == [line.replace(": patched", ": already patched") for line in SAID]
 
 
 def _refused(name: str, old: str, new: str, refusal: type[Exception], message: str, said: int, tmp_path: Path,
-             monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+             monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """The script on a directory whose file `name` has `new` for `old` is refused with `message` after `said` lines. The
     refused edit writes nothing: the file is as it was, but for the two sums when the script's second edit of `softmax.h`
-    is the one refused; the edits before stand and are said; no library file is written. With `old` back, a second run
+    is the one refused; the edits before stand and are logged; no library file is written. With `old` back, a second run
     makes the directory that a run on a whole stand-in makes."""
     assert STAND_IN[name].count(old) == 1
     lacking = STAND_IN[name].replace(old, new)
@@ -455,7 +468,7 @@ def _refused(name: str, old: str, new: str, refusal: type[Exception], message: s
         _apply(root, monkeypatch)
 
     assert str(refused.value) == message.replace("<path>", str(root / name))
-    assert capsys.readouterr().out.splitlines() == SAID[:said]
+    assert capsys.readouterr().out == "" and _said(caplog) == SAID[:said]
     kept = (root / name).read_text()
     assert _changed(lacking, kept) == ([], SUMS if (name, said) == (SOFTMAX_H, 1) else [])
     assert not (root / TAPPED_CPP).exists()
@@ -486,12 +499,12 @@ def _refused(name: str, old: str, new: str, refusal: type[Exception], message: s
         "no-mainloop-arguments", "no-last-argument"])
 def test_the_script_refuses_a_directory_that_lacks_lines_it_edits_and_shows_them(
         name: str, old: str, new: str | None, found: int, shown: str, said: int, tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """An `AssertionError` that says how often the lines were found and shows their first 200 characters; in the mainloop
     160, without the file's path. `new` is `old` twice, or nothing: `old` as a comment."""
     message = f"mainloop anchor found {found}x:\n{shown}" if name == MAINLOOP_HPP else (
         f"<path>: anchor found {found}x (expected 1):\n{shown}")
-    _refused(name, old, new or _out(old), AssertionError, message, said, tmp_path, monkeypatch, capsys)
+    _refused(name, old, new or _out(old), AssertionError, message, said, tmp_path, monkeypatch, capsys, caplog)
 
 
 @pytest.mark.parametrize(("name", "old", "new", "refusal", "said"), [
@@ -509,9 +522,9 @@ def test_the_script_refuses_a_directory_that_lacks_lines_it_edits_and_shows_them
         "no-block-count", "an-op-already", "no-registration", "no-last-declaration", "no-extension"])
 def test_the_script_refuses_without_a_message_a_directory_that_lacks_the_other_lines_it_edits(
         name: str, old: str, new: str | None, refusal: type[Exception], said: int, tmp_path: Path,
-        monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+        monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
     """Four places of the mainloop and three of the library file are asserted with no message, and so is a library file
     that names one of the ops already. The two ends of the `IntraWGOverlap` branch are looked for with `str.index`,
     whose `ValueError` names neither the file nor the line."""
     message = "substring not found" if refusal is ValueError else ""
-    _refused(name, old, new or _out(old), refusal, message, said, tmp_path, monkeypatch, capsys)
+    _refused(name, old, new or _out(old), refusal, message, said, tmp_path, monkeypatch, capsys, caplog)

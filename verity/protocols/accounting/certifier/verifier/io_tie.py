@@ -93,7 +93,7 @@ ID_EVENT_BYTES = len(ID_EVENT_HEAD) + ID_DIGITS + len(ID_EVENT_TAIL)
 ID_AT = HEADER.size + len(ID_EVENT_HEAD)
 #: the least cell: the header and one event, which a `DATA` cell holds with no padding
 CELL_USED = HEADER.size + ID_EVENT_BYTES
-#: the network certifier's `END` kind (`warden.END`), beside `active`'s `PAD` and `DATA`
+#: the network certifier's `END` kind (`warden.END`), beside `link_frame`'s `PAD` and `DATA`
 END = 0x20
 #: a response's last bytes, after its events: the network certifier's `END` holds them
 TRAILER = b"data: [DONE]" + EVENT_END
@@ -829,7 +829,7 @@ IoTieBucket = CompositeDefinition(
     doc="1 iff every cell of the bucket row (the warden's registered row, read by the proof system: bit 8k + i is bit i "
         "of byte k) is its map record's, with a DATA cell's id the entry the record names of the S port rows (the "
         "Commit's registered rows at the bucket's steps, read by the proof system) (`IoTieContent`): the I/O tie of "
-        "one egress bucket row, every cell opened; a link-window's tie is its T rows'")
+        "one egress bucket row, every cell opened; an execution phase's tie is its T rows'")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------

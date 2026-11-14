@@ -28,8 +28,8 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 { nproc; free -g | head -2; git rev-parse HEAD; } | tee "$O/machine.txt"
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) \
-    && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier sampled-proofs-difftest) \
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) \
+    && (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier spot-difftest) \
     && (cd verity/protocols/proofs/spot_flock/verifier/lean && lake build sampled-two sampled-two-on); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
@@ -75,7 +75,7 @@ KEPT=(); [ -z "$LOGITS" ] || KEPT=(--kept "$LOGITS")
 tail -3 "$O/first.log"
 rc=0
 # shellcheck disable=SC2086
-"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
+"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --first-stage "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --challenger-host "$W/first/challenger-host" --deployed-key \
   --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
@@ -112,7 +112,7 @@ echo "FORM_OFF rc=$off $(head -c 2000 "$O/form/off.json")"
   > "$O/first-tree.log" 2>&1 || { tail -20 "$O/first-tree.log"; exit 9; }
 rc=0
 # shellcheck disable=SC2086
-"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --stage1 "$W/first-tree/$(basename "$CLASS")/stage1.json" \
+"${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py second --first-stage "$W/first-tree/$(basename "$CLASS")/stage1.json" \
   --boundary "$CLASS" --capture "$W/serve/capture" --challenger local --challenger-host "$W/first-tree/challenger-host" \
   --deployed-key --interior-trees --form-case --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
   --out "$W/second-tree" "${KEPT[@]}" ${SMALL_SECOND:-} > "$O/second-tree.log" 2>&1 || rc=$?

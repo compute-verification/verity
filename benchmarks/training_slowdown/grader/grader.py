@@ -226,9 +226,12 @@ def load_handover(path: Path) -> Handover:
     digest and annotations against the record, both Programs a frontend step (`step_program`'s annotations), theta as
     registered, and two batch shapes that tell the token dims apart. Raises `Refused` with the fix."""
     from verity.circuits.codec import decode_program, program_digest
-    from verity.circuits.defs import REGISTRY
+    # the Definitions a decoded step calls by id are the vLLM adapter's catalog, in REGISTRY only once its modules load
+    from verity_vllm.definitions.registry.catalog import load as load_catalog
     # registers the Definitions the frontend's rules lower to, which a decoded step calls by id
     import verity_torch.frontend.train_step  # noqa: F401
+
+    REGISTRY, catalog_errors = load_catalog()
 
     path = Path(path)
     path = path / "handover.json" if path.is_dir() else path
@@ -280,8 +283,9 @@ def load_handover(path: Path) -> Handover:
         try:
             decoded[key] = decode_program(desc, REGISTRY)
         except Exception as e:
-            raise Refused(f"the {key} Program doesn't decode here ({type(e).__name__}: {str(e)[:300]}): read it at a "
-                          f"commit that has every Definition it calls, registered before the grader reads it") from e
+            failed = f"; the catalog's modules that failed to import: {'; '.join(catalog_errors)}" if catalog_errors else ""
+            raise Refused(f"the {key} Program doesn't decode here ({type(e).__name__}: {str(e)[:300]}{failed}): read it at "
+                          f"a commit that has every Definition it calls, registered before the grader reads it") from e
     inputs = _input_names(decoded["step"], "step")
     _input_names(decoded["structure"], "structure")
     theta = sorted(decoded["step"].root.theta)

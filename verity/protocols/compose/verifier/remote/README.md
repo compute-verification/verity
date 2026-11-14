@@ -18,13 +18,12 @@ This file is an outline with signposts; the Lean is the definition. The vocabula
 Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `*Horizon` means a
 monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window*` a period.
 
-**Which "remote".** Five things in the tree are called "remote", and this page means the first:
+**Which "remote".** Four things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v1`; v0 is development);
 - PoUB, an onsite subprotocol whose code names still say "remote": `verity/protocols/accounting/poub/verifier/`, `Poub`,
   `Accounting.Remote*`, `verity/remote-bandwidth/v0`, `benchmarks/remote_session/` and serve-openai's `--remote-verifier`;
 - `RemoteChallenger` (`verity/protocols/proofs/spot/device/remote.py`), a remote challenger's client;
-- `CertifierClient` (`verity/protocols/accounting/certifier/verifier/active.py`), onsite's network certifier, over the network;
 - the slowdown bound's remote regime (`Slowdown.Guarantees.SlowdownRemote`, the slowdown calculator's `regime.remote`): a bound over this
   protocol, not in it (part 6 below);
 
@@ -149,7 +148,7 @@ else is a theorem or a named gap.
 | Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Slowdown.Assumptions.SampledDetection`, `Slowdown.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
 | The baseline | The data the registration names was public, not computed off the books before. | `InferenceOnly.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
 | Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Slowdown.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
-| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `InferenceOnly.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
+| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Slowdown.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
 For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
 upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
@@ -319,7 +318,7 @@ times the fleet-time the reference training algorithm takes with no protocol (fl
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
 endpoint.** No Lean states it: it is derived in prose (`security/README.md`, part 4) from the local bounds,
-`Verity.Guarantees.Counting` and `InferenceOnly.Guarantees.CapabilityFloor`. The Lean bound `SlowdownRemote` is a different,
+`Verity.Guarantees.Counting` and `Slowdown.Guarantees.CapabilityFloor`. The Lean bound `SlowdownRemote` is a different,
 older formula (below), and the Results table comes from a third route, the calculator's.
 
 **Its total failure probability** over a monitoring period of n verification phases is at most
@@ -374,10 +373,10 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 - The local bounds' caps `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
   `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates` and `Slowdown.Guarantees.RecomputeByState`, and the
-  floor `InferenceOnly.Guarantees.CapabilityFloor`: **proved**
+  floor `Slowdown.Guarantees.CapabilityFloor`: **proved**
   (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Slowdown/Coverage.lean`), each from its premises. Every premise,
   structure and bound is surveyed in `security/Definitions/Slowdown/Capability/README.md`.
-- Their premises, `InferenceOnly.Assumptions.CoversEfficientMethods`, `Slowdown.Assumptions.DescriptionHard` (or
+- Their premises, `Slowdown.Assumptions.CoversEfficientMethods`, `Slowdown.Assumptions.DescriptionHard` (or
   `Slowdown.Assumptions.MinEntropyHard`) and the wiring property `Slowdown.Capability.Consumers.Upstream`, are named assumptions in
   the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
   certificate is not checked on a named training circuit.
@@ -516,7 +515,7 @@ The local bounds (part 6):
 
 - `Slowdown.Assumptions.DescriptionHard` (in the lock): every selection of an item
   family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
-- `InferenceOnly.Assumptions.CoversEfficientMethods` (in the lock): the floor, a hypothesis about every efficient method. Each
+- `Slowdown.Assumptions.CoversEfficientMethods` (in the lock): the floor, a hypothesis about every efficient method. Each
   way of reaching the target below T_max carries some local bound's covered structure, with at least its weighted
   count Ω_*, except with probability η. It is the open part, untested.
 

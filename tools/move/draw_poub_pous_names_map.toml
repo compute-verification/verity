@@ -77,11 +77,11 @@ files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_protocol.py"
 words = { "test_drawn_edits_agree" = "test_sampled_edits_agree" }
 
 [[words_in]]
-files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_drawn.py"]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_sampled.py"]
 words = { "test_drawn_edits_of_drawn_sessions_agree" = "test_sampled_edits_of_sampled_sessions_agree", "test_drawn_edits_of_recorded_sessions_agree" = "test_sampled_edits_of_recorded_sessions_agree", "test_drawn_honest_sessions_drawn_several_windows_a_coin_agree" = "test_sampled_honest_sessions_sampled_several_windows_a_coin_agree" }
 
 [[words_in]]
-files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_drawn.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_protocol.py"]
+files = ["verity/protocols/accounting/poub/verifier/lean/tests/test_sampled.py", "verity/protocols/accounting/poub/verifier/lean/tests/test_protocol.py"]
 words = { "test_drawn_honest_sessions_agree" = "test_sampled_honest_sessions_agree" }
 
 [[words_in]]

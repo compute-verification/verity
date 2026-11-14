@@ -182,8 +182,10 @@ def is_registry(path: str, marks: frozenset[str]) -> bool:
 
 
 def files() -> list[str]:
+    """The tracked Python files it reads, outside ``LEFT_OUT``: a tracked symlink is its target's second path, read there."""
     out = subprocess.run(["git", "ls-files", "-z", "--", "*.py"], cwd=ROOT, capture_output=True, check=True).stdout
-    return sorted(p for p in out.decode().split("\0") if p and not p.startswith(LEFT_OUT))
+    return sorted(p for p in out.decode().split("\0")
+                  if p and not p.startswith(LEFT_OUT) and not (ROOT / p).is_symlink())
 
 
 @lru_cache(maxsize=None)

@@ -10,7 +10,8 @@ member some sample misses, and the members share their template's circuit file. 
 ``refusal`` on it. Per window, OUT/m<MEMBERS>/result.json holds the audit's exit, seconds and peak, the members' staged
 directories with no circuit file of their own (each a file the per-member case named before each member named its
 template's), and the refusal's line, exit, seconds and peak, with ``all_passed`` whether the line is
-`members.ALL_PASSED` (every check before the per-member form's refusal passed)."""
+`members.ALL_PASSED` (every check before the per-member form's refusal passed). It exits 1 unless every window's audit
+exited 0 and its refusal's line is all passed."""
 from __future__ import annotations
 
 import hashlib
@@ -109,9 +110,12 @@ def one(root: Path, members: int, flock: Path, lean: Path) -> dict:
 
 def main() -> int:
     root, flock, lean, *sizes = sys.argv[1:]
+    passed = True
     for n in map(int, sizes):
-        print(json.dumps(one(Path(root), n, Path(flock), Path(lean)), sort_keys=True), flush=True)
-    return 0
+        res = one(Path(root), n, Path(flock), Path(lean))
+        print(json.dumps(res, sort_keys=True), flush=True)
+        passed = passed and res["audit"]["rc"] == 0 and res.get("refusal", {}).get("all_passed") is True
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

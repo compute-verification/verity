@@ -67,6 +67,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
 from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
 from verity.protocols.proofs.spot.prover.audit import two_stage as TS  # noqa: E402
@@ -208,7 +209,7 @@ def main(argv=None) -> int:
                     "--first-parent origin/main`), which the challenger session's pin is held to")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
-    manager, draws, finisher = AC.start("local", ROOT, [0, 1], a.out / "challenger", a.main)
+    manager, draws, finisher = AC.start("local", ROOT, [0, 1], a.out / "challenger", a.main, local=LC.Local)
     try:
         return run(a, a.out, StageCoins(draws), draws)
     finally:

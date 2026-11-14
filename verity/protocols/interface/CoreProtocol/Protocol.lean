@@ -27,7 +27,7 @@ namespace Core
 open Lean (Json)
 open Flock (V)
 
-/-- `undecided` does not reject the prover. The evidence doesn't settle the question (a link-window with no
+/-- `undecided` does not reject the prover. The evidence doesn't settle the question (an execution phase with no
 certificate yet), and nothing is made public. -/
 inductive Verdict where
   | accept
@@ -67,7 +67,7 @@ structure Protocol where
   publicJson : Public → Json
   profileJson : Profile → Json
 
-/-- The check accepts: the predicate a protocol's properties (`Security/Properties/<protocol>.lean`) are stated over. -/
+/-- The check accepts: the predicate a protocol's properties (`security/Properties/<protocol>.lean`) are stated over. -/
 def Protocol.Accepts (P : Protocol) (p : P.Params) (c : P.Commitment) (e : P.Evidence) : Prop :=
   ∃ pub prof, P.check p c e = .accept pub prof
 

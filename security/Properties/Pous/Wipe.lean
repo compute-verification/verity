@@ -1,7 +1,7 @@
 module
 
 public import MemoryChallenger.WipeProtocol
-public import Definitions.Pous.Wipe
+public import Definitions.Pous.Accounting.Wipe
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
@@ -39,7 +39,7 @@ condition and the bound fails. Proved from `Pous.Guarantees.StreamedWipeMeetsRea
 
 The honest strategy (`honest`), a cheating one (`cheat`) and one segment (`segmentParams` on `segmentDevice`) are what
 its honest and nontrivial lemmas, `WipeSurvivorBoundHonest` and `WipeSurvivorBoundNontrivial`
-(`Security/Proofs/Properties/Pous/Lemmas/Wipe.lean`), are stated at.
+(`security/Proofs/Properties/Pous/Lemmas/Wipe.lean`), are stated at.
 -/
 
 @[expose] public section

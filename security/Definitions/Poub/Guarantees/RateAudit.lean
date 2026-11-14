@@ -7,8 +7,8 @@ public import Definitions.Poub.RateAuditInteractive
 /-!
 # The rate audit: what an accepted device held and read (trusted)
 
-The game is `Security/Definitions/Poub/RateAudit.lean`, its embedding in the device model
-`Security/Definitions/Poub/RateAuditJoint.lean`; proofs are in `Security/Proofs/Poub/RateAudit/`. No named
+The game is `security/Definitions/Poub/RateAudit.lean`, its embedding in the device model
+`security/Definitions/Poub/RateAuditJoint.lean`; proofs are in `Security/Proofs/Poub/RateAudit/`. No named
 assumption: the device's bounds (on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at `c_tag`
 per tag and `c_enc` per rebuilt word) define the class of devices or runs the guarantees quantify over, and the claims
 registry names, for a deployed device, the measurement or conjecture that carries each to it (`bandwidth-s-chip`,
@@ -17,7 +17,7 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 
 * `RateAudit`: in one window, an accepted device's footprint (residency) and ingress (bandwidth) reach the floor except
   with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`; its honest device is a lemma, `RateHonest`
-  (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
+  (`security/Proofs/Poub/Lemmas/RateAudit.lean`).
 * `RateAuditWindows`: over `n` windows on one store, the time-averaged footprint.
 * `RateOfAudit`: in a joint run, the bandwidth account's reads, with the rebuilds charged as compute, so a compute
   account that did `W` of work leaves `F·T − W` for them.
@@ -154,7 +154,7 @@ def RateOfAudit : Prop :=
           (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam
 
 /-- **The rate audit with interactive side sources that ignore the oracle.** `RateAudit`'s bound, at its floor and its
-error, for an `InteractiveProver` (`Security/Definitions/Poub/RateAuditInteractive.lean`): its chip may send any
+error, for an `InteractiveProver` (`security/Definitions/Poub/RateAuditInteractive.lean`): its chip may send any
 number of bits, however they depend on the seed, to side sources that answer each read as any function of the store,
 the certified stream and every bit sent so far, but not of the oracle. `L` bounds what came in over the side link (side
 bits and stream bits together); sends are free. The rebuild charge `(F − k·c_tag)·b` and the stream's `ρ` are

@@ -1,7 +1,7 @@
 """`streamed_wipe/served_wipe.sh`, the wipe's piece of a served window (served_verdicts.sh's WIPE_CMD), on a
 CPU: its demo.sh is `served_wipe_demo.py` (one 32 MiB segment in host memory, `wipe_store.HostMemory`, against
 `wipe_side.py`, the challenger's stand-in on a host of its own), and `nvidia-smi` and `gpu-lease` are stand-ins on PATH.
-DIR/answer.json is the leg's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's
+DIR/answer.json is the subprotocol's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's
 `piece_row` reads through `pouw.core_check.answer_of`), the answer `wipe.case.json` decides, with served.json and the
 summary beside it; the wipe runs on the serve's leased card, or under a lease of its own, by the node's `gpu-lease`
 or, where none is installed, the tree's own. A card that isn't idle and a
@@ -446,7 +446,7 @@ def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
 def test_the_start_file_demo_sh_runs_starts() -> None:
     """`wipe_on_node.py`, which demo.sh runs on the card and no CPU test runs whole, imports what it starts and answers
     `--help` with `wipe_run.main`'s options."""
-    start = WRAPPER.parent / "wipe_on_node.py"
+    start = ROOT / "benchmarks/pous/streamed_wipe/wipe_on_node.py"
     assert f"python {start.relative_to(ROOT)} --period" in DEMO.read_text()
     r = subprocess.run([sys.executable, str(start), "--help"], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr

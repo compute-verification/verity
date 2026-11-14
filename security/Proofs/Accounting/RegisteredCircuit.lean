@@ -1,9 +1,9 @@
 module
 
-public import Definitions.Compose.Assumptions.Stacking
+public import Definitions.Poub.Assumptions.Stacking
 public import Definitions.Accounting.Guarantees.RegisteredCircuit
 public import Mathlib.Tactic.Continuity
-public import Proofs.Compose.Stacking
+public import Proofs.Poub.Stacking
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

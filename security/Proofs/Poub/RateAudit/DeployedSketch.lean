@@ -277,9 +277,9 @@ theorem pr_unpaid_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) 
       ≤ εrank + (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r))) := by
   classical
   let Passes := Fin P → SketchPassCoins N ρ h ks G
-  let Draw := Fin d → Fin P × Fin N
-  let eSample : SketchStore N m × (SketchSigns ks m × Passes × Draw) ≃
-      (SketchStore N m × (SketchSigns ks m × Passes)) × Draw :=
+  let Sample := Fin d → Fin P × Fin N
+  let eSample : SketchStore N m × (SketchSigns ks m × Passes × Sample) ≃
+      (SketchStore N m × (SketchSigns ks m × Passes)) × Sample :=
     ((Equiv.refl _).prodCongr (Equiv.prodAssoc _ _ _).symm).trans
       (Equiv.prodAssoc _ _ _).symm
   rw [Rate.pr_equiv eSample]

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Poub.RateAuditDeployed
-public import Definitions.Compose.Remote.Deployed
+public import Definitions.Poub.Remote.Deployed
 public import Definitions.Poub.Assumptions.RateAudit
 public import Definitions.Poub.Assumptions.RateAuditDeployed
 
@@ -11,7 +11,7 @@ public import Definitions.Poub.Assumptions.RateAuditDeployed
 One guarantee from "the verifier accepts a session of `n` chained windows" to "the session conserves its words, at
 `γ` no more than the sum of its named terms", over the deployed game (`Definitions/Poub/RateAuditDeployed.lean`):
 partial completion, interactive side sources, memory tiers, chained passes whose roots the prover grinds, and one
-pooled sample a window. Proofs are in `Security/Proofs/Poub/RateAudit/Deployed.lean`.
+pooled sample a window. Proofs are in `security/Proofs/Poub/RateAudit/Deployed.lean`.
 
 * `RemoteRunConservation`: at every `d̄`, `d_w` and every parameter.
 * `RemoteRunConservationDeployed`: at the deployed parameters (masked `p = 2^1024 − 105` at `k = 3` rounds, 4 KiB

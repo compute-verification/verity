@@ -20,8 +20,10 @@ log "v2 executable"
 .venv/bin/python -c 'from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF; print(PF.v2_executable())' \
   > "$OUT/v2-build.log" 2>&1 || { log "v2 build failed"; tail -20 "$OUT/v2-build.log"; exit 8; }
 log "stand-in windows: ${MEMBERS:-300 100}"
+rc=0
 # shellcheck disable=SC2086
 env -u PYTHONPATH .venv/bin/python benchmarks/one_stage/members_standin.py "$OUT/standin" "$SCR/flock-circuit" \
-  "$PWD/verity/protocols/proofs/flock/verifier/.lake/build/bin" ${MEMBERS:-300 100} 2>&1 | tee "$OUT/standin.log" | cut -c1-3000
-log "done"
+  "$PWD/verity/protocols/proofs/flock/verifier/.lake/build/bin" ${MEMBERS:-300 100} > "$OUT/standin.log" 2>&1 || rc=$?
+log "done rc=$rc"
 rm -rf "$SCR"
+exit "$rc"

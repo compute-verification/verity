@@ -121,7 +121,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   and the read's verdict port reads a value the verifier fills with 1 (`openedRow`): the row is then the table's at
   that key, short of a SHA-512 collision. A key the block computes, a wire, is refused, with a reason of its own
   (`KEY_WHY`): no statement covers it. Only where the wired key's switch is on (`WIRED_KEY`, off in the build of
-  record; on only in the development executable `sampled-proofs-wired-key-dev`) is such a key taken, when it is whole
+  record; on only in the development executable `spot-wired-key-dev`) is such a key taken, when it is whole
   (`keyFailure`, each failure its own reason) and each sampled unit's key its writer unit's committed output row
   (`second-read`). A read is a template the auditor's params record as one (`Own.reads`,
   `Run.templateReads`): the template check (`flock-read-tmpl check V H`, `Flock.ReadNet.check`) accepted the circuit
@@ -176,7 +176,7 @@ each one last (`two-stage-form`). Three things withhold the accept. SPOT[Flock]'
 (`Flock.SecurityProofs.SpotKSTwo`) takes as a premise that each gate's value has one address, fixed before the run
 (`SpotFlock.AddressesConnected`), which nothing proves from this check. No theorem says that a run this verifier
 accepts is one the verifier that guarantee is stated about (`SpotFlock.V`) accepts. And the composite's sampled
-component has no two-stage form, nor a leg for one, under the one soundness theorem (`Verity.Soundness`). The switch
+component has no two-stage form, nor a subprotocol for one, under the one soundness theorem (`Verity.Soundness`). The switch
 turns on only once the two-stage form is under that theorem: SPOT[Flock]'s own two-stage theorem does not turn it
 on. -/
 def FORM : Bool := false
@@ -229,7 +229,7 @@ def KEY_WHY : String :=
 
 /-- **The wired key's switch**: whether round 2 takes a read whose key a wire fills (`openedRow`, `keyFailure`). Off, it
 refuses each one with `KEY_WHY`. It is a constant of the build: the run of record (`Run.run`) holds `Own.wiredKey` to
-it, and no executable reads the field from its input; only the development executable `sampled-proofs-wired-key-dev`
+it, and no executable reads the field from its input; only the development executable `spot-wired-key-dev`
 (`Spot.WiredKeyDevMain`) holds it on, for development plays, never an accept of record. It turns on only once the
 statement that a sampled reader unit's key is its writer unit's committed output row is proved. -/
 def WIRED_KEY : Bool := false
@@ -926,11 +926,11 @@ def interiorRoot (boundary : String) (sample : Array Nat) : Option String := do
 interior's `k`-th member being the `k`-th part. -/
 def setName (run : String) (k : Nat) : String := "served/" ++ run ++ "/m" ++ toString k
 
-/-- The window-domain rule's tag (`verity.ml.commitments.window.WINDOW_DOMAIN`). -/
+/-- The window-domain rule's tag (`verity.commitments.window.WINDOW_DOMAIN`). -/
 def WINDOW_DOMAIN : String := "verity/one-stage/served-domain/v1"
 
 /-- The binding, in run `run`, of the interior record `rec`'s port `port` of row schema `schema`: the window-domain rule
-(`verity.ml.commitments.window`), the identity digest (`tagged_sha512` of the canonical JSON) of the record's program
+(`verity.commitments.window`), the identity digest (`tagged_sha512` of the canonical JSON) of the record's program
 and partition, the port, its schema, the leaves the record gives it and the run. None when the record names no such
 port, or no program or partition. -/
 def portBinding (rec : Json) (port schema run : String) : Option String := do

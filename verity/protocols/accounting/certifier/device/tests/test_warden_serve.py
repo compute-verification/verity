@@ -9,7 +9,6 @@ certifier's process, moves no tick in `serve`'s publisher process."""
 
 from __future__ import annotations
 
-import ast
 import asyncio
 import dataclasses
 import io
@@ -22,7 +21,6 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
@@ -37,59 +35,6 @@ ROOT = Path(__file__).resolve().parents[6]
 
 async def _no_sleep(_: float) -> None:
     pass
-
-
-#: what the relay's runner still imports from the older form's files, by the file: nothing. The keys stay so that a
-#: read of one comes back only by a line here, and the list only shrinks.
-OLDER_FORM_READS = {"active": set()}
-
-
-def _imports(path: Path) -> dict[Path, set[str]]:
-    """{a file of the tree: the names `path` imports from it, "*" for the module itself}, the module named bare beside
-    `path` or dotted from the root, the imports inside `path`'s functions included."""
-    def file(module: str) -> Path | None:
-        beside, rooted = path.with_name(f"{module}.py"), ROOT.joinpath(*module.split(".")).with_suffix(".py")
-        return beside if beside.is_file() else rooted if rooted.is_file() else None
-
-    out: dict[Path, set[str]] = {}
-    for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            if f := file(node.module):
-                out.setdefault(f, set()).update(a.name for a in node.names)
-            for a in node.names:
-                if f := file(f"{node.module}.{a.name}"):
-                    out.setdefault(f, set()).add("*")
-        elif isinstance(node, ast.Import):
-            for a in node.names:
-                if f := file(a.name):
-                    out.setdefault(f, set()).add("*")
-    return out
-
-
-def test_the_relays_runner_imports_from_the_older_forms_files_only_what_is_listed():
-    """A file of the relay's runner is the runner's own or a file beside it that it reaches by its imports. Of the
-    older form's protocol file, only the runner's own imports, and `OLDER_FORM_READS` and no more, so once that is
-    empty the older form can go without the relay; and the list names nothing the runner no longer imports."""
-    runner = Path(ws.__file__)
-    older = {ROOT.joinpath(*WR.__package__.split("."), "active.py")}
-    assert all(f.is_file() for f in older) and {f.stem for f in older} == set(OLDER_FORM_READS), older
-    files: dict[Path, dict[Path, set[str]]] = {}
-    todo = [runner]
-    while todo:
-        if (path := todo.pop()) not in files:
-            files[path] = _imports(path)
-            todo += [f for f in files[path] if f.parent == runner.parent and f not in older]
-    assert len(files) > 4, sorted(p.name for p in files)
-    found = {(p.name, f.stem): names for p, imports in files.items() for f, names in imports.items() if f in older}
-    more = {k: sorted(names - (OLDER_FORM_READS[k[1]] if k[0] == runner.name else set())) for k, names in found.items()}
-    assert not any(more.values()), (
-        "\n".join(f"{f} imports {', '.join(names)} from {m}.py" for (f, m), names in sorted(more.items()) if names)
-        + f"\nA file of the relay reads nothing of the older form's files. Move the definition to a module of the relay's "
-          f"own, or to one named for what it holds, beside {runner.name} (a definition of the protocol's: beside the "
-          f"relay's protocol file), and have the older form's file import it from there, so that it keeps one definition.")
-    stale = {m: sorted(gone) for m, names in OLDER_FORM_READS.items() if (gone := names - found.get((runner.name, m), set()))}
-    assert not stale, (f"OLDER_FORM_READS lists what {runner.name} no longer imports from the older form's files: "
-                       f"{stale}. Delete it from the list, which only shrinks.")
 
 
 def test_varied_traffic_is_fixed_by_its_seed_and_varies():
@@ -866,7 +811,7 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
     (`monitor-unavailable`), the issuer certifies none of its records, and the check refuses it. In `serve`'s
     `PublisherProcess` the same commit runs in the spawned process, which signs and commits from the rows released to
-    it: every tick is on time, and the check accepts every link-window, certified and registered. A commit that fails
+    it: every tick is on time, and the check accepts every execution phase, certified and registered. A commit that fails
     there fails `close`, and the warden's process doesn't wait on it."""
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]

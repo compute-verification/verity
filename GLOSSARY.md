@@ -175,7 +175,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | "netlist"; Flock's `verity/flock-netlist/…` tags and domains and the `flock-netlist/v1` file format of its older statements (`netlist-vectors.patch`) | a private circuit, or the circuit's description |
 | "trusted text", in the `layers` reasons of `lean-audit.json` | spec |
 | "horizon" and "accounting period" for the stretch of time a bound is about; the Lean's `*Horizon*` and `*Period*` names (`ComposePeriod`, `CircuitWorkPeriod`), PoUB's ledger's `horizon` field, until renamed | monitoring period (`horizon` is its pooled reading) |
-| "block" for a part of the device graph; `Datacenter.blocks`, `block_of`, `benchmarks/network_sim`'s `--blocks` flag | zone |
+| "block" for a part of the device graph; `Datacenter.blocks`, `block_of` | zone |
 | "block", "thread block" for CUDA's unit of a launch; CUDA's `blockIdx`, `blockDim` | CTA |
 | "block" for a kernel's tile of a tensor; the Definitions `AttnBlock_v*`, `AttnBlockSoftcap_v*`, `AttnBlockFA3_v1`, `SparseMlaBlock_v1`, `TritonBlockRMSNorm_v1`, `MoeAlignBlocks_v1`, Triton's `BLOCK_*` | tile |
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until renamed; BLAKE3's own terms | chunk (a compression's 1024 bits) |
@@ -371,7 +371,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   hardware.
 - **Input block** (`INPUT_UNIT` in `verity.circuits.partition`): the part of a partition that holds every input gate.
   It is certified by checking each input's commitment root against its external
-  anchor (the registered weights root, the client's request commitment, the randomness source), always, never sampled.
+  anchor (the registered weights root, the client's request commitment, the challenger's live coins), always, never sampled.
 - **Pinned**, as an instruction's status (`verity.circuits.silicon.instructions`): its silicon model matched every
   hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
   unprobed). A pinned value or root is one fixed before the run, which a check compares to.

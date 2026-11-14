@@ -5,7 +5,7 @@ public import InferenceOnlyCheck.Desc
 /-!
 # The count of `(c, k)`-inference blocks
 
-`InferenceOnly.CompliesAtMost c k n` (`Security/Definitions/InferenceOnly.lean`) holds of a Boolean declaration `(D, θ)` when `D`'s
+`InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`) holds of a Boolean declaration `(D, θ)` when `D`'s
 computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`Verity.Partition.IsCK`), each reading at
 most `k` bits from outside it that are not θ (`|in(I) \ θ| ≤ k`). `InferenceOnlyCheck.Count.evaluate` checks the division the
 declaration names, on its word-level Program, with blocks of at most `c` gates: each activation of a block Definition

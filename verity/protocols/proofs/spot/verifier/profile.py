@@ -163,7 +163,7 @@ class IntegrityProfile:
                 raise ValueError(f"the strata hold {self.draws[names[-1]].population} units, the checked level "
                                  f"{self.count(names[-1])}")
         else:
-            _, n, _, k = self._sampling_design()
+            _, n, _, k = self._design()
             if k > n:
                 raise ValueError(f"a Subset draw of {k} exceeds the {n} checked members it draws from")
         if not 0 < self.delta < 1:
@@ -185,7 +185,7 @@ class IntegrityProfile:
             raise ValueError(f"level {within!r} is finer than {name!r}")
         return prod(self.sizes[j + 1:i + 1])
 
-    def _sampling_design(self) -> tuple[int, int, Fraction, int]:
+    def _design(self) -> tuple[int, int, Fraction, int]:
         """(Bernoulli members, checked members n inside each, p, k)."""
         checked = self.levels[-1].name
         if isinstance(self.draws[checked], (Stratified, Work)):
@@ -200,7 +200,7 @@ class IntegrityProfile:
     def accept(self, m: int) -> Fraction:
         """Exact probability that one Bernoulli member with `m` incorrect checked members passes:
         1 - p + p * C(n - m, k) / C(n, k)."""
-        _, n, p, k = self._sampling_design()
+        _, n, p, k = self._design()
         if not 0 <= m <= n:
             raise ValueError(f"0 <= m <= {n}")
         return 1 - p + p * Fraction(comb(n - m, k), comb(n, k))
@@ -208,7 +208,7 @@ class IntegrityProfile:
     def _odds(self) -> tuple[int, int, int, int, int]:
         """(n, k, p's numerator, p's denominator, C(n, k)): accept(m) = ((den - num) C(n, k) + num C(n - m, k)) /
         (den C(n, k)), in integers."""
-        _, n, p, k = self._sampling_design()
+        _, n, p, k = self._design()
         return n, k, p.numerator, p.denominator, comb(n, k)
 
     def rho(self, m: int) -> float:
@@ -243,7 +243,7 @@ class IntegrityProfile:
         passes `cap`, that level's member count (`count`), which the bound never exceeds."""
         if cap is not None and cap < 0:
             raise ValueError("cap >= 0")
-        members, n, _, _ = self._sampling_design()
+        members, n, _, _ = self._design()
         rhos = self._rhos()
         points = [(r * (1 - MARGIN), float(u)) for m in range(1, n + 1) if (u := utility(m)) > 0 and (r := rhos[m]) < inf]
         best = 0.0

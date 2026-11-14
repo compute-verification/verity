@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import tempfile
 from pathlib import Path
@@ -29,16 +28,16 @@ if str(PPL) not in sys.path:
     sys.path.insert(0, str(PPL))
 
 import methodology  # noqa: E402
+import settings  # noqa: E402
 import windows as W  # noqa: E402
 
 
 def run(a: argparse.Namespace) -> dict:
     from transformers import AutoTokenizer
-    from vllm import SamplingParams
-    from vllm.inputs import TokensPrompt
 
     from verity_vllm.engine.build import build_engine, target_mismatches
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm.engine.stock import sampling
+    from verity_vllm import TargetProfile
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -53,13 +52,12 @@ def run(a: argparse.Namespace) -> dict:
                            engine_args=json.loads(a.engine_args))
     assert not target_mismatches(eng), target_mismatches(eng)
     cal = Calibrator(eng.model)
-    eng.llm.generate([TokensPrompt(prompt_token_ids=w.tolist()) for w in wins], SamplingParams(temperature=0.0, max_tokens=1),
-                     use_tqdm=False)
+    eng.llm.generate([{"prompt_token_ids": w.tolist()} for w in wins], sampling(temperature=0.0, max_tokens=1), use_tqdm=False)
     amax = cal.close()
     calibration = {"set": methodology.CALIBRATION["set"], "ctx": methodology.CALIBRATION["ctx"],
                    "windows": list(methodology.CALIBRATION["windows"]), "windows_sha256": rec["sha256"], "tokens": cal.tokens,
                    "served": "int8 linears (verity_int8) and vLLM's FlashAttention, bf16 KV cache", "at": a.at, "by": a.by,
-                   "run": os.environ.get("RESEARCH_RUN_ID")}
+                   "run": settings.given("RESEARCH_RUN_ID")}
     new = K.entry(entry["revision"], entry["repo"], amax, calibration)
     (out / "k_scales_entry.json").write_text(json.dumps(new, indent=1) + "\n")
     doc = json.loads(K.MANIFEST.read_text()) if K.MANIFEST.is_file() else None
@@ -80,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base-role", default="LLAMA31_8B")
     ap.add_argument("--role", default="LLAMA31_8B_INT8")
     ap.add_argument("--repo", default="verity-int8/Llama-3.1-8B-INT8")
-    ap.add_argument("--hf-home", default=os.environ.get("HF_HOME"))
+    ap.add_argument("--hf-home", default=settings.given("HF_HOME"))
     ap.add_argument("--tokenizer-family", default="llama3", choices=sorted(W.lock()),
                     help="the windows.lock.json family the calibration windows are checked against (qwen2.5 for Qwen2.5 and Qwen3)")
     ap.add_argument("--engine-args", default="{}", help='JSON engine arguments over the defaults, e.g. \'{"gpu_memory_utilization": 0.95}\' '

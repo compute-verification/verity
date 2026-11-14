@@ -56,6 +56,16 @@ order = [
 directory = "verity/protocols/proofs/flock"
 owner = "proofs"
 reason = "Flock's distribution (`verity_flock`) and its verifier's scripts"
+# the files of `verity` that load it, each by its path, until `known_reason`'s day; the list only shrinks
+known = [
+    "verity/protocols/proofs/spot/prover/audit/compose_circuit.py",
+    "verity/protocols/proofs/spot/prover/audit/prove_bundle.py",
+    "verity/protocols/proofs/spot/prover/audit/records_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/template_audit.py",
+    "verity/protocols/proofs/spot/prover/audit/two_stage.py",
+    "verity/protocols/proofs/spot/prover/audit/window_audit.py",
+]
+known_reason = "SPOT's prover audit runs Flock's prover; owner proofs; goes the day `verity_flock` joins `verity`"
 
 [[distribution]]
 directory = "verity/protocols/accounting/pous/verifier/check"
@@ -65,12 +75,12 @@ reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside
 [[distribution]]
 directory = "verity/protocols/accounting/poub/prover"
 owner = "memory-accounting"
-reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; the session's prover party (`session_prover.py`), which only tests load by name; and the honest provers, the period's prover side and the P2 session's (`audit_prover.py`, `p2_prover.py`, `period_prover.py`, `opening_prover.py`, `p2_party_prover.py`), which tests, `benchmarks/` and the vLLM adapter load by name"
+reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; the session's prover party (`session_prover.py`), which only tests load by name; and the honest provers, the period's prover side and the P2 session's (`audit_prover.py`, `p2_prover.py`, `period_prover.py`, `opening_prover.py`, `p2_party_prover.py`), which tests, `benchmarks/` and the vLLM adapter load by name; and the P2 session's staging (`p2_stage/`: `bandwidth.py`, run as a script, and the `stage` and `layout` it loads), which `benchmarks/` loads by path under those names"
 
 [[distribution]]
 directory = "verity/protocols/accounting/pous/prover/p2"
 owner = "memory-accounting"
-reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by the vLLM adapter and by its harness in `benchmarks/`"
+reason = "PoUS's P2 prover, which runs on a GPU through torch, which `verity` never imports: loaded by path as the package `p2_store` by PoUS's `weight_store` (whose tensors are its `tensors.py`), the vLLM adapter and its harness in `benchmarks/`"
 
 [[distribution]]
 directory = "verity/protocols/compose/device/live_challenger"
@@ -404,20 +414,20 @@ reaches = [
     "verity/runtime",
 ]
 loaded_by = [
-    "verity/protocols/accounting/certifier/prover/advice_check.py",
-    "verity/protocols/accounting/certifier/prover/cache_step_v3.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v4.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v5.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v6.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.py",
-    "verity/protocols/accounting/certifier/prover/compile_slice_v7.py",
+    "adapters/vllm/verity_vllm/compiler/advice_check.py",
+    "adapters/vllm/verity_vllm/compiler/cache_step_v3.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v4.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v5.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.circuit-check.py",
+    "adapters/vllm/verity_vllm/compiler/compile_slice_v7.py",
     "verity/protocols/accounting/certifier/prover/egress.py",
     "verity/protocols/accounting/certifier/prover/ingress_scan.py",
     "verity/protocols/accounting/certifier/prover/io_ids.py",
     "verity/protocols/accounting/certifier/prover/lengths_row.py",
     "verity/protocols/accounting/certifier/prover/response_tie.py",
-    "verity/protocols/accounting/certifier/prover/served_statics.py",
-    "verity/protocols/accounting/certifier/prover/served_tie.py",
+    "adapters/vllm/verity_vllm/compiler/served_statics.py",
+    "adapters/vllm/verity_vllm/compiler/served_tie.py",
     "verity/protocols/accounting/certifier/prover/window_charge.py",
 ]
 
@@ -453,6 +463,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/opening_prover.py",
     "verity/protocols/accounting/poub/prover/p2_prover.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
     "verity/protocols/accounting/poub/prover/period_prover.py",
     "verity/protocols/accounting/poub/prover/remote_session/device.py",
     "verity/protocols/accounting/poub/prover/remote_session/prover.py",
@@ -514,6 +525,7 @@ loads = [
     "verity/commitments/crypto",
     "verity/commitments/periods",
     "verity/protocols/accounting/pous/verifier",
+    "verity/protocols/proofs/spot/verifier",
     "verity/runtime",
 ]
 
@@ -541,6 +553,8 @@ reaches = [
 loaded_by = [
     "verity/protocols/accounting/pous/prover/challenger_prover.py",
     "verity/protocols/accounting/poub/prover/p2_prover.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/layout.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",
@@ -719,6 +733,9 @@ paths = [
     "verity/protocols/proofs/spot/prover/candidates.py",
     "verity/protocols/proofs/spot/prover/costfit.py",
     "verity/protocols/proofs/spot/device/challenger.py",
+    "verity/protocols/proofs/spot/device/challenger_gate.py",
+    "verity/protocols/proofs/spot/device/challenger_party.py",
+    "verity/protocols/proofs/spot/device/challenger_session.py",
     "verity/protocols/proofs/spot/device/coins.py",
     "verity/protocols/proofs/spot/device/remote.py",
     "verity/protocols/proofs/spot/prover/optimize.py",
@@ -728,6 +745,7 @@ loads = [
     "verity/channel.py",
     "verity/circuits",
     "verity/commitments",
+    "verity/commitments/crypto",
     "verity/commitments/randomness",
     "verity/protocols/proofs/spot/verifier/profile.py",
     "verity/runtime",
@@ -743,6 +761,7 @@ reaches = [
 ]
 loaded_by = [
     "verity/protocols/accounting/certifier/prover/window_charge.py",
+    "verity/protocols/accounting/pous/prover/served_weights.py",
     "verity/protocols/accounting/pouw/prover/circuit/h1window.py",
     "verity/protocols/proofs/flock/prover/pod/rec_inner.py",
     "verity/protocols/proofs/flock/prover/pod/rec_reprice.py",
@@ -792,6 +811,7 @@ loaded_by = [
     "verity/protocols/proofs/flock/prover/tests/test_stream_zk_server.py",
     "verity/protocols/proofs/flock/prover/tests/test_tmpl_statement.py",
     "verity/protocols/proofs/flock/prover/tests/tmpl_statement.py",
+    "verity/protocols/proofs/spot/prover/audit/local_challenger.py",
 ]
 
 [[place]]

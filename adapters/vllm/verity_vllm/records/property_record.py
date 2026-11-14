@@ -132,7 +132,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "block's k-slice schedule, which the Programs take as input)."),
     Property("dsv4_indexer_capture", "verity-vllm/dsv4-indexer-capture/v1",
              "On the capture's Hopper GPU, from the vLLM sources the Definitions were read from, vLLM selects the FP8 indexer cache, "
-             "the one-stage head-128 compressor and f32 o-projection scales for the DSV4 indexer row, and at the row's TP8 statics "
+             "the one-stage head-128 compressor and f32 o-projection scales for the DSV4 indexer workload, and at the workload's TP8 statics "
              "every compared state score row equals Dsv4CompressorScore_v1, every "
              "written indexer-cache entry Dsv4IndexerCompress_v1 of the state rows the kernel reads, every short-context fill row "
              "Dsv4ShortContextTopK_v1, every inverse-RoPE FP8 head Dsv4InvRopeQuantHead_v1, every compared prefill and paged logit "
@@ -158,10 +158,10 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "activation quant Fp8GroupQuant_v1 at G 64 or 128, bit for bit, while each competing model is refuted."),
     Property("norm_tap_exactness", "verity-vllm/norm-tap-exactness/v1",
              "The tapped norm kernels (fused CUDA op, Triton copy) compute exactly the installed kernels' outputs, write every row's "
-             "scale, and each scale is the IR model's scale bit for bit; the Triton copy's compiled arithmetic is the installed kernel's."),
+             "scale, and each scale is the circuit's scale bit for bit; the Triton copy's compiled arithmetic is the installed kernel's."),
     Property("router_tap_exactness", "verity-vllm/router-tap-exactness/v1",
              "The tapped topk_softmax computes exactly the installed op's outputs, writes every word of every row's softmax, and each word "
-             "is the ordered router's committed value in the IR bit for bit (ties, NaN, +-inf and +-0 included), in vLLM's own MoE layers too."),
+             "is the ordered router's committed value in the circuit bit for bit (ties, NaN, +-inf and +-0 included), in vLLM's own MoE layers too."),
     Property("sigmoid_router_capture", "verity-vllm/sigmoid-router-capture/v2",
              "On the capture's GPU at vLLM's defaults (not batch invariant, the fused grouped top-k on, as vLLM read its switches), "
              "MUFU ex2 / rcp are core's tables on every input, and vLLM's fused sigmoid noaux_tc router "
@@ -176,24 +176,24 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "below 1, and ex2 / rcp.approx.ftz.f32 are core's tables on every input."),
     Property("dsv4_flashmla_capture", "verity-vllm/dsv4-flashmla-capture/v1",
              "On the capture's Hopper GPU, vLLM selects the FlashMLA sparse decode and prefill it vendors from FlashMLA 6bc49418 "
-             "and the CuTe K-cache gather for the DSV4 row's MLA, its planner's metadata is get_mla_metadata_kernel's, and at the "
-             "row's TP8 statics (16 heads padded to 64, the 128-token window, compress-ratio 4 and 128 rows, the sink) every "
+             "and the CuTe K-cache gather for the DSV4 workload's MLA, its planner's metadata is get_mla_metadata_kernel's, and at the "
+             "workload's TP8 statics (16 heads padded to 64, the 128-token window, compress-ratio 4 and 128 rows, the sink) every "
              "output word of every decode launch equals FlashMlaDecode_v1 at the token's SPLITS, every gathered workspace row "
              "FlashMlaGatherRow_v1, and every output word of every prefill launch FlashMlaPrefill_v1 at the token's NP, bit for bit."),
     Property("dsv4_compressor_capture", "verity-vllm/dsv4-compressor-capture/v1",
              "On the capture's Hopper GPU, vLLM takes the CuTe DSL head-512 compressor (nvidia-cutlass-dsl 4.6.2) into the "
-             "fp8_ds_mla cache for the DSV4 row's MLA, its three kernels' PTX holds the arithmetic the Definitions were read from, "
-             "and at the row's TP8 statics on a ratio-4 and a ratio-128 layer every state score word save_partial_states writes "
+             "fp8_ds_mla cache for the DSV4 workload's MLA, its three kernels' PTX holds the arithmetic the Definitions were read from, "
+             "and at the workload's TP8 statics on a ratio-4 and a ratio-128 layer every state score word save_partial_states writes "
              "equals Dsv4CompressorScore_v1, every column of the ratio-128 compress Dsv4MlaC128Column_v1, and every byte of every "
              "compressed cache row Dsv4MlaCompressC4_v1 or Dsv4MlaCompressC128_v1, bit for bit."),
     Property("dsv4_indices_capture", "verity-vllm/dsv4-indices-capture/v1",
-             "On the capture's Hopper GPU, the DSV4 row's FlashMLA prefill calls vLLM's Triton combine_topk_swa_indices (Triton "
+             "On the capture's Hopper GPU, the DSV4 workload's FlashMLA prefill calls vLLM's Triton combine_topk_swa_indices (Triton "
              "3.7.1), whose PTX and the ratio-128 prefill row builder's hold the arithmetic the Definitions were read from, and at "
-             "the row's TP8 statics (ratio 4's top-k of 1024, ratio 128's at widths 256, 896 and 8192, the 128-token window) every "
+             "the workload's TP8 statics (ratio 4's top-k of 1024, ratio 128's at widths 256, 896 and 8192, the 128-token window) every "
              "ratio-128 prefill top-k row equals Dsv4ShortContextTopK_v1 and every row of workspace indices and its length "
              "Dsv4CombineTopkSwa_v1, at served chunks and at the int32 edges of its domain, bit for bit."),
     Property("dsv4_qnorm_insert_capture", "verity-vllm/dsv4-qnorm-insert-capture/v1",
-             "On the capture's cc 9.0 GPU (132 SMs), vLLM d9105ea80 selects the fp8_ds_mla SWA cache for the hidden-7168 row's "
+             "On the capture's cc 9.0 GPU (132 SMs), vLLM d9105ea80 selects the fp8_ds_mla SWA cache for the hidden-7168 workload's "
              "attention, and at its TP8 statics (16 query heads of 512 padded to 64, the 64-token page, 64 indexer heads of 128) "
              "every word of the q that the fused q-norm/RoPE/KV-quant insert op returns and every byte it writes to the cache (and "
              "none other) equal Dsv4QNormRopeKvInsert_v1, each written row is the input FlashMlaKvRow_v1 dequantises, and every "
@@ -205,15 +205,15 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "d = 384 and scalar at d = 9) return exactly MoeRouterSqrtSoftplus_v1, MoeRouterHash_v1 and SiluMulClamp_v1 on "
              "every captured row."),
     Property("dsv4_decode_index_row_capture", "verity-vllm/dsv4-decode-index-row-capture/v1",
-             "On the capture's Hopper GPU, the DSV4 row's ratio-4 FlashMLA decode calls vLLM's Triton "
+             "On the capture's Hopper GPU, the DSV4 workload's ratio-4 FlashMLA decode calls vLLM's Triton "
              "compute_global_topk_indices_and_lens (Triton 3.7.1) at block size 64, whose PTX holds the arithmetic the Definition "
-             "was read from, and at the row's TP8 statics (the top-k of 1024, the block table's row at max_model_len 1,048,576 and "
+             "was read from, and at the workload's TP8 statics (the top-k of 1024, the block table's row at max_model_len 1,048,576 and "
              "4096) every slot id and length it writes for a decode token, padding tokens and bytes other than 0 and 1 included, "
              "equals Dsv4GlobalTopk_v1, at served steps and at the int32 edges of its domain, bit for bit."),
     Property("dsv4_decode_metadata_capture", "verity-vllm/dsv4-decode-metadata-capture/v1",
-             "On the capture's Hopper GPU, the DSV4 row's FlashMLA decode reads the window builder's "
+             "On the capture's Hopper GPU, the DSV4 workload's FlashMLA decode reads the window builder's "
              "_compute_swa_indices_and_lens_kernel and the HCA builder's _build_c128a_topk_metadata_kernel (Triton 3.7.1), whose "
-             "PTX holds the arithmetic the Definitions were read from, and at the row's TP8 statics (the window of 128 at block 64, "
+             "PTX holds the arithmetic the Definitions were read from, and at the workload's TP8 statics (the window of 128 at block 64, "
              "ratio 128 at block 2 and the step's width, the block tables' rows at max_model_len 1,048,576 and 4096) every slot id "
              "and length they write for a decode token, padding tokens and bytes other than 0 and 1 included, equals "
              "Dsv4SwaIndices_v1 and Dsv4C128aGlobalTopk_v1, at served steps and at the int32 and int64 edges of their domains, bit "
@@ -239,7 +239,7 @@ REGISTRY: dict[str, Property] = {p.name: p for p in (
              "fp8_fp4_paged_mqa_logits, at next_n 1 over those rows, writes DsaMqaLogit_v3{H=32, D=128} at every compared (row, "
              "key) entry, bit for bit."),
     Property("vocab_range_exactness", "verity-vllm/vocab-range-exactness/v1",
-             "The vocabulary-range values a TP rank commits equal the IR's EmbeddingShard_v1 values on every token, and the fused "
+             "The vocabulary-range values a TP rank commits equal the circuit's EmbeddingShard_v1 values on every token, and the fused "
              "embedding kernel's output agrees with them (zero rows exactly where the rank does not own the token, else the shard row)."),
     Property("noninterference", "verity-vllm/noninterference/v2",
              "At the record's tensor-parallel world, the observed engine generated the bare engine's tokens for every request (and, "

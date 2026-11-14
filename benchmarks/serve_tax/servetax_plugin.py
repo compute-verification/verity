@@ -835,7 +835,7 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
     if cfg.get("kv"):
         import torch
 
-        from verity.protocols.accounting.pouw.prover.serving import RowTableLibrary
+        from verity_torch.pouw import RowTableLibrary
 
         RowTableLibrary.of(torch, torch.cuda.current_device())
     done.append(hooks)

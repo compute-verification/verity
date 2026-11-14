@@ -18,7 +18,7 @@ sys.path.insert(0, str(HERE.parent))
 TS = importlib.import_module("verity.protocols.proofs.spot.prover.audit.two_stage")
 SM = importlib.import_module("two_stage_small")
 
-SECOND = ["second", "--stage1", "s1.json", "--boundary", "class", "--capture", "capture", "--challenger", "local",
+SECOND = ["second", "--first-stage", "s1.json", "--boundary", "class", "--capture", "capture", "--challenger", "local",
           "--main", "main.txt", "--m0-pythonpath", "path", "--bin", "flock-circuit", "--lean", "verity-verify-proof", "--out", "out"]
 
 

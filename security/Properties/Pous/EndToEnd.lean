@@ -32,7 +32,7 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
   against a server that is a `Server S D Q L` of this module, with the memory challenger's coins flipped as the code
   samples them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from uniform bytes. The honest
   full-state server's lemmas, `HonestPassesRing` and `HonestPassesAccepts`, are in
-  `Security/Proofs/Pous/Lemmas/EndToEnd.lean`.
+  `security/Proofs/Pous/Lemmas/EndToEnd.lean`.
 
 The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
 separately so that each can be rejected alone:

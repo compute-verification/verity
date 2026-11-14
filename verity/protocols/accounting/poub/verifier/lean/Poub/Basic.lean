@@ -30,7 +30,7 @@ def tag0 (s : String) : ByteArray := s.toUTF8.push 0
 
 def zeros (n : Nat) : ByteArray := ⟨Array.replicate n 0⟩
 
-/-- `verity.ml.randomness.frame` of bytes and of a string. -/
+/-- `verity.commitments.randomness.frame` of bytes and of a string. -/
 def frameBytes (b : ByteArray) : ByteArray := FlockSoundness.Randomness.frame (.bytes b)
 def frameStr (s : String) : ByteArray := FlockSoundness.Randomness.frame (.str s)
 

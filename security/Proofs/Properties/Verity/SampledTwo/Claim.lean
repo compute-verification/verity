@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.SamplingGeneric.Guarantees
 
 /-!
-# The two-stage leg's claim, at replay blocks
+# The two-stage subprotocol's claim, at replay blocks
 
 A proof block's interior values are committed only after the first stage's sample, so at the two-stage form the
 claim's units are the replay blocks: a replay block is bound when some interior values make each of its proof blocks

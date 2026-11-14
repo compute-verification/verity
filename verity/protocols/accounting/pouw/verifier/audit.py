@@ -1,4 +1,4 @@
-"""The protocol's commitments and execution phase, the same for every `PoUWScheme` (Lean `PouwCommit.Bindings`, `PouwCommit.Rows`, `PouwCommit.Draws`): what the served
+"""The protocol's commitments and execution phase, the same for every `PoUWScheme` (Lean `PouwCommit.Bindings`, `PouwCommit.Rows`, `PouwCommit.Samples`): what the served
 path's prover commits and its verifier reads.
 
 0. **Coins.**  Before the execution phase the challenger publishes its coin commitment over the execution phase's coins (`coins`).

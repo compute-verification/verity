@@ -13,7 +13,7 @@ exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", 
            "tests/test_retired_terms.py", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
 
 [[words_in]]
-files = ["security/Proofs/Properties/Accounting/Remote/Run.lean"]
+files = ["security/Proofs/Properties/Poub/Remote/Run.lean"]
 words = { "drawnN" = "sampledN" }
 
 [[words_in]]
@@ -33,31 +33,31 @@ files = ["security/Proofs/Properties/Pous/Wipe.lean"]
 words = { "value_draw_pr" = "value_sample_pr" }
 
 [[words_in]]
-files = ["security/Proofs/Poub/ReadUnit.lean"]
+files = ["security/Proofs/Accounting/ReadUnit.lean"]
 words = { "readUnitDrawn" = "readUnitSampled" }
 
 [[words_in]]
-files = ["security/Proofs/Poub/ReadUnit.lean", "security/Proofs/Poub/ReadUnit/Binding.lean", "security/Proofs/Poub/ReadUnit/Deployed.lean"]
+files = ["security/Proofs/Accounting/ReadUnit.lean", "security/Proofs/Accounting/ReadUnit/Binding.lean", "security/Proofs/Accounting/ReadUnit/Deployed.lean"]
 words = { "readUnitDrawnCR" = "readUnitSampledCR" }
 
 [[words_in]]
-files = ["security/Proofs/Poub/ReadUnit/Binding.lean"]
+files = ["security/Proofs/Accounting/ReadUnit/Binding.lean"]
 words = { "expectedCR_of_draw" = "expectedCR_of_sample" }
 
 [[words_in]]
-files = ["security/Proofs/Poub/ReadUnit/Binding.lean", "security/Proofs/Poub/ReadUnit/Deployed.lean", "verity/protocols/proofs/flock/verifier/Flock/ReadTmplCmd.lean"]
+files = ["security/Proofs/Accounting/ReadUnit/Binding.lean", "security/Proofs/Accounting/ReadUnit/Deployed.lean", "verity/protocols/proofs/flock/verifier/Flock/ReadTmplCmd.lean"]
 words = { "readUnitDrawn_check" = "readUnitSampled_check" }
 
 [[words_in]]
-files = ["security/Proofs/Poub/ReadUnit/Deployed.lean"]
+files = ["security/Proofs/Accounting/ReadUnit/Deployed.lean"]
 words = { "readUnitDrawn_partsOf" = "readUnitSampled_partsOf", "readUnitDrawn_layout" = "readUnitSampled_layout" }
 
 [[words_in]]
-files = ["security/Proofs/Poub/ReadUnit/Witnesses.lean"]
+files = ["security/Proofs/Accounting/ReadUnit/Witnesses.lean"]
 words = { "drawnHashed₀" = "sampledHashed₀" }
 
 [[words_in]]
-files = ["security/Proofs/Properties/Accounting/Remote/SubprotocolWitnesses.lean"]
+files = ["security/Proofs/Properties/Poub/Remote/SubprotocolWitnesses.lean"]
 words = { "draws_zero" = "samples_zero", "drawTerm_pos" = "sampleTerm_pos" }
 
 [[words_in]]
