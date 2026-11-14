@@ -24,7 +24,9 @@ from pathlib import Path
 
 from tests.engine import int8_attention_cut as C
 from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
-from verity_vllm.pipeline import match_capture as m1_capture
+from verity_vllm.pipeline import (
+    match_capture as m1_capture,  # first: match_capture applies the engine environment before vLLM is imported
+)
 
 WORKLOAD_FROM = Path(__file__).parents[2] / "workloads" / "llama32-1b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager.json"
 PROMPTS = (5, 3)
