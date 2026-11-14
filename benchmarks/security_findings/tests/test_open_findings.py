@@ -163,7 +163,7 @@ MAIN_LIKE = ("sh -c 'h=tools/agent-guard/hook.sh; [ -f \"$h\" ] && exec sh \"$h\
     ('/opt/agent-guard/hook "${CURSOR_PROJECT_DIR}"/tools/agent-guard/shell_hook.py', False),
     ("/opt/agent-guard/hook $(git rev-parse --show-toplevel)", False),
     ("git show HEAD:tools/agent-guard/shell_hook.py | python3 -", False),
-    ("python3 -m research.guard", False),
+    ("python3 -m research.addresses", False),
     (".venv/bin/python tools/agent-guard/shell_hook.py", False),
     ("./tools/agent-guard/hook.sh shell_hook.py", False),
     ("/opt/agent-guard/../../agent/repos/verity/tools/agent-guard/hook.sh", False),
