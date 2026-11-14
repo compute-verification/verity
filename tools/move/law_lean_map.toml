@@ -45,7 +45,7 @@ exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md"]
 
 [keep]
 patterns = [
-  '''["']laws?["'](?!: (?:LAW|SAMPLING_DESIGN), "scheme")''',
+  '''(?<!check\[)["']laws?["'](?!: (?:LAW|SAMPLING_DESIGN), "scheme")''',
   '''\\"laws?\\"''',
   '''(?<=[A-Za-z0-9])(?<!-draw)-[Ll]aws?\b''',
   '''\b[Ll]aws?-\w''',
