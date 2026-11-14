@@ -2773,7 +2773,7 @@
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_models.py", "count": 7},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_periods.py", "count": 129},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_rt4.py", "count": 2},
-    {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden.py", "count": 109},
+    {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_warden.py", "count": 127},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_coin_link.py", "count": 3},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_serve.py", "count": 4},
     {"file": "verity/protocols/accounting/poub/device/live_verifier/host.py", "count": 15},
