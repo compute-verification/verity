@@ -2,7 +2,8 @@
 
 SPOT's cost model for one served workload under Flock: each file plans a workload's sample with the planner beside
 it (`../optimize.py`, `../candidates.py`, `../costfit.py`), from the measured inputs under `benchmarks/sampling_plan/`
-(`inputs.py`, `glm53_blocks.json`, `served_window_inputs.json`), each with its source and status, measured or
+(`inputs.json`, `glm53_blocks.json`, `served_window_inputs.json`, which `inputs.py` loads, `glm53.py` and
+`served_window.py` read), each with its source and status, measured or
 assumed. `window_cost.py` and `class_rows.py` price the class-of-record window's commit.
 
 Each row gives the cost model fitted from proving measurements, the cuts the candidate generator finds, the frontier of
@@ -73,7 +74,7 @@ their floor.
   commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`, and the second mode again
   under a code-based commitment at each rate ρ (codeword columns hashed, 1/ρ the bytes, and no row hashed in circuit),
   each total with the replay of the requests the sample meets, each re-run from its prompt at the stock step's share;
-  then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when Flock's block holds each of its proof blocks (`benchmarks/sampling_plan/inputs.py`'s `cap`). Its
+  then the chunk family's optimum against √(wβhC/(oΛ)). A rung fits when Flock's block holds each of its proof blocks (`inputs.cap`). Its
   inputs, each with its status and source, are `benchmarks/sampling_plan/served_window_inputs.json`; it writes `served_window.json` and
   `served_window.md`.
 

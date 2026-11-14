@@ -7,14 +7,22 @@ from __future__ import annotations
 import weakref
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving import observe_matmul
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving import (
+    batch_order,
+    CreditTrace,
+    H1_SCHEME,
+    H1_TILE,
+    H1_WEIGHT_KEY,
+    h1_weight_root,
+    H1Run,
+    new_requests,
+    numpy_of,
+    observe_matmul,
+)
 
 
 def layers(model: Any, types: tuple[type, ...], ks: tuple[int, ...] | None = None, *,
-           scheme: str = PH.SCHEME) -> list[Any]:
+           scheme: str = H1_SCHEME) -> list[Any]:
     """The linear layers by type in module order, with ``ks`` only those whose weight's K is one of them (the pouw setting
     ``ks``; the others serve on their arm, unhooked); ValueError, naming `scheme`, names every one not on the int8_exact
     plain arm (`engine.int8_vllm.Int8PlainLinearMethod`, whose ``observe`` the option wraps) with its int8 weight and
@@ -65,14 +73,14 @@ def weight_roots(layers: list[Any], lo: int = 0) -> dict[int, bytes]:
     root while the key is the one it was computed under and the layer's weight the tensor it was computed from, with the
     same storage, shape, dtype and version. Anything else (another key, a weight replaced or written in place, or an array
     that isn't a tensor) is computed again."""
-    out, salt = {}, PH.WEIGHT_KEY
+    out, salt = {}, H1_WEIGHT_KEY
     for i, m in enumerate(layers):
         w, weight = lo + i, m.weight
         key, hit = _tensor_key(weight), _ROOTS.get((salt, w))
         if key is not None and hit is not None and hit[0]() is weight and hit[1] == key:
             out[w] = hit[2]
             continue
-        out[w] = PH.weight_root(w, PH.numpy_of(weight), salt)
+        out[w] = h1_weight_root(w, numpy_of(weight), salt)
         if key is not None:
             _ROOTS[(salt, w)] = (weakref.ref(weight), key, out[w])
     return out
@@ -99,7 +107,7 @@ def expert_names(layers: list[Any]) -> dict[int, str]:
     return {w: m.name for w, m in enumerate(layers) if isinstance(m, ExpertSite)}
 
 
-def observer(run: PH.H1Run, w: int, orig: Any) -> Any:
+def observer(run: H1Run, w: int, orig: Any) -> Any:
     """Layer `w`'s ``observe``: the arm's own, then the call handed to the run (`serving.observe_matmul`, `H1Run.observe`)
     with the layer's weight and the z the arm's kernel wrote, if it hands one over (``scaled_mm_zy``'s z/y records, the
     tensor itself)."""
@@ -110,7 +118,7 @@ def observer(run: PH.H1Run, w: int, orig: Any) -> Any:
     return observe
 
 
-def traced(run: PH.H1Run, w: int, orig: Any) -> Any:
+def traced(run: H1Run, w: int, orig: Any) -> Any:
     """Layer `w`'s ``apply``: the arm's own under the credit gate's trace (`credit_gate.Trace`), then the call `record` made
     inside it judged against the y it returns (`H1Run.judge`)."""
 
@@ -118,14 +126,14 @@ def traced(run: PH.H1Run, w: int, orig: Any) -> Any:
         if not run.commit:
             return orig(layer, x, bias)
         run._recorded = None
-        with CG.Trace(run.modules.get(w, f"linear {w}")) as trace:
+        with CreditTrace(run.modules.get(w, f"linear {w}")) as trace:
             y = orig(layer, x, bias)
         run.judge(trace, y)
         return y
     return apply
 
 
-def admitting(run: PH.H1Run, orig: Any, runner: Any) -> Any:
+def admitting(run: H1Run, orig: Any, runner: Any) -> Any:
     """The model runner's ``execute_model``: the step's admitted requests and its batch order handed to the run
     (`H1Run.admit`) before the step's forward, so each entry is in the round of the step that admits it and each served row
     names its request; a dummy run or a step with no scheduled token admits nothing."""
@@ -133,12 +141,12 @@ def admitting(run: PH.H1Run, orig: Any, runner: Any) -> Any:
     def execute_model(scheduler_output: Any, *args: Any, **kw: Any) -> Any:
         dummy = bool(kw.get("dummy_run", False)) or (len(args) >= 2 and bool(args[1]))
         if not dummy and int(getattr(scheduler_output, "total_num_scheduled_tokens", 0) or 0):
-            run.admit(RQ.new_requests(scheduler_output), RQ.batch_order(runner, scheduler_output))
+            run.admit(new_requests(scheduler_output), batch_order(runner, scheduler_output))
         return orig(scheduler_output, *args, **kw)
     return execute_model
 
 
-def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int, ks: tuple[int, ...] | None = None) -> None:
+def wire(run: H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int, ks: tuple[int, ...] | None = None) -> None:
     """The run's hooks on ``hooks`` (the option's `Hooks`): ``runner``'s ``execute_model`` (`admitting`), if given, and
     each layer's ``observe`` (`observer`) and ``apply`` (`traced`); a committing run's layer on an arm with ``zy_rows``
     whose N is whole tile columns serves z/y records over ``rows`` slots. With ``ks`` (the pouw setting `layers` took
@@ -158,7 +166,7 @@ def wire(run: PH.H1Run, hooks: Any, layers: list[Any], runner: Any, rows: int, k
 def serves_zy(layer: Any) -> bool:
     """Whether a committing run's calls on ``layer`` serve z/y records (`wire`): its arm has ``zy_rows`` and its N is whole
     tile columns."""
-    return hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0
+    return hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % H1_TILE[1] == 0
 
 
 def warm_zy(layers: list[Any], rows: int, *, pick: Any = None, call: Any = None) -> int:

@@ -20,7 +20,7 @@ exit is 1.
 
 The rebuild needs the pinned vLLM (`ops/pod_bootstrap.sh --cpu`) and each row's checkpoint metadata (the derive runs on the meta
 device and reads no weights), so it runs on a CPU pod, never in `check`; the suite's tier is `tests/program/test_derive_neutrality.py`.
-fast: small TP1/TP2 rows, minutes each, run after each landing of main by `tools/verity/check/post_train.py`, whose red names
+fast: small TP1/TP2 rows, minutes each, run after each landing of main by `tools/check/post_train.py`, whose red names
 the row and rings the rows' owner; heavy: GLM-5.3's 8 ranks, about 50 minutes on a 256-CPU pod.
 """
 from __future__ import annotations

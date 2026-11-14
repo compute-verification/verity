@@ -8,7 +8,7 @@ modifies a circuit puts its report in the PR, and `check` runs `circuit-check --
 
 - **Provides:** the `circuit-check` command (`circuit_check.cli:main`) and its report. `targets` (what a target string
   names) and `structural` are imported as modules too.
-- **Loaded by:** `check`, which runs the command and plans it by target (`tools/verity/check/plan.py`); the benchmarks
+- **Loaded by:** `check`, which runs the command and plans it by target (`tools/check/plan.py`); the benchmarks
   that stage or lower a catalog target (`benchmarks/one_stage`, `benchmarks/proof_throughput`, `benchmarks/served_units`,
   `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/proofs/flock/prover/pod/catalog.py`); and a migration tool under
   `adapters/vllm/tools`.
