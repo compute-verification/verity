@@ -2,16 +2,19 @@
 why the site couldn't read something; filtering by id and owner; an undeclared id or a refusal as one line; which
 credential goes where: a site key only to the console's route, an older token never, the identity otherwise. And `research
 metrics send`, with a stand-in for the site: a reading's shape, the panels key read from its file and left out of a dry run,
-https only, a reading the door would refuse sent not at all, and the deployed copy's commit."""
+sent only over https to the site's own host, a reading the door would refuse sent not at all, and a failure on the network
+one line, never raised."""
 from __future__ import annotations
 
+import http.client
 import io
 import json
 import urllib.error
+import urllib.request
 
 import pytest
 
-from research import metrics
+from research import metrics, slack
 from research.jobs import client
 from research.slack import RouteError
 
@@ -145,8 +148,6 @@ def test_a_reading_the_door_would_refuse_and_a_missing_key_or_plain_http_send_no
         f"{what}: no panels key at {key} (FileNotFoundError): nothing sent")
     key.write_text("k")
     assert metrics.send([], loop="l", commit=None, key=key, post=post) == f"{what}: no reading to send"
-    assert metrics.send([ok], loop="l", commit=None, url="http://site.invalid/api/metrics", key=key, post=post) == (
-        "POST http://site.invalid/api/metrics: not an https URL: nothing sent")
     bad = [{**ok, "value": None}, {**ok, "mark": "guessed"}, {**ok, "value": "3"}, {**ok, "time": ""}, {**ok, "colour": 1}]
     assert metrics.send(bad, loop="l", commit=None, key=key, post=post) == (
         f"{what}: nothing sent: infra/x: a null value needs its why; infra/x: mark is 'guessed', not one of measured, "
@@ -191,28 +192,71 @@ def test_the_command_sends_one_reading_from_its_arguments_or_the_readings_on_std
     assert not sent
 
 
-def test_a_deployed_copys_commit_is_the_commit_file_at_its_trees_root(tmp_path):
-    (tmp_path / "src" / "infra" / "control").mkdir(parents=True)
-    assert metrics.deployed_commit(tmp_path / "src" / "infra" / "control") is None
-    (tmp_path / "src" / "COMMIT").write_text("c" * 40 + "\n")
-    assert metrics.deployed_commit(tmp_path / "src" / "infra" / "control") == "c" * 40
+def _no_network(monkeypatch):
+    def refuse(*a, **k):
+        raise AssertionError("nothing is sent")
+    monkeypatch.setattr(urllib.request, "build_opener", refuse)
+    monkeypatch.setattr(metrics, "http_open", refuse, raising=False)
 
 
-def test_the_site_client_sends_its_key_only_to_an_https_url_and_never_after_a_redirect(monkeypatch):
-    monkeypatch.setattr(metrics.urllib.request, "build_opener",
-                        lambda *h: (_ for _ in ()).throw(AssertionError("nothing is sent")))
-    assert metrics.send_json("POST", "http://site.invalid/api/metrics", {}, "k", "w") == (
-        "w: 'http://site.invalid/api/metrics' is not an https URL: nothing sent")
-    opened = []
+def test_the_panels_key_goes_only_to_the_sites_own_host(tmp_path, monkeypatch, capsys):
+    """Whatever `--url` or $FLEET_PANELS_URL says: another host, or the site's over http, is refused with nothing sent."""
+    _no_network(monkeypatch)
+    key = tmp_path / "panels.key"
+    key.write_text("k")
+    ok = metrics.reading("infra/x", 1, time=T)
+    for url in ("https://elsewhere.invalid/api/metrics", f"http://{metrics.SITE_HOST}/api/metrics",
+                f"https://{metrics.SITE_HOST}.elsewhere.invalid/api/metrics"):
+        why = (f"{url!r} is not on the site (https://{metrics.SITE_HOST}), the one host the panels key goes to: "
+               "nothing sent")
+        assert metrics.send([ok], loop="l", commit=None, url=url, key=key) == f"POST {url}: {why}"
+        assert metrics.send([ok], loop="l", commit=None, url=url, key=key, dry_run=True) == f"POST {url}: {why}"
+        assert metrics.send_json("PUT", url, {}, "k", "x") == f"x: {why}"
+    assert metrics.main(["--url", "https://elsewhere.invalid/api/metrics", "send", "--loop", "l", "--metric", "infra/x",
+                         "--value", "1", "--time", T]) == 1
+    assert "nothing sent" in capsys.readouterr().out
 
-    class Opener:
-        def __init__(self, *handlers):
-            opened.append(handlers)
 
-        def open(self, req, timeout):
-            assert req.get_header("Authorization") == "Bearer k" and req.get_method() == "PUT" and timeout == 30
-            raise metrics.urllib.error.URLError("redirected; refusing to forward the bearer token")
-    monkeypatch.setattr(metrics.urllib.request, "build_opener", Opener)
-    assert metrics.send_json("PUT", "https://site.invalid/api/panels/x", {}, "k", "x") == (
-        "x: <urlopen error redirected; refusing to forward the bearer token>")
-    assert opened == [(metrics._NoRedirect,)]
+@pytest.mark.parametrize("raised", [
+    http.client.IncompleteRead(b""), http.client.BadStatusLine("x"), http.client.LineTooLong("header line"),
+    http.client.InvalidURL("bad"), ConnectionResetError(104, "reset"), TimeoutError("timed out"),
+    urllib.error.URLError("redirected; refusing to forward the bearer token"),
+    urllib.error.HTTPError(metrics.METRICS, 503, "down", None, io.BytesIO(b'{"error": "unavailable"}'))])
+def test_the_site_client_never_raises_on_the_network(monkeypatch, raised):
+    _no_network(monkeypatch)
+
+    def http_open(*a):
+        raise raised
+    monkeypatch.setattr(metrics, "http_open", http_open)
+    why = metrics.send_json("POST", metrics.METRICS, {}, "k", "w")
+    assert why.startswith("w: ") and "\n" not in why
+    if isinstance(raised, urllib.error.HTTPError):
+        assert why == "w: HTTP 503 unavailable"
+
+
+def test_a_failure_reading_a_refusals_body_is_one_line_too(monkeypatch):
+    _no_network(monkeypatch)
+
+    class Cut(io.BytesIO):
+        def read(self, *a):
+            raise http.client.IncompleteRead(b"")
+
+    def http_open(*a):
+        raise urllib.error.HTTPError(metrics.METRICS, 502, "bad gateway", None, Cut())
+    monkeypatch.setattr(metrics, "http_open", http_open)
+    assert metrics.send_json("POST", metrics.METRICS, {}, "k", "w") == "w: IncompleteRead: IncompleteRead(0 bytes read)"
+
+
+def test_the_site_client_is_slacks_with_the_bearer_and_its_answer_unread(monkeypatch):
+    """One client: `slack.http_open`, which `http_json` reads with and which follows no redirect. The answer isn't read, so a
+    2xx with any body or none is taken."""
+    assert metrics.http_open is slack.http_open and "http_open" in slack.http_json.__code__.co_names
+    _no_network(monkeypatch)
+    calls = []
+
+    def http_open(method, url, data, headers):
+        calls.append((method, url, json.loads(data), headers))
+        return io.BytesIO(b"not json")
+    monkeypatch.setattr(metrics, "http_open", http_open)
+    assert metrics.send_json("PUT", metrics.METRICS, {"a": 1}, "k", "x") is None
+    assert calls == [("PUT", metrics.METRICS, {"a": 1}, {"Authorization": "Bearer k", "Content-Type": "application/json"})]

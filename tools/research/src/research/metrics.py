@@ -9,8 +9,9 @@ loop's readings sent to it with POST /api/metrics.
                         [--mark M] [--target N] [--period P] [--over O] [--member M] [--run R]
                                                             one reading, or with no --metric the readings on stdin
                                                             (a JSON object or list), sent with the control pod's
-                                                            panels key ($FLEET_PANELS_KEY); --dry-run prints the
-                                                            request without the key and sends nothing
+                                                            panels key ($FLEET_PANELS_KEY), only to the site's own
+                                                            host; --dry-run prints the request without the key and
+                                                            sends nothing
 
 The page and this command read one door. It answers a site key with events:read (`$JOBS_TOKEN`, else
 ~/.research/jobs/token, as `research jobs` reads it, when it starts with vsk_) or else this agent's Cursor identity
@@ -23,44 +24,47 @@ commit of the copy that runs. The control pod's loops send theirs with infra/con
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
 import sys
 import urllib.error
-import urllib.request
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .jobs.client import DEFAULT_URL, TOKEN_ENV, TOKEN_FILE, kept_token
 from .pods.nebius.settings import PANELS_KEY
-from .slack import RouteError, SlackError, _code, _Identity, _NoRedirect, http_json, route_error
+from .slack import RouteError, SlackError, _code, _Identity, http_json, http_open, route_error
 
 METRICS = f"{DEFAULT_URL}/api/metrics"   # the route, and its OIDC token's audience
+SITE_HOST = urlsplit(DEFAULT_URL).netloc   # the one host the panels key goes to
 KEY_PREFIX = "vsk_"   # the site reads a bearer with it as a site key, and any other as a Cursor identity
 MARKS = ("measured", "modeled", "partial")   # kit.MARKS
 OPTIONAL = ("target", "period", "over", "member", "run", "commit", "loop")
 
 
+def off_site(url: str) -> str | None:
+    """Why ``url`` may not be sent the panels key: anything but https to the site's own host. None when it may."""
+    u = urlsplit(url)
+    if u.scheme == "https" and u.netloc == SITE_HOST:
+        return None
+    return f"{url!r} is not on the site (https://{SITE_HOST}), the one host the panels key goes to: nothing sent"
+
+
 def send_json(method: str, url: str, body: object, key: str, what: str) -> str | None:
-    """One JSON request to the site with ``key`` as its bearer: None when the site took it, else why not, in one line. Only an
-    https URL is sent the key, and a redirect is not followed with it."""
-    if not url.startswith("https://"):
-        return f"{what}: {url!r} is not an https URL: nothing sent"
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), method=method,  # noqa: S310 (https, checked above)
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
+    """One JSON request to the site with ``key`` as its bearer, through `slack.http_open`, the client `http_json` reads with (no
+    redirect followed, 30 s): None when the site took it, else why not, in one line; it never raises. Its answer isn't read.
+    The key goes only to the site's own host."""
+    if why := off_site(url):
+        return f"{what}: {why}"
     try:
-        with urllib.request.build_opener(_NoRedirect).open(req, timeout=30):
-            return None
-    except urllib.error.HTTPError as e:
-        return f"{what}: HTTP {e.code} {e.read()[:300].decode(errors='replace')}".rstrip()
-    except (urllib.error.URLError, OSError) as e:
-        return f"{what}: {e}"
-
-
-def deployed_commit(start: Path) -> str | None:
-    """The commit a deployed copy runs: the `COMMIT` file the deploy writes at its tree's root, found from ``start`` upward."""
-    for d in (start, *start.parents):
-        if (d / "COMMIT").is_file():
-            return (d / "COMMIT").read_text().strip() or None
-    return None
+        try:
+            with http_open(method, url, json.dumps(body).encode(),
+                           {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}):
+                return None
+        except urllib.error.HTTPError as e:
+            return f"{what}: HTTP {e.code}{_code(e)}"
+    except (urllib.error.URLError, OSError, http.client.HTTPException, ValueError) as e:
+        return f"{what}: {type(e).__name__}: {e}"
 
 
 def reading(metric: str, value: float | None, *, time: str, why: str | None = None, mark: str = "measured",
@@ -92,7 +96,7 @@ def send(readings: list[dict], *, loop: str, commit: str | None, url: str | None
          dry_run: bool = False, post=None, out=print) -> str | None:
     """POST ``readings`` to the door, each naming ``loop`` and ``commit``, with the panels key: None when the site took them (or,
     with ``dry_run``, when the request is printed with the key left out and nothing sent), else why not, in one line. Never
-    raises on the network or a missing key, so a loop goes on."""
+    raises on the network or a missing key, so a loop goes on. ``url`` may only be on the site's own host."""
     url, key = url or METRICS, key or PANELS_KEY
     body = {"readings": [{**r, "loop": loop, **({"commit": commit} if commit else {})} for r in readings]}
     what = f"POST {url}"
@@ -100,8 +104,8 @@ def send(readings: list[dict], *, loop: str, commit: str | None, url: str | None
         return f"{what}: no reading to send"
     if bad := [w for r in body["readings"] if (w := _refused(r))]:
         return f"{what}: nothing sent: {'; '.join(bad)}"
-    if not url.startswith("https://"):
-        return f"{what}: not an https URL: nothing sent"
+    if why := off_site(url):
+        return f"{what}: {why}"
     if dry_run:
         held = "the panels key in" if key.is_file() else "no key: a send would refuse, none at"
         out(f"{what}\nAuthorization: Bearer <{held} {key}>\nContent-Type: application/json\n\n{json.dumps(body, indent=1)}")
@@ -207,7 +211,8 @@ def show(report: dict) -> str:
 
 def main(argv: list[str], route: Route | None = None, stdin=None) -> int:
     p = argparse.ArgumentParser(prog="research metrics", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--url", default=METRICS, help="the route (default: the console's); only the console's gets a site key")
+    p.add_argument("--url", default=METRICS, help="the route (default: the console's); only the console's gets a site key, "
+                                                  "and `send` refuses any host but the site's")
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("show")
     s.add_argument("ids", nargs="*", metavar="ID")
