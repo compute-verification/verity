@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity_vllm.definitions.registry.pearl_c_noise`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity.protocols.accounting.pouw.prover.circuit.pearl_c_noise`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`).
 
 Two Boolean Definitions are over the 65,536 ANDs circuit-check lowers a Definition whole at, so neither is lowered whole
@@ -21,7 +21,7 @@ def _pearl_c_noise_roots() -> list[Any]:
     here so each is checked whatever its size. A compression's word form reaches its byte primitive, and the scale and the
     code theirs. Then a row's digest, its two block Definitions, and a row's line, the two with K small."""
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import pearl_c_noise as N
+    from verity.protocols.accounting.pouw.prover.circuit import pearl_c_noise as N
 
     return [bind(N.PearlCSeedB), bind(N.PearlCRowSeedHead), bind(N.PearlCRowSeedTail), bind(N.PearlCRowSeed),
             bind(N.PearlCLineKey), bind(N.PearlCLineRaw), bind(N.PearlCLineScale),

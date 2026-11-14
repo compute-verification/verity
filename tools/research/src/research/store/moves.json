@@ -3579,6 +3579,40 @@
         "benchmarks/network_traces/tests/test_stall_probe.py": "verity/protocols/accounting/certifier/device/tests/test_stall_probe.py",
         "verity/protocols/accounting/certifier/device/tests/test_certifier_term.py": "benchmarks/network_traces/tests/test_certifier_term.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/NetworkCertifier/Guarantees/Period.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean",
+        "security/Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriodChecked.lean",
+        "security/Definitions/NetworkCertifier/Period.lean": "security/Definitions/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Definitions/NetworkCertifier/PeriodChecked.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodChecked.lean",
+        "security/Definitions/NetworkCertifier/PeriodConditions.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodConditions.lean",
+        "security/Proofs/NetworkCertifier/Period.lean": "security/Proofs/NetworkCertifier/MonitoringPeriod.lean",
+        "security/Proofs/NetworkCertifier/PeriodCheckedChecks.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodCheckedChecks.lean",
+        "security/Proofs/NetworkCertifier/PeriodSum.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
+        "security/Proofs/NetworkCertifier/PeriodWitnesses.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodWitnesses.lean",
+        "security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/SessionFits.lean": "security/Proofs/Properties/Verity/SampledTwo/AttachmentFits.lean",
+        "security/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+        "verity/protocols/certifier/verifier/lean/NetworkCheck/LinkWindow.lean": "verity/protocols/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_call.py": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_call.py",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_call.circuit-check.py": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_call.circuit-check.py",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_call.circuit-check.json": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_call.circuit-check.json",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_forming.py": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_forming.py",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_forming.circuit-check.py": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_forming.circuit-check.py",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_forming.circuit-check.json": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_forming.circuit-check.json",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_noise.py": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_noise.py",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_noise.circuit-check.py": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_noise.circuit-check.py",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_noise.circuit-check.json": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_noise.circuit-check.json",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.py": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.py",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.circuit-check.py": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.circuit-check.py",
+        "adapters/vllm/verity_vllm/definitions/registry/pearl_c_tile.circuit-check.json": "verity/protocols/accounting/pouw/prover/circuit/pearl_c_tile.circuit-check.json",
+        "adapters/vllm/verity_vllm/definitions/boolean.py": "verity/circuits/ops/boolean/versions.py"
+      }
     }
   ]
 }
