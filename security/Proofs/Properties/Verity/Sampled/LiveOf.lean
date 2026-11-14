@@ -59,7 +59,8 @@ theorem oneStage_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStage.Param
 theorem oneStageZk_paramsOfJson_program {j : Json} {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.paramsOfJson j = .ok p) :
     ∃ b, _root_.Spot.Program.parse b = .ok p.base.verifier.program := by
-  unfold _root_.Spot.OneStageZk.paramsOfJson at h
+  have h := _root_.Spot.OneStageZk.paramsOfJson_parsed h
+  unfold _root_.Spot.OneStageZk.paramsParsed at h
   repeat' (first
     | (obtain ⟨_, _, h⟩ := ebind_ok h)
     | (split at h)
@@ -78,6 +79,15 @@ theorem program_of_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params}
   obtain ⟨_, hr⟩ := Binding.dispatch_params hj
   obtain ⟨b, hb⟩ := oneStageZk_paramsOfJson_program hr
   exact ⟨b.data.toList, hb⟩
+
+/-- **v2's parameters in `θ` sample by a law object of kind `subset`** (`paramsOfJson_subset`). -/
+theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) :
+    Properties.Spot.SecurityProofs.kindOf p.base.verifier.law = "subset" := by
+  obtain ⟨_, -, x, -, hj⟩ := hp
+  obtain ⟨_, -, hj⟩ := ebind_ok hj
+  obtain ⟨_, hr⟩ := Binding.dispatch_params hj
+  unfold Properties.Spot.SecurityProofs.kindOf
+  rw [_root_.Spot.OneStageZk.paramsOfJson_subset hr]
 
 /-! ## The sampling design -/
 
@@ -648,6 +658,11 @@ def SubsetDesign (θ : ByteArray) : Prop :=
       .subset (Flock.Bridge.lawK
         (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n))
 
+/-- **v2's registration samples by a subset design**: its parameters' law object is of kind `subset`
+(`kindOf_paramsAt`), under which `designAt` is a subset design (`designAt_subset`). -/
+theorem subsetDesign (θ : ByteArray) : SubsetDesign θ :=
+  fun _ hp _ n _ => Flock.Bridge.designAt_subset n (kindOf_paramsAt hp)
+
 /-- **The bound's parameters are in range**: `k`, `Rw` and `M` at least one, a rate below one, and `2^23 ≤ ρ·(e·k)`,
 the count curve `hr_planZHJP` reads at `Zk.schedule`'s cap. -/
 structure SessionBound.Ok (b : SessionBound) : Prop where
@@ -661,12 +676,12 @@ open FlockSoundness.Discharge.Composed (inputsJ nTab) in
 /-- **Wherever v2 accepts a play, a session `LiveSpec` holds of exists**: on the committed files `F` at the parameters
 `θ` the sampled verdict accepts, the inputs, descriptor, public file and design v2's session reads (`session_parts`),
 the reference setup at the record's sample (`y₀_of_setup`), the circuit with no public input port and the public file
-with none (`pub_of_setup`), the deployed sample's bytes (`Live.deployed`) and the bound's parameters make a `Live`, where
-the registration samples by a subset design and the bound's parameters are in range. -/
+with none (`pub_of_setup`), the subset design v2's parameters name (`subsetDesign`), the deployed sample's bytes
+(`Live.deployed`) and the bound's parameters make a `Live`, where the bound's parameters are in range. -/
 theorem liveSpec_of_accepted {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ : ByteArray} (hD : DigestsAt V θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hread : V.read θ F = readOf θ F) (hsub : SubsetDesign θ)
+    (hread : V.read θ F = readOf θ F)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent o.sent) : ∃ A, LiveSpec V b θ F A := by
   obtain ⟨p, n, I, D, pubO, desc, hpa, htags, hcount, hwork, hstrat, hclos, hcirc, hpubf, htab, hpart, hprog, htyp,
@@ -682,7 +697,8 @@ theorem liveSpec_of_accepted {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ
   let A : Live :=
     { n, I, own := none, ht := htyp, D, hD := hDp, hU, hpi := hpiD, pub, hpub, pubO, hpubO, hscope, hdup, hn, hnO,
       desc, qr := p.base.verifier.query, hpop, lj := p.base.verifier.law, tb := p.base.verifier.workTable,
-      hsub := hsub p hpa desc n hdesc, hdiv := by rw [hn1]; exact Nat.mod_one _, S₀, d₀, y₀ := Classical.choice hy,
+      hsub := subsetDesign θ p hpa desc n hdesc, hdiv := by rw [hn1]; exact Nat.mod_one _, S₀, d₀,
+      y₀ := Classical.choice hy,
       Ω := DeployedCoins, fΩ := inferInstance, nΩ := inferInstance, Lb := deployedLb, src := deployedSrc,
       hA3 := uniformRandomBytes_deployed, hTags, k := b.k, Rw := b.Rw, M := b.M, hk := hb.k, hRw := hb.Rw,
       hM := hb.M, ρ := b.ρ, hρ := hb.ρ, hr := fun S R j => hr_planZHJP _ _ hb.kρ S R j, ε := (V.certOf θ).ε,
@@ -695,11 +711,11 @@ there, so SPOT's published δ there is the session's, not `⊤`. -/
 theorem liveOf_ne_none {V : Vocab d α} {b : SessionBound} (hb : b.Ok) {θ : ByteArray} (hD : DigestsAt V θ)
     (hc : ∀ θ, V.programDigest θ = programDigestOf θ) (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ)
     {k : Verity.Registration.Composite} {F : Array ByteArray} {c : ByteArray} {o : Verity.Exchange}
-    (hread : V.read θ F = readOf θ F) (hsub : SubsetDesign θ)
+    (hread : V.read θ F = readOf θ F)
     (hP : ∃ p, ParamsAt θ p) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
     (ht : TablesSent o.sent) : liveOf V b θ F ≠ none := by
   unfold liveOf
-  rw [dif_pos (liveSpec_of_accepted hb hD hc hp hread hsub hP hreach hv ht)]
+  rw [dif_pos (liveSpec_of_accepted hb hD hc hp hread hP hreach hv ht)]
   exact Option.some_ne_none _
 
 end Verity.Sampled
