@@ -48,15 +48,24 @@ export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/
 COLD() { "$PY" benchmarks/one_stage/cold_sessions.py "$@"; }
 
 W=$SCR/window/audit/window; IFACE=$SCR/window/window/circuit.json
-unpack() {
+unpack() {   # unpack PROBE: the circuits and instance files listed with their sizes, written empty; else the whole window
   [ -s "${COLD_ARCHIVE:?}" ] || { log "no archive at $COLD_ARCHIVE"; exit 1; }
   rm -rf "$SCR/window"; mkdir -p "$SCR/window"
-  local t0; t0=$(date +%s)
-  if command -v zstd > /dev/null; then zstd -dc -T2 "$COLD_ARCHIVE" | tar -xf - -C "$SCR/window"
-  else "$PY" -c 'import sys, tarfile, zstandard
-with open(sys.argv[1], "rb") as f, tarfile.open(fileobj=zstandard.ZstdDecompressor().stream_reader(f), mode="r|") as t:
-    t.extractall(sys.argv[2], filter="tar")' "$COLD_ARCHIVE" "$SCR/window"; fi
-  log "unpacked $COLD_ARCHIVE ($(du -sh "$SCR/window" | cut -f1)) in $(( $(date +%s) - t0 )) s"
+  local t0 ZPY=$FLOCK_WORK/cold-unpack/bin/python3; t0=$(date +%s)
+  [ -x "$ZPY" ] || { UV=$(command -v uv || echo "$HOME/.local/bin/uv"); "$UV" venv -q --python 3.12 "$FLOCK_WORK/cold-unpack" \
+    && "$UV" pip install -q --python "$ZPY" zstandard; } > "$O/unpack-venv.log" 2>&1
+  "$ZPY" -c 'import os, re, sys, tarfile, zstandard
+archive, out, probe = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
+big = re.compile(r"/(circuit\.txt|inst-\d+\.bin)$")
+with open(archive, "rb") as f, tarfile.open(fileobj=zstandard.ZstdDecompressor().stream_reader(f), mode="r|") as t:
+    for m in t:
+        print(m.size, m.name)
+        if probe and m.isfile() and big.search(m.name):
+            os.makedirs(os.path.join(out, os.path.dirname(m.name)), exist_ok=True)
+            open(os.path.join(out, m.name), "w").close()
+        else:
+            t.extract(m, out, filter="tar")' "$COLD_ARCHIVE" "$SCR/window" "${1:-0}" > "$O/archive-list.txt" || { log "the archive did not unpack"; return 1; }
+  log "unpacked $COLD_ARCHIVE ($(du -sh "$SCR/window" | cut -f1) written, $(awk '{s += $1} END {printf "%.1f GB", s / 1e9}' "$O/archive-list.txt") listed) in $(( $(date +%s) - t0 )) s"
   COLD plan --window "$W" --members "${COLD_MEMBERS:?}" | tee "$O/plan.txt"
   [ "${PIPESTATUS[0]}" = 0 ] || { log "the window's plan names missing files (plan.txt)"; return 1; }
   [ -s "$IFACE" ] || { log "no registered circuit record at $IFACE"; return 1; }
@@ -90,7 +99,7 @@ card_free() {   # card COLD_CARD holds no other run's lease and no compute proce
 
 if [ "$STAGE" = probe ]; then
   log "probe: archive $(ls -l "${COLD_ARCHIVE:?}" | awk '{print $5}') B, sha256 $(sha256sum "$COLD_ARCHIVE" | cut -c1-16)"
-  unpack; rc=$?
+  unpack 1; rc=$?
   for f in verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh benchmarks/proof_throughput/verify.sh benchmarks/one_stage/member_seconds.py; do
     [ -f "$f" ] || { log "missing $f"; rc=1; }
   done
