@@ -872,7 +872,7 @@ def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capp
     assert cli._custody_ttl_problem(None, ["--timeout", "3600"]) is None
     assert "outlives the custody key's default lifetime (6h)" in cli._custody_ttl_problem(None, ["--timeout=30000"])
     assert cli._custody_ttl_problem("12h", ["--timeout", "30000"]) is None
-    assert "over the 24 h cap" in cli._custody_ttl_problem("25h", [])
+    assert "over the 24 h limit" in cli._custody_ttl_problem("25h", [])
     assert cli.main(["run", "--on", "vy-nowhere", "--timeout", "30000", "--", "true"]) == 2
     assert "pass --custody-ttl" in capsys.readouterr().err
 
