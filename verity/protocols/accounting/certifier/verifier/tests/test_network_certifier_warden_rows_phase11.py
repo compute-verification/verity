@@ -20,7 +20,7 @@ from __future__ import annotations
 import pytest
 
 from verity.protocols.accounting.certifier.verifier import warden_rows as W
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.grid import COMPLETE, BlockGrid
 from verity.protocols.accounting.certifier.verifier.warden import cell

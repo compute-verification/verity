@@ -13,7 +13,7 @@ import json
 import cell_shim as C
 import pytest
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.warden import (Warden as Certifier, WardenParams as CertifierParams,
                                                                     audit)

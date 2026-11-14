@@ -72,7 +72,7 @@ from verity.circuits import boolean as BL  # noqa: E402
 from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.types import Array  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA, PAD  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, cell  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G  # noqa: E402

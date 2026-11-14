@@ -78,7 +78,7 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import ID_FIELD_BYTES
+from verity.protocols.accounting.certifier.verifier.id_form import ID_FIELD_BYTES
 from verity.protocols.accounting.certifier.verifier.connection_rows import Rows, Table
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 

@@ -81,7 +81,7 @@ from warden_zk import WardenRowIdentity, flip  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams  # noqa: E402

@@ -65,6 +65,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
 import active_replay as ar  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.blob_files import read_blobs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF  # noqa: E402
 import negatives as NG  # noqa: E402
 import window_chain as WC  # noqa: E402
@@ -702,8 +703,8 @@ def changed_windows(run: Path) -> list[int] | None:
     plan, report = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json"))
     setup = ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
-    ins = [RF.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
-    outs = [RF.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
+    ins = [RF.unpack_record(b, i.frame_bytes) for b in read_blobs(run / "requests.records")]
+    outs = [RF.unpack_record(b, e.frame_bytes) for b in read_blobs(run / "responses.records")]
     users = {r["stream"]: r["user"] for r in NG.cs.certified_io(plan, setup, ins, outs)["records"]}
     compact, at, nxt = bool(plan.get("compact")), {}, defaultdict(int)
     for rec in sorted(outs, key=lambda r: r.window):

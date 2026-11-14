@@ -19,7 +19,8 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.certifier.verifier import active, id_form as IDF, io_tie as IT
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD, encode_frame
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.pacer import Report
 from verity.protocols.accounting.certifier.verifier.release import (WATERMARK_END, one_request, read_watermark, release_head,
@@ -697,11 +698,11 @@ def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_
 
 def malformed_requests() -> dict[str, bytes]:
     """Requests whose `max_tokens` the network certifier can't read as `id_form.id_request` writes one."""
-    good, at = id_req(4), active.MAX_TOKENS_AT
-    field = lambda f: good[:at] + f + good[at + active.ID_DIGITS:]  # noqa: E731
+    good, at = id_req(4), IDF.MAX_TOKENS_AT
+    field = lambda f: good[:at] + f + good[at + IDF.ID_DIGITS:]  # noqa: E731
     return {
         "a leading zero": field(b"0000000004"), "a sign": field(b"        -4"), "not digits": field(b"      four"),
-        "past a u32": field(b"4294967296"), "no digits": field(b" " * active.ID_DIGITS),
+        "past a u32": field(b"4294967296"), "no digits": field(b" " * IDF.ID_DIGITS),
         "another key": good.replace(b'{"max_tokens":', b'{"max_tokenz":'), "not an id request": request(300),
         "a short request": good[:at + 4], "no request": b"",
         "a content-length that isn't a u32": good.replace(b"content-length:", b"content-length:x", 1)[:len(good)],

@@ -31,6 +31,7 @@ from verity.protocols.accounting.certifier.verifier import record_files as RF
 import compact_render as cr  # noqa: E402
 from test_compact_render import FIXTURE, VOCAB  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import active
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, encode_frame
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 
 B = 8
@@ -78,8 +79,7 @@ def _as_id_events(outs):
         if slot is None:
             return None
         request, token, _ = active.compact_record_data(slot)
-        return active.encode_frame(active.DATA, active.CANONICAL_STREAM, active.id_event(request, token),
-                                   cs.FRAME_BYTES)
+        return encode_frame(DATA, active.CANONICAL_STREAM, active.id_event(request, token), cs.FRAME_BYTES)
     return [SimpleNamespace(window=r.window, grid=[[event(s) for s in row] for row in r.grid]) for r in outs]
 
 

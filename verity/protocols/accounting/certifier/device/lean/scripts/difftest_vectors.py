@@ -81,10 +81,7 @@ from verity.protocols.accounting.certifier.verifier.active import (
     COMPACT_LAST,
     COMPACT_RECORD,
     COMPACT_STOP,
-    DATA,
-    PAD,
     PLACEHOLDER,
-    SALT,
     SALT_STREAM,
     Bucketer,
     InlineExecutor,
@@ -92,11 +89,11 @@ from verity.protocols.accounting.certifier.verifier.active import (
     compact_cell,
     compact_record,
     compact_unit,
-    encode_frame,
     event_body,
     request_frames,
     salt_frame,
 )
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD, SALT, encode_frame
 from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridParams, Reason, BlockGrid, row_count
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids
 from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile, admits

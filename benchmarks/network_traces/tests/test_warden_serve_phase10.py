@@ -22,7 +22,8 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, VirtualClock
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.certificate import record_head
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.warden import END, Shim, Warden, cells, read_cell
