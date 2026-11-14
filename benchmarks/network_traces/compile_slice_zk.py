@@ -100,12 +100,12 @@ sys.path.insert(0, str(HERE))
 import zk_drivers  # noqa: E402
 from verity.protocols.accounting.certifier.prover import leak_scan as LS, warden_zk as WZ  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import charge_chain as CC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import compile_slice as CS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import served_rows as SR  # noqa: E402
+from verity_vllm.compiler import compile_slice as CS  # noqa: E402
+from verity_vllm.compiler import served_rows as SR  # noqa: E402
 from verity.commitments import advice as ADV  # noqa: E402
 from verity.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
-from verity.protocols.accounting.certifier.prover import compile_slice_v7 as V7  # noqa: E402
+from verity_vllm.compiler import compile_slice_v7 as V7  # noqa: E402
 from verity.protocols.accounting.certifier.prover import window_charge as WC  # noqa: E402
 
 FIXTURES = REPO / "verity/protocols/accounting/certifier/verifier/tests/fixtures"
