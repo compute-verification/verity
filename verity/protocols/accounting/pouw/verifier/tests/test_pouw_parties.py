@@ -6,12 +6,12 @@ from __future__ import annotations
 
 import hashlib
 
-from verity.runtime import sources as S
-from verity.party import Received
-from verity.runtime.runner import ProtocolDef, run
 from verity.channel import Message
+from verity.party import Received
 from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import parties as P
+from verity.runtime import sources as S
+from verity.runtime.runner import ProtocolDef, run
 
 SEED = b"pouw parties"
 ALL = [P.CHALLENGER, P.PROVER, P.VERIFIER]

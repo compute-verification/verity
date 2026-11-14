@@ -115,14 +115,18 @@ replay that differs, the first token that does and the first step.
   that kept counters, the calls of the indexer's top-k, the rows of more than its keys that were rewritten, and
   those of them with a tie across the k-th key, where vLLM's own kernels may select another set from run to run. The
   processes keep them under `PRIVATE`; the job's report reads them there and keeps the counts in
-  `out/topk_counters.json`. The counts are lower bounds (a process writes them every few thousand calls and when it
-  exits), and a replay in which no process kept any shows nothing of the top-k having run there.
+  `out/topk_counters.json`. A process writes its calls at the end of each one, so they are there when vLLM kills it,
+  as it does a serving worker. It reads its rows from its device every few thousand calls and when it exits in order,
+  so a killed process's rows are a lower bound: `rows_at` is the calls the processes had made when their rows were
+  read, and the report says so where it is below the calls. A replay in which no process kept any shows nothing of
+  the top-k having run there.
 - **each pass**, where the job served arms beside the three (`--arms`): every pass of the load every arm served, a
   line a pass in the order served, by the counters the benchmark read off its server before and after it (the pass's
   own `meta.json`; they are vLLM's own on the server's `/metrics`, so every arm's are read the same way, with a step
   trace or without, and the first line names the two the accepted share is of): its engine steps, its drafts and how
   many of the tokens they proposed the model accepted, and beside them
-  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up. Then how each
+  its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up, and a pass whose
+  record holds no output tokens or no seconds (one none of whose requests was served) says so. Then how each
   arm's requests were sampled, and whether its client sent their seeds; and for each directory whether its server
   was started on the canonical top-k (its record's environment) and what the top-k's processes counted there.
   These lines are in no verdict. They are what an arm served beside the three is read by: two arms that differ in
