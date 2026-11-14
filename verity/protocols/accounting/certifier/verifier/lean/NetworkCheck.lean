@@ -9,6 +9,7 @@ public import NetworkCheck.RecordsGrid
 public import NetworkCheck.RecordsBytes
 public import NetworkCheck.ScanOk
 public import NetworkCheck.Period
+public import NetworkCheck.ConnectionRowsGuards
 public import NetworkCheck.TransferBlocks
 
 /-!

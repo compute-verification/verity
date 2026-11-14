@@ -33,8 +33,8 @@ PLAIN_DIGEST = ("b064f2c3e90f5059b7393bcbca02b7b94d514041946423a253fa1cca6de11ee
 CAPPED_DIGEST = ("6dc8692fb13c37e45ce4d4229a8377931b434ff5c72fd243aeb2d0596dc0226e"
                  "b987b7a37d81a0baeed20ac5eb52ee614b991797a45e85c3fba8916f34361c22")
 #: PLAIN's digest with lengths rows, with content rows and with request words, each the one the period check's Lean
-#: computes for the same schedule (`NetworkCheck.Period`'s guards on `plainSchedule`): the changes to PLAIN, then the
-#: digest
+#: computes for the same schedule (`NetworkCheck.ConnectionRowsGuards`' guards on `plainSchedule`): the changes to
+#: PLAIN, then the digest
 ROWS_DIGESTS = (
     ({"lengths": 1}, "98280d93904a794e8b443e0c2bb917e0ce0fbb20462a8e99f42fdbe06b0b8510"
                      "bc65791cc41703428a43976695a2fb75330780df7434190990751efd1202bd13"),

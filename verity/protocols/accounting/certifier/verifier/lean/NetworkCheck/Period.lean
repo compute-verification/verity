@@ -9,6 +9,7 @@ public import Flock.Public
 public import Flock.WindowRecord
 public import NciCheck.Desc
 public import NciCheck.DefinitionDigest
+public import NetworkCheck.Period.ConnectionRows
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
 meta import NetworkCheck.ScanOk
@@ -18,6 +19,7 @@ meta import Flock.Public
 meta import Flock.WindowRecord
 meta import NciCheck.Desc
 meta import NciCheck.DefinitionDigest
+meta import NetworkCheck.Period.ConnectionRows
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
@@ -353,23 +355,6 @@ def cellHeader : Nat := 9
 /-- The byte of an id request past its `max_tokens` field (`active.MAX_TOKENS_AT + ID_DIGITS`): under a response cap a
 cell's payload holds at least this much, so the network certifier reads the field off the request's first cell. -/
 def maxTokensEnd : Nat := 130
-/-- The byte of an id request past its first prompt id (`io_request.layout`'s `start` and `active.ID_FIELD_BYTES`):
-with lengths rows a cell's payload holds at least this much, so a request's head and first prompt id are in its first
-cell, each field at its place (`io_request.layout` raises for a smaller cell). -/
-def firstPromptEnd : Nat := 378
-/-- The most slots a lengths row has (`connection_rows.check_slots`): its proof block returns the whole row, 96 bits a
-slot, after its 2 words of 16 bits, in a public size class of at most 262,144 bits. -/
-def mostSlots : Nat := 2730
-/-- The most ids a response row has (`content_rows.most_ids`): its tie's proof block returns the whole row, 32 bits an
-id after its count, behind 16 bits of verdict in a public size class of at most 262,144 bits, and a class's size is a
-power of two. -/
-def mostIds : Nat := 4096
-/-- The most classes a schedule lists (`content_rows.MOST_CLASSES`): the connection rows' head counts its tables in a
-u16, three a class after the lengths and the fails tables. -/
-def mostClasses : Nat := 21844
-/-- The most classes a schedule with request words lists (`content_rows.most_classes`): a class has a fourth table
-there, its words table. -/
-def mostClassesWords : Nat := 16383
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
@@ -421,9 +406,6 @@ def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 /-- A window's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
 def Schedule.executionPhasePrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
-/-- ⌈a / b⌉, and 0 at b = 0. -/
-def divCeil (a b : Nat) : Nat := (a + b - 1) / b
-
 /-- The most buckets from a connection's admission to its last egress cell's: D + ⌊(`egress_cells` − 1) / r⌋
 (`WardenParams.span`). With lengths rows a connection ends by then, and it is at most T. -/
 def Schedule.span (s : Schedule) : Nat := s.delay + (s.egressCells - 1) / s.slots
@@ -470,13 +452,6 @@ def rowsWfRefusal (s : Schedule) (windows : Nat) : String :=
   s!"rows format: a frame's ordinal and payload length are u32s, so the lanes · windows · window = \
     {s.lanes * (windows * s.window)} connections and a cell's {s.cellBytes} bytes must each be under 2^32, or two \
     frames could encode alike (rowsWf)"
-
-/-- What the check says of a schedule with connection rows (`Schedule.connectionRows`). It reads each execution
-phase's cells' rows and no connection rows' registration (`connection_rows.check_registration`), so it would hold
-nothing of such a schedule's lengths, fails and content tables to the schedule. -/
-def connectionRowsRefusal : String :=
-  "schedule: connection rows: the check reads no connection rows' registration, so it refuses a schedule with \
-    lengths rows, content rows or request words (connectionRowsCheck)"
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
 (none: it registers the rows, and its `prog` is a compute audit's output, `progTied`, whose free inputs a link-window's
@@ -602,17 +577,11 @@ def scheduleKeys : List String :=
   ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes", "queue",
     "slots", "window"]
 
-/-- The keys a schedule has only where it sets them (`warden.OPTIONAL_FIELDS`). -/
-def optionalScheduleKeys : List String := ["content", "lengths", "max_tokens_cap", "request_words"]
-
 /-- The keys of a schedule that sets the optional keys `set` holds, in the order an object lists its keys. -/
 def scheduleKeysWith (set : String → Bool) : List String :=
   ["bucket_ms", "cell_bytes", "content", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
     "lengths", "max_tokens_cap", "queue", "request_words", "slots", "window"].filter fun k =>
       !optionalScheduleKeys.contains k || set k
-
-/-- A class's size, of prompt ids or of ids released: a power of two of at least 2 (`content_rows.check_size`). -/
-def classSize (n : Nat) : Bool := 2 ≤ n && n &&& (n - 1) == 0
 
 /-- What `content_rows.classes` refuses of a schedule's content rows' classes, or none: a schedule with content rows
 has lengths rows; it lists 1 to `mostClasses` classes, or to `mostClassesWords` with request words, each (P, O, rows)
@@ -1215,117 +1184,6 @@ def defaultSchedule : Schedule :=
 #guard (({ defaultSchedule with maxTokensCap := some 4 } : Schedule).digest.map Flock.hexOf).toOption == some
   "8832fdae0616446e90e1b4178ab99c0e3d67bf790d5bb81512f13c651767adc3\
     0a29f9401b9eb0a2cdf2a8d1c02c50304353250f06af526a970074a207bf3d12"
-
-/-- A schedule whose cells hold an id request's head and first prompt id, without lengths rows
-(`WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
-ingress_buckets=3, egress_cells=9, every=2)`). -/
-def plainSchedule : Schedule :=
-  { bucketMs := 100, cellBytes := 512, delay := 5, egressCells := 9, every := 2, ingressBuckets := 3,
-    ingressCells := 4, lanes := 2, queue := 2, slots := 2, window := 16 }
-
--- `WardenParams.digest` of `plainSchedule`, with lengths rows of form 1 and of form 2, with form 1's classes
--- (2, 2, 1) and (4, 8, 16), with form 2's classes (2, 2) and (4, 8), with those under `max_tokens_cap` 4, and with
--- request words beside them: the lengths rows' form, the content rows' classes and the request words are in the
--- digest only of a schedule that sets them
-#guard (plainSchedule.digest.map Flock.hexOf).toOption == some
-  "b064f2c3e90f5059b7393bcbca02b7b94d514041946423a253fa1cca6de11ee4\
-    1898e2e0368e1a03d9e5f8a910fc91ac2f8154924ccd7f669f8b0f4d99964808"
-#guard (({ plainSchedule with lengths := some 1 } : Schedule).digest.map Flock.hexOf).toOption == some
-  "98280d93904a794e8b443e0c2bb917e0ce0fbb20462a8e99f42fdbe06b0b8510\
-    bc65791cc41703428a43976695a2fb75330780df7434190990751efd1202bd13"
-#guard (({ plainSchedule with lengths := some 2 } : Schedule).digest.map Flock.hexOf).toOption == some
-  "804c6d03b6666a89155a1c4f41c31c7d02c90978cf6d5a28b6a41bbe54131d2c\
-    6ea7c345d593c1b204775de7b4bab8f1b264bfed3ec60bb9018d3bee4243335a"
-#guard (({ plainSchedule with lengths := some 1, content := some #[#[2, 2, 1], #[4, 8, 16]] } : Schedule).digest.map
-  Flock.hexOf).toOption == some
-  "f5a916f78cead6daa18dd2913f37aeb53acf2e2557bceb70a33326d786927891\
-    4bb9cc7e1c9737ba575ebb86bb5632d1d6d95cfabea982eda3af34081ac1384a"
-#guard (({ plainSchedule with lengths := some 2, content := some #[#[2, 2], #[4, 8]] } : Schedule).digest.map
-  Flock.hexOf).toOption == some
-  "d2217081ba58125d65abf5eef16979e867596c702dea76e3f3d55bb698cb490c\
-    dee255fe7b76238dc4b4147b60191d30179391ecca9e29aed228723e822f9811"
-#guard (({ plainSchedule with lengths := some 2, content := some #[#[2, 2], #[4, 8]], maxTokensCap := some 4 } :
-  Schedule).digest.map Flock.hexOf).toOption == some
-  "5c079664862cfe253a9794957b6af18c8d0cd41adf1e2608e624663cde1038f8\
-    3f792222b44885914fde2364290676e742cf28c1f93c55f093953fc7f1be6d3e"
-#guard (({ plainSchedule with
-    lengths := some 2, content := some #[#[2, 2], #[4, 8]], maxTokensCap := some 4, requestWords := true } :
-  Schedule).digest.map Flock.hexOf).toOption == some
-  "213b8b63d87459e4b76591beab56ea7b2ac6b9c888566ca4cd43b0d511584459\
-    b84624493f8e18377327c4402ab301982b8fda184864fb9f2879502707781b47"
--- a slot stride's releases at `plainSchedule` and at its strides of 1, 4, 8 and 16 buckets, at a stride of 16 with
--- one ingress bucket, and at 5 lanes, a stride of 8 and 5 ingress buckets; an execution phase's releases at
--- `plainSchedule`, with one ingress bucket, at a delay of 12, and at 5 lanes and 5 ingress buckets; and a
--- connection's span, at a delay of 5 and of 12 (`WardenParams.stride_releases`, `phase_releases` and `span`)
-#guard
-  let s := plainSchedule
-  s.strideReleases == 2 && ({ s with every := 1 } : Schedule).strideReleases == 2 &&
-    ({ s with every := 4 } : Schedule).strideReleases == 2 && ({ s with every := 8 } : Schedule).strideReleases == 4 &&
-    ({ s with every := 16 } : Schedule).strideReleases == 8 &&
-    ({ s with every := 16, ingressBuckets := 1 } : Schedule).strideReleases == 6 &&
-    ({ s with every := 8, lanes := 5, ingressBuckets := 5 } : Schedule).strideReleases == 15 &&
-    s.executionPhaseReleases == 6 && ({ s with ingressBuckets := 1 } : Schedule).executionPhaseReleases == 6 &&
-    ({ s with delay := 12 } : Schedule).executionPhaseReleases == 4 &&
-    ({ s with lanes := 5, ingressBuckets := 5 } : Schedule).executionPhaseReleases == 20 &&
-    s.span == 9 && ({ s with delay := 12 } : Schedule).span == 16
--- a schedule's keys are in the order an object lists them, the optional ones only where it sets them
-#guard scheduleKeysWith (fun _ => false) == scheduleKeys && (scheduleKeysWith fun _ => true).length == 15 &&
-  keysOf (Json.mkObj ((scheduleKeysWith fun _ => true).map (·, Json.null))) == scheduleKeysWith fun _ => true
--- an id request's body after `max_tokens`: `temperature` and `top_p` in 8 characters each, `seed` in 10, no stop
--- strings, streamed, `model` and `user` in 64 each, then the prompt's key and its first id, `[` and 10 characters
-#guard maxTokensEnd + (",\"temperature\":".length + 8) + (",\"top_p\":".length + 8) + (",\"seed\":".length + 10) +
-  ",\"stop\":[],\"stream\":true".length + (",\"model\":".length + 64) + (",\"user\":".length + 64) +
-  ",\"prompt\":".length + (1 + 10) == firstPromptEnd
--- a lengths row's slots, a response row's ids and a schedule's classes, each the most its bound gives
-#guard mostSlots == (262144 - 2 * 16) / 96 && mostClasses == (2 ^ 16 - 3) / 3 &&
-  mostClassesWords == (2 ^ 16 - 3) / 4 && classSize mostIds && mostIds ≤ (262144 - 16) / 32 - 1 &&
-  (262144 - 16) / 32 - 1 < 2 * mostIds
--- the parse reads `plainSchedule` with lengths rows of either form and with content rows of the form's classes, and
--- refuses a third form, lengths rows where ingress ends after the delay, a connection outlasts the window or a cell
--- holds no first prompt id, content rows without lengths rows, no class, a class of the other form's numbers, a size
--- that is no power of two, more ids than a response row has, more prompt ids than a request's bytes, and more rows
--- than the lengths table's 16 slots
-#guard
-  let n := fun (x : Nat) => toJson x
-  let j := fun (delay cell : Nat) (more : List (String × Json)) => Json.mkObj ([("bucket_ms", n 100),
-    ("cell_bytes", n cell), ("delay", n delay), ("egress_cells", n 9), ("every", n 2), ("ingress_buckets", n 3),
-    ("ingress_cells", n 4), ("lanes", n 2), ("queue", n 2), ("slots", n 2), ("window", n 16)] ++ more)
-  let reads := fun (more : List (String × Json)) => (scheduleOf (j 5 512 more)).toOption.isSome
-  let classes := fun (cs : Array (Array Nat)) => ("content", toJson cs)
-  let form := fun (f : Nat) => ("lengths", n f)
-  reads [] && reads [form 1] && reads [form 2] && reads [form 1, classes #[#[2, 2, 1], #[4, 8, 16]]] &&
-    reads [form 2, classes #[#[2, 2], #[4, 4096]]] && reads [form 2, classes #[#[1024, 2]], ("max_tokens_cap", n 4)] &&
-    (scheduleOf (j 5 512 [form 2, classes #[#[2, 2]]])).toOption.map (·.content) == some (some #[#[2, 2]]) &&
-    !reads [form 3] && (scheduleOf (j 2 512 [form 1])).toOption.isNone &&
-    (scheduleOf (j 13 512 [form 1])).toOption.isNone && (scheduleOf (j 5 386 [form 1])).toOption.isNone &&
-    (scheduleOf (j 5 387 [form 1])).toOption.isSome && (scheduleOf (j 5 386 [])).toOption.isSome &&
-    !reads [classes #[#[2, 2]]] && !reads [form 2, classes #[]] && !reads [form 2, classes #[#[2, 2, 1]]] &&
-    !reads [form 1, classes #[#[2, 2]]] && !reads [form 2, classes #[#[3, 2]]] && !reads [form 2, classes #[#[2, 1]]] &&
-    !reads [form 2, classes #[#[2, 8192]]] && !reads [form 2, classes #[#[4096, 2]]] &&
-    !reads [form 1, classes #[#[2, 2, 0]]] && !reads [form 1, classes #[#[2, 2, 17]]]
--- the parse reads `plainSchedule` with request words beside form 2's classes and `max_tokens_cap`, and refuses request
--- words that are not true, under form 1, without content rows, without `max_tokens_cap` and without lengths rows; a
--- schedule with request words lists at most `mostClassesWords` classes, and one without them more
-#guard
-  let n := fun (x : Nat) => toJson x
-  let reads := fun (more : List (String × Json)) => (scheduleOf (Json.mkObj ([("bucket_ms", n 100),
-    ("cell_bytes", n 512), ("delay", n 5), ("egress_cells", n 9), ("every", n 2), ("ingress_buckets", n 3),
-    ("ingress_cells", n 4), ("lanes", n 2), ("queue", n 2), ("slots", n 2), ("window", n 16)] ++ more)))
-  let classes := fun (cs : Array (Array Nat)) => ("content", toJson cs)
-  let form := fun (f : Nat) => ("lengths", n f)
-  let limit := ("max_tokens_cap", n 4)
-  let words := fun (b : Bool) => ("request_words", toJson b)
-  let many := fun (k : Nat) => classes (Array.replicate k #[2, 2])
-  (reads [form 2, classes #[#[2, 2]], limit, words true]).toOption.map (·.requestWords) == some true &&
-    (reads [form 2, classes #[#[2, 2]], limit]).toOption.map (·.requestWords) == some false &&
-    (reads [form 2, classes #[#[2, 2]], limit, words false]).toOption.isNone &&
-    (reads [form 2, classes #[#[2, 2]], limit, ("request_words", n 1)]).toOption.isNone &&
-    (reads [form 1, classes #[#[2, 2, 1]], limit, words true]).toOption.isNone &&
-    (reads [form 2, limit, words true]).toOption.isNone &&
-    (reads [form 2, classes #[#[2, 2]], words true]).toOption.isNone && (reads [limit, words true]).toOption.isNone &&
-    (reads [form 2, many mostClassesWords, limit, words true]).toOption.isSome &&
-    (reads [form 2, many (mostClassesWords + 1), limit, words true]).toOption.isNone &&
-    (reads [form 2, many (mostClassesWords + 1), limit]).toOption.isSome
 
 /-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
@@ -2118,21 +1976,6 @@ def protocol : Core.Protocol where
     (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, w, none⟩ : Params)
   rowsWf s (2 ^ 25 - 1) && !rowsWf s (2 ^ 25) && (rowsWfCheck (p (2 ^ 25 - 1))).isNone &&
     (rowsWfCheck (p (2 ^ 25))).isSome
--- the check refuses a schedule with connection rows, whatever parse it came from, and no other: the period of no
--- execution phase and no audit under `plainSchedule` at T = 2 is accepted, and with lengths rows it is refused by name
-#guard
-  let p := fun (s : Schedule) =>
-    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩ : Params)
-  let reason := fun (s : Schedule) => match check (p s) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
-    | .accept .. => "accept"
-    | .reject r => r
-    | .undecided r => r
-  let s : Schedule := { plainSchedule with window := 2 }
-  (connectionRowsCheck (p s)).isNone && (connectionRowsCheck (p { s with lengths := some 1 })).isSome &&
-    (connectionRowsCheck (p { s with content := some #[] })).isSome &&
-    (connectionRowsCheck (p { s with requestWords := true })).isSome && reason s == "accept" &&
-    reason { s with lengths := some 2 } == connectionRowsRefusal
-
 -- the class circuit c is held when every tied audit is registered under it, an untied audit's Program unread; not when
 -- one tied audit's is another, or with no class circuit; with no tied audit it holds (`wired` refuses that)
 #guard
