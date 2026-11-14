@@ -5,7 +5,8 @@ block, a payload not the committed one or not the committed KV, a word at or abo
 leaf, salt or path, a plan without the block at the sampled position, a receipt the pass's tree commits but the block doesn't
 give. The Boolean unit equals its reference on toy blocks with those negatives, and the parts equal theirs at the deployed
 fields and cost the gates pinned here. The second version's reference gives v1's verdict on every opening under the identity
-plan, opens a block past 2^16 in a store past 2^16 blocks and refuses one a position off, and its unit equals it."""
+plan, opens a block past 2^16 in a store past 2^16 blocks and refuses one a position off, and its unit equals it, at 64 sign
+rows too. Its range admits each row bound's costliest split of `LEVELS` and refuses a level more by name."""
 from __future__ import annotations
 
 import random
@@ -501,26 +502,73 @@ def test_v2s_rows_hold_every_parameter_and_its_public_rows_are_the_verifiers() -
     assert BC.row_words(rows[:2], pub) == BC.row_words(rows[:2], o.args)
 
 
-@pytest.mark.parametrize("bad", [dict(N=64, C=59), dict(BYTES=64), dict(K=1), dict(K=4), dict(MASKED=2), dict(ROWS=17),
-                                 dict(ROWS=64), dict(LEAF=17), dict(DR=29), dict(DP=33), dict(DV=33), dict(DR=0),
-                                 dict(DR=28, DP=32, DV=5), dict(DR=24, DP=28, DV=13)])
+@pytest.mark.parametrize("bad", [dict(N=64, C=59), dict(BYTES=64), dict(K=1), dict(K=4), dict(MASKED=2), dict(ROWS=0),
+                                 dict(ROWS=65), dict(LEAF=17), dict(DR=29), dict(DP=33), dict(DV=33), dict(DR=0),
+                                 dict(DR=28, DP=32, DV=5), dict(DR=24, DP=28, DV=13), dict(ROWS=17, DR=24, DP=28, DV=1),
+                                 dict(ROWS=64, DR=1, DP=32, DV=20)])
 def test_a_v2_binding_past_its_range_is_refused_by_name(bad) -> None:
     with pytest.raises(ValueError, match="^BlockOpeningCheck_v2: "):
         BC.opening_rows_v2(_v2(P1024, **bad))
 
 
-def test_v2s_costliest_legal_bindings_are_admitted() -> None:
-    for field in ((1024, 105), (512, 569), BC.TOY):
-        S = SimpleNamespace(N=field[0], C=field[1], K=3, MASKED=1, BYTES=4096, ROWS=16, LEAF=16, DR=28, DP=32, DV=BC.LEVELS - 60)
-        assert BC.opening_rows_v2(S)
+#: each row bound of `LEVELS` with the costliest split of its levels bound (`block_check`'s docstring: one tree filled to its
+#: 32 levels first)
+COSTLIEST = {16: (1, 31, 32), 64: (1, 19, 32)}
+
+
+@pytest.mark.parametrize("rows", sorted(BC.LEVELS))
+def test_v2s_costliest_legal_bindings_are_admitted_and_a_level_more_refused(rows) -> None:
+    """At each row bound, from the row count past the one below it to the bound itself, the costliest splits of the levels
+    bound are admitted at every field, and a level more is refused, saying the bound and its rows."""
+    low = max((r for r in BC.LEVELS if r < rows), default=0) + 1
+    top = BC.LEVELS[rows]
+    dr, dp, dv = COSTLIEST[rows]
+    assert dr + dp + dv == top
+    for n in (low, rows):
+        for field in ((1024, 105), (512, 569), BC.TOY):
+            for split in ((dr, dp, dv), (dr, dv, dp)):
+                S = SimpleNamespace(N=field[0], C=field[1], K=3, MASKED=1, BYTES=4096, ROWS=n, LEAF=16,
+                                    **dict(zip(("DR", "DP", "DV"), split)))
+                assert BC.opening_rows_v2(S)
+        for more in (dict(DR=dr + 1, DP=dp, DV=dv), dict(DR=dr, DP=dp + 1, DV=dv)):
+            want = (f"^BlockOpeningCheck_v2: DR \\+ DP \\+ DV is at most {top} levels at {low} to {rows} sketch rows, not "
+                    f"{top + 1}: ")
+            with pytest.raises(ValueError, match=want):
+                BC.opening_rows_v2(_v2(P1024, ROWS=n, **more))
+
+
+def test_v2_admits_a_whole_nodes_store_at_64_rows_and_not_2_28_blocks() -> None:
+    """At 64 sketch rows a whole node's store of 130,023,424 blocks (DR 23, DP 27) is admitted with DV up to 2, and a store
+    past 2^27 blocks (DR 24, DP 28) is refused at any DV; at 16 rows that store is admitted."""
+    whole, deep = dict(DR=23, DP=27), dict(DR=24, DP=28)
+    for dv in (1, 2):
+        assert BC.opening_rows_v2(_v2(P1024, ROWS=64, **whole, DV=dv))
+    with pytest.raises(ValueError, match="^BlockOpeningCheck_v2: DR \\+ DP \\+ DV is at most 52 levels"):
+        BC.opening_rows_v2(_v2(P1024, ROWS=64, **deep, DV=1))
+    assert BC.opening_rows_v2(_v2(P1024, ROWS=16, **deep, DV=1))
+
+
+def test_v2s_64_row_receipt_is_the_audits() -> None:
+    """At 64 sketch rows (k_s = 64), an honest identity-plan opening at p1024/k3/masked is accepted by v2's reference, and its
+    receipt is `receipts.SketchReceipter`'s at k_s = 64, not the 16-row one."""
+    rng = random.Random(64)
+    S = _v2(P1024, ROWS=64, **SMALL)
+    o = _identity_opening(rng, S, True, _core_encode, 40, 33)
+    assert BC.opening_check_v2(o.S, o.args) == 1
+    seed = rng.randbytes(64)
+    block = BC._bytes_of(o.args["block"])
+    want = RC.SketchReceipter(seed, 64)(o.j, block)
+    assert BC.receipt(RC.sketch_prefix(seed), o.j, block, RC.sign_bits(seed, 64)) == want
+    assert BC.receipt(RC.sketch_prefix(seed), o.j, block, RC.sign_bits(seed, 16)) != want
 
 
 @pytest.mark.slow
 def test_the_toy_unit_v2_is_its_reference() -> None:
     """A few minutes (the compressions' and the deep reads' first trace): the only evaluation of v2's wiring, its u32
-    position into the receipt leaf's rank, position and entry and pos = j, at a store past 2^16 blocks as at a small one."""
+    position into the receipt leaf's rank, position and entry and pos = j, at a store past 2^16 blocks as at a small one,
+    and at 64 sign rows, whose sketch takes the receipt over three compressions where two rows take one."""
     rng = random.Random(19)
-    for S, n in ((TOY_V2, 35), (_v2(TOY_V2, MASKED=1), 35), (DEEP, DEEP_N)):
+    for S, n in ((TOY_V2, 35), (_v2(TOY_V2, MASKED=1), 35), (DEEP, DEEP_N), (_v2(TOY_V2, ROWS=64), 35)):
         group = [a for bound in (False, True) for a in _v2_cases(_identity_opening(rng, S, bound, _toy_encode, n, n - 2)).values()]
         S_ = SimpleNamespace(**{**vars(S), "LEAF": 3})
         refs = [BC.opening_check_v2(S_, a) for a in group]
