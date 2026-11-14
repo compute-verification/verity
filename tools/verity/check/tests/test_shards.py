@@ -800,14 +800,14 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
     for args, gib in ((["--deferred", steps, "--shard", "1/3"], 330), (["--deferred", reused, "--shard", "1/3"], 240),
                       (["--deferred", steps, "--shard", "1/5"], 330), (["--deferred", reused, "--shard", "1/5"], 170),
                       (["--deferred", steps, "--shard", "2/5"], 200), (["--deferred", reused, "--shard", "2/5"], 200),
-                      (["--deferred", steps, "--shard", "4/5"], 110),
-                      (["--deferred", steps, "--shard", "3/5"], 110), (["--deferred", steps, "--shard", "2/3"], 130),
-                      (["--deferred", steps, "--shard", "3/3"], 290), (["--deferred", "lean-audit"], 330)):
+                      (["--deferred", steps, "--shard", "4/5"], 160),
+                      (["--deferred", steps, "--shard", "3/5"], 130), (["--deferred", steps, "--shard", "2/3"], 130),
+                      (["--deferred", steps, "--shard", "3/3"], 340), (["--deferred", "lean-audit"], 330)):
         sent = env("--priority", *args)
         assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB), args
         assert sent[CHECK.SLOT.RUN_MEM_ENV] == CHECK.ask_gb(gib) and CHECK.SLOT.gib(float(CHECK.ask_gb(gib))) == gib, args
     assert CHECK.SLOT.RUN_MEM_ENV not in env("--deferred", steps, "--shard", "1/3"), "a lane's check books its slot line alone"
     assert CHECK.SLOT.RUN_MEM_ENV not in (whole := env("--priority")) and CHECK.SLOT.MIN_MEM_ENV in whole
     build = ["lean-build", "lean-audit:security/Properties", "lean-agreement"]
-    assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 390 and CHECK.shard_ask_gib(build, []) == 130
+    assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 470 and CHECK.shard_ask_gib(build, []) == 130
     assert all(CHECK.SLOT.gib(float(CHECK.ask_gb(g))) == g for _, g in CHECK.SHARD_ASKS_GIB)

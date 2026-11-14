@@ -466,19 +466,19 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 #: GiB, or where a row says so the memory its suites' workers need. ci.toml's plans place the parts; slot.py books the larger
 #: of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
-    (("lean-agreement",), 390),                                  # the agreement beside lean-build, Flock suite: 339 + 15%
+    (("lean-agreement",), 470),                                  # the agreement beside lean-build, Flock suite: 406 + 15%
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
-    (("circuit-check",), 290),                                   # circuit-check granted the slot once alone: 251 + 15%
+    (("circuit-check",), 340),                                   # circuit-check granted the slot once alone: 292 + 15%
     (("pytest:verity/definitions", "lean-suites:verity-vllm:1/3"), 170),   # its test beside the parallel suites: 144 + 15%
     (("pytest", "lean-suites"), 240),                            # pytest whole beside the parallel suites: 208 + 15%
     (("lean-build", "lean-audit"), 130),                         # lean-build, the rest of the audit, Flock suite: 110 + 15%
-    (("lean-build",), 110),                                      # lean-build and the Flock suite alone: 94 + 15%
-    (("pytest",), 110),                                          # pytest's other suites alone: 87 + 15%
+    (("lean-build",), 130),                                      # lean-build and the Flock suite alone: 110 + 15%
+    (("pytest",), 160),                                          # pytest's other suites alone: 134 + 15%
     # the Rust build beside two vLLM parts and the rest of lean-suites: lean-suites' half (`groups`), less its one-process
     # suites' reserve, gives the parts about nine workers (`suites.py`'s `wide_workers`), which end them inside the shard's
     # longest one-process suite
     (("flock-circuit-build", "lean-suites:verity-vllm:2/3"), 200),
-    (("flock-circuit-build",), 40),                              # the Rust build and tests, the rest of lean-suites: 30 + 15%
+    (("flock-circuit-build",), 50),                              # the Rust build and tests, the rest of lean-suites: 40 + 15%
 )
 
 

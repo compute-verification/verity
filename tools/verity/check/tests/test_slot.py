@@ -1714,7 +1714,7 @@ def test_a_shards_ask_books_a_lowered_line_and_the_heavy_part_keeps_its_slots_bo
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
     heavy, light = check.shard_ask_gib(["pytest", "lean-audit:security/Proofs"], []), check.shard_ask_gib(["lean-build"], [])
-    assert (heavy, light) == (330, 110)
+    assert (heavy, light) == (330, 130)
     (tmp_path / "slots").write_text("t 0 only=trains mem=560 book=520 scope=1\n" + "".join(
         f"{by} {i} only=trains mem=300 book=40\n" for i, by in enumerate("bcd", 1)))
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
@@ -1731,7 +1731,7 @@ def test_a_shards_ask_books_a_lowered_line_and_the_heavy_part_keeps_its_slots_bo
     monkeypatch.setenv(SLOT.MIN_MEM_ENV, str(check.TRAIN_GB))
     for gib, by, want in ((heavy, "t", {"slot": "t", "mem": "560", "book": "520"}),
                           (heavy, "b", {"slot": "b", "mem": "330", "book": "330"}),
-                          (light, "c", {"slot": "c", "mem": "300", "book": "110"})):
+                          (light, "c", {"slot": "c", "mem": "300", "book": "130"})):
         monkeypatch.setenv(SLOT.RUN_MEM_ENV, check.ask_gb(gib))
         with pytest.raises(Exec):
             SLOT.main(["--priority", "--by", by, "--", "check.py"], now=lambda: NOW, sleep=lambda s: pytest.fail("waited"))
