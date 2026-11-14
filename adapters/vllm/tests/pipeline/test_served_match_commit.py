@@ -207,24 +207,29 @@ def _files(out: Any) -> tuple[Any, Any]:
     return json.loads((out / "build_rebuilt.json").read_text()), json.loads((out / "artifact_check.json").read_text())
 
 
-def test_a_process_whose_build_read_the_artifact_of_record_writes_both_files_and_returns_its_build(monkeypatch, process, tmp_path, capsys):
+def _said(caplog) -> list[str]:
+    """What `served_match` logged."""
+    return [r.getMessage() for r in caplog.records if r.name == sm.__name__]
+
+
+def test_a_process_whose_build_read_the_artifact_of_record_writes_both_files_and_returns_its_build(monkeypatch, process, tmp_path, caplog):
     built = _build(program_digest="q" * 128)
     assert _rebuild(monkeypatch, _row(process), built, tmp_path) is built
     check = {"pinned": ARTIFACT["digest"], "loaded": ARTIFACT["digest"], "equal": True, "differences": []}
     assert _files(tmp_path) == (built, check)
     assert (tmp_path / "build_rebuilt.json").read_text() == json.dumps(built, indent=1)
     assert (tmp_path / "artifact_check.json").read_text() == json.dumps(check, indent=1)
-    assert capsys.readouterr().out == f"[delta] compile artifact {ARTIFACT['digest'][:16]}: this process's is the Build of record's\n"
+    assert _said(caplog) == [f"[delta] compile artifact {ARTIFACT['digest'][:16]}: this process's is the Build of record's"]
 
 
-def test_a_process_whose_build_read_another_artifact_writes_both_files_with_each_difference_and_exits_3(monkeypatch, process, tmp_path, capsys):
+def test_a_process_whose_build_read_another_artifact_writes_both_files_with_each_difference_and_exits_3(monkeypatch, process, tmp_path, caplog):
     built = _build(artifact=OTHER)
     with pytest.raises(SystemExit) as stop:
         _rebuild(monkeypatch, _row(process), built, tmp_path)
     assert stop.value.code == 3
     assert _files(tmp_path) == (built, {"pinned": ARTIFACT["digest"], "loaded": OTHER["digest"], "equal": False, "differences": DIFFERENCES})
-    assert capsys.readouterr().out == (f"[delta] REFUSE: this process loaded compile artifact {OTHER['digest'][:16]}, not the Build of record's "
-                                       f"{ARTIFACT['digest'][:16]} (5 differences: {DIFFERENCES[:3]})\n")
+    assert _said(caplog) == [(f"[delta] REFUSE: this process loaded compile artifact {OTHER['digest'][:16]}, not the Build of record's "
+                              f"{ARTIFACT['digest'][:16]} (5 differences: {DIFFERENCES[:3]})")]
 
 
 def test_a_build_that_stops_on_anything_but_a_refusal_of_the_artifact_stops_the_row_and_writes_no_file(monkeypatch, process, tmp_path):
@@ -237,13 +242,13 @@ REFUSED: dict[str, Any] = {"program_digest": None, "manifest_digest": None, "com
                            "populations": {"identities": 0}, "identities": []}
 
 
-def test_a_refused_build_is_recorded_and_its_process_is_held_to_the_winners_of_record_alone(monkeypatch, process, tmp_path, capsys):
+def test_a_refused_build_is_recorded_and_its_process_is_held_to_the_winners_of_record_alone(monkeypatch, process, tmp_path, caplog):
     row, inductor = _row(process), process()
     (inductor / "k0").mkdir(parents=True)
     (inductor / "k0" / "a.best_config").write_text(json.dumps({"BLOCK_M": 64, "time_taken_ms": 9}))
     assert _rebuild(monkeypatch, row, Unmodelled("no template models kernel k9"), tmp_path) == REFUSED
     assert _files(tmp_path) == (REFUSED, {"pinned": ARTIFACT["digest"], "loaded": None, "equal": True, "differences": []})
-    assert capsys.readouterr().out == f"[delta] compile artifact {ARTIFACT['digest'][:16]}: this process's is the Build of record's\n"
+    assert _said(caplog) == [f"[delta] compile artifact {ARTIFACT['digest'][:16]}: this process's is the Build of record's"]
 
 
 def test_a_refused_build_in_a_process_whose_own_compile_dirs_are_gone_is_refused_by_name(monkeypatch, process, tmp_path):
@@ -254,7 +259,7 @@ def test_a_refused_build_in_a_process_whose_own_compile_dirs_are_gone_is_refused
     assert [f.name for f in tmp_path.iterdir()] == ["build_rebuilt.json"]
 
 
-def test_a_refused_build_whose_process_has_other_winners_exits_3(monkeypatch, process, tmp_path, capsys):
+def test_a_refused_build_whose_process_has_other_winners_exits_3(monkeypatch, process, tmp_path, caplog):
     row, inductor = _row(process), process()
     (inductor / "k1").mkdir(parents=True)
     (inductor / "k1" / "b.best_config").write_text(json.dumps({"BLOCK_M": 32}))
@@ -263,8 +268,8 @@ def test_a_refused_build_whose_process_has_other_winners_exits_3(monkeypatch, pr
     differences = ["winners k0/a.best_config: pinned {'BLOCK_M': 64}, loaded absent", "winners k1/b.best_config: pinned absent, loaded {'BLOCK_M': 32}"]
     assert stop.value.code == 3
     assert _files(tmp_path) == (REFUSED, {"pinned": ARTIFACT["digest"], "loaded": None, "equal": False, "differences": differences})
-    assert capsys.readouterr().out == ("[delta] REFUSE: this process loaded compile artifact of a refused Bui, not the Build of record's "
-                                       f"{ARTIFACT['digest'][:16]} (2 differences: {differences})\n")
+    assert _said(caplog) == [("[delta] REFUSE: this process loaded compile artifact of a refused Bui, not the Build of record's "
+                              f"{ARTIFACT['digest'][:16]} (2 differences: {differences})")]
 
 
 def _c2(monkeypatch, row: sm.ServedCommit, report: Any, chain: dict[str, Any] = CHAIN, *, challenge: str | None = "abc",

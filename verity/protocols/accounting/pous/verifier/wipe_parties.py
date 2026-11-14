@@ -9,13 +9,20 @@ prover -> memory-challenger   FillAck once it holds the fill; per batch Answer, 
 ~~~
 
 The run's parameters are `wipe_party.request_of`'s request, which names no reads: the challenger chooses them, never the
-prover.
+prover. A deployment starts both parties from its configuration (`verity.protocol.ProtocolDef.starts`), where the wipe is
+`COMPONENT`, each with that request (`deployed_request`): its fill and tiers are the node's card memory and its deadline
+the card's calibration, which no configuration states, so until those are read it raises
+`NotImplementedError(challenger_session.ONSITE_GOAL)`.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 from verity.protocol import Channel, Manifest, Role
 from verity.channel import Body, Int, List, Schema
+from verity.protocols.accounting.pous.device.challenger_session import ONSITE_GOAL
 
 from . import streamed_wipe as sw
 from . import wipe_party as WP
@@ -23,6 +30,8 @@ from . import wipe_party as WP
 ID = "verity/pous/streamed-wipe"
 VERSION = 1
 CHALLENGER, PROVER = "memory-challenger", "prover"
+#: the wipe's name in a deployment configuration: in its `protocols`, a `[[pin]]`'s `protocol` and a binding's table
+COMPONENT = "wipe"
 MAX_BATCH = 1 << 10
 MANIFEST = Manifest(
     ID, VERSION, "verity.protocols.accounting.pous.verifier.wipe_party:request_of",
@@ -38,4 +47,11 @@ MANIFEST = Manifest(
               Schema("End", 1, "structure")))
 
 
-__all__ = ["CHALLENGER", "ID", "MANIFEST", "PROVER", "VERSION"]
+def deployed_request(configuration: Mapping[str, Any], bound: Mapping[str, Any]) -> dict[str, Any]:
+    """The wipe's request (`wipe_party.request_of`) as a deployment starts it: `node` the prover's node from its deploy
+    bindings (`bound`), `labels` and `tiers` the node's card memory from its data sheet, and `limit_ns` the card's
+    calibration, which no configuration states."""
+    raise NotImplementedError(ONSITE_GOAL)
+
+
+__all__ = ["CHALLENGER", "COMPONENT", "ID", "MANIFEST", "PROVER", "VERSION", "deployed_request"]

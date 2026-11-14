@@ -26,9 +26,6 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-
-from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.evaluation import bits as BS
@@ -40,6 +37,8 @@ from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, interior_links as IL, interior_rows as IR
 from verity_vllm.pipeline import long_row as LR
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier import second_stage as SS
 
 RUN = "0" * 128
 
