@@ -4,6 +4,7 @@ what `free_programs` and `record` put on the run's row, with the lines each logs
 only; the replay itself is `tests/check/test_sampled_replay.py`."""
 from __future__ import annotations
 
+import ctypes
 import json
 import logging
 import struct
@@ -240,14 +241,26 @@ def readings(monkeypatch: pytest.MonkeyPatch, *kb: int | None) -> None:
     monkeypatch.setattr(C2, "rss_kb", lambda: (left.pop(0), None))
 
 
-def test_the_freed_programs_are_measured_by_three_readings_of_the_resident_set(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("released", [1, 0, OSError("libc.so.6: cannot open shared object file: " + "x" * 80)])
+def test_the_freed_programs_are_measured_by_three_readings_of_the_resident_set(monkeypatch: pytest.MonkeyPatch,
+                                                                                released: int | OSError) -> None:
+    """Between the second reading and the third, glibc is asked to give its free pages back; what it says (1 if it gave any) is
+    on the record, and a host whose C library is not glibc names why in 80 characters."""
     readings(monkeypatch, 4096, 2048, 1024)
+    asked: list[str | int] = []
+
+    def cdll(name: str) -> SimpleNamespace:
+        asked.append(name)
+        if isinstance(released, OSError):
+            raise released
+        return SimpleNamespace(malloc_trim=lambda pad: asked.append(pad) or released)
+
+    monkeypatch.setattr(ctypes, "CDLL", cdll)
     sr, held = Record(), {"programs": object()}
     C2.free_programs(sr, held, 0)
-    trim = sr["programs_freed"].pop("malloc_trim")
-    assert held == {} and isinstance(trim, (int, str))
+    assert held == {} and asked == ["libc.so.6", *([] if isinstance(released, OSError) else [0])]
     assert sr["programs_freed"] == {"rss_before_kb": 4096, "rss_after_gc_kb": 2048, "rss_after_kb": 1024, "freed_mib": 3, "freed_by_gc_mib": 2,
-                                    "freed_by_malloc_trim_mib": 1,
+                                    "freed_by_malloc_trim_mib": 1, "malloc_trim": released if isinstance(released, int) else repr(released)[:80],
                                     "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
 
 

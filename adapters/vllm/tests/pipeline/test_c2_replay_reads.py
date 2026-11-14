@@ -1,6 +1,7 @@
 """What `verity_vllm.pipeline.c2_replay` reads of a block its record may leave out: a row's schedule of record, a loaded
-Program's Build result, and the manifest's digests of record.  A block that is null or empty reads as one that is absent.
-CPU only: the Programs are stand-ins and no Definition is checked (`tests/check/test_replay_definitions.py` loads real ones)."""
+Program's Build result, the manifest's digests of record, and what each request is found by under a Programs root.  A block
+that is null or empty reads as one that is absent.  CPU only: the Programs are stand-ins and no Definition is checked
+(`tests/check/test_replay_definitions.py` loads real ones)."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -63,6 +64,22 @@ BUILT: Record = {"dir": "/programs/r0", "result": {"program_digest": "d1"}, "ins
 def test_a_program_is_of_record_when_the_program_digest_or_the_manifest_names_its_digest(
         monkeypatch: pytest.MonkeyPatch, manifest: Any, digest: str | None) -> None:
     assert loads(monkeypatch, BUILT, manifest, digest) == ({"r0": BUILT}, {"r0": "d1"})
+
+
+@pytest.mark.parametrize("sampling, most", [({"max_tokens": 6}, 6), ({}, 1)])
+def test_under_a_programs_root_each_request_s_program_is_found_by_its_label_its_lengths_and_its_cached_prefix(
+        monkeypatch: pytest.MonkeyPatch, sampling: Record, most: int) -> None:
+    """Each request's `max_tokens` is its own, else the workload's, else 1."""
+    asked: list[tuple[Record, str]] = []
+    built: Record = {"r0": BUILT, "r1": BUILT | {"dir": "/programs/r1"}}
+    monkeypatch.setattr(MF, "programs_for", lambda fx, root: asked.append((fx, root)) or built)
+    monkeypatch.setattr(MF, "load_program", lambda d: pytest.fail("a root's Programs are not loaded one by one"))
+    reqs = [REQS[0] | {"cached": 1}, REQS[1]]
+    args = SimpleNamespace(program_digest="d1", programs_root="/programs", program_dir=None)
+    got = C2.programs_of_record(C2.ProgramSources(args, None, reqs, sampling), C2.request_labels(reqs), definitions=False)
+    assert got == (built, {"r0": "d1", "r1": "d1"})
+    assert asked == [({"requests": [{"request_id": "r0", "prompt_len": 2, "max_tokens": 4, "cached": 1},
+                                    {"request_id": "r1", "prompt_len": 1, "max_tokens": most, "cached": 0}]}, "/programs")]
 
 
 @pytest.mark.parametrize("manifest", [None, {}, {"component_digests": None, "components": None}, {"component_digests": [], "components": {}},
