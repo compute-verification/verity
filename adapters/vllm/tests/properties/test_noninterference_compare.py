@@ -308,7 +308,7 @@ def test_the_expected_step_count_is_the_bare_arm_s_then_its_largest_max_tokens_t
     rep = NI.compare(str(tmp_path), None, LAYERS)
     assert (rep["expected_steps"], rep["expected_steps_source"]) == (16, "default") and rep["PASS"] is False
     (said,) = _said(caplog)
-    assert said.startswith(f"{bare} gives no step count, so 16: FileNotFoundError(")
+    assert said == f"{bare} gives no step count, so 16: FileNotFoundError(2, 'No such file or directory')"
     assert rep["problems"] == ["missing tokens for c_bare",
                                "no clean reference tokens: neither --accepted-ctl (control run) nor c_bare/tokens.json has generated_token_ids"]
     assert rep["tokens_equal_accepted"] == {"a_observer": False, "b_hooks": False, "c_bare": False}
@@ -579,7 +579,10 @@ def test_the_case_is_the_flag_s_else_the_workload_file_s_else_b0_and_why_b0_at_d
     for name, error in why.items():
         assert NI.case_of_args(SimpleNamespace(case="", workload=str(tmp_path / name))) == "B0", name
         (said,) = _said(caplog)
-        assert said.startswith(f"the workload file {tmp_path / name} gives no case, so B0: {error}"), name
+        assert said.startswith(f"the workload file {tmp_path / name} gives no case, so B0: {error}") and said.endswith(")"), name
+    assert NI.case_of_args(SimpleNamespace(case=None)) == "B0", "arguments that name no workload file"
+    missing = "AttributeError(\"'types.SimpleNamespace' object has no attribute 'workload'\")"
+    assert _said(caplog) == ["the workload file None gives no case, so B0: " + missing]
 
 
 def test_the_expected_layers_are_the_case_s_profile_s_and_none_for_no_case_or_an_unknown_one_and_why_none_at_debug(caplog):
@@ -589,4 +592,4 @@ def test_the_expected_layers_are_the_case_s_profile_s_and_none_for_no_case_or_an
     assert _said(caplog) == [], "a case with a profile and no case say nothing"
     assert NI.expected_layers_for("no such case") is None
     (said,) = _said(caplog)
-    assert said.startswith("no layer count for case 'no such case': KeyError(")
+    assert said.startswith("no layer count for case 'no such case': KeyError(") and said.endswith(")")

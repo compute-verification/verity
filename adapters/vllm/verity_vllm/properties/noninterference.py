@@ -457,7 +457,7 @@ def case_of_args(args) -> str | None:
         doc = json.loads(Path(args.workload).read_text())
         return doc.get("case") or "B0"
     except Exception as e:  # noqa: BLE001
-        logger.debug("the workload file %s gives no case, so B0: %r", args.workload, e)
+        logger.debug("the workload file %s gives no case, so B0: %r", getattr(args, "workload", None), e)
         return "B0"
 
 
