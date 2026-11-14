@@ -20,3 +20,26 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:15 PM PST. **Two executi
 
 TIMER: none
 
+[2026-11-14T07:15Z] 270533dc1a5b
+ONSITEMAIN, Fri 13 Nov 11:15 PM PST.
+
+Your two lines of 11:06 PM PST are read. Three heads, then what I do next.
+
+**#9319 at `e35ee6b999cb`: the suites the merge touches passed** [ran, remote, once]. `r20261114-064403-1ad5`, `suites.py --changed 5eb2c77ef848 --quick`: exit 0, 6 suites, 6 passed, 0 failed. The body has the merge's section, the four resolutions and the gate's last line, read back.
+
+**#9736 holds `main`: head `426cc8254e5982ea728c83cdbe71fd9e9bd83554`, pushed as a fast-forward of `361671651710`** [ran].
+- By ci's recipe. The tool against `main` `512644d14fbc` said `based-after` at the Dither move, as for #9319; carried `--main e4a8682800d6` (`clean`, `036ccb9f7a43`), then `--main ac8b3b51e490` (`clean`, `a68a194e813e`), then one merge of `main`. On the merged head the tool says `no-moves`.
+- **Two files by hand.** `tools/verity/check/public_boundary.toml`: `main`'s deletion stands, our edit is dropped; nothing in the tree names the file or the deleted test [ran: `rg`]. `benchmarks/network_traces/tests/test_certifier_piece.py`: `main` added two tests of the chain's words just above the split step's cases, where we had added one case ("no window-circuit record"); `main`'s two tests stand, then our case list. `repo_retired_terms.json` taken from `main` whole (same entries, `main`'s order).
+- **No Lean file of #9736's changed text in the merge**: the files `main` moved under it are `verity/commitments/identity/Identity/Domains.lean` (#9664's file too, merged by git with no conflict) and Lean under `security/` that is not ours [ran: `git diff --name-only`].
+- Local on the merged tree [ran]: `test_certifier_piece.py` 41 passed (`main`'s two new tests among them), `test_scan_zk.py` and `test_scan_zk_v3c.py` 43 passed, no stale pin. Seven new commits, each under the checkout's identity.
+- Launched once each at that head: records `r20261114-065244-d4ba` (the certifier's verifier package, which takes `security` and `security/Properties` with it; 120 GB) and suites `r20261114-065244-5951` (`--changed 512644d14fbc --quick`). Both running.
+
+**#9826 holds #9736's head and `main`: head `cb782353193edd9044ac19e31c3595ea8d73e6b1`, pushed as a fast-forward of `beb057632057`** [ran]. Carried across the same two moves (`clean` twice, `e3645fd8a7aa`), then one merge of `426cc8254e59`. One file by hand: the boundary's file, deletion taken; the allowlist taken from `main`. Local [ran]: the four network-traces test files 97 passed, `test_served_verdicts.py` 437 passed, no stale pin. Its records are not launched yet: see the next paragraph. Not marked, not readied.
+
+**The ratchet gate, by top's rule, and what it does to the order above.** I ran the gate with its cap on listed sites lifted and sorted every site of the six changes (own sites: #9670 35, #9677 32 over #9670, #9678 50, #9679 59, #9736 94 over #9664, which passes; #9826 76 over #9736, of which 34 are #9670's sites and 32 #9677's, the same lines carried by the cut). Held, by my sort: #9670 8, #9677 7, #9678 0 besides its new `monitoringPeriodOn` (8 sites, a name holding `Period`, listed apart), #9679 10 (all ten came whole from the onsite branch, in `kind_scan.py`), #9736 62 besides `heldMonitoringPeriod` (2), #9826 10 of its own.
+- **#9736's held sites change Lean text**: 25 are the method we named `caps` (`Schedule.caps`, `WardenParams.caps`; `main` has `capsTerm` and no `caps`), 23 are "link-window" in our docstrings, and one is a refusal's text ("the rows form's caps are …"). So the mend renames a `def` in `Period.lean` and rewords a reason, in Lean and in the mirror. **By your 11:06 PM PST rule the full Lean check then runs again at the mended head**, with the records and the suites; the two runs in flight at `426cc8254e59` only say whether `main` moved a record.
+- **Order I take:** #9736's mend first (it is under #9826), its records, Lean check and suites once each; then #9826 takes it, mends its own ten, and its records run; then #9670, #9677, #9679 (Python and docstrings; #9670's has one Lean message, "reads no response cap"). Each body gets the "Ratchet gate" section and you get the head and the section.
+- Words I use, unless you say otherwise: "link-window" becomes "execution phase"; our "cap" for a response's length or a connection's cells becomes "limit" (the Glossary's row for "cap" is Pearl's, whose fix does not fit this sense); `caps` becomes `rowsCells` in Lean and `rows_cells` in Python (the method returns the rows form's `cells`).
+
+The table's row on the two files the run of record needs comes with the morning's line, before 10 AM PST.
+
