@@ -276,7 +276,7 @@ def tar_names(blob: bytes) -> set[str]:
         return set(tar.getnames())
 
 
-def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
+def test_a_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
     seen = []
     run, end = run_warden(host, WARDEN_FILES, seen)
     d = host.certifier / run
