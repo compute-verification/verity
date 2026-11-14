@@ -118,6 +118,7 @@ untraced = [
     "tests/test_verifier_cost.py",
     "tests/test_vllm_boundary.py",
     "tests/test_vllm_public_api.py",
+    "tests/test_wipe_counted_callers.py",
 ]
 inputs = [".", "AGENTS.md"]   # its lints read the docs: a listed `.md` keys its Markdown too (`suites.markdown`)
 testpaths = ["tests", "tools/research/tests", "infra/ops/tests", "benchmarks/native_peak/tests", "verity/tests", "benchmarks/numerical/tests", "verity/protocols/proofs/flock/prover/tests", "tools/verity/circuit_check/tests", "tools/verity/lean/tests", "verity/protocols", "verity/circuits/ops/tests", "benchmarks/pouw/tests"]
