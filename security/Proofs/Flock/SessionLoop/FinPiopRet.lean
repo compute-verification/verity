@@ -69,15 +69,17 @@ namespace FlockComplete
 
 open _root_.Flock
 
+variable {wideLeaf : Bool}
+
 /-- The `--zk` schedule's level 0 caps strictly below its depth: its tree hashes at least once. -/
 theorem JsonRT.zkSchedule_cap0_lt {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : _root_.Flock.Schedule × ℕ}
-    (h : _root_.Flock.Zk.schedule m = .ok v) :
+    (h : _root_.Flock.Zk.schedule wideLeaf m = .ok v) :
     (v.1.levels.getD 0 default).cap < (v.1.levels.getD 0 default).d := by
-  have key : ∀ k : Fin 11, (match _root_.Flock.Zk.schedule (k.val + 25) with
+  have key : ∀ (w : Bool) (k : Fin 11), (match _root_.Flock.Zk.schedule w (k.val + 25) with
       | .ok v => decide ((v.1.levels.getD 0 default).cap < (v.1.levels.getD 0 default).d)
       | .error _ => false) = true := by
     decide +kernel
-  have := key ⟨m - 25, by omega⟩
+  have := key wideLeaf ⟨m - 25, by omega⟩
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   exact this
 

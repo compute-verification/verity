@@ -8,7 +8,7 @@ public import Proofs.Pouw.PeriodJ10R.Honest
 # `RightValues` at an honest period, and against a verifier that accepts everything
 
 The two witnesses of `Properties.Pouw.ServedValues.RightValues`, on `Proofs.Pouw.PeriodJ10R.Honest`'s J10-R
-period. Its declared circuit has `N = N_p` committed words of no operands, one a block. The honest registered
+period. Its registered circuit has `N = N_p` committed words of no operands, one a block. The honest registered
 declaration (`andDecl N`) is a Boolean circuit of two input gates and `N` output gates, each the AND of the two
 (`andCircuit N`), and its lowering is itself (`Verity.RegisteredCircuit.D`). The honest map (`blocks N`) has block `t` AND
 gate `t + 2` and word `t` its one bit. No other protocol credits a gate (the ledger is empty), so each block's credit

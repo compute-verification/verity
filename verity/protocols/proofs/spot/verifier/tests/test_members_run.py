@@ -51,16 +51,21 @@ def header(member: str, **changes) -> dict:
 class Window:
     """The two members' files under `at`, the sessions of the members of `sessions` on one challenger's release log,
     each tree's link, one round and its closing round before the next tree's first, and the per-member parameters and
-    evidence over them. `headers` are the members' public files' headers (`header`'s by default)."""
+    evidence over them. `headers` are the members' public files' headers (`header`'s by default), and `lookups` the
+    pinned tables a member's circuit looks up (none by default)."""
 
-    def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B)) -> None:
+    def __init__(self, at, headers: dict | None = None, sessions: tuple[str, ...] = (A, B),
+                 lookups: dict | None = None) -> None:
         self.at, self.files = at, []
         challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("sample", 1)], entropy("members-run"))
         log = [json.dumps({"event": "commitment", "root": challenger.commitment.root.hex()})]
         statements, members = [], {}
         for k, name in enumerate((A, B)):
             public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\nthe rows"
-            members[name] = {"circuit": self.put(b"flock-circuit/v1 u\nMETA {\"vus_per_block\": 4}\n" + name.encode()),
+            looked = {"lookups": {t: {} for t in lookups[name]}} if name in (lookups or {}) else {}
+            meta = {"vus_per_block": 4} | looked
+            members[name] = {"circuit": self.put(b"flock-circuit/v1 u\nMETA " + json.dumps(meta).encode() + b"\n"
+                                                 + name.encode()),
                              "public": self.put(public), "registered": None, "units": UNITS[name], "vus_per_block": 4}
             if name not in sessions:
                 continue
@@ -100,11 +105,12 @@ class Window:
         return d
 
     def run(self, verdict=None, record: dict = RECORD, evidence: dict | None = None, params: dict | None = None,
-            program=PROGRAM, form=None):
+            program=PROGRAM, form=None, tables: dict | None = None):
+        """`members_run` on the window's files and, under their pinned SHA-512s whatever their bytes, the `tables`."""
         return M.members_run(self.params if params is None else params, record,
-                             self.evidence if evidence is None else evidence, M.blobs_of(self.files), program=program,
-                             verify=lambda key, message, signature: False, verdict=verdict or accepting,
-                             form=form or formed)
+                             self.evidence if evidence is None else evidence, M.blobs_of(self.files) | (tables or {}),
+                             program=program, verify=lambda key, message, signature: False,
+                             verdict=verdict or accepting, form=form or formed)
 
 
 def accepting(st: M.Statement) -> dict:
@@ -215,6 +221,39 @@ def test_every_members_files_are_held_in_the_members_order_before_any_session(tm
         assert w.run(never) == (None, f"member {A}: circuit: no blob has the SHA-512 {ms[A]['circuit']}")
 
 
+def test_a_member_is_held_to_its_own_circuits_tables_among_the_blobs(tmp_path):
+    """A window whose first member's circuit looks up ``rcp`` and whose second looks up no table, on blobs holding
+    ``rcp`` and ``ex2`` under their pinned SHA-512s: both members' files pass, each member's form check and session are
+    handed its own tables alone (``rcp`` for the first, none for the second), and the run credits both sessions.
+    Without ``rcp`` among the blobs the first member is refused for it before any session, whatever other table they
+    hold. The tables a statement is handed are refused where they are not, by name, its circuit's lookups: one it does
+    not look up as one it lacks."""
+    w = Window(tmp_path, lookups={A: ["rcp"]})
+    rcp, ex2 = tmp_path / "rcp.u32", tmp_path / "ex2.u32"
+    held = {PF.MUFU_SHA512["rcp"]: rcp, PF.MUFU_SHA512["ex2"]: ex2}
+    formed_on, verified_on = [], []
+
+    def form(circuit, public, tables):
+        formed_on.append(tables)
+
+    def verdict(st: M.Statement) -> dict:
+        verified_on.append(st.tables)
+        return accepting(st)
+    run, refused = w.run(verdict, form=form, tables=held)
+    assert refused is None and run.all and run.proved == (1, 2, 4)
+    assert formed_on == verified_on == [(("rcp", rcp),), ()]
+    for tables in ({}, {PF.MUFU_SHA512["ex2"]: ex2}):
+        assert w.run(never, tables=tables) == (
+            None, f"member {A}: {PF.NO_TABLES}: the circuit looks up rcp, the blobs hold none")
+    assert PF.own_tables(["rcp"], held) == ["rcp"] and PF.own_tables([], held) == []
+    assert PF.own_tables(["sqrt", "rcp", "ex2"], held) == ["rcp", "ex2"]
+    assert PF.tables_match_why(["rcp"], ["rcp"]) is None and PF.tables_match_why([], []) is None
+    assert PF.tables_match_why(["rcp"], []) == f"{PF.NO_TABLES}: the circuit looks up none, the blobs hold rcp"
+    assert PF.tables_match_why(["rcp"], ["rcp", "ex2"]) == (
+        f"{PF.NO_TABLES}: the circuit looks up rcp, ex2, the blobs hold rcp")
+    assert PF.tables_why([], held) == f"{PF.NO_TABLES}: the circuit looks up none, the blobs hold rcp, ex2"
+
+
 def test_a_members_files_are_refused_by_the_first_of_leans_checks_that_applies(tmp_path):
     """`files_why` in Lean's order: a circuit that does not parse or a public file that does not load (the form check's
     refusal, the scope's word for word), the template's refusal, the rest of the form, then the population check."""
@@ -274,8 +313,8 @@ def test_the_registrations_roots_are_each_one_members_and_none_a_row_tables(tmp_
 
 
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
-    """Parameters or evidence the per-member parsers refuse, a program other than the parameters', and a registered
-    file whose port is no registered port's."""
+    """Parameters or evidence the per-member parsers refuse, a program other than the parameters', a registered
+    file whose port is no registered port's, and parameters naming the members' wiring."""
     w = Window(tmp_path)
     ms = w.params["proofs"]["members"]
     for params, evidence in ((w.params | {"proofs": {"circuit": "", "public": "", "registered": None}}, None),
@@ -288,3 +327,5 @@ def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
         w.run(program=P.population_program(PAIR, 5))
     with pytest.raises(M.Outside, match="registered port"):
         w.run(params=w.params | {"proofs": {"members": {A: ms[A] | {"registered": {"ports": {"p": {}}}}, B: ms[B]}}})
+    with pytest.raises(M.Outside, match="wiring"):
+        w.run(params=w.params | {"proofs": {"members": ms, "wiring": {"templates": {}, "cuts": {}, "wires": []}}})

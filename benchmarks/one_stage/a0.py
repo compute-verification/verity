@@ -2,14 +2,14 @@
 verifier, the Lean verifier's sample checks, and the audit record with its integrity profile; then the negatives.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
-      python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
+      python benchmarks/one_stage/a0.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out DIR \\
       [--k 16] [--delta 0.01] [--port 7511]
 
 * **Stand-in commitment.** M0 commits the captured values afresh (`frame-v3-sha512`, `hm96-sha512/row/v1` leaves, fresh
   OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
   link is provenance, not proof, and the registration says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
-* **Verifier of record.** Lean's `flock-verify verify` replays the session offline with the circuit and the public
+* **Verifier of record.** Lean's `verity-verify-proof verify` replays the session offline with the circuit and the public
   file held by content; Lean also checks U1-U3 on the sample, and M0's own verifier (`flock-circuit serve`) checks it live.
 """
 from __future__ import annotations
@@ -73,7 +73,7 @@ DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
 
 def challenger_draw(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
                     log: Path) -> subprocess.CompletedProcess:
-    """Lean's sample, ``flock-verify draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
+    """Lean's sample, ``verity-verify-proof draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
     none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
     committed before any coin opens. Its one family holds the coins the sample reads, opened after `after` (the
     registration's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
@@ -502,7 +502,7 @@ class VerifyMembers:
 
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
-    """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
+    """The verifier: Lean `verity-verify-proof verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values, with the window's registered circuit record
     (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds (`bound_files`); `zk`,
@@ -615,8 +615,8 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
         "m0-verifier": {"accepted": verifier.get("accepted") is True, "why": verifier.get("why"),
                         "tool": "flock-circuit serve (M0)"},
         "lean-draw-u1-u3": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u,
-                            "tool": "flock-verify draw-test (9d0d53df)"},
-        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "flock-verify verify --archive"},
+                            "tool": "verity-verify-proof draw-test (9d0d53df)"},
+        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "verity-verify-proof verify --archive"},
     }
     if draw is None:
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
@@ -687,8 +687,8 @@ def main() -> int:
     ap.add_argument("--set", required=True)
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks")
-    ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify; default --lean")
+    ap.add_argument("--lean", required=True, help="verity-verify-proof for the draw checks")
+    ap.add_argument("--lean-verify", default=None, help="verity-verify-proof for the full verify; default --lean")
     ap.add_argument("--out", required=True)
     ap.add_argument("--k", type=int, default=16)
     ap.add_argument("--delta", type=float, default=0.01)

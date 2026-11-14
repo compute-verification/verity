@@ -26,7 +26,7 @@ from verity_flock import rec_outer as O
 from verity_flock import rec_residuals as RR
 from verity_flock import rec_vstar as V
 
-BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "verity-verify-proof"
 PROGRAM = O.session_program(b"a test session")
 
 

@@ -45,7 +45,6 @@ public import Proofs.Flock.Soundness.NovelBasis
 public import Proofs.Flock.Soundness.PadCode
 public import Definitions.Flock.Accounting.Padded
 public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
-public import Proofs.Flock.Soundness.Accounting.WideLeafChecks
 public import Definitions.Flock.LigeritoPad
 public import Proofs.Flock.Soundness.LigeritoPadLevel0
 public import Proofs.Flock.Soundness.LigeritoPadDecode

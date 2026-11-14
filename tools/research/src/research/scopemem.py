@@ -10,7 +10,7 @@
                by the slice), with the cgroup that sets it; `max` everywhere is no limit
     growth     bytes/s of memory.current over the last GROWTH_WINDOW_S of the run's own sampler records (resources.jsonl
                `cgroup` records), only for the cgroup the sampler reads; none otherwise -- never two reads taken here
-    near_cap   current within NEAR_LIMIT of the limit
+    near_limit current within NEAR_LIMIT of the limit
     cpuset     each cgroup's own cpuset.cpus (a scope's AllowedCPUs; none when unset) and cpuset.cpus.effective, and the
                workload group's affinities (Cpus_allowed_list), which a `taskset` sets where no cgroup does
 
@@ -154,7 +154,7 @@ def read(cg_root: Path, path: str) -> dict[str, Any]:
         p = p.parent
     cur = _bytes(_text(d / "memory.current"))
     return {"cgroup": path, "current_bytes": cur, "peak_bytes": _bytes(_text(d / "memory.peak")), "memory_max": own,
-            "cap_bytes": limit, "cap_at": limit_at, "near_cap": cur is not None and limit is not None and cur >= (1 - NEAR_LIMIT) * limit,
+            "limit_bytes": limit, "limit_at": limit_at, "near_limit": cur is not None and limit is not None and cur >= (1 - NEAR_LIMIT) * limit,
             "cpuset": _text(d / "cpuset.cpus") or None, "cpus_effective": _text(d / "cpuset.cpus.effective"),
             **({} if d.is_dir() else {"error": "gone"})}
 
@@ -389,15 +389,15 @@ def render(r: dict[str, Any]) -> str:
     limit."""
     if r.get("error") == "gone":
         return f"{r['cgroup']}  gone"
-    if r["cap_bytes"] is None:
+    if r["limit_bytes"] is None:
         limit = "none (memory.max is max)"
     else:
-        used = f", {100 * r['current_bytes'] / r['cap_bytes']:.0f}% used" if r["current_bytes"] is not None else ""
-        limit = _gib(r["cap_bytes"]) + (f" (at {r['cap_at']}{used})" if r["cap_at"] != r["cgroup"] else f" ({used[2:]})" if used else "")
+        used = f", {100 * r['current_bytes'] / r['limit_bytes']:.0f}% used" if r["current_bytes"] is not None else ""
+        limit = _gib(r["limit_bytes"]) + (f" (at {r['limit_at']}{used})" if r["limit_at"] != r["cgroup"] else f" ({used[2:]})" if used else "")
     g = r.get("growth")
     grow = "-" if g is None else f"{g['bytes_per_s'] * 60 / GIB:+.1f} GiB/min over {g['over_s']:g} s of samples"
     return (f"{r['cgroup']}  current {_gib(r['current_bytes'])}  peak {_gib(r['peak_bytes'])}  limit {limit}  growth {grow}"
-            + ("  NEAR LIMIT" if r["near_cap"] else ""))
+            + ("  NEAR LIMIT" if r["near_limit"] else ""))
 
 
 def main(argv: list[str]) -> int:

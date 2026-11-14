@@ -63,7 +63,7 @@ session), and with leaves the lanes evidence (`credit.LANES_KEYS`: ``leaf_progra
 with each leaf statement's ``unit`` and ``statement``).
 
 ``check``: credit's own verification of those statements over the window's sampled proof blocks under its sample (``verified``:
-the CLI's is `credit._verified` with the Lean ``flock-verify`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
+the CLI's is `credit._verified` with the Lean ``verity-verify-proof`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
 before it hands them over: ``PROVED`` or ``REFUSED``. Credit's verdict of record (`verifier.RECORD_VERDICT` ``lean``,
 `PouwCheck.Verified`, the lanes form among it) is the Lean's; this is the Python reference's. Each verifier run is
 answered as credit asks for it (`answers.Answers`), one ``LEAN-ANSWER`` line a verdict, and judged in credit's order.
@@ -133,7 +133,7 @@ _random = os.urandom
 #: (n, K) and f32 s_w (n,), in the window's order
 CheckpointWeights = Callable[[Path, Sequence[tuple[str, int, int]], int], list[tuple[np.ndarray, np.ndarray]]]
 #: ``check``'s verifier: (the statements, --circuits' manifest's ``files`` (``k<K>``, or ``lane<K>``, ``combine<K>`` and
-#: ``leaf_programs``), the window (`window_of`, its ``draw`` among it), its sampled proof blocks, the Lean ``flock-verify``) -> each
+#: ``leaf_programs``), the window (`window_of`, its ``draw`` among it), its sampled proof blocks, the Lean ``verity-verify-proof``) -> each
 #: sampled proof block's proof outcomes and None, or None and credit's refusal
 Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, str] | None]]
 

@@ -112,7 +112,7 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
 
 def test_the_work_table_and_design_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
-    `design_object` is the sampling design `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
+    `design_object` is the sampling design `verity-verify-proof draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
     verifier's table raises a zero-work stratum's samples to it."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]

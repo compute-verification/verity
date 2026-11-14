@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Accounting.JointPeriod
-public import Definitions.NetworkCertifier.MonitoringPeriod
-public import Definitions.NetworkCertifier.Tap
+public import Definitions.Certifier.MonitoringPeriod
+public import Definitions.Certifier.Tap
 public import Definitions.Core.Assumptions
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

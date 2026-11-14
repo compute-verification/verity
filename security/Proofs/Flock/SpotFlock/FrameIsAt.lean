@@ -27,7 +27,7 @@ follows from two facts, one about `c` and the slots, one about the run's records
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 open Lean (Json)
 
 /-- **Whether round 2 reads a registered read's value `v` at template `t`'s port `port` off the interior record**

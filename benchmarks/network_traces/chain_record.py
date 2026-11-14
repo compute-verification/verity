@@ -103,7 +103,7 @@ CLEAR = {
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
     "scan": "at the verifier: each unit's o0 output opened from the salts the prover sends; the I/O tie "
             "(IoTieRequest) stays in the clear, outside the proofs",
-    "lean": "nothing: each proof is decided by the verifier's own Lean `flock-verify verify --zk` run",
+    "lean": "nothing: each proof is decided by the verifier's own Lean `verity-verify-proof verify --zk` run",
     "warden_certificates": "at the auditor, on the warden's witness: the warden's own offline check "
                            "(warden_serve.check: each record's certificate and its rows' registration under the "
                            "warden's key and session, the audit and the client's view), and the public "

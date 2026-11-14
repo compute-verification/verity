@@ -67,7 +67,7 @@ def run(served) -> dict:
 def _handed(interior: Path, served: Path, mine: CS.Binding, reads: dict, drawn: list[int]) -> tuple[list[dict], dict]:
     """The sessions' statements and their verdicts of record without the sessions: each member's public file as the
     served path writes it for the written window (`flock_input_files`, as a5 stages a session), the verifier's reads,
-    and a stand-in for what `flock-verify verify`'s verdict of record names of the session it checked."""
+    and a stand-in for what `verity-verify-proof verify`'s verdict of record names of the session it checked."""
     from verity_flock.class_statement import member_stager
 
     def sha512(j) -> str:

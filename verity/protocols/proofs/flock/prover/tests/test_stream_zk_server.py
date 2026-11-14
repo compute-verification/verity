@@ -48,7 +48,7 @@ from verity_flock.proof_server import ProofServer, Statement
 
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 #: the Lean verifier, and the ZK server's Lean: its tap and its session loop
-VERIFY = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+VERIFY = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 LOOP = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
 BIN = settings.flock_circuit()
 #: what puts a `--zk` prover behind the ZK server

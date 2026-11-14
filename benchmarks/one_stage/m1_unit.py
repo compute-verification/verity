@@ -32,7 +32,7 @@ Program it refuses every session once its checks pass.
 
     PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
-      [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
+      [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean verity-verify-proof] [--n 1]
 
 Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, unit_cells (the cells its layout
 takes of its slot of 2^unit_log: a template's with its copies aligned), k_log, block_bits (where its block's last range ends,
@@ -419,7 +419,7 @@ def main() -> int:
                     help="with --reads slots: at most N ANDs a net, the caps whose statement takes the smallest block, then "
                          "whose nets take the fewest cells (auto), or no cap (read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
-    ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
+    ap.add_argument("--lean", default=None, help="the Lean verifier of record (verity-verify-proof)")
     ap.add_argument("--tmpl-unit-bin", default=None, help="with --structural and --bin: flock-tmpl-unit, which places the unit's rows")
     ap.add_argument("--n", type=int, default=1)
     ap.add_argument("--port", type=int, default=7611)

@@ -27,7 +27,7 @@ def reg : ByteArray := "{\"callees\":[\"TAdd32_v1\",\"Input32_v1\",\"RegisteredI
 def stripped : Public :=
   { pub with header := Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson [0, 1])])] }
 
-/-- `flock-verify verify`'s registered reads in its setup's order: `Registered.checkProgram` on the verifier's own program,
+/-- `verity-verify-proof verify`'s registered reads in its setup's order: `Registered.checkProgram` on the verifier's own program,
 then `Registered.check` on the statement (its units derived); setup's `checkComplete`, which follows, is
 `Flock.Test.RegComplete`'s. -/
 def run (program : Option ByteArray) (f : Option Json) (p : Public) : Except String Unit := do

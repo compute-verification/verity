@@ -105,7 +105,8 @@ salts and 64-byte path entries, and a file under `2^64` bytes at a good case's a
 (`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four and the
 mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` proves three of level 0's four and
 `Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification and level 0's verifier premise
-(`Level0.Verifier`), which is not proved.
+(`Level0.Verifier`), which is not proved. That premise covers both statement versions, so completeness at today's
+version rests on it at both.
 For zero knowledge, `honestPR`'s first message is the link of
 the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
 `honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β`,

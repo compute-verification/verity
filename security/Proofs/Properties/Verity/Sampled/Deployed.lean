@@ -13,7 +13,7 @@ decodes (`Live.hCust`, `RecordCustodyZKJPLaw` at the sample file's law at every 
 `hsz`, `Live.hsz`), and carries a third as a field, A3 at the device's bytes the sample reads (`Live.hA3`), which the
 session as deployed takes from here (`Live.deployed`). This file proves the three at the deployment's session:
 
-* **The sample file** (`printedDraw law`): at each sample `S`, the one `flock-verify draw` prints for the verifier's own sample
+* **The sample file** (`printedDraw law`): at each sample `S`, the one `verity-verify-proof draw` prints for the verifier's own sample
   of `S` under `law` over the `n` proof blocks (`UnitDraw.toJson` of `ZkLink.drawOf`); at a subset sampling design it is
   `Claims.Bridge.CustodyZkP.djPrinted` (`printedDraw_subset`). The session's sample file is the `.subset` print of the
   member's share of the window's sample under the verifier's law `L`, its `kd` units (`Live.dj`), and the bound comes
@@ -40,7 +40,7 @@ open FlockSoundness FlockSoundness.Discharge
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **The sample file `flock-verify draw` prints** for the verifier's own sample of `S` under the sampling design `law` over the `n`
+/-- **The sample file `verity-verify-proof draw` prints** for the verifier's own sample of `S` under the sampling design `law` over the `n`
 proof blocks (`UnitDraw.toJson` of `ZkLink.drawOf`). -/
 def printedDraw (law : Flock.Draw.Law) (S : Finset (Fin n)) : Lean.Json := (ZkLink.drawOf law n S).toJson
 
@@ -90,7 +90,7 @@ theorem recordCustodyZKJPLaw_designAt (I : Exec.Inputs) (own : Option ByteArray)
   recordCustodyZKJPLaw_printed I own _ (Flock.Bridge.notBernoulli_designAt desc q lj tb n) Jf
 
 /-- **The sample file a member of a window's sample is served** (`serve --draw-file`): at its part `S` of the sample, the
-one `flock-verify draw` prints for the verifier's own sample of `S` under `subset |S|` over the member's `n` proof blocks. -/
+one `verity-verify-proof draw` prints for the verifier's own sample of `S` under `subset |S|` over the member's `n` proof blocks. -/
 def printedPart (S : Finset (Fin n)) : Lean.Json := printedDraw (.subset S.card) S
 
 /-- **`live-verifier` at a member's writer and sample file** (`Flock.Guarantees.MemberV5.hCust`): `RecordCustodyZKJPLaw`

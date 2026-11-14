@@ -65,18 +65,20 @@ level 0's are the binding and level 0's bodies at the rep's own table and sample
 
 namespace Claims.ZKServer.Count
 
+variable {wideLeaf : Bool}
+
 /-- Every `--zk` schedule's `n` (the packed table's variables, `m − 7`) is under `64`. -/
-def nOk (m : ℕ) : Bool :=
-  match _root_.Flock.Zk.schedule m with
+def nOk (wideLeaf : Bool) (m : ℕ) : Bool :=
+  match _root_.Flock.Zk.schedule wideLeaf m with
   | .ok (sch, _) => decide (sch.n < 64)
   | .error _ => true
 
-/-- Every `--zk` schedule, `m < 36`, by the kernel's evaluation. -/
-theorem nOk_lt : ∀ m, m < 36 → nOk m = true := by decide +kernel
+/-- Every `--zk` schedule, `m < 36` at either statement version, by the kernel's evaluation. -/
+theorem nOk_lt : ∀ (w : Bool) (m : Fin 36), nOk w m.val = true := by decide +kernel
 
-theorem sched_n {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule m = .ok (sch, tp)) :
+theorem sched_n {m tp : ℕ} {sch : _root_.Flock.Schedule} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok (sch, tp)) :
     sch.n < 64 := by
-  have hok := nOk_lt m (sched_facts h).1
+  have hok := nOk_lt wideLeaf ⟨m, (sched_facts h).1⟩
   unfold nOk at hok
   rw [h] at hok
   simpa only [decide_eq_true_eq] using hok
@@ -108,7 +110,7 @@ theorem openList_l0 (sch : _root_.Flock.Schedule) {N : ℕ} (hN : N ≠ 0) (hn0 
 
 /-- **A rep's plan at its binding and level 0**: `z`'s `n`, then level 0's counts. -/
 theorem repPlan_l0 {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (h : _root_.Flock.Zk.schedule st.m = .ok (sch, tp)) {i : ℕ} (hi : i ≤ sch.k0 + 2) :
+    (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) {i : ℕ} (hi : i ≤ sch.k0 + 2) :
     (_root_.Flock.Firewall.Session.repPlan spec st).getD
       (((_root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0)).length +
         ((2 + spec.points * st.regions.size) + 1 + i)) 0 = if i = 0 then sch.n else l0Nc i := by
@@ -137,7 +139,7 @@ theorem piop_list {m kLog : ℕ} (hm : 14 ≤ m) :
   simp [zcCounts, lcCounts, sq, show m - 13 ≠ 0 by omega, flatten_ones]
 
 theorem plan_get {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (h : _root_.Flock.Zk.schedule st.m = .ok (sch, tp)) {p : ℕ}
+    (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) {p : ℕ}
     (hp : p < ((_root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog).toList.filter (· != 0) ++
       openList (2 + spec.points * st.regions.size) sch).length) :
     (_root_.Flock.Firewall.Session.repPlan spec st).getD p 0 =
@@ -148,7 +150,7 @@ theorem plan_get {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch
 /-- **A rep's plan in its PIOP and ring switch**: the zerocheck's `r_outer` round squeezes `m − 13` coins, its residual
 rounds and the lincheck's rounds one each, then each of the `N` claims' ring switch `7` and their batching `N`. -/
 theorem repPlan_piop {spec : _root_.Flock.SessionSpec} {st : _root_.Flock.Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
-    (h : _root_.Flock.Zk.schedule st.m = .ok (sch, tp)) (hm : 14 ≤ st.m) :
+    (h : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (hm : 14 ≤ st.m) :
     (_root_.Flock.Firewall.Session.repPlan spec st).getD 1 0 = st.m - 13 ∧
       (∀ i < st.m - 6, (_root_.Flock.Firewall.Session.repPlan spec st).getD (3 + i) 0 = 1) ∧
       (∀ i < st.c.kLog - 6, (_root_.Flock.Firewall.Session.repPlan spec st).getD (3 + (st.m - 6) + 2 + i) 0 = 1) ∧
@@ -259,7 +261,7 @@ theorem sched_mono {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : Byt
 /-- **A rep stream's start fixes its layout**: `Drive.start` lays the pads out at its statement's schedule. -/
 theorem start_lay {st : Stmt} {lay : _root_.Flock.Zk.PadLayout} {mask : _root_.Flock.Firewall.Frame.MaskSlot}
     (h : _root_.Flock.Firewall.Drive.start st = .ok (lay, mask)) :
-    ∃ sch tp, _root_.Flock.Zk.schedule st.m = .ok (sch, tp) ∧
+    ∃ sch tp, _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp) ∧
       lay = _root_.Flock.Zk.PadLayout.new st.m st.c.kLog sch.k0 := by
   unfold _root_.Flock.Firewall.Drive.start at h
   obtain ⟨⟨sch, tp⟩, hs, h⟩ := bindV_ok h
@@ -421,7 +423,7 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
   have hst : (Masked.stsOf x)[(2 * j + r) / 2]! = (Masked.stsOf x)[j] := by
     rw [hjj]
     exact getElem!_pos _ j hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   obtain ⟨N, hN⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
@@ -518,7 +520,7 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
   obtain ⟨hts', ⟨tp, htp⟩, hxs⟩ := Count.placeholder_tab hph
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  have hzt : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (t.sch, y.tPad) := htsch ▸ hz
+  have hzt : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (t.sch, y.tPad) := htsch ▸ hz
   obtain ⟨hm36, hk0, hn, hq⟩ := Count.sched_facts hzt
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
@@ -637,7 +639,7 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     rw [show n + 1 + R - 1 - R = n by omega] at hs'
     exact ⟨s, hs'⟩
   obtain ⟨htrst, htrsch, -, -, hcapA⟩ := Count.real_tabAlike hR hph hreal
-  have hzr : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (tr.sch, y.tPad) := by
+  have hzr : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (tr.sch, y.tPad) := by
     rw [htrsch]; exact hzt
   obtain ⟨-, hk0r, hnr, hqr⟩ := Count.sched_facts hzr
   have hn0r : tr.sch.n ≠ 0 := by have := (Count.sched_rho hzr).1; omega

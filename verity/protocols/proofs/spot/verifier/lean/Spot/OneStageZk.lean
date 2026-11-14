@@ -3,7 +3,7 @@ Sampled proofs' one-stage audit on the proofs themselves (`verity/sampled-proofs
 v1 audit (`OneStage`) with the verdicts computed here, from the statement's files, rather than read from the evidence.
 
 * **params**: v1's, plus `proofs`, exactly `{"circuit", "public", "registered"}`: the SHA-512s the auditor committed for
-  the circuit and public files (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify
+  the circuit and public files (lowercase hex of 64 bytes) and the verifier's own registered file (`verity-verify-proof
   --registered`'s object, or null for a program that reads no registered value). The partition must not be null: the
   sessions are verified against the verifier's own partition object; and v1's `challenger`, with its `window_root`, must
   be named (`NO_CHALLENGER`), its key at the deployed LMS parameters, `Lms.deployed` (`KEY_PARAMS`);
@@ -15,8 +15,9 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   statement is theirs: the check refuses evidence naming none or several (`oneSession`) before it reads a tree;
 * **blobs**: the files those digests name (`Core.Blobs`). The registered circuit names the lookup tables its session
   reads (its META's `lookups`, `lookupsOf`), so blobs whose pinned MUFU tables (`tablesOf`, each under its SHA-512 as
-  `flock-verify --archive` finds one) are other than those refuse (`tablesHeld`, `NO_TABLES`) before the session is set
-  up: the tables the session `run` sets up reads are the registered circuit's;
+  `verity-verify-proof --archive` finds one) are other than those refuse (`tablesHeld`, `NO_TABLES`) before the session is set
+  up: the tables the session `run` sets up reads are the registered circuit's. The per-member form holds each member
+  to its own circuit's tables instead (below, **per member**);
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a sample other than the one they give before v1's `check`;
@@ -39,7 +40,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   roots and their domains and its instance count the record's, and its `units.indices` the population's units in
   order (`indicesHeld`, `indicesHeld_of_publicHeld`), so no header written after the sample relabels an instance as
   another unit; else the check refuses, before any session is verified;
-* **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
+* **check**: `verity-verify-proof verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
   `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
@@ -49,7 +50,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `Flock.Bridge.partOf` reads it); then v1's `check` on those verdicts, one of
   record a session (`flock-verify/<name>`). A session accepted under another program than the partition object's, proved
   units other than the evidence's `proved_units`, or a circuit, public or record file no blob holds, rejects; a rep
-  file no blob holds is that session's reject, as a file `flock-verify` can't read is. So does a length a session's
+  file no blob holds is that session's reject, as a file `verity-verify-proof` can't read is. So does a length a session's
   statement can't hold, since it writes each in an 8-byte word: the circuit or public file, the lookup tables, the
   program, the partition object, the registered reads or a session's sample at `2^64` bytes or more (`fitsWhy`,
   `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
@@ -62,10 +63,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   read it (`membersParamsOfJson`, `membersEvidenceOf`; `paramsEitherOfJson` and `evidenceEitherOf` read either
   form), and on parameters that name members with evidence that names statements `checkBlobsAt` is
   `checkMembersAt`; parameters of one form with evidence of the other reject. Its parameters' `proofs` is exactly
-  `{"members"}` (`membersOf`), an object from each member's name to exactly
+  `{"members"}` or `{"members", "wiring"}`: `members` (`membersOf`) an object from each member's name to exactly
   `{"circuit", "public", "registered", "units", "vus_per_block"}`: its
   statement's files, as the one statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', and
-  its circuit's units a proof block. Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
+  its circuit's units a proof block; `wiring` (`wiringOf`) the members' wiring, SPOT's (`Spot.Wires.Wiring`), refused
+  where SPOT's check refuses it, a parameter and so fixed before any coin. Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
@@ -76,7 +78,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   fixed before the next member's coins; and the log opens the trees one after another in the sessions' order, no round
   of a tree before the closing round of the one before it or after its own (`Challenger.membersOrder`). Then every
   member's files are read, sampled or not (`membersFiles`): its statement must read as a sampled member's does
-  (`Member.statement`), and its files pass what a session's verdict checks of the files alone (`StepAt.filesHeld`: the
+  (`Member.statement`), on its own lookup tables, the blobs' pinned tables its own circuit looks up (`ownTables`), each
+  of which the blobs must hold (`tablesMatch`, `NO_TABLES`): the members of a window may look up different tables, and
+  a member's inputs hold no table its circuit does not look up (`Properties.Spot.TablesRegistered`). Its files pass
+  what a session's verdict checks of the files alone (`StepAt.filesHeld`: the
   scope, the files' ports and roots, the form the sampled audit's knowledge soundness covers without a session's
   sample, `Flock.KsScope.filesOf`, and the population check), so a member the sample missed is refused where its
   session's verdict would have refused its files (`membersRun_files`). Then each
@@ -86,8 +91,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   restricted to its units (`Member.sizes`: the parameters fix each stratum's size in a member, and nothing the prover
   sends moves a unit between strata), and its public file's units are exactly its member's, in order
   (`Member.population`), so every unit its session proves is its member's; the units the statements proved must be the
-  evidence's `proved_units` (`membersRun_proved`). The registration is held to the members before any statement's
-  session: the members' units are its population, each member one range of it (`laidHeld`), and each of its roots is
+  evidence's `proved_units` (`membersRun_proved`). Then, where the parameters name a wiring, every wired row of every
+  unit of `proved_units` is its writer's output row (`wiresHeld`, `membersRun_wires`): each template of the wiring is
+  one range of the verifier's partition holding exactly its units, and the row's `b ‖ c` in its member's public file
+  is the writer's row's in the writer's member's (`wiresOn`). The registration is held to the members before any
+  statement's session: the members' units are its population, each member one range of it (`laidHeld`), and each of its roots is
   exactly one member's, the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no
   member's or two members' refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is
   held to its slice of the
@@ -105,6 +113,7 @@ public import Spot.OneStage
 public import Spot.ChallengerTrees
 public import Spot.Slots
 public import Spot.FilePart
+public import Spot.WiresDrawn
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
@@ -113,6 +122,7 @@ meta import Spot.OneStage
 meta import Spot.ChallengerTrees
 meta import Spot.Slots
 meta import Spot.FilePart
+meta import Spot.WiresDrawn
 meta import Flock
 meta import Flock.JsonParse
 meta import Std.Data.HashMap
@@ -164,7 +174,7 @@ def templateOk (c : Flock.Circuit) : V Unit := do
   if c.upv = 0 then throw NO_ROW_WHY
   if returnedBits c > UNIT_CLASS_MAX then throw WIDE_WHY
 
-/-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
+/-- The verifier's own inputs to `verity-verify-proof verify --zk`: the program's descriptor (as JSON and as the bytes
 `--program` reads), the partition object, the circuit and public files' committed SHA-512s and the registered file. -/
 structure Own where
   programJ : Json
@@ -183,11 +193,13 @@ structure Member where
   own : Own
 
 /-- The parameters: v1's, the verifier's own inputs, and in the per-member form (module docstring, **per member**)
-its members, `own` then holding the program and the partition every member's statement reads and no file. -/
+its members, `own` then holding the program and the partition every member's statement reads and no file, and the
+members' wiring where the parameters name one, with SPOT's summary of it (`wiringOf`). -/
 structure Params where
   base : OneStage.Params
   own : Own
   members : Option (Array Member)
+  wiring : Option (Spot.Wires.Wiring × Spot.Wires.Summary) := none
 
 structure RunFiles where
   name : String
@@ -300,7 +312,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   if sessions.map (·.name) != base.sessions then throw "proofs: the sessions are not the evidence's sessions, in order"
   pure { base, sessions, statements := none }
 
-/-- `flock-verify`'s `checkIdentifier` without the verifier's own identifier: a public header that names one refuses. -/
+/-- `verity-verify-proof`'s `checkIdentifier` without the verifier's own identifier: a public header that names one refuses. -/
 def checkIdentifier (st : Flock.Stmt) : V Unit :=
   match st.pub.header.getObjVal? "identifier" with
   | .error _ => pure ()
@@ -310,7 +322,7 @@ def checkIdentifier (st : Flock.Stmt) : V Unit :=
       throw s!"identifier: the public header's identifier is outside canonical JSON's RFC 8785 domain: {e}"
     throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
 
-/-- `flock-verify`'s `buildSessionOf` on an hm96-sha512 row statement with none of `--work`, `--stratified`,
+/-- `verity-verify-proof`'s `buildSessionOf` on an hm96-sha512 row statement with none of `--work`, `--stratified`,
 `--closure`, `--public-inputs` or `--identifier`. -/
 def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB : ByteArray) (coins : Flock.Coins)
     (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Json) (program : Option ByteArray)
@@ -326,7 +338,7 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
   Flock.Registered.checkFull registered draw
   return r
 
-/-- `flock-verify`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
+/-- `verity-verify-proof`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
 def programDigest (b : ByteArray) : Option String := do
   let j ← (Flock.JsonParse.parse (← String.fromUTF8? b)).toOption
   let bare := match j with
@@ -383,7 +395,7 @@ def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
     | none => throw "the record draws an instance the public file's units.indices does not name"
   return units.qsort (· < ·)
 
-/-- The pinned MUFU lookup tables the blobs hold, each found under its pinned SHA-512 as `flock-verify --archive` finds
+/-- The pinned MUFU lookup tables the blobs hold, each found under its pinned SHA-512 as `verity-verify-proof --archive` finds
 it. -/
 def tablesOf (bs : Core.Blobs) : List (String × ByteArray) :=
   Flock.MUFU_TABLES.filterMap fun t =>
@@ -411,10 +423,33 @@ def tablesHeld (p : Own) (bs : Core.Blobs) : V Unit := do
   let names (ns : List String) := if ns.isEmpty then "none" else ", ".intercalate ns
   if got != want then throw s!"{NO_TABLES}: the circuit looks up {names want}, the blobs hold {names got}"
 
-/-- `tablesHeld` on a circuit file whose META is `{"lookups": lookups}` (`{}` where `j` has no `lookups`) and blobs
-under the digests `digests` (lowercase hex), whatever their bytes: the `tables_held` piece,
-`{"lookups": ..., "digests": [hex, ...]}` to `{"why": refusal or null}`. -/
-def tablesPiece (j : Json) : V Json := do
+/-- `tablesHeld` past its reads: the lookup tables a statement is handed, `tables`, held to the ones its circuit looks
+up, `want`. Other names refuse: a table the circuit does not look up, as one it looks up that is not handed. -/
+def tablesMatch (tables : List (String × ByteArray)) (want : List String) : V Unit := do
+  let got := tables.map (·.1)
+  let names (ns : List String) := if ns.isEmpty then "none" else ", ".intercalate ns
+  if got != want then throw s!"{NO_TABLES}: the circuit looks up {names want}, the blobs hold {names got}"
+
+/-- `tablesHeld` is its reads of the circuit file, then `tablesMatch` at the blobs' lookup tables. -/
+theorem tablesHeld_match (p : Own) (bs : Core.Blobs) :
+    tablesHeld p bs =
+      bs.get p.circuit "circuit" >>= fun circuitB => lookupsOf circuitB >>= tablesMatch (tablesOf bs) :=
+  rfl
+
+/-- The blobs' pinned MUFU tables among the names `names`, in `Flock.MUFU_TABLES`' order. -/
+def tablesAmong (names : List String) (bs : Core.Blobs) : List (String × ByteArray) :=
+  (tablesOf bs).filter fun t => names.contains t.1
+
+/-- **A member's own lookup tables** (module docstring, **per member**): the blobs' pinned MUFU tables its registered
+circuit looks up (`lookupsOf`), and no other the blobs hold, so a table another member's circuit looks up is none of
+its. A refusal where no blob holds the circuit file or its META's `lookups` does not read. -/
+def ownTables (p : Own) (bs : Core.Blobs) : V (List (String × ByteArray)) :=
+  bs.get p.circuit "circuit" >>= fun circuitB => lookupsOf circuitB >>= fun names => pure (tablesAmong names bs)
+
+/-- The case of the `tables_held` and `own_tables` pieces, `{"lookups": ..., "digests": [hex, ...]}`: the verifier's
+own files naming a circuit file whose META is `{"lookups": lookups}` (`{}` where `j` has no `lookups`), and blobs
+holding it and, under the digests `digests` (lowercase hex), whatever their bytes. -/
+def tablesCase (j : Json) : V (Own × Core.Blobs) := do
   let .arr ds := getD j "digests" | throw "digests is not a list"
   let entries ← ds.mapM fun
     | .str s => return (← Flock.unhex s, ByteArray.empty)
@@ -427,18 +462,42 @@ def tablesPiece (j : Json) : V Json := do
   let own : Own :=
     { programJ := Json.null, program := .empty, partition := Json.null, circuit := Flock.hexOf d, pub := "",
       registered := none }
-  return Json.mkObj [("why", match tablesHeld own ⟨#[(d, c)] ++ entries⟩ with
+  return (own, ⟨#[(d, c)] ++ entries⟩)
+
+/-- `tablesHeld` on the case `j` names (`tablesCase`): the `tables_held` piece, to `{"why": refusal or null}`. -/
+def tablesPiece (j : Json) : V Json := do
+  let (own, bs) ← tablesCase j
+  return Json.mkObj [("why", match tablesHeld own bs with
     | .ok () => Json.null
     | .error w => Json.str w)]
 
-/-- What `flock-verify verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
+/-- A member's own lookup tables on the case `j` names (`tablesCase`), held to its circuit's lookups as its statement
+holds them (`ownTables`, then `tablesMatch`): the `own_tables` piece, to `{"tables": [name, ...], "why": refusal or
+null}`, the tables by name, null where they do not read. -/
+def ownTablesPiece (j : Json) : V Json := do
+  let (own, bs) ← tablesCase j
+  return match ownTables own bs with
+    | .error w => Json.mkObj [("tables", Json.null), ("why", Json.str w)]
+    | .ok tables =>
+      Json.mkObj [("tables", Lean.toJson (tables.map (·.1))),
+        ("why", match bs.get own.circuit "circuit" >>= lookupsOf >>= tablesMatch tables with
+          | .ok () => Json.null
+          | .error w => Json.str w)]
+
+/-- What `verity-verify-proof verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
 `tags`, the circuit and public files, one table, the lookup tables the blobs hold, and the verifier's own partition
 object and program. -/
 def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Core.Blobs) : Flock.Witness.Inputs :=
   { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables := tablesOf bs, partition := some p.partition,
     program := some p.program }
 
-/-- The bound on each length a session's statement holds: `flock-verify`'s statement writes every length in an 8-byte
+/-- `inputsOf` at the lookup tables `tables` a statement is handed, rather than every pinned table the blobs hold. -/
+def inputsAt (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (tables : List (String × ByteArray)) :
+    Flock.Witness.Inputs :=
+  { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables, partition := some p.partition,
+    program := some p.program }
+
+/-- The bound on each length a session's statement holds: `verity-verify-proof`'s statement writes every length in an 8-byte
 word. -/
 def WORD : Nat := 2 ^ 64
 
@@ -599,7 +658,7 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
       pure { coinKeys, all := r.all, proved := r.proved ++ units,
              out := r.out.push (verdictJson rd programSha s st true "" units) }
 
-/-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own sample
+/-- One session's `verity-verify-proof verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own sample
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
 makes after it, the population check last (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in
 no blob or not UTF-8, its sample doesn't fit the session's statement (`drawFitsWhy`), or it accepted naming another
@@ -624,7 +683,7 @@ def provedHeld (proved want : Array Nat) : V Unit :=
   if proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
   else pure ()
 
-/-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
+/-- One `verity-verify-proof verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
 session set up at its own record's sample: every session's verdict, the units the accepted ones proved and whether all
 accepted. A session accepts only where the registration's population is the public file's units in order
 (`FilePart.check`, last). A refusal, first, of blobs holding other lookup tables than the registered circuit's (`tablesHeld`),
@@ -690,19 +749,30 @@ def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableN
 `2^cap₀` digests of the table's Merkle scheme, `cap₀` the first stratum of `Flock.Zk.schedule` at the table's `m`.
 `Zk.verify` holds `root_B` to that cap (S16/R1), so the statement fixes it. -/
 def rootBLen (st : Flock.Setup) : V Nat := do
-  let (sch, _) ← Flock.Zk.schedule st.m
+  let (sch, _) ← Flock.Zk.schedule st.wideLeaf st.m
   pure (2 ^ (sch.levels.getD 0 default).cap * st.merkle.digestLen)
 
 /-- The session's tables (`sessionTables`), each with its `root_B`'s byte length (`rootBLen`) at the session `record`
-sets up: `setupAt` at the record's sample on the verifier's own files `p`, as `run` sets it up. None where it sets up no
-table, and then `run` sets up none either, so the session's own verdict rejects. -/
-def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
+sets up: `setupAt` at the record's sample on what `inputs` makes of the statement's tags and the circuit and public
+files of the verifier's own files `p`. None where it sets up no table. -/
+def rootBTablesAt (inputs : Flock.Tags → ByteArray → ByteArray → V Flock.Witness.Inputs) (p : Own) (bs : Core.Blobs)
+    (record : String) : Array (String × Option Nat) :=
   let tabs : Option (Array Flock.Setup) := (do
     let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
-    let I := inputsOf tags0 p (← bs.get p.circuit "circuit") (← bs.get p.pub "public file") bs
+    let I ← inputs tags0 (← bs.get p.circuit "circuit") (← bs.get p.pub "public file")
     let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
     pure tabs : V (Array Flock.Setup)).toOption
   sessionTables.mapIdx fun i t => (t, tabs.bind fun ts => ts[i]?.bind fun st => (rootBLen st).toOption)
+
+/-- `rootBTablesAt` on `inputsOf`, every pinned table the blobs hold, as `run` sets the session up. None where it sets
+up no table, and then `run` sets up none either, so the session's own verdict rejects. -/
+def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
+  rootBTablesAt (fun tags circuitB pubB => pure (inputsOf tags p circuitB pubB bs)) p bs record
+
+/-- `rootBTablesAt` for a member's session: on the member's own files `p` at its own lookup tables (`ownTables`), the
+inputs its statement holds (`Member.statement`), whatever other pinned table the blobs hold. -/
+def ownRootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
+  rootBTablesAt (fun tags circuitB pubB => do pure (inputsAt tags p circuitB pubB (← ownTables p bs))) p bs record
 
 /-- The evidence's sessions held to the challenger's trees `ts` (module docstring, **trees**): each session's record
 on the blobs, refused as `verdicts` refuses it when no blob holds it or it isn't UTF-8, read as `Flock.Record.decode`
@@ -825,21 +895,43 @@ def statementsOf (pr : Json) : V (Array StatementFiles) := do
 /-- A digest in the place of a file's the per-member form's parameters name none of (`membersParamsOfJson`). -/
 private def NO_FILE : String := "".pushn '0' 128
 
-/-- **The per-member form's parameters**: `proofs` exactly `{"members"}` (`membersOf`, on the program and the
-partition every member's statement reads), and everything else as the one statement's parameters hold it
-(`paramsOfJson`, read at `proofs` of no file): `own` is that program and partition, with no file. -/
+/-- **The members' wiring**: SPOT's wiring (`Spot.Wires.Wiring.ofJson`: `templates`, `cuts`, `wires` and optionally
+`order`, the `wires` piece's), each template a template descriptor id of the verifier's partition, and SPOT's
+summary of it, a refusal where SPOT's check refuses it (`Spot.Wires.check`). It is a parameter, so it is fixed before
+any coin, and the check reads it alone. -/
+def wiringOf (j : Json) : V (Spot.Wires.Wiring × Spot.Wires.Summary) := do
+  let W ← (Spot.Wires.Wiring.ofJson j).mapError (s!"proofs: wiring: {·}")
+  match Spot.Wires.check W with
+  | .ok S => pure (W, S)
+  | .error r =>
+    throw s!"proofs: wiring: SPOT's check refuses it ({r.code.name}{(r.wire.map (s!", wire {·}")).getD ""})"
+
+/-- The keys of the per-member form's `proofs`: its members, and its members' wiring where it names one. -/
+def MEMBERS_KEYS : List (Array String) := [#["members"], #["members", "wiring"]]
+
+/-- **The per-member form's parameters**: `proofs` exactly `{"members"}` or `{"members", "wiring"}` (`membersOf`, on
+the program and the partition every member's statement reads; `wiringOf`), and everything else as the one statement's
+parameters hold it (`paramsOfJson`, read at `proofs` of no file): `own` is that program and partition, with no
+file. -/
 def membersParamsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
-  exactly pr #["members"] "proofs"
+  if !MEMBERS_KEYS.any (keys? pr == some ·) then
+    throw "the keys of proofs are not members, or members and wiring"
   let one := Json.mkObj [("circuit", Json.str NO_FILE), ("public", Json.str NO_FILE), ("registered", Json.null)]
   let p ← paramsOfJson (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
   let own := { p.own with circuit := "", pub := "" }
-  pure { p with own, members := some (← membersOf own (getD pr "members")) }
+  let members ← membersOf own (getD pr "members")
+  let wiring ← match field? pr "wiring" with
+    | some w => some <$> wiringOf w
+    | none => pure none
+  pure { p with own, members := some members, wiring }
 
-/-- **The parameters in either form**: the per-member form's where `proofs` is exactly `{"members"}`, else the one
-statement's. `protocol` reads `paramsOfJson`, which refuses the per-member form's. -/
+/-- **The parameters in either form**: the per-member form's where `proofs`' keys are its (`MEMBERS_KEYS`), else the
+one statement's. `protocol` reads `paramsOfJson`, which refuses the per-member form's. -/
 def paramsEitherOfJson (j : Json) : V Params :=
-  if (field? j "proofs").bind keys? == some #["members"] then membersParamsOfJson j else paramsOfJson j
+  match (field? j "proofs").bind keys? with
+  | some ks => if MEMBERS_KEYS.contains ks then membersParamsOfJson j else paramsOfJson j
+  | none => paramsOfJson j
 
 /-- **The per-member form's evidence**: `proofs` exactly `{"statements"}` (`statementsOf`), and everything else as the
 one statement's evidence holds it (`evidenceOf`, read at `proofs` of the statements' sessions in order), so its
@@ -1107,11 +1199,12 @@ structure StepAt where
 def StepAt.step (a : StepAt) (bs : Core.Blobs) (r : Run) (s : RunFiles) : V Run :=
   OneStageZk.step a.I a.rd bs a.scope a.ksFiles a.population a.programSha a.want r s
 
-/-- The statement at the verifier's own inputs `p`, the tags `tags0`, the circuit and public files, the blobs' lookup
-tables and the registered reads `rd`, as `run` builds its own, with `population` its population check. -/
-def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs : Core.Blobs) (rd : Reads)
-    (population : V Unit) : StepAt :=
-  let I := inputsOf tags0 p circuitB pubB bs
+/-- The statement at the verifier's own inputs `p`, the tags `tags0`, the circuit and public files, the lookup tables
+`tables` and the registered reads `rd`, as `run` builds its own at the blobs' tables, with `population` its population
+check. -/
+def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (tables : List (String × ByteArray))
+    (rd : Reads) (population : V Unit) : StepAt :=
+  let I := inputsAt tags0 p circuitB pubB tables
   { I, rd, scope := scopeOf I rd
     ksFiles := Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
       (Flock.Witness.zkTags I) pubB
@@ -1119,13 +1212,17 @@ def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (bs 
     programSha := programDigest p.program
     want := getD p.partition "program" }
 
-/-- **The statement the sessions at the inputs `p` are held to, read off the blobs before any session**: `run`'s own
-checks in `run`'s order (the blobs' lookup tables the circuit's, the statement's tags with hiding leaves, registered
-values read only with the verifier's registered file, the circuit and public files, each length within a statement's
-word, the registered reads), then `StepAt.ofOwn` with the population check `population` on the public file. A
-refusal where `run` refuses. -/
-def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) : V StepAt :=
-  tablesHeld p bs >>= fun _ =>
+/-- **The statement the sessions at the inputs `p` are held to on the lookup tables `tables` it is handed, read off
+the blobs before any session**: `run`'s own checks in `run`'s order (the tables handed the circuit's, by name, as `run`
+holds the blobs' to them, `tablesMatch`; the statement's tags with hiding leaves, registered values read only with the
+verifier's registered file, the circuit and public files, each length within a statement's word, the registered
+reads), then `StepAt.ofOwn` at those tables with the population check `population` on the public file. A refusal
+where `run` refuses on blobs whose pinned tables are `tables`. -/
+def statementOf (p : Own) (population : ByteArray → V Unit) (tables : List (String × ByteArray)) (bs : Core.Blobs) :
+    V StepAt :=
+  bs.get p.circuit "circuit" >>= fun circuitB =>
+  lookupsOf circuitB >>= fun want =>
+  tablesMatch tables want >>= fun _ =>
   match Flock.Tags.find? STATEMENT with
   | none => throw s!"the statement {STATEMENT} is not known"
   | some tags0 =>
@@ -1137,18 +1234,20 @@ def statementOf (p : Own) (population : ByteArray → V Unit) (bs : Core.Blobs) 
         throw ("registered: the program reads registered values (a RegisteredInput among its definitions) and the " ++
           "verifier holds no registered reads: verify with its own registered file")
       | false =>
-        bs.get p.circuit "circuit" >>= fun circuitB =>
         bs.get p.pub "public file" >>= fun pubB =>
-        match fitsWhy WORD circuitB pubB (tablesOf bs) (some p.program) (some p.partition) p.registered with
+        match fitsWhy WORD circuitB pubB tables (some p.program) (some p.partition) p.registered with
         | some what => throw s!"{what}: {FITS}"
         | none =>
-          readsOf p.registered >>= fun rd => pure (StepAt.ofOwn p tags0 circuitB pubB bs rd (population pubB))
+          readsOf p.registered >>= fun rd => pure (StepAt.ofOwn p tags0 circuitB pubB tables rd (population pubB))
 
-/-- **The statement a member's session is held to**: `statementOf` at the member's own inputs, its population check the
-member's at its `slice` of the registration (`Member.population`), and its circuit's units a proof block the
-parameters' (`Member.blockHeld`). -/
+/-- **The statement a member's session is held to**: `statementOf` at the member's own inputs and its own lookup tables
+(`ownTables`: the blobs' pinned tables its circuit looks up, so a table of the blobs that only another member's circuit
+looks up does not refuse it, and one its circuit looks up that the blobs do not hold does, `NO_TABLES`), its
+population check the member's at its `slice` of the registration (`Member.population`), and its circuit's units a
+proof block the parameters' (`Member.blockHeld`). -/
 def Member.statement (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
-  statementOf m.own (m.population slice) bs >>= fun a =>
+  ownTables m.own bs >>= fun tables =>
+  statementOf m.own (m.population slice) tables bs >>= fun a =>
   m.blockHeld (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.tables) >>= fun _ => pure a
 
 /-- **A statement's files held to what its sessions' verdicts check of the files alone**, with no session: the scope
@@ -1317,9 +1416,9 @@ def sessionEvidence (bs : Core.Blobs) (s : RunFiles) : V ByteArray := do
 
 /-- The statements' sessions held to the challenger's trees `ts` and its release log's lines `log`, each statement
 with its member: each session's record on the blobs, refused as `treesHeld` refuses it, at its tables with the
-`root_B` lengths its statement fixes on its member's own files (`rootBTables`) and the SHA-512 of its evidence
-(`sessionEvidence`), then `Challenger.membersTreeReason`: each session's coins one tree's, the tree closed after that
-digest, and the trees opened one after another in the sessions' order. -/
+`root_B` lengths its statement fixes on its member's own files and lookup tables (`ownRootBTables`) and the SHA-512 of
+its evidence (`sessionEvidence`), then `Challenger.membersTreeReason`: each session's coins one tree's, the tree closed
+after that digest, and the trees opened one after another in the sessions' order. -/
 def membersTreesHeld (ts : Array Challenger.LoggedTree) (log : List String) (sts : Array (StatementFiles × Member))
     (bs : Core.Blobs) : V Unit := do
   let mut named : Array (String × Array (String × Option Nat) × Json × String) := #[]
@@ -1328,7 +1427,7 @@ def membersTreesHeld (ts : Array Challenger.LoggedTree) (log : List String) (sts
       let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
         | throw s!"session {s.name}'s record is not UTF-8"
       let evidence ← sessionEvidence bs s
-      named := named.push (s.name, rootBTables m.own bs record,
+      named := named.push (s.name, ownRootBTables m.own bs record,
         (Flock.JsonParse.parse record).toOption.getD Json.null, sha512Hex evidence)
   if let some why := Challenger.membersTreeReason ts log named then throw why
 
@@ -1350,15 +1449,131 @@ def membersStructure (p : Params) (ms : Array Member) (c : OneStage.Commitment) 
   laidHeld ms c.record
   classHeld ms
 
+/-- The refusal of a template of the wiring that is not one range of the verifier's partition holding exactly its
+units (`wiresHeld`). -/
+def WIRES_TEMPLATE : String :=
+  "wiring: a template of the wiring is not one range of the verifier's partition holding exactly its units: a " ++
+    "template's unit u is the population's unit first + u"
+
+/-- The refusal of a wired row of a unit of the sample that is not its writer's output row (`wiresHeld`). -/
+def WIRES_SAMPLED : String :=
+  "wiring: a wired row of a unit of the sample is not its writer's output row: its b || c in its member's " ++
+    "public file is not the writer's row's in the writer's member's"
+
+/-- Row `r` of a port cut into `k` rows, by its name among the circuit's ports: the port's own name uncut, else
+`port#r`. -/
+def rowName (port : String) (r k : Nat) : String := if k == 1 then port else s!"{port}#{r}"
+
+/-- The member holding the population's unit `g`, of the members `ms` (each its name, first unit and count), and `g`'s
+slot in its public file: members laid over the population (`laidHeld`) are each one range, so the slot is `g` less
+the member's first unit. -/
+def memberAt (ms : Array (String × Nat × Nat)) (g : Nat) : Option (String × Nat) :=
+  (ms.find? fun (_, lo, n) => decide (lo ≤ g) && decide (g < lo + n)).map fun (name, lo, _) => (name, g - lo)
+
+/-- A member's rows as `wiresOn` reads them: its circuit's ports' names, in order, and the `b ‖ c` of slot `i`'s port
+`k` in its public file. -/
+abbrev Rows := Array String × (Nat → Nat → ByteArray)
+
+/-- **The wires of the sample's units held to the members' rows**, on the wiring `W` with SPOT's summary `S`, the
+partition's ranges `rs` (each its template, first unit and count), the members `ms` (each its name, first unit and
+count), the units of the sample `sample` and each member's rows (`load`, by name): each template of the wiring is one
+range of `rs` of exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and
+every wired row of every unit of the sample is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's
+check on the sample's units by `Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
+slot and the port the row names (`rowName`), is the writer's output row's in the writer's member's, neither empty
+(else `WIRES_SAMPLED`). It loads the members a unit of the sample with a wired row, or one of its writers, is in. -/
+def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String × Nat × Nat))
+    (ms : Array (String × Nat × Nat)) (sample : Array Nat) (load : String → V Rows) : V Unit := do
+  let spans ← W.templates.mapM fun (tid, t) =>
+    match (rs.filter (·.1 == tid)).toList with
+    | [(_, first, count)] => if count == t.units then pure (tid, first, count) else throw WIRES_TEMPLATE
+    | _ => throw WIRES_TEMPLATE
+  let at? : String → Int → Option (String × Nat) := fun tid u => do
+    let (_, lo, n) ← spans.find? (·.1 == tid)
+    if decide (0 ≤ u) && decide (u < (n : Int)) then memberAt ms (lo + u.toNat) else none
+  let sampled := sample.toList.filterMap fun g =>
+    (spans.find? fun (_, lo, n) => decide (lo ≤ g) && decide (g < lo + n)).map fun (tid, lo, _) => (tid, g - lo)
+  let need := sampled.flatMap fun (tid, u) => match S.rowsAt tid u with
+    | [] => []
+    | rws => ((at? tid u).toList ++ rws.filterMap fun (_, (wt, wu, _)) => at? wt wu).map (·.1)
+  let files ← (ms.toList.filter (need.contains ·.1)).mapM fun (name, _) => do pure (name, ← load name)
+  let bc : String → Int → String → Option ByteArray := fun tid u row => do
+    let (name, i) ← at? tid u
+    let (ports, digest) ← files.lookup name
+    let k ← ports.findIdx? (· == row)
+    let d := digest i k
+    if d.isEmpty then none else some d
+  let same := fun ((tid, u, port, r) : String × Nat × String × Nat) ((wt, wu, out) : String × Int × String) =>
+    match bc tid u (rowName port r (W.cutsOf tid port)), bc wt wu out with
+    | some a, some b => a == b
+    | _, _ => false
+  if !S.drawnOk same sampled then throw WIRES_SAMPLED
+
+/-- A member's rows as its sessions' verdicts parse its files (`Flock.ProvedScope.circuitOf`,
+`Flock.ProvedScope.publicOf`), from the blobs its parameters name at its own lookup tables (`ownTables`): its
+circuit's ports' names and its public file's `b ‖ c` (`Flock.Public.digest`). -/
+def Member.rows (m : Member) (bs : Core.Blobs) : V Rows := do
+  let a ← statementOf m.own (fun _ => pure ()) (← ownTables m.own bs) bs
+  let tags := Flock.Witness.zkTags a.I
+  let c ← Flock.ProvedScope.circuitOf tags a.I.circuitFile a.I.tables
+  let pub ← Flock.ProvedScope.publicOf tags c a.I.publicFile
+  pure (c.ports.map (·.name), fun i k => pub.digest i k c.ports.size)
+
+/-- **The wires of the sample's units held to the members' public files**, where the parameters name a wiring
+(`wiringOf`): `wiresOn` at the ranges of the verifier's partition (`Partition.evaluate` on the verifier's program and
+query), the units of the sample `sample` (the evidence's `proved_units`, which v1's check holds to the sample) and
+each member's rows read off its files on the blobs (`Member.rows`). It reads no session. -/
+def wiresHeld (p : Params) (ms : Array Member) (sample : Array Nat) (bs : Core.Blobs) : V Unit := do
+  let some (W, S) := p.wiring | pure ()
+  let rs ← Partition.evaluate (← Program.parse p.own.program) (getD p.own.partition "query")
+  wiresOn W S (rs.map fun r => (r.template, r.first, r.count)) (ms.map fun m => (m.name, m.first, m.count)) sample
+    fun name => match ms.find? (·.name == name) with
+      | some m => m.rows bs
+      | none => throw "the parameters name no such member"
+
+/-- **The `members_wires` piece**: `wiresOn` on an instance `{"members", "ranges", "sample", "wiring"}`: `wiring` as
+the parameters' (`wiringOf`), `ranges` the partition's `[template, first, count]`, `members` each exactly
+`{"count", "first", "name", "ports", "rows"}` (its ports' names, and per slot its ports' strings, each string's UTF-8
+bytes a `b ‖ c`, the empty string none), `sample` the units of the sample. The output is `{"refusal"}`: null, or the
+refusal of `wiringOf` or `wiresOn`. -/
+def membersWiresPiece (j : Json) : V Json := do
+  exactly j #["members", "ranges", "sample", "wiring"] "an instance"
+  let .arr rs := getD j "ranges" | throw "ranges is not a list"
+  let rs ← rs.mapM fun
+    | .arr #[.str t, a, n] => match nat? a, nat? n with
+      | some a, some n => pure (t, a, n)
+      | _, _ => throw "a range is [template, first, count]"
+    | _ => throw "a range is [template, first, count]"
+  let .arr ms := getD j "members" | throw "members is not a list"
+  let ms ← ms.mapM fun m => do
+    exactly m #["count", "first", "name", "ports", "rows"] "a member"
+    let (.str name, some first, some count, .arr ports, .arr rows) :=
+        (getD m "name", nat? (getD m "first"), nat? (getD m "count"), getD m "ports", getD m "rows")
+      | throw "a member is {name, first, count, ports, rows}"
+    let ports ← ports.mapM fun | .str p => pure p | _ => throw "a port is a name"
+    let rows ← rows.mapM fun
+      | .arr r => r.mapM fun | .str s => pure s.toUTF8 | _ => throw "a row's string is a string"
+      | _ => throw "a slot's rows are a list"
+    pure (name, first, count, ports, rows)
+  let .arr ds := getD j "sample" | throw "sample is not a list"
+  let sample ← ds.mapM fun d => match nat? d with | some n => pure n | none => throw "a unit of the sample is a natural"
+  let out := wiringOf (getD j "wiring") >>= fun (W, S) =>
+    wiresOn W S rs (ms.map fun (n, f, c, _, _) => (n, f, c)) sample fun name =>
+      match ms.find? (·.1 == name) with
+      | some (_, _, _, ports, rows) => pure (ports, fun i k => (rows.getD i #[]).getD k ByteArray.empty)
+      | none => throw "no such member"
+  pure (Json.mkObj [("refusal", match out with | .ok () => Json.null | .error why => .str why)])
+
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
 member's (`rootsOf`), then every member's files and each statement's session on the blobs, at its member's slice of
-the registration (`Member.slice`, `runMembers`). -/
+the registration (`Member.slice`, `runMembers`), then the wires of the sample's units (`wiresHeld`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run :=
   membersStructure p ms c e sts bs >>= fun _ =>
   rootsOf ms c.record >>= fun roots =>
-  runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs
+  runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs >>= fun r =>
+  wiresHeld p ms e.base.provedUnits bs >>= fun _ => pure r
 
 /-- **Where the per-member form's run returns, every member's files are held, sampled or not**: at the roots
 `rootsOf` gives each member, each member of the parameters has its statement read and its files pass what a session's
@@ -1370,7 +1585,8 @@ theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitme
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
-  exact ⟨roots, hr, runMembers_files h⟩
+  obtain ⟨_, hrun, _⟩ := Flock.HmNets.bind_ok h
+  exact ⟨roots, hr, runMembers_files hrun⟩
 
 /-- **Where the per-member form's run returns with every session accepted, the units the sessions proved are the
 evidence's `proved_units`** (`runMembers_proved`), which the record's checks hold to the sample (`Record.checks`'
@@ -1381,7 +1597,23 @@ theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitm
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
-  exact runMembers_proved h hall
+  obtain ⟨r', hrun, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, _, h⟩ := Flock.HmNets.bind_ok h
+  cases h
+  exact runMembers_proved hrun hall
+
+/-- **Where the per-member form's run returns, the wires of the sample's units held** (`wiresHeld`): with a wiring,
+each of its templates is one range of the verifier's partition and every wired row of a unit of the sample is its
+writer's output row in the members' public files. -/
+theorem membersRun_wires {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
+    {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
+    wiresHeld p ms e.base.provedUnits bs = .ok () := by
+  unfold membersRun at h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
+  obtain ⟨⟨⟩, hw, _⟩ := Flock.HmNets.bind_ok h
+  exact hw
 
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
 verdicts (`membersRun`), then v1's `checkAt` at `ξ` on them, as the one statement's check; and what would accept is
@@ -1481,6 +1713,17 @@ theorem paramsOfJson_members {j : Json} {p : Params} (h : paramsOfJson j = .ok p
   subst h
   rfl
 
+/-- **Parsed parameters name no wiring**: whatever `paramsOfJson` returns is of the one statement's form. -/
+theorem paramsOfJson_wiring {j : Json} {p : Params} (h : paramsOfJson j = .ok p) : p.wiring = none := by
+  unfold paramsOfJson at h
+  simp only [bind, Except.bind] at h
+  repeat' split at h
+  all_goals try contradiction
+  all_goals try (rename_i ht _ _ _ _; simp [throw, throwThe, MonadExceptOf.throw] at ht; done)
+  simp only [pure, Except.pure, Except.ok.injEq] at h
+  subst h
+  rfl
+
 /-- **Parsed evidence names no statements**: whatever `evidenceOf` returns is of the one statement's form. -/
 theorem evidenceOf_statements {b : ByteArray} {e : Evidence} (h : evidenceOf b = .ok e) : e.statements = none := by
   unfold evidenceOf at h
@@ -1510,7 +1753,7 @@ theorem live_checkAt_parsed (bs : Array ByteArray) {j : Json} {b : ByteArray} {p
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
 proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file
 canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
-difftest holds it to `flock-verify verify --zk` (`one_stage.proofs.verify`). -/
+difftest holds it to `verity-verify-proof verify --zk` (`one_stage.proofs.verify`). -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -1662,7 +1905,8 @@ private def oneProofs : Json :=
 
 #guard paramsWhy (paramsOfJson (proofsOnly (Json.mkObj [("members", Json.mkObj [])]))) ==
   "the keys of proofs are not circuit, public, registered"
-#guard paramsWhy (membersParamsOfJson (proofsOnly oneProofs)) == "the keys of proofs are not members"
+#guard paramsWhy (membersParamsOfJson (proofsOnly oneProofs)) ==
+  "the keys of proofs are not members, or members and wiring"
 #guard paramsWhy (paramsOfJson (proofsOnly oneProofs)) != ""
 #guard paramsWhy (paramsOfJson (proofsOnly oneProofs)) != "the keys of proofs are not circuit, public, registered"
 #guard paramsWhy (membersParamsOfJson (proofsOnly (Json.mkObj [("members", Json.mkObj [])]))) ==
@@ -1750,6 +1994,32 @@ private def unitsJ (us : Array Nat) : Json := Json.mkObj [("units", Json.mkObj [
 #guard (whyT (membersFiles (fun _ => Json.null) ⟨#[]⟩ membersT.toList)).startsWith "member m2: circuit: "
 #guard ((membersFiles (fun _ => Json.null) ⟨#[]⟩ []).toOption.map (·.length)) == some 0
 #guard whyT (statementAt [] (memberT "m2" #[(2, 3)])) == "the parameters name no such member"
+
+/-- Blobs of a window of two members, one whose circuit file looks up no table and one whose looks up `rcp`, holding
+the MUFU tables `names`. -/
+private def twoT (names : List String) : Core.Blobs :=
+  ⟨#[(Flock.Sha512.hash (lookingUp []), lookingUp [])] ++ (withTables (lookingUp ["rcp"]) names).entries⟩
+
+/-- Why the statement of a member whose circuit file is `c` does not read on the blobs `bs`: its public file's
+refusal, which these members name none of, where its tables pass. -/
+private def statedT (c : ByteArray) (bs : Core.Blobs) : String :=
+  whyT (({ name := "m", units := #[], g := 1, own := ownOf c } : Member).statement Json.null bs)
+
+#guard (statedT (lookingUp []) (twoT ["rcp"])).startsWith "public file: "
+#guard (statedT (lookingUp ["rcp"]) (twoT ["rcp"])).startsWith "public file: "
+#guard (statedT (lookingUp ["rcp"]) (twoT ["sqrt", "rcp", "ex2"])).startsWith "public file: "
+#guard statedT (lookingUp ["rcp"]) (twoT []) == s!"{NO_TABLES}: the circuit looks up rcp, the blobs hold none"
+#guard statedT (lookingUp ["rcp"]) (twoT ["ex2"]) == s!"{NO_TABLES}: the circuit looks up rcp, the blobs hold none"
+#guard statedT (lookingUp ["ex2", "rcp"]) (withTables (lookingUp ["ex2", "rcp"]) ["ex2", "rsq"]) ==
+  s!"{NO_TABLES}: the circuit looks up rcp, ex2, the blobs hold ex2"
+#guard (statedT (lookingUp []) ⟨#[]⟩).startsWith "circuit: "
+#guard ((ownTables (ownOf (lookingUp [])) (twoT ["rcp", "ex2"])).toOption.map (·.map (·.1))) == some []
+#guard ((ownTables (ownOf (lookingUp ["rcp"])) (twoT ["rcp", "ex2"])).toOption.map (·.map (·.1))) == some ["rcp"]
+#guard refusal (tablesMatch [("rcp", .empty)] []) == s!"{NO_TABLES}: the circuit looks up none, the blobs hold rcp"
+#guard whyT (statementOf (ownOf (lookingUp [])) (fun _ => pure ()) [("rcp", .empty)] (twoT [])) ==
+  s!"{NO_TABLES}: the circuit looks up none, the blobs hold rcp"
+#guard (whyT (statementOf (ownOf (lookingUp ["rcp"])) (fun _ => pure ()) [("rcp", .empty)] (twoT []))).startsWith
+  "public file: "
 
 /-- A statement of no file whose scope, ports and population checks are the ones given. -/
 private def stepT (scope ksFiles population : V Unit) : Option StepAt :=

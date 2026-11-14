@@ -4,7 +4,7 @@
 # root (`research run --cwd source --declared-output 'out/*'`); results go to $RESEARCH_RUN_DIR/out, scratch to a
 # `mktemp -d` directory the job removes, builds to $HZ_CACHE (kept, keyed by their inputs) or the scratch directory.
 #   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/proofs/flock/prover's patches (the proving build: sha512, glue; the
-#      selftest build: + seed-injection), the Lean flock-verify, and a venv with numpy and blake3
+#      selftest build: + seed-injection), the Lean verity-verify-proof, and a venv with numpy and blake3
 #   2. per config ROLE:K in HZ_CONFIGS (ROLE row_a, row_b or tile, stage.py's): stage N instances, one loopback --zk session
 #      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
 #      controls, sampled the same way, and the Lean
@@ -12,7 +12,7 @@
 #        honest-own     the honest session, the verifier's own anchors file                REFUSED (below)
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
 #        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
-#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
+#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement verity-verify-proof
 #                       refuses once every check has passed (`ProvedScope.servedForm`): honest gets through every check
 #                       before its config's refusal (below); output_row_committed_false (a tampered output row),
 #                       output_claim_false, unit_internal_bit_flipped and public_input_claim_false (a false anchor
@@ -87,7 +87,7 @@ lean_copy() {       # lean_copy DEST: those packages copied under DEST, with DES
   P=$(python3 "$SRC/verity/protocols/proofs/flock/prover/pod/lake_closure.py" copy "$SRC/verity/protocols/proofs/flock/verifier" "$1") \
     && ln -s "${P#"$1/"}/.lake" "$1/.lake" && echo "$P"
 }
-build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
+build_lean() {      # build_lean DEST: DEST/.lake/build/bin/verity-verify-proof
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1 P
   rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
@@ -126,7 +126,7 @@ setup() {
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
   [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=$(cat "$W/flock.dir")/flock-circuit-selftest; }
-  [ -n "${FLOCK_VERIFY:-}" ] || FLOCK_VERIFY=$(cat "$W/lean.dir")/.lake/build/bin/flock-verify
+  [ -n "${FLOCK_VERIFY:-}" ] || FLOCK_VERIFY=$(cat "$W/lean.dir")/.lake/build/bin/verity-verify-proof
   [ -n "${HZ_PYTHON:-}" ] || HZ_PYTHON=$(cat "$W/venv.dir")/bin/python
   BIN=$FLOCK_PROVE SBIN=${FLOCK_SELFTEST:?} LEAN=$FLOCK_VERIFY PY=$HZ_PYTHON
   for p in "$BIN" "$SBIN" "$LEAN" "$PY"; do [ -x "$p" ] || { log "missing: $p"; fail=1; }; done

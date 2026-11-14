@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.device import load_card
 
 import policy as P
 
@@ -41,8 +42,9 @@ sys.path.append(str(P.ROOT / "benchmarks" / "one_stage"))
 
 #: the pinned exact-int8 checkpoint of Llama 3.2 1B
 MODEL = "verity-int8/Llama-3.2-1B-INT8"
-#: the card the class is registered for, serving an exact-int8 checkpoint's linears int8
-H200 = {"compute_capability": (9, 0), "num_sms": 132, "int8_exact": "linears"}
+#: the card the class is registered for, serving an exact-int8 checkpoint's linears int8; its SMs are the card's
+H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb")["sm"]["count"]["value"],
+        "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
 PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"

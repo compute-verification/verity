@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # M1 with a unit's MUFU reads in Flock lookup slots (m1_unit.py --reads slots, `read_slots`), on a CPU machine, on hidden_zk's
-# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, cached under $RS_CACHE):
+# builds (its job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof, cached under $RS_CACHE):
 #   RS_CACHE=/workspace/research/cache/pouw-hidden-zk bash benchmarks/one_stage/m1_reads.sh
 #   (a job run from the source tree, 16 CPUs, 64 GB, keeping out/*)
 # Each spec of RS_PROVE is built with its reads in slots, staged, proved under --zk and verified by the Lean verifier; each

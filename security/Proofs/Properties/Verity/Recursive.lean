@@ -105,7 +105,7 @@ noncomputable def finalAt (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (s 
     Option FlockDeploy.Final :=
   ((session IV st x s v).msgs.getLast?).bind fun m => FlockDeploy.finalOf m.1
 
-/-- The file name `flock-verify` gives a rep stream `w`'s proof (`Witness.lean`'s `{w.replace "/" "."}.bin`). -/
+/-- The file name `verity-verify-proof` gives a rep stream `w`'s proof (`Witness.lean`'s `{w.replace "/" "."}.bin`). -/
 def repName (w : String) : String := s!"{w.replace "/" "."}.bin"
 
 /-- **The blobs show the run.** In the run's view `v` at statement `x`, the recursive session's files that the compiled
@@ -538,8 +538,9 @@ theorem recVerdict_verdict (V : Vocab d α) (k : Verity.Registration.Composite) 
     (h : RecVerdict V k o) : V.Verdict k .sampled o := by
   obtain ⟨hreg, hrec, a, cb, eb, ⟨ps, b, ev, hdec, x, hx, h1, ha, hc, he⟩, hda, -⟩ := h
   subst ha hc he
-  refine ⟨hreg, hrec, VStar.Recursive.Sampled.protocol, ?_, ps, b, ev, hdec, x, hx, h1, by rw [h1]; exact hda⟩
-  cases k <;> rfl
+  exact ⟨hreg, hrec, VStar.Recursive.Sampled.protocol,
+    Verity.component_of_onBlobs (a := .sampled) (List.of_mem_zip hx).1 h1, ps, b, ev, hdec, x, hx, h1,
+    by rw [h1]; exact hda⟩
 
 /-- **The deployment** `RecursiveKSAt` is stated at (the weights, the brings and the challenger's live-coin part's record), with the
 inner decoder `decI` and the outer decoder `decO` that fix its extractor. -/

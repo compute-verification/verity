@@ -96,6 +96,6 @@ private def parsedWhy (r : V Json) : String :=
   "params: the parameters name no proofs (the members and their statements' files)"
 #guard parsedWhy (membersParsed "{\"proofs\":{\"circuit\":\"\",\"public\":\"\",\"registered\":null}}".toUTF8
     "{}".toUTF8) ==
-  "params: the keys of proofs are not members"
+  "params: the keys of proofs are not members, or members and wiring"
 
 end Spot.OneStageZk

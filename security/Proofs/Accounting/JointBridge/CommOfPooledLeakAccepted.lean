@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfPooledLeakAccepted
-public import Definitions.NetworkCertifier.Guarantees.PooledLeak
-public import Proofs.NetworkCertifier.PooledLeak
+public import Definitions.Certifier.Guarantees.PooledLeak
+public import Proofs.Certifier.PooledLeak
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

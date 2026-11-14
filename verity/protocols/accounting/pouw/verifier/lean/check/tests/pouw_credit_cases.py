@@ -1195,7 +1195,7 @@ def _partial(rng: random.Random) -> tuple[dict, list[int]]:
     while True:
         d = {**_draw_args(rng), "layout": layout(rng)}
         d["k"] = _k(rng, d["layout"])
-        units, _ = Cr.drawn(*(d[k] for k in DRAWN_KEYS))
+        units, _ = Cr.drawn_twin(*(d[k] for k in DRAWN_KEYS))
         if len(units) < sum(hi - lo for s in Cr.strata(d["layout"])[0] for lo, hi in s["units"]):
             return d, units
 
@@ -1205,11 +1205,11 @@ def outcome_instance(rng: random.Random, name: str = "honest") -> dict:
     if name == "chosen":
         d, units = _partial(rng)
         other = {**d, "coin": _hex(rng)}
-        chosen, _ = Cr.drawn(*(other[k] for k in DRAWN_KEYS))
+        chosen, _ = Cr.drawn_twin(*(other[k] for k in DRAWN_KEYS))
         return {**d, "proofs": _proofs(rng, chosen if chosen != units else units[1:] + [max(units) + 1])}
     d = {**_draw_args(rng), "layout": layout(rng)}
     d["k"] = _k(rng, d["layout"])
-    units, _ = Cr.drawn(*(d[k] for k in DRAWN_KEYS))
+    units, _ = Cr.drawn_twin(*(d[k] for k in DRAWN_KEYS))
     proofs = _proofs(rng, units)
     return {**d, "proofs": proofs if name == "honest" else _mutate_proofs(proofs, rng, name, units)}
 
@@ -1222,7 +1222,7 @@ def _served_units(d: dict, stream: str | None = None, k: int | None = None) -> l
     """The units `d`'s sampling coin selects at its K (or `k`) under the served execution phase's arguments (`credit.window`'s), or
     under `stream`."""
     coin = d["draw"]["coin"]["coin"]
-    got, why = Cr.drawn(coin, d["window"]["root"] if stream is None else stream, d["draw"]["root"],
+    got, why = Cr.drawn_twin(coin, d["window"]["root"] if stream is None else stream, d["draw"]["root"],
                         {"receipts": d["draw"]["receipts"]}, d["layout"], d["k"] if k is None else k)
     assert why is None, why
     return got

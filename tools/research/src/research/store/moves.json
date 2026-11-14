@@ -2440,7 +2440,43 @@
     },
     {
       "paths": {
+        "fixtures/typed-obligation-v0/": "benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/edited_gemm/": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/",
+        "benchmarks/pouw/masked_gemm/": "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/",
+        "benchmarks/pouw/floored_gemm/": "verity/protocols/accounting/pouw/prover/kernels/floored_gemm/",
+        "benchmarks/pouw/gpu_kit/": "verity/protocols/accounting/pouw/prover/kernels/gpu_kit/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/torch_gpu/sha512_rows/engine.py": "verity/commitments/cuda/sha512_rows/engine.py",
+        "benchmarks/torch_gpu/sha512_rows/rows.cu": "verity/commitments/cuda/sha512_rows/rows.cu",
+        "benchmarks/torch_gpu/sha512_rows/rows.cuh": "verity/commitments/cuda/sha512_rows/rows.cuh",
+        "benchmarks/torch_gpu/sha512_rows/rows_host.cpp": "verity/commitments/cuda/sha512_rows/rows_host.cpp",
+        "benchmarks/torch_gpu/sha512_rows/settings.py": "verity/commitments/cuda/sha512_rows/settings.py",
+        "benchmarks/torch_gpu/sha512_rows/check.py": "verity/commitments/cuda/sha512_rows/check.py",
+        "benchmarks/torch_gpu/sha512_rows/README.md": "verity/commitments/cuda/sha512_rows/README.md",
+        "benchmarks/torch_gpu/sha512_rows/pyproject.toml": "verity/commitments/cuda/sha512_rows/pyproject.toml",
+        "benchmarks/torch_gpu/sha512_rows/tests/": "verity/commitments/cuda/sha512_rows/tests/",
+        "benchmarks/torch_gpu/commit_slots/slots.py": "verity/commitments/cuda/commit_slots/slots.py",
+        "benchmarks/torch_gpu/commit_slots/slots_gpu.py": "verity/commitments/cuda/commit_slots/slots_gpu.py",
+        "benchmarks/torch_gpu/commit_slots/README.md": "verity/commitments/cuda/commit_slots/README.md",
+        "benchmarks/torch_gpu/commit_slots/pyproject.toml": "verity/commitments/cuda/commit_slots/pyproject.toml",
+        "benchmarks/torch_gpu/commit_slots/tests/": "verity/commitments/cuda/commit_slots/tests/"
       }
     },
     {
@@ -2504,6 +2540,24 @@
         "adapters/vllm/tests/protocols/test_pouw_lead_record.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_record.py",
         "adapters/vllm/tests/protocols/test_pouw_native.py": "verity/protocols/accounting/pouw/prover/tests/test_pouw_native.py",
         "adapters/vllm/tests/commit/test_lead_rows.py": "verity/protocols/accounting/pouw/prover/tests/test_lead_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
+        "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
+        "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
+        "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/NetworkCertifier.lean": "security/Definitions/Certifier.lean",
+        "security/Definitions/NetworkCertifier/": "security/Definitions/Certifier/",
+        "security/Proofs/NetworkCertifier.lean": "security/Proofs/Certifier.lean",
+        "security/Proofs/NetworkCertifier/": "security/Proofs/Certifier/",
+        "security/Proofs/Properties/NetworkCertifier/": "security/Proofs/Properties/Certifier/",
+        "security/Properties/NetworkCertifier/": "security/Properties/Certifier/"
       }
     }
   ]

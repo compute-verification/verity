@@ -625,7 +625,7 @@ def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_sen
 def test_a_kernel_s_grid_cap_is_another_sense_and_pearl_s_cap_beside_it_is_not() -> None:
     """A kernel's ``grid_cap`` as the identifier it is; Pearl's spellings beside it, and a longer name built on it, still
     count in the same file."""
-    path = "benchmarks/pouw/masked_gemm/sgemm.cu"
+    path = "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/sgemm.cu"
     theirs = "static void ssetup(SProb& P, int grid_cap) {\n  P.grid = std::min(tiles, grid_cap > 0 ? grid_cap : nsm);\n"
     assert said(theirs, path) == []
     assert said(theirs + "// grid_cap, then Pearl's cap, CAP and capOK; grid_capOK, grid_cap_check\n", path) == [

@@ -48,7 +48,7 @@ def LoopServe {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claim
       (∃ ct, _root_.Flock.Firewall.Session.streamsOk spec sts ct = true) ∧
       (∃ (ls : Array _root_.Flock.Firewall.Level0.Level0) (publics : List ByteArray), AfterDraw sid ls σ.L0 ∧
         (∀ j (hj : j < ls.size), ∃ g d hi, M.src (2 * j) = .ok (g, d, hi) ∧
-          _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d = .ok ls[j]) ∧
+          _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) ∧
         M.L.ownMsg M.x M.w M.ρ (M.hist σ.c) = 0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics ∧
         ls.size < 2 ^ 64 ∧ publics.length < 2 ^ 64 ∧ (∀ l ∈ ls, l.root.size < 2 ^ 64) ∧
         ∀ b ∈ publics, b.size < 2 ^ 64) ∧

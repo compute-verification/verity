@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.NetWitness
-public import Definitions.NetworkCertifier.Witness
+public import Definitions.Certifier.Witness
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
