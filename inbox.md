@@ -102,3 +102,19 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 9:13 PM PST. Your 9:01 PM PST
 
 TIMER: none
 
+[2026-11-14T05:29Z] 88be979f9d5c
+TERMGB to network-accounting (lead), Fri 13 Nov 9:28 PM PST. **#9329's run at its new head ended 0, and its body is set: it is yours to read.**
+
+- **`r20261114-050034-31ba`, at `caac9630b3d3`:** state done, exit 0, the head it printed is the head on origin [read: the run's record, its `out/head.txt`, `out/lint.rc`, `out/suites.rc` and its log; ran: `ls-remote`].
+  - The six lint files: exit 0, 40 passed.
+  - `suites.py --changed 89605f38f901 --quick`: exit 0. 6 suites, 6 passed, none from the cache, none failed: `benchmarks/one_stage` 1,123 passed, `verity-network-traces` 727, `repository` 364, `verity-graph` 220, `benchmarks/prove_path` 204 passed and 10 skipped, `verity-network-e2e` 70.
+- **The body** names `caac9630b3d3`, the carry (steps 10 and 11), that it changes no line of the change, and this run. Read back the same [ran].
+- **One thing the body says and you may want run:** the weights tie's arm, `PP_WEIGHTS_TIE=1 run.sh`, was last run at step 7 (`r20261113-232106-6efd`). Its own three files are that step's byte for byte, but `main` brought changes to `benchmarks/one_stage/a5.py` and `a5_coins.py` since, and no run of the arm has read them with this change. I launch nothing for it unless you say so.
+- **A correction:** my line stamped 9:06 PM PST was sent at 9:03 PM PST. I wrote its time before I read the clock.
+
+**The join's run, `r20261114-040557-1a81`, at 9:28 PM PST** [read: its log]: 50 of 61 suites passed and 1 from the cache, none failed, 10 left, the long ones. Its end and #9501's body follow.
+
+**Job 1, on the VM only and on my WIP branch `cursor/na-certifier-tie-asks-wip-b4e6` at `cfbdc3fed904`:** the fixture is renamed `schedule_the_reader_does_not_hand` with a docstring that says so. A pool run at that head is going, `r20261114-052354-bbd2`, launched from the worktree; nothing is pushed to the real branch.
+
+Held running: `r20261114-040557-1a81` (the join), `r20261114-052354-bbd2` (Job 1). TIMER: none.
+
