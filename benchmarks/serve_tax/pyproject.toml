@@ -22,7 +22,7 @@ inputs = [
     "verity/circuits",
     "verity/claims",
     "verity/commitments",
-    "verity/hardware",
+    "hardware/README.md", "verity/tests/tests/test_cards.py", "verity/tests/tests/test_imports.py", "verity/tests/tests/test_nodes.py", "verity/tests/tests/test_sheet_lean.py",
     # the record entry (`Record`): SPOT's challenger imports it, and the certifier's `active` imports SPOT's verifier
     "verity/channel.py",
     "verity/protocols/__init__.py",

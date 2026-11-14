@@ -3181,6 +3181,15 @@
       "paths": {
         "benchmarks/vllm_encoded/paged.cu": "verity/protocols/accounting/poub/prover/word_codec/paged.cu"
       }
+    },
+    {
+      "paths": {
+        "verity/hardware/README.md": "hardware/README.md",
+        "verity/hardware/tests/test_cards.py": "verity/tests/tests/test_cards.py",
+        "verity/hardware/tests/test_nodes.py": "verity/tests/tests/test_nodes.py",
+        "verity/hardware/tests/test_package.py": "verity/tests/tests/test_imports.py",
+        "verity/hardware/tests/test_sheet_lean.py": "verity/tests/tests/test_sheet_lean.py"
+      }
     }
   ]
 }

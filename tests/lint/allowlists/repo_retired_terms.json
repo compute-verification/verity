@@ -3962,7 +3962,7 @@
     {"file": "verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_difftest.py", "count": 28},
     {"file": "verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_in_difftest.py", "count": 4},
     {"file": "verity/protocols/proofs/recursion/verifier/vstar_cli/tests/test_vstar_recursive.py", "count": 30},
-    {"file": "verity/hardware/tests/test_cards.py", "count": 1},
+    {"file": "verity/tests/tests/test_cards.py", "count": 1},
     {"file": "verity/circuits/PROTOCOL.md", "count": 1},
     {"file": "verity/circuits/boundary.py", "count": 18},
     {"file": "verity/circuits/defs.py", "count": 4},

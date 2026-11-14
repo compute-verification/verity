@@ -436,7 +436,7 @@
       "linear": "CMP",
       "linear_label": "lane:compute-research",
       "owns": [
-        "verity/hardware/",
+        "verity/tests/tests/test_cards.py", "verity/tests/tests/test_imports.py", "verity/tests/tests/test_nodes.py", "verity/tests/tests/test_sheet_lean.py",
         "hardware/",
         "benchmarks/pouw/tensor_kinds/",
         "benchmarks/pouw/opcode_probe/",

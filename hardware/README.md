@@ -64,7 +64,7 @@ record, a `measurement`, which `max` is never below.
 reads (`number(load_card(sku)["drift"]["max"])`), and a row is of record only where that entry's mark is `ceiling`. Where
 it is `premise`, as on the one time base with a card (the raw clock of a provider's virtual machine, which no page
 bounds), the row prints the premise for the device's host, which the registration names and the card does not, and
-`tests/test_cards.py` lists every entry so marked, in a card or a node file.
+`../verity/tests/tests/test_cards.py` lists every entry so marked, in a card or a node file.
 
 **The device's own report.** A ceiling is the hardware's, never its firmware's. A few entries marked `ceiling` are
 today what the device reports under its vBIOS, with no document behind them: `clock.sm` on the RTX PRO 6000 and the
@@ -90,7 +90,7 @@ else: the functions `load_card`, `skus`, `rate`, `number` (an entry's value as a
 word) and `CARDS` (the directory the card files are in, found from the `verity` package's directory). The module
 imports the standard library, the wire and `verity.errors` only. The package file, `verity/hardware/__init__.py`,
 holds a docstring and nothing else: no import and no re-export. Importing the Site or the wire, in a verifier too,
-reads no card file and no node file: the readers run only when called. `tests/test_package.py` holds both.
+reads no card file and no node file: the readers run only when called. `../verity/tests/tests/test_imports.py` holds both.
 
 `load_card(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
@@ -229,4 +229,4 @@ site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("
 `remote` accepts each node's log against the auditor the GPU card files give, and neither site is mediated. `onsite`
 refuses the eight-card node by `uncertified`, by its interface's link, with a stand-in certifier or without one, and
 accepts the H200 node, both of whose links say why no certifier splits them, once a memory challenger reaches its host
-(`tests/test_nodes.py`).
+(`../verity/tests/tests/test_nodes.py`).
