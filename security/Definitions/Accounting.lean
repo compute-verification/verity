@@ -34,7 +34,7 @@ public import Definitions.Pous.Memory
 public import Definitions.Pouw.PerRun
 public import Definitions.Accounting.PeriodBinding
 public import Definitions.Accounting.Physical
-public import Definitions.Accounting.Slowdown
+public import Definitions.Slowdown.Tasks
 public import Definitions.Pouw.Pouw
 public import Definitions.Pouw.PouwWitness
 public import Definitions.Accounting.NetWitness
@@ -61,8 +61,8 @@ public import Definitions.Accounting.Requirement.Placed
 public import Definitions.Pous.Responder
 public import Definitions.Accounting.Schedule
 public import Definitions.Accounting.Served
-public import Definitions.Accounting.ServingBlocks
-public import Definitions.Accounting.ServingBlocks.Instances
+public import Definitions.Slowdown.ServingBlocks
+public import Definitions.Slowdown.ServingBlocks.Instances
 public import Definitions.Pous.Tag
 public import Definitions.Pouw.TS
 public import Definitions.Pouw.TS.Fixed

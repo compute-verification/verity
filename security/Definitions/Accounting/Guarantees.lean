@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual
-public import Definitions.Accounting.Guarantees.Actual.Threaded
-public import Definitions.Accounting.Guarantees.Actual.Slowdown
+public import Definitions.Slowdown.Guarantees.Actual
+public import Definitions.Slowdown.Guarantees.Actual.Threaded
+public import Definitions.Slowdown.Guarantees.Actual.Slowdown
 public import Definitions.Accounting.Guarantees.Additive
 public import Definitions.Poub.Guarantees.Bandwidth
 public import Definitions.Poub.Guarantees.Bandwidth.Causal
@@ -43,8 +43,8 @@ public import Definitions.Poub.Guarantees.RateAuditPooled
 public import Definitions.Poub.Guarantees.RateAuditRemote
 public import Definitions.Poub.Guarantees.RateAuditSketch
 public import Definitions.Pous.Guarantees.Responder
-public import Definitions.Accounting.Guarantees.ServingBlocks
-public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+public import Definitions.Slowdown.Guarantees.ServingBlocks
+public import Definitions.Slowdown.Guarantees.ServingBlocks.Witnesses
 public import Definitions.Accounting.Guarantees.RemoteHeld
 public import Definitions.Accounting.Guarantees.RemoteDraw
 public import Definitions.Accounting.Guarantees.RemoteBinding

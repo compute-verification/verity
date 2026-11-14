@@ -119,9 +119,9 @@ public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Proofs.Accounting.Served
 public import Proofs.Pous.Obligation
 public import Proofs.Accounting.Additive
-public import Proofs.Accounting.Coverage
-public import Proofs.Accounting.ServingBlocks
-public import Proofs.Accounting.ServingBlocks.Witnesses
+public import Proofs.Slowdown.Coverage
+public import Proofs.Slowdown.ServingBlocks
+public import Proofs.Slowdown.ServingBlocks.Witnesses
 public import Proofs.Accounting.Defs.Actual.Source
 public import Proofs.Accounting.Defs.Localization
 public import Definitions.Pous.P2.Cost

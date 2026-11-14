@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Coverage
+public import Definitions.Slowdown.Guarantees.Coverage
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
 import Proofs.Core.Game.Prob

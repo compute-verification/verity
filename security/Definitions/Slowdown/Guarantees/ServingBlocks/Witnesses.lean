@@ -1,13 +1,13 @@
 module
 
-public import Definitions.Accounting.Guarantees.ServingBlocks
-public import Definitions.Accounting.ServingBlocks.Instances
+public import Definitions.Slowdown.Guarantees.ServingBlocks
+public import Definitions.Slowdown.ServingBlocks.Instances
 
 /-!
 # The serving-block bound: honest and nontrivial lemmas
 
 Each guarantee of `Accounting.Guarantees.ServingBlocks` has two statements here, at the instances of
-`Security/Definitions/Accounting/ServingBlocks/Instances.lean`. `<Guarantee>_honest`: its premises hold together at
+`Security/Definitions/Slowdown/ServingBlocks/Instances.lean`. `<Guarantee>_honest`: its premises hold together at
 `Honest`. `<Guarantee>_nontrivial`: at an explicit circuit every premise but one named premise holds, that one fails, and
 the counted weight is above the bound's right-hand side, so the guarantee is false without it, its last
 conjunct the bound's negation `¬ J.total ≤ …`. `ServingBlockBound` has two more lemmas of that form in the proofs, one for
@@ -23,7 +23,7 @@ serving blocks around one wipe, an operation split across the wipe and a dark re
 instance of this structural bound, which is about one circuit: Layer 2's envelopes supply the deployed premises, each
 with its probability.
 
-The proofs are in `Security/Proofs/Accounting/ServingBlocks/Witnesses.lean`.
+The proofs are in `Security/Proofs/Slowdown/ServingBlocks/Witnesses.lean`.
 -/
 
 @[expose] public section

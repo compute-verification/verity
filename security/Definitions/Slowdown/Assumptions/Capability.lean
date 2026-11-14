@@ -14,7 +14,7 @@ local bound has three ingredients, and only two of them carry premises:
 * **structure**: how much counted computation held values support. Definitions checkable on a named circuit
   (`InferenceOnly.Capability.Consumers.Upstream`, `InferenceOnly.Capability.Consumers.OverlapWeights`), no premise.
 * **coverage**: every sufficiently cheap successful method contains enough of that computation.
-  `CoversEfficientMethods`, stated over tasks and runs in `Definitions.Accounting.Assumptions.Coverage`.
+  `CoversEfficientMethods`, stated over tasks and runs in `Definitions.Slowdown.Assumptions.Coverage`.
 
 The rates and deficits belong to the decoder budget, the distribution of runs, the registration, the arithmetic and the
 computation evaluated; none is a universal bits-per-value constant. The smallest sufficient premise comes first.

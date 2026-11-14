@@ -3844,6 +3844,24 @@
         "security/Proofs/Accounting/Tag/Signs.lean": "security/Proofs/Pous/Tag/Signs.lean",
         "security/Proofs/Accounting/Tag/SketchExact.lean": "security/Proofs/Pous/Tag/SketchExact.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Assumptions/Coverage.lean": "security/Definitions/Slowdown/Assumptions/Coverage.lean",
+        "security/Definitions/Accounting/CoverageToy.lean": "security/Definitions/Slowdown/CoverageToy.lean",
+        "security/Definitions/Accounting/Guarantees/Actual.lean": "security/Definitions/Slowdown/Guarantees/Actual.lean",
+        "security/Definitions/Accounting/Guarantees/Actual/Slowdown.lean": "security/Definitions/Slowdown/Guarantees/Actual/Slowdown.lean",
+        "security/Definitions/Accounting/Guarantees/Actual/Threaded.lean": "security/Definitions/Slowdown/Guarantees/Actual/Threaded.lean",
+        "security/Definitions/Accounting/Guarantees/Coverage.lean": "security/Definitions/Slowdown/Guarantees/Coverage.lean",
+        "security/Definitions/Accounting/Guarantees/ServingBlocks.lean": "security/Definitions/Slowdown/Guarantees/ServingBlocks.lean",
+        "security/Definitions/Accounting/Guarantees/ServingBlocks/Witnesses.lean": "security/Definitions/Slowdown/Guarantees/ServingBlocks/Witnesses.lean",
+        "security/Definitions/Accounting/ServingBlocks.lean": "security/Definitions/Slowdown/ServingBlocks.lean",
+        "security/Definitions/Accounting/ServingBlocks/Instances.lean": "security/Definitions/Slowdown/ServingBlocks/Instances.lean",
+        "security/Definitions/Accounting/Slowdown.lean": "security/Definitions/Slowdown/Tasks.lean",
+        "security/Proofs/Accounting/Coverage.lean": "security/Proofs/Slowdown/Coverage.lean",
+        "security/Proofs/Accounting/ServingBlocks.lean": "security/Proofs/Slowdown/ServingBlocks.lean",
+        "security/Proofs/Accounting/ServingBlocks/Witnesses.lean": "security/Proofs/Slowdown/ServingBlocks/Witnesses.lean"
+      }
     }
   ]
 }

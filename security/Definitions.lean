@@ -78,7 +78,7 @@ public import Definitions.Slowdown.Guarantees.Remote
 public import Definitions.Slowdown.Guarantees.RemotePeriod
 public import Definitions.Slowdown.Assumptions.Capability
 public import Definitions.Slowdown.Guarantees.Capability
-public import Definitions.Accounting.Guarantees.Coverage
+public import Definitions.Slowdown.Guarantees.Coverage
 public import Definitions.Slowdown.Guarantees.Covering
 public import Definitions.Slowdown.Guarantees.CoveringTwoCosts
 public import Definitions.Slowdown.Guarantees.Cut

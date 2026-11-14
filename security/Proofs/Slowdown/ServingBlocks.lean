@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.ServingBlocks
+public import Definitions.Slowdown.Guarantees.ServingBlocks
 public import Proofs.Core.Formalism
 public import Mathlib.Tactic.Linarith
 

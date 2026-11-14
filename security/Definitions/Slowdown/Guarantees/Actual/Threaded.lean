@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual
+public import Definitions.Slowdown.Guarantees.Actual
 public import Definitions.Slowdown.Assumptions.Threads
 public import Definitions.Slowdown.Dark
 

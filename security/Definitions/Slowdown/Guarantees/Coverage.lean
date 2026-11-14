@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Assumptions.Coverage
-public import Definitions.Accounting.CoverageToy
+public import Definitions.Slowdown.Assumptions.Coverage
+public import Definitions.Slowdown.CoverageToy
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
