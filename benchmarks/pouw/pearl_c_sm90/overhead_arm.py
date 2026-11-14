@@ -17,6 +17,9 @@ one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the referen
   served call's, uploaded by it, so `launch` makes no host-device copy; their SHA-512 and the pass's bookkeeping, a served
   call's host work too, are not in it (the record's ``host``). `weight_side` is the served weight side's device work: B
   widened to FP32, B's row tree, then the job (B's screen, on the host, is not in it).
+- **y's commitment is timed serially.** `launch` makes y's tree on the harness's stream after the call's steps, where the
+  served call overlaps it on its retain stream, and widens y's rows by `widen_a`, where the served call uses torch's copy.
+  The bytes are the served call's and the launches are not, so the arm's time for y bounds the served call's from above.
 - **The gate**: y's m rows and, with hashing, y's tree, A's root, the tile leaves and the screen's flags equal, byte for
   byte, the served call's on the same operands at the same index (``all`` each; y's tree is `served_y.y_tree`'s over the
   served call's y, every node).
@@ -347,11 +350,12 @@ class _Held:
 
 
 class _YTree:
-    """A call's y commitment on the device, as the served call makes it: the pipeline of `trees` (`served_y.DeviceTrees`, its
-    width's, held to `commit_y` at its first use) and `served_y.tree_launches`, over buffers made here, at prepare: y's tree
-    in `commit_y`'s layout, the row digests, one chunk's FP32 words and segment scratch (`served_y.chunk_rows`), and y's
-    domain id at the call's index in the pipeline's ``dom_b``.  `launch` widens y's m real rows into the words a chunk at a
-    time (`widen_a`, exact: `served_y.f32_rows`) and digests them: device launches alone, no allocation and no torch."""
+    """A call's y commitment on the device, the served call's bytes made serially: the pipeline of `trees`
+    (`served_y.DeviceTrees`, its width's, held to `commit_y` at its first use) and `served_y.tree_launches`, over buffers
+    made here, at prepare: y's tree in `commit_y`'s layout, the row digests, one chunk's FP32 words and segment scratch
+    (`served_y.chunk_rows`), and y's domain id at the call's index in the pipeline's ``dom_b``.  `launch` widens y's m real
+    rows into the words a chunk at a time (`widen_a`, exact: `served_y.f32_rows`) and digests them: device launches alone,
+    no allocation and no torch."""
 
     def __init__(self, trees: Any, m: int, n: int, index: int) -> None:
         from verity_vllm.protocols.pouw import pearl_c as PPD
