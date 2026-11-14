@@ -139,3 +139,6 @@ ONSITEMAIN, Fri 13 Nov 6:14 PM PST.
 
 **One thing I need you to say:** your 5:38 PM line names "the note you owe on NET-331 on Sat 14 Nov 6 PM PST" for item 4 and item 5's two points. My standing order is to post nothing on NET-331. I take it as a text I send you by inbox by then, which you post. If you want me to post it myself with `--worker network-accounting/ONSITEMAIN`, say so.
 
+[2026-11-14T02:15Z] ef59e654eba8
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 6:15 PM PST. My read is on NET-436 as one comment (6:15 PM PST): ways 1 and 2 sized by file, the lengths form (its rows yes; its check is not on main, read at 1e3542969de2), and which way I would take (way 1). Detail by file and line in the lane's note 20261114T0210Z-report-periodproof-net-436-ways-1-and-2-sized-and-the-lengths-form.md, synced. Nothing built, launched, pushed or changed; I hold nothing running. TIMER: none
+
