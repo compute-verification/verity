@@ -170,10 +170,12 @@ class HttpShim:
             path = target.partition(b" ")[0].partition(b"?")[0]
             if (method, path) != (b"POST", b"/v1/completions"):
                 writer.write(_error(404, "this shim takes POST /v1/completions alone"))
+                self.unread("a request was not POST /v1/completions", 404)
                 return
             size = headers.get(b"content-length", b"")
             if not size.isdigit() or int(size) > BODY_BYTES:
                 writer.write(_error(400, f"a completion's body has a content-length of at most {BODY_BYTES}"))
+                self.unread(f"a request's content-length was not a number of at most {BODY_BYTES}", 400)
                 return
             try:
                 raw = await reader.readexactly(int(size))

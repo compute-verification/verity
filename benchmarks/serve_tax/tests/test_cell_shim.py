@@ -285,7 +285,25 @@ def test_a_body_the_id_request_cannot_carry_is_refused_and_nothing_is_sent(chang
     assert status == 400 and why in body["error"]["message"]
     assert other.answer()[0] == 400 and lost.answer()[0] == 404
     assert (certifier.ordinals, certifier.refused, server.conns) == (0, 0, [])
-    assert [(x["status"], "unsent" in x) for x in log] == [(400, True)] * 2 and C.client_doc(log) == {"connections": []}
+    assert [(x["index"], x["status"], "unsent" in x) for x in log] == [(0, 400, True), (1, 400, True), (None, 404, True)]
+    assert log[2]["unsent"] == "a request was not POST /v1/completions"
+    assert C.client_doc(log) == {"connections": []}
+
+
+def test_a_request_with_no_content_length_or_one_over_the_cap_is_refused_and_nothing_is_sent():
+    """A completion that names no content-length, and one that names more than the longest body taken (its head alone:
+    the shim answers before it reads any of the body), each get a 400 and a line that says why; the certifier sees no
+    connection of them, and they are none of the offline check's."""
+    head = b"POST /v1/completions HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+    certifier, server, sinks, log = asyncio.run(drive({1: [
+        head + b"\r\n", head + b"Content-Length: %d\r\n\r\n" % (C.BODY_BYTES + 1)]}))
+    assert [(x["index"], x["status"], x.get("unsent")) for x in log] == [
+        (None, 400, f"a request's content-length was not a number of at most {C.BODY_BYTES}")] * 2
+    for sink in sinks:
+        status, body, _ = sink.answer()
+        assert status == 400 and f"at most {C.BODY_BYTES}" in body["error"]["message"]
+    assert (certifier.ordinals, certifier.refused, server.conns) == (0, 0, [])
+    assert C.client_doc(log) == {"connections": []}
 
 
 def test_a_request_never_read_whole_is_recorded_and_nothing_is_sent():
