@@ -52,17 +52,17 @@ rc=0
 for arm in ${SHARE_ARMS:-exact-fused exact}; do
   mkdir -p "$OUT/$arm" "$S/$arm"
   timeout 1200 "$NSYS" profile -t cuda,nvtx --cuda-graph-trace=node --sample=none --cpuctxsw=none \
-    --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/$arm/cap" --force-overwrite true \
+    --capture-range=cudaProfilerApi --capture-range-end=stop -o "$S/$arm/trace" --force-overwrite true \
     "$PY" "$SHARE" --arm "$arm" --out "$OUT/$arm" --scratch "$S/$arm" > "$OUT/$arm/run.log" 2>&1
   r=$?
   tail -2 "$OUT/$arm/run.log"
-  if [ $r -ne 0 ] || [ ! -f "$S/$arm/cap.nsys-rep" ]; then echo "share: $arm rc $r"; rc=5; continue; fi
-  "$NSYS" export --type sqlite --force-overwrite true -o "$S/$arm/cap.sqlite" "$S/$arm/cap.nsys-rep" \
+  if [ $r -ne 0 ] || [ ! -f "$S/$arm/trace.nsys-rep" ]; then echo "share: $arm rc $r"; rc=5; continue; fi
+  "$NSYS" export --type sqlite --force-overwrite true -o "$S/$arm/trace.sqlite" "$S/$arm/trace.nsys-rep" \
     > "$OUT/$arm/export.log" 2>&1
-  "$PY" "$SHARE" --analyse "$S/$arm/cap.sqlite" --meta "$OUT/$arm/share.json" > "$OUT/$arm/analysis.json" \
+  "$PY" "$SHARE" --analyse "$S/$arm/trace.sqlite" --meta "$OUT/$arm/share.json" > "$OUT/$arm/analysis.json" \
     || { echo "share: $arm analyse rc $?"; rc=6; }
-  gzip -c "$S/$arm/cap.sqlite" > "$S/$arm/cap.sqlite.gz"
-  [ "$(stat -c %s "$S/$arm/cap.sqlite.gz")" -lt 209715200 ] && cp "$S/$arm/cap.sqlite.gz" "$OUT/$arm/"
+  gzip -c "$S/$arm/trace.sqlite" > "$S/$arm/trace.sqlite.gz"
+  [ "$(stat -c %s "$S/$arm/trace.sqlite.gz")" -lt 209715200 ] && cp "$S/$arm/trace.sqlite.gz" "$OUT/$arm/"
 done
 "$PY" "$SHARE" --summary "$OUT" > "$OUT/summary.json" || rc=7
 kill "$smi" 2>/dev/null

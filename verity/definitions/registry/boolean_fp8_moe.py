@@ -2,7 +2,6 @@
 one's word view is its `_v1` composite at the same statics (`elementwise.on_bits`).
 
     MoeExpertFp8BlockCoordinate_v2{K,G,KB,SWAP}, MoeExpertFp8BlockCoordinateW_v2{K,G,KB,SWAP}
-    MoeExpertFp8BlockGemm_v2{K,N,G,KB,SWAP}, MoeExpertFp8BlockGemmW_v2{K,N,G,KB,SWAP}
 
     SiluMulFp8BlockQuantResult_v2, SiluMulFp8BlockQuantGroup_v2{G}, SiluMulFp8BlockQuant_v2{I,G}
 
@@ -40,7 +39,6 @@ from verity.definitions.registry import fp8_moe as M
 from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry.boolean_attention import _Bits
 from verity.definitions.registry.boolean_fp8 import F448, F_NEG448, Fp8RowScaleV2
-from verity.definitions.registry.fp8 import weight_blocks
 from verity.definitions.registry.prims import bits_of
 
 BF16 = Array(16, BL.BIT)
@@ -76,32 +74,6 @@ MoeExpertFp8BlockCoordinateWV2 = EW.on_bits(
     lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("g", F32), ("wrow", Array(S.K, E4M3)),
                 ("sw", Array(S.K // S.G, F32))), BF16),
     _coordinate_w, M.MoeExpertFp8BlockCoordinateW)
-
-
-def _gemm(B, S, xq, sx, w, ws):
-    """`MoeExpertFp8BlockGemm_v1`'s body on bits."""
-    coord = bind(MoeExpertFp8BlockCoordinateV2, K=S.K, G=S.G, KB=S.KB, SWAP=S.SWAP)
-    return M.rows(B, coord, S.N, S.G, w, ws, (xq, sx), BF16)
-
-
-MoeExpertFp8BlockGemmV2 = EW.on_bits(
-    "MoeExpertFp8BlockGemm", 2, ["K", "N", "G", "KB", "SWAP"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("w", Array(S.N, Array(S.K, E4M3))),
-                ("ws", Array(weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16)),
-    _gemm, M.MoeExpertFp8BlockGemm)
-
-
-def _gemm_w(B, S, xq, sx, g, w, ws):
-    """`MoeExpertFp8BlockGemmW_v1`'s body on bits."""
-    coord = bind(MoeExpertFp8BlockCoordinateWV2, K=S.K, G=S.G, KB=S.KB, SWAP=S.SWAP)
-    return M.rows(B, coord, S.N, S.G, w, ws, (xq, sx, g), BF16)
-
-
-MoeExpertFp8BlockGemmWV2 = EW.on_bits(
-    "MoeExpertFp8BlockGemmW", 2, ["K", "N", "G", "KB", "SWAP"],
-    lambda S: ((("xq", Array(S.K, E4M3)), ("sx", Array(S.K // S.G, F32)), ("g", F32), ("w", Array(S.N, Array(S.K, E4M3))),
-                ("ws", Array(weight_blocks(S.N, S.G), Array(S.K // S.G, F32)))), Array(S.N, BF16)),
-    _gemm_w, M.MoeExpertFp8BlockGemmW)
 
 
 def _coordinate_dot(B, S, xq, sx, wrow, sw):

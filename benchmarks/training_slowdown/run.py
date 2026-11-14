@@ -1,5 +1,5 @@
 """`verity bench training-slowdown CONFIG`: every job of an attack config and of its honest config, each found by its
-label and run where it is missing.
+label and run where it is missing, and their grade once every one has its record.
 
     verity bench training-slowdown NAME|CONFIG.toml [--dry-run] [--local [--root DIR] | --on MACHINE [--pool NAME]]
         [--weights] [--starts FILE] [--starts-root DIR] [--device DEVICE]
@@ -47,9 +47,18 @@ A job's output holds no weights: its record, and its last checkpoint's E (the by
 from θ) when E is under 50 MiB. `--weights` makes each job this call runs keep its last checkpoint's whole state too,
 for a promoted config; a job that already has its record isn't run again for them.
 
-`--dry-run` prints what it would run and runs nothing. The command exits 0 when every job has its record, 3 when a job
-is still pending (its run id says which) or stopped, 4 when a job stalled, and 1 when a job failed: a failed job is
-shown, and never run again.
+Once every job of the config and of its honest config has its record, the command grades those jobs and no other with
+the grade's own `report` (`training_slowdown.grade`), prints its block and writes `slowdown.json`: with `--local` from
+each job's run.json in its directory, writing `ROOT/<the config's digest>/slowdown.json`, and naming a record there at
+a seed or split the config doesn't list, which it doesn't read; else from each job's run.json in its run's record,
+writing `$OUT/<the config's digest>/slowdown.json` where the command has an `$OUT`, and nothing where it has none. A
+config that names no honest config has no grade, which the command says. The grade's own command, which reads a
+whole directory, stays for `--also` and `--as-if-assumed`.
+
+`--dry-run` prints what it would run, runs nothing and grades nothing. The command exits 0 when every job has its
+record and the grade answers, or the config names no honest config; 3 when a job is still pending (its run id says
+which) or stopped; 4 when a job stalled; 1 when a job failed: a failed job is shown, and never run again; and 5
+(`REFUSED`) when every job has its record and the grade refuses them, with the grade's reason.
 """
 from __future__ import annotations
 
@@ -68,7 +77,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
-from training_slowdown import BUDGET_SLACK, NOTHING, config, starts, stop_record, told  # noqa: E402
+from training_slowdown import BUDGET_SLACK, NOTHING, config, grade, starts, stop_record, told  # noqa: E402
 from verity_config.settings import SHARED  # noqa: E402
 
 KIND = "training-attack"
@@ -116,6 +125,8 @@ STATE_COPIES = 3
 #: where `TMP` is on another one the environment is in the figure and not in what the hold measures.
 OUTSIDE_GB = 20
 DONE, PENDING, STOPPED, STALLED, FAILED, MISSING = "done", "pending", "stopped", "stalled", "failed", "missing"
+#: the command's exit status where every job has its record and the grade refuses them
+REFUSED = 5
 #: a job whose last this many runs were each stopped and kept no newer state than the one before them is stalled, and
 #: `--continue-stalled` continues it for this many more
 STALLS = 3
@@ -447,6 +458,56 @@ def main(argv=None, store: Store | None = None) -> int:
               (f", {n[STOPPED]} of them stopped: run the command again to continue them" if n[STOPPED] else ""))
         return 3
     print(f"every job has its record ({len(jobs)})")
+    if a.dry_run:
+        return 0
+    return graded(cfg, configs[1] if len(configs) > 1 else None, reg, list(zip(jobs, states)),
+                  root if a.local else None, store)
+
+
+def graded(cfg: config.Config, honest: config.Config | None, reg: dict, done: list[tuple[config.Job, State]],
+           root: Path | None, store: Store | None) -> int:
+    """Grade `cfg` against `honest` once every job of both has its record (`done`), with the grade's own `report`
+    on the config as the grade reads it and the starts registry `reg`. The grade reads those jobs and no other, on
+    both paths: with `root` (`--local`) each job's run.json in its directory, `root/<label>/`, its `source` that
+    path, as the grade's command reads a directory of one config's jobs, and `slowdown.json` goes to
+    `root/<cfg's digest>/`; else each job's run.json in its run's record on `store`, its `source` the record's id,
+    and `slowdown.json` goes to `$OUT/<cfg's digest>/` where the command has an `$OUT`, else nowhere. A config's
+    digest leaves out its seeds, so `root/<digest>/` may hold a record at a seed or split the config doesn't list:
+    the grade's C is a mean over every seed it is handed, so it isn't read, and the command names it. A config that
+    names no honest config has no grade, since the grade divides its count by honest training's; a grade that
+    refuses the records prints why and exits `REFUSED`."""
+    if honest is None:
+        print(f"{cfg.name} names no honest config, so it has no slowdown: the grade divides the config's count by "
+              f'honest training\'s, and `honest = "NAME"` in the config names one')
+        return 0
+    if root is not None:
+        listed = {j.label for j, _ in done}
+        unlisted = sorted(str(p) for c in (cfg, honest) for p in (root / c.digest).glob("*/*/run.json")
+                          if p.parent.name in grade.SPLITS and p.parent.parent.name.isdigit()
+                          and f"{c.digest}/{int(p.parent.parent.name)}/{p.parent.name}" not in listed)
+        if unlisted:
+            print(f"training-slowdown: not graded, at a seed or split its config doesn't list: {', '.join(unlisted)}")
+    runs, theirs = [], []
+    for j, s in done:
+        if root is not None:
+            p = root / j.label / "run.json"
+            said, source = reads(p, str(p.parent)) if p.is_file() else None, str(p)
+        else:
+            said, source = store.says(s.where), s.where
+        if not isinstance(said, dict):
+            print(f"training-slowdown: no slowdown, the grade refuses the records: job {j.label}'s record ({source}) "
+                  f"holds no run.json that reads")
+            return REFUSED
+        (runs if j.config is cfg else theirs).append({"seed": j.seed, "split": j.split, "record": said,
+                                                      "source": source})
+    for rs in (runs, theirs):
+        rs.sort(key=lambda r: (str(r["seed"]), r["split"]))  # as `grade.read` orders a directory's
+    out = root / cfg.digest if root is not None else Path(SHARED.OUT) / cfg.digest if SHARED.OUT else None
+    try:
+        grade.report(grade.config_of(cfg.path), reg, runs, theirs, out)
+    except ValueError as e:
+        print(f"training-slowdown: no slowdown, the grade refuses the records: {e}")
+        return REFUSED
     return 0
 
 
