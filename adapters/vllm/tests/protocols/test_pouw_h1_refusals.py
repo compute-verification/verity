@@ -39,10 +39,12 @@ and its record's root (`drawn.leaf_stagers`, `FileStager.stage`, `stage_leaves`)
 And what a call's receipts are with no card: each lane's words, J10-R's from the call's one stream, a dead tile's
 under admit bits and the units kernel's seed record (`pouw_h1_receipts.call_receipts`, `call_stream`,
 `gated_receipts`, `seed_record`), and a producer that skips dead tiles, keeps a call, or is handed a step for the
-units kernel (`Receipts`, `prepare`). Beside them, the one reserve after a period's close
-(`pouw_h1_window.after_close`), a host library that returns nonzero (`pouw_h1_registered_device.host_commit`,
-`host_zy`, `host_public_salts`, `pouw_h1_tables_device.host_roots`) and call tables whose kernels don't build
-(`pouw_h1_tables_device.available`, `pouw_h1_registered_device.zy_available`)."""
+units kernel (`Receipts`, `prepare`); with stand-ins for the two kernels, what `noise_blocks` and `call_streams`
+read back from the noise kernel and what a producer hands the units kernel. Beside them, the one reserve after a
+period's close (`pouw_h1_window.after_close`), a host library that returns nonzero
+(`pouw_h1_registered_device.host_commit`, `host_zy`, `host_public_salts`, `pouw_h1_tables_device.host_roots`) and
+call tables whose kernels don't build (`pouw_h1_tables_device.available`,
+`pouw_h1_registered_device.zy_available`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -2177,11 +2179,12 @@ def _declared(defn=TS.StandIn):
 
 
 def _asked(served, **made):
-    """A producer for `served` under `SALT` and the roots `RA` and `RB`, the window's first call (20 served rows of
-    its 64 slots, 32 weight rows), its codes and its weight."""
+    """A producer for `served` under `SALT` and, unless ``roots`` is given, the roots `RA` and `RB`; the window's
+    first call (20 served rows of its 64 slots, 32 weight rows), its codes and its weight."""
     rng = np.random.default_rng(5)
     codes, weight = (rng.integers(-127, 128, (rows, K), dtype=np.int8) for rows in (20, 32))
-    producer = RC.Receipts(served, SimpleNamespace(salt=SALT), roots=lambda _call: (RA, RB), **made)
+    made.setdefault("roots", lambda _call: (RA, RB))
+    producer = RC.Receipts(served, SimpleNamespace(salt=SALT), **made)
     return producer, SimpleNamespace(index=0, layer=0, n=32, k=K), codes, weight
 
 
@@ -2359,6 +2362,91 @@ def test_a_step_prepared_for_the_units_kernel_refuses_codes_and_tiles_off_the_pr
         alone(short, codes, None, weight, None)
     assert str(refused.value) == "call 1: 4 units in the window Program, not its 64 × 32 tiles"
     assert (producer.calls, alone.calls) == (0, 0)
+
+
+class _Hashlib:
+    """A stand-in for the noise kernel: it writes hashlib's halves as the device's 32-bit integers, and keeps the
+    shapes it was asked with."""
+
+    def __init__(self):
+        self.asked: list[tuple] = []
+
+    @staticmethod
+    def _digests(seeds):
+        return [b"".join(int(word).to_bytes(8, "big", signed=True) for word in row) for row in seeds.tolist()]
+
+    def launch(self, seeds, n, out):
+        self.asked.append(("launch", tuple(seeds.shape), n, tuple(out.shape)))
+        out.copy_(RC.noise_blocks(self._digests(seeds), n, "cpu", None).to(torch.int32))
+
+    def launch_calls(self, seeds, starts, out):
+        self.asked.append(("launch_calls", tuple(seeds.shape), starts.tolist(), tuple(out.shape)))
+        counts = (starts[1:] - starts[:-1]).tolist()
+        out.copy_(torch.cat(RC.call_streams(self._digests(seeds), counts, "cpu", None)).to(torch.int32))
+
+
+def test_a_noise_kernels_halves_are_read_back_unsigned_and_each_calls_stream_at_its_start():
+    """With a noise kernel, here a stand-in that writes hashlib's halves, `noise_blocks` and `call_streams` hand it
+    the seeds as rows of big-endian words and ask once: for every seed's blocks, or for every call's stream in one
+    launch, each at its start. What they read back is what they give with no kernel: each half unsigned, and each
+    call its own blocks, a call of no block none."""
+    seeds, kernel = [RA, RB, SALT], _Hashlib()
+    got, want = (RC.noise_blocks(seeds, 5, "cpu", cubin) for cubin in (kernel, None))
+    assert got.dtype == torch.int64 and torch.equal(got, want) and int(got.min()) >= 0 and int(got.max()) >= 1 << 31
+    streams, wanted = (RC.call_streams(seeds, [3, 0, 5], "cpu", cubin) for cubin in (kernel, None))
+    assert [tuple(s.shape) for s in streams] == [(3, 16), (0, 16), (5, 16)]
+    assert all(torch.equal(s, w) for s, w in zip(streams, wanted, strict=True))
+    assert kernel.asked == [("launch", (3, 8), 5, (3, 5, 16)), ("launch_calls", (3, 8), [0, 3, 3, 8], (8, 16))]
+
+
+class _Chain:
+    """A stand-in for the units kernel: it answers with the torch chain's receipts under `RA` and `RB`, as the
+    device's 32-bit integers, and keeps what it was handed."""
+
+    def __init__(self):
+        self.seeded: list[tuple] = []
+        self.asked: list[tuple] = []
+
+    def seeds(self, record, u0, n, call=None):
+        self.seeded.append((record, u0, n, call))
+        return u0
+
+    def receipts(self, a, b, seeds, live, j10r):
+        self.asked.append((seeds, None if live is None else live.tolist(), j10r))
+        return torch.from_numpy(RC.call_receipts(RC.Call(a, b), SALT, seeds, RA, RB, j10r=j10r).view(np.int32))
+
+
+@pytest.mark.parametrize("defn", [TS.StandIn, TS.StandInJ10R])
+def test_a_producer_hands_the_units_kernel_a_calls_seed_record_its_span_and_its_live_row_blocks(defn):
+    """With the units kernel, here a stand-in that answers with the torch chain's receipts, a call asked on its own
+    is one launch. The producer hands the kernel the seed record of the salt and the call's roots, the same one
+    while the roots are the same and another under other roots, then the call's first position and its proof
+    blocks, and under J10-R that position again as its call. Its receipts are read back unsigned, the torch
+    chain's. Made with ``skip_dead`` it hands over which row blocks hold a served row, and under J10-R it refuses."""
+    j10r = defn is TS.StandInJ10R
+    served, kernel = _declared(defn), _Chain()
+    producer, call, codes, weight = _asked(served, units=kernel, device="cpu",
+                                           roots=lambda call: (RA, RB) if call.index == 0 else (RB, RA))
+    chain, *_ = _asked(served)
+    got = producer(call, codes, None, weight, None)
+    assert got.dtype == np.uint32 and np.array_equal(got, chain(call, codes, None, weight, None))
+    later = SimpleNamespace(index=2, layer=0, n=32, k=K)
+    for c in (call, later):
+        producer(c, codes, None, weight, None)
+    (u0, n), (u2, _n) = producer.start(call), producer.start(later)
+    (record, *first), (again, *second), (other, *third) = kernel.seeded
+    assert first == second == [u0, n, u0 if j10r else None] and third == [u2, n, u2 if j10r else None]
+    assert again is record and record.dtype == torch.int64
+    assert np.array_equal(record.numpy(), RC.seed_record(SALT, RA, RB, j10r=j10r))
+    assert np.array_equal(other.numpy(), RC.seed_record(SALT, RB, RA, j10r=j10r))
+    assert kernel.asked == [(u0, None, j10r), (u0, None, j10r), (u2, None, j10r)] and producer.calls == 3
+    skipping, *_ = _asked(served, units=_Chain(), device="cpu", skip_dead=True)
+    if j10r:
+        with pytest.raises(ValueError, match="^skip_dead under J10-R: its unit "):
+            skipping(call, codes, None, weight, None)
+    else:
+        skipping(call, codes, None, weight, None)
+        assert skipping.units.asked == [(u0, [1, 0], False)]
 
 
 def test_the_one_reserve_after_a_periods_close_is_the_lanes_first():
