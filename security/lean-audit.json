@@ -16562,7 +16562,26 @@
    "type_hash": "b1b8da0e8ecbf5e4890926e53f753248e83ae2e68cc8f323b6675fa1e54aed47"
   },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_unCausal": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial_unCausal",
+    "  (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :",
+    "  Exists fun vs =>",
+    "    Exists fun x =>",
+    "      Not",
+    "        (Claims.ZKServer.Loop.ZkAnyAt Claims.ZKMal.Masked.dataE vs",
+    "          (((Claims.ZKServer.Loop.constRel Claims.ZKServer.Loop.Tp).withLink Claims.ZKServer.Loop.leakSrc).withFiles",
+    "            Claims.ZKServer.Loop.leakSrc)",
+    "          (Claims.ZKServer.Loop.realOf Claims.ZKServer.Loop.leakSrc) Claims.ZKServer.Loop.leakWk (fun x x_1 => True) 2)"
+   ],
+   "assumptions": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"],
+    "reads": ["FlockSoundness.Assumptions.HashDerivedKey"]
+   },
+   "type_hash": "8aaa6aee24f06bbf5e1f005f689690b3e5b74d6ab694be39c27197da70dab255"
   },
   "Flock.SecurityProofs.SessionLoopZKDeployed": {
    "owner": "@proofs",
