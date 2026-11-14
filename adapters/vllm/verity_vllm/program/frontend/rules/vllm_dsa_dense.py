@@ -1,5 +1,5 @@
 """[GLM-5.3] The prefill a DeepSeek sparse attention layer serves by dense MHA (vLLM d9105ea80 `SparseMLACommonImpl.forward_mha`,
-`FlashAttnPrefillBackend`), over the leaf `export_compat.dsa_leaves` exports in `dsa_indexer_attn`'s place (`vllm_iface`):
+`FlashAttnPrefillBackend`), over the leaf `dsa_leaves.dsa_leaves` exports in `dsa_indexer_attn`'s place (`vllm_iface`):
 
     dsa_dense_mha(positions, q_nope, q_pe, k_nope, v, kv_c, k_pe, index_k?, index_k_scale?, layer_name, topk, scale)
         -> attention rows [T, NH, DV]
@@ -81,7 +81,7 @@ def takes_dense_mha(layer, T: int, rows: int, topk: int) -> bool:
     """Whether vLLM serves a sparse attention call of T query rows, its layer's history then `rows` rows long, by dense MHA
     (`DeepseekV32Attention._use_sparse_mha`, `use_dense_mha`): the layer has a prefill backend, `sparse_mla_force_mqa` is off, the
     metadata builder counts the call a prefill (T above its decode threshold at the layer's heads) and the prefill's rows have at
-    most TOPK keys.  Masked MHA, the route past TOPK, is FA4's and not the H200's.  `export_compat.dsa_leaves` asks it."""
+    most TOPK keys.  Masked MHA, the route past TOPK, is FA4's and not the H200's.  `dsa_leaves.dsa_leaves` asks it."""
     cfg = getattr(getattr(layer, "_vllm_config", None), "attention_config", None)
     if getattr(layer, "prefill_backend", None) is None or getattr(cfg, "sparse_mla_force_mqa", False):
         return False
@@ -119,11 +119,26 @@ class DsaDenseMhaRule(StateRule):
                                    "layer_name static and written from one module; not under registered_values"),
                     evidence_domain="structural; numerics: Attention_v4 and AttentionSplit_v1 (glm53_fa3_prefill_capture)")
 
+    #: the op's arguments (a rule of another cache row's: `vllm_dsa_fp8`)
+    names = _DENSE
+
     def targets(self):
         return {iface.dsa_dense_mha.default}
 
+    def observed(self, layer_name: str) -> str | None:
+        """None when the layer's observed implementation is the one whose cache rows the call carries."""
+        return _observed_sparse_mla(layer_name)
+
+    def cache_rows(self, ctx, a: dict, T: int) -> list[str | None]:
+        """Each of the call's cache-row operands, None where it is the value the layer's history takes."""
+        return [_value(ctx, a["kv_c"], BF16, (T, (shape(ctx, a["kv_c"]) or (0, 0))[-1]), "kv_c")]
+
+    def append(self, ctx, hist: dict, a: dict, has: bool) -> None:
+        """Append the call's cache rows to the layer's history."""
+        _append_rows(ctx, hist, a, has)
+
     def applies(self, node, ctx):
-        a = _args(node, _DENSE)
+        a = _args(node, self.names)
         layer, topk, scale = a["layer_name"], a["topk"], a["scale"]
         if not isinstance(layer, str) or not isinstance(topk, int) or topk < 1 or not _static_float(scale):
             return "layer_name, topk, scale are not static"
@@ -131,7 +146,7 @@ class DsaDenseMhaRule(StateRule):
             return r
         if ctx.registered_values:
             return "numerics_unregistered: Attention_v4 folds its scale; the registered-values twin is not bound here"
-        if (r := _observed_sparse_mla(layer)) or (r := _observed_prefill_backend(layer, float(scale))):
+        if (r := self.observed(layer)) or (r := _observed_prefill_backend(layer, float(scale))):
             return r
         tp = active_target_profile()
         if tp.compute_capability != (9, 0) or not TG.fa3_check_inf(tp):
@@ -152,10 +167,9 @@ class DsaDenseMhaRule(StateRule):
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
         D = P + R
         DV = (shape(ctx, a["v"]) or (0,))[-1]
-        L = (shape(ctx, a["kv_c"]) or (0, 0))[-1]
         for r in (_value(ctx, a["q_nope"], BF16, (T, NH, P), "q_nope"), _value(ctx, a["q_pe"], BF16, (T, NH, R), "q_pe"),
                   _value(ctx, a["k_nope"], BF16, (T, NH, P), "k_nope"), _value(ctx, a["k_pe"], BF16, (T, R), "k_pe"),
-                  _value(ctx, a["v"], BF16, (T, NH, DV), "v"), _value(ctx, a["kv_c"], BF16, (T, L), "kv_c")):
+                  _value(ctx, a["v"], BF16, (T, NH, DV), "v"), *self.cache_rows(ctx, a, T)):
             if r:
                 return r
         if DV != D:
@@ -184,7 +198,7 @@ class DsaDenseMhaRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        a = _args(node, _DENSE)
+        a = _args(node, self.names)
         has = a.get("index_k") is not None
         layer, TOPK, scale = a["layer_name"], a["topk"], float(a["scale"])
         mp, h = ctx.module_path(node), ctx.hint_name(node)
@@ -197,7 +211,7 @@ class DsaDenseMhaRule(StateRule):
             refuse("numerics_unregistered", node, mp, f"{layer!r}: a dense-MHA prefill of {T} rows after {P0} history rows runs over a "
                                                      f"chunked context (`_compute_prefill_context`, `merge_attn_states`), which no "
                                                      f"Definition states")
-        _append_rows(ctx, hist, a, has)
+        self.append(ctx, hist, a, has)
         tp = active_target_profile()
         geom = TG.attention_geometry(tp, D, T, NH, NH)
         BM, ns = TG.fa3_tile_m(D, T, 1), _dense_splits(tp, T, NH, D)

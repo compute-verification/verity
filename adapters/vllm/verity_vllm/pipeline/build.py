@@ -66,7 +66,8 @@ def _spec_histogram(program) -> dict[str, int]:
 #: the builder's own sources (hashed into `construction_version`): the export shims, the meta instantiation / wrappers and its loader
 #: parity, this driver and its instance writer, the Triton interception, the vLLM bindings + vocabulary + derive core, and the
 #: applicability contract itself.
-_CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/vllm_meta.py",
+_CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/dsa_leaves.py",
+                         "verity_vllm/program/frontend/vllm_meta.py",
                          "verity_vllm/pipeline/build.py", "verity_vllm/program/frontend/loader_parity.py",
                          "verity_vllm/pipeline/build_instances.py", "verity_vllm/pipeline/build_sampling.py",
                          "verity_vllm/program/frontend/triton_capture.py",
@@ -90,6 +91,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_sampling.py", "verity_vllm/program/frontend/rules/vllm_moe.py",
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
                          "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
+                         "verity_vllm/program/frontend/rules/vllm_dsa_fp8.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
                          "verity/definitions/boolean.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
