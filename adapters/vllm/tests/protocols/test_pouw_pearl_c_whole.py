@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
-from verity.protocols.accounting.pouw.verifier.serving import SERIAL
+from verity.protocols.accounting.pouw.verifier.serving import DEFERRED_A, SERIAL
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
@@ -1135,6 +1135,81 @@ def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_cop
         else:
             assert torch.equal(xa[:3], x.float()) and (xa[3] == 0).all() and (xa[4] == 7).all() and len(launched) == 1
             assert calls._widening is None
+
+
+def test_an_eager_calls_lanes_take_over_at_events_and_a_tree_aside_runs_apart_from_a_full_tile(monkeypatch):
+    """`LaneCalls._lanes` without a graph, on the card, under ``deferred-a``: each event's record and each wait, in `log`,
+    over stand-ins of the device, the streams and the events.  The main lane starts behind the caller.  A's tree, aside,
+    starts at an event the main lane records after its per-row keying, and copies A's root to the pass on its lane: the
+    side lane after the call's from `TREE_APART_ROWS` rows, the call's own below.  The call's side lane runs the rest
+    behind the main lane's end, waits for a tree that ran apart, and its end is the set's event, which the set's next
+    call waits for on the main lane before its steps.  The caller waits for the main lane's end."""
+    torch = pytest.importorskip("torch")
+    log: list = []
+    on = ["caller"]
+
+    class Stream:
+        def __init__(self, name):
+            self.name = name
+
+        def wait_event(self, event):
+            log.append(f"{self.name} waits for {event.name}, recorded on {event.at}")
+
+    class Event:
+        def __init__(self, name):
+            self.name, self.at = name, None
+
+        def record(self, stream):
+            self.at = stream.name
+            log.append(f"{self.name} on {stream.name}")
+
+    @contextlib.contextmanager
+    def stream(s):
+        held, on[0] = on[0], s.name
+        try:
+            yield
+        finally:
+            on[0] = held
+
+    def lane(name, raw):
+        return SimpleNamespace(raw=raw, stream=Stream(name), event=Event(f"{name}'s event"),
+                               tree_event=Event(f"{name}'s tree event"))
+
+    def buf(name):
+        log.append(f"{name} read on {on[0]}")
+        return tree
+    monkeypatch.setattr(torch.cuda, "stream", stream)
+    monkeypatch.setattr(L, "_event", lambda: Event("the set's end"))
+    kernel, tree = SimpleNamespace(dev=SimpleNamespace(stream=None)), torch.arange(128, dtype=torch.uint8)
+    run = SimpleNamespace(device=SimpleNamespace(type="cuda"), schedule=DEFERRED_A, main=lane("main", 1),
+                          sides=[lane("side 0", 2), lane("side 1", 3)], _side_turn=0, hashing=False, nb=64, kernel=kernel,
+                          _launching=None, roots_buf=torch.zeros(256, dtype=torch.uint8), cur=SimpleNamespace(first=5))
+    steps, side = ([lambda x=x: log.append(f"{x} ({kernel.dev.stream})") for x in names]
+                   for names in (("rows_a", "forming"), ("tree_seed_a", "hash_leaf")))
+    full, part = (SimpleNamespace(turn=0, sets=[dict.fromkeys(L.rotated(DEFERRED_A), tree)], m16=m16, done=[None], buf=buf)
+                  for m16 in (L.TREE_APART_ROWS, L.TREE_APART_ROWS // 2))
+
+    def launched(sh, index):
+        pipe = SimpleNamespace(b={}, keys={}, lane_cuts=(1, 1), size={"tree_a": 128})
+        log.clear()
+        assert L.LaneCalls._lanes(run, 7, sh, pipe, steps, side, 9, Stream("caller"), index, True) == (None, False)
+        assert kernel.dev.stream is None and run._launching is None and on == ["caller"]
+        return list(log)
+
+    behind_caller = ["keys read on caller", "main's event on caller", "main waits for main's event, recorded on caller"]
+    keyed = ["rows_a (1)", "side 1's event on main", "forming (1)",
+             "side 1 waits for side 1's event, recorded on main", "tree_seed_a (3)", "tree_a read on side 1"]
+    ended = ["main's event on main", "caller waits for main's event, recorded on main"]
+    apart = [*keyed, "side 0's tree event on side 1",
+             "side 0's event on main", "side 0 waits for side 0's event, recorded on main", "hash_leaf (2)",
+             "side 0 waits for side 0's tree event, recorded on side 1", "the set's end on side 0", *ended]
+    assert launched(full, 6) == behind_caller + apart
+    assert launched(part, 7) == [*behind_caller, *keyed,
+                                 "side 1's event on main", "side 1 waits for side 1's event, recorded on main",
+                                 "hash_leaf (3)", "the set's end on side 1", *ended]
+    assert launched(full, 8) == [*behind_caller, "main waits for the set's end, recorded on side 0", *apart]
+    assert (full.turn, part.turn, run._side_turn) == (2, 1, 3)
+    assert run.roots_buf.tolist() == [0] * 64 + 3 * tree[64:].tolist()
 
 
 def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():
