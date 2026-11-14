@@ -1,7 +1,8 @@
 """`verity_vllm.pipeline.commit`'s small parts that `test_commit_main` stands in for or never reaches: the source's commit
 (`git_head`), the device's memory in use (`nvidia_smi_used_mib`), an engine row's request (`_rid_of`) and the staging's
 environment (`staging_environ`) where it refuses, excludes families, traces the footprint or drops a flush point; the Programs'
-forecast (`c2_programs_forecast`) where an instance file can't be read, and the check that the engine is left as it was
+forecast (`c2_programs_forecast`) where an instance file can't be read; the serving loop (`run_workload`) where a request
+arrives late, the engine has nothing to serve or a request is let go unfinished, over `test_commit_main`'s stand-in engine; the check that the engine is left as it was
 (`assert_pristine`) where a runner's method or a module's forward is still wrapped, or the sampler keeps a hook; and the
 kept bytes' digests (`tensor_digests`): a whole FA2 row's planes, a row of zeros, a later pair's differences and the step
 dumped.  The two commands each reader runs, and `commit`'s clock, are stood in.  CPU only."""
@@ -20,8 +21,11 @@ from typing import Any
 import pytest
 import torch
 
+from tests.pipeline.test_commit_main import TOKENS, WORKLOAD, Clock
+from tests.pipeline.test_commit_main import engine as served
 from verity_vllm import settings
 from verity_vllm.commit.committer import native_collect as NC
+from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline import cli, commit
 
 #: The environment names `staging_environ` writes: absent at a test's start, and taken back at its end.
@@ -140,6 +144,39 @@ def test_an_instance_file_that_cannot_be_read_is_named_and_counts_no_rows(tmp_pa
     assert (fc["rows"], fc["json_bytes"], fc["bytes"], fc["why"]) == (2, len(text), 2 * len(text), None)
     assert fc["files"] == [{"file": str(good), "rows": 2, "json_bytes": len(text), "gz_bytes": good.stat().st_size},
                            {"file": str(bad), "error": repr(raised.value)[:200]}]
+
+
+def serve(monkeypatch: pytest.MonkeyPatch, requests: list[dict[str, Any]], finishing: set[str] | None = None) -> dict[str, Any]:
+    """`run_workload` over `test_commit_main`'s stand-in engine, each step a second of `commit`'s clock from 100 s, and a
+    request's sampling its `max_tokens` alone.  With ``finishing``, a request outside it leaves the engine without an output
+    that says it finished."""
+    clock = Clock()
+    clock.take(100.0)
+    monkeypatch.setattr(commit, "time", clock)
+    monkeypatch.setattr(va, "sampling_params", lambda req, sampling: SimpleNamespace(max_tokens=int(req["max_tokens"])))
+    eng = served(clock)
+    core = eng.llm.llm_engine
+    if finishing is not None:
+        stepped = core.step
+        monkeypatch.setattr(core, "step", lambda: [SimpleNamespace(**{**vars(o), "finished": o.finished and o.request_id in finishing})
+                                                   for o in stepped()])
+    return commit.run_workload(eng, requests, {})
+
+
+@pytest.mark.parametrize("arrive, tokens_out", [(1, [1, 2, 2]), (3, [1, 1, 1, 1, 1]), (7, [1, 1, 1, 1, 1])])
+def test_a_request_joins_at_its_arrival_step_or_at_once_when_the_engine_has_nothing_to_serve(
+        monkeypatch: pytest.MonkeyPatch, arrive: int, tokens_out: list[int]) -> None:
+    """A request is admitted once the engine has stepped `arrive_step` times; an engine with nothing left to serve takes the
+    next request at once, without a step."""
+    first, second = WORKLOAD["requests"]
+    ran = serve(monkeypatch, [first, {**second, "arrive_step": arrive}])
+    assert (ran["tokens"], ran["step_tokens_out"], ran["iterations"]) == (TOKENS, tokens_out, len(tokens_out))
+    assert ran["step_wall_s"] == [1.0] * len(tokens_out) and (ran["wall_s"], ran["t_last_step"]) == (len(tokens_out), 100 + len(tokens_out))
+
+
+def test_a_request_the_engine_lets_go_unfinished_is_refused_by_the_count_of_such(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(RuntimeError, match=r"^1 requests did not finish$"):
+        serve(monkeypatch, WORKLOAD["requests"], finishing={"a"})
 
 
 def engine(**runner: Any) -> Any:
