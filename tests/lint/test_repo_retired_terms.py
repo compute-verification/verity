@@ -598,14 +598,14 @@ def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
     terms iterates in an order that differs between processes."""
     alive, said = [], set()
     for i in range(64):
-        pair = [Term("Dampener*", "the slowdown", code=True), Term("*RemotePeriod", "monitoring period", code=True)]
+        pair = [Term("Slowdown*", "the slowdown", code=True), Term("*RemotePeriod", "monitoring period", code=True)]
         alive.append(pair)
         by: dict[str, list[Term]] = {}
         for t in pair[::-1] if i % 2 else pair:
             for a in t.anchors:
                 by.setdefault(a, []).append(t)
-        said |= set(sites_of("the DampenerRemotePeriod\n", by))
-    assert said == {(1, "'DampenerRemotePeriod' is retired; say monitoring period (GLOSSARY.md)")}, sorted(said)
+        said |= set(sites_of("the SlowdownRemotePeriod\n", by))
+    assert said == {(1, "'SlowdownRemotePeriod' is retired; say monitoring period (GLOSSARY.md)")}, sorted(said)
 
 
 def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in() -> None:
