@@ -1,5 +1,5 @@
 # CLOCK_MONOTONIC_RAW in a Nebius virtual machine, a KVM guest on clocksource kvm-clock or tsc: the one source of its
-# numbers (verity/hardware/README.md). Each number is { value, unit, mark, source }. mark: "ceiling" (nothing run on
+# numbers (hardware/README.md). Each number is { value, unit, mark, source }. mark: "ceiling" (nothing run on
 # this time base exceeds it: what the model's premises need), "measurement" (a measured value, so only a lower bound on
 # the ceiling), "premise" (no page and no run bounds the number; it is assumed under the premise its source states, of
 # whom it names) or "placeholder" (none of these, open). A time base's card is the clock an auditor's device reads,
