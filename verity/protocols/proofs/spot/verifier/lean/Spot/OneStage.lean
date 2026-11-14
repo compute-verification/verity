@@ -7,7 +7,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `work-rate:NUM/DEN`, which names its sampling design and work table over the program's population (`design`); the
   protocol refuses `bernoulli` at every `p`, `paramsOfJson` and `drawnFrom`, as the sampled audit's soundness statement
   doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`,
-  what its layout derives), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
+  what its layout derives, a port whose rows are the leaves of another port's tree naming that port too, `"wired"`, a
+  string), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
   `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
@@ -263,7 +264,8 @@ def paramsParsed (j : Json) : V Params := do
   let (law, workTable) ← design program query (getD j "law") workTable
   let .str scheme := getD j "scheme" | throw "scheme is not a string"
   let ports ← (entries (← obj (getD j "ports") "ports")).mapM fun (p, v) => do
-    exactly v #["domain", "leaves"] s!"port {p}"
+    exactly v (if getD v "wired" matches .str _ then #["domain", "leaves", "wired"] else #["domain", "leaves"])
+      s!"port {p}"
     if (nat? (getD v "leaves")).isNone || !(getD v "domain" matches .str _) then
       throw s!"port {p}: leaves is not a natural number or domain not a string"
     pure (p, v)
