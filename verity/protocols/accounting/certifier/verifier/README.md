@@ -460,8 +460,8 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 ## Zero knowledge: what N2's verdict reads, and what's open
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
-counts to the occupancy profile on every link's execution phase (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound (provisional).
+counts on every link's execution phase: on a served link to the ones its ingress counts derive under the declared sync,
+on a network certifier's to its schedule's, beside the proved timing bound (provisional).
 
 N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
 block (`NetworkTransferBlocks` v5, served `NetworkServedTransferBlocks` v4) and public inputs alone: its own run of Flock's Lean

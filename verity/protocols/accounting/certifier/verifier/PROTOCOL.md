@@ -253,13 +253,13 @@ One execution phase's certificates are registered through the proof system
   system: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
   ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
-  service's `late`. On a plain, served or network certifier link the verdict of record is the Lean's (`NetworkCheck.TransferBlocks`,
+  service's `late`. On a served or network certifier link the verdict of record is the Lean's (`NetworkCheck.TransferBlocks`,
   `service.OF_RECORD`), with the Python beside it as the reference; the README has the gap list and the replay. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
   profile's (and the ingress head's, where that end declares one), which puts the link's timing at the profile. The
   egress grid is the head's counts filled with its frames in order, and the head's digest binds both, so the frames
   are the rest of the grid, and nothing in this protocol holds them, so it doesn't say the egress grid is the Program's.
-  A link whose egress end has neither an occupancy profile nor a served profile has no verdict (`ValueError`, failing
-  closed), since nothing would hold its egress timing.
+  `LinkWindows` refuses a link that is neither served nor a network certifier's (`ValueError`, failing closed), since
+  no occupancy profile holds a link's egress timing.
 - **The in-the-clear check** is `LinkWindows.clear`, over the opening: the opening reproduces the registered root,
   each end's head check accepts (`head_check.reference`, which the tests hold to the circuit), and the audit accepts
   both records under the certifier's key in its session, comparing no grid (`check_link(grid=False)` on the status,

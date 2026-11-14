@@ -139,7 +139,7 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     assert [r["output"] for r in io["records"]] == [list(r) for r in sz.W63.responses]
     assert all(r["release"] is not None and r["frames"][0][1] >= r["release"] for r in io["records"])
     lw, dep, params = WC.link(run)
-    assert lw.warden.digest == params.digest and lw.windows == sz.W63.windows
+    assert lw.warden.digest == params.digest and lw.charge == 0.0 and lw.windows == sz.W63.windows
     assert lw.grid(0) == lw.grid(1) and lw.link == "warden" and lw.run == dep["run_id"]
     pairs, refused = WC.pairs(run, dep)
     assert len(pairs) == sz.W63.windows and refused == []

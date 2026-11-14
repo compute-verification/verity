@@ -15,7 +15,7 @@ its `reference`, which the tests hold to the circuit.
         Salt = Array<24, Array<64, Value<1>>>, Byte = Array<8, Value<1>>, HL = 157 + L + 4T
 
 **Statics: the size class.** L is the UTF-8 length of the link's name, T the end's buckets a window, and COUNTS 1 when
-the end has an occupancy profile, so `profile` is a parameter. All three are public: the
+the end has an occupancy profile (`LinkWindows.occupancy`), so `profile` is a parameter. All three are public: the
 link's name and its grids are, and so is whether an end has a profile.
 
 **Public inputs.** `record` is the root of N2's commitment to the execution phase, `record_domain` its domain id
