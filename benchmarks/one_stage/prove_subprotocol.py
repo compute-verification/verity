@@ -1,13 +1,13 @@
-"""The proof leg: units through Flock `prove --zk` behind the Lean ZK server and the Lean verifier, one call
+"""The proof subprotocol: units through Flock `prove --zk` behind the Lean ZK server and the Lean verifier, one call
 (`prove_units`) that stages each member's units, registers them, takes the verifier's sample, proves each sampled member's
 units in one `--zk` session, verifies it with Lean `verity-verify-proof verify --zk` (with `--registered` when the units read
 registered values), opens the rows the verifier holds its own copy of, and records every verdict in the one-stage audit
 record. The compiled per-step units of an arbitrary vLLM model, its head-check units and the I/O tie's units all ride
 it.
 
-    python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean verity-verify-proof [--firewall flock-firewall] \\
+    python benchmarks/one_stage/prove_subprotocol.py standin --bin flock-circuit --lean verity-verify-proof [--firewall flock-firewall] \\
       --out DIR [--n 4] [--negatives] [--registered] [--gpus 0,1] [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit]
-    python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean verity-verify-proof [--firewall flock-firewall] \\
+    python benchmarks/one_stage/prove_subprotocol.py defs --bin flock-circuit --lean verity-verify-proof [--firewall flock-firewall] \\
       --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots] [--gpus 0,1] \\
       [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit]
 
@@ -28,8 +28,8 @@ it.
   callable that takes the docket and returns that mapping (a `service.Stream`'s register and select).
 * **Proving.** Each sampled member's units are one `--zk` session on SPOT's proof server (`verity_flock.proof_server`):
   one long-lived streaming prover a device and one queued verifier a block type, ``FC_VERIFY_AHEAD`` 2, every member's
-  session submitted before any is collected. The run's server (`proof_server`, the CLI's ``--gpus``) serves every leg
-  inside it; a leg outside one runs its own CPU server. Under ``FLOCK_CHALLENGER=1`` a leg runs a server of its own whose
+  session submitted before any is collected. The run's server (`proof_server`, the CLI's ``--gpus``) serves every subprotocol
+  inside it; a subprotocol outside one runs its own CPU server. Under ``FLOCK_CHALLENGER=1`` a subprotocol runs a server of its own whose
   verifiers take their coin trees from challengers, and closes it before its verdicts, since a challenger's audit holds
   every session it served at once. Behind the ZK server (``FC_FIREWALL=1``, its Lean frame ``FC_FIREWALL_LEAN``, when
   `Tools.firewall` names one) a session is one `serve --zk --draw-file` / `prove --zk` process pair instead
@@ -96,7 +96,7 @@ TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "k_log
 
 
 def log(msg: str) -> None:
-    print(f"LEG {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
+    print(f"SUBPROTOCOL {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
 def maxrss_gb(who: int) -> float:
@@ -158,13 +158,13 @@ def free_port() -> int:
 
 #: `stage`'s bound stagers by unit and partition inside `reuse_lowerings`, else None
 _STAGERS: dict | None = None
-#: the run's proof server (`proof_server`), which every leg inside it proves on
+#: the run's proof server (`proof_server`), which every subprotocol inside it proves on
 _SERVER: ProofServer | None = None
 
 
 @contextlib.contextmanager
 def proof_server(tools: Tools, out: Path, devices: Sequence[int] | None = None, verify_ahead: int = 2):
-    """SPOT's proof server for every leg run inside: ``devices``' GPUs (None: one CPU prover), its processes' logs under
+    """SPOT's proof server for every subprotocol run inside: ``devices``' GPUs (None: one CPU prover), its processes' logs under
     ``out`` and, once it closes, ``server.json`` (its devices, each type's device and each process's exit). Its sessions
     run as SPOT's proof server runs them (`a0.DIRECT`: no ZK server, the witness built where the prover builds it)."""
     global _SERVER
@@ -287,7 +287,7 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
     return s
 
 
-# --- the leg ----------------------------------------------------------------------------------------------------------
+# --- the subprotocol ----------------------------------------------------------------------------------------------------------
 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
@@ -381,13 +381,13 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                 registered: Path | None = None, *, tools: Tools, out: Path, k: int | None = None, program=None, query=None,
                 window: dict | None = None, mutate: Callable[[dict], dict] | None = None,
                 server: ProofServer | None = None) -> dict:
-    """Every member staged, registered, sampled, proved ``--zk`` and verified by Lean; returns the leg's record
+    """Every member staged, registered, sampled, proved ``--zk`` and verified by Lean; returns the subprotocol's record
     (``verity/prove-leg/v0``): per member its sampled proof blocks, each unit's verdict, the session's verdicts and timing; the
     audit record; and ``accepted``. ``registered``: the verifier's own ``--registered`` file. ``k``: the stratified rule's
     K (default every unit). ``program``/``query``: the window's, else the members' population program. ``window``: the
     docket's window (default a stand-in's). ``mutate``: the docket as the verifier is handed it (a
     negative's), from the honest one. ``server``: the proof server to prove on (default the run's, `proof_server`, else
-    one of the leg's own on the CPU; under FLOCK_CHALLENGER=1 always the leg's own, with challengers)."""
+    one of the subprotocol's own on the CPU; under FLOCK_CHALLENGER=1 always the subprotocol's own, with challengers)."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -408,7 +408,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
             raise ValueError(f"template {tid}'s units are not one contiguous range of the program's (a member is one statement)")
         bases[tid] = (b0, c0 + cnt)
     population = P.units(program, query)
-    leg: dict[str, Any] = {"format": FORMAT, "population": population, "partition": bound["partition"],
+    subprotocol: dict[str, Any] = {"format": FORMAT, "population": population, "partition": bound["partition"],
                            "program": bound["program"], "firewall": tools.firewall is not None, "members": {},
                            "_out": str(out)}
 
@@ -421,7 +421,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         s = stage(m, bases[tid][0], bound, out, salt_key, files, tools)
         staged.append(s)
         by_name[m.name] = (bases[tid][0], m.n)
-        leg["members"][m.name] = {"template": tid, "n": m.n, "base": s["base"], "ands": s["ands"], "unit_nnz": s["unit_nnz"],
+        subprotocol["members"][m.name] = {"template": tid, "n": m.n, "base": s["base"], "ands": s["ands"], "unit_nnz": s["unit_nnz"],
                                   "k_log": s["meta"].get("k_log"), "pin": s["pin"], "lower_s": s["lower_s"],
                                   "stage_s": s["stage_s"], "forged": list(m.forge), "form": s["form"]}
         log(f"staged {m.name}: {m.n} units from {s['base']}, {s['ands']} ANDs, k_log {s['meta'].get('k_log')}, "
@@ -438,7 +438,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
     sampling_design = D.parse_design(f"stratified:{k}")
-    window = window or {"kind": "stand-in", "of": "the proof leg's members (prove_leg.py)",
+    window = window or {"kind": "stand-in", "of": "the proof subprotocol's members (prove_subprotocol.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}
     honest = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
@@ -448,13 +448,13 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     for s in staged:
         checks[f"statement/{s['name']}"] = a7.statement_checks(s, rec, want)
     receipt = R.receipt(rec, "prove-leg verifier (prove_leg.py)")
-    leg["registration"] = R.digest(rec)
-    leg["checks_before_draw"] = {c: {"ok": v["ok"], "codes": v.get("codes")} for c, v in checks.items()}
+    subprotocol["registration"] = R.digest(rec)
+    subprotocol["checks_before_draw"] = {c: {"ok": v["ok"], "codes": v.get("codes")} for c, v in checks.items()}
     if not all(v["ok"] for v in checks.values()):
-        leg.update(accepted=False, refused="before the draw", seconds=round(time.time() - t0, 1))
+        subprotocol.update(accepted=False, refused="before the draw", seconds=round(time.time() - t0, 1))
         log(f"refused before the draw: {[c for c, v in checks.items() if not v['ok']]}")
-        (out / "leg.json").write_text(json.dumps(leg, indent=1, sort_keys=True, default=str))
-        return leg
+        (out / "leg.json").write_text(json.dumps(subprotocol, indent=1, sort_keys=True, default=str))
+        return subprotocol
 
     draw = _draw(coins, rec, files["program_file"], files["partition_file"], k, tools.lean, out,
                  {s["name"]: (s["base"], s["n"]) for s in staged})
@@ -470,7 +470,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         submitted = {}
         for m, s in zip(members, staged):
             local = sorted(u - s["base"] for u in draw["units"] if s["base"] <= u < s["base"] + s["n"])
-            leg["members"][m.name]["drawn"] = local
+            subprotocol["members"][m.name]["drawn"] = local
             if not local:
                 continue
             sdir = out / f"session-{m.name}"
@@ -483,14 +483,14 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                           tmpl_unit=s.get("tmpl_unit")),
                 sample, str(sdir.resolve()), out=sdir / "sessions", self_check="skip" if m.forge else None,
                 verdict=lambda _, s=s, sdir=sdir: a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True))
-        got = {m.name: _session(m, s, submitted[m.name], leg["members"][m.name]["drawn"], tools, out / f"session-{m.name}")
+        got = {m.name: _session(m, s, submitted[m.name], subprotocol["members"][m.name]["drawn"], tools, out / f"session-{m.name}")
                for m, s in zip(members, staged) if m.name in submitted}
         if chall:
             stack.close()
         for m, s in zip(members, staged):
             if m.name not in submitted:
                 continue
-            ml, sdir = leg["members"][m.name], out / f"session-{m.name}"
+            ml, sdir = subprotocol["members"][m.name], out / f"session-{m.name}"
             local = ml["drawn"]
             record, live, lv, session_s = got[m.name]
             h = submitted[m.name]
@@ -531,26 +531,26 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     result = V.audit_record(rec, receipt, draw, rec["law"], sorted(proved), n_inst, statement, verdicts, tools.delta,
                             sessions=sessions, served=sorted(served), session_roots=session_roots)
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
-    leg["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
-    leg["audit"]["failed"] = [c for c, v in (result.get("checks") or {}).items() if not v.get("ok")]
-    leg["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
-    leg["accepted"] = bool(result.get("accepted"))
-    leg["seconds"] = round(time.time() - t0, 1)
-    leg["_staged"] = {s["name"]: str(s["dir"]) for s in staged}
-    (out / "leg.json").write_text(json.dumps(leg, indent=1, sort_keys=True, default=str))
-    log(f"leg: accepted {leg['accepted']}, audit {leg['audit']}, {leg['seconds']} s")
-    return leg
+    subprotocol["audit"] = {x: result.get(x) for x in ("accepted", "complete", "wrong_units")}
+    subprotocol["audit"]["failed"] = [c for c, v in (result.get("checks") or {}).items() if not v.get("ok")]
+    subprotocol["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
+    subprotocol["accepted"] = bool(result.get("accepted"))
+    subprotocol["seconds"] = round(time.time() - t0, 1)
+    subprotocol["_staged"] = {s["name"]: str(s["dir"]) for s in staged}
+    (out / "leg.json").write_text(json.dumps(subprotocol, indent=1, sort_keys=True, default=str))
+    log(f"subprotocol: accepted {subprotocol['accepted']}, audit {subprotocol['audit']}, {subprotocol['seconds']} s")
+    return subprotocol
 
 
 # --- negatives --------------------------------------------------------------------------------------------------------
 
-def refused(leg: dict, member: str | None = None) -> bool:
-    """The leg refused (not accepted), and, naming ``member``, refused at least one of its units."""
-    if leg.get("accepted"):
+def refused(subprotocol: dict, member: str | None = None) -> bool:
+    """The subprotocol refused (not accepted), and, naming ``member``, refused at least one of its units."""
+    if subprotocol.get("accepted"):
         return False
     if member is None:
         return True
-    units = leg["members"].get(member, {}).get("units")
+    units = subprotocol["members"].get(member, {}).get("units")
     return units is None or any(u["verdict"] != "accept" for u in units)
 
 
@@ -559,7 +559,7 @@ def wrong_unit(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
     ``b``'s pin, which ``a``'s circuit file doesn't hash to (the proof system's own check, `proofs.verify`'s
     ``circuit``), and Lean verifies ``a``'s session against ``b``'s circuit file."""
     if "_staged" not in honest:
-        return {"refused": False, "skipped": "the honest leg has no session (refused before the draw)"}
+        return {"refused": False, "skipped": "the honest subprotocol has no session (refused before the draw)"}
     da, db = Path(honest["_staged"][a]), Path(honest["_staged"][b])
     n = honest["members"][a]["n"]
     stage_ = out / "stage"
@@ -581,7 +581,7 @@ def wrong_unit(honest: dict, a: str, b: str, tools: Tools, out: Path) -> dict:
 def tampered_registered_root(honest: dict, member: str, registered: Path, tools: Tools, out: Path) -> dict:
     """Member's honest session verified against the verifier's ``--registered`` file with its first port's root changed."""
     if "_staged" not in honest:
-        return {"refused": False, "skipped": "the honest leg has no session (refused before the draw)"}
+        return {"refused": False, "skipped": "the honest subprotocol has no session (refused before the draw)"}
     reads = json.loads(Path(registered).read_text())
     port = next(iter(reads["ports"]))
     reads["ports"][port]["root"] = "00" * 64
@@ -602,7 +602,7 @@ def negatives(members: list[Member], coins, registered: Path | None, tools: Tool
               program=None, query=None, k: int | None = None) -> dict:
     """The proof-layer negatives on the first member (and, for incorrect-block, the second), each expected refused. ``coins``
     must sample unit 0 of the first member (``"lean"`` with every unit sampled does), or ``k`` (the stratified rule's K, fewer
-    than the member's units) is given and every unit is forged. ``program``/``query``: the honest leg's, when it was given
+    than the member's units) is given and every unit is forged. ``program``/``query``: the honest subprotocol's, when it was given
     its own."""
     m = members[0]
     neg: dict[str, dict] = {}
@@ -612,10 +612,10 @@ def negatives(members: list[Member], coins, registered: Path | None, tools: Tool
     for name, t in (("tampered-unit", tools), ("tampered-unit-unfirewalled", replace(tools, firewall=None) if tools.firewall else None)):
         if t is None:
             continue
-        leg = prove_units([replace(m, forge=forge)], coins, registered, out=out / name, **{**kw, "tools": t})
-        ml = leg["members"][m.name]
-        neg[name] = {"refused": refused(leg, m.name), "units": ml.get("units"), "lean_why": ml.get("lean_why"),
-                     "prover_stopped": ml.get("prover_stopped"), "audit": leg.get("audit")}
+        subprotocol = prove_units([replace(m, forge=forge)], coins, registered, out=out / name, **{**kw, "tools": t})
+        ml = subprotocol["members"][m.name]
+        neg[name] = {"refused": refused(subprotocol, m.name), "units": ml.get("units"), "lean_why": ml.get("lean_why"),
+                     "prover_stopped": ml.get("prover_stopped"), "audit": subprotocol.get("audit")}
 
     if m.held:
         row = next(iter(m.held))
@@ -627,17 +627,17 @@ def negatives(members: list[Member], coins, registered: Path | None, tools: Tool
             t[skw["refs"][row][0], 0] ^= 1
             skw["tables"] = {**skw["tables"], row: t}
             vals[row] = t[np.asarray(skw["refs"][row])]
-        leg = prove_units([replace(m, values=vals, stage_kw=skw)], coins, registered, out=out / "tampered-public", **kw)
-        neg["tampered-public"] = {"refused": refused(leg, m.name), "row": row, "units": leg["members"][m.name].get("units"),
-                                  "lean": leg["members"][m.name].get("lean"), "openings": leg["members"][m.name].get("openings")}
+        subprotocol = prove_units([replace(m, values=vals, stage_kw=skw)], coins, registered, out=out / "tampered-public", **kw)
+        neg["tampered-public"] = {"refused": refused(subprotocol, m.name), "row": row, "units": subprotocol["members"][m.name].get("units"),
+                                  "lean": subprotocol["members"][m.name].get("lean"), "openings": subprotocol["members"][m.name].get("openings")}
 
     def bad_root(rec: dict) -> dict:
         rec["roots"][0]["root"] = "00" * 64
         return rec
 
-    leg = prove_units([m], coins, registered, out=out / "tampered-root", mutate=bad_root, **kw)
-    neg["tampered-root"] = {"refused": refused(leg) and leg.get("refused") == "before the draw",
-                            "checks_before_draw": leg.get("checks_before_draw")}
+    subprotocol = prove_units([m], coins, registered, out=out / "tampered-root", mutate=bad_root, **kw)
+    neg["tampered-root"] = {"refused": refused(subprotocol) and subprotocol.get("refused") == "before the draw",
+                            "checks_before_draw": subprotocol.get("checks_before_draw")}
 
     if len(members) > 1:
         neg["wrong-unit"] = wrong_unit(honest, members[0].name, members[1].name, tools, out / "wrong-unit")
@@ -933,7 +933,7 @@ _LOWERINGS: dict = {}
 @contextlib.contextmanager
 def reuse_lowerings():
     """`class_statement.unit_lowering` once per unit, and `stage`'s bound `UnitStager` once per unit and partition, while
-    inside: the honest leg and its negatives restage the same unit, mostly under the same partition, and neither
+    inside: the honest subprotocol and its negatives restage the same unit, mostly under the same partition, and neither
     `circuit.compose` nor `UnitStager.stage` changes the lowering or the stager it is given."""
     global _STAGERS
     from verity_flock import class_statement as CS
@@ -1005,24 +1005,24 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
 
 def prove_served(shape: str, tools: Tools, out: Path, seed: int, reads: str | None = None) -> tuple[Member, dict, dict]:
     """``shape``'s member through `prove_units`, one unit sampled by Lean: staged at one unit, and again at `units_for`'s when
-    one unit's statement is smaller than --zk admits. Call inside `reuse_lowerings`. Returns the member, its info and the leg."""
+    one unit's statement is smaller than --zk admits. Call inside `reuse_lowerings`. Returns the member, its info and the subprotocol."""
     import a11_kinds as K
 
     m, info = served_member(shape, seed, reads=reads)
     t = time.time()
     with K.no_cyclic_gc():
         try:
-            leg = prove_units([m], "lean", tools=tools, out=out / m.name / "honest", k=1)
+            subprotocol = prove_units([m], "lean", tools=tools, out=out / m.name / "honest", k=1)
         except OutsideShape as ex:
             n = units_for(ex.k_log, ex.per_block)
             if n == 1:
                 raise
             log(f"{shape}: k_log {ex.k_log}, {ex.per_block} a block: staged again at {n} units")
             m, info = served_member(shape, seed, n, reads)
-            leg = prove_units([m], "lean", tools=tools, out=out / m.name / "honest", k=1)
-    ml = leg["members"][m.name]
+            subprotocol = prove_units([m], "lean", tools=tools, out=out / m.name / "honest", k=1)
+    ml = subprotocol["members"][m.name]
     info.update(ands=ml["ands"], k_log=ml["k_log"], leg_s=round(time.time() - t, 1), stage_py_maxrss_gb=maxrss_gb(resource.RUSAGE_SELF))
-    return m, info, leg
+    return m, info, subprotocol
 
 
 def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed: int, max_ands: int,
@@ -1084,9 +1084,9 @@ def defs_ok(rec: dict) -> bool:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="prove_leg.py", description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(prog="prove_subprotocol.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    s = sub.add_parser("standin", help="the stand-in members through the leg, and the negatives")
+    s = sub.add_parser("standin", help="the stand-in members through the subprotocol, and the negatives")
     s.add_argument("--bin", required=True)
     s.add_argument("--lean", required=True)
     s.add_argument("--firewall", default=None, help="flock-firewall: prove behind the ZK server")
@@ -1096,7 +1096,7 @@ def main(argv=None) -> int:
     s.add_argument("--negatives", action="store_true")
     s.add_argument("--registered", action="store_true",
                    help="the registered-weights stand-in (one member at the first K) in place of the population one")
-    d = sub.add_parser("defs", help="vLLM's served Definitions at Llama shapes through the leg (`served`), and the negatives")
+    d = sub.add_parser("defs", help="vLLM's served Definitions at Llama shapes through the subprotocol (`served`), and the negatives")
     d.add_argument("--bin", default=None)
     d.add_argument("--lean", default=None)
     d.add_argument("--firewall", default=None, help="flock-firewall: prove behind the ZK server")

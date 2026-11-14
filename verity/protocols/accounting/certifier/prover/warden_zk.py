@@ -233,7 +233,7 @@ def _one_stage():
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
 
     d = proof_drivers.drivers()
-    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_leg=d.prove_leg, D=D, R=R, V=V)
+    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_subprotocol=d.prove_subprotocol, D=D, R=R, V=V)
 
 
 def check_shape(M, sg: SimpleNamespace) -> None:

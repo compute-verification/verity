@@ -176,7 +176,7 @@ each one last (`two-stage-form`). Three things withhold the accept. SPOT[Flock]'
 (`Flock.SecurityProofs.SpotKSTwo`) takes as a premise that each gate's value has one address, fixed before the run
 (`SpotFlock.AddressesConnected`), which nothing proves from this check. No theorem says that a run this verifier
 accepts is one the verifier that guarantee is stated about (`SpotFlock.V`) accepts. And the composite's sampled
-component has no two-stage form, nor a leg for one, under the one soundness theorem (`Verity.Soundness`). The switch
+component has no two-stage form, nor a subprotocol for one, under the one soundness theorem (`Verity.Soundness`). The switch
 turns on only once the two-stage form is under that theorem: SPOT[Flock]'s own two-stage theorem does not turn it
 on. -/
 def FORM : Bool := false

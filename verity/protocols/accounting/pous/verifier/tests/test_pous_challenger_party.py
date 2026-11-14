@@ -413,7 +413,7 @@ def test_a_period_asks_its_caller_for_the_pous_side(tmp_path) -> None:
         raise Handed
 
     with pytest.raises(Handed):
-        period_prover.leg(period_dir, "n0", tmp_path / "out", side_of=side_of, session=CR.session)
+        period_prover.subprotocol(period_dir, "n0", tmp_path / "out", side_of=side_of, session=CR.session)
     assert handed == [({}, "n0", "pous", CS.command(tmp_path / "periods" / "pous-challenger"), None)]
 
 
