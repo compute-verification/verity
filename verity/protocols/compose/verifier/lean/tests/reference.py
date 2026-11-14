@@ -73,8 +73,8 @@ def module(name: str, path: Path) -> ModuleType:
     return m
 
 
-#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `parsed_params_v2`,
-#: `subset_law` and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
+#: SPOT's one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `parsed_params_v2`,
+#: `subset_design` and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
 ONE_STAGE = module("one_stage_difftest", ROOT / "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", ROOT / "verity/protocols/accounting/pouw/verifier/lean/check/tests/pouw_period_cases.py")
@@ -184,8 +184,8 @@ def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsEitherOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1, in the one statement's form
     (`paramsOfJson`): ``proofs``, exactly the circuit and public files' SHA-512s and the verifier's registered file or
     null, then v1's params (`parsed_params_v2`, which refuses them naming no challenger) with a partition object, under
-    a subset sampling design (`subset_law`), its last refusal. The per-member form (``proofs`` exactly ``members``) is outside the
-    mirror."""
+    a subset sampling design (`subset_design`), its last refusal. The per-member form (``proofs`` exactly ``members``)
+    is outside the mirror."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
@@ -200,7 +200,7 @@ def _one_stage_params(rest: dict) -> dict:
     p = ONE_STAGE.parsed_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
-    return {**ONE_STAGE.subset_law(p), "proofs": pr}
+    return {**ONE_STAGE.subset_design(p), "proofs": pr}
 
 
 def _one_stage_evidence(rest: dict) -> dict:

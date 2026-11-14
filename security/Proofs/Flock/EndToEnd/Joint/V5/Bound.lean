@@ -98,7 +98,7 @@ end Ended
 /-- **The window's audit accepts with a sampled proof block incorrect**, at every window: `accepted_drawnWrong_le`
 where some outcome of the stream ends the sample, which is where its premises are asked; where none does, no run is
 accepted. -/
-theorem accepted_drawnWrong_le_of_ends (τ : Strategy w.game)
+theorem accepted_sampledWrong_le (τ : Strategy w.game)
     (hCR : ∀ _ : Nonempty w.EndΩ, ∀ k ω j, TableCRZ execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
@@ -194,7 +194,7 @@ theorem JointSampledV5 : Flock.Guarantees.JointSampledV5 := by
     _ ≤ prob (fun o => w.Accepts o ∧ ∃ u ∈ o.2.1, u ∈ w.wrongSet τ) w.game τ +
           prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ W) w.game τ := prob_or_le _ _ _ _
     _ ≤ w.eps + ENNReal.ofReal (w.pa W) :=
-        add_le_add (w.accepted_drawnWrong_le_of_ends τ hCR hA2) (w.drawMiss_le hA3 W τ)
+        add_le_add (w.accepted_sampledWrong_le τ hCR hA2) (w.drawMiss_le hA3 W τ)
     _ = ENNReal.ofReal (w.pa W) + w.eps := add_comm _ _
 
 /-- **A window's sample over several members, the share form.** -/
@@ -233,7 +233,7 @@ theorem JointHorizonV5 : Flock.Guarantees.JointHorizonV5 := by
       (periodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
   have hA := period_union (fun t => (W t).game) (JointAuditV5.record W)
     (fun r => r.accepted ∧ r.drawnWrong) (fun t τ => t < T ∧ cr t τ) (fun t => (W t).eps)
-    (fun t τ hτ => (W t).accepted_drawnWrong_le_of_ends τ hτ.2.1 hτ.2.2) T 0 s hs
+    (fun t τ hτ => (W t).accepted_sampledWrong_le τ hτ.2.1 hτ.2.2) T 0 s hs
   have hB := period_prod (fun t => (W t).game) (JointAuditV5.record W) (fun r => ¬ r.drawnWrong)
     AuditRecV5.pa (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨ENNReal.ofReal ((W t).pa ((W t).wrongSet τ)), ENNReal.ofReal_ne_top, fun _ => rfl,

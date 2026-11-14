@@ -24,10 +24,10 @@ import time
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-#: the stack limit the executable runs under, where its caller's is lower: Linux's cap on arguments is then its own
+#: the stack limit the executable runs under, where its caller's is lower: Linux's limit on arguments is then its own
 STACK = 24 << 20
-#: Linux's cap on a command's arguments and environment, each string's bytes, its NUL and its pointer
-ARGS_CAP = 6 << 20
+#: Linux's limit on a command's arguments and environment, each string's bytes, its NUL and its pointer
+ARGS_LIMIT = 6 << 20
 
 
 def linked(blobs: Sequence[str | Path], d: Path) -> list[str]:
@@ -60,7 +60,7 @@ def argv(case: Mapping[str, Any], exe: Path, command: str, d: Path) -> list[str]
 
 
 def arg_bytes(args: Sequence[str], env: Mapping[str, str]) -> int:
-    """What `args` and `env` take of `ARGS_CAP`."""
+    """What `args` and `env` take of `ARGS_LIMIT`."""
     return sum(len(a.encode()) + 1 + 8 for a in args) + sum(len(f"{k}={v}".encode()) + 1 + 8 for k, v in env.items())
 
 
@@ -73,11 +73,11 @@ def _stack() -> None:
 def run(case: Mapping[str, Any], exe: Path, command: str, d: Path) -> dict[str, Any]:
     """`argv` run from `d`, its output in ``d/stdout`` and ``d/stderr`` -> its exit (``rc``), its last line, its
     ``seconds``, its peak RSS (``peak_rss_kb``, its own, from wait4), and the blobs listed, linked and their bytes.
-    Raises ValueError where even the short names pass `ARGS_CAP`."""
+    Raises ValueError where even the short names pass `ARGS_LIMIT`."""
     args = argv(case, exe, command, d)
     took = arg_bytes(args, os.environ)
-    if took > ARGS_CAP:
-        raise ValueError(f"{len(args)} arguments and the environment take {took} bytes, past Linux's {ARGS_CAP}")
+    if took > ARGS_LIMIT:
+        raise ValueError(f"{len(args)} arguments and the environment take {took} bytes, past Linux's {ARGS_LIMIT}")
     t = time.monotonic()
     with open(d / "stdout", "w") as out, open(d / "stderr", "w") as err:
         p = subprocess.Popen(args, cwd=d, stdout=out, stderr=err, preexec_fn=_stack)

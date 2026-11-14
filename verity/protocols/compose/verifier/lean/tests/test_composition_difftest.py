@@ -602,11 +602,11 @@ def test_spot_refuses_one_stage_v1(name, request):
     assert set(seen) == set(want), dict(seen)
 
 
-def test_spot_refuses_a_law_that_is_no_subset(remote_server):
-    """Sampled proofs' one-stage form covers a subset sampling design alone: v2's audit under a `stratified` or a `work` law is
-    refused by the sampling design's kind (`OneStageZk.SUBSET_ONLY`) at its params, its last refusal there, so with no partition
-    too it is refused for the partition. Remote, every other subprotocol aimed at acceptance on the audit's record,
-    rejects with that refusal as sampled proofs' reason, in Lean as in Python."""
+def test_spot_refuses_a_sampling_design_that_is_no_subset(remote_server):
+    """SPOT's one-stage form covers a subset sampling design alone: v2's audit under a `stratified` or a `work` one is
+    refused by the sampling design's kind (`OneStageZk.SUBSET_ONLY`) at its params, its last refusal there, so with no
+    partition too it is refused for the partition. Remote, every other subprotocol aimed at acceptance on the audit's
+    record, rejects with that refusal as SPOT's reason, in Lean as in Python."""
     want = {"stratified": f"params: {OS.subset_only('stratified')}", "work": f"params: {OS.subset_only('work')}",
             "stratified-no-partition": "params: partition is null: the sessions are verified against the verifier's own "
                                        "partition object"}

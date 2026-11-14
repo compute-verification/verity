@@ -163,7 +163,8 @@ private def committedOf (pr : Json) : V (String × String × Option Json) := do
 /-- The refusal of a sampling design of kind `kind` that is no `subset` one, at the one statement's form
 (`paramsOfJson`): its soundness statement covers a uniform sample of a fixed count alone. -/
 def SUBSET_ONLY (kind : String) : String :=
-  s!"the law is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a subset law"
+  s!"the sampling design is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a \
+    subset sampling design"
 
 /-- The one statement's parameters as parsed, before `paramsOfJson`'s refusal of a sampling design that is no `subset`
 one. The per-member form's parameters read them (`membersParamsOfJson`), under any sampling design v1 parses. -/
@@ -184,10 +185,10 @@ def paramsParsed (j : Json) : V Params := do
          members := none }
 
 /-- **The one statement's parameters** (`paramsParsed`), with every sampling design that is no `subset` one refused by
-its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed law's, the one the sample is
-sampled under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over the population
-(`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` law here and passes, and `stratified-rate:` and `work-rate:`
-are refused as `stratified` and `work`. -/
+its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed sampling design's, the one the
+sample is sampled under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over
+the population (`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` one here and passes, and `stratified-rate:` and
+`work-rate:` are refused as `stratified` and `work`. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
   let kind := match getD p.base.verifier.law "law" with | .str s => s | _ => ""

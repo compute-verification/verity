@@ -185,11 +185,11 @@ noncomputable def link (L : Law m.n) : ℝ≥0∞ :=
 
 end MemberV5
 
-/-- **The sample ended** on the bytes `src ω`: the deployed sample (`Spot.Draw.drawUnits`) under `law` over `[0, pop)`
-returned a sample before the stream ran out. `Bridge.execSel` samples every unit where it did not. -/
-def sampleEnded {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (law : Flock.Draw.Law)
+/-- **The sample ended** on the bytes `src ω`: the deployed sample (`Spot.Draw.drawUnits`) under `design` over
+`[0, pop)` returned a sample before the stream ran out. `Bridge.execSel` samples every unit where it did not. -/
+def sampleEnded {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (design : Flock.Draw.Law)
     (pop : ℕ) (ω : Ω) : Bool :=
-  match Spot.Draw.drawUnits law pop (Properties.Spot.bytesOf (src ω 0)) with
+  match Spot.Draw.drawUnits design pop (Properties.Spot.bytesOf (src ω 0)) with
   | .ok _ => true
   | .error _ => false
 

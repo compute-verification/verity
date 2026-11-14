@@ -12,7 +12,7 @@ its timing bucket and on its advice, and then the window's audit runs (`JointAud
 session on one live sample). The probability that it leaves `M` incorrect proof blocks undetected is at most
 $$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
 by `period_undetected`. A window is accepted with a sampled incorrect proof block with probability at most its members'
-knowledge and binding terms (`JointAuditV5.accepted_drawnWrong_le_of_ends`). Its sample misses its `w` incorrect proof
+knowledge and binding terms (`JointAuditV5.accepted_sampledWrong_le`). Its sample misses its `w` incorrect proof
 blocks with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the sampling design's per-block
 miss: a premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata
 each have `(n − k)/n ≤ x`). The named assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
@@ -76,7 +76,7 @@ theorem servedRec_accepted_le (w : JointAuditV5) (τ : Strategy (servedGame w (R
   show prob (fun b => w.Accepts b.2 ∧ ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ))
     (w.game.map fun o => (τ.1, o)) τ.2 ≤ _
   rw [prob_map]
-  exact w.accepted_drawnWrong_le_of_ends (servedAudit w τ) hCR hA2
+  exact w.accepted_sampledWrong_le (servedAudit w τ) hCR hA2
 
 theorem servedRec_miss_le (w : JointAuditV5) (hA3 : Assumptions.UniformRandomBytes w.Lb w.src)
     (x : ℝ) (hx : 0 ≤ x)

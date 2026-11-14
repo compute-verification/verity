@@ -110,16 +110,16 @@ def test_the_declared_day_is_held_by_both():
                     declarations=change.get("declarations"))
 
 
-def _window(law: dict, counts=(2, 18)) -> tuple:
-    """A registration under `law` of a window of two templates, `counts` proof blocks of PAIR then of OTHER: the record,
-    its program, its query and its ports."""
+def _window(design: dict, counts=(2, 18)) -> tuple:
+    """A registration under `design` of a window of two templates, `counts` proof blocks of PAIR then of OTHER: the
+    record, its program, its query and its ports."""
     program = P.mixed_population_program(list(zip((PAIR, OTHER), counts)))
     query = P.template_instances_query((PAIR, OTHER))
     part, n = P.partition(program, query), sum(counts)
     ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
              for p, leaves in (("x", n), ("out", 2 * n))}
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    return (R.record(program, query, law, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0}), program, query,
+    return (R.record(program, query, design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0}), program, query,
             ports)
 
 
@@ -136,7 +136,8 @@ def test_the_per_member_forms_link_points_are_held_by_both():
     * `subset:9` over two and eighteen misses PAIR's member and holds seven to nine of OTHER's, 3 link points or 4;
     * `subset:2` over ten and ten misses either member and gives each one count: link points alone pass it;
     * `subset:17` over ten and ten holds seven to ten of each, 3 link points or 4, and misses neither;
-    * a Bernoulli law of rate 0 samples nothing, so each member's fewest and most are none: link points alone pass it.
+    * a Bernoulli sampling design of rate 0 samples nothing, so each member's fewest and most are none: link points
+      alone pass it.
 
     With no members, the one-statement form's, both pass every record, and a member with a unit past the population
     is refused by both under each."""
@@ -147,22 +148,22 @@ def test_the_per_member_forms_link_points_are_held_by_both():
             ((10, 10), {"law": "subset", "k": 2}, [(0, 2), (0, 2)], [0, 1], []),
             ((10, 10), {"law": "subset", "k": 17}, [(7, 10), (7, 10)], [], [0, 1]),
             ((2, 18), {"law": "bernoulli", "p": "0/1"}, [(0, 0), (0, 0)], [0, 1], [])]
-    for counts, law, bounds, missed, differ in rows:
-        rec, program, query, ports = _window(law, counts)
+    for counts, design, bounds, missed, differ in rows:
+        rec, program, query, ports = _window(design, counts)
         n = sum(counts)
         members, past = [([[0, counts[0]]], 1), ([[counts[0], n]], 1)], [([[0, counts[0]]], 1), ([[counts[0], n + 1]], 1)]
-        assert LP.bounds(*LP.law_of(program, query, law), members) == bounds, law
-        assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, law
-        assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, law
+        assert LP.bounds(*LP.law_of(program, query, design), members) == bounds, design
+        assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, design
+        assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, design
         refused = sorted({*missed, *differ})
         codes = ("link-points",) if refused else ()
         for ms, want in ((members, codes), ((), ()), (past, ("link-points",))):
-            v = V.check(rec, program, query, law, S.SCHEME, ports, members=ms)
+            v = V.check(rec, program, query, design, S.SCHEME, ports, members=ms)
             side = {"ok": not want, "codes": list(want)}
-            assert v.codes == want and v.verifiers == {"of_record": "lean", "lean": side, "python": side}, (law, ms)
-        py = R.check(rec, program, query, law, S.SCHEME, ports, members=members)
-        assert py.codes == codes and py.detail == ({"link-points": {"members": refused}} if refused else {}), law
-        if law["law"] == "stratified":
+            assert v.codes == want and v.verifiers == {"of_record": "lean", "lean": side, "python": side}, (design, ms)
+        py = R.check(rec, program, query, design, S.SCHEME, ports, members=members)
+        assert py.codes == codes and py.detail == ({"link-points": {"members": refused}} if refused else {}), design
+        if design["law"] == "stratified":
             assert [s["k"] for s in rec["law"]["strata"]] == [lo for lo, _ in bounds]
 
 

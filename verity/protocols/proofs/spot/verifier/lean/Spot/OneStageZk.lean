@@ -6,9 +6,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   the circuit and public files (lowercase hex of 64 bytes) and the verifier's own registered file (`flock-verify
   --registered`'s object, or null for a program that reads no registered value). The partition must not be null: the
   sessions are verified against the verifier's own partition object; and v1's `challenger`, with its `window_root`, must
-  be named (`NO_CHALLENGER`), its key at the deployed LMS parameters, `Lms.deployed` (`KEY_PARAMS`). The sampling design must be a
-  `subset` one, or a rate stated as text that names one over the population (`rate:NUM/DEN[:T]`): a `stratified` or
-  `work` law, written as an object or as a rate, is refused by its kind (`SUBSET_ONLY`, `paramsOfJson_subset`), since
+  be named (`NO_CHALLENGER`), its key at the deployed LMS parameters, `Lms.deployed` (`KEY_PARAMS`). The sampling
+  design must be a `subset` one, or a rate stated as text that names one over the population (`rate:NUM/DEN[:T]`): a
+  `stratified` or `work` one, written as an object or as a rate, is refused by its kind (`SUBSET_ONLY`,
+  `paramsOfJson_subset`), since
   the one statement's soundness statement covers a uniform sample of a fixed count alone;
 * **commitment**: v1's (the registration record);
 * **evidence**: v1's without `verdicts`, its `coins` within the challenger evidence's limits (`Challenger.withinAt`
@@ -656,8 +657,8 @@ def live (bs : Array ByteArray) : Core.Live (protocol.on bs) where
   checkAt p c ξ e := checkBlobsAt p c ξ e (Core.Blobs.ofArray bs)
   factors _ _ _ := rfl
 
-/-- **What `paramsOfJson` returns, `paramsParsed` returned, under a `subset` law**: its one refusal of its own is
-`SUBSET_ONLY`'s. -/
+/-- **What `paramsOfJson` returns, `paramsParsed` returned, under a `subset` sampling design**: its one refusal of its
+own is `SUBSET_ONLY`'s. -/
 theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
     paramsParsed j = .ok p ∧ getD p.base.verifier.law "law" = .str "subset" := by
   unfold paramsOfJson at h
@@ -680,8 +681,8 @@ theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
 theorem paramsOfJson_parsed {j : Json} {p : Params} (h : paramsOfJson j = .ok p) : paramsParsed j = .ok p :=
   (paramsOfJson_ok h).1
 
-/-- **Parsed parameters' law is a `subset` one**: whatever `paramsOfJson` returns names a sampling design of kind `subset`, the
-kind the sample's sample reads (`Draw.deriveLaw`, `Draw.flockLaw`). -/
+/-- **Parsed parameters' sampling design is a `subset` one**: whatever `paramsOfJson` returns names a sampling design of
+kind `subset`, the kind the sample reads (`Draw.deriveLaw`, `Draw.flockLaw`). -/
 theorem paramsOfJson_subset {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
     getD p.base.verifier.law "law" = .str "subset" :=
   (paramsOfJson_ok h).2

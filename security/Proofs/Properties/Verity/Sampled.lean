@@ -656,7 +656,7 @@ theorem ParamsAt.unique {θ : ByteArray} {p p' : _root_.Spot.OneStageZk.Params} 
   obtain rfl : x = x' := Option.some.inj (hx.symm.trans hx')
   exact Sum.inl.inj (Except.ok.inj (hp.symm.trans hp'))
 
-/-- **The parameters `θ` name no members**: v2's parameters in them, where they name sampled proofs' one-stage form
+/-- **The parameters `θ` name no members**: v2's parameters in them, where they name SPOT's one-stage form
 (`ParamsAt`), are of the one statement's form, so what v2 accepts on them the one statement's check accepts. -/
 def OneStatement (θ : ByteArray) : Prop :=
   ∀ p, ParamsAt θ p → p.members = none
