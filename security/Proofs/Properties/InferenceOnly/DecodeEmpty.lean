@@ -178,6 +178,10 @@ theorem ddefs_rule (m : Std.HashMap String Json) (hm : m = (∅ : Std.HashMap St
     (k : String) (hk : k = "Root_v1") : m[k]? = some rootE := by
   subst hm hk; exact Std.HashMap.getElem?_insert_self
 
+theorem dup_rule (ps : Array (String × Ty)) (h : ps = #[]) :
+    ((ps.foldl (fun s p => s.insert p.1) (∅ : Std.HashSet String)).size != ps.size) = false := by
+  subst h; simp
+
 theorem index_rule (k : String) : (∅ : Std.HashMap String Nat)[k]? = none := Std.HashMap.getElem?_empty
 
 theorem busy_rule (k : String) : (∅ : Std.HashSet String).contains k = false := Std.HashSet.contains_empty
@@ -199,12 +203,12 @@ theorem st_forIn_range0 {β} (m : Nat) (h : m = 0) (b : β) (f : Nat → β → 
     (forIn [0:m] b f : DM β) s = .ok (b, s) := by
   subst h; rw [Std.Legacy.Range.forIn_eq_forIn_range']; rfl
 
-set_option maxHeartbeats 0 in -- the walk steps through `decode` and leaves closed checks to the kernel
+set_option maxHeartbeats 1000000 in -- the walk steps through `decode` and leaves closed checks to the kernel
 fwd_def progEmpty decode_empty : decode programEmpty.toUTF8 by
   [fromUTF8?_toUTF8, parse_empty, domain_none, ofJson_tuple0, split_rule, toNat_rule, rfi_rule, ddefs_rule,
     index_rule, busy_rule, String.contains_char_eq, String.all_bool_eq, Array.mapM_empty,
     st_run, st_bind, st_get, st_set, st_modify, st_pure, st_ite,
-    st_forIn_nil, st_forIn_range0, leaves_rule]
+    st_forIn_nil, st_forIn_range0, leaves_rule, dup_rule]
   block [domainError, Ty.ofJson]
   shallow [programEmpty]
 
