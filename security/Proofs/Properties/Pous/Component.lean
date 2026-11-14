@@ -926,7 +926,7 @@ private theorem checkAt_toy (pk sig : ByteArray)
 
 private theorem message_toy : ∃ m, MemoryChallenger.message toySessionCommitment COMPLETE #[toyRound] = .ok m := by
   obtain ⟨v, hv⟩ : ∃ v, toyRound.value = .ok v := by
-    have hd : toyRound.digest.size = 64 := Properties.NetworkCertifier.Bytes.hash_size _
+    have hd : toyRound.digest.size = 64 := Properties.Certifier.Bytes.hash_size _
     unfold MemoryChallenger.Round.value
     rw [ite_cond_eq_false _ _ (by simp [hd])]
     exact ⟨_, rfl⟩
