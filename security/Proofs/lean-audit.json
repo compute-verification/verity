@@ -100,6 +100,7 @@
   "Proofs.Properties.InferenceOnly.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
   "Proofs.Properties.Pous.WipeSigned",
+  "Proofs.Properties.Pous.WipeCount",
   "Proofs.Properties.Challenger",
   "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.Coins",
