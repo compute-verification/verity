@@ -8,7 +8,7 @@ public import Proofs.Flock.SpotFlock.Cap
 import Proofs.Flock.Claims.JsonNorm
 import Proofs.Flock.Claims.Sampling.Select.Bounds
 import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Proofs.Flock.Claims.Sampling.Select.Second
 import Proofs.Flock.SamplingGeneric.TwoCode
@@ -346,12 +346,12 @@ theorem stratifiedWith_sub (src : ByteArray) (strata : Array _root_.Flock.Draw.S
 open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
 /-- **A draw's units are slots of its population**: under a `subset` sampling design, or a stratified or work sampling design whose strata's
 ranges are the population's slots in order, every unit `drawUnits` returns is below the population. -/
-theorem drawUnits_lt {law : _root_.Flock.Draw.Law} {n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
-    (hb : _root_.Flock.Bridge.NotBernoulli law)
-    (hSt : ∀ St : Array _root_.Flock.Draw.Stratum, ((∃ k, law = .stratified k St) ∨
-      ∃ k ws, law = .work k ws ∧ St = ws.map (·.toStratum)) →
+theorem drawUnits_lt {samplingDesign : _root_.Flock.Draw.SamplingDesign} {n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
+    (hb : _root_.Flock.Bridge.NotBernoulli samplingDesign)
+    (hSt : ∀ St : Array _root_.Flock.Draw.Stratum, ((∃ k, samplingDesign = .stratified k St) ∨
+      ∃ k ws, samplingDesign = .work k ws ∧ St = ws.map (·.toStratum)) →
         St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n)
-    (h : Spot.Draw.drawUnits law n src = .ok (units, read)) : ∀ u ∈ units, u < n := by
+    (h : Spot.Draw.drawUnits samplingDesign n src = .ok (units, read)) : ∀ u ∈ units, u < n := by
   have hstrata : ∀ St : Array _root_.Flock.Draw.Stratum,
       St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n →
       ∀ p D, (_root_.Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need) St).run 0 = .ok (some D, p) →
@@ -366,7 +366,7 @@ theorem drawUnits_lt {law : _root_.Flock.Draw.Law} {n : ℕ} {src : ByteArray} {
       exact List.getElem_mem _
     exact List.mem_range.1 hmem
   unfold Spot.Draw.drawUnits at h
-  cases hw : (_root_.Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) law n).run 0 with
+  cases hw : (_root_.Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -378,7 +378,7 @@ theorem drawUnits_lt {law : _root_.Flock.Draw.Law} {n : ℕ} {src : ByteArray} {
     dsimp only at h
     obtain ⟨hu, -⟩ := Prod.mk.inj (Except.ok.inj h)
     subst hu
-    cases law with
+    cases samplingDesign with
     | subset k =>
       unfold _root_.Flock.Draw.drawWith at hw
       dsimp only at hw
@@ -430,13 +430,13 @@ theorem drawUnits_lt {law : _root_.Flock.Draw.Law} {n : ℕ} {src : ByteArray} {
           exact hstrata _ (hSt _ (Or.inr ⟨k, strata, rfl, rfl⟩)) p D ho
 
 open Properties.Spot.SecurityProofs (bind_eq_ok throw_bind_ne) in
-/-- **An accepted second stage's draw** is the object `drawFirstRead` writes for the units it drew under `secondLaw`'s
+/-- **An accepted second stage's draw** is the object `drawFirstRead` writes for the units it drew under `secondSamplingDesign`'s
 Flock sampling design over the `|sample|·Σ n_t` proof blocks. -/
 theorem selectSecond_draw {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Spot.Select.selectSecond sample ns ks src = .ok (draw, read)) :
-    ∃ parsed units read', Spot.Draw.flockLaw (Spot.Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) =
+    ∃ parsed units read', Spot.Draw.flockSamplingDesign (Spot.Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) =
         .ok parsed ∧ Spot.Draw.drawUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read') ∧
-      draw = Json.mkObj ((Spot.entries (Spot.Select.secondLaw sample ns ks)).toList ++
+      draw = Json.mkObj ((Spot.entries (Spot.Select.secondSamplingDesign sample ns ks)).toList ++
         [("population", Lean.toJson (sample.size * ns.toList.sum)), ("units", Spot.natsJson units)]) := by
   unfold Spot.Select.selectSecond at h
   cases hq : Spot.Select.secondProblem sample ns ks with
@@ -462,7 +462,7 @@ theorem proved_second_lt {sample ns ks : Array ℕ} {src : ByteArray} {draw : Js
     (h : Spot.Select.selectSecond sample ns ks src = .ok (draw, read)) :
     ∀ j ∈ Spot.Draw.proved draw, ∃ v : ℕ, j = v ∧ v < sample.size * ns.toList.sum := by
   obtain ⟨parsed, units, read', hp, hu, rfl⟩ := selectSecond_draw h
-  obtain ⟨ws, rfl, hmap⟩ := Properties.Spot.SecurityProofs.flockLaw_second _ _ _ _ _ hp
+  obtain ⟨ws, rfl, hmap⟩ := Properties.Spot.SecurityProofs.flockSamplingDesign_second _ _ _ _ _ hp
   have hlt := drawUnits_lt (fun a b => by simp) (fun St hSt => by
       rcases hSt with ⟨k, hk⟩ | ⟨k, ws', hk, rfl⟩
       · cases hk
@@ -480,7 +480,7 @@ theorem proved_second_lt {sample ns ks : Array ℕ} {src : ByteArray} {draw : Js
     cases hjv
     exact ⟨v, rfl, hlt v hv⟩
   · dsimp only at hj
-    have hc : Spot.getD (Json.mkObj ((Spot.entries (Spot.Select.secondLaw sample ns ks)).toList ++
+    have hc : Spot.getD (Json.mkObj ((Spot.entries (Spot.Select.secondSamplingDesign sample ns ks)).toList ++
         [("population", Lean.toJson (sample.size * ns.toList.sum)), ("units", Spot.natsJson units)])) "closure" =
         Json.null := rfl
     rw [hc] at hj
@@ -645,12 +645,12 @@ theorem firstSlots_of {K : ℕ} (hK : firstK h.reg.first = some K)
     obtain rfl := Except.ok.inj hn'
     rw [hlo] at hl'
     obtain rfl := Except.ok.inj hl'
-    obtain rfl : derived = none := Properties.Spot.SecurityProofs.deriveLaw_subset _ _ _ _ _
-      (Properties.Spot.SecurityProofs.flockLaw_subset _ _ _ hf).1 hder
+    obtain rfl : derived = none := Properties.Spot.SecurityProofs.deriveSamplingDesign_subset _ _ _ _ _
+      (Properties.Spot.SecurityProofs.flockSamplingDesign_subset _ _ _ hf).1 hder
     rw [hpu hc] at hi ⊢
     rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
     · exact absurd hall hne
-    · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
+    · have hp' : Spot.Draw.flockSamplingDesign named n = .ok parsed := hp
       rw [hf] at hp'
       obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
       have hu' : Spot.Draw.drawUnits (.subset K) n src = .ok (units, read') := hu

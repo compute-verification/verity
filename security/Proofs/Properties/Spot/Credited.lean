@@ -304,7 +304,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
         · cases hheld
         · rename_i hne
           simpa only [bne_iff_ne, ne_eq, not_not] using hne
-      refine ⟨s, pB, B, record, law, n, units, read, hs, hpB, hB, hu, hder, hn, hd, ?_⟩
+      refine ⟨s, pB, B, record, samplingDesign, n, units, read, hs, hpB, hB, hu, hder, hn, hd, ?_⟩
       obtain ⟨xs, rfl⟩ := provedUnits_sorted hus'
       rw [hus', ← hpu', ← hq, Array.empty_append, qsort_qsort]
 

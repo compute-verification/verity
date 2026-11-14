@@ -237,7 +237,7 @@ theorem filesWhy_none {tags : Tags} {count : Nat} {c : Circuit} {pub : Public} {
 
 /-- **At more than one table, a passing sample parses, and its subset `k` is a multiple of the tables.** -/
 theorem drawWhy_none {count : Nat} {sample : Option Json} (h : drawWhy count sample = none) (hc : ¬ count ≤ 1) :
-    ∃ j d, sample = some j ∧ Draw.UnitDraw.ofJson j = .ok d ∧ ∀ k, d.law = .subset k → k % count = 0 := by
+    ∃ j d, sample = some j ∧ Draw.UnitDraw.ofJson j = .ok d ∧ ∀ k, d.samplingDesign = .subset k → k % count = 0 := by
   unfold drawWhy at h
   rw [if_neg hc] at h
   cases sample with

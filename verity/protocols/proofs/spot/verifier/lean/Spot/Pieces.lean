@@ -389,20 +389,20 @@ def select (j : Json) : V Json := do
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
-/-- The sampling design of a `Flock.Draw.Law` at its sizes: each stratum named by its template, its size
+/-- The sampling design of a `Flock.Draw.SamplingDesign` at its sizes: each stratum named by its template, its size
 its ranges' total. `none` for a Bernoulli sampling design of denominator 0. -/
-private def designOfLaw : Flock.Draw.Law → Option Core.SamplingDesign
+private def designOfSamplingDesign : Flock.Draw.SamplingDesign → Option Core.SamplingDesign
   | .subset k => some (.subset k)
   | .bernoulli a b => (Core.Ratio.mk' a b).map .bernoulli
   | .stratified _ strata => some (.stratified (strata.map fun s => { name := s.template, size := s.size, k := s.k }))
   | .work k strata => some (.work k (strata.map fun s =>
       { name := s.template, size := s.size, k := s.k, work := s.work, floor := s.floor }))
 
-/-- `select`'s input to `{"design"}`: the sampling design (`designOfLaw`) of the challenger's sample's sampling design,
+/-- `select`'s input to `{"design"}`: the sampling design (`designOfSamplingDesign`) of the challenger's sample's sampling design,
 as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
 def design (j : Json) : V Json := do
   let d ← Flock.Draw.UnitDraw.ofJson (getD (← select j) "draw")
-  let some design := designOfLaw d.law | throw "the draw's law has no sampling design"
+  let some design := designOfSamplingDesign d.samplingDesign | throw "the draw's law has no sampling design"
   return Json.mkObj [("design", design.toJson)]
 
 /-- `{"sample", "ns", "ks", "source"}` to `{"draw", "read"}`: a two-stage rule's second stage (`Select.selectSecond`)

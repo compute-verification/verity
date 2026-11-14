@@ -32,8 +32,8 @@ import Proofs.Flock.Soundness.Game
   `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenDrawn` (`SamplingBlock.accepted_drawnWrong_le`), or every
   sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
   `monitoringPeriod_horizon`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most
-  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.drawMiss_le`; `Law.execOS_subset_escape_le`,
-  `Law.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
+  `C(n − |W|, kd)/C(n, kd) ≤ (1 − kd/n)^{|W|}` under A3 (`SamplingBlock.drawMiss_le`; `SamplingDesign.execOS_subset_escape_le`,
+  `SamplingDesign.choose_div_le_one_sub_pow`). At `M = ⌈ln(1/δ)/q⌉`, `(1 − q)^M ≤ e^{−qM} ≤ δ`.
 -/
 
 @[expose] public section
