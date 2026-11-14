@@ -3,7 +3,7 @@
 Torch-free.  Two halves:
 
   1. the group PLAN (`hidden_source.plan_fa2_tap_groups` / `fa2_tap_buffer_words`): order preserved, every sequence in exactly one group,
-     every group's padded buffer within the cap; the B64 llama 1024 geometry reproduces the r17_0738 OOM byte count exactly.
+     every group's padded buffer within the cap; the B64 llama 1024 geometry's one whole-batch buffer is 26,340,229,120 bytes.
   2. a numpy model of the tap + p0b compaction (native_collect.cpp Fa2Wrap): the kernel writes rows < seqlen_q of each sequence's h slabs
      (causal partial writes per plane), the wrapper stages every sequence's rectangle per plane as a NAMED tensor and zeroes it.  The
      UNBOUNDED path (one whole-batch buffer per launch) and the BOUNDED path (groups, prefix views of one capped buffer, stage -> flush ->
@@ -31,10 +31,10 @@ from verity_vllm.acquire.sources.hidden_source import (
 # ----------------------------------------------------------------------------------------------------------------------------- 1. plan
 
 
-def test_b64_llama_geometry_is_the_r17_0738_allocation():
-    """B64 llama-3.2-1B 1024/128 prefill: b=64, h=32, M=max_seqlen_q=1024, NB=8 (BN=128), D=64 -> the one allocation exec's commit.log names."""
+def test_b64_llama_geometry_is_one_whole_batch_buffer_of_24_53_gib():
+    """B64 llama-3.2-1B 1024/128 prefill: b=64, h=32, M=max_seqlen_q=1024, NB=8 (BN=128), D=64 -> the one buffer the unbounded tap allocates."""
     words = fa2_tap_buffer_words(64, 32, 1024, 8, 128, 64)
-    assert words * 4 == 26_340_229_120                     # "Tried to allocate 24.53 GiB" = 26,340,229,120 B (r17_0738 commit.log:168)
+    assert words * 4 == 26_340_229_120                     # 24.53 GiB: torch's message for it reads "Tried to allocate 24.53 GiB"
     assert fa2_tap_words_per_seq(32, 1024, 8, 128, 64) * 4 == 411_566_080     # ~393 MiB per sequence at pitch M=1024
     assert mat_total_words(64 * 32, 1024, 8, 128, 64) == 64 * fa2_tap_words_per_seq(32, 1024, 8, 128, 64)
 
@@ -56,8 +56,8 @@ def test_plan_b64_and_b8_under_2gib():
 def test_small_cap_plans_one_sequence_groups_which_the_wrapper_must_still_compact():
     """Cap 512 MiB on the B8 llama geometry (393 MiB per sequence) plans EIGHT one-sequence groups.  The C++ Fa2Wrap must treat
     such a group as a group of a split launch (hold_launch), not as a B=1 launch: staged on the whole-buffer b == 1 branch they give
-    27,376 tensors / root ba16ddff.. vs 28,016 / 2891d10b.. at cap 0 and 2048.  The plan is legal and the equality is measured on
-    the pod; this pins the plan shape that exercises the branch."""
+    fewer tensors and another root than at cap 0 and 2048.  The plan is legal and the roots' equality is checked on a card;
+    this pins the plan shape that exercises the branch."""
     per = fa2_tap_words_per_seq(32, 1024, 8, 128, 64)
     g8 = plan_fa2_tap_groups(8, per, (512 << 20) // 4)
     assert g8 == [(i, i + 1) for i in range(8)]
