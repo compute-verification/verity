@@ -174,7 +174,7 @@ CLAIM_ADVICE = {
         "N2's counts: no link-window's head is held to a profile or to the advice, and nothing "
         "is proved by n2_zk, whose head check is the planned profile's; a tampered head is not refused.",
         "The tie (`io_tie`): no proof holds the certified tokens to the committed values. The tie is `io_tie`'s "
-        "reference in the clear on stand-ins: the certified frames under fake salts in place of the warden's cells, and "
+        "reference in the clear on stand-ins: the certified frames under fake salts in place of the network certifier's cells, and "
         "the endpoint's sampled ids from its records in place of the Commit's port. The advice's rebuild from the "
         "certified I/O here runs in the clear, on the rehearsal's published witness.",
         CLAIM["not_covered"][2],

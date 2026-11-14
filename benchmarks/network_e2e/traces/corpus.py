@@ -24,8 +24,8 @@ continues in the next window, hitting its own cached blocks. Each open request i
 whether a cut moves any request's output ids, and each edge's record (``raw/cut.PID.jsonl``) holds its hold, its cut set
 and its cost.
 
-`WARDEN`'s traces serve a trace's server and load through the active network certifier: `network_certifier_serve.py serve` in front of the
-server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
+`NETWORK_CERTIFIER`'s traces serve a trace's server and load through the active network certifier: `network_certifier_serve.py serve` in front of the
+server, a process beside it on its host (``network certifier beside the server, not on the auditor host``), and the client
 (`drive_network_certifier`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
 their own (`cpu_plan`), the relay under `network_certifier_probe.py` (its every tick, publish and collection) and the host's load
 sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
@@ -39,7 +39,7 @@ the wire.
 ``--admit tick`` serves every trace of the run under the certified tick (`verity_vllm.pipeline.serve_admit`, its
 ``tick``): the server loads `tick_plugin.register` (`verity_vllm.pipeline.tick_plugin`) as a general plugin beside the
 tracer, configured by ``VERITY_TICK``, and `tick_plugin.TickFeed` as its outermost middleware, which writes the release
-headers and the watermark the server gets to its feed (``raw/tick-feed.jsonl``). In a `WARDEN` trace they come from the
+headers and the watermark the server gets to its feed (``raw/tick-feed.jsonl``). In a `NETWORK_CERTIFIER` trace they come from the
 network certifier in front of the server: it numbers each request it releases, in its release order, with the bucket of
 its release, and streams the watermark to the server (`network_certifier_serve.py serve --watermark`), its bucket τ_b
 (`tick_for`). In every other trace the client stands in for the network certifier, which isn't in front of the server
@@ -49,7 +49,7 @@ it closes. The hostile schedulers' traces don't take the tick. τ_sat and τ_fre
 (``--tick-ms``), or calibrated on a trace of the same server on the same host (``--tick-from``, `tick_from`, which `tick`
 prints): `TICK_SAT` and `TICK_FREE` times its mean busy cycle (`summary.busy_cycle`). The trace's meta.json records them
 with the origin, the run, the watermark's outcome and where the releases came from (``tick``), and requests.jsonl each
-request's ``release`` and ``bucket`` (a `WARDEN` trace's as the server got them, checked against the network certifier's
+request's ``release`` and ``bucket`` (a `NETWORK_CERTIFIER` trace's as the server got them, checked against the network certifier's
 log: `summary.feed_releases`), which `replay.read_corpus_trace` reads.
 
 Every model runs eager under the integration's engine switches (`verity_vllm.engine.env.ENGINE`) but the in-process engine
@@ -159,8 +159,8 @@ TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every win
 #: which on these traces' busy cycles is estimated, not measured, to stay inside D's headroom over those figures. A cell
 #: D doesn't cover fails its connection late, which the summary counts (`summary.network_certifier_summary`'s ``failed``), so it
 #: can't pass unseen.
-WARDEN = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
-WARDEN_WHERE = "warden beside the server, not on the auditor host"
+NETWORK_CERTIFIER = {"warden-heavy": ("heavy", 300), "warden-smallkv": ("smallkv", 1200)}
+NETWORK_CERTIFIER_WHERE = "network certifier beside the server, not on the auditor host"
 #: a stall of the client's event loop it records (`drive_network_certifier`), in seconds: a fifth of a bucket
 LOOP_LAG_S = 0.02
 #: the descriptors the client holds beside its connections' (the server's and network certifier's pipes, the loop's, the logs')
@@ -168,16 +168,16 @@ FD_MARGIN = 256
 #: the network certifier's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the network certifier never
 #: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in
 #: memory; and the bytes egress form, as vLLM streams its text completions (`network_certifier`'s "The egress form")
-WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
+NETWORK_CERTIFIER_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
                    "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096, "egress": "bytes"}
 #: seconds the network certifier runs past the last arrival's D, for the last responses' egress cells
-WARDEN_TAIL_S = 60.0
+NETWORK_CERTIFIER_TAIL_S = 60.0
 #: seconds the trace waits for the network certifier past its last window: a spawned publisher may still be committing the last
 #: windows' records (`network_certifier_probe`'s `publisher`)
-WARDEN_END_S = 900.0
-TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active warden, D = {d} buckets of 100 ms "
-                                   f"({WARDEN_WHERE})")
-           for name, (base, d) in WARDEN.items()}
+NETWORK_CERTIFIER_END_S = 900.0
+TRACES |= {name: (TRACES[base][0], f"{TRACES[base][1]}; through the active network certifier, D = {d} buckets of 100 ms "
+                                   f"({NETWORK_CERTIFIER_WHERE})")
+           for name, (base, d) in NETWORK_CERTIFIER.items()}
 #: the certified tick (``--admit tick``): the network certifier's bucket τ_b in ms, and τ_sat, τ_free as multiples of a
 #: calibrating trace's mean busy cycle (`tick_from`)
 TICK_BUCKET_MS = 100
@@ -622,7 +622,7 @@ async def drive_network_certifier(deployment: dict, served: str, requests: list[
                 times = [t for t, kind in shim.arrivals if kind in (network_certifier.DATA, network_certifier.END)]
                 rec |= read_response(bytes(shim.data), times, params.payload, sent)
                 if shim.outcome != "end":
-                    rec.setdefault("error", f"the warden's connection ended: {shim.outcome}")
+                    rec.setdefault("error", f"the network certifier's connection ended: {shim.outcome}")
                 conns[k] = ws.connection_log(k, round(t0_unix - origin + at, 6), sent - origin, request, shim, origin)
             except asyncio.CancelledError:
                 rec["error"] = "cancelled at the drain deadline"
@@ -701,19 +701,19 @@ def egress_base(network_certifier) -> str:
         return "release a (the ingress end): egress cell i at a + D + i/r"
     if "before s + D" in doc:
         return "admission s: egress cell i at s + D + i/r"
-    return "unknown (the warden's docstring names neither a + D nor s + D)"
+    return "unknown (the network certifier's docstring names neither a + D nor s + D)"
 
 
 def start_network_certifier(d: Path, port: int, delay: int, span_s: float, key: Path, env: dict,
                  cpus: list[int] | None = None, watermark: bool = False) -> tuple[subprocess.Popen, dict]:
     """`network_certifier_serve.py serve` in front of the server at `port`, a process beside it on `cpus`, through `network_certifier_probe.py`
     (its ticks, publishes and collections to d/warden/ticks.json), writing to d/warden/ (its log to serve.log) with a
-    fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and `WARDEN_TAIL_S`; with
+    fresh session and the LMS key in `key`, for enough windows to cover the last arrival's D and `NETWORK_CERTIFIER_TAIL_S`; with
     `watermark`, also streaming the watermark to the server (``--watermark``). Returns the process and its deployment
     record."""
-    params = WARDEN_SCHEDULE | {"delay": delay}
+    params = NETWORK_CERTIFIER_SCHEDULE | {"delay": delay}
     tau = params["bucket_ms"] / 1000
-    windows = math.ceil((span_s + delay * tau + WARDEN_TAIL_S) / (params["window"] * tau))
+    windows = math.ceil((span_s + delay * tau + NETWORK_CERTIFIER_TAIL_S) / (params["window"] * tau))
     w = d / "warden"
     w.mkdir(parents=True, exist_ok=True)
     subprocess.run([sys.executable, str(ROOT / "benchmarks/network_traces/network_certifier_serve.py"), "keys", "--dir", str(key)],
@@ -726,7 +726,7 @@ def start_network_certifier(d: Path, port: int, delay: int, span_s: float, key: 
                                 stdout=subprocess.PIPE, stderr=log, text=True, env=env)
     if "listening" not in json.loads(proc.stdout.readline() or "{}"):
         proc.wait()
-        raise RuntimeError(f"the warden exited with {proc.returncode} before it listened (warden/serve.log)")
+        raise RuntimeError(f"the network certifier exited with {proc.returncode} before it listened (warden/serve.log)")
     return proc, json.loads((w / "deployment.json").read_text())
 
 
@@ -742,7 +742,7 @@ def check_network_certifier(d: Path) -> int:
 def rate_of(model: Model, name: str, rate: float | None) -> float | None:
     """A trace's Poisson rate: `rate` where given, else the model's for the trace's load (None if it has none)."""
     return rate if rate is not None else model.rates.get("heavy" if name in HOSTILE or name in CUT
-                                                         else WARDEN.get(name, (name,))[0])
+                                                         else NETWORK_CERTIFIER.get(name, (name,))[0])
 
 
 def tick_args(trace: str | None, given_ms: str | None) -> dict:
@@ -774,14 +774,14 @@ def tick_from(d: Path) -> dict:
 
 def tick_for(traces: list[str], trace: str | None, given_ms: str | None) -> dict:
     """``--admit tick``'s constants for a run of `traces` (`tick_args`). Refused for the hostile schedulers' traces, and
-    for a `WARDEN` trace unless its network certifier's bucket is τ_b, since that certifier's release buckets and
+    for a `NETWORK_CERTIFIER` trace unless its network certifier's bucket is τ_b, since that certifier's release buckets and
     watermark lines are then the tick's buckets."""
     if bad := [n for n in traces if n in HOSTILE]:
         raise SystemExit(f"--admit tick doesn't serve the hostile schedulers' traces {bad}")
     tick = tick_args(trace, given_ms)
-    if (ws := [n for n in traces if n in WARDEN]) and WARDEN_SCHEDULE["bucket_ms"] * 1000 != tick["bucket_us"]:
-        raise SystemExit(f"--admit tick: the network certifier's bucket, {WARDEN_SCHEDULE['bucket_ms']} ms "
-                         f"(WARDEN_SCHEDULE), isn't τ_b, {tick['bucket_us']} µs, so {ws} would number releases in buckets "
+    if (ws := [n for n in traces if n in NETWORK_CERTIFIER]) and NETWORK_CERTIFIER_SCHEDULE["bucket_ms"] * 1000 != tick["bucket_us"]:
+        raise SystemExit(f"--admit tick: the network certifier's bucket, {NETWORK_CERTIFIER_SCHEDULE['bucket_ms']} ms "
+                         f"(NETWORK_CERTIFIER_SCHEDULE), isn't τ_b, {tick['bucket_us']} µs, so {ws} would number releases in buckets "
                          "the tick doesn't count")
     return tick
 
@@ -790,7 +790,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
               args: argparse.Namespace) -> dict:
     server_args, why = TRACES[name]
     sampling, async_scheduling = VARIANTS[args.variant]
-    base, delay = WARDEN.get(name, (name, None))
+    base, delay = NETWORK_CERTIFIER.get(name, (name, None))
     rate = rate_of(model, name, getattr(args, "rate", None))
     tick = getattr(args, "tick", None)
     hostile = HOSTILE.get(name)
@@ -826,7 +826,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
         meta["cpus"] = cpus or f"not pinned: the job has {len(os.sched_getaffinity(0))} cores"
     t = clock()
     network_certifier = sampler = None
-    key = Path(tempfile.mkdtemp(prefix="trace-corpus-warden-")) if delay is not None else None
+    key = Path(tempfile.mkdtemp(prefix="trace-corpus-network-certifier-")) if delay is not None else None
     with open(d / "server.log", "wb") as log:
         server = subprocess.Popen([*taskset(cpus and cpus["server"]), *argv], stdout=log, stderr=subprocess.STDOUT, env=env,
                                   start_new_session=True)
@@ -845,32 +845,32 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
             wenv = dict(os.environ, PYTHONPATH=os.pathsep.join([str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])]))
             network_certifier, dep = start_network_certifier(d, port, delay, arr[-1], key, wenv, cpus and cpus["warden"], watermark=bool(tick))
             end = dep["origin_unix"] + dep["windows"] * dep["params"]["window"] * dep["params"]["bucket_ms"] / 1000
-            meta["warden"] = {"where": WARDEN_WHERE, "egress_base": egress_base(network_certifier_modules()[0]), "params": dep["params"],
+            meta["warden"] = {"where": NETWORK_CERTIFIER_WHERE, "egress_base": egress_base(network_certifier_modules()[0]), "params": dep["params"],
                               "digest": dep["digest"], "windows": dep["windows"], "origin_unix": dep["origin_unix"],
                               "listen": dep["listen"], "slack_s": dep.get("slack"),
                               "key": "a scratch LMS key made for this trace and deleted after it (its public half is in "
                                      "warden/deployment.json)"}
             if tick:
                 meta["tick"] = {**tick, "hold_ms": TICK_HOLD_MS, "origin_unix": dep["origin_unix"], "run": dep["run_id"],
-                                "where": f"the network certifier ({WARDEN_WHERE}; network_certifier_serve.py serve --watermark)"}
+                                "where": f"the network certifier ({NETWORK_CERTIFIER_WHERE}; network_certifier_serve.py serve --watermark)"}
             pid = d / "warden" / "publisher.pid"
             sampler = subprocess.Popen([*taskset(cpus and cpus["server"]), sys.executable, str(HERE / "host_sample.py"),
                                         str(d / "warden" / "host.jsonl"), ",".join(map(str, sorted(os.sched_getaffinity(0)))),
                                         f"warden:{network_certifier.pid}", f"client:{os.getpid()}", f"server={server.pid}",
                                         *([f"publisher:{pid.read_text()}"] if pid.exists() else [])])
-            print(f"[corpus] {name}: warden ({WARDEN_WHERE}) on {dep['listen']}, D {delay} from the "
+            print(f"[corpus] {name}: network certifier ({NETWORK_CERTIFIER_WHERE}) on {dep['listen']}, D {delay} from the "
                   f"{meta['warden']['egress_base'].split(':')[0]}, {dep['windows']} windows; cores {meta['cpus']}", flush=True)
             meta |= asyncio.run(drive_network_certifier(dep, model.served, requests, arr, ids, d / "client.jsonl", args.drain_s,
                                              sampling, cpus and cpus["client"]))
             try:
-                meta["warden"]["rc"] = network_certifier.wait(max(0.0, end - time.time()) + WARDEN_END_S)
+                meta["warden"]["rc"] = network_certifier.wait(max(0.0, end - time.time()) + NETWORK_CERTIFIER_END_S)
             except subprocess.TimeoutExpired:
-                meta["warden"]["rc"] = f"still running {WARDEN_END_S:g} s past its last window"
+                meta["warden"]["rc"] = f"still running {NETWORK_CERTIFIER_END_S:g} s past its last window"
             meta["warden"]["ended_past_last_window_s"] = round(time.time() - end, 3)
             if tick:
                 log = d / "warden" / "warden.json"
                 meta["tick"]["watermark"] = (json.loads(log.read_text()).get("watermark") if log.exists() else
-                                             {"error": "the warden wrote no warden.json"})
+                                             {"error": "the network certifier wrote no warden.json"})
     finally:
         if network_certifier is not None and network_certifier.poll() is None:
             network_certifier.terminate()
@@ -999,7 +999,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "summarize":
         for w in sorted(Path(args.dir).glob("*/warden/deployment.json")):
             if not (w.parent / "check.json").exists():
-                print(f"[corpus] {w.parent.parent.name}: warden check rc {check_network_certifier(w.parent.parent)}", flush=True)
+                print(f"[corpus] {w.parent.parent.name}: network certifier check rc {check_network_certifier(w.parent.parent)}", flush=True)
         summary.summarize(Path(args.dir))
         return 0
     out = summary.compare_corpora([summary.corpus_spec(x) for x in args.corpora], Path(args.out))

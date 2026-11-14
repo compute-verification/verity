@@ -254,7 +254,7 @@ class Class:
                 "egress": (params.egress == "id", "= id, the egress record's form")}
         bad = [f"{k} {want} (it is {getattr(params, k)})" for k, (ok, want) in need.items() if not ok]
         if bad:
-            raise ValueError(f"{self} doesn't serve the warden at these parameters: set " + "; ".join(bad))
+            raise ValueError(f"{self} doesn't serve the network certifier at these parameters: set " + "; ".join(bad))
 
 
 def slot_layout(cls: Class) -> tuple[tuple[str, int], ...]:
@@ -883,7 +883,7 @@ def _append(C, cls: Class, sels: Sequence, writes: Sequence, ids: Sequence) -> l
 
 _STEP = ("each block continues the live slot on its ordinal or takes the lowest free slot (live and up to admitted + D "
          "+ floor(n / r) is held) as a new connection above `last`, its data cells are the next frames of the slot's "
-         "warden-form id request and its ids (IDB bits each) are appended at the slot's cell count, below C, its prompt "
+         "network-certifier-form id request and its ids (IDB bits each) are appended at the slot's cell count, below C, its prompt "
          "at most KI ids; a slot whose anchor is now and whose occupancy word occ has bit 0 set reads its entry, "
          "prog<j> for slot j (its read bit 1), and takes its n, at most KO, and KO output ids from it, a slot whose "
          "anchor is now and whose occ has bit 0 clear takes n and outputs zero, and every other entry is ignored; "
@@ -891,7 +891,7 @@ _STEP = ("each block continues the live slot on its ordinal or takes the lowest 
          "switch is computed from the state, the entries and the row")
 IngressScanBucket = _part(
     "IngressScanBucket", STATICS, _sig, _build,
-    "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r warden cells of B bytes, a "
+    "the scan's state S_t = `ingress_scan.step` of sin, bucket t's ingress row (lanes·r network certifier cells of B bytes, a "
     "block of r a live connection in ordinal order) and the Programs' entries prog0 … prog<lanes − 1> (each "
     "`SlotEntry_v1`'s row of its slot), and its egress view at t (`egress.EgressBucket`'s state), with 1 in bit 0 of "
     "the first output iff every check of the step holds: " + _STEP, version=3)

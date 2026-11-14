@@ -198,7 +198,7 @@ def test_a_refused_signer_gives_no_certificate(traffic, tmp_path):
     assert len(cells_.rows) == T
 
 
-def test_the_port_reads_the_rows_the_wardens_wiring_places_and_nothing_else(traffic, tmp_path):
+def test_the_port_reads_the_rows_the_network_certifiers_wiring_places_and_nothing_else(traffic, tmp_path):
     """`port` holds only a `verity/registered-reads/v1` port's keys (`Flock.Registered.PORT_KEYS`), reads each (q, k)'s
     row under the wiring the head names, and names the head's root, domain and row format. A wiring the head doesn't
     name, a connection the wiring doesn't hold, a cell past its connection's or read twice, and a read that isn't
@@ -218,7 +218,7 @@ def test_the_port_reads_the_rows_the_wardens_wiring_places_and_nothing_else(traf
     assert W.reads_file({"o0": p}) == {"format": G.READS_V1, "ports": {"o0": p}}
     others = [W.Wiring(wiring.connections, bytes(64)), W.Wiring(wiring.connections[:-1], wiring.salt)]
     for other in others:
-        with pytest.raises(ValueError, match="isn't the one the warden signed"):
+        with pytest.raises(ValueError, match="isn't the one the network certifier signed"):
             W.port(head, other, PARAMS, reads)
     absent = max(c[0] for c in wiring.connections) + 1
     for bad, why in [([(absent, 0)], "holds no slot"), ([(q, n)], "not cell"), ([(q, -1)], "not cell"),

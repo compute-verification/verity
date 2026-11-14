@@ -27,10 +27,10 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     a bin and a uniform offset (binned, uniform), counted in one segment, then the length
     terms' tail (tailBits) (window), the carry the decisions' and the last order entry's
     position and rank, a run's charges (charges)
-../../Definitions/NetworkCertifier/Cells.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
+../../Definitions/NetworkCertifier/Cells.lean  trusted: the network certifier (design v3): its cells (CellView), its public schedule
     (CertifierSchedule), what reaches it from the server (Arrivals), its code (certifierLane,
     certifierCode), the fail cell (failCell) and the client's view (clientView)
-../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the warden and the certifier as one auditor device on a
+../../Definitions/NetworkCertifier/Tap.lean  trusted: the tap, the network certifier and the certifier as one auditor device on a
     server's uplink: its record format (RecordFormat: on a schedule it holds, every cell its
     code sends reads back from its record) and its one code run giving the cells and the
     record (recordingCode)
@@ -98,7 +98,7 @@ Schedule.lean   Theorem 3 for the constant-rate Program (the advice cap of k bit
 Ingress.lean    the ingress bound (the occupancy of the ingress grid, read from inside X)
 PerWindow.lean  the last two over the run's first `m` whole execution blocks, and the ingress bound
     over the first `m` periods of `T` buckets: the factor per block and per period
-Cells.lean     the warden's code is the client view: its lane is the client view of its first late
+Cells.lean     the network certifier's code is the client view: its lane is the client view of its first late
     cell (certifierLane_eq), and so are its code's cells (certifierCode_eq), which
     Tap reads the network certifier's cells from
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each faulty
@@ -108,7 +108,7 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
     relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
     hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
-Tap.lean        what the tap's certifier saw is what its warden sent: under trusted-host, on a schedule its
+Tap.lean        what the tap's certifier saw is what its network certifier sent: under trusted-host, on a schedule its
     record format holds, its cells read back from the record its same run writes
     (certifier_cells_read), and each data cell its lane sends before the fail cell is
     in it (certifier_data_read)

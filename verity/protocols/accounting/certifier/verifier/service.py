@@ -143,7 +143,7 @@ in zero knowledge), so its counts are its schedule's: no occupancy profile holds
 charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifier runs no shaper clock, so a window
 declares no sync and the charge is 0. Its proof block is the plain one, `NetworkTransferBlocks` v5{EGRESS, INGRESS}, each
 head check holding its end's head to the network certifier's grid and digest and to the network certifier's signed
-digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
+digest. Its public items are `PUBLIC_NETWORK_CERTIFIER`. The in-the-clear check is the opening's root and the head checks: the
 records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records.
 
 A link whose egress end has no occupancy profile and is neither served nor a network certifier's has no verdict
@@ -383,8 +383,8 @@ PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
              "`charge` already counts, which the served counts read"),
 )
 #: a network certifier link's: no occupancy profile and no sync, the network certifier's schedule instead, which puts its counts
-PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
-    S.Public("warden", "structure", "the active warden's schedule (`network_certifier.NetworkCertifierParams`, the digest both ends' heads "
+PUBLIC_NETWORK_CERTIFIER = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
+    S.Public("warden", "structure", "the active network certifier's schedule (`network_certifier.NetworkCertifierParams`, the digest both ends' heads "
              "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
              "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
 )
@@ -442,7 +442,7 @@ def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
 
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
                "nothing would hold its egress counts (declare LinkWindows.occupancy, LinkWindows.served on a served "
-               "link, or LinkWindows.network_certifier on a warden's)")
+               "link, or LinkWindows.network_certifier on a network certifier's)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
@@ -556,9 +556,9 @@ class NetworkCertifierProfile:
 
     def __post_init__(self) -> None:
         if type(self.windows) is not int or self.windows < 1:
-            raise ValueError(f"a warden link has one or more windows, not {self.windows!r}")
+            raise ValueError(f"a network certifier link has one or more windows, not {self.windows!r}")
         if type(self.digest) is not bytes or len(self.digest) != HC.DIGEST_BYTES:
-            raise ValueError(f"a warden's parameters digest is {HC.DIGEST_BYTES} bytes")
+            raise ValueError(f"a network certifier's parameters digest is {HC.DIGEST_BYTES} bytes")
 
 
 @dataclass(frozen=True)
@@ -587,9 +587,9 @@ class LinkWindows:
             raise ValueError("the occupancy profile has one entry per end: (egress, ingress)")
         if self.network_certifier is not None:
             if self.served is not None or tuple(self.occupancy) != (None, None):
-                raise ValueError("a warden link's counts are its schedule's: it has no occupancy or served profile")
+                raise ValueError("a network certifier link's counts are its schedule's: it has no occupancy or served profile")
             if self.ingress_params != self.params:
-                raise ValueError("a warden link's two ends are on the warden's one grid")
+                raise ValueError("a network certifier link's two ends are on the network certifier's one grid")
         if self.served is not None:
             g, i = self.params, self.ingress_params
             if self.occupancy[0] is not None:
@@ -698,7 +698,7 @@ class LinkWindows:
             **({} if self.network_certifier is None else {"warden": [self.network_certifier.windows, self.network_certifier.digest.hex()]})})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
-        public = (PUBLIC_SERVED if self.served is not None else PUBLIC_WARDEN if self.network_certifier is not None
+        public = (PUBLIC_SERVED if self.served is not None else PUBLIC_NETWORK_CERTIFIER if self.network_certifier is not None
                   else PUBLIC)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
 

@@ -329,7 +329,7 @@ def test_an_advice_whose_received_isnt_the_release_refuses_every_window(tmp_path
     assert run.verdict(moved).accepted == (False, False)
 
 
-def test_a_row_that_isnt_the_wardens_is_refused(tmp_path):
+def test_a_row_that_isnt_the_network_certifiers_is_refused(tmp_path):
     """Each proof block's witness row is read off the network certifier's root at its own bucket
     (`network_certifier_rows.bucket_port`): a proof on another row (window 1's bucket 1, which IoTieRequest accepts on its own
     lanes) or on the window's rows read by swapped proof blocks fails the registered read, and so do its sessions."""

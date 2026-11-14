@@ -526,7 +526,7 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
     return head, body
 
 
-def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
+def test_ids_answers_in_id_form_exactly_the_network_certifiers_id_requests():
     """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
     headers (`release.with_release`: the release, the run and, as the certifier sends it, the release's bucket); its base
     for anything else, the shim's rebuilt POST, an id request in other cells, or bytes that aren't a request."""
@@ -538,7 +538,7 @@ def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
     assert proto.PlainProtocol().of(id_request()).name == "plain"
 
 
-def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_path):
+def test_under_ids_the_network_certifiers_id_request_streams_raw_id_events_then_done(tmp_path):
     """``--protocol ids`` on the network certifier's own id request (`active.id_request` in its P + 9-byte cells, offset 0, with the
     release headers the certifier adds) with the usage forced: the server sends no HTTP head, no chunking and no usage,
     each sampled id one event of P bytes, then ``data: [DONE]``, every byte as `TWO_IDS_AT_140` at P = 140. At the

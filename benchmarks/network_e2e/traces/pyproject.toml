@@ -24,7 +24,7 @@ inputs = [
     "adapters/vllm/verity_vllm/pipeline/cut_plugin.py",
     "adapters/vllm/verity_vllm/settings.py",
     # `verity.protocols.accounting.certifier.verifier.release` (tests/test_tick_corpus.py): the release headers and the watermark as
-    # the network certifier makes them, which the server's feed reads in a warden trace under `--admit tick`, and its
+    # the network certifier makes them, which the server's feed reads in a network certifier trace under `--admit tick`, and its
     # packages
     "verity/__init__.py",
     "verity/protocols/accounting/certifier/verifier/__init__.py",

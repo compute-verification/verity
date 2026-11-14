@@ -3,7 +3,7 @@ and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), 
 and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON] NAME=NETWORK_CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of link-window W: the parameters the network certifier run's ``deployment.json`` (its key, session
   and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
@@ -147,7 +147,7 @@ def main(argv=None) -> int:
     ap.add_argument("--v3c", type=Path, metavar="PERIOD",
                     help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
                          "trees (scan_zk.py --v3c)")
-    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
+    ap.add_argument("cases", nargs="+", help="NAME=NETWORK_CERTIFIER_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
     m = mirror(a.mirror)
     a.out.mkdir(parents=True, exist_ok=True)
