@@ -729,6 +729,34 @@ def test_a_chain_the_split_rejects_stands_and_its_period_step_checks_nothing(tmp
     assert json.loads((piece / "answer.json").read_text()) == a and not (tmp_path / "seen").exists()
 
 
+def test_a_chain_accepted_on_the_period_check_goes_on_to_that_check_whose_answer_is_the_pieces(tmp_path, warden, period):
+    """The chain's report says `chain_record.RESTS` where its scan's acceptance rests on the period check. The piece
+    then goes on to that check and answers what it answers, a reject as an accept, so no answer is an accept the
+    period check didn't give; split in two, the chain step marks DIR/chain.json with no answer, and the period step
+    reads that report again and checks V3c's period.json."""
+    seen = []
+    rejected = CP.answer("reject", "window 0: the scan's prog is no compute audit's slot entries")
+    accepted = {"protocol": CP.PROTOCOL, "verdict": "accept"}
+    assert _decide(tmp_path / "reject", warden, CR.RESTS, check=lambda c, p: seen.append(p.name) or rejected) == rejected
+    assert _decide(tmp_path / "accept", warden, CR.RESTS, check=lambda c, p: seen.append(p.name) or accepted) == accepted
+    assert seen == ["period", "period"]
+    d = _serve_dir(tmp_path / "serve", warden)
+    v3c, piece = _v3c(d, PERIOD), tmp_path / "pieces" / "certifier"
+    assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, CR.RESTS, warden["w"])) == 0
+    assert (piece / CP.CHAINED).is_file() and not (piece / "answer.json").exists()
+    answer = period.reference(period.case("accept", 1, "clock"))
+    assert _hook("period", d, piece, v3c, *_lean(tmp_path, answer)) == 0, (piece / "period.log").read_text()
+    assert json.loads((piece / "answer.json").read_text())["verdict"] == "accept" and (tmp_path / "seen").is_dir()
+
+
+@pytest.mark.parametrize("word", ["refused", "scan accepted", f"scan {CR.RESTS}", f"{CR.RESTS}, N2 refused", None])
+def test_any_other_word_of_the_chains_report_is_a_reject_and_the_period_check_isnt_run(tmp_path, warden, word):
+    """Only the whole chain's two accepting words go on: a refusal, the scan-only path's words and anything else are the
+    chain's reject, with the word and its why, before the period check (`_decide`'s fails the test when called)."""
+    a = _decide(tmp_path, warden, word)
+    assert a["verdict"] == "reject" and a["reason"].startswith(f"the chain {word}: ")
+
+
 @pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json"])
 def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, warden):
     """The chain step refuses without V3c's committed window, which its scan reads, and when its limit

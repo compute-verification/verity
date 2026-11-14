@@ -95,8 +95,7 @@ def test_a_device_that_is_not_its_card_is_refused_naming_each_field(cc: tuple[in
 
 
 def test_a_card_whose_arch_names_no_compute_capability_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    loader = "load_card" if hasattr(SD, "load_card") else "load"  # the card loader, by the name `served_device` imports it under
-    monkeypatch.setattr(SD, loader, lambda sku: {"arch": "hopper", "sm": {"count": {"value": 132}}})
+    monkeypatch.setattr(SD, "load_card", lambda sku: {"arch": "hopper", "sm": {"count": {"value": 132}}})
     with pytest.raises(Unmodelled) as e:
         SD.check_card((9, 0), 132, "a-card")
     assert str(e.value) == "hardware/cards/a-card.toml: arch 'hopper' names no compute capability"
