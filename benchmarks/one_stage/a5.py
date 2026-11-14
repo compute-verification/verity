@@ -1577,7 +1577,7 @@ def window_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
 
 
 def stage_trees(a: argparse.Namespace, members: Sequence[dict]) -> bool:
-    """`window_trees` for a caller's sample (``drawn``): the sessions take their coin trees from the caller's
+    """`window_trees` for a caller's sample: the sessions take their coin trees from the caller's
     stage's own challenger session (``a.stage``, `two_stage`'s ``--interior-trees``), held for them since before its
     sample ended, a window of one member's too: that caller's case is the per-member form's at any number of members
     (`members_proof`'s ``one``). Without ``a.stage`` the sessions keep a challenger of their own."""

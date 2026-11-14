@@ -74,8 +74,8 @@ under. It reads the sample the coins `ξ₂` give under the second stage's desig
 (`OneStage.verdictOf`), and the bound under the second stage's design. That design is computed, never read from the
 evidence (`secondDesignOf`): `Select.secondLaw` of the first stage's sample (the proved units of the sample the run of
 record decided) over the replay block's cells under the interior's query (`Select.replayCells`) at the rule's counts,
-the function and the arguments the run of record's second stage samples by. Its refusals are `OneStage.check`'s,
-word for word, so a reason names the same step in both forms.
+the function and the arguments the run of record's second stage samples by. Its refusals carry `OneStage.check`'s
+step prefixes, so a reason names the same step in both forms.
 -/
 module
 
@@ -484,7 +484,7 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
       { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
         levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := m, draw := some prof }],
         delta, drawn := #[(Record.LEVEL, units.size)] }
-  | none => .reject "the law the draw passed under has no profile"
+  | none => .reject "the second stage's sampling design has no profile"
 
 /-- **The interior audit's check at the second stage's sampling design** (check, 5; module docstring, **the last
 step**): the interior registration's population `m`; the sample the coins `ξ₂` give under `design`
