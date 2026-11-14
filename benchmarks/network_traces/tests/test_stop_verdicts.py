@@ -2078,7 +2078,7 @@ def _every_block(x: dict, served: list[object]) -> bool:
     if stream is None or x[CC.REGISTRATION] not in docs or stream.get("previous") != x[CC.REGISTRATION]:
         return False
     n = stream.get("population")
-    return type(n) is int and n > 0 and stream.get("law") == {"law": "subset", "k": n} and x.get(SV.RATE) == "1/1"
+    return type(n) is int and n > 0 and stream.get(SV.DESIGN) == {SV.DESIGN: SV.SUBSET, "k": n} and x.get(SV.RATE) == "1/1"
 
 
 #: the ways a thing the reader is handed stands against another: each is a refusal by the reader's rules, so
