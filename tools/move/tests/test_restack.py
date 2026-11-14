@@ -220,6 +220,8 @@ def test_a_conflict_only_in_lean_locks_takes_ontos_and_leaves_them_stale(repo, m
     assert "return 50" in show(repo, r["result"], "app/core/util.py")
     assert git(repo, "rev-list", "--parents", "-n", "1", r["result"]).split()[2] == onto
     assert f"pr: locks-stale {r['result'][:12]}" in RS.line(r)
+    assert r["error"].endswith(RS.LOCKS_READD) and "re-added by hand: pkg/lean-audit.json" in git(
+        repo, "log", "-1", "--format=%B", r["result"])
     monkeypatch.chdir(repo)
     assert RS.main(["pr", "--move-commit", moved, "--onto", onto]) == 1
 
@@ -468,7 +470,7 @@ def test_a_crossing_that_skipped_a_move_pushes_nothing_until_its_moves_are_named
 
 def test_a_crossing_that_skipped_a_move_and_left_locks_stale_stays_locks_stale_and_pushes_nothing(
         late, dated, tmp_path, monkeypatch, capsys):
-    """`locks-stale` is pushed for its owner to regenerate the locks on, but not with a move skipped: the status stays, the
+    """`locks-stale` is pushed for its owner to re-add the branch's own lock entries on, but not with a move skipped: the status stays, the
     exit is 1 as it was, nothing is pushed, and the command that names the moves pushes that same result."""
     repo, first = late["repo"], late["first"]
     remote = _remote(repo, tmp_path)

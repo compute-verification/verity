@@ -98,6 +98,7 @@ from verity.commitments.crypto.blake3 import blake3, keyed
 from verity.commitments.crypto.turboshake import turboshake128
 from verity.circuits.silicon import fp32
 
+from verity.protocols.accounting.pouw.verifier.audit import Epoch, activation_binding, rows_domain, transcript_domain, weight_binding
 from verity.protocols.accounting.pouw.verifier.protocol import CALL_RANGE, Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from verity.protocols.accounting.pouw.verifier.registration import check_registration
 from verity.protocols.accounting.pouw.verifier.serving import HASH_FORMATS
@@ -173,6 +174,12 @@ def seed_b(salt: bytes, root_b: bytes, hashing: str = "h3") -> bytes:
 def line_key(seed: bytes) -> bytes:
     """The key a seed's noise lines are sampled under: Pearl's (`pearl_kw._line_key`), or an `S512Seed`'s H_"noise-line"(seed)."""
     return _s512_line_key(seed) if isinstance(seed, S512Seed) else P._line_key(seed)
+
+
+def unit_block(salt: bytes, root_b: bytes, index: int) -> bytes:
+    """A unit's key block, `hash_h3.cuh`'s `s512_seeds` p3: salt ‖ root_B (64 bytes) ‖ index u64 LE, `unit_seed_a`'s message
+    without root_A."""
+    return salt + root_b + index.to_bytes(8, "little")
 
 
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
@@ -659,3 +666,14 @@ class PearlC:
         value = P.bf16_to_f32 if self.forming == "v0" else P.f32_of_bits
         return [[P.f32_of_bits(w) / (value(ops.a.alpha[i]) * value(ops.b.alpha[j]))
                  for j, w in enumerate(row)] for i, row in enumerate(checked.u)]
+
+
+def keys_of(scheme: PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict[str, bytes]:
+    """A unit's key inputs to the device pipeline (`run.Pipeline`'s `keys`) but the prover's salt key and the hm96 constants,
+    which the caller adds: E_B's line key, the domains in the scheme's tree hash, and the unit's key block."""
+    s, salt, h = matmul.shape, epoch.salt, scheme.commitment_hash
+    return {"line_b": line_key(seed_b),
+            "dom_a": rows_domain(activation_binding(salt, matmul.index), matmul.index, s.m, h).domain_id,
+            "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
+            "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
+            "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
