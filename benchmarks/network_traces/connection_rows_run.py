@@ -96,14 +96,17 @@ import hashlib
 import json
 import pickle
 import statistics
+import sys
 import tempfile
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
 import active_replay as ar
-import certifier_serve as cs
+from benchmarks.network_traces import certifier_serve as cs
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
@@ -522,7 +525,7 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
 
 def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    import warden_serve as ws  # at its use: it imports this module
+    from benchmarks.network_traces import warden_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
     hands, pickles, longest = [], [], []
@@ -530,7 +533,7 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
         out, key = Path(scratch) / "run", Path(scratch) / "key"
         out.mkdir()
         cs.load_key(key, height)
-        publish = ws.PublisherProcess(out, key, bytes(32), params)
+        publish = ws.PublisherProcess(out, key, bytes(32), params, base_ms=0)  # a scratch key's first session
         try:
             for phase in range(phases):
                 handed: list = []

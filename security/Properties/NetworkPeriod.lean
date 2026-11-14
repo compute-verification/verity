@@ -1,6 +1,8 @@
 module
 
 public import NetworkCheck.Period
+public import Spot.OneStage
+public import Lms.Sign
 public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
@@ -305,7 +307,7 @@ def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, some 4⟩
 /-- The rows-form period of no link-window and no audit under `cappedSchedule`, at the deployed LMS parameters: the
 period `RowsCapPublished`'s witnesses are stated at. -/
 def cappedPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩
 
 /-- The `roots` entry `e` is the ok bits' constant of the scan's member `m` (its name, template and proof blocks'
 count, `ScanOk.members`): its port is `<name>/o0`, its leaves are the member's proof blocks' count, and its domain and
@@ -355,14 +357,74 @@ def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none⟩
 /-- The rows-form period of `n` execution phases and no audit under `pairSchedule`, at the deployed LMS parameters:
 the periods `RowsOkHeld`'s witnesses are stated at. -/
 def pairParams (n : ℕ) : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n, none⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n, none⟩
 
 /-- The rows-form period of no execution phase and no audit under `pairSchedule` whose parameters name the class
 circuit `c`, at the deployed LMS parameters: the period `RowsCircuitHeld`'s honest witness is stated at. -/
 def heldMonitoringPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, some "c"⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, some "c"⟩
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩
+
+
+/-! ## An accepted rows-form period with an execution phase: the steps, unproved
+
+The rows form's statements (`RowsProgWired`, `RowsStateTied`, `RowsTiedCharged`, `RowsTiedInputWired`, `RowsOkHeld`)
+speak of each execution phase, and every acceptance Lean shows of `check` has none (`pairParams 0` among them).
+These state what a witness with one execution phase and one compute audit rests on. Each is unproved, and no
+guarantee reads one. -/
+
+/-- A certificate that the key `k` at the deployed LMS parameters signs passes `Certificate.signs` under `k`'s public
+key, at any link, direction, window and digest whose certificate message forms: the step from Lean's signer
+(`Lms.signAt`) to the check's verification of each certificate. -/
+def SignsCertificateAt : Prop :=
+  ∀ (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray) (link : String) (d : NetworkCheck.Direction)
+    (w : ℕ) (digest : ByteArray),
+    Lms.key Lms.deployed I seed = .ok k →
+    (∃ m, NetworkCheck.certificateMessage k.I session link d w digest = .ok m) →
+    ∃ x : NetworkCheck.Check.Certificate, x.keyId = k.I ∧ x.link = link ∧ x.direction = d ∧ x.window = w ∧
+      x.digest = digest ∧ x.signs Lms.deployed k.publicKey session = true
+
+/-- A ratio in lowest terms with a positive denominator reads back from the text `Core.Ratio.toString` writes: the
+step a profile's `delta` takes when the check reads an audit's answer. -/
+def RatioReadsBack : Prop :=
+  ∀ (r : Core.Ratio) (ctx : String), 0 < r.den → Nat.gcd r.num r.den = 1 →
+    Core.Ratio.ofString r.toString ctx = .ok r
+
+/-- The profile `i` reads back from the JSON `Core.Integrity.toJson` writes. Not every profile does (an unsorted
+`prescribed`, a ratio not in lowest terms), so a witness states it at its own audits' profiles. -/
+def ProfileReadsBackAt (i : Core.Integrity) : Prop := Core.Integrity.ofJson i.toJson = .ok i
+
+/-- `check` accepts a rows-form period that has an execution phase and a compute audit, under the public key of a key at
+the deployed LMS parameters. -/
+def RowsExecutionPhaseAccepted : Prop :=
+  ∃ (I seed : ByteArray) (k : Lms.PrivateKey) (p : Params) (c : Commitment) (e : Evidence) (pub : Public)
+    (prof : Profile) (s : Schedule) (sd : ByteArray) (scan : Scan),
+    Lms.key Lms.deployed I seed = .ok k ∧ p.lms = Lms.deployed ∧ p.key = k.publicKey ∧ p.form = .rows s sd scan ∧
+      0 < c.windows.size ∧ 0 < c.audits.size ∧ check p c e = .accept pub prof
+
+/-- The one-stage answers the period check reads: each compute audit's, then each link-window's. -/
+def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map (·.answer)
+
+/-- What `AnswersVerified` says of a period its check accepted: each answer the check reads is the one one-stage's
+compiled verifier gives (`Spot.OneStage.protocol.answer`) on some parameters, commitment and evidence. The answer's
+digest is that commitment's, which the check holds to the registration (`answered`), and an accepting one-stage check
+holds its parameters' Program to that registration's; the parameters' query, law and δ are not yet the period's. -/
+def AnswersVerifiedAt (e : Evidence) : Prop :=
+  ∀ a ∈ answersRead e, ∃ params commitment evidence : ByteArray,
+    Spot.OneStage.protocol.answer params commitment evidence = a
+
+/-- `AnswersVerified` of the period check `chk`: `AnswersVerifiedAt` of every period `chk` accepts. -/
+def AnswersVerifiedOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → AnswersVerifiedAt e
+
+/-- **The period check accepts an execution phase only where the compiled Lean verifier verified every answer it
+reads**: each compute audit's and each link-window's one-stage answer is `Spot.OneStage.protocol.answer`'s on some
+inputs (`AnswersVerifiedAt`). Not yet proved: the check reads the answers as the evidence states them. -/
+def AnswersVerified : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → AnswersVerifiedAt e
 
 end Properties.NetworkPeriod

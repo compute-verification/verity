@@ -190,6 +190,9 @@ def _toml(path: str) -> dict:
 
 #: one copy of the served model's weights in FP4: the workload card's parameters, 4 bits each
 WEIGHTS = Weights(_json(WORKLOAD)["value"]["params"] * FP4, f"{MODEL} in FP4")
+#: the demo's served model, Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the
+#: final norm) in BF16. The served checkpoint is int8, so its share is of this BF16 copy, as its label says.
+SERVED = Weights(1_235_814_400 * 16, "the demo's served model (Llama-3.2-1B) in BF16")
 #: each reading of the sampling block's free inputs (the scan's `prog`, the tied audit's free inputs), as a report
 #: labels it
 READINGS = {"registered": "`prog` as registered, the tied audit's slot entries (the record's K)",

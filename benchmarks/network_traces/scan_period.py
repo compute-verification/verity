@@ -5,9 +5,10 @@ and its Lean.
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
-  form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
+* **The case** (`rows_case`) of execution phase W: the parameters the warden run's ``deployment.json`` (its key and its
+  session, the one entry the parameters list, its stretch starting at execution phase 0, so the period's numbers are the
+  run's own, and one schedule, its integer fields and its response cap when it has one: the period check reads the id
+  egress form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
   `WardenParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
@@ -15,7 +16,9 @@ and its Lean.
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
-  (``cells.jsonl``, as ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T
+  (``cells.jsonl``, as ``answers.json`` carries them), and the listed entry's session's signed start
+  (``deployment.json``'s ``start``, which the period check reads for each listed entry: a run whose deployment holds
+  none is refused). The rows form reads a registration of one link-window's 2T
   units, so a group of more is refused, the scan's `prog` must be an audit's `SlotEntry_v1` template's entries
   and its ``scan/state`` that audit's, and that audit must run the class circuit, the parameters' ``circuit``
   (`heldChecks`): the stand-in block audit's own Program here.
@@ -61,10 +64,11 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
-import warden_serve as WS  # noqa: E402
+from benchmarks.network_traces import warden_serve as WS  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -103,6 +107,9 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     if dep["params"].get("egress", "id") != "id":
         raise SystemExit(f"{run}: the period check's schedule is the id egress form's, not {dep['params']['egress']!r}'s")
+    if "start" not in dep:
+        raise SystemExit(f"{run}: deployment.json holds no signed start, and the period check reads each listed entry's "
+                         "session's: take a run whose network certifier certified its session's start")
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [json.loads(v3c.read_text())]
@@ -128,13 +135,13 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     schedule = {k: dep["params"][k] for k in INTEGER_FIELDS} | ({} if cap is None else {"max_tokens_cap": cap})
     cells = WardenParams(**dep["params"]).rows_cells(1)
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": cells,
-              "circuit": circuit, "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"],
-              "link": WS.LINK,
+              "circuit": circuit, "first": x["window"], "jitter": LB.JITTER_BOUND,
+              "keys": [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": schedule,
-              "session": dep["session"], "windows": 1}
+              "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
-    evidence = canonical_json({"audits": [a["answer"] for a in audits], "windows": [
+    evidence = canonical_json({"audits": [a["answer"] for a in audits], "starts": [dep["start"]], "windows": [
         {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 

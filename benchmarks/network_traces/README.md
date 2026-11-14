@@ -151,13 +151,15 @@ whose rows count each Commit period's requests, steps and outputs and its advice
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
 other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's
 answers are the case's evidence less its certificates. The leak guard (`--public`) moves any file the piece doesn't
-declare out of its directory. Split in two around V3c
-(`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
-(`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
-consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
-releases through its own hold. The check reads an audit's state entry among its `roots` and its `registered` alone,
-and a served window's registration holds its `SCAN_STATE` in its window's `activations.values` alone, so a served
-period's answer is a reject at the state tie.
+declare out of its directory. `kind_scan.py DIR` reads a piece's files field by field and reports each one that is of
+none of the four public kinds and no certificate of the network certifier's, a case or a scan's answers left there
+among them; `--received OUT` does so for what a verifier on another machine reads of a served run's OUT. Split in two
+around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
+committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
+`period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
+V3c's; each step releases through its own hold. The check reads an audit's state entry among its `roots` and its
+`registered` alone, and a served window's registration holds its `SCAN_STATE` in its window's `activations.values`
+alone, so a served period's answer is a reject at the state tie.
 
 ## A cheating server
 
@@ -398,7 +400,9 @@ whole; a SIGKILL leaves the hold where it is, out of the record.
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
 through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
 the relay's own offline check on its witness (`warden_serve.check`) and holds the public `certificates.jsonl` to the
-certified lines. The relay signs no clock certificate, so none is read. The endpoint step binds the endpoint's own
+certified lines. That check requires the session's certified start, so a gate run made by a device that certifies no
+start is refused here: such a run is read by the chain of the tree its gate ran. The relay signs no clock certificate,
+so none is read. The endpoint step binds the endpoint's own
 advice to the certified I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
 ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
 parameters digest, no sync declared or charged). The I/O tie is proved on the relay's ingress (`n2_tie_zk.py prove

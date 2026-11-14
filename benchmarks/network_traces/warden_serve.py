@@ -28,7 +28,7 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network
-  certifier's host clock (`origin_unix`).
+  certifier's own clock, its host's raw clock (`origin_raw`).
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `verity/protocols/compose/device/live_challenger/auditor.py`).
 
@@ -66,13 +66,27 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         --out DIR [--height 10] [--start-in 5] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes]
         [--max-tokens-cap N]
 
-- `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
-  digest, the origin) and beside it `endpoints.json` (the listener and the endpoint, which a client reads and nothing
-  publishes), runs the network certifier for `--windows` windows, each bucket released by its
+- `keys` makes the key directory: the LMS key, its leaf state and, with a key made there, its device state
+  (`make_key`; `certificate.DeviceState`): the key's life so far, in milliseconds on the network certifier's clock,
+  and the sessions started under it.
+- `serve` runs on the host's raw clock and no other (the device's "The clock"), and refuses to start where the host
+  has none. It holds the key's device state from before its first tick until its publisher has closed, so a second
+  `serve` under the key is refused meanwhile, as is a session id the key has started. The device state gives the
+  session its base, the key's life before the run, and moves the life on by the run's whole span, `--windows`
+  execution phases of T ticks, before the base is signed: a run that ends early has used its whole span. The
+  publisher signs the start's certificate at that base (`certificate.CertifiedStart`) before the origin is set.
+  `serve` then writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters
+  and their digest, the start's certificate, the origin) and beside it `endpoints.json` (the listener and the
+  endpoint, which a client reads and nothing publishes). The origin is there on the network certifier's clock
+  (`origin_raw`) and as wall time: `origin_unix` is one reading of the host's wall time at the origin, and wall
+  time minus it is not the network certifier's bucket, since the host steers its wall time and not the raw clock.
+  `serve` runs the network certifier for `--windows` windows, each bucket released by its
   pacer `--paced-ms` after its boundary (`warden`'s "The pacer"; 0: written on the network certifier's loop), and writes
   `warden.json` (each connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their
-  windows, and each bucket's pacer report, `paced`). Each window's records go to `requests.records`,
-  `responses.records` and `fails.records` (each failed connection's reason, witness), and each is certified
+  windows, each bucket's pacer report, `paced`, and how far the host's wall time parted from the network
+  certifier's clock between the origin's setting and the last tick, `clocks`). Each window's records go to
+  `requests.records`, `responses.records` and `fails.records` (each failed connection's reason, witness), and each
+  is certified
   (`certificate.Issuer`, with the network certifier's parameters digest) into `certified.jsonl`, except a window in
   which the network certifier refused a connection, whose records and rows it certifies and signs none of (`warden`'s
   "Admission"). Each window of the wire's two records is also committed as rows, a row a bucket, with its wiring
@@ -93,7 +107,8 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   table holds every connection before it sends (`reserve_fds`): its process has numpy's threads too, and a table grown
   mid-run put cells that left the network certifier on time a bucket late (168 ms, every connection open as the client
   passed 256).
-- `check` (`check`): every window of the three records has a certificate that verifies and whose head is the
+- `check` (`check`): the session's start is certified under the deployment's key and session for its schedule
+  (`check_start`), every window of the three records has a certificate that verifies and whose head is the
   record's, every window of the wire's two has a registration that verifies whose root is its record's rows under
   their salts (`check_cells`), the audit (`warden.audit`) accepts the records, and every connection's client got
   exactly its egress record's cells, each in its bucket, its request is the ingress record's and its response the
@@ -102,8 +117,8 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   problem, the first of the problems `check.json` lists. With `--registrations FILE` besides, a check that found no
   problem writes there what it was checked under and then each registration of connection rows it held, one a
   line (`connection_rows_run`'s "The registrations' file"); `--registrations` without the two is refused.
-- `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
-  `serve` and `client` as processes, then `check`.
+- `rehearse` makes a key and its device state in a scratch directory, writes the traffic, starts the fake endpoint
+  when `--fake`, and runs `serve` and `client` as processes, then `check`.
 
 **The load** (`--load-store`, the gate's `load-relay`): the serving session's weights' load, relayed and committed by
 this device and signed by its one signer. `rehearse` first relays the store to the H200's sink
@@ -191,15 +206,20 @@ import traceback
 from dataclasses import asdict, replace
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
 import active_replay as ar
-import certifier_serve as cs
+from benchmarks.network_traces import certifier_serve as cs
 import connection_rows_run as crr
-import load_relay as lr
+from benchmarks.network_traces import load_relay as lr
 import stall_probe
+from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request
-from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, CertifiedStart, DeviceState, Direction, Issuer,
+                                                         LmsKey, SignerRefused, StartRefused, record_head)
 from verity.protocols.accounting.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
+from verity.protocols.accounting.certifier.verifier.pacer import ClockRefused, raw_clock
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_PATH
 from verity.protocols.accounting.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cells)
@@ -209,6 +229,8 @@ INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
 #: each record's certified link name and direction: the wire's two under `LINK`, the reasons under their own name
 CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
              FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
+#: in a key directory, beside the key and its leaf state: the key's device state (`certificate.DeviceState`)
+DEVICE = "device.json"
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
 #: the heap `prepare_process` grows and touches before the origin, a lane's and at least: heavy's opening burst through
 #: the network certifier (1000 connections at 300 a second, 1 KiB cells) grew its heap by about 35 KB a connection
@@ -626,17 +648,60 @@ def sign_load(issuer: Issuer, key: LmsKey, heads: Path, out: Path) -> dict:
     return doc
 
 
+def make_key(directory: Path, height: int = cs.HEIGHT) -> lms.PrivateKey:
+    """The network certifier's key directory, made or loaded (`certifier_serve.load_key`), and with a key made here
+    its device state (`DEVICE`, `certificate.DeviceState`): created once, with the key, at none of its life used. A
+    key that was already there keeps its device state as it is, and one without it is given none: nothing says how
+    much of its life it has used, so `serve` refuses to start under it."""
+    made = not (directory / "seed").exists()
+    key = cs.load_key(directory, height)
+    if made:
+        DeviceState.create(directory / DEVICE, lms.public_key(key))
+    return key
+
+
+def registered_key(key: Path) -> LmsKey:
+    """The registered key of the key directory `key`, read from its ``public.json``. A directory without one holds
+    no key the network certifier starts under (`StartRefused`)."""
+    try:
+        return cs.read_public(json.loads((key / "public.json").read_text()))
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise StartRefused(f"{key}: no registered key ({type(e).__name__}); `keys --dir` makes one") from None
+
+
+def certify_start(issuer: Issuer, base_ms: int, params: WardenParams) -> CertifiedStart:
+    """The start's certificate of `issuer`'s session (`Issuer.certify_start`, under `LINK`): the session starts at
+    `base_ms` of its key's life, under `params`'s schedule. A signer that refuses raises `SignerRefused`, and the
+    network certifier does not start."""
+    start = issuer.certify_start(LINK, base_ms, params.digest)
+    if start is None:
+        raise SignerRefused(f"the signer refused the start of session {issuer.session.hex()}")
+    return start
+
+
+def start_json(start: CertifiedStart) -> dict:
+    """A start's certificate as `deployment.json` carries it: all of it is public."""
+    return {"base_ms": start.base_ms, "schedule": start.schedule.hex(),
+            "certificate": cs.certificate_json(start.certificate)}
+
+
+def start_from_json(doc: dict) -> CertifiedStart:
+    return CertifiedStart(doc["base_ms"], bytes.fromhex(doc["schedule"]), cs.certificate_from_json(doc["certificate"]))
+
+
 def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit,
-                    load_heads: Path | None = None) -> None:
+                    load_heads: Path | None, base_ms: int) -> None:
     """`PublisherProcess`'s process: the network certifier's key and its leaf state are this process's alone. It signs
-    the load's heads first when there are any (`sign_load`), sends the public key, rebuilds each record from its
-    released rows, keeps it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and
-    at the end sends the issuer's refusals and its own usage."""
+    the load's heads first when there are any (`sign_load`), then the start's certificate of its session at `base_ms`
+    (`certify_start`), sends that and the public key, rebuilds each record from its released rows, keeps it as
+    `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and at the end sends the
+    issuer's refusals and its own usage."""
     try:
         own = cs.signer(key)
         issuer = Issuer(own, session)
         if load_heads is not None:
             sign_load(issuer, own.public_key(), load_heads, out)
+        results.send(("start", start_json(certify_start(issuer, base_ms, params))))
         results.send(("key", own.public_key()))
         publisher = Publisher(out, issuer, params, commit or WR.Cells.of)
         keeper = crr.Keeper(out, issuer, params, LINK)
@@ -678,17 +743,20 @@ class PublisherProcess:
     `key` is the network certifier's public key; `close` waits for every record and gives the issuer's refusals; `usage`
     is then the process's own. A process that exits early, killed or failed, raises at the next close or at `close`.
     `commit` stands in for `Cells.of` (a test's). With `load_heads` the process signs the load's heads before anything
-    else (`sign_load`), so construction returns once ``load.json`` is written. The queue's thread is started at
+    else (`sign_load`), so construction returns once ``load.json`` is written. It then signs the start's certificate
+    of its session at `base_ms`, the base the key's device state gave the session (`certify_start`): `start` is that
+    certificate as `deployment.json` carries it, there before construction returns, so before any origin is set, and
+    a signer that refuses it fails the construction. The queue's thread is started at
     construction, with a row of the grid's size that the process drops, so that the first tick starts no thread and
     the thread's buffers have grown to a row's; `feeder` is its thread id."""
 
     def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None,
-                 load_heads: Path | None = None) -> None:
+                 load_heads: Path | None = None, *, base_ms: int) -> None:
         ctx = multiprocessing.get_context("spawn")
         self.rows = ctx.Queue()
         self.results, results = ctx.Pipe(duplex=False)
         self.process = ctx.Process(target=_publisher_main, name="warden-publisher", daemon=True,
-                                   args=(self.rows, results, out, key, session, params, commit, load_heads))
+                                   args=(self.rows, results, out, key, session, params, commit, load_heads, base_ms))
         self.process.start()
         results.close()
         self.usage: dict | None = None
@@ -696,6 +764,7 @@ class PublisherProcess:
         self._digests: dict[str, object] = {}
         self.rows.put((None, None, bytes(params.grid.allocation * params.cell_bytes)))
         self.feeder: int | None = self.rows._thread.native_id
+        self.start: dict = self._receive("start")
         self.key: LmsKey = self._receive("key")
 
     def _receive(self, kind: str):
@@ -766,13 +835,19 @@ def _quantiles(xs: list[float]) -> dict:
 
 
 def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
-                      slack: float, run_id: bytes | None = None) -> dict:
+                      slack: float, run_id: bytes | None = None, start: dict | None = None,
+                      origin_raw: float | None = None) -> dict:
     """`deployment.json`, the auditor's record of a run: the network certifier's public key and session, the schedule's
-    parameters and their digest, the origin, and the run id its server's requests carry. Its addresses are
-    `endpoints_record`'s."""
+    parameters and their digest, the start's certificate (`start_json`: where the session starts on its key's life),
+    the origin, and the run id its server's requests carry. Its addresses are `endpoints_record`'s. The origin is
+    given twice: `origin_raw` is its reading on the network certifier's clock, which a process on its host reads the
+    grid by. `origin_unix` is one reading of the host's wall time, taken when the origin was set: wall time minus it
+    is not the network certifier's bucket, since the two clocks part at the rate the host steers its wall time
+    (`clocks_parted`)."""
     return {"key": cs.public_json(key), "session": session.hex(), "link": LINK,
-            "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
-            "origin_unix": origin_unix, "windows": windows, "run_id": None if run_id is None else run_id.hex()}
+            "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000, "start": start,
+            "origin_unix": origin_unix, "origin_raw": origin_raw, "windows": windows,
+            "run_id": None if run_id is None else run_id.hex()}
 
 
 def endpoints_record(listen: tuple[str, int], upstream: tuple[str, int]) -> dict:
@@ -783,6 +858,16 @@ def endpoints_record(listen: tuple[str, int], upstream: tuple[str, int]) -> dict
 def read_endpoints(deployment: Path) -> dict:
     """The run's `ENDPOINTS`, beside its `deployment` file."""
     return json.loads((deployment.parent / ENDPOINTS).read_text())
+
+
+def clocks_parted(start: tuple[float, float], end: tuple[float, float]) -> dict:
+    """How far the host's wall time parted from the network certifier's clock between two readings of both (each a
+    pair: the clock's, then the wall's): the seconds each counted, and the wall's gain on the clock in milliseconds
+    and in milliseconds an hour of the clock. It is what one run saw, a step of the wall time included, and no bound
+    on either clock."""
+    clock, wall = end[0] - start[0], end[1] - start[1]
+    return {"clock_s": clock, "wall_s": wall, "parted_ms": (wall - clock) * 1000,
+            "parted_ms_an_hour": (wall - clock) / clock * 3_600_000 if clock > 0 else None}
 
 
 def _memlock(libc) -> str:
@@ -867,49 +952,71 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cs._announce, probe: bool = False, process: dict | None = None,
                 load_heads: Path | None = None, paced_ms: float = cs.PACED_MS, watermark: bool = False,
-                sock: socket.socket | None = None) -> dict:
-    """One run of the network certifier on the host's clock (the module docstring's `serve`), on the listening socket
-    `sock` when given (its caller's, bound at `listen`: "A session") and else one it binds at `listen`, its records
-    published by a `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when
-    given, its threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its
-    boundary (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark stream sent to
-    `upstream` when `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what
-    `prepare_process` did.
-    The loop's errors are kept, not logged: the ticker writes no file."""
+                clock=raw_clock, sleep=None, wall=time.time, sock: socket.socket | None = None) -> dict:
+    """One run of the network certifier on its host's raw clock (the module docstring's `serve`), on the listening
+    socket `sock` when given (its caller's, bound at `listen`: "A session") and else one it binds at `listen`, its
+    records published by a `PublisherProcess` that holds the key in `key` and first signs the load's heads
+    `load_heads` when given, its threads sampled by `stall_probe` when `probe`, each bucket released by its pacer
+    `paced_ms` after its boundary (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark
+    stream sent to `upstream` when `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with
+    `process`, what `prepare_process` did.
+    The loop's errors are kept, not logged: the ticker writes no file. With `paced_ms` 0 there is no pacer, which the
+    network certifier refuses on a clock of its host's: only a run on a caller's own clock has none.
+
+    It starts in this order, and a step that refuses starts nothing after it. The clock is read: a host without the
+    raw clock runs no network certifier (`pacer.ClockRefused`). The key's device state (`DEVICE` in `key`) is opened
+    and held until the publisher has closed, so no other run under the key ticks or signs meanwhile, and gives the
+    session its base: the key's life, moved on by the run's whole span on disk before the base is used
+    (`certificate.StartRefused` for a state that is held, missing or another key's, and for a session already
+    started). The publisher signs the start's certificate at that base. Only then is the origin set, a reading of
+    the clock, with the host's wall time read beside it; both are read again when the last tick is done, and
+    the run's log says how far they parted (`clocks`, `clocks_parted`). `clock`, `sleep` and `wall` are the network
+    certifier's clock, its wait and the host's wall time, for a caller that drives a run itself."""
     out.mkdir(parents=True, exist_ok=True)
-    loop = asyncio.get_running_loop()
-    errors: list[str] = []
-    loop.set_exception_handler(lambda _, context: errors.append(f"{context.get('message')}: "
-                                                               f"{context.get('exception')!r}"))
-    publish = PublisherProcess(out, key, session, params, load_heads=load_heads)
-    origin = time.monotonic() + start_in
-    warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
-                    publish=publish, withhold=publish.withhold, release=publish.release, slack=slack,
-                    paced=paced_ms / 1000,
-                    watermark=(lambda: asyncio.open_connection(*upstream)) if watermark else None)
-    server = await listening(warden.handle, listen, sock)
-    sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
-                                {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
-    deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
-                                   windows=windows, slack=slack, run_id=warden.run_id)
-    endpoints = endpoints_record((listen[0], server.sockets[0].getsockname()[1]), upstream)
-    (out / ENDPOINTS).write_text(json.dumps(endpoints, indent=1))
-    (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
-    warden.hand_lengths = publish.lengths
-    announce({"listening": endpoints["listen"], "deployment": str(out / "deployment.json")})
-    try:
-        await warden.run()
-    finally:
-        server.close()
-        refused = await loop.run_in_executor(None, publish.close)
-        stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
+    clock()
+    registered = registered_key(key)
+    with DeviceState(key / DEVICE, registered.public) as device:
+        base_ms = device.start(session, windows * params.window * params.bucket_ms)
+        loop = asyncio.get_running_loop()
+        errors: list[str] = []
+        loop.set_exception_handler(lambda _, context: errors.append(f"{context.get('message')}: "
+                                                                   f"{context.get('exception')!r}"))
+        publish = PublisherProcess(out, key, session, params, load_heads=load_heads, base_ms=base_ms)
+        if publish.key != registered:
+            publish.close()
+            raise StartRefused(f"{key}: the signer's key isn't the registered key")
+        started = (clock(), wall())
+        origin = started[0] + start_in
+        warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
+                        clock=clock, sleep=sleep, publish=publish, withhold=publish.withhold, release=publish.release,
+                        slack=slack, paced=paced_ms / 1000 if paced_ms else None,
+                        watermark=(lambda: asyncio.open_connection(*upstream)) if watermark else None)
+        server = await listening(warden.handle, listen, sock)
+        sampler = stall_probe.start(out / "stalls.json", origin,
+                                    {"warden": os.getpid(), "publisher": publish.process.pid},
+                                    {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
+        deployment = deployment_record(params, publish.key, session, origin_unix=started[1] + start_in,
+                                       windows=windows, slack=slack, run_id=warden.run_id, start=publish.start,
+                                       origin_raw=origin)
+        endpoints = endpoints_record((listen[0], server.sockets[0].getsockname()[1]), upstream)
+        (out / ENDPOINTS).write_text(json.dumps(endpoints, indent=1))
+        (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
+        warden.hand_lengths = publish.lengths
+        announce({"listening": endpoints["listen"], "deployment": str(out / "deployment.json")})
+        try:
+            await warden.run()
+            ended = (clock(), wall())
+        finally:
+            server.close()
+            refused = await loop.run_in_executor(None, publish.close)
+            stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
     lateness = [x * 1000 for x in warden.lateness]
     log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
            "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
            "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
-           "ticks_ms": [round(x, 3) for x in lateness],
+           "clocks": clocks_parted(started, ended), "ticks_ms": [round(x, 3) for x in lateness],
            "paced": {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
                      "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
                                    round(r.end * 1000, 3), r.written] for r in warden.releases]}}
@@ -938,12 +1045,14 @@ def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shi
             "response": parse_response(data) if id_payload is None else parse_id_response(data, id_payload)}
 
 
-async def client(deployment: dict, endpoints: dict, traffic: list[dict], out: Path, clock=time.time) -> dict:
+async def client(deployment: dict, endpoints: dict, traffic: list[dict], out: Path, clock=raw_clock) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim, to the listener `endpoints` names; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is
-    sent as its network-certifier-form id request (`active.id_request`, offset 0) and its response read as id-form."""
+    sent as its network-certifier-form id request (`active.id_request`, offset 0) and its response read as id-form. It
+    runs on the network certifier's host and reads that host's raw clock, the one the origin is a reading of
+    (`origin_raw`), so that a cell's arrival is laid against the grid on the grid's own clock however long the run."""
     params = WardenParams(**deployment["params"])
-    origin, listen = deployment["origin_unix"], tuple(endpoints["listen"])
+    origin, listen = deployment["origin_raw"], tuple(endpoints["listen"])
     host = "%s:%d" % tuple(endpoints["upstream"])
 
     async def one(index: int, item: dict) -> dict:
@@ -1083,6 +1192,19 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
     return summary | {"relayed": relayed}, problems + found
 
 
+def check_start(dep: dict, key: LmsKey, session: bytes, params: WardenParams) -> tuple[dict, list[str]]:
+    """The deployment's start's certificate read as a verifier reads it: under the deployment's key and session, for
+    its link and its schedule's parameters digest (`CertifiedStart.refusal`). A deployment without one, or with one
+    that doesn't hold, has no certified start."""
+    try:
+        start = start_from_json(dep["start"])
+    except (KeyError, TypeError, ValueError):
+        return {"base_ms": None, "certified": False}, ["the session's start isn't certified (no start's certificate)"]
+    why = start.refusal(key, session, LINK, params.digest)
+    return ({"base_ms": start.base_ms, "certified": why is None},
+            [] if why is None else [f"the session's start isn't certified ({why})"])
+
+
 def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None) -> dict:
     """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
     each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
@@ -1104,6 +1226,8 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
         problems.append("the deployment's digest isn't its parameters'")
     problems += [f"the deployment holds {k}, an address: it goes in {ENDPOINTS}, which is never published"
                  for k in ADDRESSES if k in dep]
+    start, start_problems = check_start(dep, key, session, params)
+    problems += start_problems
     load, load_problems = check_load(run, dep, key, session)
     problems += load_problems
     windows = []
@@ -1160,7 +1284,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
         "requests": len(rows), "ended": sum(r["outcome"] == "end" for r in rows),
         "refused": sum(r["outcome"] == "refused" for r in rows),
         "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
-        "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
+        "start": start, "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
         "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
         "cell_timing": cell_timing(run),
@@ -1169,6 +1293,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
         "cells_in_their_bucket": [sum(r["in_bucket"] for r in served), sum(r["cells"] for r in served)],
         "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": warden_log.get("lateness_ms"),
+        "clocks": warden_log.get("clocks"),
         "ticker_stalls": None if not warden_log.get("stalls") else
         warden_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
         "completion_tokens": sum(r.get("completion_tokens") or 0 for r in served),
@@ -1197,7 +1322,8 @@ def table(result: dict) -> str:
             f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
             f"link-windows "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
-            f"cells {s['cells']}; tick lateness {s['tick_lateness_ms']}; ticker D episodes "
+            f"cells {s['cells']}; start at {s['start']['base_ms']} ms of the key's life; tick lateness "
+            f"{s['tick_lateness_ms']}; wall time against the clock {s.get('clocks') or 'not read'}; ticker D episodes "
             f"{s.get('ticker_stalls') or 'not probed'}; cell rows {s['cell_rows']['registered']}/"
             f"{s['cell_rows']['of']} link-windows registered, {s['cell_rows']['rows']} rows a window")
 
@@ -1314,7 +1440,7 @@ def rehearse(args) -> int:
     scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
     procs: list[subprocess.Popen] = []
     try:
-        cs.load_key(scratch / "network_certifier", args.height)
+        make_key(scratch / "network_certifier", args.height)
         if load:
             try:
                 lr.relay_load(args.load_store, lr.SHAPES[args.load_shape], args.load_sinks, args.load_program, out,
@@ -1375,7 +1501,7 @@ def _sha512(text: str) -> bytes:
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="warden_serve.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    k = sub.add_parser("keys", help="make or load an LMS key and write its public.json")
+    k = sub.add_parser("keys", help="make or load an LMS key, with a key made its device state, and write its public.json")
     t = sub.add_parser("traffic", help="write varied traffic")
     f = sub.add_parser("fake", help="a stand-in for vLLM's streamed /v1/completions")
     s = sub.add_parser("serve", help="the network certifier in front of the server, for one run")
@@ -1489,7 +1615,7 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
 
     if args.command == "keys":
-        cs.load_key(args.dir, args.height)
+        make_key(args.dir, args.height)
         print((args.dir / "public.json").read_text())
         return 0
     if args.command == "traffic":
@@ -1527,11 +1653,14 @@ def main(argv=None) -> int:
         process = prepare_process(params)
         for name in ("PYTHONMALLOC", C_ALLOCATOR):
             os.environ.pop(name, None)
-        asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
-                          session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
-                          probe=args.stall_probe, process=process, load_heads=args.load_heads,
-                          paced_ms=args.paced_ms, watermark=args.watermark,
-                          sock=None if args.listen_fd is None else socket.socket(fileno=args.listen_fd)))
+        try:
+            asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
+                              session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
+                              probe=args.stall_probe, process=process, load_heads=args.load_heads,
+                              paced_ms=args.paced_ms, watermark=args.watermark,
+                              sock=None if args.listen_fd is None else socket.socket(fileno=args.listen_fd)))
+        except (ClockRefused, StartRefused) as e:
+            raise SystemExit(f"the network certifier did not start: {e}") from None
         return 0
     if args.command == "client":
         ar._quiet_runtime()
