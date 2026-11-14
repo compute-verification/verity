@@ -16,7 +16,9 @@ import sys
 from pathlib import Path
 
 import pytest
-from test_a5_case_v2 import RP  # noqa: F401 -- the fixture: this suite's `replay` under the name a5's `case_v2` imports
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "tests"))
+from test_window_audit_case_v2 import RP  # noqa: F401 -- the fixture: this suite's `replay` under the name the window audit's `case_v2` imports
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite as C

@@ -1,6 +1,6 @@
 """The DRAM-free filler's tile (dcap.cu's `dfill_k`) in Python: the receipt a tile of NC chains writes after S chained
 int8 MMAs, from the round's coins (c0, c1) and the tile's id. Written from the matrices, as dcap.cu's `dfill_ref` is;
-`dcap dgate` holds the GPU to `dfill_ref`, and tests/test_dfill_ref.py holds this file to receipts `dfill_ref` printed."""
+`dcap dgate` holds the GPU to `dfill_ref`, and benchmarks/pouw/filler/tests/test_dfill_ref.py holds this file to receipts `dfill_ref` printed."""
 
 from __future__ import annotations
 
