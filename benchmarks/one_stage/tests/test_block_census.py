@@ -1,5 +1,5 @@
-"""`block_census.py`: each row's cut (the row itself when it fits, else each slot's coarsest fitting option, else a gap with
-its finest option's reason; a ``COLS`` or ``WIDE_COORDS`` row or slot at its fitting width of least leakage-weighted proving
+"""`block_census.py`: each row's cut (the row itself when it fits and is no longer than its family's `WHOLE_UP_TO`, else each
+slot's coarsest fitting option, else a gap with its finest option's reason; a ``COLS`` or ``WIDE_COORDS`` row or slot at its fitting width of least leakage-weighted proving
 cost; no proof block
 for a row of no gate or no input; a ``CHAINS`` row's key blocks as scores and values units before whole), the slots of each
 kind of split the serving rows' tables name, and the census's counts per
@@ -63,9 +63,9 @@ CHAIN_ROW = ('SparseMlaSplit_v1{T=272,NS=5,NH=8,DR=64,DV=512,BN=64,DOT={"fn":"Ho
              'INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}')
 
 
-def _chain_units(**sized):
-    """`CHAIN_ROW`'s unit templates past itself as stand-in sized units (``sized``: a family's fields), and its ways' units."""
-    ways = dict(B.ST.chain_ways(CHAIN_ROW))
+def _chain_units(row=CHAIN_ROW, **sized):
+    """``row``'s unit templates past itself as stand-in sized units (``sized``: a family's fields), and its ways' units."""
+    ways = dict(B.ST.chain_ways(row))
     by = {u: unit(u, n, **sized.get(u.split("{")[0], {})) for way in ways.values() for u, n in way}
     return list(by.values()), {g: [by[u] for u, _n in way] for g, way in ways.items()}
 
@@ -86,6 +86,25 @@ def test_a_chain_row_takes_its_scores_and_values_units_and_whole_key_blocks_when
     assert B.cut(CHAIN_ROW, row) == ("split", ways[64], None)
     units, ways = _chain_units(SparseMlaHeadValues_v1={"unpieced": ["Erf_v1"]})
     assert B.cut(CHAIN_ROW, family(CHAIN_ROW, units, est_log=31)) == ("split", ways[None], None)
+
+
+def test_a_fitting_row_past_its_familys_whole_bound_is_cut_like_its_longer_rows_and_whole_only_when_no_cut_fits():
+    short, long = (CHAIN_ROW.replace("T=272,NS=5", f"T={t},NS=1") for t in (3, 4))
+    assert B.WHOLE_UP_TO["SparseMlaSplit_v1"] == ("T", 3) and not B.past_whole(short) and B.past_whole(long)
+    units, _ways = _chain_units(short)
+    kind, got, why = B.cut(short, family(short, units, est_log=27))
+    assert (kind, [u["spec"] for u in got], why) == ("row", [short], None)
+    units, ways = _chain_units(long)
+    assert B.cut(long, family(long, units, est_log=27)) == ("split", ways[64], None)
+    units, ways = _chain_units(long, SparseMlaHeadValues_v1={"unpieced": ["Erf_v1"]})
+    assert B.cut(long, family(long, units, est_log=27)) == ("split", ways[None], None)
+    units, _ways = _chain_units(long, SparseMlaHeadValues_v1={"est_log": 28}, SparseMlaHeadBlock_v1={"est_log": 28})
+    kind, got, why = B.cut(long, family(long, units, est_log=27))
+    assert (kind, [u["spec"] for u in got], why) == ("row", [long], None)
+    for n, kind in ((36, "row"), (37, "split")):
+        row, one = f"DsaMqaLogits_v3{{N={n},H=32,D=128}}", unit("DsaMqaLogits_v3{N=1,H=32,D=128}", n)
+        k, got, _why = B.cut(row, family(row, [one], est_log=27))
+        assert (k, [(u["spec"], u["n"]) for u in got]) == (kind, [(row, 1)] if kind == "row" else [(one["spec"], n)])
 
 
 def test_the_served_sparse_attention_partition_names_a_decode_rows_units_at_the_census_s_width():
