@@ -31,7 +31,7 @@ files = ["**/network_traces/scan_zk.py"]
 "coin source the challenger" = "coins from the challenger"
 
 [[words_in]]
-files = ["**/one_stage/a5_coins.py"]
+files = ["**/spot/device/challenger_session.py"]
 [words_in.words]
 "coin source is then" = "coins then come from"
 "coin source is" = "coins come from"
