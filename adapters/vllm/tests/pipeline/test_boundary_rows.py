@@ -30,7 +30,8 @@ from verity.commitments import history as HT
 from verity.commitments.windows import rows as CS
 from verity.definitions.registry import stop_check, stop_rule
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_class as BC, boundary_rows as BR, boundary_stop as BS, boundary_windows as BW
+from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_windows as BW
+from verity_vllm.pipeline import boundary_class as BC
 
 XOR8 = PrimitiveDefinition("BoundaryRowsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
