@@ -8,10 +8,8 @@ public import Proofs.Properties.Verity.SampledTwo.WiredScope
 `couplesAt_wired`: an instance of `CouplesAt` at a commitment and strategy, at the statement `JoinsAt` fixes (`stmtX`)
 and at the audit statement, partition and design the session's verifier reads of it. Its `scope` is a lemma of
 `JoinsAt` and `TwoHolds` (`scope_wired`), and `parse`, `partition` and `two` are what the verifier computes
-(`WiredParse.lean`), under two premises stated once:
+(`WiredParse.lean`). The statement decodes at every commitment (`decode_of_stmtOf`), and the design takes one premise:
 
-* `RecordWf c`: the record the commitment carries is a well-formed tree, which the proved verifier's reader reads back
-  from the bytes `Flock.canon` prints of it (`decode_of_stmtOf`);
 * `SpotFlock.RunsAs.Round2.TwoHolds A.h`: the held copies' design evaluates, a lemma wherever a play whose blobs don't
   collide with the registered files is accepted (`twoHolds_of_formAccepts` at `heldOfAt_goodCase`).
 
@@ -21,7 +19,7 @@ units are the replay blocks under `readX`. `joins`, `extract`, `caps`, `opens`, 
 
 ## What this does not show
 
-`RecordWf`, `TwoHolds` where no play with no such collision is accepted, and `UnitsWired`: each is a hypothesis.
+`TwoHolds` where no play with no such collision is accepted, and `UnitsWired`: each is a hypothesis.
 `JoinsAt` at a commitment whose bytes don't decode (`stmtOf c = none`), where its `stmtX` fails, so the instance is at
 the commitments that decode.
 -/
@@ -34,11 +32,6 @@ open Claims
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The record a commitment carries is a well-formed tree**: every object in it is a well-formed tree map
-(`Claims.Json.Wf`). `Spot.OneStage.commitmentOf` parses with Lean's `Json.parse`. -/
-def RecordWf (c : ByteArray) : Prop :=
-  ∀ cm, Spot.OneStage.commitmentOf c = .ok cm → Claims.Json.Wf cm.record
-
 /-- **The vocabulary's units are the replay blocks at what the verifier reads**: at the audit statement, partition
 and design the session's verifier reads of `x`, `UnitsAreReplay` under the reading `readX`. -/
 def UnitsWired (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
@@ -47,8 +40,8 @@ def UnitsWired (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Ar
     UnitsAreReplay V θ F c FlockDeploy.sha512 A.L.commit s Pt dd readX
 
 /-- **`CouplesAt` at the wired statement**: at the audit statement, partition and design the session's verifier reads
-of it, from the join's premise, `RecordWf`, `TwoHolds` and `UnitsWired`, with the majority's and the coupling's other
-fields as they are. -/
+of it, from the join's premise, `TwoHolds` and `UnitsWired`, with the majority's and the coupling's other fields as
+they are. -/
 theorem couplesAt_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live₂} {x : Msg} {θ : ByteArray}
     {F : Array ByteArray} {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} {C : CaseOf}
     {Ms : SessionReading} {tab : ℕ → String} {ℓ₁ ℓ₂ : String} {Dg : Verity.Exchange → ℕ → Option Msg} {q : ℕ}
@@ -57,7 +50,7 @@ theorem couplesAt_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A 
     {readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F)}
     {openOf : Claims.Sampling.Wit → Fin (V.circuitOf θ F).N → Option Hash.RowLeaf.Opening} {dColl : ℕ}
     (hJ : JoinsAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg P fs₁ fs₂ cut P')
-    (hW : RecordWf c) (hT : SpotFlock.RunsAs.Round2.TwoHolds A.h) (hU : UnitsWired V A x θ F c readX)
+    (hT : SpotFlock.RunsAs.Round2.TwoHolds A.h) (hU : UnitsWired V A x θ F c readX)
     (hX : V.extract θ F c σ =
       majority V A x θ F c σ (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
         readX)
@@ -76,7 +69,7 @@ theorem couplesAt_wired {V : Vocab d α} {k : Verity.Registration.Composite} {A 
             (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg) openOf dColl) ≤
         V.delta θ .sampled (V.cost θ F c σ)) :
     ∃ s Pt dd, CouplesAt V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' s Pt dd readX openOf dColl := by
-  obtain ⟨st, hst⟩ := decode_of_stmtOf hJ.stmtX hW
+  obtain ⟨st, hst⟩ := decode_of_stmtOf hJ.stmtX
   obtain ⟨s, hs⟩ := parse_wired A hst
   obtain ⟨Pt, hPt⟩ := partition_wired A s
   obtain ⟨dd, hdd⟩ := two_wired hT s

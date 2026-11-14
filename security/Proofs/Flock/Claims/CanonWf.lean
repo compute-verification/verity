@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.Challenger.CanonRead
+public import Proofs.Flock.Claims.CanonRead
 public import Proofs.Flock.Claims.JsonNorm
 import Std.Data.TreeMap.Raw.Lemmas
 import all Lean.Data.Json.Basic

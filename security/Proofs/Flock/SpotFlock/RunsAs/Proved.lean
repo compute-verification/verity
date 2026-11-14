@@ -1,7 +1,10 @@
 module
 
 public import Proofs.Flock.SpotFlock.RunsAs.Steps
-public import Proofs.Properties.Spot.Credited
+public import Proofs.Flock.SpotFlock.SampleInts
+public import Proofs.Properties.Spot
+public import Proofs.Flock.Bridge.V5.Accepted
+public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.Soundness.ExecDraw
 import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas

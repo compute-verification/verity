@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Flock.Claims.JsonNorm
-public import Proofs.Properties.Challenger.CanonWf
+public import Proofs.Flock.Claims.CanonWf
 public import Proofs.Properties.Challenger.Coins
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String

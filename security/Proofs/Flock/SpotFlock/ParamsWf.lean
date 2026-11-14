@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.HeldOfReads
 public import Proofs.Flock.SpotFlock.DoWalk
-public import Proofs.Properties.Spot.Units
+public import Proofs.Flock.Claims.JsonField
 public import Batteries.Tactic.OpenPrivate
 
 /-!
