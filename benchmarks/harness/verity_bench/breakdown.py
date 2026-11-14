@@ -77,6 +77,10 @@ def per_token(rep: Mapping[str, Any], kind: str) -> dict[str, float]:
     return {part: ms * steps / int(rep["generated_tokens"]) for part, ms in parts(rep, kind).items()}
 
 
+def _diff(audit: Mapping[str, Mapping[str, float]], plain: Mapping[str, Mapping[str, float]], kind: str, part: str) -> float:
+    return audit[kind].get(part, 0.0) - plain[kind].get(part, 0.0)
+
+
 def _spans_recorded(row: Mapping[str, Any], arm: str) -> None:
     for rep in _reps(row, arm):
         if not any(parts(rep, kind) for kind in KINDS):
@@ -105,15 +109,12 @@ def attribution(row: Mapping[str, Any]) -> dict[str, Any]:
         values["top-up contention"].append((tpot[AUDIT_SPANS] - tpot[AUDIT_OFF]) - (tpot[PLAIN_SPANS] - tpot[PLAIN_OFF]))
         audit = {kind: per_token(reps[AUDIT_OFF][i], kind) for kind in KINDS}
         plain = {kind: per_token(reps[PLAIN_OFF][i], kind) for kind in KINDS}
-
-        def diff(kind: str, part: str) -> float:
-            return audit[kind].get(part, 0.0) - plain[kind].get(part, 0.0)
-
         decode = set(audit["graph"]) | set(plain["graph"])
         for part in DECODE_ROWS:
-            values[f"decode {part}"].append(diff("graph", part))
-        values["decode, the rest"].append(sum(diff("graph", part) for part in decode - set(DECODE_ROWS)))
-        values["prefill steps"].append(sum(diff("eager", part) for part in set(audit["eager"]) | set(plain["eager"])))
+            values[f"decode {part}"].append(_diff(audit, plain, "graph", part))
+        values["decode, the rest"].append(sum(_diff(audit, plain, "graph", part) for part in decode - set(DECODE_ROWS)))
+        values["prefill steps"].append(sum(_diff(audit, plain, "eager", part)
+                                           for part in set(audit["eager"]) | set(plain["eager"])))
         spanned = sum(values[name][-1] for name in names[:-1])
         values["outside every span"].append(tpot[AUDIT_OFF] - tpot[PLAIN_OFF] - spanned)
     total = summarize(values["total"])
@@ -210,11 +211,11 @@ def render(doc: Mapping[str, Any]) -> str:
     lines = [
         "# Where the bandwidth audit's time goes",
         "",
-        "Llama-3.1-8B FP8 on one RTX PRO 6000, the bandwidth audit's encoded stack in vLLM. Each row is ms an output "
-        f"token, the mean over the point's paired reps ± its 95% half-width (Student t). `{AUDIT_SPANS}` over "
-        f"`{PLAIN_SPANS}` is split into rows that sum to it: the top-up's contention from the arms with the top-up off, "
-        "every other row a part of the spans arms with the top-up off. The credited lines' difference (spans off) is "
-        "the audit's cost; the spans' marks add their own time to the spans arms. Nothing here is a ratio or a verdict.",
+        ("Llama-3.1-8B FP8 on one RTX PRO 6000, the bandwidth audit's encoded stack in vLLM. Each row is ms an output "
+         f"token, the mean over the point's paired reps ± its 95% half-width (Student t). `{AUDIT_SPANS}` over "
+         f"`{PLAIN_SPANS}` is split into rows that sum to it: the top-up's contention from the arms with the top-up off, "
+         "every other row a part of the spans arms with the top-up off. The credited lines' difference (spans off) is "
+         "the audit's cost; the spans' marks add their own time to the spans arms. Nothing here is a ratio or a verdict."),
     ]
     for entry in doc["points"]:
         source = entry["source"]
