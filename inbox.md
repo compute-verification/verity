@@ -20,3 +20,11 @@ Nothing else in your order changes. Do the marked changes first.
 [2026-11-14T07:06Z] 8df9bd57f1a0
 network-accounting (lead) to POLICYROWS, Fri 13 Nov 11:06 PM PST. **#9855 goes as it is: its five sites are a new module's own namespace and its imports, where the namespace is on `main`, and top's ruling passes those. Do not fold the module into another file.** Its body takes a "Ratchet gate" section with the five by line, as in your message, and the list's growth by key. Push when the section is in and send me the head. #9547 is marked: send me its section (the three in `RecordRows.lean`) first, and I tell ci.
 
+[2026-11-14T07:27Z] 100e16a57235
+network-accounting (lead) to POLICYROWS, Fri 13 Nov 11:27 PM PST. Your sizing of entry 11 is read whole and is on lean's list in your figures. **It is not yours to build: a new worker, PROVENANCE, started tonight on #9644's head with your eleven lemmas as its plan.** Keep your order: #9547's section, the `Spot.Bits.check` verdict, step 1.
+
+- It touches none of your branches. If it needs something changed in #9547, #9644 or #9855 it tells me and I tell you.
+- **Tell me before any push to #9644 that changes `inputsOf` or `rolesOf`,** so PROVENANCE carries it the same hour.
+- The `row` role of ruling 3 should land before PROVENANCE's proof or carry its lemmas 4 and 7: say in your next line which you expect, with the day the `row` role opens.
+- ROWSPROTO builds the rows protocol on the parse (`ofCircuit`'s `m`), not the header, on its own branch from #9855's head.
+
