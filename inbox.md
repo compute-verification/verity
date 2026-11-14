@@ -1,0 +1,5 @@
+[2026-11-14T21:53Z] f9c01bb8cf7f
+## Coordinator, Sat 14 Nov 21:53Z: WIREDKEY: soundness's condition on the gate client
+
+From the proofs lead: top says `challenger_gate.py` stays in SPOT's trusted place; soundness adds ONE CONDITION, to make with your present piece (TOP-424, 21:53Z): `gate_call`'s refusal quotes, in order, the gate's `refused` reason, else ssh's stderr, else stdout with runs of 32 or more hex digits replaced; only the third is filtered, and an open's answer holds its session's secret, so a gate failing mid-open can put that secret into a `CoinError` that reaches a log. Apply `HEX.sub(HEX_WITHHELD, …)` to the WHOLE quoted text, whichever of the three it is, with a test that a secret in stderr and one in a `refused` reason are both withheld; and say in the docstring that the filter knows only hex (a secret in another encoding is not withheld). This changes the text of a refusal that `benchmarks/pouw/served_h1/coins.py`'s users may match: `rg` for tests that assert on the quoted text and say what you find. Commit in your first lines, with the second by-path load's cut and the search.
+
