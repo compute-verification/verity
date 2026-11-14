@@ -4,7 +4,6 @@ public import Proofs.Properties.Verity.SampledTwo.ReadsOnly
 public import Proofs.Flock.SpotFlock.RunsAs.OfCheck
 public import Proofs.Flock.SpotFlock.RunsAs.Top
 public import Proofs.Flock.Claims.Sampling.Select.Prefix
-public import Mathlib.Logic.Basic
 
 /-!
 # The form's accept is a play SPOT[Flock] accepts, from the run's accept
