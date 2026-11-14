@@ -27,7 +27,7 @@ against `Loop.helloRej` sums below `1` over the two.
 
 The statement takes no hiding premise: its error is stated at hm96's hiding gap at the pinned key, whatever that gap is.
 That the error is below `1` there rests on the gap being at most `2^-193`, the pinned key's hiding
-(`FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96`, whose statement the witness takes as written out), with the
+(`FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96`, the witness's one hypothesis), with the
 session's leaves at most `64·leafCap` (`Loop.nLeaves_dataE_le_max`).
 
 * `Loop.pLog_unP_helloRej`, `Loop.fork_unP_helloRej`: against `helloRej` the unswitched prover sends its `Hello` and its
@@ -297,11 +297,8 @@ theorem _root_.Claims.ZKServer.Loop.anyErr_leak_lt
 loop's own link and `Finish` on the source `leakSrc`, the concrete statement under the relation of every pair and the
 witnesses `⟨[]⟩` and `⟨[true]⟩`, `ZkAnyAt` fails at `t = 2`. Against `helloRej` the link carries the empty root at the
 first and a root of `64·2^cap` bytes at the second, and the error at each is `24·n_L·δ₁ + 2·3^{-2}`, below `1/2` where
-hm96 hides at `2^-193` at the pinned key (`HashDerivedKeyHm96`'s statement) and the session has at most `64·leafCap`
-leaves. -/
-theorem SessionLoopZKAnyDeployed_nontrivial
-    (hKey : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash
-      ((2 : ℝ≥0∞) ^ (-193 : ℤ))) :
+hm96 hides at `2^-193` at the pinned key (`HashDerivedKeyHm96`) and the session has at most `64·leafCap` leaves. -/
+theorem SessionLoopZKAnyDeployed_nontrivial (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :
     ¬ Loop.ZkAnyAt Masked.dataE Loop.finS.honestVals
       (LeanRelease.withFiles (LeanRelease.withLink (Loop.constRel Loop.Tp) Loop.leakSrc) Loop.leakSrc)
       (Loop.realOf Loop.leakSrc) Loop.leakWk (fun _ _ => True) 2 := fun h =>
