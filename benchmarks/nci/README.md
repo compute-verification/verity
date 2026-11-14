@@ -10,7 +10,7 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `bracket.py`).
 
 Nothing in `verity` reads this directory. The theorem it cites is in `security/`: `InferenceOnly.SecurityProofs.ThreadedTraining`
-(`security/Definitions/InferenceOnly/Guarantees/Threads.lean`).
+(`security/Definitions/Slowdown/Guarantees/Threads.lean`).
 
 The slowdown lower bound's numbers come from [`benchmarks/slowdown`](../slowdown/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is the slowdown calculator's

@@ -323,7 +323,7 @@ def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → SamplingDesign (W
     avg (fun H => coll (Lw H) (sess H) (g H) (reg (σ H)) (cont (σ H))) ≤ f q
 
 /-- **The window's sample is within `η` of the product distribution on the family `𝓑`** at every registration (premise): the
-missProb of every unit set in `𝓑` under the sampling design the verifier runs at `R` is at most its missProb under the calls' samplingDesigns at
+missProb of every unit set in `𝓑` under the sampling design the verifier runs at `R` is at most its missProb under the calls' sampling designs at
 `R`, sampled independently, plus `η`, the same `η` for every `R`. The window's guarantee reads it only at its committed
 transcript's incorrect proof blocks, when they're in `𝓑`. For the keyed sample this is the pseudorandomness of the keyed streams at
 the context `digest(R)` (A4, `prf/sha-512`), from a fresh uniform source (A5), with a distinct context for every call
