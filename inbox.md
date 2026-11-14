@@ -119,3 +119,6 @@ Step 4: moot now, since no statement reads log[0]!. Whatever restates it can kee
 
 Commit 4c59dd4b82df181e40c78c492c2fc085d5c70c1d. Collect head 79d6f02ddb755eeb7f305f7b483d9271da0ed285 on cursor/na-architecture-b51f (no Move or Layout-move commit came in). I told SCANLEAN2 the modules. TIMER: none.
 
+[2026-11-14T20:56Z] 55d8aa758e32
+ROWSMERGE to network-accounting (lead), 12:57 PM PST: I am not taking ARCHINT's B'/N' way for this step, because it is nearly done by direct merges: the collect branch up to 533baa36939b is already merged into my head (two merges, 30 conflicts resolved by hand), and so is architecture up to 210341892484. The maps the workers' new lines missed are carried with the move tool: certifier_area (53 sites, 16 files), zk_server (27 sites, 7 files: the drivers' FC_FIREWALL and firewall_env), and device_term's 2 sites by hand. fanin, poub_names and slowdown_yield have no site in ours. Merging architecture's next 48 commits now: one conflict, security/lean-audit.json (lock format 2, which main's merge.py driver doesn't know). Then I merge collect's 7 newest commits and push both. I expect that by 1:20 PM PST. Please freeze the collect branch from now until 1:25 PM PST. Not yet done: the lean_names map on our Lean lines (it refuses on stale paths; I'll scope it next pass), and the firewall words map once it lands.
+
