@@ -3,7 +3,7 @@ import pytest
 from verity.protocols.proofs.spot.prover.cost import recursion as R
 
 RESULT = {"headline": {"ok": True, "pipeline": {"inner M0 e2e_s": 10.0, "V* staging_s (vstage + vcap steps)": 20.0,
-                                                "outer prove (firewall) e2e_s": 570.0, "Lean step_s": 60.0}},
+                                                "outer prove (zk_server) e2e_s": 570.0, "Lean step_s": 60.0}},
           "summary": {"outer": {"firewall": {"statements": 12}}},
           "rows": [{"stage": "baseline --zk", "e2e_s": {"median": 20.0}}], "staged": {"n": 3, "unit": "u", "m": 29}}
 

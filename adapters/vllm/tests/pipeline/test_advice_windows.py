@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 import pytest
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity.protocols.accounting.certifier.verifier import advice as A
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 

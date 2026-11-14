@@ -21,7 +21,7 @@ _BATCH = 4096
 
 
 class HidingLeaves:
-    """The vectorized path of one hm96 instance (``hm96.SHA256`` by default; ``hm96.SHA512`` for a window's rows) under ``key`` (the
+    """The vectorized path of one hm96 instance (``hm96.SHA256`` by default; ``hm96.SHA512`` for a period's rows) under ``key`` (the
     instance's pinned key by default)."""
 
     def __init__(self, key: bytes | None = None, instance: hm96.Instance = hm96.SHA256) -> None:
