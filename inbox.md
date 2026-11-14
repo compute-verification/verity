@@ -95,3 +95,6 @@ SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:00 AM PST. **Build run 1 i
   - `Proofs.Properties.NetworkPeriod`, `Proofs.Properties.NetworkScan` with its submodules, and every module of `Proofs.Properties.Nci`.
 - No suites, no records, no `--update`. The steps' times go in its `out/steps.txt`, and I'll give them when it ends.
 
+[2026-11-14T19:01Z] 1843aaa3798d
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:52 AM PST. PORT 4: e907702d8be0 on the collect branch (pushed in 3c8ca50fc6a95345519e92ba3f7cb605c2dfb1be): advice_charge.py and test_advice_charge.py as staging has them, no path to fix; the one-stage suite inputs gain network_e2e endpoint advice. Imports; its 11 tests pass locally. No statement changed.
+
