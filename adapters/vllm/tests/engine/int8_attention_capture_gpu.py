@@ -1,5 +1,5 @@
 """The recorded int8 attention fold test's capture (`test_int8_attention_recorded`): Llama-3.1-8B served on this GPU with
-`TargetProfile.int8_exact` "all" under the Match capture (`pipeline.m1_capture`, observer on, snapshots of steps 0 and 1), then one
+`TargetProfile.int8_exact` "all" under the Match capture (`pipeline.match_capture`, observer on, snapshots of steps 0 and 1), then one
 layer's attention scope cut out of it (`int8_attention_cut`) as the test's fixture.
 
     cd adapters/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
@@ -8,7 +8,7 @@ layer's attention scope cut out of it (`int8_attention_cut`) as the test's fixtu
 The workload is the int8 Llama-3.2-1B sweep workload's engine and target (`WORKLOAD_FROM`, the same int8 arm and CUSTOM attention backend)
 on the registered `LLAMA31_8B_INT8` pin (`int8_exact_gpu.pin`), with two requests of PROMPTS' lengths (that row's first prompt ids;
 Llama 3.1 and 3.2 share the tokenizer) and two tokens each: step 0 is one batched prefill of both, step 1 one batched decode, so
-each step's kv_quant_batch pads the shorter window.  m1_capture writes to a scratch directory; DIR gets workload.json, capture/
+each step's kv_quant_batch pads the shorter window.  match_capture writes to a scratch directory; DIR gets workload.json, capture/
 (its log and records, and the snapshots of the layer's scope at both steps: what the cutter reads) and the fixture, cut from
 capture/, with its values beside it.
 """
@@ -25,7 +25,7 @@ from pathlib import Path
 from tests.engine import int8_attention_cut as C
 from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
 from verity_vllm.pipeline import (
-    match_capture as m1_capture,  # first: match_capture applies the engine environment before vLLM is imported
+    match_capture,  # first: match_capture applies the engine environment before vLLM is imported
 )
 
 WORKLOAD_FROM = Path(__file__).parents[2] / "workloads" / "llama32-1b__int8__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager.json"
@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     with tempfile.TemporaryDirectory() as scratch:
         checkpoints = scratch_checkpoints(a.checkpoints, entry, Path(scratch))
         capture = Path(scratch) / "capture"
-        m1_capture.main(m1_capture.Options(workload=str(wl), out=str(capture), checkpoints=str(checkpoints), case=a.role,
+        match_capture.main(match_capture.Options(workload=str(wl), out=str(capture), checkpoints=str(checkpoints), case=a.role,
                                            snapshot_steps=",".join(map(str, STEPS)), max_num_seqs=len(PROMPTS)))
         keep_scopes(capture, kept, a.layer)
     fixture = a.out / f"llama31_8b_int8_attn_l{a.layer}.jsonl.gz"

@@ -236,7 +236,7 @@ def main(args: Options) -> None:
     revision = adapter_revision(args)
 
     case = va.case_of(wl, args.case)
-    # stage telemetry of this process (m1_capture = one engine per arm: `capture` / `control` are separate processes)
+    # stage telemetry of this process (match_capture = one engine per arm: `capture` / `control` are separate processes)
     tl = Timeline.from_env("m1_capture", hot=False, arm=("control" if args.no_observer else "capture"))
     tl.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3))
     tl.start("engine.build", case=case, max_num_seqs=args.max_num_seqs)
