@@ -89,7 +89,7 @@ def _sha(b: bytes) -> str:
 def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
     and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
-    tree) is one proof block (a subset of one, the least a subset law draws), its proved unit, and it names no session,
+    tree) is one proof block (a subset of one, the least a subset sampling design samples), its proved unit, and it names no session,
     and its params name the circuit and public files `BLOBS` hold. Made once each: a challenger's signed session is slow
     to make."""
     s, law = OS.SETUPS[i], {"k": 1, "law": "subset"}
@@ -318,7 +318,7 @@ def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> lis
 GENERIC_BANDWIDTH = "verity/remote-bandwidth/v0"
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every subprotocol's case standing,
 #: and so the way to a rejection that no subprotocol's own explains. `generic-bandwidth` comes five times too, so that a
-#: fixed seed's thousand cases reach it whatever the subprotocols' generators draw before it.
+#: fixed seed's thousand cases reach it whatever the subprotocols' generators sample before it.
 MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
                            "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
@@ -599,7 +599,7 @@ def test_spot_refuses_one_stage_v1(name, request):
 
 def _recursive(a: dict) -> dict:
     """v2's audit `a` as the recursive audit's case: its params v1's under the form ``recursive``, naming the recursive
-    audit's own inputs (`VStar.Recursive.ownOf`'s keys: the circuit and public files `BLOBS` hold, a draw, no
+    audit's own inputs (`VStar.Recursive.ownOf`'s keys: the circuit and public files `BLOBS` hold, a sample, no
     registration and no part), and its evidence under that form."""
     own = {"circuit": _sha(CIRCUIT), "draw": _sha(b"draw"), "parts": [], "public": _sha(PUBLIC), "registration": None}
     return OS._case({"params": {**_without(a["params"], "proofs"), "form": "recursive", "recursive": own},
@@ -786,7 +786,7 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
 @functools.cache
 def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its draw at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
     tree) drew no unit (a subset of none), so it has no session and no proved unit, and `BLOBS` hold its circuit and
     public files. Its log is empty, or with `after` (a record's canonical JSON) that one record, which its record is
     chained right after. Made once each: a challenger's signed session is slow to make."""
@@ -826,7 +826,7 @@ def _paths(j) -> list[str]:
 @pytest.mark.skipif(not SERVED, reason="VERITY_COMPOSITION_SERVED names no served run (its Lean check hashes 2.1 GB of "
                                        "distinct pass files and replays 470 tiles: about an hour on a CPU node)")
 def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
-    """Remote v1 on a served Pearl+ run with live coins and the challenger's draw: Pearl+ accepts in Lean, both ties
+    """Remote v1 on a served Pearl+ run with live coins and the challenger's sample: Pearl+ accepts in Lean, both ties
     hold, and the composite is undecided only because sampled proofs is (`_empty_audit`, as everywhere here), in Lean
     as in Python. The run is the dress rehearsal r20261105-082550-ed23's (development, never the record): its four
     retained passes, the epoch coins, the coin record and the window record W the passes are tied to, with the verdict
@@ -840,7 +840,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     chained right after W (``previous`` = digest(W), W the one record of its log), because the dress ran no follow-on
     and so registered no R. The run of record's own R, with its own run, replaces it.
 
-    It catches what no drawn case can: the composite's `run` and `window` ties and Pearl+'s Lean decoder, opener and
+    It catches what no sampled case can: the composite's `run` and `window` ties and Pearl+'s Lean decoder, opener and
     check on a real run's commitment, coin record and files handed over as blobs, which the synthetic cases (Pearl+'s
     commitments that don't decode, the ties' unit tests) never reach."""
     d = Path(SERVED)

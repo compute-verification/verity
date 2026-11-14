@@ -14,7 +14,7 @@ of the pairs at `g` that passes (`relink_val_of_enc`), which exists since the pa
 differs from the pair's encoding opening, the encoding's binding collides on the two; if that record opening's differs
 from the pair's record opening, the record's does. Otherwise every value the trace opens, the relinked trace opens alike
 (`hext`), so a proof block correct on the trace's values is correct on the relinked ones (`Prog.correct_mono`,
-it reads only opened values): the relinked faulty set is a subset of the trace's (`faulty_mono`), and `M_δ` is closed
+it reads only opened values): the relinked incorrect set is a subset of the trace's (`faulty_mono`), and `M_δ` is closed
 downward at every design (`design_M_down`: `P_a` is antitone in each one-stage design, and so in their product).
 -/
 
@@ -175,7 +175,7 @@ theorem relink_val_of_enc (H : Msg → Msg) (enc : List Msg → ℕ → Bool) (C
     · simp [ho, hg]
     · simp [ho]
 
-/-- A trace that opens every value another opens, alike, has no more faulty proof blocks. -/
+/-- A trace that opens every value another opens, alike, has no more incorrect proof blocks. -/
 theorem faulty_mono {H : Msg → Msg} {Cm Cm' : CommitmentScheme Bool} {s : AuditStatement} {P : Partition}
     {w w' : Wit} (hext : ∀ g b, w.val H Cm s g = some b → w'.val H Cm' s g = some b) :
     faulty H Cm' s P w' ⊆ faulty H Cm s P w := by
