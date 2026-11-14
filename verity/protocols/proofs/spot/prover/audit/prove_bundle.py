@@ -12,14 +12,14 @@ tampered window's member, whose proof must not be accepted.
   registered `subset:4`, a fixture's sample) unless it's given others.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
   private files included), since Flock's statement is a whole member. Checks: the bundle's own check
-  (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
-  replayed, and the sample's law the registered one); the bundle's run, registration digest and partition are the
+  (`replay_bundle.check` against the window's docket: every string, path and domain, and each unit's Definition
+  replayed, and the sample's sampling design the registered one); the bundle's run, docket digest and partition are the
   window's; each sampled member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires
-  one) is held to the window (`held_draw`): its receipt names the window's registration, and its record is a sample of
-  the bundle's units under the registered law over the registered population (`draw.check_draw`).
+  one) is held to the window (`held_draw`): its receipt names the window's docket, and its record is a sample of
+  the bundle's units under the registered sampling design over the registered population (`draw.check_draw`).
 * **Staging** as a5 stages a sampled member. The circuit is composed from the template's Definition, bound to the window's
   partition and program (`records_audit.verifier_window`'s composer). The public file is made under that circuit and
-  held to the registration's roots and domains, and the prover's file is made under the same header.
+  held to the docket's roots and domains, and the prover's file is made under the same header.
 * **The session** serves the bundle's member sample (`serve --zk --draw-file`). The prover runs `prove --zk` itself
   (`a0.DIRECT`), or under ``--firewall`` behind the ZK server's send check (``FC_FIREWALL=1``, Lean's `flock-firewall`), and
   Lean `verify --zk --archive --partition --program` decides it.
@@ -101,7 +101,7 @@ def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
 
 
 class Staged:
-    """The window's verifier side, read once: its Spec, registration, ports, and each template's circuit composed once."""
+    """The window's verifier side, read once: its Spec, docket, ports, and each template's circuit composed once."""
 
     def __init__(self, wdir: Path, out: Path) -> None:
         self.wdir, self.out = wdir, out
@@ -116,7 +116,7 @@ class Staged:
         self.composed: dict[str, tuple[Path, dict, object]] = {}
 
     def member(self, k: int) -> dict:
-        """Member ``k`` staged as a5 stages a sampled one: its circuit, public file and header held to the registration, and
+        """Member ``k`` staged as a5 stages a sampled one: its circuit, public file and header held to the docket, and
         its prover's file under that header."""
         m = self.mine.members[k]
         pd, prog = self.mine.partition_digest, self.mine.partition["program"]

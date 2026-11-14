@@ -19,7 +19,7 @@ is what the Lean is checked against; after, the Python is held to the Lean.
   `tests/test_canonical_json_port.py` holds `Core.canonicalJson`'s answer under each of the two to one Python mirror the
   same way; its port, `core-canonical-json-difftest`, is in the interface's package (`verity/protocols/interface`).
   The package requires the base and the circuit format (`core_base`, `core_circuits`) and nothing of Flock's package:
-  the port of the honest worker's requests, which reads the ZK server, is in `verity/protocols/proofs/recursion/verifier/firewall`.
+  the port of the honest worker's requests, which reads the ZK server, is in `verity/protocols/proofs/recursion/verifier/zk_server`.
 - `python/verity_difftest` is the Python side: `Port`, `run`, `replay`, `Server`, `server_fixture`, `canonical`. `run`
   keeps one server open, compares outputs as canonical JSON, requires reject parity (both reject or neither; reasons may
   differ), treats an undeclared exception or a protocol fault as a difference, and fails a vacuous run (no output, or no
@@ -41,7 +41,7 @@ is what the Lean is checked against; after, the Python is held to the Lean.
 # PORT/lean/lakefile.toml: [[require]] name = "verity_difftest", path = "<relative path to this lean/>"
 # PORT/lean/DifftestMain.lean:  def main : IO Unit := Difftest.serve (Difftest.table [("encode", Port.encode)])
 # PORT/lean/lakefile.toml: [[lean_exe]] name = "port-difftest", root = "DifftestMain"
-# PORT/pyproject.toml: a suite in AFTER_LEAN (tools/verity/check/suites.py); inputs list what lake reads outside PORT
+# PORT/pyproject.toml: a suite in AFTER_LEAN (tools/check/suites.py); inputs list what lake reads outside PORT
 import shutil, pytest, verity_difftest as D
 from hypothesis import strategies as st
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -70,4 +70,4 @@ The harness never skips. When `lake` is missing or the build fails it raises. Th
 itself, so `tests/test_no_wall_clock.py` requires its suite to be among those `check` runs after its Lean steps. A reference
 returns JSON values (integers, never floats) or raises one of `rejects` (default `verity_difftest.Reject`).
 
-Run the suite with `uv run tools/verity/check/suites.py verity-difftest`.
+Run the suite with `uv run tools/check/suites.py verity-difftest`.

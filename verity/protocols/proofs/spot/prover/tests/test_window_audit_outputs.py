@@ -1,7 +1,7 @@
 """a5's output class (`a5.output_units`): a window's units whose outputs are served out would be proved whole beside a work
 sample only on a closure map, which the stream refuses (`closure`), so a5 refuses a window with an output class before the
 sample (`a5.output_refusal`). On a test's own challenger (`fake_challenger`) the stream refuses the class's closure map
-before reading a coin, and the same registration's work sample without one is accepted, the Lean's `Run.run` agreeing. A
+before reading a coin, and the same docket's work sample without one is accepted, the Lean's `Run.run` agreeing. A
 toy window of one template."""
 
 from __future__ import annotations

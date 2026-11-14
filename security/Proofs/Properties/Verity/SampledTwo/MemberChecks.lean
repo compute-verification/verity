@@ -12,7 +12,7 @@ public import Proofs.Flock.SpotFlock.Code
 The two-stage form checks each sampled member's sessions with `Spot.OneStageZk.stepMember`: the member's statement
 (`Member.statement`: `statementOf` at the member's own inputs, then its population and block checks), then `step` on
 each session, which sets the session up at its record's sample (`setupAt`) and pushes `verdictOf`'s verdict. Where the
-statement's run accepts every session (`Run.all`), each session's statement, as `flock-verify verify --zk` reads it, is in
+statement's run accepts every session (`Run.all`), each session's statement, as `verity-verify-proof verify --zk` reads it, is in
 the scope the two-stage proof reads of it (`SpotFlock.sessionOk`): it sets up in Flock's masked scope (`zkOk`), passes
 the deployed scope check (`FlockDeploy.scopeCheck true`) and has hidden outputs (`hiddenOf`).
 
@@ -299,7 +299,7 @@ theorem stepMember_sessions {slice : _root_.Spot.OneStageZk.Member → Json}
   rw [← Array.foldlM_toList] at h
   exact ⟨circuitB, pubB, rd, hpl, hc, hp, hrd, (foldl_all _ r r' h ha).2⟩
 
-/-! ## The session's statement as `flock-verify` reads it -/
+/-! ## The session's statement as `verity-verify-proof` reads it -/
 
 /-- **A session statement's fields are a member's**: the statement `verity/flock-circuit` under `--zk` (no `--coins
 os`), the member's circuit and public files `circuitB` and `pubB`, the blobs' lookup tables, one table, the member's
@@ -367,7 +367,7 @@ theorem registered_of_reads {o : Option ByteArray} {R j : Option Json}
       rw [hb]
       exact hj
 
-/-- **`flock-verify`'s reading of a member's session statement holds v2's inputs at the member's files**: where the
+/-- **`verity-verify-proof`'s reading of a member's session statement holds v2's inputs at the member's files**: where the
 statement's fields are the member's and its JSON files read back, `FlockDeploy.Raw.ins` reads it as `si`, which matches
 v2's inputs `inputsOf` at the member's files and its registered reads `rd` (`Record.SessionMatch`), with the record's
 sample. -/

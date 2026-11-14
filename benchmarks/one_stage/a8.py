@@ -25,7 +25,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   first sample replaced by other bytes before the passes (a prover that lost the chunk and receipts what it holds in its
   place). Its proof block's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on
   one stager, so the circuit is lowered once.
-* **What the verifier received** (`scan`): every file the verifier side holds (the registration, partition, program,
+* **What the verifier received** (`scan`): every file the verifier side holds (the docket, partition, program,
   circuit, public file, the session's record and proofs, the sample, the openings it was sent and v0's messages), scanned
   at every offset, raw and as hex, for each sampled chunk and payload cut whole into 16-byte pieces (`leak_scan.cut`, its
   tail included), but the pieces the staged public circuit holds (a run of zero bytes), which it lists. A round fails on

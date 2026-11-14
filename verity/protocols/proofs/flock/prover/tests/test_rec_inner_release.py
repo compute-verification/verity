@@ -1,6 +1,6 @@
 """Pod 85's release side (`pod/rec_inner.py release-parts`, `release-report`): V*'s statements named as 85 stages them, the
 release windows its ``RELEASE_WINDOWS_S`` gives them, and a recursive session read back from the ZK server's record against
-that schedule and the Lean session loop's ``FIREWALL-TIMES`` lines."""
+that schedule and the Lean session loop's ``ZK-SERVER-TIMES`` lines."""
 from __future__ import annotations
 
 import importlib.util
@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 
 import pytest
-from verity_flock import firewall as FW
+from verity_flock import zk_server as FW
 
 REC_INNER = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/prover/pod/rec_inner.py"
 UNITS = ["rec-open/l32-h11", "rec-open/l16-h10", "rec-open/l16-h8", "rec-residuals/m29-k26-c6-p0",
@@ -44,7 +44,7 @@ def test_windows_are_per_class_with_the_lead_on_the_first():
 
 
 def _session(tmp_path, n_released: int, stop: str | None = None):
-    fw = FW.Firewall(tmp_path / "fw")
+    fw = FW.ZkServer(tmp_path / "fw")
     ws = R.release_windows_ms(PARTS, "L=10,alg=5,cap=2")
     sid = fw.open("circuit/rep0", PARTS, budget=1, release={"start_ms": 1_000, "windows_ms": ws})
     fw.finish(sid)
@@ -80,10 +80,10 @@ def test_a_stop_a_missing_part_or_a_loop_time_off_schedule_is_not_ok(tmp_path):
     assert not R.release_report(state, sid, times)["ok"]
 
 
-def test_the_cli_reads_firewall_times_lines_and_exits_on_the_verdict(tmp_path, capsys):
+def test_the_cli_reads_zk_server_times_lines_and_exits_on_the_verdict(tmp_path, capsys):
     state, sid, times = _session(tmp_path, len(PARTS))
     err = tmp_path / "prove.err"
-    err.write_text("noise\n" + "".join(f"FIREWALL-TIMES {json.dumps(t)}\n" for t in times))
+    err.write_text("noise\n" + "".join(f"ZK-SERVER-TIMES {json.dumps(t)}\n" for t in times))
     assert R.main(["release-report", "--state", str(state), "--session", sid, "--times", str(err)]) == 0
     assert json.loads(capsys.readouterr().out)["ok"]
     assert R.main(["release-report", "--state", str(state), "--session", sid]) == 1

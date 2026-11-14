@@ -479,8 +479,8 @@ def _compare_requests(reads: _RequestReads, run_prof: dict) -> list[tuple]:
             if comp is not None and comp not in components and all(comp != x[0] for x in to_load):
                 to_load.append((comp, f"derived[{PP.shape_name(sh)}]"))
         if to_load:
-            # the components are built on the workers too, one per leg (2 s to build vs 0.1 s to pickle a component back: the build is
-            # the descriptor walk), then held by the parent so the legs below share them copy-on-write; a build failure raises, as the
+            # the components are built on the workers too, one per leg (a build costs more than pickling a component back: the build
+            # is the descriptor walk), then held by the parent so the legs below share them copy-on-write; a build failure raises, as the
             # record's load in the loop does
             components.update(zip((d for d, _ in to_load), ops.legs(to_load, lambda it: ops.load_derived(*it), lambda it: 1)))
         with _Phase(run_prof, "legs") if profiling else _NoPhase():

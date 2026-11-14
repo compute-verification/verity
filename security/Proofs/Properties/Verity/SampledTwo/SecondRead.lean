@@ -11,7 +11,7 @@ read by the form's last step (`secondCheck` at `ξ₂`), which refuses a sample 
 
 * `coinsReason_read`: a sample the check finds no fault in read `read` bytes of its coins, and the coins hold as many
   whole challenger coins as those bytes reach: `⌈read / COIN_BYTES⌉ = src.size / COIN_BYTES`.
-* `secondCheck_read`: the last step at the coins `ξ` accepts only at such a sample, under the second stage's law and the
+* `secondCheck_read`: the last step at the coins `ξ` accepts only at such a sample, under the second stage's sampling design and the
   record's population.
 * `second_read`: where the two-stage check accepts, the interior audit's sample is such a sample of `ξ₂`, the bytes
   `OneStageZk.coinsOf` read.
@@ -48,7 +48,7 @@ theorem coinsReason_read {v : Registration.Verifier} {law rec_ draw : Json} {src
       exact ⟨n, units, read, rfl, hdf, by simpa using ite_ite_none h⟩
 
 /-- **The form's last step at the coins `ξ` accepts only where its sample read every coin of `ξ`**, under the second
-stage's law `law` at the verifier whose sampling design is a subset of all the record's population. -/
+stage's sampling design `law` at the verifier whose sampling design is a subset of all the record's population. -/
 theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : OneStage.Commitment} {law : Json}
     {ξ : ByteArray} {e : OneStage.Evidence} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : secondCheck v delta c law ξ e = .accept pub prof) :
@@ -71,7 +71,7 @@ theorem secondCheck_read {v : Registration.Verifier} {delta : Core.Ratio} {c : O
         | exact ⟨_, units, read, hm, hdf, hsz⟩
 
 /-- **An accepted two-stage check's second-stage bytes are the coins its sample read**: the interior audit's sample, under
-the second stage's law `secondDesignOf` computes and its record's population, read `read` bytes of the bytes `ξ₂` its
+the second stage's sampling design `secondDesignOf` computes and its record's population, read `read` bytes of the bytes `ξ₂` its
 sample read, and `ξ₂` holds as many whole challenger coins as those bytes reach. -/
 theorem second_read {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}

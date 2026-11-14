@@ -42,8 +42,8 @@ namespace Claims.ZKServer.LeanRelease
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg Masker)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker)
+open _root_.Flock.ZkServer.Finish (Tab)
 open Loop
 
 theorem rangeMap_getElem! {α : Type} [Inhabited α] {f : ℕ → α} {n i : ℕ} (h : i < n) :
@@ -52,7 +52,7 @@ theorem rangeMap_getElem! {α : Type} [Inhabited α] {f : ℕ → α} {n i : ℕ
 
 theorem wordsAt_size_lt (x : Msg) (h1 : List (Msg × Msg)) {p : ℕ} (hp : p < h1.length) :
     (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) p).size =
-      min (loopNr x p) _root_.Flock.Firewall.Frames.COIN_MAX := by
+      min (loopNr x p) _root_.Flock.ZkServer.Frames.COIN_MAX := by
   have e := wordsAt_size x h1 (s := h1.length) (p := p) hp (Nat.le_refl _)
   rwa [List.take_of_length_le (Nat.le_refl _)] at e
 
@@ -112,7 +112,7 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (hx : Masked.Live x) (hSv : Serves x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (m₀ ρ₀ : Msg) (ops : List (Msg × Msg))
@@ -177,7 +177,7 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
     ((ofLoop T L₀ real).cfgAt x ρ (s + 1))
     (coinsAt x ((m₀, ρ₀) :: (ops.take s ++ [(dm, da)]))) = .ok m at ha
   have hca : coinsAt x ((m₀, ρ₀) :: (ops.take s ++ [(dm, da)])) =
-      (ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX) := by
+      (ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.ZkServer.Frames.COIN_MAX) := by
     unfold coinsAt
     simp only [List.tail_cons, List.getLast?_append, List.getLast?_singleton, List.length_append,
       hts, List.length_singleton, Nat.add_sub_cancel]
@@ -215,7 +215,7 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
   obtain ⟨⟨hmp, hmp0, hpc⟩, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
   have hls : (wordsAt x ((ops.take s).map fun p => ZKMal.CoinLayer.rd p.2) 0).size =
-      min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+      min (loopNr x 0) _root_.Flock.ZkServer.Frames.COIN_MAX := by
     obtain ⟨p0, rest, hpr⟩ : ∃ p0 rest, ops.take s = p0 :: rest := by
       cases h' : ops.take s with
       | nil => rw [h', List.length_nil] at hts; omega
@@ -241,7 +241,7 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
     simp only [_root_.Flock.Setup.ofCircuit, ByteArray.size_extract]
     omega
   have hmb : t.st.m < 2 ^ 64 := by rw [hts']; exact Nat.lt_trans hm36 (by decide)
-  have hA : alg.size = ((_root_.Flock.Firewall.Session.replayCoins (Masked.stsOf x)[(2 * j + r) / 2]!.m
+  have hA : alg.size = ((_root_.Flock.ZkServer.Session.replayCoins (Masked.stsOf x)[(2 * j + r) / 2]!.m
       (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog).toList.filter (· != 0)).length := by
     have eA := congrArg List.length (Count.rounds_counts hmb hal)
     rw [Count.piop_counts, hts', List.length_map, Array.length_toList] at eA
@@ -249,7 +249,7 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
   have hplan := congrArg List.length (Count.repPlan_list (spec := spec) hzt)
   rw [Array.length_toList, repPlan_size] at hplan
   simp only [repRounds_true, hz, List.length_append] at hplan
-  have h4 : ([1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
+  have h4 : ([1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q].filter (· != 0)).length = 4 := by
     decide
   have hFO : alg.size + (Count.openList (2 + spec.points * (Masked.stsOf x)[(2 * j + r) / 2]!.regions.size)
       t.sch).length = N := by
@@ -292,7 +292,7 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
     all_goals rfl
   have hord : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).order.size = c'.order.size := by
     rw [hc']
-    show (_root_.Flock.Firewall.Frame.absorbed ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay).size = _
+    show (_root_.Flock.ZkServer.Frame.absorbed ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay).size = _
     rw [hlay']
     all_goals rfl
   have hCRs : CR.size = alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3) + 1 := by
@@ -306,7 +306,7 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
     rw [hCR, crAt_getD _ _ _ (show alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 2) < P' by omega)]
     rw [show s - 1 - P' + (alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 2)) + 1 = s - 1 by omega]
   have hw1 : wordsAt x ((ops.take (s + 1)).map fun p => ZKMal.CoinLayer.rd p.2) s =
-      (ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.Firewall.Frames.COIN_MAX) := by
+      (ZKMal.CoinLayer.rd da).vals (min (loopNr x s) _root_.Flock.ZkServer.Frames.COIN_MAX) := by
     unfold wordsAt
     rw [List.getElem?_map, List.getElem?_take_of_lt (Nat.lt_succ_self s), hd]
     rfl
@@ -323,7 +323,7 @@ theorem ofLoop_answered_at (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {m : Masker}
     (hA : (ofLoop T L₀ real).answered x ρ (e0 :: h1) = .ok m)
@@ -377,7 +377,7 @@ theorem ofLoop_sched_placeholder (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (hx : Masked.Live x) (hSv : Serves x) (hST : ScheduleTotal x)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (m₀ ρ₀ : Msg) (h1 : List (Msg × Msg))
@@ -498,8 +498,8 @@ namespace Claims.ZKServer.Loop
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 /-- **The loop's own table is answered** at a rep stream of the session, where `src` samples the tape's level 0
 (`Level0Src`): its level 0 is sampled, and `tabOfLevel0` of it is of the placeholder's shape, which is answered
@@ -537,7 +537,7 @@ theorem realOf_ok {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × B
   obtain ⟨sg', tpg', hsg', hg'⟩ := Count.ofDraws_gsize hl0
   rw [hsg] at hsg'
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hsg')
-  obtain ⟨-, -, ⟨s1, hs1, hlv⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl'
+  obtain ⟨-, -, ⟨s1, hs1, hlv⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl'
   rw [hsg] at hs1
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Except.ok.inj hs1)
   have hd : 64 * 2 ^ l.lv.d < 2 ^ 64 := by
@@ -546,7 +546,7 @@ theorem realOf_ok {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × B
   have hA := Sched.tabOfLevel0_alike (_root_.Flock.Setup.ofCircuit (Masked.stsOf x)[k / 2]!) hl' hl0
     (by rw [hg, hg']) hd
   rw [ht0] at hA
-  cases htr : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit (Masked.stsOf x)[k / 2]!) l with
+  cases htr : _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit (Masked.stsOf x)[k / 2]!) l with
   | error e =>
     rw [htr] at hA
     exact (hA : False).elim
@@ -582,8 +582,8 @@ theorem ofLoop_sched_unrefused (L₀ : LeanRelease Flock.Wit Loop.Tp)
       schedSoFar tr ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)
         (spec.domain (spec.tables[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!)
           ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2)).toUTF8
-        (_root_.Flock.Firewall.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
-          (_root_.Flock.Firewall.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+        (_root_.Flock.ZkServer.Drive.extras sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
+          (_root_.Flock.ZkServer.Drive.linkPoints sts[(ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 / 2]!
             (wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hi
         ((Array.range (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2).map
           fun j => wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2)

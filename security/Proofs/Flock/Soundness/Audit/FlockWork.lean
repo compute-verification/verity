@@ -10,7 +10,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 
 `Flock.Draw.workK` sizes the executable's work samples (`verity-verify-proof draw --work`) above each stratum's floor from the
 verifier's work table, and U2 holds each stratum of a work sample to it. It is `Law.workRule`, the rule the theorems of
-`Audit/Work.lean` read; `Flock.Draw.stratumK`, the count law's rule, is `Law.countRule`.
+`Audit/Work.lean` read; `Flock.Draw.stratumK`, the count sampling design's rule, is `Law.countRule`.
 -/
 
 @[expose] public section

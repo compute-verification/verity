@@ -14,7 +14,7 @@ public import Proofs.Flock.Claims.ZK.RepReplay
 /-!
 # The ZK server's `repCons` returns where the cut rep does
 
-`flock-firewall finish` runs a rep's PIOP and opening (`Finish.repCons`) in `StateT Nat V`, round `k` answered by the
+`flock-zk-server finish` runs a rep's PIOP and opening (`Finish.repCons`) in `StateT Nat V`, round `k` answered by the
 rep's coins `C[k]` (`asksOf C`). Here it returns on any values, pads, level-0 commitment and extra claims, wherever the
 coins pass the checks the rep samples them for, at the round count `consCounts` gives:
 
@@ -43,15 +43,15 @@ set_option synthInstance.maxHeartbeats 1000000
 namespace Claims.ZKServer.Count
 
 open _root_.Flock (V F128 Transcript TMW liftTM)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
-open _root_.Flock.Firewall.Finish (sampleP sampleVecP zerocheckFw lincheckFw repPiop)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Finish (sampleP sampleVecP zerocheckFw lincheckFw repPiop)
 
 variable {I : Got → Prop}
 
 /-- The counts a rep's `repCons` asks for over `OpenM`, at `e` extra claims: the algebraic phase's without its zeros, then
 the opening's. -/
 def consCounts (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (e : ℕ) : List ℕ :=
-  (_root_.Flock.Firewall.Session.replayCoins st.m st.fold.kLog).toList.filter (· != 0) ++ openList (2 + e) sch
+  (_root_.Flock.ZkServer.Session.replayCoins st.m st.fold.kLog).toList.filter (· != 0) ++ openList (2 + e) sch
 
 theorem zerocheckFw_ot (coins : Got) (m : ℕ) (digest cap root : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
     (mk : ℕ → F128) (hm : m < 2 ^ 64) :
@@ -152,16 +152,16 @@ theorem ot_liftV {α : Type} (v : V α) :
 /-- **A rep's `repCons` asks for `consCounts`** over `OpenM`, past no coins: the PIOP's counts, then the opening's at the
 extras and two claims more. -/
 theorem repCons_ot (st : _root_.Flock.Setup) (sch : _root_.Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray)
-    (g : Array F128) (cm0 : _root_.Flock.Firewall.Finish.Commit) (extras : Array _root_.Flock.Claim)
-    (pads : _root_.Flock.Firewall.Finish.PadsZk) (ic : _root_.Flock.Firewall.Finish.InnerCommit) (vals : Array F128)
+    (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit) (extras : Array _root_.Flock.Claim)
+    (pads : _root_.Flock.ZkServer.Finish.PadsZk) (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (hm : st.m < 2 ^ 64)
     (hes : extras.size + 2 < 2 ^ 64) (hk : 1 ≤ sch.k0) (hn : sch.n < 2 ^ 62)
     (hq : ∀ i, (sch.levels.getD i default).q < 2 ^ 63) :
     OT (Past #[]) (consCounts st sch extras.size) (fun _ => True)
-      (_root_.Flock.Firewall.Finish.repCons (stepAsks #[] true)
-        (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic
+      (_root_.Flock.ZkServer.Finish.repCons (stepAsks #[] true)
+        (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic
         vals extra lanePad salt) := by
-  unfold _root_.Flock.Firewall.Finish.repCons
+  unfold _root_.Flock.ZkServer.Finish.repCons
   apply ot_eq
   · try dsimp only
     apply ot_bind (repPiop_ot #[] st _ _ _ extras _ hm); intro r hr
@@ -327,8 +327,8 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
     {sch : Schedule} {tp : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (tPad rep : ℕ) (dom : ByteArray)
-    (g : Array F128) (cm0 : _root_.Flock.Firewall.Finish.Commit) (extras : Array Claim)
-    (pads : _root_.Flock.Firewall.Finish.PadsZk) (ic : _root_.Flock.Firewall.Finish.InnerCommit) (vals : Array F128)
+    (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit) (extras : Array Claim)
+    (pads : _root_.Flock.ZkServer.Finish.PadsZk) (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (vals : Array F128)
     (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (l : Array Claims.Msg)
     (hN : CutEq.innerAt l.size st sch extras ≤ n)
     (hρ : Zk.rhoIndependent
@@ -336,8 +336,8 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
           F256),
         (⟨coin (CutEq.ligAt l.size st extras + 3 + sch.k0) 0, coin (CutEq.ligAt l.size st extras + 3 + sch.k0) 1⟩ :
           F256)) = true) :
-    ∃ r tr l', ((_root_.Flock.Firewall.Finish.repCons (LigLock.Fed.cutAsks coin n)
-        (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic
+    ∃ r tr l', ((_root_.Flock.ZkServer.Finish.repCons (LigLock.Fed.cutAsks coin n)
+        (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic
         vals extra lanePad salt).run (Transcript.init #[] dom)).go l = (.ok (r, tr), l') ∧
       r.1.zerocheck.finalC = vals[(Zk.PadLayout.new st.m st.kLog sch.k0).fc]! +
         pads.h[(Zk.PadLayout.new st.m st.kLog sch.k0).fc]! ∧
@@ -351,7 +351,7 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
   have hN' := hN
   simp only [CutEq.innerAt, CutEq.ligAt] at hN'
   obtain ⟨zc, t₁, l₁, h₁⟩ := Claims.ZKServer.zerocheckCut_proof coin n hm st.digest
-    (_root_.Flock.Firewall.Finish.flat cm0.cap) ic.root (Zk.PadLayout.new st.m st.kLog sch.k0)
+    (_root_.Flock.ZkServer.Finish.flat cm0.cap) ic.root (Zk.PadLayout.new st.m st.kLog sch.k0)
     (fun i => vals[i]! + pads.h[i]!) (Transcript.init #[] dom) l (by omega)
   obtain ⟨hz₁, hl₁⟩ := zerocheckCut_at coin n hm _ _ _ _ _ h₁
   obtain ⟨zp, h₁, hzp⟩ := ok_name h₁
@@ -366,7 +366,7 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
   have hsz : (abcClaims st.m st.kLog zc lc ++ extras).size = 2 + extras.size := by
     rw [Array.size_append, abcClaims_size]
   obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, -, -⟩ := Claims.ZKServer.Switch.ringSwitchCut_bodies coin n
-    (fun k => _root_.Flock.Firewall.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
+    (fun k => _root_.Flock.ZkServer.Finish.switchVec g (abcClaims st.m st.kLog zc lc ++ extras)[k]!)
     (abcClaims st.m st.kLog zc lc ++ extras) (by rw [hsz]; omega) t₂ l₂ (by rw [hsz]; omega)
   obtain ⟨-, hl₃, -⟩ := ringSwitchCut_sws coin n _ _ (by rw [hsz]; omega) h₃
   rw [hsz] at hl₃
@@ -376,7 +376,7 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
       | (unfold CutEq.ligAt; omega)
       | omega
   obtain ⟨lg, zl, rec, t₄, l₄, h₄, hood, hch, hmsg⟩ := ligeritoPZk_cut_ret coin n hr h25 h35 hz
-    MerkleScheme.hm96Sha512 T cm0.toC g (_root_.Flock.Firewall.Finish.basisVals sws (st.m - 7))
+    MerkleScheme.hm96Sha512 T cm0.toC g (_root_.Flock.ZkServer.Finish.basisVals sws (st.m - 7))
     (Zk.PadLayout.new st.m st.kLog sch.k0) pads.h rep tPad extra lanePad salt t₃ l₃ (by omega)
     (by rw [hL₃]; exact hρ)
   have hR : Replay.Prefix t₂.rounds t₄.rounds :=
@@ -391,37 +391,37 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
       rw [Array.size_extract, Replay.pushes_size]
       omega)
   obtain ⟨lgc, hlgc⟩ := ligeritoConstraints_ok (lay := Zk.PadLayout.new st.m st.kLog sch.k0) (msgs := zl) hood hch hmsg
-  have hP : ((_root_.Flock.Firewall.Finish.repPiop (LigLock.Fed.cutAsks coin n) st
-      (Zk.PadLayout.new st.m st.kLog sch.k0) (_root_.Flock.Firewall.Finish.flat cm0.cap) ic.root extras
+  have hP : ((_root_.Flock.ZkServer.Finish.repPiop (LigLock.Fed.cutAsks coin n) st
+      (Zk.PadLayout.new st.m st.kLog sch.k0) (_root_.Flock.ZkServer.Finish.flat cm0.cap) ic.root extras
       (fun i => vals[i]! + pads.h[i]!)).run (Transcript.init #[] dom)).go l =
         (.ok ((zp, lp, abcClaims st.m st.kLog zc lc ++ extras), t₂), l₂) := by
-    unfold _root_.Flock.Firewall.Finish.repPiop
-    rw [_root_.Flock.Firewall.Finish.zerocheckFw_eq, LigLock.Fed.cutAsks_toC, bind_go h₁]
+    unfold _root_.Flock.ZkServer.Finish.repPiop
+    rw [_root_.Flock.ZkServer.Finish.zerocheckFw_eq, LigLock.Fed.cutAsks_toC, bind_go h₁]
     try dsimp only
-    rw [_root_.Flock.Firewall.Finish.lincheckFw_eq _ _ st.m, LigLock.Fed.cutAsks_toC, bind_go h₂]
+    rw [_root_.Flock.ZkServer.Finish.lincheckFw_eq _ _ st.m, LigLock.Fed.cutAsks_toC, bind_go h₂]
     try dsimp only
     try exact pure_go _ _ _
-  have hO : ((_root_.Flock.Firewall.Finish.repOpening (LigLock.Fed.cutAsks coin n)
-      (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch
+  have hO : ((_root_.Flock.ZkServer.Finish.repOpening (LigLock.Fed.cutAsks coin n)
+      (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) st sch
       (Zk.PadLayout.new st.m st.kLog sch.k0) tPad rep g cm0 (abcClaims st.m st.kLog zc lc ++ extras) pads.h extra
       lanePad salt).run t₂).go l₂ = (.ok ((ss, lg, zl, rec), t₄), l₄) := by
-    unfold _root_.Flock.Firewall.Finish.repOpening
-    rw [_root_.Flock.Firewall.Finish.ringSwitchP_eq, LigLock.Fed.cutAsks_toC, bind_go h₃, hmk]
+    unfold _root_.Flock.ZkServer.Finish.repOpening
+    rw [_root_.Flock.ZkServer.Finish.ringSwitchP_eq, LigLock.Fed.cutAsks_toC, bind_go h₃, hmk]
     try dsimp only
-    rw [_root_.Flock.Firewall.Finish.ligeritoPZk_fw, LigLock.Fed.cutAsks_toC, bind_go h₄]
+    rw [_root_.Flock.ZkServer.Finish.ligeritoPZk_fw, LigLock.Fed.cutAsks_toC, bind_go h₄]
     try dsimp only
     try exact pure_go _ _ _
-  unfold _root_.Flock.Firewall.Finish.repCons
+  unfold _root_.Flock.ZkServer.Finish.repCons
   try dsimp only
   rw [bind_go hP]
   try dsimp only
   rw [bind_go hO]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.get_run_go _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.get_run_go _ _)]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.liftV_run_go hq _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.liftV_run_go hq _ _)]
   try dsimp only
-  rw [bind_go (_root_.Flock.Firewall.Finish.liftV_run_go hlgc _ _)]
+  rw [bind_go (_root_.Flock.ZkServer.Finish.liftV_run_go hlgc _ _)]
   try dsimp only
   subst hzp
   exact ⟨_, _, _, pure_go _ _ _, rfl, rp, tt, lgc, rec, hq, hlgc, rfl⟩
@@ -430,10 +430,10 @@ end FlockComplete.CutFree
 
 /-! ## The ZK server's `repCons` at `asksOf` -/
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock With Transcript
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
 open Claims.ZKServer.Count (SP)
 
 set_option maxHeartbeats 4000000 in
@@ -767,4 +767,4 @@ theorem repCons_asksOf_size (C : Array (Array F128)) {st : Setup} (h25 : 25 ≤ 
   exact repCons_asksOf C h25 h35 hkm hkk hmk hfold hf hz tPad rep dom g cm0 extras pads ic vals extra lanePad salt hes
     ⟨[], by rw [List.append_nil, hC]⟩ hρ
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

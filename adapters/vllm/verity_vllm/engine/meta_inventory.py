@@ -239,15 +239,15 @@ def target_device(target: Any, device_name: str, memory_gb: int):
                 args = (args[0], meta, *args[2:])
             return func(*args, **kwargs)
 
-    cap, memory = tuple(target.compute_capability), memory_gb << 30
-    props = SimpleNamespace(name=device_name, major=cap[0], minor=cap[1], total_memory=memory,
+    capability, memory = tuple(target.compute_capability), memory_gb << 30
+    props = SimpleNamespace(name=device_name, major=capability[0], minor=capability[1], total_memory=memory,
                             multi_processor_count=target.num_sms)
     cuda = {"Stream": _Stream, "Event": _Stream, "current_stream": lambda *a, **k: _Stream(),
             "default_stream": lambda *a, **k: _Stream(), "set_stream": lambda *a, **k: None,
             "stream": lambda *a, **k: _Stream(), "synchronize": lambda *a, **k: None,
             "is_current_stream_capturing": lambda: False, "current_device": lambda: 0, "set_device": lambda *a, **k: None,
             "get_device_properties": lambda *a, **k: props, "get_device_name": lambda *a, **k: device_name,
-            "get_device_capability": lambda *a, **k: cap}
+            "get_device_capability": lambda *a, **k: capability}
     with hooks.Hooks() as h:
         for name, value in cuda.items():
             h.patch(torch.cuda, name, value)

@@ -29,8 +29,8 @@ state the loop's own frames leave (`Loop.progOf`, at placeholder samples on the 
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (V F128 SessionSpec Stmt)
-open _root_.Flock.Firewall.Frame (Cfg Masker)
-open _root_.Flock.Firewall.Frames (Rep)
+open _root_.Flock.ZkServer.Frame (Cfg Masker)
+open _root_.Flock.ZkServer.Frames (Rep)
 
 /-- **`Masker.answer` neither reads nor writes `stopped`.** -/
 theorem answer_stopped (c : Cfg) (s : Masker) (cs : Array F128) (b : Bool) :
@@ -72,7 +72,7 @@ taking of the last coins of `cs` (`m`) but for `stopped`, and the frame releases
 the placeholder's, its state after it is the loop's after `cs ++ [d]`, but for `stopped`. -/
 theorem round_progOf (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt} {q : Nat} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
-    (hq : cs.length = q + 1) {c c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray}
+    (hq : cs.length = q + 1) {c c' : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray}
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
       .ok (c', t, dom, xs, hi))
@@ -81,12 +81,12 @@ theorem round_progOf (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coi
     (hs' : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2) dom xs hi
       ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok sched')
     (hlt : j + 1 < rsched.size) {m : Masker} (ha : (progOf x cs).answer c (wordsAt x cs q) = .ok m)
-    {st st' : _root_.Flock.Firewall.Frame.State} (hu : unstop st.m = unstop m) {v out : ByteArray} {vd : String}
-    (h : _root_.Flock.Firewall.Frame.step c st
+    {st st' : _root_.Flock.ZkServer.Frame.State} (hu : unstop st.m = unstop m) {v out : ByteArray} {vd : String}
+    (h : _root_.Flock.ZkServer.Frame.step c st
       (.round (rsched.getD (j + 1) (.empty, 0)).2 v (.sched (rsched.getD (j + 1) (.empty, 0)).1)) =
         (.round out vd, st')) :
     unstop st'.m = unstop (progOf x (cs ++ [d])) := by
-  obtain ⟨why, hck⟩ := _root_.Flock.Firewall.Frame.check_of_step h
+  obtain ⟨why, hck⟩ := _root_.Flock.ZkServer.Frame.check_of_step h
   rw [eq_unstop hu.symm] at hck
   rw [progOf_check_step x cs d hx hq hph hc hj hrs hs' hlt ha hck]
   all_goals rfl
@@ -97,18 +97,18 @@ the loop starts at `m` (`freshOf`), against the rep's first scheduled round. -/
 theorem round_progOf_first (x : Msg) (cs : List FlockDeploy.Coin) (d : FlockDeploy.Coin) {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt} {q : Nat} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
     (hq : cs.length = q + 1) (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = 0) {m : Masker}
-    (hm : freshOf x cs = .ok m) {c c' : Cfg} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray}
+    (hm : freshOf x cs = .ok m) {c c' : Cfg} {t : _root_.Flock.ZkServer.Finish.Tab} {dom : ByteArray}
     {xs : Array (Array F128)} {hi : Array ByteArray}
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 (wordsAt x cs 0) =
       .ok (c', t, dom, xs, hi))
     (hc : CfgAlike c c') {rsched sched' : Array (ByteArray × Nat)} (hrs : Sched.RoundsAt rsched sched')
     (hs' : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2) dom xs hi #[] = .ok sched')
-    (hlt : 0 < rsched.size) {st st' : _root_.Flock.Firewall.Frame.State} (hu : unstop st.m = unstop m)
+    (hlt : 0 < rsched.size) {st st' : _root_.Flock.ZkServer.Frame.State} (hu : unstop st.m = unstop m)
     {v out : ByteArray} {vd : String}
-    (h : _root_.Flock.Firewall.Frame.step c st
+    (h : _root_.Flock.ZkServer.Frame.step c st
       (.round (rsched.getD 0 (.empty, 0)).2 v (.sched (rsched.getD 0 (.empty, 0)).1)) = (.round out vd, st')) :
     unstop st'.m = unstop (progOf x (cs ++ [d])) := by
-  obtain ⟨why, hck⟩ := _root_.Flock.Firewall.Frame.check_of_step h
+  obtain ⟨why, hck⟩ := _root_.Flock.ZkServer.Frame.check_of_step h
   rw [eq_unstop hu.symm] at hck
   rw [progOf_check_first x cs d hx hq hj hm hph hc hrs hs' hlt hck]
   all_goals rfl
@@ -123,28 +123,28 @@ theorem coins_answered (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q j : Nat}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
     (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1) {c : Cfg}
-    (hc : CfgAlike c ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))) {st st' : _root_.Flock.Firewall.Frame.State}
+    (hc : CfgAlike c ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))) {st st' : _root_.Flock.ZkServer.Frame.State}
     (hu : unstop st.m = unstop (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)))
-    (hco : _root_.Flock.Firewall.Frame.step c st (.coins (.ok (coinsAt x (e0 :: h1)))) = (.ok, st'))
+    (hco : _root_.Flock.ZkServer.Frame.step c st (.coins (.ok (coinsAt x (e0 :: h1)))) = (.ok, st'))
     {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: h1) = .ok m) :
     unstop st'.m = unstop m := by
   obtain ⟨-, -, hF⟩ := answeredR_ok hA
   rw [ofLoop_frameAnswerR_same T L₀ real x ρ e0 h1 hx hq hj] at hF
-  obtain ⟨a', ha', hua⟩ := answer_unstop hc hu (_root_.Flock.Firewall.Frame.answer_of_step hco)
+  obtain ⟨a', ha', hua⟩ := answer_unstop hc hu (_root_.Flock.ZkServer.Frame.answer_of_step hco)
   rw [hF] at ha'
   cases ha'
   exact hua
 
 /-- An earlier rep's coins are taken alike at configurations of one layout. -/
-theorem step_prior_alike {c c' : Cfg} (hc : CfgAlike c c') (st : _root_.Flock.Firewall.Frame.State) (k : Nat)
+theorem step_prior_alike {c c' : Cfg} (hc : CfgAlike c c') (st : _root_.Flock.ZkServer.Frame.State) (k : Nat)
     (b : ByteArray) :
-    _root_.Flock.Firewall.Frame.step c st (.prior k b) = _root_.Flock.Firewall.Frame.step c' st (.prior k b) := by
-  simp only [_root_.Flock.Firewall.Frame.step, hc.lay]
+    _root_.Flock.ZkServer.Frame.step c st (.prior k b) = _root_.Flock.ZkServer.Frame.step c' st (.prior k b) := by
+  simp only [_root_.Flock.ZkServer.Frame.step, hc.lay]
 
 /-- **At rep 0's first round** its frame is the frame's start, as the loop's (`Loop.freshOf`). -/
 theorem repRun_start_fresh {q : Rep} (h : RepRun [] [] q) : q.st = {} :=
@@ -153,11 +153,11 @@ theorem repRun_start_fresh {q : Rep} (h : RepRun [] [] q) : q.st = {} :=
 /-- **At rep 1's first round** its frame is the frame's start after rep 0's algebraic-phase coins, taken at any
 configuration of its layout, as the loop's (`Loop.freshOf`, at the placeholder's), where the coins are the same. -/
 theorem repRun_prior_fresh {k : Nat} {b : ByteArray} {q : Rep} (h : RepRun [.prior k b] [] q) {c' : Cfg}
-    (hc : CfgAlike q.cfg c') {st' : _root_.Flock.Firewall.Frame.State}
-    (hp : _root_.Flock.Firewall.Frame.step c' {} (.prior k b) = (.ok, st')) : q.st = st' := by
+    (hc : CfgAlike q.cfg c') {st' : _root_.Flock.ZkServer.Frame.State}
+    (hp : _root_.Flock.ZkServer.Frame.step c' {} (.prior k b) = (.ok, st')) : q.st = st' := by
   have h1 := h.1
-  have e : _root_.Flock.Firewall.Frame.run q.cfg {} ([.prior k b] ++ evReqs []) = (st', false) := by
-    show _root_.Flock.Firewall.Frame.run q.cfg {} [.prior k b] = (st', false)
+  have e : _root_.Flock.ZkServer.Frame.run q.cfg {} ([.prior k b] ++ evReqs []) = (st', false) := by
+    show _root_.Flock.ZkServer.Frame.run q.cfg {} [.prior k b] = (st', false)
     rw [run_cons, step_prior_alike hc, hp]
     all_goals rfl
   rw [e] at h1

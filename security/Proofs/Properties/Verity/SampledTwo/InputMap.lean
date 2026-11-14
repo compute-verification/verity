@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.Steps
 
 /-!
-# The last step's law is over the run of record's own second stage's cells and counts
+# The last step's sampling design is over the run of record's own second stage's cells and counts
 
 The two-stage form's last step holds the interior audit's sample to a sampling design it computes from its parameters
 (`secondDesignOf`): the replay block's cells under the interior's query, at the rule's counts. The run of record's second
@@ -91,7 +91,7 @@ theorem secondLawOf_ok {p : Params} {run law : Json} (h : secondDesignOf p run =
     exact ⟨_, _, _, ns, ids, ks, by assumption, hns, hids, hks, h.symm⟩
   · cases h
 
-/-- **The last step's law, at the run of record's own second stage**: where the two-stage check accepts, the run of
+/-- **The last step's sampling design, at the run of record's own second stage**: where the two-stage check accepts, the run of
 record `run` of the input `i` names `accept`; `i` holds an interior `it` on the second stage's bytes `ξ₂` under a
 two-stage rule; and the sampling design the last step holds the interior audit's sample to is `Select.secondLaw` of the proved
 units of `run`'s `draw`, over the cells of `it`'s replay block under `it`'s query, at the rule's counts over them:

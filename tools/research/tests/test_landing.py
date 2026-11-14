@@ -75,7 +75,7 @@ def world(tmp_path):
 CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' for s in AFTER_LANDING)
 POLICY_TOML = 'schema = "policy/v0"\noff_gate = ["circuit-check"]\n'
 #: the files `_move_main` writes for a tree declaring `CI_TOML` under `POLICY_TOML`
-GATED_TREE = {"tools/verity/check/ci.toml": CI_TOML, "tools/verity/check/policy.toml": POLICY_TOML}
+GATED_TREE = {"tools/check/ci.toml": CI_TOML, "tools/check/policy.toml": POLICY_TOML}
 #: the preflights a check runs before any step (check.py's `preflight`), which the run beside a candidate's check judges
 PREFLIGHTS = tuple(s for s in SLIM_JUDGED if s not in SLIM_STEPS)
 
@@ -268,11 +268,11 @@ def test_a_guard_failed_suite_with_no_failing_test_points_at_its_outside_reads_a
     (d / "suites").mkdir(parents=True)
     (d / "steps.jsonl").write_text('{"step": "lean-suites", "status": "failed"}\n')
     record = {"name": "verity-lean-audit", "suite": "tools/verity/lean", "status": "failed", "failed_tests": [],
-              "outside": {"tools/verity/check/lean_slot.py": "tools/verity/lean/tests/test_lean_changed.py",
-                          "tools/verity/check/slot.py": "*"},
+              "outside": {"tools/check/lean_slot.py": "tools/verity/lean/tests/test_lean_changed.py",
+                          "tools/check/slot.py": "*"},
               "child_outside": {"tools/verity/lean/tests/test_cache.py": ["elsewhere/data.txt"]}, "log": None}
     (d / "suites-lean.json").write_text(json.dumps([record]))
-    assert implicated(d) == {"tools/verity/check/lean_slot.py", "tools/verity/check/slot.py",
+    assert implicated(d) == {"tools/check/lean_slot.py", "tools/check/slot.py",
                              "tools/verity/lean/tests/test_lean_changed.py", "tools/verity/lean/tests/test_cache.py",
                              "elsewhere/data.txt"}
     (d / "suites-lean.json").write_text(json.dumps([{**record, "outside": {}, "child_outside": {}}]))
@@ -393,8 +393,8 @@ def test_train_sh_runs_with_the_queues_credentials_and_git_never_prompts(tmp_pat
     the tty, and the loop with it."""
     from research.landing import train_launch
 
-    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
-    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text(
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "train.sh").write_text(
         'echo "prompt=$GIT_TERMINAL_PROMPT n=$GIT_CONFIG_COUNT $GIT_CONFIG_KEY_1=$GIT_CONFIG_VALUE_1 $GIT_CONFIG_KEY_2=$GIT_CONFIG_VALUE_2"\n'
         'read -r line && echo "stdin: $line"\necho "RUN r20261012-060000-aaaa"\n')
     monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
@@ -410,8 +410,8 @@ def test_train_launch_gives_train_sh_the_steps_and_flags_of_a_candidates_check(t
     regenerated never, ratchet-gate's base and its shard, in train.sh's order."""
     from research.landing import train_launch
 
-    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
-    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", True, deferred="lean-agreement,ratchet-gate", no_regenerate=True,
                              base="b" * 40, shard="2/3")
     assert ids == ["r20261027-120000-aaaa"]
@@ -427,8 +427,8 @@ def test_train_launch_gives_train_sh_no_cache_circuit_checks_cache_and_ratchet_g
     the `--base`."""
     from research.landing import train_launch
 
-    (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
-    (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    (tmp_path / "tools" / "check").mkdir(parents=True)
+    (tmp_path / "tools" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="pytest,circuit-check", no_cache=True,
                              circuit_cache=True, no_regenerate=True)
     assert ids == ["r20261027-120000-aaaa"]
@@ -442,7 +442,7 @@ def test_the_records_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes
     (`takes_bookkeeping`); a train.sh that predates it would refuse every records run, so it isn't given it."""
     from research.landing import takes_bookkeeping, train_launch
 
-    sh = tmp_path / "tools" / "verity" / "check" / "train.sh"
+    sh = tmp_path / "tools" / "check" / "train.sh"
     sh.parent.mkdir(parents=True)
     assert not takes_bookkeeping(tmp_path)
     sh.write_text('# --bookkeeping-warn\necho "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
@@ -465,8 +465,8 @@ def test_a_candidates_check_and_its_records_run_take_a_check_slot_ahead_of_unran
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setenv("CHECK_SLOT_RANK", "7")
     repo = tmp_path / "clone"
-    (repo / "tools" / "verity" / "check").mkdir(parents=True)
-    (repo / "tools" / "verity" / "check" / "train.sh").write_text(
+    (repo / "tools" / "check").mkdir(parents=True)
+    (repo / "tools" / "check" / "train.sh").write_text(
         'echo "rank=[$CHECK_SLOT_RANK] argv=[$*]"\necho "RUN r20261103-140000-aaaa"\n')
     d = Landing(types.SimpleNamespace(auth=(), workdir=repo), on="m1")
 
@@ -493,7 +493,7 @@ def test_a_landings_launches_carry_the_queues_credentials_the_loops_train_sh_and
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
     repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261110-100000-aaaa"
-    for path, who in ((repo / "tools" / "verity" / "check" / "train.sh", "clone"), (own, "own")):
+    for path, who in ((repo / "tools" / "check" / "train.sh", "clone"), (own, "own")):
         path.parent.mkdir(parents=True)
         path.write_text(f'# --bookkeeping-warn\necho "{who} n=$GIT_CONFIG_COUNT argv=[$*]"\necho "RUN {rid}"\n')
     d = Landing(types.SimpleNamespace(auth=("-c", "credential.helper="), workdir=repo), on="m1")
@@ -553,7 +553,7 @@ def test_a_detached_train_launch_runs_its_own_copy_of_train_sh(tmp_path, monkeyp
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     repo, gate, rid = tmp_path / "clone", tmp_path / "gate", "r20261026-093000-abcd"
-    script = repo / "tools" / "verity" / "check" / "train.sh"
+    script = repo / "tools" / "check" / "train.sh"
     script.parent.mkdir(parents=True)
     script.write_text(f'echo "train: $0 in $PWD"\ncat {gate} > /dev/null\necho "RUN {rid}"\n')
     os.mkfifo(gate)
@@ -576,7 +576,7 @@ def test_a_detached_train_launch_given_a_train_sh_runs_a_copy_of_it_in_the_clone
 
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     repo, own, rid = tmp_path / "clone", tmp_path / "own" / "train.sh", "r20261026-093000-abcd"
-    script = repo / "tools" / "verity" / "check" / "train.sh"
+    script = repo / "tools" / "check" / "train.sh"
     for path, text in ((script, 'echo "RUN r20261026-093000-ffff"\n'), (own, f'echo "train: own in $PWD"\necho "RUN {rid}"\n')):
         path.parent.mkdir(parents=True)
         path.write_text(text)
@@ -649,10 +649,10 @@ def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, 
     _move_main(world, GATED_TREE)
     h.q.fetch()
     assert gating(h.q.workdir, _main(world)) == h.d._gating(_main(world)) == [s for s in every if s != "circuit-check"]
-    _move_main(world, {"tools/verity/check/policy.toml": "not toml ["})
+    _move_main(world, {"tools/check/policy.toml": "not toml ["})
     h.q.fetch()
     assert gating(h.q.workdir, _main(world)) == every
-    _move_main(world, {"tools/verity/check/policy.toml": POLICY_TOML, "tools/verity/check/ci.toml": "not toml ["})
+    _move_main(world, {"tools/check/policy.toml": POLICY_TOML, "tools/check/ci.toml": "not toml ["})
     h.q.fetch()
     assert gating(h.q.workdir, _main(world)) == every
 
@@ -908,7 +908,7 @@ def test_a_failed_task_is_allowed_by_its_suites_row_or_by_each_circuit_failure_i
     covers nothing, and is named), a circuit-check task's when each failure it names, fewer than `CIRCUIT_NAMED`, has an
     allowance, and nothing of any other kind."""
     later, gone = "2030-06-01T00:00:00Z", "1970-01-01T00:00:01Z"
-    _move_main(world, {"tools/verity/check/policy.toml": _policy(("suite pkg", "ci", later), ("suite old", "ci", gone),
+    _move_main(world, {"tools/check/policy.toml": _policy(("suite pkg", "ci", later), ("suite old", "ci", gone),
                                                                  ("circuit-check fold/F01 Mul", "ci", later))})
     h = Harness(world, monkeypatch)
     h.q._clone()
@@ -1256,7 +1256,7 @@ def test_the_plan_job_plans_in_a_worktree_of_the_tip_and_planned_reads_its_plan(
                     "--max-shards", "3"], cwd=repo, env=env, check=True)
     cwd, venv, head, *argv = (tmp_path / "argv").read_text().splitlines()
     assert (cwd, venv, head) == (str(trees / "plan-plan"), str(trees / "plan-venv"), tip)
-    assert argv == ["run", "-q", "python", "tools/verity/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
+    assert argv == ["run", "-q", "python", "tools/check/check.py", "--shard-plan", "--out", str(out / AUTO_PLAN),
                     "--deferred", "pytest", "--max-shards", "3"]
     left = removal == "none"
     assert (trees / "plan-plan").exists() == left and len(_git(repo, "worktree", "list").splitlines()) == 1 + left, \
