@@ -25,7 +25,7 @@ from verity_vllm.pipeline import serving_rows as SRW
 
 BENCH = (Path(__file__).resolve().parents[6] / "benchmarks" / "prove_path")
 REPO = BENCH.parents[1]
-RUN_SH = BENCH / "run.sh"
+RUN_SH = REPO / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.sh"
 #: where the partition files are kept: beside this benchmark's drivers and beside the one-stage audit's
 KEPT = (BENCH, REPO / "benchmarks" / "one_stage")
 #: the script's variable for the kind of its stand-in's rules, and a partition file's key for the rule it states
