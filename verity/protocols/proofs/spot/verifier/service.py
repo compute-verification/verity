@@ -14,7 +14,7 @@ one-stage's record (`one_stage.docket`, v1 or v2), and `check_public` holds each
 rule: it is the service's own, a salted root of a declared Value, or an item the Spec declares in `public`.
 
 * The service's own: `format`, `protocol` and `previous` (one-stage's tags and the log's chain), `scheme` (`SCHEME`: hm96
-  rows in frame-v3-sha512 trees, the one hash), `query` (the check's) and `law` (the selection rule's).
+  rows in frame-v3-sha512 trees, the one hash), `query` (the check's) and `sampling_design` (the selection rule's).
 * A salted root: one per declared Value, a `roots` entry for a served value and a `registered` entry for a registered one.
   A tree over roots (`ROOTS`, a row-table window's `row-table` port) is salted through its trees' hiding leaves, the
   schema its Value names (`over`).
@@ -45,7 +45,7 @@ verifier has coins of its own: a stream whose selection reads coins refuses any 
 its (`outcome`'s `coins`). A closure map (`select(closure=)`) is refused before any coin is read (`closure`): a work
 sample widened by one proves a set whose size varies with the sample, which the sampled audit's soundness statement
 doesn't cover.
-From the selection rule to the sample object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
+From the selection rule to the sample object it is `selection_sampling_design`, `draw.derive` and `select_draw`, which the Lean
 verifier's `Spot.Select` ports, held to them by its difftest on fixed coins.
 
 **A two-stage sampling design** (`TwoStage(grain, replay, k)`, `Stream(replay=)`). The docket is the boundary
@@ -58,9 +58,9 @@ block holds n_t instances of each template t of the check (`replay_cells`, the c
 first instance), and the interior is template-major (`Stream.interior_program`): template t's Q·n_t proof blocks from
 off_t = Q·Σ_{t'<t} n_t', replay block `sample[i]`'s instances of it [off_t + i·n_t, off_t + (i+1)·n_t), one cell. The
 second stage (the second `select`, on the interior docket) samples k_t proof blocks in each cell of template t on
-fresh coins (`second_law`: one stratum per cell; `second_counts`), and its sample is proved. The outcome holds both
+fresh coins (`second_sampling_design`: one stratum per cell; `second_counts`), and its sample is proved. The outcome holds both
 audit records and accepts when both do; its profile counts incorrect proof blocks at each replay block's footprint,
-which the boundary commitment fixes before any coin (`IntegrityProfile`'s two levels). One-stage is `Law`: a two-stage design whose replay blocks are single proof blocks is
+which the boundary commitment fixes before any coin (`IntegrityProfile`'s two levels). One-stage is `SamplingDesign`: a two-stage design whose replay blocks are single proof blocks is
 refused, so each design has one form. Both stages' samples are the Lean verifier's (`Select.select`,
 `Select.selectSecond`), and its knowledge soundness at Flock's masked record is `SamplingDeploy.ksTwo_code`'s, under
 the premises that theorem takes.
@@ -311,7 +311,7 @@ def rate(text: Any) -> bool:
 
 
 @dataclass(frozen=True)
-class Law:
+class SamplingDesign:
     """A one-stage sampling design, a rate (`rate`): the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T`
     (`draw.parse_rate`), the stratified rate `stratified-rate:NUM/DEN` or the work rate `work-rate:NUM/DEN`
     (`draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which `Stream.register` refuses. A docket's N proof blocks
@@ -341,8 +341,8 @@ def _grain(g: Any) -> bool:
             and set(g["params"]) == {"template"} and isinstance(g["params"]["template"], str))
 
 
-def _replay_law(text: Any) -> bool:
-    """`Select.replayLaw?`: a rate sampling design, a uniform sample of replay blocks at the rate however many the prover
+def _replay_sampling_design(text: Any) -> bool:
+    """`Select.replaySamplingDesign?`: a rate sampling design, a uniform sample of replay blocks at the rate however many the prover
     registers."""
     return D.parse_rate(text) is not None
 
@@ -356,7 +356,7 @@ class TwoStage:
     fresh coins after the interior docket: one count for every template, or `{template's descriptor id: k_t}`
     naming each of the check's templates once. A cell of fewer proof blocks than its count is proved whole
     (`second_counts`); a `Stream` refuses a design that proves every cell whole, which would prove whole replay blocks,
-    and replay blocks of one proof block (`Law` is that design)."""
+    and replay blocks of one proof block (`SamplingDesign` is that design)."""
 
     grain: Mapping[str, Any]
     replay: str
@@ -366,7 +366,7 @@ class TwoStage:
         if not _grain(self.grain):
             raise ValueError("a two-stage design's grain is the replay partition's query, Q_template_instance v0 over the "
                              f"replay block's Definition (partition.template_instance_query), not {self.grain!r}")
-        if not _replay_law(self.replay):
+        if not _replay_sampling_design(self.replay):
             raise ValueError(f"a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, not {self.replay!r}")
         if not (type(self.k) is int and self.k >= 1 or isinstance(self.k, Mapping) and self.k and all(
                 isinstance(t, str) and type(k) is int and k >= 1 for t, k in self.k.items())):
@@ -378,7 +378,7 @@ class TwoStage:
                 "k": self.k if type(self.k) is int else dict(self.k)}
 
 
-Selection = All | Law | TwoStage
+Selection = All | SamplingDesign | TwoStage
 
 
 def boundary_values(values: Sequence[Value]) -> tuple[Value, ...]:
@@ -464,7 +464,7 @@ class Spec:
         names = [v.name for v in self.values]
         if len(set(names)) != len(names):
             raise ValueError("a spec's values have distinct names")
-        if not isinstance(self.selection, (All, Law, TwoStage)):
+        if not isinstance(self.selection, (All, SamplingDesign, TwoStage)):
             raise ValueError(f"a selection rule is All, Law or TwoStage, not {self.selection!r}")
         interior = [v.name for v in self.values if v.phase == "interior"]
         if isinstance(self.selection, TwoStage):
@@ -568,7 +568,7 @@ class WindowCommitmentRecord:
 
 @dataclass(frozen=True)
 class Draw:
-    """The challenger's one sample for a docket: `law` (its sampling design, expanded over the challenger's own program) and
+    """The challenger's one sample for a docket: `sampling_design` (its sampling design, expanded over the challenger's own program) and
     `draw`, one-stage's sample object (with a work sample's `closure`), which goes to the ZK server. A two-stage design's
     second stage is the sample of its interior docket, and `replay_sample` is the first stage's, the sample of
     the docket it follows."""
@@ -644,9 +644,9 @@ def check_public(spec: Spec, record: Any, values: Sequence[Value] | None = None,
     need: list[str] = []
     if {"population", "program", "partition"} & set(record):
         need.append("population")
-    law = record.get("law")
-    if isinstance(law, Mapping) and isinstance(law.get("strata"), list):
-        need += [f"population:{s.get('template') if isinstance(s, Mapping) else s}" for s in law["strata"]]
+    sampling_design = record.get("law")
+    if isinstance(sampling_design, Mapping) and isinstance(sampling_design.get("strata"), list):
+        need += [f"population:{s.get('template') if isinstance(s, Mapping) else s}" for s in sampling_design["strata"]]
     if "window" in record:
         need.append("window")
     if isinstance(record.get("window"), Mapping) and R.SEED_SALT in record["window"]:
@@ -740,7 +740,7 @@ def selection_sizes(rule: Selection, program: Program, query: Mapping[str, Any])
     """The strata sizes a stratified rate's K reads (`draw.strata_sizes` of `program` under `query`), none for any other rule.
     Raises `Refused` (`rate`) where the query doesn't apply to a stratified rate, as `selection_table` does for a work rate.
     The Lean verifier's `Select.strataSizes`, which `Rule.over` reads only for a stratified rate, is this."""
-    strata = D.parse_strata_rate(rule.text) if isinstance(rule, Law) else None
+    strata = D.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
     if strata is None or strata[0]:
         return []
     try:
@@ -749,13 +749,13 @@ def selection_sizes(rule: Selection, program: Program, query: Mapping[str, Any])
         raise _refuse("rate", {"law": rule.text, "reason": str(e)}) from None
 
 
-def selection_law(rule: Selection, n: int, sizes: Sequence[int] = ()) -> dict[str, Any]:
+def selection_sampling_design(rule: Selection, n: int, sizes: Sequence[int] = ()) -> dict[str, Any]:
     """The sampling design a selection rule names over `n` proof blocks in strata of `sizes` (`selection_sizes` of the check's
-    program and query), before `draw.derive` expands it over them: `subset:n` for `All` and a `Law`'s own. A rate sampling
+    program and query), before `draw.derive` expands it over them: `subset:n` for `All` and a `SamplingDesign`'s own. A rate sampling
     design is `subset:K` at K = `draw.rate_count` over `n`, a stratified rate `stratified:K` at K = `draw.strat_k` over
     `sizes`, and a work rate `work:K` at K = ceil(NUM n / DEN) over `selection_table`'s work table, each raising `Refused`
     (`rate`) unless 1 <= K <= n, and a stratified rate without strata too. A two-stage design's is its first stage's, over
-    `n` replay blocks. The Lean verifier's `Select.Rule.over`, then `Select.Rule.lawOver`, is this."""
+    `n` replay blocks. The Lean verifier's `Select.Rule.over`, then `Select.Rule.samplingDesignOver`, is this."""
     if isinstance(rule, All):
         return {"law": "subset", "k": n}
     text = rule.replay if isinstance(rule, TwoStage) else rule.text
@@ -775,11 +775,11 @@ def selection_law(rule: Selection, n: int, sizes: Sequence[int] = ()) -> dict[st
 
 def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
                     work_table: Mapping[str, Any] | None) -> Mapping[str, Any] | None:
-    """The work table a selection rule's sampling design (`selection_law`'s) is expanded over, from the challenger's own
+    """The work table a selection rule's sampling design (`selection_sampling_design`'s) is expanded over, from the challenger's own
     `work_table`: a work rate's, each stratum of `program` under `query` with its floor at the rate (`draw.rate_table`), else
     `work_table` itself. Raises `Refused` (`rate`) where the query doesn't apply, a work rate has no work table or it names
     no work for a stratum's template. The Lean verifier's `Select.Rule.tableOver` is this."""
-    strata = D.parse_strata_rate(rule.text) if isinstance(rule, Law) else None
+    strata = D.parse_strata_rate(rule.text) if isinstance(rule, SamplingDesign) else None
     if strata is None or not strata[0]:
         return work_table
     try:
@@ -788,22 +788,22 @@ def selection_table(rule: Selection, program: Program, query: Mapping[str, Any],
         raise _refuse("rate", {"law": rule.text, "reason": str(e)}) from None
 
 
-def params_law(law: Any, program: Program, query: Mapping[str, Any],
+def params_sampling_design(sampling_design: Any, program: Program, query: Mapping[str, Any],
                work_table: Mapping[str, Any] | None) -> tuple[Any, Mapping[str, Any] | None]:
     """One-stage's parameters' agreed sampling design and the work table it is expanded over: a sampling design object as given, with
     `work_table`, or a rate as a selection rule states it (`draw.parse_rate`, `draw.parse_strata_rate`), its sampling design
-    over the population of `program` under `query` and its strata (`selection_law`) and its work table (`selection_table`). Raises
-    `ValueError` for any other text, a query that doesn't apply, or a rate `selection_law` or `selection_table` refuses.
+    over the population of `program` under `query` and its strata (`selection_sampling_design`) and its work table (`selection_table`). Raises
+    `ValueError` for any other text, a query that doesn't apply, or a rate `selection_sampling_design` or `selection_table` refuses.
     The Lean verifier's `OneStage.design` is this."""
-    if not isinstance(law, str):
-        return law, work_table
-    if D.parse_rate(law) is None and D.parse_strata_rate(law) is None:
+    if not isinstance(sampling_design, str):
+        return sampling_design, work_table
+    if D.parse_rate(sampling_design) is None and D.parse_strata_rate(sampling_design) is None:
         raise ValueError("a law stated as text is a rate, rate:NUM/DEN[:T], stratified-rate:NUM/DEN or work-rate:NUM/DEN, "
-                         f"not {law!r}")
-    rule = Law(law)
+                         f"not {sampling_design!r}")
+    rule = SamplingDesign(sampling_design)
     try:
-        law = selection_law(rule, P.units(program, query), selection_sizes(rule, program, query))
-        return law, selection_table(rule, program, query, work_table)
+        sampling_design = selection_sampling_design(rule, P.units(program, query), selection_sizes(rule, program, query))
+        return sampling_design, selection_table(rule, program, query, work_table)
     except (P.QueryRefused, Refused) as e:
         raise ValueError(str(e)) from None
 
@@ -812,32 +812,32 @@ def params_law(law: Any, program: Program, query: Mapping[str, Any],
 BERNOULLI = "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
 
 
-def bernoulli(law: Mapping[str, Any]) -> bool:
-    """Whether `law` (a `selection_law`) is `bernoulli`, at any p, which the sampled audit's soundness statement doesn't
+def bernoulli(sampling_design: Mapping[str, Any]) -> bool:
+    """Whether `sampling_design` (a `selection_sampling_design`) is `bernoulli`, at any p, which the sampled audit's soundness statement doesn't
     cover: at 0 < p < 1 its sampled count varies, and p = 0 (nothing sampled) and p = 1 aren't covered either. A work
     sample's closure varies too, and `Stream.select` refuses a closure map (`closure`). The Lean verifier's
     `Draw.bernoulli` is this. A Spec that wants Bernoulli's public rate at a fixed count states the rate sampling design,
     `rate:NUM/DEN[:T]`, and one that wants every proof block, `All`."""
-    return law.get("law") == "bernoulli"
+    return sampling_design.get("law") == "bernoulli"
 
 
-def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
+def select_draw(rule: Selection, sampling_design: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
                 closure: Mapping[int, Sequence[int]] | None = None, sampler: Sampler | None = None) -> dict[str, Any]:
-    """The challenger's sample object over [0, n) under its expanded `law`: every proof block for `All`, reading no coins;
+    """The challenger's sample object over [0, n) under its expanded `sampling_design`: every proof block for `All`, reading no coins;
     otherwise `sampler`'s sample, or `coins.draw_first` on `coins` read in order. With `closure`, the challenger's
     closure map, a work sample carries the sampled proof blocks' closure (`coins.closure_of`) when it is not empty. Raises
     `Refused` (`closure`) for a closure map on another sampling design or outside [0, n), before any coin is read, and `ValueError`
     where `draw_first` does. The Lean verifier's `Select.select` is this, from the rule on."""
-    if closure is not None and not (law["law"] == "work" and isinstance(closure, Mapping) and all(
+    if closure is not None and not (sampling_design["law"] == "work" and isinstance(closure, Mapping) and all(
             type(u) is int and 0 <= u < n and isinstance(cs, Sequence) and all(type(c) is int and 0 <= c < n for c in cs)
             for u, cs in closure.items())):
         raise _refuse("closure", f"a closure map {{unit: [units]}} over [0, {n}) widens a work draw only")
     if isinstance(rule, All):
         units = list(range(n))
     else:
-        units = sorted(int(u) for u in (sampler(dict(law), n) if sampler is not None
-                                        else draw_first(OwnRandomness(coins), law, n)["units"]))
-    obj = {**law, "population": n, "units": units}
+        units = sorted(int(u) for u in (sampler(dict(sampling_design), n) if sampler is not None
+                                        else draw_first(OwnRandomness(coins), sampling_design, n)["units"]))
+    obj = {**sampling_design, "population": n, "units": units}
     if closure is not None and closure_of(closure, units):
         obj["closure"] = closure_of(closure, units)
     return obj
@@ -1004,7 +1004,7 @@ def cell_parts(q: int, ids: Sequence[str], ns: Sequence[int]) -> tuple[SS.Part, 
     return tuple(SS.Part(t, q * sum(ns[:i]), ns[i] if i < len(ns) else 0) for i, t in enumerate(ids))
 
 
-def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> dict[str, Any]:
+def second_sampling_design(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> dict[str, Any]:
     """The second stage's sampling design over the interior's len(sample)·Σ n_t proof blocks, template-major: template
     t's being [off_t, off_t + Q·n_t), off_t = Q·Σ_{t'<t} n_t', and sampled replay block `sample[i]`'s instances of it
     [off_t + i·n_t, off_t + (i+1)·n_t), one cell. One stratum per cell, template by template and in each by sampled
@@ -1012,7 +1012,7 @@ def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> d
     `ns[t]` proof blocks in each; the strata tile [0, Q·Σ n_t) in order. The stratified sampling design sizes each stratum's count
     in proportion to its size, which cells of several templates' sizes don't follow, so the sampling design is the work sampling design at
     k = 1 and unit work: its rule (`draw.work_k`) gives each stratum max(floor, 1) capped at its size, and each cell's
-    floor is its count. The Lean verifier's `Select.secondLaw` is this."""
+    floor is its count. The Lean verifier's `Select.secondSamplingDesign` is this."""
     off = _offsets(len(sample), ns)
     return {"law": "work", "k": 1,
             "strata": [{"template": f"{r}/{t}", "units": [[off[t] + i * n, off[t] + (i + 1) * n]], "work": 1,
@@ -1022,11 +1022,11 @@ def second_law(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int]) -> d
 
 def select_second(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int], coins: Callable[[int], bytes], *,
                   sampler: Sampler | None = None) -> dict[str, Any]:
-    """The second stage: `second_law`'s sample object over the replay sample's proof blocks, `sampler`'s sample or
+    """The second stage: `second_sampling_design`'s sample object over the replay sample's proof blocks, `sampler`'s sample or
     `coins.draw_first` on `coins` (the challenger's, opened after the interior docket's digest), held to
     `draw.check_draw`. Raises `ValueError` for a replay sample that isn't ascending replay blocks, each once, cells that
     aren't one or more templates' of at least one proof block each, a replay block of fewer than two proof blocks (its
-    design is `Law`'s), a count not in [1, n_t], counts that prove every cell whole (whole replay blocks), a sample not
+    design is `SamplingDesign`'s), a count not in [1, n_t], counts that prove every cell whole (whole replay blocks), a sample not
     well formed under its sampling design, and where `draw_first` does. The Lean verifier's `Select.selectSecond` is
     this."""
     if not (sample and all(type(r) is int and r >= 0 for r in sample) and all(a < b for a, b in zip(sample, sample[1:]))):
@@ -1041,11 +1041,11 @@ def select_second(sample: Sequence[int], ns: Sequence[int], ks: Sequence[int], c
                          f"cells of {list(ns)}")
     if list(ks) == list(ns):
         raise ValueError(f"counts {list(ks)} prove every cell of {list(ns)} whole, and so whole replay blocks")
-    law, m = second_law(sample, ns, ks), len(sample) * sum(ns)
-    units = sorted(int(u) for u in (sampler(dict(law), m) if sampler is not None
-                                    else draw_first(OwnRandomness(coins), law, m)["units"]))
-    obj = {**law, "population": m, "units": units}
-    v = D.check_draw(obj, {"population": m}, law)
+    sampling_design, m = second_sampling_design(sample, ns, ks), len(sample) * sum(ns)
+    units = sorted(int(u) for u in (sampler(dict(sampling_design), m) if sampler is not None
+                                    else draw_first(OwnRandomness(coins), sampling_design, m)["units"]))
+    obj = {**sampling_design, "population": m, "units": units}
+    v = D.check_draw(obj, {"population": m}, sampling_design)
     if not v.ok:
         raise ValueError(f"the second stage's draw is not well formed under its law: {list(v.codes)}")
     return obj
@@ -1991,7 +1991,7 @@ class Stream:
         many dockets without a final outcome as it may (`open`, `ready`), when it is late, when a window's `counts`
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
         (`population`), when the rule's rate sampling design
-        samples none or more than N proof blocks or a stratified rate's strata don't apply (`rate`, `selection_law`, before
+        samples none or more than N proof blocks or a stratified rate's strata don't apply (`rate`, `selection_sampling_design`, before
         R1-R8) or a work rate's strata or work table don't apply (`rate`, `selection_table`, R1-R8 then reading its table),
         when either check fails, or, after both,
         when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the program's proof blocks read stratum by stratum
@@ -2017,7 +2017,7 @@ class Stream:
                                                [P.template_id(t) for t in self.templates]}).verdict
             if v.ok:
                 try:
-                    law = selection_law(self.spec.selection, n, selection_sizes(self.spec.selection, program, self.query))
+                    sampling_design = selection_sampling_design(self.spec.selection, n, selection_sizes(self.spec.selection, program, self.query))
                 except Refused as r:
                     v = r.verdict
             if v.ok:
@@ -2027,15 +2027,15 @@ class Stream:
                     v = r.verdict
             if v.ok:
                 earlier = self._earlier(record, supplied, outputs)
-                v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
+                v = V.check(record, program, self.query, sampling_design, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
                             outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None,
                             history=history, certified=certified)
-                if v.ok and bernoulli(law):
-                    v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
+                if v.ok and bernoulli(sampling_design):
+                    v = _refuse("bernoulli", {"law": sampling_design, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
                     v = _refuse("population-order", {"population": n}).verdict
-                got.update(program=program, law=law, table=table, earlier=earlier)
+                got.update(program=program, law=sampling_design, table=table, earlier=earlier)
             if v.ok and self._fleet is not None:
                 try:
                     self._fleet._admit(self)
@@ -2058,8 +2058,8 @@ class Stream:
         if earlier is self._log:
             earlier = self._log[:]
         self._append(reg)
-        program, law = got["program"], got["law"]
-        self._entries.append(_Entry(reg, D.derive(program, self.query, law, got["table"]), program, work_table,
+        program, sampling_design = got["program"], got["law"]
+        self._entries.append(_Entry(reg, D.derive(program, self.query, sampling_design, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
                                      window_root, held, outputs), seed_salt, history, certified))
         if deadline is not None:
@@ -2349,20 +2349,20 @@ class Stream:
                 b = self._coins(n)
                 read.extend(b)
                 return b
-            law = second_law(first.units, ns, ks)
+            sampling_design = second_sampling_design(first.units, ns, ks)
             try:
                 obj = select_second(first.units, ns, ks, coins, sampler=self._sampler)
                 if self._sampler is None:
                     obj, v = V.select_second(obj, bytes(read), first.units, ns, ks)
                     if not v.ok:
                         raise Refused(v)
-                v = V.check_draw(obj, reg.record, law)
+                v = V.check_draw(obj, reg.record, sampling_design)
                 if not v.ok:
                     raise Refused(v)
             except Refused as r:
                 got["checks"] = r.verdict
                 return list(r.verdict.codes)
-            got.update(draw=Draw(reg, law, obj, first), read=None if self._sampler is not None else bytes(read))
+            got.update(draw=Draw(reg, sampling_design, obj, first), read=None if self._sampler is not None else bytes(read))
             op["second"] = _draw_token(got["draw"])
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
@@ -2537,7 +2537,7 @@ class Stream:
                        "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
                        "audit": {k: x for k, x in rec.items() if k != "verifiers"}},
                       reg.record, e.program, self.spec.check.query,
-                      selection_law(self.spec.selection, reg.record["population"],
+                      selection_sampling_design(self.spec.selection, reg.record["population"],
                                     selection_sizes(self.spec.selection, e.program, self.spec.check.query)),
                       SCHEME, ports, leaf_layer, anchors,
                       earlier, e.work_table, registered, self.spec.selection.to_json(),
@@ -2620,7 +2620,7 @@ class Stream:
                        "interior": {"receipt": dict(ireg.receipt), "draw": dict(second.draw),
                                     "read": len(e.second_read), "audit": within}},
                       reg.record, e.program, self.query,
-                      selection_law(self.spec.selection, reg.record["population"],
+                      selection_sampling_design(self.spec.selection, reg.record["population"],
                                     selection_sizes(self.spec.selection, e.program, self.query)),
                       SCHEME, ports, leaf_layer, anchors, earlier, e.work_table, registered,
                       self.spec.selection.to_json(), [(x.name, x.registered) for x in self._values()],
@@ -2724,8 +2724,8 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
     return why
 
 
-__all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
+__all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "SamplingDesign", "Outcome",
            "PHASES", "Pending", "ProofRun", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME",
            "SOURCES", "Selection", "Spec", "Stream", "Terms", "TwoStage", "Value",
            "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "interior_values",
-           "replay_cells", "second_counts", "second_law", "select_draw", "select_second", "selection_law"]
+           "replay_cells", "second_counts", "second_sampling_design", "select_draw", "select_second", "selection_sampling_design"]

@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-REPO = HERE.parents[2]
+REPO = HERE.parents[1]
 #: the command the fake store's attempts ran, held to itself (`research.merge.invocation`)
 COMMAND = ("uv", "run", "python", "tools/check/check.py")
 

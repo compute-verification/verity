@@ -93,7 +93,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
+ROOT = HERE.parents[1]
 _spec = importlib.util.spec_from_file_location("plan_settings", HERE / "settings.py")
 #: every environment variable check reads, declared once (`settings.py`), from beside this file: sent with it to a node (`--on`)
 SETTINGS = importlib.util.module_from_spec(_spec)

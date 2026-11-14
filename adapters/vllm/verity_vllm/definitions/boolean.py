@@ -5,14 +5,17 @@ A Definition is Boolean (`verity.circuits.boolean.is_boolean`) when it computes 
 only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.circuits.boolean.trace.word_of`: its
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
-looked up among every module of `verity.circuits.ops.boolean` and of `verity_vllm.definitions.registry` (`registry.catalog`), and
-`NoBooleanVersion` names each Definition it finds none for.  A Boolean Definition marked ``opt_in`` is left out of the table:
+looked up in `REGISTRY` once every module of `verity.circuits.ops.boolean` and of each catalog registered with it
+(`catalog_loader`) is imported, and `NoBooleanVersion` names each Definition it finds none for.  This module imports no
+catalog by name: a catalog registers its loader as its package loads (an adapter's catalog package does), and a
+lookup made while none is registered scans only the core's modules and what is already imported, which `NoBooleanVersion`
+says.  A Boolean Definition marked ``opt_in`` is left out of the table:
 it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training routes' k16 step), never `boolean_version`,
 so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
 names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`,
 `BitAtx{W}`) has its Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register one per constant or
-vocabulary size ahead.
+vocabulary size ahead: the constants' family is the core's, and a catalog adds its own with its loader (the gathers and `BitAtx`).
 
 `sigma_lift(word, version)` is a word composite as a registered Boolean Definition: at each binding, its word body with each Call
 the Boolean version of its Definition, over the bits each word operand occupies (`lift_body`); `boolean_version` serves it
@@ -94,6 +97,34 @@ def _base(fid: str) -> str:
 # ---- the table: word id -> Boolean Definition, from the Boolean Definitions' own `word` links ---------------------------------
 
 _TABLE: list = []
+#: the catalogs' loaders (`catalog_loader`), in the order they registered
+_LOADERS: list[Callable[[], list[str]]] = []
+#: the families a catalog makes on demand (`catalog_loader`'s ``families``), each read once the families are first needed
+_CATALOG_FAMILIES: list[Callable[[], tuple]] = []
+
+
+def catalog_loader(load: Callable[[], list[str]], families: Callable[[], tuple] | None = None) -> None:
+    """Scan the catalog ``load`` loads: ``load()`` imports every module of the catalog, so the Boolean Definitions they register
+    are in `REGISTRY`, and returns the modules that failed to import (each named in every gap).  ``families()``, when given,
+    is the catalog's families made on demand, as (word id pattern, its Boolean version's factory of the match) pairs.  A
+    catalog's package calls this as it loads; the table and every lookup made before it are dropped, so a lookup made later
+    scans it too."""
+    if load in _LOADERS:
+        return
+    _LOADERS.append(load)
+    if families is not None:
+        _CATALOG_FAMILIES.append(families)
+    _TABLE.clear()
+    _VERSIONS.clear()
+    _FAMILIES.clear()
+
+
+def _catalogs() -> list[str]:
+    """Every registered catalog loaded (`catalog_loader`); the modules that failed to import."""
+    errors: list[str] = []
+    for load in list(_LOADERS):
+        errors += load()
+    return errors
 
 
 def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
@@ -101,9 +132,7 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
     of their bindings, keyed by their name; the modules that failed to import."""
     if _TABLE:
         return _TABLE[0]
-    from verity_vllm.definitions.registry.catalog import load as load_registry
-    _, errors = load_registry()
-    errors = list(errors)
+    errors = _catalogs()
     core = importlib.import_module("verity.circuits.ops.boolean")
     for m in sorted(pkgutil.iter_modules(core.__path__), key=lambda m: m.name):
         try:
@@ -125,8 +154,8 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
 
 
 def load() -> list[str]:
-    """Every module that registers a Boolean Definition imported (`verity.circuits.ops.boolean`'s and the integration's registry),
-    so a Boolean Definition's id resolves in `REGISTRY`; the modules that failed to import."""
+    """Every module that registers a Boolean Definition imported (`verity.circuits.ops.boolean`'s and each registered catalog's,
+    `catalog_loader`), so a Boolean Definition's id resolves in `REGISTRY`; the modules that failed to import."""
     return list(_load()[2])
 
 
@@ -173,17 +202,13 @@ def _statics_on_bits(kw: dict) -> dict:
 
 def _families() -> tuple:
     """The Boolean versions made on demand, as their word Definitions are (a family by id): (word id pattern, its Boolean
-    version's factory)."""
+    version's factory), the core's constants first, then each registered catalog's (`catalog_loader`)."""
     if not _FAMILIES:
         from verity.circuits.ops.boolean import scalar as SC
-        from verity_vllm.definitions.registry import boolean_gather as BGA
-        _FAMILIES.extend([
-            (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))),
-            (re.compile(r"^GatherBf16x(\d+)_v1$"), lambda m: BGA.gather_bf16(int(m[1]))),
-            (re.compile(r"^GatherI32x(\d+)_v1$"), lambda m: BGA.gather_i32(int(m[1]))),
-            (re.compile(r"^GatherF32x(\d+)_v1$"), lambda m: BGA.gather_f32(int(m[1]))),
-            (re.compile(r"^BitAtx(\d+)_v1$"), lambda m: BGA.bit_at(int(m[1]))),
-        ])
+        _FAMILIES.append(
+            (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))))
+        for families in _CATALOG_FAMILIES:
+            _FAMILIES.extend(families())
     return tuple(_FAMILIES)
 
 
@@ -240,6 +265,9 @@ def _find(fn: FunctionDefinition, fid: str, family: str | None = None) -> Functi
         why = "; ".join(notes) or f"no registered {family or 'Boolean Definition'} names it as its word"
         if errors:
             why += f" (registry modules that failed to import: {errors})"
+        if not _LOADERS:
+            why += (" (no catalog is registered with the lookup, catalog_loader: only verity.circuits.ops.boolean and the modules "
+                    "already imported were scanned)")
         raise NoBooleanVersion({fid: why})
     names = {c.name for c in cands}
     if len(names) > 1:
@@ -620,14 +648,13 @@ def gate_table(fns) -> tuple[dict[str, int], list[str]]:
 
 def load_program(path: Path):
     from verity.circuits.codec import decode_program, program_digest
-    from verity_vllm.definitions.registry.catalog import load as load_registry
     opener = gzip.open if str(path).endswith(".gz") else open
     with opener(path, "rt") as f:
         desc = json.load(f)
-    registry, _ = load_registry()
-    return decode_program(desc, registry), program_digest(desc)
+    _catalogs()
+    return decode_program(desc, REGISTRY), program_digest(desc)
 
 
-__all__ = ["NoBooleanVersion", "boolean_version", "made_on_demand", "bit_offsets", "lift", "lift_body", "sigma_lift", "sigma_check",
+__all__ = ["NoBooleanVersion", "boolean_version", "catalog_loader", "made_on_demand", "bit_offsets", "lift", "lift_body", "sigma_lift", "sigma_check",
            "boolean_function", "purity", "dry_run", "derived_calls", "gate_table", "load_program", "word_descriptor",
            "write_word"]
