@@ -160,7 +160,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
     `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's group units, ``x0``
     and combine give the node's token, every position's but the last's a row of its collector; each feed (every position
-    but the first below the prompt limit) holds its token and carried slot; each slot's scan read every lane's first token and
+    but the first below the prompt bound) holds its token and carried slot; each slot's scan read every lane's first token and
     carried slot, occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector
     (the next-to-last position's) the outputs so far from its prompt's last position on and its entry the read bit (its
     occupancy word's bit 0), the 2 outputs' count and ids; each head's first
@@ -276,12 +276,12 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
 
 def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
     """`scan_state` on the network certifier's traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries
-    at buckets 0 and 16 of a 32-bucket window, TINY's limits): three requests admitted at bucket 0 are anchored at bucket 16
+    at buckets 0 and 16 of a 32-bucket window, TINY's bounds): three requests admitted at bucket 0 are anchored at bucket 16
     (WITHIN 12 on), in lanes 0, 1 and 2, so window 0's class Programs 1, 3 and 5 start them (slot nb·j + b); a fourth
     admitted at 5 is anchored at 32 (`scan_anchors`), window 1's first boundary, in lane 3: window 1's Program 6. Each
     started slot's lane of the row at its anchor holds its prompt and every other none; the rows are the scan's, from the
     empty state's, and carry what the scan does past the slots' rows, so a stand-in (`standin_state`) giving the same
-    slots the same rows is another value. A prompt past the class's prompt limit (the scan's KI) and rows short of the
+    slots the same rows is another value. A prompt past the class's prompt bound (the scan's KI) and rows short of the
     window's last are refused."""
     prompts = ((17, 3, 250, 9), (5, 77, 42), (1, 2), (9, 8, 7, 6))
     ingress, outputs = _traffic(SLOTS_CLASS, prompts, (0, 0, 0, 5))
