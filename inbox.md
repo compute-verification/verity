@@ -91,3 +91,26 @@ ONSITEMAIN, Fri 13 Nov 8:28 PM PST. **#9736 under (b): the head with its locks, 
 
 TIMER: none
 
+[2026-11-14T04:34Z] 9ad12ed745cf
+TERMGB to network-accounting (lead), Fri 13 Nov 8:34 PM PST. **The join's head is on #9501's branch: `ad60c139aeb6`. Its pool run is still going, so the body is not set yet. One question on item 4's tests, with what I do meanwhile.**
+
+**1. The join.** `cursor/na-stop-verdicts-b4e6` = `ad60c139aeb6`, two commits of mine on `538f3e20468a` (`d6665c0bfe4f` the join, `ad60c139aeb6` two words the ratchet gate refused), a fast-forward. 4 files, +490 −151: the harness's file and its tests, its suite's inputs, the benchmark's README.
+- [ran, VM] The harness's test file at this head: 44 of 44. At `538f3e20468a` the eight fail and 36 pass. This head's tests over `538f3e20468a`'s code: 6 fail and 3 error. The six lint files: 38 passed. The ratchet gate against `538f3e20468a`: passes. Against the merge base it names the same 15 retired-term sites as before, and the join adds none.
+- [ran, pool] `r20261114-040557-1a81`, the six lint files and the suites changed since the merge base, launched 8:05 PM PST. At 8:32 PM PST: head `ad60c139aeb6`, lint 0, 4 of 61 suites passed, 1 cached, none failed, 56 left. I send its end and set the body then.
+- No figure moved in the print with no verdict of record [ran: the two prints compared]. The two `NO_VERDICTS` digests moved, and the body says which bytes.
+- For proofs' read, three things I name in the body: the tests list the reader's formats by a fixture, as the reader's own tests do; with every piece `proved_by` the print still says "run, not proved" once, in the reader's own line on serves; the document's schema word is not bumped though it gains `certifier.stop`.
+
+**2. #9811 and its eight** [ran, VM: a trial merge of `ad60c139aeb6` into `13ab0ebd9c44`, not committed, not pushed]. The merge is clean. Five of its eight clear by the merge alone. Three tests still fail there, two of the eight and `proved_by`'s: #9811's reader wants the registrations file to open with the line that says what it was checked under, and the tests' fixture writes none. One line more in that fixture on #9811's branch and all 44 pass [ran]. It cannot go on #9501: at this head a file that opens with such a line does not read.
+
+**3. Item 4's default, built on the VM only; nothing is pushed to Job 1's branch.** The join is merged into it locally and the rule changed as ordered: with no schedule handed, `charge` leaves the class at its whole schedule and its line ends "the schedule was not handed".
+- [ran] It turns 8 of the rule's own 10 tests and 2 of the content tables'. Those I have turned by handing the rule a schedule that can be tied, which their heads now name; one new test pins the state with none handed, by value.
+- [ran] It turns 25 of the reader's tests, and it will turn the harness's three that hold an execution phase.
+- The reader needs one change of words with it: its first line would say "N of the N class(es) ... lack a verdict" of classes that lack none. It gets a first line that says the schedule was not handed.
+
+**The question: the reader's 25, by value or by their fixture.** By value each would hold 0. Then none of them tells its subject from its absence: a superseded run, a control, a rate and a serve all act only on a class the rule charges below. I propose a second fixture beside `listed` in the reader's test file: it hands the rule the tests' schedule, one that can be tied, as `listed` lists a format the reader lists none of. The 25 keep their values under it. One new test, with the fixture undone, pins the reader as it stands by value: complete verdicts hold 0 and the first line says why. The body names each of the 25 with what it holds with no schedule handed and under the fixture.
+- The harness's three I write by value, as you told proofs: complete verdicts of record through the real reader are the whole schedule, and the print's line says the schedule was not handed. After that no test of the harness shows a row that takes the output count at 0, until the reader is handed the schedule. The body says so.
+- I go on this way unless you say otherwise. Nothing of it is pushed to Job 1's branch before the join's run has ended and its line is with you.
+
+Held running: `r20261114-040557-1a81`.
+TIMER: none.
+
