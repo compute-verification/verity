@@ -248,12 +248,14 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
   what an integration hands Verity (`verity.commitments.windows.interface`): the window's `circuit.json`, which its registration binds
   by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
-  advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
-  catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
+  advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition one a
+  catalog registers or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
   table names for it (`prove_path.py circuit` for a served window, which takes no row dir and compiles over its own Build of
   each Program), on advice that opens the registered root, and holds its output to the circuit record (less the run root and
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
-  unchanged digests is refused (`circuit`). It imports no `verity_vllm` code.
+  unchanged digests is refused (`circuit`). Of `verity_vllm` it loads only a catalog package
+  (`verity.circuits.defs.catalog_package`), where a served template's Definition is registered, and nothing else of the
+  adapter.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own compile, and the Build manifest falls back to

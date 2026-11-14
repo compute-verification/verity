@@ -360,6 +360,31 @@ def test_the_rates_readers_quote() -> None:
             call()
 
 
+def test_the_readings_of_the_tensors_clock() -> None:
+    """`readings`, the tensor peak under each reading of its clock a card states (`READINGS`): the H200's at its tensor
+    clock, 1830 MHz, then at its SM clock, 1980 MHz, in s8 MACs and in another format's; one peak twice on a card that
+    gives the tensor no clock of its own or the SM clock again; the first always `rate`'s own; and what `rate` refuses
+    refused."""
+    h200 = load_card("h200-sxm-141gb")
+    assert S.READINGS == ("tensor", "sm")
+    assert S.readings(h200) == {"tensor": 132 * 4096 * 1830 * 10 ** 6, "sm": 132 * 4096 * 1980 * 10 ** 6}
+    assert S.readings(h200, fmt="bf16") == {"tensor": 132 * 2048 * 1830 * 10 ** 6, "sm": 132 * 2048 * 1980 * 10 ** 6}
+    untimed = copy.deepcopy(h200)
+    del untimed["clock"]["tensor"]
+    assert S.readings(untimed) == dict.fromkeys(S.READINGS, 132 * 4096 * 1980 * 10 ** 6)
+    for sku in ("rtx-pro-6000-server", "b200-sxm-180gb"):
+        assert S.readings(load_card(sku)) == dict.fromkeys(S.READINGS, S.rate(load_card(sku))), sku
+    for sku in skus("gpu"):
+        card = load_card(sku)
+        peaks = S.readings(card, fmt="e4m3")
+        assert list(peaks) == list(S.READINGS) and peaks["tensor"] == S.rate(card, fmt="e4m3"), sku
+        assert peaks["sm"] == S.rate(card, fmt="e4m3", mhz=value(card, "clock.sm")), sku
+    for call, refusal in ((lambda: S.readings(load_card("xeon-6776p-2s")), "is a host card"),
+                          (lambda: S.readings(h200, fmt="fp8"), "weighs tensor MACs only")):
+        with pytest.raises((KeyError, ValueError), match=refusal):
+            call()
+
+
 def test_an_unknown_sku_names_the_cards() -> None:
     every = ["b200-sxm-180gb", "dgx-h200", "h200-sxm-141gb", "nebius-vm-monotonic-raw", "rtx-pro-6000-server",
              "xeon-6776p-2s", "xeon-platinum-8468-2s"]
