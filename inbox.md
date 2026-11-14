@@ -55,3 +55,17 @@ NETSEATS2 to network-accounting (lead), merge 1 of 2: #9369 (bb83f6fa529c7be9742
 - [ran] 440 tests pass at 288a9440706b: `test_session_start`, `test_warden_serve`, `test_deviations`, `test_scan_zk`, `test_warden_serve_phase10`, `test_wipe_egress`, the certifier's `device_state` and `warden`, and `test_auditor_warden`. These are named files on the agent VM, not a check run.
 - Next: the top of the stack, #9919 (7d87e70b7aea13210662daf1e9673e16e454d3d3), which brings #9656, #9741, #9760 and #9867.
 
+[2026-11-14T19:00Z] bfed632e7ba2
+MEND9319 to network-accounting (lead). **#9639 (`bbbae169113e5b92e4dd93e399f2d31e7e050109`) is merged: the collect branch is at `028c65d937861ef43a3a57e1bf6831216fc63c7c` after my push.**
+
+- **The carry.** `restack.py` read the head as `based-after`. Following its recipe, I carried it across `ac8b3b51e490` (word `clean`), then across `8469d5dcc164`, where it stopped at the move's base on one file. I merged that base by hand, and the tool then carried the rest `clean`, to `f91ac5ee1b0a`. The tool skipped `e4a8682800d6` (`pouw_dither_map`), as its recipe says; none of the branch's added lines names an old path or module of the three maps [ran: grep].
+- **The one file resolved by hand:** `tools/research/src/research/store/moves.json`. Both sides added one move's entry at the list's end, and I kept both, `pouw_dither`'s then `pouw_clear`'s, in the order the collect branch holds them. It parses as JSON [ran].
+- **The merge into the collect branch:** clean, only the change's four files. No `.py` changed.
+- **Lean built?** Yes, per its body: at the carried head `a33474dac75d`, whose three Lean files are byte for byte the head's, `r20261113-171810-3230` made the records and compiled the six modules. I did not build it here.
+- **Listed Lean statements, in `security/Properties/lean-audit.json`:**
+  - `Properties.NetworkScan.ScanScopeAcc` (the statement `scanScopeAcc` proves) is reworded. Before, its hypotheses were `StmtFlattens D → ScopeMatches D → D.scopeCheck x = true →`. After: `StmtFlattens D → D.Scope x →`. Its conclusion is unchanged: `NetTiming.ScopeAcc D (layOf s) (fun _ => s.window) x`. The premises of `scanScopeAcc` go from `open` = {`ScopeMatches`, `StmtFlattens`} and `domain` = {} to `open` = {`StmtFlattens`} and `domain` = {`Claims.SamplingGeneric.Compiled.Scope`}.
+  - `Properties.NetworkScan.ScopeMatches` leaves the open premises. It was a scan-local named premise and is deleted.
+  - `Claims.SamplingGeneric.Compiled.Scope` enters `domain` (owner `@network-accounting`).
+  - The witness `scan_honest` is reworded. Before: `canon null = ok "null" ∧ Flattens default {gates:=[],outs:=[]}`. After, a third conjunct: `∧ ∃ A D x, D.Scope x`.
+  - `scanScopeAcc_nontrivial`: the same signature, and a new `type_hash` (its witness moved).
+
