@@ -161,8 +161,8 @@ theorem LuckCaseACube : Accounting.Guarantees.TS.LuckCaseACube :=
 theorem LiSegmentsBind : Accounting.Guarantees.TS.LiSegmentsBind :=
   fun D ω => LiLemmas.right_of_same D ω
 
-theorem LiWindowUnbound : Accounting.Guarantees.TS.LiWindowUnbound :=
-  fun n D ω => LiLemmas.windowUnbound n D ω
+theorem LiExecutionPhaseUnbound : Accounting.Guarantees.TS.LiExecutionPhaseUnbound :=
+  fun n D ω => LiLemmas.executionPhaseUnbound n D ω
 
 theorem DuoSegmentsBind : Accounting.Guarantees.TS.DuoSegmentsBind :=
   fun D ω => DuoCPLemmas.right_of_same D ω

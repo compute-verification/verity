@@ -1,13 +1,13 @@
 module
 
 public import Definitions.Nci.Guarantees.FitRate
-public import Proofs.Accounting.Actual.Windows
+public import Proofs.Accounting.Actual.ServerBlocks
 public import Proofs.Nci.Fit
 
 /-!
 # Proof of the fit bound on a run
 
-`WindowsAt` at the run's cuts divides the developer's declaration into the windows `A[X i, [τ j, τ (j + 1))]`, each
+`ServerBlocksAt` at the run's cuts divides the developer's declaration into the windows `A[X i, [τ j, τ (j + 1))]`, each
 reading in `G` at most the part in `G` of its server's state at `τ j` plus `β_{X i} (τ (j + 1) − τ j)`. At `G` the image
 of `c`'s novel gates, the windows pulled into `c` (`pull`) read at most that (`novelReads_pull_le_readsIn_compl`), so at
 most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its compute-rate hypothesis holds at `Φ = A.N`
@@ -70,7 +70,7 @@ theorem cuts_mul_le {t : ℕ} (κ : Cuts t) {ω₀ : ℕ} (h : ∀ j : Fin κ.J,
 
 theorem FitRate : Guarantees.FitRate := by
   intro L E _ _ A ℓ ends β link n X θ hθ t κ ω R r c M T start Nstar b_w w_e hX hC hL hω hr hR hgap hReach hFits
-  obtain ⟨P, hP⟩ := Accounting.SecurityProofs.Actual.WindowsAt A ℓ (fun _ => A.N) ends β link n X θ hθ t κ
+  obtain ⟨P, hP⟩ := Accounting.SecurityProofs.Actual.ServerBlocksAt A ℓ (fun _ => A.N) ends β link n X θ hθ t κ
     ((c.θᶜ).map ⟨M.emb, M.emb_inj⟩) hX hC (computeRate_N A _) hL
   have hQ : ∀ (i : Fin n) (j : Fin κ.J) (g : Fin c.D.N), g ∈ (pull M P).gates (finProdFinEquiv (i, j)) ↔
       M.emb g ∈ A.region (X i) (Set.Ico (κ.τ j.castSucc) (κ.τ j.succ)) := fun i j g =>
