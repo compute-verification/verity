@@ -1,7 +1,7 @@
 module
 
 /-!
-# The FP8 tensor-core steps: `verity.ml.circuits.silicon.total_fp8`
+# The FP8 tensor-core steps: `verity.circuits.silicon.total_fp8`
 
 A copy of Security's FP8 step, definition for definition: the E4M3 codec of `security/Definitions/Pouw/Fp8Atom/E4M3.lean`
 (its `decode` to `ℚ` left out), the grouped-sum step of `Fp8Atom/Atom.lean` (`tc_dot_total_e4m3`, its `Term.value` left out)

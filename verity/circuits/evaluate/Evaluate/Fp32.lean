@@ -5,7 +5,7 @@ public import Evaluate.Scalar
 /-!
 # The FP32 and BF16 arithmetic primitives
 
-Executable transcriptions of `verity.ml.circuits.ops.fp32` and of the FP32 word primitives the vLLM integration registers
+Executable transcriptions of `verity.circuits.ops.fp32` and of the FP32 word primitives the vLLM integration registers
 (`verity_vllm.program.registry`: `prims`, `ref_prims`, `moe`, `dsa`, `topp_word_gates`), and of `mufu.DivFullScaleA_v1`,
 the one MUFU primitive that reads no table. Words are natural numbers as in `Evaluate.Scalar`.
 

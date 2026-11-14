@@ -12,7 +12,7 @@ execution (`Proofs/Accounting/Lemmas/RequirementPouw.lean`). A step is always an
 This is code, so it requires nothing of `security/`: `Properties.Accounting.Requirement` states that each function here
 is the definition it computes, on the wiring, execution, layout, store and placement an instance denotes, and
 `Proofs.Properties.Accounting.Requirement` proves it. `requirement-difftest` serves these functions to the difftest, which
-holds them to `verity.ml.circuits.requirement` (`tests/test_requirement_difftest.py`).
+holds them to `verity.circuits.requirement` (`tests/test_requirement_difftest.py`).
 
 An instance's values are `0 … n - 1`, `n` the length of `width`, and the operands a gate uses are those at this
 execution's values (`Wiring.uses` at `Execution.value`). An array read past its end reads as empty, or 0. A set is a list,

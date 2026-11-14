@@ -1,7 +1,7 @@
 module
 
 /-!
-# The BF16 tensor-core steps: `verity.ml.circuits.silicon.total.tc_dot_total`
+# The BF16 tensor-core steps: `verity.circuits.silicon.total.tc_dot_total`
 
 A copy of `security/Definitions/Core/TC/Pipeline.lean` and `Spec.lean`, definition for definition: the grouped-sum
 pipelines (`models.GroupSum`) and the total semantics of one BF16 step on every encoding (`term.py`, `models.group_sum`,

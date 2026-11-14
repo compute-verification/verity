@@ -22,7 +22,7 @@ the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests
   `RefusedAt`: when it refuses, the index it names is the first entry the spec refuses, with that refusal, or the log's
   end, where every entry passes and the log's Site is not complete.
 
-The code's difftest (`site-difftest`) holds it to `verity.core.site`, so these carry the Python Site to the spec. A code
+The code's difftest (`site-difftest`) holds it to `verity.device`, so these carry the Python Site to the spec. A code
 figure (`Core.Site.Figure`, a nonnegative `Rat`) denotes the same rational in `ℚ≥0` (`figure`).
 -/
 

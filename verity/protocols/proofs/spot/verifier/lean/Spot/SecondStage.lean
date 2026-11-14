@@ -926,11 +926,11 @@ def interiorRoot (boundary : String) (sample : Array Nat) : Option String := do
 interior's `k`-th member being the `k`-th part. -/
 def setName (run : String) (k : Nat) : String := "served/" ++ run ++ "/m" ++ toString k
 
-/-- The window-domain rule's tag (`verity.ml.commitments.window.WINDOW_DOMAIN`). -/
+/-- The window-domain rule's tag (`verity.commitments.window.WINDOW_DOMAIN`). -/
 def WINDOW_DOMAIN : String := "verity/one-stage/served-domain/v1"
 
 /-- The binding, in run `run`, of the interior record `rec`'s port `port` of row schema `schema`: the window-domain rule
-(`verity.ml.commitments.window`), the identity digest (`tagged_sha512` of the canonical JSON) of the record's program
+(`verity.commitments.window`), the identity digest (`tagged_sha512` of the canonical JSON) of the record's program
 and partition, the port, its schema, the leaves the record gives it and the run. None when the record names no such
 port, or no program or partition. -/
 def portBinding (rec : Json) (port schema run : String) : Option String := do

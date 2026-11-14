@@ -65,7 +65,7 @@ free; `prf` is any function, the deployed one being SHA-512's keyed stream under
   replaced by the sample's premises and `W` by the record's own pooled bound at error `δc`, so the line the ledger reads
   at the record's `audit.pooled` is the one stated.
 
-The advantages are C3's terms (claim `prf/sha-512`, `verity.ml.randomness`'s keyed streams). Each is against one
+The advantages are C3's terms (claim `prf/sha-512`, `verity.commitments.randomness`'s keyed streams). Each is against one
 distinguisher a window, which the session fixes: it flips the other coins and the earlier windows' coins, runs the
 session's prover and verifier through window `t`, computing the earlier windows' streams itself, and reads
 `s'_t ≤ s_t` first blocks of the stream it is given, so a PRF distinguisher with `s_t` queries whose time is the

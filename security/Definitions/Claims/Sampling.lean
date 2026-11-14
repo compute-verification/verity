@@ -236,7 +236,7 @@ structure SizeClass where
 /-- `K`: the bits of a wire index, enough for the `W = N_IN + G` wires, at least one. -/
 def SizeClass.indexBits (c : SizeClass) : ℕ := Nat.log2 (c.nIn + c.G - 1) + 1
 
-/-- **A private circuit's gates**, as the universal unit takes them (`verity.ml.private_circuits.universal`): SSA wires,
+/-- **A private circuit's gates**, as the universal unit takes them (`verity.circuits.private_circuits.universal`): SSA wires,
 the `nIn` inputs and then one per gate. Gate `(op, a, b)` reads wires `a` and `b` and computes XOR, AND, XNOR or NAND
 (`op`'s bit 0 picks AND, bit 1 negates); a wire at or past the reading gate's own reads `0`, as does an output past the
 last wire. -/
