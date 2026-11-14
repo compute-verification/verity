@@ -9,7 +9,9 @@ public import Proofs.Accounting.Actual.Localization
 public import Proofs.Accounting.Actual.Device
 public import Proofs.Accounting.Actual.Confidence
 public import Proofs.Accounting.Actual.Bridges
+public import Proofs.Accounting.Actual.Parts
 public import Proofs.Accounting.Actual.RegisteredSite
+public import Proofs.Accounting.Actual.RegisteredWitness
 public import Proofs.Accounting.Actual.Transducer
 public import Proofs.Accounting.Defs.Actual.Source
 public import Proofs.Accounting.Actual.Sampler
@@ -56,10 +58,16 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   strategy; `CM_A`'s programs carry their oracle tree (`costModel_queries`), the honest clock holds at `CM_A` from
   `t_d` on (`honestClock`), so B1 is all that is conjectured of PoUW's deadline row, and a salt-dependent gate that
   the verifier reads before `t_d` lies in the cost window (`cost_serverBlock`, `prover_cost_serverBlock`).
+* `Actual/Parts.lean`: `LeakParts`, `B4`'s limit as a sum over the trusted devices: with each device's record within
+  its limit the joint record is within the limits' sum (`records_encard_le`), and a memory challenger is a sealed
+  sink, which adds nothing (`leak_le_sum_K_sealed`), or a trusted device, which adds its limit and a jitter share.
 * `Actual/RegisteredSite.lean`: `EgressRegistered`, at the Site's places and links: a subtree's egress is at most the
   capacity of the registered links with exactly one end in it, a tick, and that limit is at most its root's alone plus
   its root's children's subtrees'; limits add over parts, at most (`linkCapacity_union_le`,
-  `linkCapacity_biUnion_le`).
+  `linkCapacity_biUnion_le`). `LeakPartsRegistered`: `LeakParts` at a subtree of a valid registration's Site, the
+  sinks' sealing concluded from the registration (`Site.leak_le_registered`).
+* `Actual/RegisteredWitness.lean`: `LeakPartsRegistered_honest`: the example onsite log is valid, and at its Site a
+  one-gate strategy has each trusted device's record within one bit.
 * `Actual/Transducer.lean`: a location is a transducer over what reaches it: under causality from every tick, what `X`
   does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
   `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values
