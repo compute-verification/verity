@@ -242,7 +242,8 @@ def _estimate(arg: Argument, p: Profile, ctx: Context, partition: Partition, blo
     except Outside as e:
         return Estimate(arg.name, arg.side, "outside", None, str(e)), None
     w = weight_per_gate(p, ctx.units)
-    s = overhead(partition, cap, w, p.efficiency, arg.side, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
+    s = overhead(partition, cap, w, p.efficiency, arg.side, u=st.weight(w), mfu=mfu, reference_efficiency=ref,
+                 per_bit=st.per_bit)
     return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(cap, w, block), table, st), cap
 
 
@@ -278,7 +279,7 @@ def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None
     met = [m for m in met if m[0].name not in drafts]
     cap = least(*(_admitted(c, a.cites, table) for a, c in met))
     w = weight_per_gate(p, ctx.units)
-    s = overhead(partition, cap, w, p.efficiency, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
+    s = overhead(partition, cap, w, p.efficiency, u=st.weight(w), mfu=mfu, reference_efficiency=ref, per_bit=st.per_bit)
     ks = _binding_ks(partition, s) or (0.0,)
     refuted = {a.name: [_refuted(a.cites, k, table) for k in ks] for a, _ in met}
     used = [a for a, _ in met if not all(refuted[a.name])]

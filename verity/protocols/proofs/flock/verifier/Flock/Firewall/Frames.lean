@@ -159,6 +159,13 @@ def Sessions.maskOf (R : Sessions) (L0 : Level0.Slots) (name : String) (j m : Na
   if m != st.m then throw s!"a level-0 request at m = {m}, where table {j}'s statement is at m = {st.m}"
   return (← Drive.maskSlot st, st.c.kLog)
 
+/-- Whether table `j` of the session named `name` is a wide-leaf statement's (`Stmt.wideLeaf`), as the loop set it up:
+which `--zk` schedule its level 0 is sampled at. `false` wherever `maskOf` refuses. -/
+def Sessions.wideOf (R : Sessions) (L0 : Level0.Slots) (name : String) (j : Nat) : Bool :=
+  match R.named L0 "level-0 request" name with
+  | .ok s => (s.sts[j]?.map (·.wideLeaf)).getD false
+  | .error _ => false
+
 /-- **Table `i`'s rep `r` of the session named `name` starts**, for the request line `line` on `ch`: `rep NAME I R` is
 answered `ok 64` followed by the pads' root (`Frame.padsRoot`) over the rep's samples, sampled from the operating system at
 the statement's start (`Drive.start`) and kept in the rep's frame, never sent; a rep's frame starts once, and only once
@@ -219,7 +226,7 @@ def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.L
 /-- The algebraic phase's scheduled rounds of a rep of the statement `st` whose stream's domain is `dom`, on its level-0
 root `root` (`Skeleton.rounds`). -/
 def algOf (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := do
-  let (sch, _) ← Zk.schedule st.m
+  let (sch, _) ← Zk.schedule st.wideLeaf st.m
   Skeleton.rounds (Setup.ofCircuit st) sch.k0 root dom
 
 /-! ## The lincheck fold's refusal alone
@@ -412,18 +419,21 @@ theorem openStepM_fold (t : Tab) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.
 
 theorem ok_bind {α β : Type} (a : α) (f : α → V β) : ((Except.ok a : V α) >>= f) = f a := rfl
 
-/-- `tabOfLevel0` reads of its setup only the Merkle scheme and `m`. -/
-theorem tabOfLevel0_with (S S' : Setup) (hm : S'.merkle = S.merkle) (hn : S'.m = S.m) (l : Level0.Level0) :
+/-- `tabOfLevel0` reads of its setup only the Merkle scheme, `m` and the statement's version. -/
+theorem tabOfLevel0_with (S S' : Setup) (hm : S'.merkle = S.merkle) (hn : S'.m = S.m)
+    (hw : S'.wideLeaf = S.wideLeaf) (l : Level0.Level0) :
     tabOfLevel0 S' l = (fun t => { t with st := S' }) <$> tabOfLevel0 S l := by
   unfold tabOfLevel0
-  rw [hm, hn]
+  rw [hm, hn, hw]
   cases (S.merkle.id != MerkleScheme.hm96Sha512.id)
   · cases (l.m != S.m)
-    · cases Zk.schedule S.m with
-      | error e => rfl
-      | ok p =>
-        obtain ⟨sch, tPad⟩ := p
-        cases h : (l.tPad != tPad) <;> simp only [ok_bind, h] <;> rfl
+    · cases (l.wideLeaf != S.wideLeaf)
+      · cases Zk.schedule S.wideLeaf S.m with
+        | error e => rfl
+        | ok p =>
+          obtain ⟨sch, tPad⟩ := p
+          cases h : (l.tPad != tPad) <;> simp only [ok_bind, h] <;> rfl
+      · rfl
     · rfl
   · rfl
 
@@ -435,8 +445,8 @@ def openingOf (setup : Stmt → Setup) (st : Stmt) (l0 : Level0.Level0) (rep : N
 theorem openingOf_chk : openingOf Setup.ofCircuit = openingOf ofCircuitChk := by
   funext st l0 rep dom xs hi coins
   unfold openingOf
-  rw [tabOfLevel0_with (Setup.ofCircuit st) (ofCircuitChk st) rfl rfl l0,
-    tabOfLevel0_with (Setup.ofCircuit st) (Setup.ofCircuit st) rfl rfl l0]
+  rw [tabOfLevel0_with (Setup.ofCircuit st) (ofCircuitChk st) rfl rfl rfl l0,
+    tabOfLevel0_with (Setup.ofCircuit st) (Setup.ofCircuit st) rfl rfl rfl l0]
   simp only [Functor.map_map]
   refine congrArg (fun f => Functor.map f (tabOfLevel0 (Setup.ofCircuit st) l0)) (funext fun t => ?_)
   exact (openStepM_fold t (Setup.ofCircuit st) { st.circuitFold with fold := foldChk st } rfl (foldChk_map st) rep dom xs
@@ -472,7 +482,7 @@ def placeOfChk : Array (ByteArray × Nat × Array ByteArray) → Level0.Level0 �
 
 /-- `algOf` on the statement's setup `setup st`. -/
 def algOfWith (setup : Stmt → Setup) (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := do
-  let (sch, _) ← Zk.schedule st.m
+  let (sch, _) ← Zk.schedule st.wideLeaf st.m
   Skeleton.rounds (setup st) sch.k0 root dom
 
 def algOfChk : Stmt → ByteArray → ByteArray → V (Array (ByteArray × Nat)) := algOfWith ofCircuitChk

@@ -129,7 +129,7 @@ theorem repState_closeIn {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order
     (hm14 : 14 ≤ t.st.m) (hdg : t.st.digest.size < 2 ^ 64)
     (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hdom : dom.size < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
-    (hz : _root_.Flock.Zk.schedule t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
+    (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
     {d : _root_.Flock.Firewall.Frame.Draws} {mk : Option _root_.Flock.Firewall.Frame.MaskSlot}
     (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
     (hcd : c = Cfg.ofDraws lay d mk) (hord : c''.order.size = c.order.size)
@@ -286,7 +286,7 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hq2 : 2 * j.val + r.val < spec.repStreams.size := by rw [FlockDeploy.repStreams_size, hspec]; omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -489,7 +489,7 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hmkR : tr.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by rw [hT1]; exact hmkt
   have hkR : tr.sch.k0 = (Masked.zkTab x j).sch.k0 := by rw [hT2, hsch]
   have hlvR : tr.sch.levels.size = (Masked.zkTab x j).sch.levels.size := by rw [hT2, hsch]
-  have hschR : _root_.Flock.Zk.schedule (Masked.stAt x j).m = .ok (tr.sch, tp) := by rw [hT2, ← hst]; exact htp
+  have hschR : _root_.Flock.Zk.schedule (Masked.stAt x j).wideLeaf (Masked.stAt x j).m = .ok (tr.sch, tp) := by rw [hT2, ← hst]; exact htp
   have hOL := Count.openList_length hschR (c := xs'.size + 2) (by omega)
   have hC1 : alg'.size + (xs'.size + 2) + 1 + tr.sch.k0 + 4 ≤ cr.size := by omega
   have hC2 : cr.size < alg'.size + (Count.openList (xs'.size + 2) tr.sch).length := by omega
@@ -525,8 +525,9 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hlay : lay = _root_.Flock.Zk.PadLayout.new tph.st.m tph.st.kLog tph.sch.k0 := by
     rw [hlayE, hts', hsch]
     try rfl
-  have htp' : _root_.Flock.Zk.schedule tph.st.m = .ok (tph.sch, tp) := by
-    rw [htm, ← hst]
+  have htw : tph.st.wideLeaf = (Masked.stAt x j).wideLeaf := by rw [hts']; rfl
+  have htp' : _root_.Flock.Zk.schedule tph.st.wideLeaf tph.st.m = .ok (tph.sch, tp) := by
+    rw [htm, htw, ← hst]
     exact htp
   obtain ⟨hCA, -, -, -⟩ := ofLoop_cfg_place Masked.dataE L₁ (Loop.realOf src) x (ν, t) ((m₀, ρ₀) :: ops) hsx
     (q := i0 + 1) (by simp only [List.length_cons]; omega) hloc hph0

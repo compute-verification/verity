@@ -1,9 +1,13 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import PouwCheck.Credit
+public import PouwCheck.CreditOnce
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import PouwCheck.Credit
+meta import PouwCheck.CreditOnce
 
 /-!
 # A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`
@@ -15,10 +19,14 @@ windows is credited (`Credit.window`), and a refused window refuses the period. 
 
 **Params**, canonical JSON with exactly these keys, the verifier's own:
 
-    {"key": challenger key, "main": [commit, …], "name": period}
+    {"key": challenger key, "main": [commit, …], "name": period, "sessions": [session, …]}
 
-the challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent
-history (newest first) and the name of the period it credits, a string.
+the challenger key the verifier pins (`Spot.Challenger.ChallengerKey`), its own copy of main's first-parent history
+(newest first), the name of the period it credits (a string) and the ordered ids of the sessions the challenger's
+ledger opened for the period's windows (each window's and its sample's, `sessionId?`; the empty list names none).
+Parameters without `sessions`, `{"key", "main", "name"}` (`aloneKeys`), run the period with no session list to check
+its close against; any other key set is refused (`KEYS_FORM`). They name no device: the accounting layer binds the
+challenger key to a registered device.
 
 **Commitment**, canonical JSON: the auditor's ledger, the list of the lines the challenger signed (`ledgerEntry?`). Its
 period's open commits the period's circuit, its sample K, its table rows T, its weights' root and model and its fixed
@@ -33,11 +41,17 @@ record, round log, sample, descriptor, registered entries, each sampled proof bl
 (`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`) doesn't cover: a Pearl-C pass, a circuit that is not an H1
 window (a per-tile protocol's tile, a Pearl-C leaf), a template over per-unit noise (`PouwH1Tile` v1, v3 or v4), a
 J10-R unit over a tile other than `PouwH1Tile_v5` (v6), or units at more than one K (more than one stratum). Then it is
-`Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`. It
-never leaves a period undecided.
+`Credit.periodCredit` on them: it accepts with the period's credit, or rejects with the first refusal, `code: why`.
+Last it reads the challenge phases (sessions) the period's close lists (`ledgerChallengePhases`) and refuses
+(`sessions: why`) a ledger it can't read them from, and, where the parameters list the sessions, a session they
+don't list or that repeats one before it (`challengePhasesRefusal`). It never leaves a period undecided.
 
-**Public**, on acceptance: `Credit.PeriodCredit.toJson`, each window's credited calls, its credited served work, the K
-the period's open committed, the δ (`Credit.DELTA`) and each window's ε at it.
+**Public**, on acceptance (`Published.toJson`), what `account` reads: `Credit.PeriodCredit.toJson`, each window's
+credited calls, its credited served work, the K the period's open committed, the δ (`Credit.DELTA`) and each window's
+ε at it; beside it the parameters' challenger `key`, and from the ledger the close's open `roots` in its order and the
+period's span: the period-open's `start` and its `length` to its close inclusive, in ledger entries, as the ledger
+carries no clock reading on either. It names no device, registration head or place: the accounting layer binds the
+challenger `key` to a registered device.
 
 **Profile**: the period's name and its number of windows.
 
@@ -55,13 +69,18 @@ open Flock (V)
 
 def protocolId : String := "verity/pouw/period/v1"
 def commitmentTag : String := "verity/pouw/period/ledger/v1"
-def paramsKeys : List String := ["key", "main", "name"]
+def paramsKeys : List String := ["key", "main", "name", "sessions"]
+/-- The keys of a period's parameters with no session list: `paramsKeys` without `sessions`. -/
+def aloneKeys : List String := ["key", "main", "name"]
 def evidenceKeys : List String := ["pins", "windows"]
 
+/-- A period's parameters: the challenger key, main's history, the period's name and, where they list them, the
+challenge phases (sessions, under the key `sessions`) the challenger's ledger opened for the period's windows. -/
 structure Params where
   key : Json
   main : Json
   name : String
+  challengePhases : Option (List String)
 
 structure Commitment where
   ledger : Json
@@ -75,10 +94,25 @@ structure Profile where
   period : String
   windows : Nat
 
+def CHALLENGE_PHASES_FORM : String :=
+  "sessions is not a list of the ids of the sessions the challenger's ledger opened for the period (1 to 64 of " ++
+  "[A-Za-z0-9._:-] each, the first alphanumeric)"
+
+def KEYS_FORM : String :=
+  s!"keys are not {", ".intercalate paramsKeys}, or {", ".intercalate aloneKeys} alone"
+
+def challengePhasesOf (j : Json) : V (List String) := do
+  let some sessions := (match get j "sessions" with
+      | .arr a => a.toList.mapM fun s => (str? s).filter sessionId?
+      | _ => none) | throw CHALLENGE_PHASES_FORM
+  pure sessions
+
 def paramsOf (j : Json) : V Params := do
-  unless keys j == some paramsKeys do throw s!"keys are not {", ".intercalate paramsKeys}"
+  let ks := keys j
+  unless ks == some paramsKeys || ks == some aloneKeys do throw KEYS_FORM
   let some name := str? (get j "name") | throw "name is not a string"
-  pure { key := get j "key", main := get j "main", name }
+  let challengePhases ← if ks == some paramsKeys then some <$> challengePhasesOf j else pure none
+  pure { key := get j "key", main := get j "main", name, challengePhases }
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let ledger ← Core.canonicalJson b
@@ -164,42 +198,178 @@ def form (nm : String) (windows : Json) : Option String := Id.run do
     if let some why := windowForm nm i w then return some why
   return none
 
-def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Credit.PeriodCredit Profile :=
+/-- The ledger's entries, each line read (`Spot.Challenger.ledgerEntry?`); `none` when a line isn't one. -/
+def entries? (ledger : Json) : Option (List Spot.Challenger.LedgerEntry) := do
+  let .arr lines := ledger | none
+  lines.toList.mapM Spot.Challenger.ledgerEntry?
+
+def periodEntry? (es : List Spot.Challenger.LedgerEntry) (kind name : String) : Option Spot.Challenger.LedgerEntry :=
+  es.find? fun e => e.kind == kind && get e.body "period" == Json.str name
+
+/-- **The sessions period `name`'s close lists** in the ledger `ledger`, in its order (each window's session, then its
+sample's): the empty list when the ledger closes no period `name`, and `none` when a line of the ledger isn't an entry
+or a window of the close names no session, ledgers the check refuses. -/
+def ledgerChallengePhases (ledger : Json) (name : String) : Option (List String) := do
+  let es ← entries? ledger
+  match periodEntry? es "period-close" name with
+  | none => some []
+  | some c => match get c.body "windows" with
+    | .arr ws => ws.toList.mapM fun w => str? (get w "session")
+    | _ => none
+
+/-- Why the sessions `got` the period's close lists aren't sessions the parameters list (`listed`), each once: the
+first that isn't listed or repeats one before it; `none` when they all are, once each. Linear in the sessions: both
+sets are hash sets. -/
+def challengePhasesRefusal (name : String) (listed got : List String) : Option String := Id.run do
+  let listedSet : Std.HashMap String Unit := listed.foldl (fun m s => m.insert s ()) {}
+  let mut seen : Std.HashMap String Unit := {}
+  for (s, i) in got.zipIdx do
+    unless listedSet.contains s do
+      return some (s!"session {i} of period {name}'s close ({s}) is not one the verifier's parameters list for the " ++
+        "period: only a session the challenger's ledger opened for one of its windows counts")
+    if seen.contains s then
+      return some s!"session {i} of period {name}'s close ({s}) repeats a session before it: each session counts once"
+    seen := seen.insert s ()
+  return none
+
+/-- One value for a list of sessions, its canonical JSON: `[]` for none. -/
+def challengePhasesValue (ss : List String) : ByteArray := (cs (Json.arr (ss.map Json.str).toArray)).toUTF8
+
+/-- The challenge phases (sessions) a period's case names, as one value (`challengePhasesValue`): those its ledger's
+close lists (`ledgerChallengePhases`), read with the check's own decoders from its parameters `params` and its
+commitment `commitment`; `none` only for a case the check rejects. -/
+def challengePhasesNamed (params : String) (commitment : ByteArray) : Option ByteArray := do
+  let p ← (Core.canonicalJson params.toUTF8 >>= paramsOf).toOption
+  let c ← (commitmentOf commitment).toOption
+  challengePhasesValue <$> ledgerChallengePhases c.ledger p.name
+
+/-- Period `name`'s span in the ledger: its open's and its close's seq, and the open roots its close lists in order. -/
+structure Span where
+  start : Nat
+  stop : Nat
+  roots : List String
+
+def spanOf (ledger : Json) (name : String) : Option Span := do
+  let es ← entries? ledger
+  let o ← periodEntry? es "period-open" name
+  let c ← periodEntry? es "period-close" name
+  let .arr ws := get c.body "windows" | none
+  let roots ← ws.toList.mapM fun w => str? (get w "root")
+  pure ⟨o.seq, c.seq, roots⟩
+
+/-- What an accepted period publishes: its credit, its parameters' challenger key, and from the ledger its close's open
+roots and its span (the period-open's seq and the entries from it to its close). It names no device: the accounting
+layer binds the challenger key to a registered device. -/
+structure Published where
+  credit : Credit.PeriodCredit
+  key : Json
+  roots : List String
+  start : Nat
+  length : Nat
+
+def Published.toJson (p : Published) : Json :=
+  (Credit.PeriodCredit.toJson p.credit).mergeObj <| Json.mkObj [("key", p.key),
+    ("roots", Json.arr (p.roots.map Json.str).toArray), ("start", Lean.toJson p.start), ("length", Lean.toJson p.length)]
+
+def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Published Profile :=
   match form p.name e.windows with
   | some why => .reject s!"form: {why}"
   | none =>
     match Credit.periodCredit p.key c.ledger e.pins p.main (.str p.name) e.windows with
-    | .ok pc => .accept pc { period := p.name, windows := pc.windows.length }
     | .error (code, why) => .reject s!"{code}: {why}"
+    | .ok pc =>
+      match ledgerChallengePhases c.ledger p.name, spanOf c.ledger p.name with
+      | some got, some s =>
+        match p.challengePhases.bind fun listed => challengePhasesRefusal p.name listed got with
+        | some why => .reject s!"sessions: {why}"
+        | none => .accept ⟨pc, p.key, s.roots, s.start, s.stop + 1 - s.start⟩
+            { period := p.name, windows := pc.windows.length }
+      | _, _ => .reject s!"sessions: period {p.name}'s close in the auditor's ledger lists no session ids to read"
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("period", .str pr.period), ("windows", toJson pr.windows)]
+
+/-- **What the period accounts for** (`Core.Account`): the served work its windows' credited calls did, in MACs of
+compute, from below, each window's ε at δ (once for the period), over the ledger entries of the period's span in the
+challenger key's ledger (`series`), which carry no clock reading, so the span orders periods and covers no tick. It
+names no registration head and no place: the accounting layer binds the challenger key to a registered device, so
+until it does no registered account counts the answer. -/
+def account : Core.Account :=
+  { protocol := protocolId, head := none
+    amounts := [{ metric := "work", part := .compute, key := .published "work",
+                  unit := Core.Account.macs, side := .verified,
+                  time := .steps (.run (.published "start") (.published "length")) ⟨0, 1⟩,
+                  series := some (.published "key"), share := some (.published "eps"), error := .published "delta",
+                  pool := .once, uncertified := .safe }] }
 
 def protocol : Core.Protocol where
   id := protocolId
   Params := Params
   Commitment := Commitment
   Evidence := Evidence
-  Public := Credit.PeriodCredit
+  Public := Published
   Profile := Profile
   params := paramsOf
   commitment := commitmentOf
   evidence := evidenceOf
   digest := Commitment.digest
   check := check
-  publicJson := Credit.PeriodCredit.toJson
+  publicJson := Published.toJson
   profileJson := profileJson
 
+private def paramsWith (sessions name : String) : ByteArray :=
+  s!"\{\"key\":null,\"main\":[],\"name\":{name},\"sessions\":{sessions}}".toUTF8
+private def wellFormed : ByteArray := paramsWith "[\"s0\",\"s1\"]" "\"p\""
+private def reason (ps : ByteArray) : Option String := (protocol.answer ps "[]".toUTF8 "{}".toUTF8).reason
+
 -- every input gets a verdict: parameters, a commitment or evidence of another shape is refused, naming the input
-#guard (protocol.answer "{}".toUTF8 "[]".toUTF8 "{}".toUTF8).reason == some "params: keys are not key, main, name"
-#guard (protocol.answer "{\"key\":null,\"main\":[],\"name\":1}".toUTF8 "[]".toUTF8 "{}".toUTF8).reason ==
-  some "params: name is not a string"
-#guard (protocol.answer "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 "{}".toUTF8 "{}".toUTF8).reason ==
+#guard reason "{}".toUTF8 == some s!"params: {KEYS_FORM}"
+#guard KEYS_FORM == "keys are not key, main, name, sessions, or key, main, name alone"
+-- the parameters name no device, and without `sessions` the period runs with no session list
+#guard reason ("{\"head\":\"" ++ "".pushn 'a' 128 ++
+  "\",\"key\":null,\"main\":[],\"name\":\"p\",\"place\":\"gpu0\",\"sessions\":[]}").toUTF8 ==
+  some s!"params: {KEYS_FORM}"
+#guard reason "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 == some "evidence: keys are not pins, windows"
+#guard reason (paramsWith "[]" "1") == some "params: name is not a string"
+#guard reason (paramsWith "\"s0\"" "\"p\"") == some s!"params: {CHALLENGE_PHASES_FORM}"
+#guard reason (paramsWith "[\"-s\"]" "\"p\"") == some s!"params: {CHALLENGE_PHASES_FORM}"
+#guard (protocol.answer wellFormed "{}".toUTF8 "{}".toUTF8).reason ==
   some "commitment: the auditor's ledger is not a list of its lines"
-#guard (protocol.answer "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 "[]".toUTF8 "{}".toUTF8).reason ==
-  some "evidence: keys are not pins, windows"
+#guard reason wellFormed == some "evidence: keys are not pins, windows"
 -- well-formed inputs reach `periodCredit`, whose refusal is the period's
-#guard (protocol.answer "{\"key\":null,\"main\":[],\"name\":\"p\"}".toUTF8 "[]".toUTF8
-  "{\"pins\":[],\"windows\":7}".toUTF8).reason == some s!"period: {Credit.WINDOWS_FORM}"
+#guard (protocol.answer wellFormed "[]".toUTF8 "{\"pins\":[],\"windows\":7}".toUTF8).reason ==
+  some s!"period: {Credit.WINDOWS_FORM}"
+
+-- a session the parameters don't list, or one that repeats, is refused; the sessions named are one value, `[]` for a
+-- ledger that closes no such period, and none for a case the check refuses
+#guard challengePhasesRefusal "p" ["s0", "s1"] ["s0", "s1"] == none
+#guard challengePhasesRefusal "p" ["s0", "s1"] ["s1"] == none
+#guard (challengePhasesRefusal "p" ["s0"] ["s0", "s1"]).map
+  (·.startsWith "session 1 of period p's close (s1) is not") == some true
+#guard (challengePhasesRefusal "p" ["s0"] ["s0", "s0"]).map
+  (·.startsWith "session 1 of period p's close (s0) repeats") == some true
+#guard challengePhasesRefusal "p" ["s0", "s1"] ["s1", "s0", "s1"] ==
+  some "session 2 of period p's close (s1) repeats a session before it: each session counts once"
+#guard challengePhasesNamed (String.fromUTF8! wellFormed) "[]".toUTF8 == some "[]".toUTF8
+#guard challengePhasesValue ["s0", "s1"] == "[\"s0\",\"s1\"]".toUTF8
+#guard challengePhasesNamed (String.fromUTF8! wellFormed) "[\"x\"]".toUTF8 == none
+#guard challengePhasesNamed (String.fromUTF8! wellFormed) "{}".toUTF8 == none
+#guard challengePhasesNamed "{}" "[]".toUTF8 == none
+
+-- the account reads what an accepted period publishes: its work with its ε, its challenger key, and its span's entries;
+-- it names no device
+private def credit : Credit.PeriodCredit := ⟨[[0], [1, 2]], [10, 20], 4, Credit.DELTA, [some (1 / 2), none]⟩
+private def published : Json := Published.toJson ⟨credit, .str "k", ["r0", "r1"], 3, 5⟩
+private def accepted : Core.Answer :=
+  { protocol := protocolId, verdict := .accept, reason := none, digest := none, published := some published,
+    profile := none }
+#guard ["registration_head", "place", "part"].all fun k => (published.getObjVal? k).toOption.isNone
+#guard account.Formed
+#guard account.head.isNone && account.amounts.all (·.place.isNone)
+#guard (account.amounts.map fun m => (m.key.read accepted, m.series.bind (·.read accepted))) ==
+  [(some (Lean.toJson [10, 20]), some (.str "k"))]
+#guard (account.amounts.map fun m => match m.time with
+  | .steps s _ => s.read accepted
+  | _ => none) == [some (3, 8)]
 
 end PouwCheck.Period

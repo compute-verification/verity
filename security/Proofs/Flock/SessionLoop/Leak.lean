@@ -3,21 +3,21 @@ module
 public import Proofs.Flock.SessionLoop.ZkAny
 public import Proofs.Flock.Claims.ZK.NonVacuous
 
-/-! # `SessionLoopZKAny`'s conclusion fails at a release whose link carries the witness
+/-! # `SessionLoopZKAny`'s conclusion fails at a release whose link tells two witnesses apart
 
 `Flock.Guarantees.SessionLoopZKAny` concludes `Claims.ZKOut` only where the transport's trusts hold
 (`LeanRelease.TrustsStop`), the link's among them. Without them its conclusion fails: at the session loop's own release
-(`LeanRelease.ofLoop`) with a link that is the witness's hidden values (`Loop.leakL`), against the verifier that answers
-the `Hello` and rejects the link (`Loop.helloRej`), at a statement the deployed setup parses with a reference round and
-two witnesses whose hidden values differ, no simulator given the outcome meets `ZKOut` at errors whose sum at the two
-witnesses is below `1` (`Loop.not_zkOut_leakL`), the loop's own `Loop.anySim` included.
+(`LeanRelease.ofLoop`) with a link an event tells apart at two witnesses, against the verifier that answers the `Hello`
+and rejects the link (`Loop.helloRej`), at a statement the deployed setup parses with a reference round, no simulator
+given the outcome meets `ZKOut` at errors whose sum at the two witnesses is below `1` (`Loop.not_zkOut_link`), the
+loop's own `Loop.anySim` included.
 
 * `Claims.not_zkOut_two`: two witnesses of one statement whose transcripts, at one verifier and one outcome, an event
   tells apart surely fail `ZKOut` at every simulator, at errors summing below `1` there.
-* `Loop.leakL`, `Loop.helloRej`: the link that carries the witness, and the verifier.
-* `Loop.nextD_leakL`, `Loop.msgs_leakL`: the release's link there is the witness's hidden values, whatever the worker
+* `Loop.helloRej`: the verifier.
+* `Loop.nextD_link`, `Loop.msgs_link`: the release's first message past the `Hello` is its link, whatever the worker
   sends, and the transcript is the `Hello` and the link.
-* **`Loop.not_zkOut_leakL`**.
+* **`Loop.not_zkOut_link`**.
 -/
 
 @[expose] public section
@@ -56,41 +56,37 @@ set_option synthInstance.maxHeartbeats 1000000
 
 namespace Loop
 
-/-- **The link that carries the witness**: `L₀` with the witness's hidden values as its link. -/
-def leakL {R : Type} (L₀ : LeanRelease Flock.Wit R) : LeanRelease Flock.Wit R :=
-  { L₀ with link := fun _ w _ _ => witMsg w }
-
 /-- **The verifier that answers the `Hello` and rejects the link**, of the session's `refK x + 2` rounds. -/
 def helloRej : VStar Unit :=
   ⟨fun x => refK x + 2, fun _ as _ => .ret (if as.length ≤ 1 then .msg [] else .rej)⟩
 
-/-- **The release's link is the witness's hidden values** at `leakL`, whatever the worker sends, at a statement the
+/-- **The release's message past the `Hello` is its link** at `L₁`, whatever the worker sends, at a statement the
 deployed setup parses with a reference round: the coin check takes the `Hello`'s answer, and the link is not the
 `Finish`. -/
-theorem nextD_leakL (T : CoinLayer.TableData)
-    (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
+theorem nextD_link (T : CoinLayer.TableData)
+    (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
       ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (wk : (LeanRelease.ofLoop T (leakL L₀) real).toSrv.Worker) (w : Flock.Wit) {x : Msg} {s : FlockDeploy.Ins}
+    (wk : (LeanRelease.ofLoop T L₁ real).toSrv.Worker) (w : Flock.Wit) {x : Msg} {s : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (hK : 0 < refK x)
     (ρ : (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand)
-    (κ : (LeanRelease.ofLoop T (leakL L₀) real).toSrv.Chk) (m a : Msg) :
-    (LeanRelease.ofLoop T (leakL L₀) real).toSrv.nextD (LeanRelease.ofLoop T (leakL L₀) real).fillOf
-      (fun x => refK x + 2) wk x w ρ κ [(m, a)] = witMsg w := by
-  have hfa : (LeanRelease.ofLoop T (leakL L₀) real).frameAnswer x ρ [(m, a)] = .ok {} := by
+    (κ : (LeanRelease.ofLoop T L₁ real).toSrv.Chk) (m a : Msg) :
+    (LeanRelease.ofLoop T L₁ real).toSrv.nextD (LeanRelease.ofLoop T L₁ real).fillOf
+      (fun x => refK x + 2) wk x w ρ κ [(m, a)] = L₁.link x w ρ [(m, a)] := by
+  have hfa : (LeanRelease.ofLoop T L₁ real).frameAnswer x ρ [(m, a)] = .ok {} := by
     show freshOf x [] = _
     unfold freshOf
     rw [hs]
     rfl
-  have hr : (LeanRelease.ofLoop T (leakL L₀) real).refusesCoins x ρ [(m, a)] = false := by
+  have hr : (LeanRelease.ofLoop T L₁ real).refusesCoins x ρ [(m, a)] = false := by
     refine (LeanRelease.refusesCoins_eq_false _ x ρ _).2 ⟨rfl, fun j hj => ?_⟩
     rcases Nat.le_one_iff_eq_zero_or_eq_one.1 hj with rfl | rfl
     · rfl
-    · show ((LeanRelease.ofLoop T (leakL L₀) real).frameAnswer x ρ [(m, a)]).isOk = true
+    · show ((LeanRelease.ofLoop T L₁ real).frameAnswer x ρ [(m, a)]).isOk = true
       rw [hfa]
       rfl
-  have hk : (LeanRelease.ofLoop T (leakL L₀) real).kindAt x [(m, a)].length = .recomputed := by
+  have hk : (LeanRelease.ofLoop T L₁ real).kindAt x [(m, a)].length = .recomputed := by
     unfold LeanRelease.kindAt
     rw [ite_eq_right (show ¬ [(m, a)].length = 0 by simp),
       ite_eq_left (Or.inl (show [(m, a)].length = 1 from rfl))]
@@ -98,75 +94,77 @@ theorem nextD_leakL (T : CoinLayer.TableData)
   rw [ite_eq_left (Or.inl (show [(m, a)].length + 1 < refK x + 2 by simp only [List.length_singleton]; omega)),
     LeanRelease.frameD_recomp _ _ wk x w ρ κ _ hk]
   unfold LeanRelease.ownMsg
-  rw [ite_eq_right (show ¬ (LeanRelease.ofLoop T (leakL L₀) real).refusesCoins x ρ [(m, a)] = true by
+  rw [ite_eq_right (show ¬ (LeanRelease.ofLoop T L₁ real).refusesCoins x ρ [(m, a)] = true by
       rw [hr]; exact Bool.false_ne_true),
-    ite_eq_right (show ¬ [(m, a)].length = (LeanRelease.ofLoop T (leakL L₀) real).last x by
+    ite_eq_right (show ¬ [(m, a)].length = (LeanRelease.ofLoop T L₁ real).last x by
       show ¬ [(m, a)].length = lastOf x
       rw [lastOf_eq]
       simp only [List.length_singleton]
       omega)]
   rfl
 
-/-- **The transcript against `helloRej`** at `leakL`: the `Hello`, answered, then the link, the witness's hidden values,
-rejected. -/
-theorem msgs_leakL (T : CoinLayer.TableData)
-    (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
+/-- **The transcript against `helloRej`** at `L₁`: the `Hello`, answered, then the link, rejected. -/
+theorem msgs_link (T : CoinLayer.TableData)
+    (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
       ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (wk : (LeanRelease.ofLoop T (leakL L₀) real).toSrv.Worker) (w : Flock.Wit) {x : Msg} {s : FlockDeploy.Ins}
+    (wk : (LeanRelease.ofLoop T L₁ real).toSrv.Worker) (w : Flock.Wit) {x : Msg} {s : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (hK : 0 < refK x)
     (ω : ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand) ×
-      (LeanRelease.ofLoop T (leakL L₀) real).toSrv.Chk) :
-    (runStar CoinOpen.shaH ((LeanRelease.ofLoop T (leakL L₀) real).toSrv.proverD
-        (LeanRelease.ofLoop T (leakL L₀) real).fillOf (fun x => refK x + 2) wk w) helloRej x ω ()).msgs =
-      [((LeanRelease.ofLoop T (leakL L₀) real).hello x ω.1, .msg []), (witMsg w, .rej)] := by
+      (LeanRelease.ofLoop T L₁ real).toSrv.Chk) :
+    (runStar CoinOpen.shaH ((LeanRelease.ofLoop T L₁ real).toSrv.proverD
+        (LeanRelease.ofLoop T L₁ real).fillOf (fun x => refK x + 2) wk w) helloRej x ω ()).msgs =
+      [((LeanRelease.ofLoop T L₁ real).hello x ω.1, .msg []),
+        (L₁.link x w ω.1 [((LeanRelease.ofLoop T L₁ real).hello x ω.1, [])], .rej)] := by
   obtain ⟨n, hn⟩ : ∃ n, refK x = n + 1 := ⟨refK x - 1, by omega⟩
-  have h0 : (LeanRelease.ofLoop T (leakL L₀) real).toSrv.nextD (LeanRelease.ofLoop T (leakL L₀) real).fillOf
-      (fun x => refK x + 2) wk x w ω.1 ω.2 [] = (LeanRelease.ofLoop T (leakL L₀) real).hello x ω.1 := by
+  have h0 : (LeanRelease.ofLoop T L₁ real).toSrv.nextD (LeanRelease.ofLoop T L₁ real).fillOf
+      (fun x => refK x + 2) wk x w ω.1 ω.2 [] = (LeanRelease.ofLoop T L₁ real).hello x ω.1 := by
     unfold ZkServer.nextD
     rw [ite_eq_left (Or.inl (show ([] : List (Msg × Msg)).length + 1 < refK x + 2 by simp))]
     exact LeanRelease.frameD_own _ _ wk x w ω.1 ω.2 [] (LeanRelease.kindAt_zero _ x)
-  have h1 := nextD_leakL T L₀ real wk w hs hK ω.1 ω.2 ((LeanRelease.ofLoop T (leakL L₀) real).hello x ω.1) []
+  have h1 := nextD_link T L₁ real wk w hs hK ω.1 ω.2 ((LeanRelease.ofLoop T L₁ real).hello x ω.1) []
   simp [runStar, helloRej, hn, stepWith, ZkServer.proverD, OC.eval, h0, h1]
 
-/-- **`SessionLoopZKAny`'s conclusion fails where its link carries the witness.** At the session loop's release with
-the link `leakL L₀`, every tables `real` and worker `wk`, at a statement the deployed setup parses with a reference round
-and two witnesses of a relation whose hidden values differ, no simulator given the outcome meets `ZKOut` at errors whose
-sum at the two witnesses against `helloRej` is below `1`: against it every run shows the outcome "stopped" and its link
-tells the two witnesses apart. -/
-theorem not_zkOut_leakL (T : CoinLayer.TableData)
-    (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
+/-- **`SessionLoopZKAny`'s conclusion fails where its link tells two witnesses apart.** At the session loop's release
+on `L₁`, every tables `real` and worker `wk`, at a statement the deployed setup parses with a reference round and two
+witnesses of a relation whose links an event `Ev` tells apart, no simulator given the outcome meets `ZKOut` at errors
+whose sum at the two witnesses against `helloRej` is below `1`: against it every run shows the outcome "stopped", and its
+link shows `Ev` at the one witness and not at the other. -/
+theorem not_zkOut_link (T : CoinLayer.TableData)
+    (L₁ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
       ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (wk : (LeanRelease.ofLoop T (leakL L₀) real).toSrv.Worker) {x : Msg} {s : FlockDeploy.Ins}
+    (wk : (LeanRelease.ofLoop T L₁ real).toSrv.Worker) {x : Msg} {s : FlockDeploy.Ins}
     {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (hK : 0 < refK x) {w₁ w₂ : Flock.Wit}
-    (hw : w₁.hid ≠ w₂.hid) (R : Rel Flock.Wit) (h₁ : R x w₁) (h₂ : R x w₂) (S : SimOut Bool)
-    (ε : (x : Msg) → Flock.Wit → (Θ : Type) → VStar Θ → Θ → Bool → ℝ)
+    (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (hK : 0 < refK x) {w₁ w₂ : Flock.Wit} (Ev : Msg → Prop)
+    (e₁ : ∀ ρ h, Ev (L₁.link x w₁ ρ h)) (e₂ : ∀ ρ h, ¬ Ev (L₁.link x w₂ ρ h)) (R : Rel Flock.Wit) (h₁ : R x w₁)
+    (h₂ : R x w₂) (S : SimOut Bool) (ε : (x : Msg) → Flock.Wit → (Θ : Type) → VStar Θ → Θ → Bool → ℝ)
     (hε : ε x w₁ Unit helloRej () false + ε x w₂ Unit helloRej () false < 1) :
     ¬ ZKOut (fun _ => (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand)
-        (fun _ => (LeanRelease.ofLoop T (leakL L₀) real).toSrv.Chk) CoinOpen.shaH (fun x => refK x + 2)
-        (fun w _ => (LeanRelease.ofLoop T (leakL L₀) real).toSrv.proverD (LeanRelease.ofLoop T (leakL L₀) real).fillOf
+        (fun _ => (LeanRelease.ofLoop T L₁ real).toSrv.Chk) CoinOpen.shaH (fun x => refK x + 2)
+        (fun w _ => (LeanRelease.ofLoop T L₁ real).toSrv.proverD (LeanRelease.ofLoop T L₁ real).fillOf
           (fun x => refK x + 2) wk w) R
-        (fun x τ => goesOnAt (LeanRelease.ofLoop T (leakL L₀) real).stop (refK x + 1) τ) S ε := by
-  have hgo : ∀ w ω, goesOnAt (LeanRelease.ofLoop T (leakL L₀) real).stop (refK x + 1)
-      (runStar CoinOpen.shaH ((LeanRelease.ofLoop T (leakL L₀) real).toSrv.proverD
-        (LeanRelease.ofLoop T (leakL L₀) real).fillOf (fun x => refK x + 2) wk w) helloRej x ω ()).msgs = false := by
+        (fun x τ => goesOnAt (LeanRelease.ofLoop T L₁ real).stop (refK x + 1) τ) S ε := by
+  have hgo : ∀ w ω, goesOnAt (LeanRelease.ofLoop T L₁ real).stop (refK x + 1)
+      (runStar CoinOpen.shaH ((LeanRelease.ofLoop T L₁ real).toSrv.proverD
+        (LeanRelease.ofLoop T L₁ real).fillOf (fun x => refK x + 2) wk w) helloRej x ω ()).msgs = false := by
     intro w ω
     obtain ⟨n, hn⟩ : ∃ n, refK x = n + 1 := ⟨refK x - 1, by omega⟩
-    rw [msgs_leakL T L₀ real wk w hs hK ω, hn]
+    rw [msgs_link T L₁ real wk w hs hK ω, hn]
     rfl
-  have hev : ∀ w ω, ((runStar CoinOpen.shaH ((LeanRelease.ofLoop T (leakL L₀) real).toSrv.proverD
-      (LeanRelease.ofLoop T (leakL L₀) real).fillOf (fun x => refK x + 2) wk w) helloRej x ω ()).msgs[1]?).map
-        Prod.fst = some (witMsg w) := by
+  have hev : ∀ w ω, ((runStar CoinOpen.shaH ((LeanRelease.ofLoop T L₁ real).toSrv.proverD
+      (LeanRelease.ofLoop T L₁ real).fillOf (fun x => refK x + 2) wk w) helloRej x ω ()).msgs[1]?).map Prod.fst =
+        some (L₁.link x w ω.1 [((LeanRelease.ofLoop T L₁ real).hello x ω.1, [])]) := by
     intro w ω
-    rw [msgs_leakL T L₀ real wk w hs hK ω]
+    rw [msgs_link T L₁ real wk w hs hK ω]
     rfl
   exact Claims.not_zkOut_two S ε h₁ h₂ helloRej () rfl false
-    (fun τ => (τ[1]?).map Prod.fst = some (witMsg w₁))
-    (fun ω => ⟨hgo w₁ ω, hev w₁ ω⟩)
-    (fun ω => ⟨hgo w₂ ω, fun e => witMsg_ne hw (Option.some.inj ((hev w₂ ω).symm.trans e)).symm⟩) hε
+    (fun τ => ∃ m, (τ[1]?).map Prod.fst = some m ∧ Ev m)
+    (fun ω => ⟨hgo w₁ ω, _, hev w₁ ω, e₁ _ _⟩)
+    (fun ω => ⟨hgo w₂ ω, fun ⟨m, hm, hE⟩ => by
+      obtain rfl := Option.some.inj ((hev w₂ ω).symm.trans hm)
+      exact e₂ _ _ hE⟩) hε
 
 end Loop
 
