@@ -68,11 +68,11 @@ from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 
 ROOT = HERE.parents[2]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"

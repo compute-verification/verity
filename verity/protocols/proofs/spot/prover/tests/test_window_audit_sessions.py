@@ -30,7 +30,7 @@ def test_session_jobs_refuses_anything_else_naming_the_rule(jobs):
 
 def args(loop: str | None, **more) -> argparse.Namespace:
     """An audit's arguments: ``loop``, the ZK server's Lean loop its sessions run behind, or None for none."""
-    return argparse.Namespace(bin="flock-circuit", firewall=loop, **more)
+    return argparse.Namespace(bin="flock-circuit", zk_server=loop, **more)
 
 
 def test_behind_the_zk_server_the_proof_server_proves_one_session_at_a_time_on_the_members_one_environment(tmp_path):
