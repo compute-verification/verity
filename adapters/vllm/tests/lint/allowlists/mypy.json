@@ -540,7 +540,6 @@
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "operator", "symbol": "PassEnds._write_retained", "detail": "", "count": 2},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "union-attr", "symbol": "PassEnds._write_retained", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/pearl_c/ends.py", "kind": "union-attr", "symbol": "PassEnds.end", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/pearl_c/lanes.py", "kind": "union-attr", "symbol": "LaneCalls._lanes", "detail": "", "count": 2},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "arg-type", "symbol": "CommitSession._session", "detail": ""},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "assignment", "symbol": "CommitSession.end", "detail": ""},
     {"file": "verity_vllm/protocols/remote_bandwidth/remote.py", "kind": "assignment", "symbol": "CommitSession.install", "detail": ""},

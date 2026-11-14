@@ -320,7 +320,7 @@ class LaneCalls(_RunState):
             with torch.cuda.stream(lane) if g is not None else nullcontext():
                 for i, f in enumerate(steps):
                     if i == cut and cuda:
-                        tl.event.record(lane)
+                        cast("_Lane", tl).event.record(lane)    # a cut is of a tree aside, which took its lane above
                     f()
             if tl is not None:
                 self.kernel.dev.stream = tl.raw
@@ -334,7 +334,7 @@ class LaneCalls(_RunState):
                     with torch.cuda.stream(tl.stream) if cuda else nullcontext():
                         self.roots_buf[nb * p:nb * (p + 1)].copy_(sh.buf("tree_a")[size - nb:size])
                 if cuda and apart:
-                    to.tree_event.record(tl.stream)
+                    cast("_Lane", to).tree_event.record(tl.stream)   # a tree lane is taken with the call's side lane
             if side:
                 to = cast("_Lane", to)              # the call's side lane, taken above with its side steps
                 self.kernel.dev.stream = to.raw
