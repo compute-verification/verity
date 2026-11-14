@@ -333,10 +333,12 @@ __device__ __forceinline__ int *sk64_prologue(uint4 *smem, const uint4 *__restri
 // does): row c of S is the first 512 bytes of the key's counter-mode stream at index ("row", c)
 // (`verity.commitments.randomness`'s Key.stream: block k is SHA512(head ‖ u64be k), head = stream tag ‖ key ‖
 // frames(("row", c)), whose last byte is c for c < 256), bit u of the row (byte u / 8, LSB first) 1 where
-// S[c][u] = −1. head is row 0's (at most 103 bytes, so a block is one compression). A thread a (row, block) of the
-// stream, 8 R of them, then the 2048 R / 16 words from shared memory.
-struct StreamHead {
-  uint8_t b[104];
+// S[c][u] = −1. head is row 0's: at 16 rows at most 103 bytes, so a block is one compression; at 64 the wide key's
+// 128 (stream-wide/v1's tag, the 64-byte key and the frames), a whole block before the counter's. A thread a (row,
+// block) of the stream, 8 R of them, then the 2048 R / 16 words from shared memory.
+template <int R>
+struct StreamHeadOf {
+  uint8_t b[R == SK64_ROWS ? 128 : 104];
   int n;
 };
 
@@ -359,7 +361,7 @@ __device__ __forceinline__ void pack_bits(uint8_t (*bits)[BLOCK / 8], int q, u32
 }
 
 template <int R>
-__global__ void __launch_bounds__(8 * R) signs_kernel(const StreamHead h, u32 *__restrict__ pk) {
+__global__ void __launch_bounds__(8 * R) signs_kernel(const StreamHeadOf<R> h, u32 *__restrict__ pk) {
   __shared__ uint8_t bits[R][BLOCK / 8];
   {
     const int c = threadIdx.x >> 3, k = threadIdx.x & 7;
@@ -382,7 +384,9 @@ __global__ void __launch_bounds__(8 * R) signs_kernel(const StreamHead h, u32 *_
 // the sketch-sign key and row streams, and the sketch receipt's first-block midstate.  `rb_chain` (reader.cu)
 // completes the receipt tree's constants from that seed.  Thus no seed, sign key, or tree constant crosses the host
 // between passes.  The 64-byte seed is retained with the pass because the opener's second library uses it to restore
-// that pass's constants.  At R rows the kernel is 8 R threads, one a (row, block) of the row streams.
+// that pass's constants.  At R rows the kernel is 8 R threads, one a (row, block) of the row streams.  At 64 rows the
+// sign key is the derive's whole SHA-512 under derive-wide/v1 and the rows stream-wide/v1's under it (`rs_chain_set`):
+// a row's head is then all of `row`, and its counter the message's last 8 bytes past it.
 struct ChainPass {
   uint8_t seed[160], derive[256], receipt[128], row[128];
   int seed_len, seed_i, seed_root, derive_len, derive_seed, receipt_seed;
@@ -399,7 +403,8 @@ __device__ ChainPassState gChainPass;
 template <int R>
 __global__ void __launch_bounds__(8 * R) chain_prepare_kernel(unsigned pass, const u64 *__restrict__ previous,
                                                               uint8_t *__restrict__ seed_out, u32 *__restrict__ pk) {
-  __shared__ uint8_t seed[64], key[32], bits[R][BLOCK / 8];
+  constexpr int KEY = R == SK64_ROWS ? 64 : 32;
+  __shared__ uint8_t seed[64], key[KEY], bits[R][BLOCK / 8];
   const int tid = threadIdx.x;
   uint8_t m[256];
   u64 h[8];
@@ -418,7 +423,7 @@ __global__ void __launch_bounds__(8 * R) chain_prepare_kernel(unsigned pass, con
     for (int b = 0; b < kChainPass.derive_len; ++b) m[b] = kChainPass.derive[b];
     for (int b = 0; b < 64; ++b) m[kChainPass.derive_seed + b] = seed[b];
     sha512_bytes(m, kChainPass.derive_len, h, nullptr);
-    for (int b = 0; b < 32; ++b) key[b] = (uint8_t)(h[b >> 3] >> (56 - 8 * (b & 7)));
+    for (int b = 0; b < KEY; ++b) key[b] = (uint8_t)(h[b >> 3] >> (56 - 8 * (b & 7)));
     for (int b = 0; b < 256; ++b) m[b] = 0;
     for (int b = 0; b < 128; ++b) m[b] = kChainPass.receipt[b];
     for (int b = 0; b < 64; ++b) m[kChainPass.receipt_seed + b] = seed[b];
@@ -429,8 +434,11 @@ __global__ void __launch_bounds__(8 * R) chain_prepare_kernel(unsigned pass, con
   {
     const int c = tid >> 3, block = tid & 7;
     for (int b = 0; b < 256; ++b) m[b] = 0;
-    for (int b = 0; b < kChainPass.row_len; ++b) m[b] = kChainPass.row[b];
-    for (int b = 0; b < 32; ++b) m[kChainPass.row_key + b] = key[b];
+    if constexpr (R == SK64_ROWS)
+      for (int b = 0; b < kChainPass.row_ctr; ++b) m[b] = kChainPass.row[b];
+    else
+      for (int b = 0; b < kChainPass.row_len; ++b) m[b] = kChainPass.row[b];
+    for (int b = 0; b < KEY; ++b) m[kChainPass.row_key + b] = key[b];
     m[kChainPass.row_c] = (uint8_t)c;
     for (int b = 0; b < 8; ++b) m[kChainPass.row_ctr + b] = (uint8_t)((u64)block >> (56 - 8 * b));
     uint8_t *out = &bits[c][64 * block];
@@ -1529,31 +1537,33 @@ int rs_pack16(const void *signs, uint32_t *pk, cudaStream_t s) {
 }
 
 // The packed signs of a pass from its stream head (`signs_kernel`), the head of the key derived at `rows`: SK16_PACK
-// words into pk at 16 rows, SK64_PACK at 64.
-static int pass_signs(int rows, const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
-  StreamHead h{};
+// words into pk at 16 rows, from a head of one block with its counter; SK64_PACK at 64, from a head of at most 128.
+int rs_signs16(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
+  StreamHeadOf<SK_ROWS> h{};
   if (!head || !pk || head_len < 1 || head_len > (int)sizeof h.b || head_len + 8 + 17 > 128) return 1;
   memcpy(h.b, head, head_len);
   h.n = head_len;
-  if (rows == SK64_ROWS) signs_kernel<SK64_ROWS><<<1, 8 * SK64_ROWS, 0, s>>>(h, pk);
-  else signs_kernel<SK_ROWS><<<1, 8 * SK_ROWS, 0, s>>>(h, pk);
+  signs_kernel<SK_ROWS><<<1, 8 * SK_ROWS, 0, s>>>(h, pk);
   return cudaGetLastError() ? 4 : 0;
 }
 
-int rs_signs16(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
-  return pass_signs(SK_ROWS, head, head_len, pk, s);
-}
-
 int rs_signs64(const uint8_t *head, int head_len, uint32_t *pk, cudaStream_t s) {
-  return pass_signs(SK64_ROWS, head, head_len, pk, s);
+  StreamHeadOf<SK64_ROWS> h{};
+  if (!head || !pk || head_len < 1 || head_len > (int)sizeof h.b) return 1;
+  memcpy(h.b, head, head_len);
+  h.n = head_len;
+  signs_kernel<SK64_ROWS><<<1, 8 * SK64_ROWS, 0, s>>>(h, pk);
+  return cudaGetLastError() ? 4 : 0;
 }
 
 // The fixed messages for `chain_prepare_kernel`, at one window's challenge and the library's rows (`rs_rows`), which
 // the sign key binds.  The framing is `verity.commitments.randomness` v2, exactly as
-// `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for WT_RECEIPT=1.
-int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
+// `benchmarks/codec_tensor/wt.cu::wt_set_pass` constructs it for WT_RECEIPT=1; at 64 rows the key is 64 bytes, the
+// derive's under derive-wide/v1 and `sketch-signs/v1`, and its rows stream under stream-wide/v1.
+static int chain_pass(const uint8_t *challenge, ChainPass &P) {
   if (!challenge) return 1;
-  ChainPass P{};
+  const bool wide = gRows == SK64_ROWS;
+  P = ChainPass{};
   auto put = [](uint8_t *m, int &o, const void *src, int len) {
     memcpy(m + o, src, len);
     o += len;
@@ -1581,10 +1591,13 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   P.seed_len = o;
 
   o = 0;
-  put(P.derive, o, "verity/randomness/derive/v2", 28);
+  if (wide)
+    put(P.derive, o, "verity/randomness/derive-wide/v1", 33);
+  else
+    put(P.derive, o, "verity/randomness/derive/v2", 28);
   P.derive_seed = o + 9;
   frame(P.derive, o, 'b', zero, 64);
-  const char *sign_domain = "verity/remote-bandwidth/sketch-signs/v0";
+  const char *sign_domain = wide ? "verity/remote-bandwidth/sketch-signs/v1" : "verity/remote-bandwidth/sketch-signs/v0";
   frame(P.derive, o, 's', sign_domain, (int)strlen(sign_domain));
   uint8_t ctx[128];
   int c = 0;
@@ -1604,9 +1617,12 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   frame(P.receipt, o, 'b', zero, 64);
 
   o = 0;
-  put(P.row, o, "verity/randomness/stream/v2", 28);
+  if (wide)
+    put(P.row, o, "verity/randomness/stream-wide/v1", 33);
+  else
+    put(P.row, o, "verity/randomness/stream/v2", 28);
   P.row_key = o;
-  put(P.row, o, zero, 32);
+  put(P.row, o, zero, wide ? 64 : 32);
   uint8_t idx[32];
   c = 0;
   frame(idx, c, 's', "row", 3);
@@ -1614,9 +1630,27 @@ int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
   frame(P.row, o, 'b', idx, c);
   P.row_c = o - 1;
   P.row_ctr = o;
-  put(P.row, o, zero, 8);
-  P.row_len = o;
+  P.row_len = o + 8;
+  return P.row_ctr <= (int)sizeof P.row ? 0 : 1;
+}
+
+int rs_chain_set(const uint8_t *challenge, cudaStream_t s) {
+  ChainPass P;
+  if (chain_pass(challenge, P)) return 1;
   return cudaMemcpyToSymbolAsync(kChainPass, &P, sizeof P, 0, cudaMemcpyHostToDevice, s) ? 4 : 0;
+}
+
+// rs_chain_set's sign messages at the library's rows, on the host only: derive gets the key's derive message (its
+// seed 64 zero bytes) and dn its length, then where the seed goes; row gets a row's head (its key zero and its row 0)
+// and rn the message's length, then where the key, the row's byte and the counter go.
+int rs_chain_template(const uint8_t *challenge, uint8_t *derive, int *dn, uint8_t *row, int *rn) {
+  ChainPass P;
+  if (!derive || !dn || !row || !rn || chain_pass(challenge, P)) return 1;
+  memcpy(derive, P.derive, P.derive_len);
+  memcpy(row, P.row, P.row_ctr);
+  dn[0] = P.derive_len, dn[1] = P.derive_seed;
+  rn[0] = P.row_len, rn[1] = P.row_key, rn[2] = P.row_c, rn[3] = P.row_ctr;
+  return 0;
 }
 
 // Prepare pass `i` from the previous root, put its seed and packed signs in device memory, and install both the sketch

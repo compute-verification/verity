@@ -7,6 +7,7 @@
 # session.cu (default: the commit this one's branch left `origin/main` at) the new build holds instruction for
 # instruction (`same_sass.py`, out/same_sass.json): at 16 rows the pass runs those, so the run ends there (exit 5)
 # unless the build holds every one, and also when there is no base, the base does not compile or cuobjdump fails.
+# It ends there too unless the build's chained pass hashes its sign key and rows as the reference does (`sign_key.py`).
 # The kernels the base has none of, the 64-row pass's, get a record and their listings (`sass_gate.py`,
 # out/sass_gate.json, out/sass64), and the run ends there too (exit 5) if one holds what that gate refuses.
 # BUILD_ONLY=1 ends after the build, so a machine with no GPU checks that it compiles (TOOLKIT=1 assembles CUDA
@@ -141,6 +142,10 @@ say "build: sm_$ARCH; against $BASE_REV: $same"
     "nothing runs (out/same_sass.json, out/sass)"
   exit 5
 }
+key=$(python3 $RS/sign_key.py "$B/session.so" 2>&1)
+rc=$?
+say "build: $(tr '\n' ';' <<< "$key")"
+[ $rc = 0 ] || { say "BUILD: sign_key.py exits $rc: the device's sign key is not the reference's, so nothing runs"; exit 5; }
 # The kernels the base has none of: their record and listings, and what the 64-row kernels may not hold.
 cuobjdump -sass "$B/session.so" > "$B/session.sass" 2> "$O/cuobjdump.err" || {
   say "BUILD: cuobjdump -sass exits $? on the build ($(tr '\n' ' ' < "$O/cuobjdump.err" | cut -c1-300)), so nothing runs"

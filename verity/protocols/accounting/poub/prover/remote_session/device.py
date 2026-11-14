@@ -55,6 +55,7 @@ import bisect
 import contextlib
 import ctypes
 import gc
+import hashlib
 import queue
 import resource
 import secrets
@@ -103,12 +104,30 @@ OPEN_BATCH = 128
 """Passes whose kept levels are brought back to a GPU at once to open a window."""
 
 
+#: the 64-row signs' key and streams (`rs_chain_set`'s at 64 rows): the derive's whole SHA-512 under DERIVE_WIDE and
+#: SIGN_DOMAIN_WIDE, its rows streamed under STREAM_WIDE, each framed as `randomness`'s v2 derive and stream are
+DERIVE_WIDE = b"verity/randomness/derive-wide/v1\0"
+STREAM_WIDE = b"verity/randomness/stream-wide/v1\0"
+SIGN_DOMAIN_WIDE = "verity/remote-bandwidth/sketch-signs/v1"
+
+
+def sign_key(source: bytes, rows: int = skr.ROWS) -> bytes:
+    """A pass's sign key from its source (`rb._digest(seed, "a pass seed")`) at k_s = `rows`: `randomness.derive`'s 32
+    bytes under `rb.SIGN_DOMAIN` at 16 rows, and at 64 the wide derive's 64."""
+    context = {"tag": rb.SKETCH_SHA512, "k": rows, "n": BLOCK}
+    if rows != skr.ROWS64:
+        return randomness.derive(source, rb.SIGN_DOMAIN, context).value
+    ctx = b"".join(randomness.frame(k) + randomness.frame(context[k]) for k in sorted(context))
+    return hashlib.sha512(DERIVE_WIDE + randomness.frame(source) + randomness.frame(SIGN_DOMAIN_WIDE)
+                          + randomness.frame(ctx)).digest()
+
+
 def stream_head(seed: bytes, rows: int = skr.ROWS) -> bytes:
-    """The head of row 0's stream of a pass's signs at k_s = `rows` (`skr.sign_bits`), its last byte the row:
-    `rs_signs16`'s input, and at 64 rows `rs_signs64`'s."""
-    key = randomness.derive(rb._digest(seed, "a pass seed"), rb.SIGN_DOMAIN,
-                            {"tag": rb.SKETCH_SHA512, "k": rows, "n": BLOCK})
-    return randomness._STREAM + key.value + randomness.frame(randomness.frame("row") + randomness.frame(0))
+    """The head of row 0's stream of a pass's signs at k_s = `rows`, its last byte the row: `rs_signs16`'s input, 91
+    bytes, and at 64 rows `rs_signs64`'s, 128."""
+    tag = STREAM_WIDE if rows == skr.ROWS64 else randomness._STREAM
+    key = sign_key(rb._digest(seed, "a pass seed"), rows)
+    return tag + key + randomness.frame(randomness.frame("row") + randomness.frame(0))
 
 
 def digests(words) -> list[bytes]:
