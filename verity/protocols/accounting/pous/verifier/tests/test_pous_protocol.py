@@ -6,21 +6,55 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
-import os
 import random
 import re
+from fractions import Fraction
 from pathlib import Path
 
+import pous_scheme_vectors as sv
+import pous_vectors
 import pytest
-
+import settings
 from pous_fakes import Clock
+
 from verity.claims import get as core_claim
+from verity.commitments.randomness import frame
 from verity.protocols.accounting.pous.verifier import band, dense, primitives, protocol, schemes
 from verity.protocols.accounting.pous.verifier.codec import Geometry
+from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
 from verity.protocols.accounting.pous.verifier.layout import TensorLayout
 from verity.protocols.accounting.pous.verifier.params import Params
-from verity.protocols.accounting.pous.verifier.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
-from verity.protocols.accounting.pous.verifier.schemes.p2 import ROOT_CALL_NS, RTT_ALLOWANCE_CAP_NS
+from verity.protocols.accounting.pous.verifier.schemes import band as band_scheme
+from verity.protocols.accounting.pous.verifier.schemes import p2
+from verity.protocols.accounting.pous.verifier.schemes.p2 import (
+    CERT_FAMILY_BLOCKS,
+    CERT_K_WIDE320,
+    CERT_WIDE_BLOCKS,
+    CHACHA8,
+    CHACHA8_NONCONFORMING,
+    EXPERIMENTAL,
+    KEYS_TAG,
+    P2_CLAIMS,
+    PROTOCOL_ID,
+    ROOT_CALL_NS,
+    RTT_ALLOWANCE_CAP_NS,
+    WIDE320_CLAIMS,
+    WIDE_CLAIMS,
+    P2Params,
+    _Field,
+    block_keys,
+    chacha_block,
+    chacha_keys,
+    encode_blocks,
+    encode_segment,
+    expand_prefix,
+    family_certificate,
+    segment_seed,
+    sha512_keys,
+    stream,
+    wide320_certificate,
+    wide_certificate,
+)
 from verity.protocols.accounting.pous.verifier.verifier import VerifierKey
 
 SALT = bytes(range(24))
@@ -123,8 +157,6 @@ def test_decode_tensor(name):
 
 
 def test_band_through_the_interface_is_the_pinned_band_codec():
-    import pous_vectors
-
     small = schemes.Band(band.BandParams(16, 64, 4, 2))
     w, salt = pous_vectors._bytes("band-small-w", small.params.w_bytes), pous_vectors._bytes("salt", 24)
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())["band/small/blocks"]
@@ -134,8 +166,8 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
 
 def test_registry():
     assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v4", "p2-16448/v2"}
-    assert schemes.DEFAULT == band.BAND12.name
-    assert schemes.EXPERIMENTAL == {"p2-16448/v4", "p2-16448/v2"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
+    assert band.BAND12.name == schemes.DEFAULT
+    assert {"p2-16448/v4", "p2-16448/v2"} == schemes.EXPERIMENTAL and schemes.DEFAULT not in schemes.EXPERIMENTAL
     assert schemes.get().experimental is None
     b = schemes.get()
     assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
@@ -156,10 +188,8 @@ def test_registry():
 def test_pinned_scheme_vectors(name):
     """Each registered scheme's conformance vector (`fixtures/schemes/`, `verifier/tests/pous_scheme_vectors.py`): its
     certificate at the registered point, and a small instance's encoded segments and `vk` root in both setups."""
-    import pous_scheme_vectors as sv
-
     pinned = json.loads(sv.path(name).read_text())
-    slow = name in sv.SLOW_ENCODE and not os.environ.get("VERITY_POUS_SLOW")
+    slow = name in sv.SLOW_ENCODE and not settings.SLOW
     assert pinned["name"] == name and pinned == sv.vector(name, sv.pinned_blocks(pinned) if slow else None)
     small = schemes.get(name, params=sv.SMALL[name])
     w, salt = sv.small_inputs(name)
@@ -169,11 +199,9 @@ def test_pinned_scheme_vectors(name):
     assert public.root.hex() == pinned["small"]["root"]
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_POUS_SLOW"), reason="a whole segment at the registered point: VERITY_POUS_SLOW=1")
+@pytest.mark.skipif(not settings.SLOW, reason="a whole segment at the registered point: VERITY_POUS_SLOW=1")
 def test_band12_segment_at_the_registered_point():
     """One whole 32 MiB band12 segment through the interface equals `band/64kb/segment` (about 25 s)."""
-    import pous_vectors
-
     w, salt = pous_vectors.band_segment_input()
     blocks = schemes.get().encode_segment(salt, 0, w)
     pinned = json.loads((Path(__file__).parent / "fixtures" / "vectors.json").read_text())["band/64kb/segment"]
@@ -184,8 +212,6 @@ def test_segment_tags_are_salt_then_u64_segment():
     """`tag_s = salt ‖ u64 s` (Lean `segDom`, `PousDenseReCert.tag`): the 24-byte salt, then the segment index, little
     endian, injective in `s` over all 2^64 segments (`segDom_inj`).  The GPU path builds the same bytes
     (`verity_vllm.engine.pous.codec.segment_tags`; `benchmarks/pous` gates it against these)."""
-    from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
-
     seen = set()
     for s in (0, 1, 2, 511, 512, 2**32, 2**64 - 1):
         t = tag(salt_value(SALT), s).to_bytes(32, "little")
@@ -242,7 +268,6 @@ def test_the_band_certificate_covers_every_segment_count():
         cert = schemes.Band(band.SECURE_FIRST.with_segments(n)).certificate
         assert (cert.theorem, cert.segments, cert.k, cert.rounds, cert.hypotheses) == (
             "Pous.SecurityProofs.BandMultiMeetsFamily", n, 111, 5, ())
-    from verity.protocols.accounting.pous.verifier.schemes import band as band_scheme
     assert band_scheme.FAMILY_SEGMENTS == 1 << 64
 
 
@@ -547,8 +572,6 @@ def test_p2_family_certificate_is_the_proved_block_range():
     """`p2.family_certificate` is `P2SlackFamilyUncond`'s `λ = 128` row at k = 105, the registered certificate's every
     field but its segment pin, for a v4 store of 2^8 to 2^23 blocks at the registered width and prime in any number of
     segments; there is none off that range, at another width, or for v2's ChaCha8 keys."""
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import CERT_FAMILY_BLOCKS, family_certificate
-
     reg = schemes.get("p2-16448/v4", segments=8).certificate
     assert CERT_FAMILY_BLOCKS == (1 << 8, 1 << 23)
     for bps, segments in ((256, 1), (128, 2), (1 << 16, 1), (1 << 16, 8), (1 << 16, 128)):
@@ -566,12 +589,9 @@ def test_p2_wide_certificate_is_period_held_at():
     `Δ + RTT`, `2^20` queries, `⌊ρ·|C|⌋` at `1% + 2^-128`) for a v4 store of 2^19 to 2^27 blocks at the registered width
     and prime in any number of segments, Demo B's 1038 segments among them, resting on `P2_CLAIMS` and a claim for each
     of `periodHeldAt`'s premises at `N`; there is none off that range, at another width, or for v2's ChaCha8 keys."""
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import CERT_WIDE_BLOCKS, P2_CLAIMS, WIDE_CLAIMS, family_certificate
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import wide_certificate
-
     fam = family_certificate(P2Params(16448, 21065, 256, 1)).to_json()
     assert CERT_WIDE_BLOCKS == (1 << 19, 1 << 27)
-    assert WIDE_CLAIMS == (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
+    assert (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at") == WIDE_CLAIMS
     for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 129), (1 << 16, 1038), (1 << 16, 1 << 11)):
         cert = wide_certificate(P2Params(16448, 21065, bps, segments))
         assert cert.to_json() == fam | {"theorem": "Pous.Period.SecurityProofs.periodHeldAt",
@@ -587,12 +607,8 @@ def test_p2_wide320_certificate_is_the_320_read_window():
     with `δ` the window's `2^-20` and `2^eps_log2` the `ε_prf = 2^-127` that `Hash.Assumptions.Sha512Prf` adds at the
     memory challenger's SHA-512 indices, under `WIDE_CLAIMS` and `prf/sha-512`, over the same 2^19 to 2^27 blocks; none
     elsewhere."""
-    from fractions import Fraction
 
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import (CERT_K_WIDE320, WIDE320_CLAIMS, WIDE_CLAIMS, wide320_certificate,
-                                                       wide_certificate)
-
-    assert CERT_K_WIDE320 == 320 and WIDE320_CLAIMS == (*WIDE_CLAIMS, "prf/sha-512")
+    assert CERT_K_WIDE320 == 320 and (*WIDE_CLAIMS, "prf/sha-512") == WIDE320_CLAIMS
     for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 1038), (1 << 16, 1 << 11)):
         q = P2Params(16448, 21065, bps, segments)
         cert = wide320_certificate(q)
@@ -610,8 +626,6 @@ def test_p2_wide320_certificate_is_the_320_read_window():
 def test_p2_encode_blocks_are_slices_of_the_segment():
     """`p2.encode_blocks` from block `j0` of a segment gives those blocks of `encode_segment`, and refuses payloads that
     are not whole blocks inside the segment."""
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import encode_blocks, encode_segment
-
     params = P2Params(128, 173, 8, 2)
     w = bytes(range(112))
     c = encode_segment(params, None, SALT, 1, w)
@@ -626,8 +640,6 @@ def test_p2_encode_blocks_are_slices_of_the_segment():
 def test_p2_arithmetic(expander):
     """sq inverts the parity-canonical root, σ is an involution on [0, p), blocks and payloads are big-endian integers
     (the spec's wire format), and a block that is not a codeword is refused."""
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import _Field, block_keys
-
     f, rng = _Field(128, 173), random.Random(9)
     for _ in range(300):
         y, k = rng.randrange(f.p), rng.getrandbits(128)
@@ -651,8 +663,6 @@ def test_p2_arithmetic(expander):
 @pytest.mark.parametrize("w,c0", [(24, 20001), (24, 40001), (24, 65533), (128, 173)])
 def test_p2_square_is_exact_for_every_accepted_c0(w, c0):
     """At a small width the largest accepted c0 leaves the two folds above 2p; the squaring is still a² mod p."""
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import _Field
-
     f, rng = _Field(w, c0), random.Random(w * c0)
     for a in [0, 1, f.p - 1, *(rng.randrange(f.p) for _ in range(2000))]:
         assert f.square(a) == a * a % f.p
@@ -664,8 +674,6 @@ def test_p2_call_is_half_the_cooperating_floor_root_and_the_cap_the_largest_us_u
     w = 16,448), 16,486 squaring-equivalents per root, and the measured 8-core speedup 2,716.7 / 778.5.  The
     RTT cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so the certificate
     admits the cap and refuses every whole µs past it; what it admits past the cap is under 1 µs."""
-    from fractions import Fraction
-
     half = Fraction(16_486) * Fraction("2060.845") / Fraction("5.7") * Fraction("778.5") / Fraction("2716.7") / 2
     assert ROOT_CALL_NS == int(half) == 854_029
     delta = 500_000
@@ -706,10 +714,6 @@ def test_p2_v4_keys_are_the_specs():
     K and t of the spec's `vectors.json` (`fixtures/p2-v4-keys.json`, copied with that file's hash), at w = 64, 96, 128
     and 16,448.  The protocol's prefix frames its 24-byte salt where the spec frames the model commitment and its 32-byte
     setup salt, and nothing else differs; both are zero-padded to whole 128-byte blocks."""
-    from verity.commitments.randomness import frame
-
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import KEYS_TAG, PROTOCOL_ID, expand_prefix, sha512_keys, stream
-
     doc = json.loads((Path(__file__).parent / "fixtures" / "p2-v4-keys.json").read_text())
     assert doc["source_sha512"] == "959911fd371111fe20c4cee6fc532ff205bbf377962c73ac539a4d2de9b22121287e6e996d9ae4bfbef9f26fcd67ac78620873702c8b2899bc41a21bdd76e853"
     for v in doc["vectors"]:
@@ -736,8 +740,6 @@ def test_p2_v4_keys_are_the_specs():
 def test_p2_v2_keys_are_chacha8_from_a_segment_seed():
     """v2's per-block keys expand where they are used, on the device, from one 32-byte seed per segment (ChaCha8 with
     the block index as nonce), so no key-sized state is stored and the 1.05× space bound holds."""
-    from verity.protocols.accounting.pous.verifier.schemes.p2 import chacha_block, chacha_keys, segment_seed
-
     # the ChaCha block function against RFC 8439 §2.3.2 (20 rounds, the same word layout), ChaCha8 against the published
     # zero-key, zero-nonce vector
     assert chacha_block(bytes(range(32)), 1 | 0x09000000 << 32, 0x4A000000, 20)[:16].hex() == "10f1e7e4d13b5915500fdd1fa32071c4"
@@ -754,8 +756,6 @@ def test_p2_v2_keys_are_chacha8_from_a_segment_seed():
 def test_p2_tweak_is_rejection_sampled():
     """A tweak candidate at or above p is skipped for the next one, as the spec requires; it is never reduced by one
     subtraction of p, which would give the values below c0 twice the weight of the rest.  Both expanders."""
-    from verity.protocols.accounting.pous.verifier.schemes import p2
-
     params = P2Params(128, 173, 4, 1, CHACHA8)
     assert p2.below(params.p, iter([params.p, params.p + 5, (1 << 128) - 1, 7])) == 7
     assert p2.below(params.p, iter([params.p - 1])) == params.p - 1

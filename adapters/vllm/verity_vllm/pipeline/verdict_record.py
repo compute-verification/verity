@@ -21,9 +21,6 @@ class FromRecordOptions:
     out: str | None = option("--out", default=None, help="where to write (default <row_dir>/verdict.json)")
     rc: int | None = option("--rc", type=int, default=None,
                             help="commit_delta's exit code (row_pod.sh passes it; a pre-P5 row's commit_summary.json supplies it otherwise)")
-    stage_ok: str | None = option("--stage-ok", default=None,
-                                  help="a stage decision made outside this verdict, if any (recorded as compat.stage_ok; a disagreement is a note)")
-    quiet: bool = option("--quiet", default=False, action="store_true")
     cmd: str = field(default="from-record", init=False)
 
 
@@ -31,10 +28,9 @@ COMMANDS = {"from-record": FromRecordOptions}
 
 
 def main(a: FromRecordOptions) -> int:
-    v = from_record(a.row_dir, rc=a.rc, stage_ok=a.stage_ok)
+    v = from_record(a.row_dir, rc=a.rc)
     out = Path(a.out) if a.out else Path(a.row_dir) / "verdict.json"
     v.write(out)
-    if not a.quiet:
-        gs = " ".join(f"{k}={v_}" for k, v_ in v.groups().items())
-        print(f"{v.outcome} {out} [{gs}]")
+    gs = " ".join(f"{k}={v_}" for k, v_ in v.groups().items())
+    print(f"{v.outcome} {out} [{gs}]")
     return 0

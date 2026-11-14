@@ -308,6 +308,25 @@ def test_a_restack_commit_that_changes_more_than_the_moves_script_is_the_prs_own
     assert (d.kind, d.moves) == ("authored", ()) and d.why == f"{sneaked[:12]} changes b.py beyond the move {move[:12]}'s script"
 
 
+#: what reaches the store (`research.store`: its key pair, bucket, root and config, the export's key pair, the API token that
+#: mints a key, the index's databases) and the queue's GitHub and Slack credentials
+KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "R2_ENDPOINT", "R2_BUCKET", "R2_ACCOUNT_ID",
+        "RESEARCH_STORE", "RESEARCH_STORE_CONFIG", "RESEARCH_EXPORT_BUCKET", "RESEARCH_EXPORT_ACCESS_KEY_ID",
+        "RESEARCH_EXPORT_SECRET_ACCESS_KEY", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "STORE_INDEXER_DATABASE_URL",
+        "STORE_PRIVATE_READER_URL", "GH_TOKEN", "GITHUB_TOKEN", "SLACK_BOT_TOKEN")
+
+
+def test_a_moves_rerun_sees_neither_the_stores_keys_nor_the_queues_credentials(repo: Path, monkeypatch):
+    """The move's script runs the tree's own code, from a carried head, in drive's or the loop's process, which hold the store's
+    keys to write labels and verdicts: the run sees none of them, nor what pushes, and the rest of the environment reaches it."""
+    for k in (*KEYS, "KEPT"):
+        monkeypatch.setenv(k, "dummy-" + k.lower())
+    monkeypatch.setattr(carry, "_MOVED", "import os, sys; sys.exit(','.join(sorted(k for k, v in os.environ.items() "
+                                         "if v.startswith('dummy-'))))")
+    head = git(repo, "rev-parse", "main")
+    assert carry.moved_tree(repo, head, head, Path("unused")) == (None, "exit 1: KEPT")
+
+
 def test_a_move_never_reruns_on_a_tree_that_another_commit_of_the_line_leaves_unvouched(moved: Path, tmp_path: Path):
     """A move's script runs a tree's own code (`rename.py` loads the tree's pins list), so carry reruns it only once every other
     commit of the PR's line passed: here an unreviewed commit below the crossing plants code in that list."""
