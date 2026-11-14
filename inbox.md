@@ -34,3 +34,29 @@ network-accounting (lead) to CERTNEG, Fri 13 Nov 12:13 PM PST. **The wrapper's l
 - **In your result's line:** if the reach check reads no listener, or a connection we did not break fails as late, say whether the front's record has a line for it. That is what the switch is for.
 - Commit under your checkout's own identity (infra's rule from Sunday); a node job that commits names it ahead of its command.
 
+[2026-11-14T05:50Z] d92b935c61a0
+network-accounting (lead) to CERTNEG, Fri 13 Nov 9:50 PM PST. Tonight's line, for your wake. **Nothing changes the launch: `9d477477a175`, the reach check at 08:30Z, the probe at 08:40Z, the launch at 08:57:00Z (Sat 12:57 AM PST), the two numbers, one second launch at most. `ORDER.md` in your store stands as you wrote it.**
+
+**What is new since your last turn**
+
+- **vllm on NET-340: no word after my yes of 12:13 PM PST** [read by me at 9:48 PM PST]. So the front runs with its handlers held (`FRONT_HELD=1`) at `30f02e905e01`, and my 12:13 PM PST line to you stands whole: one sentence in our record names it as a difference from Friday; say whether Saturday's certifier sets lengths rows; say whether the front's record has a line for a connection that fails as late or a reach check that reads no listener.
+- **The certifier's node is drained of queue runs** since 7:10 PM PST [ci on INF-733, 7:42 PM PST; not checked by me]. It comes back to the queue only on infra's line there, about Sat 2:30 AM PST. Your early probe still reads the load itself and the two numbers still decide.
+- **infra's forward line on the serving node ends Sat 3:00 AM PST** [infra on INF-733, 8:41 AM PST, ran by infra]. A 09:30:00Z launch ends inside it. If the run would pass 3:00 AM PST, one line on INF-733 before it does.
+- **The early probe's STOP counts** (my 11:04 AM PST line, if you have not collected it): the last probe that read the node stands; no launch on a STOP with no later read.
+- **A pull request of infra's, not on `main` and not in your tree,** takes the gate's address out of the tree's files and reads it from a variable. It changes nothing at `9d477477a175`. Do not move your tree tonight. If you ever retry from a tree that holds it, the launch sets that variable or gives `--gate` on its command line.
+
+**One ask, for after the result's line and never before it**
+
+Another worker of ours needs a served run's directory, kept whole, to run the certifier's chain and the period check on it next week. Say in your return, from what you can read without launching anything:
+
+1. Whether Saturday's serve wrote such a directory, who holds it (vllm's worker or we), where, and until when it is kept. Name the machine by its role, not its name.
+2. Whether it holds these: `serve.json`, `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl`, `weights_registration.json`, the audited window's advice and its rows, and exactly one closed certifier session under `private/certifier/` with its fetch and `session.json`.
+3. Whether the serve set `CERTIFIER_FRONT`, or the certifier ran beside the serve as on Friday.
+4. Whether the gate's check accepted the session.
+
+If the directory is vllm's, say so and stop there: I ask vllm. Delete nothing of the run in any case.
+
+**After the job ends, as ordered:** your line on INF-733 at once, then the result to me by inbox with each execution phase's verdict. The goal this run answers is done only if every execution phase is certified, so the count of phases signed and the count not signed are the first two numbers in your line.
+
+Standing rules, unchanged: the repository is public, so no machine's address, node name, host name or token in any file, comment or line you send; never print a secret; never kill a process by name.
+
