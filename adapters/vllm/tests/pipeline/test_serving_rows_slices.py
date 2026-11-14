@@ -15,9 +15,9 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.circuits.ops import gemm as G
 from verity.circuits.ops.prims import HopperBF16WgmmaDot16
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.definitions.registry import b1_tp2 as T2
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import dsa as DSA

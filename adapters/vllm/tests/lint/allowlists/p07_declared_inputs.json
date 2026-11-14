@@ -17,7 +17,6 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "git_head", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "nvidia_smi_used_mib", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "cwd", "symbol": "git_head", "detail": "pathlib.Path.cwd"},
-    {"file": "verity_vllm/pipeline/report.py", "kind": "seed-default", "symbol": "bootstrap_ci", "detail": "seed"},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "cwd", "symbol": "main", "detail": "os.getcwd"},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace", "count": 2},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "main", "detail": "/workspace"},

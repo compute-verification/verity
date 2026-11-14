@@ -50,7 +50,8 @@ def phi_of(rec: dict, *, hf_home: str | None = None, config: str | None = None) 
     cp = config or hf_config_path(str(hf_home), repo, rev)
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
-    hf = json.loads(Path(cp).read_text())
+    with open(cp) as f:
+        hf = json.load(f)
     declared = w.get("requests")   # a manifest that states no requests declares none
     reqs = [{"request_id": q.get("request_id"), "index": q.get("index", i), "prompt_len": q.get("prompt_len") or q.get("prompt_token_ids"),
              "max_tokens": q.get("max_tokens"), "arrive_step": q.get("arrive_step", 0), "n": q.get("n"), "seed": q.get("seed")}
@@ -127,6 +128,58 @@ def workload_program(phi: Phi, comps: dict | None = None):
 def load_descriptor(path: str) -> dict:
     with (gzip.open(path, "rt") if path.endswith(".gz") else open(path)) as f:
         return json.load(f)
+
+
+def _refs_view(a: dict) -> str:
+    return json.dumps(a.get("refs"), sort_keys=True)[:240]
+
+
+def first_divergence(pred: dict, traced: dict) -> dict:
+    """The first place two descriptors differ, in the order a reader would look: program_fn, the definition sets, a shared
+    definition's content, then the root body node by node (callee, form, argument types and references)."""
+    if pred.get("program_fn") != traced.get("program_fn"):
+        return {"where": "program_fn", "predicted": str(pred.get("program_fn"))[:300], "traced": str(traced.get("program_fn"))[:300]}
+    dp, dt = pred["definitions"], traced["definitions"]
+    root = traced.get("root")
+    only_p, only_t = sorted(set(dp) - set(dt)), sorted(set(dt) - set(dp))
+    if only_p or only_t:
+        return {"where": "definitions", "only_predicted": only_p[:6], "only_traced": only_t[:6], "n_only_predicted": len(only_p),
+                "n_only_traced": len(only_t)}
+    differing = [k for k in sorted(dp) if k != root and dp[k] != dt[k]]
+    if differing:
+        k = differing[0]
+        fields = sorted(f for f in set(dp[k]) | set(dt[k]) if dp[k].get(f) != dt[k].get(f))
+        return {"where": "definition", "definition": k, "fields": fields, "n_differing": len(differing)}
+    for key in ("types", "callees", "schema"):
+        a, b = pred.get(key), traced.get(key)
+        if a != b:
+            a, b = a if a else [], b if b else []   # a table a descriptor leaves out, or holds empty, has no entry to show
+            i = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+            return {"where": key, "index": i, "predicted": str(a[i] if i < len(a) else None)[:300], "traced": str(b[i] if i < len(b) else None)[:300],
+                    "n_predicted": len(a), "n_traced": len(b)}
+    bp, bt = dp[root]["body"], dt[root]["body"]
+    cp, ct = pred["callees"], traced["callees"]
+    tp, tt = pred["types"], traced["types"]
+    for k, (x, y) in enumerate(zip(bp["nodes"], bt["nodes"])):
+        if x == y:
+            continue
+        fx, fy = cp[x["fn"]], ct[y["fn"]]
+        d = {"where": "root node", "node": k, "callee_predicted": fx[:200], "callee_traced": fy[:200]}
+        if fx == fy:
+            xs, ys = x.get("args"), y.get("args")   # a node that states no arguments has none to differ in
+            for ai, (ax, ay) in enumerate(zip(xs if xs else [], ys if ys else [])):
+                if ax != ay:
+                    d.update(arg=ai, type_predicted=str(tp[ax["type"]])[:160], type_traced=str(tt[ay["type"]])[:160], refs_predicted=_refs_view(ax),
+                             refs_traced=_refs_view(ay))
+                    break
+            else:
+                d["fields"] = sorted(f for f in set(x) | set(y) if x.get(f) != y.get(f))
+        return d
+    if len(bp["nodes"]) != len(bt["nodes"]):
+        return {"where": "root length", "n_predicted": len(bp["nodes"]), "n_traced": len(bt["nodes"])}
+    if bp.get("ret") != bt.get("ret"):
+        return {"where": "root ret", "predicted": json.dumps(bp.get("ret"))[:300], "traced": json.dumps(bt.get("ret"))[:300]}
+    return {"where": "annotations or encoding only"}
 
 
 # ------------------------------------------------------------------------------------------------------------------- the predictor's code
