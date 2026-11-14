@@ -71,7 +71,7 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
   cp -r "$SRC/verity/protocols/proofs/flock/prover/live" crates/flock-live
   grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/flock-live",|' Cargo.toml
   rm -f crates/flock-merkle/src/hm96.rs
-  for p in sha512 glue zk vtime; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
+  for p in sha512 glue zk vtime wide; do git apply "$SRC/verity/protocols/proofs/flock/prover/flock-$p-b684b12.patch" || return 1; done
   mkdir -p "$D.tmp"
   CARGO_TARGET_DIR=$W/target cargo build -q --release -p flock-live --features sha512,glue --bin flock-circuit -j "$TH" \
     && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-prove" || return 1
