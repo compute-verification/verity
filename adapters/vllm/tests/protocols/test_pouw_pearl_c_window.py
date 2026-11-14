@@ -96,6 +96,28 @@ def test_w_registers_each_retained_timed_rounds_calls_under_the_rounds_served_nu
                    "registered": w["registered"][:6]} and PWR.version_of(old) == 1
 
 
+def test_w_names_a_declared_day_in_its_header_only_where_the_serve_declared_one(tmp_path):
+    """With a naming (the day and its declaration's digest, as `serve_day.Day.naming` gives them) W's header gains exactly
+    those two keys and nothing else of W changes, so its digest does; without one W is the record it was. `naming_of`
+    reads the header's back, and a naming that isn't a day number and a lowercase SHA-512 digest is refused."""
+    passes = served(tmp_path)
+    naming = {"day": 3, "declaration": "5d" * 64}
+    plain = PWR.write(tmp_path / "w.json", passes, [2, 3], "ab" * 64)
+    named = PWR.write(tmp_path / "named.json", passes, [2, 3], "ab" * 64, naming)
+    assert named == {**plain, "window": {**plain["window"], **naming}} and REG.digest(named) != REG.digest(plain)
+    assert json.loads((tmp_path / "named.json").read_text()) == named
+    assert (PWR.naming_of(named), PWR.naming_of(plain), PWR.naming_of({}), PWR.NAMING) == (naming, None, None,
+                                                                                        ("day", "declaration"))
+    assert PWR.version_of(named) == PWR.VERSION
+    mans = [json.loads(Path(passes[i]["manifest"]).read_text()) for i in (3, 4)]
+    assert PWR.record(mans, "ab" * 64, [2, 3], PWR.VERSION, PWR.naming_of(named)) == named
+    for bad in ({"day": 3}, {"declaration": "5d" * 64}, {**naming, "program": "00"}, {**naming, "day": "3"},
+                {**naming, "day": True}, {**naming, "day": -1}, {**naming, "declaration": "5D" * 64},
+                {**naming, "declaration": "5d" * 32}, {**naming, "declaration": None}, {}):
+        with pytest.raises(ValueError, match="W names a declared day by its number and its declaration's SHA-512 digest"):
+            PWR.record(mans, rounds=[2, 3], naming=bad)
+
+
 def test_w_at_version_1_is_the_one_written_before_w_registered_the_weights():
     """A W states its version in its header: version 2, or none, version 1 (the run of record's W, its header the kind,
     entry, scheme and salt, its values the calls' alone). A header stating any other version, 1 included, is refused, as
@@ -180,7 +202,8 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make()
     round W numbers it (round 2, the timed call's first), W at version 2 or at version 1 (built at the version it states).
     W holds no salt key. Rows the proof blocks make otherwise (one bit of one A row), another key, a W other than the
     passes' record at its version (a version-2 W's values under a header that states none), or the passes at another
-    round is refused."""
+    round is refused. A W naming a declared day is reused as the record that names it, and a header naming half of one
+    is refused."""
     key = bytes(range(100, 132))
     man, rows, _b = committed(key, [(7, 16, 5, 64, 128), (8, 32, 17, 128, 64)], s=2)
     w = PWR.record([man], rounds=[2])
@@ -194,6 +217,10 @@ def test_the_audited_windows_values_are_ws_from_the_rows_its_proof_blocks_make()
         assert all(G.verify_read(x.domain, root, p, x.bcs[p], x.path(p), G.SCHEMA_SEG) for p in range(x.leaves))
     old = PWR.record([man], rounds=[2], version=1)
     assert {v: x.entry() for v, x in PWR.reuse(old, [man], lambda name, n, empty: rows[name], rounds=[2]).items()} == theirs
+    named = PWR.record([man], rounds=[2], naming={"day": 3, "declaration": "5d" * 64})
+    assert {v: x.entry() for v, x in PWR.reuse(named, [man], lambda name, n, empty: rows[name], rounds=[2]).items()} == theirs
+    with pytest.raises(ValueError, match="W names a declared day by its number"):
+        PWR.reuse({**w, "window": {**w["window"], "day": 3}}, [man], lambda name, n, empty: rows[name], rounds=[2])
     unstated = {**w, "window": {k: x for k, x in w["window"].items() if k != "version"}}
     flipped = {**rows, "pearl-a/2/1": rows["pearl-a/2/1"].copy()}
     flipped["pearl-a/2/1"][3, 0] ^= 1

@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 #: the toy venv's python: each served_passes.py step, debit.py and served_verdicts.py noted and answered as the real one
 #: writes its files; anything else (the script's inline checks) is the real interpreter
 STEP = r'''
-import json, sys
+import json, os, sys
 from pathlib import Path
 argv = sys.argv[1:]
 with open(sys.argv[0] + ".log", "a") as f:
@@ -43,7 +43,7 @@ elif script == "served_passes.py" and cmd == "volunteer":
     Path(opt("--out")).write_text(json.dumps({"s": 1.0, "jobs": 1, "passes": []}))
     print("volunteer PASS: 0 rows given up")
 elif script == "served_passes.py" and cmd == "retain":
-    if w := opt("--window-record"):
+    if (w := opt("--window-record")) and not os.environ.get("TOY_NO_W"):
         Path(w).write_text(json.dumps({"window": {"scheme": "pearl-c-h100-v1-h3"}}))
         print("retain PASS: 3 of 3 passes with calls retained")
         print(f"retain W: {w}, rounds 0..2 (3), 384 values, digest abcd…")
@@ -67,11 +67,11 @@ else:
 
 
 def _piece(tmp_path: Path, served: dict | None, period: dict | None = None, first: dict | None = None,
-           **extra: str) -> tuple[subprocess.CompletedProcess, Path, Path]:
+           declared: dict | None = None, **extra: str) -> tuple[subprocess.CompletedProcess, Path, Path]:
     """The piece on window 7 of a toy serve dir whose ``pearl/w7/served.json`` is ``served`` (none if None), whose
-    window serve left ``pearlplus/period.json`` `period` (none if None) and ``deployment-registration.json`` `first` (none
-    if None), under PEARLPLUS_TIE with the window serve's cubin and a toy gpu-lease: the run, the serve dir and the toy
-    tree."""
+    window serve left ``pearlplus/period.json`` `period` (none if None), ``deployment-registration.json`` `first` (none
+    if None) and ``declaration.json`` `declared` (none if None), under PEARLPLUS_TIE with the window serve's cubin and a
+    toy gpu-lease: the run, the serve dir and the toy tree."""
     tree, bin_, venv, sd = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "one_stage", tree / "benchmarks" / "harness", tree / ".venv" / "bin", bin_, venv,
               sd / "pearl" / "w7", tmp_path / "piece", tmp_path / "cubin"):
@@ -93,6 +93,8 @@ def _piece(tmp_path: Path, served: dict | None, period: dict | None = None, firs
         (sd / "pearlplus" / "period.json").write_text(json.dumps(period))
     if first is not None:
         (sd / "deployment-registration.json").write_text(json.dumps(first))
+    if declared is not None:
+        (sd / "declaration.json").write_text(json.dumps(declared))
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "PEARLPLUS_TIE": "1",
            "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": str(tmp_path / "cubin" / "pearl_c_sm90.cubin"),
            "PEARLPLUS_JOBS": "1", "PEARLPLUS_TIE_CMD": f'printf "%s\\n" "$@" > {tmp_path}/tie.args; echo "PEARL-TIE: tied"',
@@ -132,6 +134,7 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     retain = argv["served_passes.py retain"]
     assert retain[retain.index("--passes") + 1] == str(q / "passes") and retain[retain.index("--window-record") + 1] == w
     assert retain[retain.index("--volunteer") + 1] == str(q / "volunteer.json") and "--previous-record" not in retain
+    assert "--day-declaration" not in retain
     assert (tmp_path / "tie.args").read_text().split() == [str(sd), "7", w, str(q / "passes")]
     verify = argv["served_passes.py verify"]
     assert verify[verify.index("--tie") + 1] == w and verify[verify.index("--passes") + 1] == str(q / "passes")
@@ -160,6 +163,18 @@ def test_under_pearlplus_tie_w_is_chained_after_the_serves_first_registration_re
     assert retain[at:at + 4] == ["--window-record", w, "--previous-record", str(sd / "deployment-registration.json")]
 
 
+def test_under_pearlplus_tie_w_names_the_day_the_serve_declared(tmp_path):
+    """Where the window serve declared a day's program (serve-openai's --day: SERVE_DIR/declaration.json), `retain` gets
+    that file as ``--day-declaration`` beside ``--window-record W``, so W names the day as the windows' registrations do
+    and the audit tied to W holds it to that day; a serve that declared none leaves W naming none (the tests above)."""
+    run, sd, _tree = _piece(tmp_path, _epoch(), declared={"day": 3, "declaration": "5d" * 64})
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    retain = next(a for a in _steps(tmp_path) if Path(a[0]).name == "served_passes.py" and a[1] == "retain")
+    at = retain.index("--window-record")
+    assert retain[at:at + 4] == ["--window-record", str(sd / "private" / "pearlplus" / "window-record.json"),
+                                 "--day-declaration", str(sd / "declaration.json")]
+
+
 def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_retain_tie_or_verdict(tmp_path):
     """No retries: an epoch whose served.json isn't ok, or none at all, is the window's failure, and the piece gives up,
     retains, ties, verifies or asks the Lean nothing, still writing its piece over what it has, as the window's own
@@ -175,6 +190,34 @@ def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_r
         said = [x for x in run.stdout.splitlines() if x.startswith("POUW window: ")]
         assert len(said) == 1 and (said[0].endswith("so round s isn't step s") if served else
                                    said[0].endswith("so there are no passes to tie")), said
+
+
+@pytest.mark.parametrize("case", ["tie fails", "no W"])
+def test_under_pearlplus_tie_a_window_whose_commit_tied_to_w_fails_gets_no_draw_verdict_or_line(tmp_path, case):
+    """The window commit tied to W is what holds the window to its class's fixed load, so where PEARLPLUS_TIE_CMD fails,
+    or `retain` wrote no W to tie, the piece says so and stops before the coin: no draw, no `verify` (tied or not), no
+    Lean, and a piece written over a verdict document that isn't there, which `served_verdicts.pearlplus` rejects, so no
+    Pearl+ line is published for a window nothing holds to its class."""
+    extra = ({"PEARLPLUS_TIE_CMD": 'echo "PEARL-TIE: window-commit class 4,32,4 refused: its rows by step"; exit 16'}
+             if case == "tie fails" else {"TOY_NO_W": "1"})
+    run, sd, _tree = _piece(tmp_path, _epoch(), **extra)
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    names = [Path(a[0]).name + " " + a[1] for a in _steps(tmp_path)]
+    assert names == ["served_passes.py volunteer-needed", "debit.py --cubin", "served_passes.py volunteer",
+                     "served_passes.py retain", "served_verdicts.py pearlplus"], run.stdout
+    pearlplus = _steps(tmp_path)[-1]
+    assert not Path(pearlplus[pearlplus.index("--verify") + 1]).exists()
+    assert not (sd / "pearl" / "w7" / "coin.json").exists() and not (tmp_path / "tie.args").exists()
+    lines = run.stdout.splitlines()
+    if case == "tie fails":
+        assert any(x.startswith("POUW tie: served_verdicts.sh pearl-tie exit 16 after ") and
+                   x.endswith(": PEARL-TIE: window-commit class 4,32,4 refused: its rows by step") for x in lines), lines
+        assert ("POUW draw: refused before it: the window's commit tied to W failed (pearl-tie exit 16), so nothing holds "
+                "the passes to the window's class and no draw or Pearl+ line follows it") in lines
+    else:
+        assert ("POUW W: retain wrote no window record, so nothing ties the passes to the window and no draw or Pearl+ "
+                "line follows") in lines
+    assert not any(x.startswith(("POUW verdict: ", "POUW coin: ", "POUW lean: ")) for x in lines), lines
 
 
 @pytest.mark.parametrize("case", ["held", "unclosed", "refused", "unread"])

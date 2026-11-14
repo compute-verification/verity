@@ -319,6 +319,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
+- `rehearsal.sh check|serve|audit|compose|probe`: the remote demo's served path as one command a node, each verb
+  `served_verdicts.sh` at fixed settings (Pearl+ tied to the window, product remote) with its output through a filter
+  that withholds a session secret. `check` runs on any CPU node what the other verbs read that needs no card and no
+  gate: the settings, the class's circuit from the serve's φ, a stand-in window of the class through what a served
+  window's close reads of it (`rehearsal_window.py`), the harness's policy step and its limits, the policy's Lean check
+  on the class's own Program with the settings' `ALPHA`, `GAMMA` and `DAY_PROGRAM` held to what it answers
+  (`rehearsal_limits.py`), the day's declaration, the Lean the verbs run, and Pearl+ against this tree's own gate code.
 
 Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

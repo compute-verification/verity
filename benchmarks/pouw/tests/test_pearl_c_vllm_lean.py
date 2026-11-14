@@ -11,14 +11,16 @@ passes other than those the verdict read, no executable) writes none and removes
 check document either way. The real executable's run is `benchmarks/one_stage`'s ``test_served_pearlplus_lean``.
 
 ``served_passes.py case`` on the Lean answer written there writes the run's case's parts for remote's composite of record
-(`verity/pouw/pearl-plus/v1`): its params, the retained manifests, the evidence of each file the Lean's opened tiles read
-and those files' bytes once each, private; it writes none without a Lean answer or a coin record, on passes the verdict
-didn't read, or on a Lean answer over another source."""
+(`verity/pouw/pearl-plus/v1`): its params, the retained manifests, the window record W the verdict held the passes to,
+the evidence of each file the Lean's opened tiles read and those files' bytes once each, private; it writes none without
+a Lean answer or a coin record, on passes the verdict didn't read, on a Lean answer over another source, or on a
+verdict that held the passes to no W or to another than its file holds."""
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import json
+import socket
 import stat
 import sys
 from pathlib import Path
@@ -43,6 +45,8 @@ SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "se
 H100 = "pearl-c-h100-v1-h3"
 SOURCE = b"verifier" * 4
 W = "d7" * 64
+#: the clock the fixture's ``verify`` ran on (`served_passes.CLOCK`'s two readings) and this host as `check_cost` names it
+VERIFY_CLOCK, NODE = (100.0, 107.5), socket.gethostname().split(".")[0]
 pytestmark = pytest.mark.slow
 
 
@@ -54,6 +58,8 @@ def run(tmp_path_factory) -> tuple[Path, Path, dict]:
     tmp = tmp_path_factory.mktemp("lean")
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(PV, "coins", lambda n: SOURCE[:n])
+        # `served_verify` runs the module under this name now, another object than `SP` once a test file loaded it again
+        mp.setattr(sys.modules[SP.__name__], "CLOCK", iter(VERIFY_CLOCK).__next__)
         for k in ("PEARLC_CHALLENGER_GATE", "PEARLC_CHALLENGER_PEER"):
             mp.delenv(k, raising=False)
         a, b = (T.proved_pass(tmp / name, H100, ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
@@ -100,6 +106,21 @@ def test_an_agreeing_lean_verdict_is_written_where_the_compose_reads_it_with_bot
     assert (check["reason"], check["differ"], check["lean"], check["python"]) == (None, [], got, SP.python_answer(doc))
     assert check["exe_sha256"] == hashlib.sha256(exe.read_bytes()).hexdigest() and check["rc"] == 0
     assert answer["work"] == doc["answer"]["public"]["work"] and answer["source"] == SOURCE.hex()
+
+
+def test_each_check_records_its_wall_seconds_and_the_node_it_ran_on(run, tmp_path, monkeypatch):
+    """``verify``'s document and ``lean``'s check document each hold what their check cost (`check_cost`): its wall
+    seconds on the step's clock and this host's name, the Python check's beside its processes. An executable that gives no
+    verdict still cost what it ran, and a step that refuses before the executable runs records none."""
+    d, verify, doc = run
+    assert doc["check_cost"] == {"seconds": 7.5, "node": NODE, "jobs": 1}
+    monkeypatch.setattr(SP, "CLOCK", iter((10.0, 13.25, 20.0, 20.5)).__next__)
+    rc, _answer, check = lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))
+    assert rc == 0 and check["check_cost"] == {"seconds": 3.25, "node": NODE}
+    rc, _answer, check = lean(tmp_path, verify, d, stub(tmp_path, "lake: no such target\n", 1))
+    assert rc == 2 and check["check_cost"] == {"seconds": 0.5, "node": NODE}
+    rc, _answer, check = lean(tmp_path, verify, d, tmp_path / "none")
+    assert rc == 2 and check["check_cost"] is None
 
 
 def test_a_lean_verdict_that_differs_on_any_held_field_writes_no_answer_and_removes_one_there(run, tmp_path):
@@ -197,12 +218,28 @@ def case(d: Path, verify: Path, answer: Path, out: Path) -> int:
     return SP.main(["case", "--passes", str(d), "--verify", str(verify), "--lean", str(answer), "--out", str(out)])
 
 
+def tied(run, tmp_path: Path) -> tuple[Path, dict, dict]:
+    """`run`'s verdict as ``verify --tie`` leaves it once it held the passes to a window record W: its document's path,
+    the document, naming W's file and its digest, and W; with the Lean's agreeing answer written beside it."""
+    from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+
+    d, _verify, doc = run
+    w = {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "window": {"version": 2}, "registered": [], "previous": None}
+    (wfile := tmp_path / "w.json").write_text(json.dumps(w))
+    held = {**doc, "tie_record": str(wfile), "tie": {"record": REG.digest(w), "tables": 0}}
+    (v := tmp_path / "tied.json").write_text(json.dumps(held))
+    assert lean(tmp_path, v, d, stub(tmp_path, printout(doc, tie=held["tie"]), 0))[0] == 0
+    return v, held, w
+
+
 def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_privately(run, tmp_path, capsys):
-    """The params are the epoch's coins, the samples and the coin record's run and source; the manifests the retained
-    passes' in order; the evidence, per pass, each file the Lean's opened tiles read (`tile_files`, sampled and exclusion
-    tiles alike) under the SHA-512 of its bytes, and the blobs exactly those files, each once, 0700 with files 0600."""
-    d, verify, doc = run
-    assert lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))[0] == 0
+    """The params are the epoch's coins, the samples and the coin record's run, source, schema and draw, the four the
+    protocol's params name; the manifests the retained passes' in order; the window the record W the verdict held the
+    passes to, with the coin record's rounds and dropped rounds; the evidence, per pass, each file the Lean's
+    opened tiles read (`tile_files`, sampled and exclusion tiles alike) under the SHA-512 of its bytes, and the blobs
+    exactly those files, each once, 0700 with files 0600."""
+    d, _, doc = run
+    verify, _, w = tied(run, tmp_path)
     answer, out = tmp_path / "piece" / "pearlplus-lean.json", tmp_path / "case"
     capsys.readouterr()
     assert case(d, verify, answer, out) == 0
@@ -211,9 +248,14 @@ def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_pri
     paths = [Path(p["manifest"]) for p in json.loads((d / "served.json").read_text())["passes"]]
     assert (parts["schema"], parts["delta"]) == (SP.CASE_SCHEMA, doc["delta"])
     assert parts["params"] == {"coins": json.loads((d / "coins.json").read_text()), "draws": 3,
-                               "record": {"commitment": coin["commitment"], "source": SOURCE.hex()}}
+                               "record": {"commitment": coin["commitment"], "source": SOURCE.hex(),
+                                          "schema": coin["schema"], "draw": coin["draw"]}}
+    assert sorted(parts["params"]["record"]) == ["commitment", "draw", "schema", "source"]
     assert parts["manifests"] == [json.loads(p.read_text()) for p in paths]
-    assert parts["lean"] == {"verdict": "accept", "reason": None, "drawn": 3, "work": doc["answer"]["public"]["work"]}
+    assert parts["window"] == {"dropped": coin["dropped"], "record": w, "rounds": coin["rounds"]}
+    assert (coin["rounds"], coin["dropped"]) == ([0, 1], [])
+    assert parts["lean"] == {"verdict": "accept", "reason": None, "drawn": 3, "work": doc["answer"]["public"]["work"],
+                             "exact_work": None}
     coins = T.VR.epoch_coins(d / "coins.json")
     passes, want = [T.VR.load(p, coins) for p in paths], [{} for _ in paths]
     for v in doc["verdicts"]:
@@ -229,12 +271,18 @@ def test_case_writes_the_runs_case_parts_and_each_file_its_opened_tiles_read_pri
 
 
 def test_case_writes_nothing_without_the_lean_answer_its_coin_record_or_its_passes_or_on_another_source(run, tmp_path):
-    d, verify, doc = run
-    assert lean(tmp_path, verify, d, stub(tmp_path, printout(doc), 0))[0] == 0
+    """Nor without the window record W the verdict held the passes to: a verdict tied to none, one whose W's file is
+    gone, and one whose file holds another record than the verdict names."""
+    d, untied, _ = run
+    verify, doc, w = tied(run, tmp_path)
     answer = tmp_path / "piece" / "pearlplus-lean.json"
     (other := tmp_path / "other.json").write_text(json.dumps({**json.loads(answer.read_text()), "source": "00" * 32}))
     (no_coin := tmp_path / "no-coin.json").write_text(json.dumps({**doc, "coin_record": None}))
     (fewer := tmp_path / "fewer.json").write_text(json.dumps({**doc, "passes": doc["passes"][:1]}))
-    for n, (v, a) in enumerate(((verify, tmp_path / "none.json"), (no_coin, answer), (fewer, answer), (verify, other))):
+    (gone := tmp_path / "gone.json").write_text(json.dumps({**doc, "tie_record": str(tmp_path / "no-w.json")}))
+    (tmp_path / "w2.json").write_text(json.dumps({**w, "registered": [{"value": "x"}]}))
+    (swapped := tmp_path / "swapped.json").write_text(json.dumps({**doc, "tie_record": str(tmp_path / "w2.json")}))
+    for n, (v, a) in enumerate(((verify, tmp_path / "none.json"), (no_coin, answer), (fewer, answer), (verify, other),
+                                (untied, answer), (gone, answer), (swapped, answer))):
         assert case(d, v, a, tmp_path / f"case{n}") == 2, n
         assert not (tmp_path / f"case{n}").exists(), n
