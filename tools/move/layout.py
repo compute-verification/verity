@@ -1338,8 +1338,8 @@ class Run:
         if path == old and new_target == target and not self._through_moved(posixpath.dirname(old), t):
             return None                                 # neither end moved: the token stays as written
         rel = posixpath.relpath(new_target, base_new or ".")
-        if t.startswith("./") and not rel.startswith("."):
-            rel = "./" + rel
+        if t.startswith(("./", "../")) and not rel.startswith("."):
+            rel = "./" + rel                            # still read as relative (`move_check.py`'s `RELATIVE`, `MD_RELATIVE`)
         if plain and rel.startswith(".."):
             self.note("relative paths that now leave their directory", f"{path}: {t} -> {rel}")
         return rel + ("/." if dot else "") + ("/" if slash else "")

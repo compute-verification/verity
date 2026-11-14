@@ -376,3 +376,7 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["tests/commit/test_census_and_memory_map.py"]
 paths = ["verity/circuits/requirement", "tools/difftest"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_serve_h1.py"]
+paths = ["adapters/torch/tests/pouw/test_pouw_h1_receipts.py"]
