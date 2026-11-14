@@ -159,9 +159,9 @@ def test_the_word_views_and_word_statics() -> None:
 
 @pytest.mark.slow
 def test_the_switch_binds_tanh_and_ex2_to_mufus_boolean_versions() -> None:
-    """The switch (`verity_vllm.definitions.boolean`) takes the word chain to these: ``TANH`` and ``EX2`` bound through
+    """The switch (`verity.circuits.ops.boolean.versions`) takes the word chain to these: ``TANH`` and ``EX2`` bound through
     ``word_statics`` to `MufuTanh_v2` and `MufuEx2Ftz_v2`, and nothing left on words."""
-    from verity_vllm.definitions import boolean as BB
+    from verity.circuits.ops.boolean import versions as BB
     for target in PINNED:
         bits = BB.boolean_version(TR.word_of(target))
         assert bits.id == target.id and BL.is_boolean(bits)

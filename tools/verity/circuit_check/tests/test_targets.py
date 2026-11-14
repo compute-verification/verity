@@ -328,6 +328,6 @@ def test_reading_every_hook_imports_no_module_of_the_catalog():
             "for name in TG.HOOKS:\n"
             "    TG._handed(name)\n"
             "print(sorted(m for m in sys.modules if m.startswith(('verity_vllm.definitions.registry', 'verity_vllm.definitions.numerics',"
-            " 'verity_vllm.definitions.boolean')) and not m.endswith('.circuit-check')))\n")
+            " 'verity.circuits.ops.boolean.versions')) and not m.endswith('.circuit-check')))\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert r.stdout.strip() == "[]", r.stdout + r.stderr
