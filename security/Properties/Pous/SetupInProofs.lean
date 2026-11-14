@@ -3,6 +3,7 @@ module
 public import Properties.Pous
 public import Definitions.Core.InProofs
 public import Properties.Verity.Sha512
+public import Properties.Pous.InProofs
 
 /-!
 # PoUS's setup inside proofs: an accepted run leaves at most `⌊B/100⌋` blocks that don't decode
@@ -73,5 +74,14 @@ def SetupGives : Prop :=
     CarriedW q W r →
     prPMF μ (fun ω => r.accepts ω ∧ q.blocks / 100 + 1 ≤ (wrong q salt W r ω).card ∧
         ¬ Hash.CollisionIn Verity.sha512 (r.hashInputs ω)) ≤ ε
+
+/-- **`SetupGives`' conclusion fails without its hypotheses**: at the registered point, a run that always accepts, holds
+an empty block at each proof block and hashes nothing leaves every block wrong, more than `⌊B/100⌋`, so the event has
+probability `1` and the bound fails at `ε = 0`. -/
+def SetupGivesNontrivial : Prop :=
+  ∃ (salt W : ByteArray) (v : Fin PousCheck.P2.Params.deployed.blocks → ByteArray × ByteArray),
+    ¬ prPMF (PMF.pure ()) (fun ω => (MemoryChallenger.Properties.InProofs.constRun v).accepts ω ∧
+        PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤ (wrong PousCheck.P2.Params.deployed salt W (MemoryChallenger.Properties.InProofs.constRun v) ω).card ∧
+        ¬ Hash.CollisionIn Verity.sha512 ((MemoryChallenger.Properties.InProofs.constRun v).hashInputs ω)) ≤ 0
 
 end PousCheck.Properties.InProofs

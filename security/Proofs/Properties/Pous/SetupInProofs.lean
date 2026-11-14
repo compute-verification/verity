@@ -31,4 +31,23 @@ theorem setupGives : SetupGives := by
   rw [← hw]
   exact hk
 
+theorem setupGives_nontrivial : SetupGivesNontrivial := by
+  refine ⟨.empty, .empty, fun _ => (.empty, .empty), fun h => ?_⟩
+  have hw : wrong PousCheck.P2.Params.deployed .empty .empty
+      (MemoryChallenger.Properties.InProofs.constRun fun _ => (.empty, .empty)) () = Finset.univ := by
+    ext u
+    simp [wrong, BlockOk, BlockDecodes, MemoryChallenger.Properties.InProofs.constRun, PousCheck.P2.Params.blockBytes,
+      PousCheck.P2.Params.deployed, PousCheck.W_BITS]
+  have hpos : 0 < PousCheck.P2.Params.deployed.blocks := by
+    simp [PousCheck.P2.Params.blocks, PousCheck.P2.Params.deployed]
+  have hc : PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤ (wrong PousCheck.P2.Params.deployed .empty .empty
+      (MemoryChallenger.Properties.InProofs.constRun fun _ => (.empty, .empty)) ()).card := by
+    rw [hw, Finset.card_univ, Fintype.card_fin]
+    exact Nat.div_lt_self hpos (by norm_num)
+  have hn : ¬ Hash.CollisionIn Verity.sha512 [] := by simp [Hash.CollisionIn]
+  simp only [prPMF, PMF.toOuterMeasure_pure_apply, Set.mem_ofPred_eq] at h
+  split_ifs at h with hE
+  · exact absurd h (by simp)
+  · exact hE ⟨trivial, hc, hn⟩
+
 end PousCheck.Properties.InProofs.SecurityProofs

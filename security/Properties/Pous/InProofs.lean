@@ -104,7 +104,7 @@ def SessionGives : Prop :=
         ¬ Hash.CollisionIn Verity.sha512 (r.hashInputs ω)) ≤ ε
 
 /-- The run that always accepts, holds `v u` at proof block `u` and hashes nothing. -/
-def constRun {n : ℕ} (v : Fin n → Vals) : Verity.InProofs.Run Unit n fun _ => Vals :=
+def constRun {n : ℕ} {V : Type} (v : Fin n → V) : Verity.InProofs.Run Unit n fun _ => V :=
   ⟨fun _ => True, fun u _ => v u, fun _ => []⟩
 
 /-- **`SessionGives`' hypotheses hold, with `verdict`'s acceptance, at an honest session**: a key `Lms.keygen` derives at
