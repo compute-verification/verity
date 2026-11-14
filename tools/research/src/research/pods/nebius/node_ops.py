@@ -172,10 +172,10 @@ BUILD = {"lake", "lean", "leanc", "cargo", "rustc", "cc1", "cc1plus", "ld", "ld.
 QUIET_MATCH = re.compile(os.environ["QUIET_MATCH"]) if os.environ.get("QUIET_MATCH") else None
 # a train check (slot.py's group, check.py under it) runs straight through a timed window, so landing never waits on one: a
 # --timed lease would otherwise freeze a train's check for the whole window
-QUIET_EXEMPT = re.compile(r"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |tools/verity/check/(check|slot)\.py")
+QUIET_EXEMPT = re.compile(r"-m research |research launch-request|/workspace/pouw/fill/running/|timeout |tools/check/(check|slot)\.py")
 # of those, the ones whose descendants in groups of their own (ninja's compiles, a check's subprocesses) are spared too; a research
 # runner's are not, since every run's workload descends from one
-QUIET_EXEMPT_TREE = re.compile(r"/workspace/pouw/fill/running/|timeout |tools/verity/check/(check|slot)\.py")
+QUIET_EXEMPT_TREE = re.compile(r"/workspace/pouw/fill/running/|timeout |tools/check/(check|slot)\.py")
 # `research run`'s per-run sampler polls nvidia-smi every 5 s for the whole life of a run, the timed run's own included,
 # so every one is paused for a window whatever its CPU use (the pous root, 17:19Z); its run records the gap.
 SAMPLER = re.compile(r"-m research\.telemetry sample ")

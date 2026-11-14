@@ -42,6 +42,7 @@ def computed(monkeypatch: pytest.MonkeyPatch) -> list[int]:
         return FRESH(w, rows, key)
 
     monkeypatch.setattr(PH, "weight_root", computing)
+    monkeypatch.setattr(PHK, "h1_weight_root", computing)
     return seen
 
 
@@ -49,6 +50,7 @@ def test_another_key_computes_every_root_again(computed, monkeypatch):
     layers = _layers(6, n=2)
     before = PHK.weight_roots(layers)
     monkeypatch.setattr(PH, "WEIGHT_KEY", bytes(range(32)))
+    monkeypatch.setattr(PHK, "H1_WEIGHT_KEY", bytes(range(32)))
     after = PHK.weight_roots(layers)
     assert computed == [0, 1, 0, 1] and after == _fresh(layers) and all(after[w] != before[w] for w in after)
 

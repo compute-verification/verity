@@ -41,15 +41,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
 from math import ceil, log
 from pathlib import Path
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
-
-from inputs import CARDS, I, cap, observations
+from verity.protocols.proofs.spot.prover.cost.inputs import CARDS, I, cap, observations
 
 from verity import protocol
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
