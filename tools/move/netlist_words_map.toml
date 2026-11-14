@@ -1,0 +1,144 @@
+# The retired word "netlist": what `tools/move/rename.py --map tools/move/netlist_words_map.toml` renames, by the
+# Glossary's row ("a private circuit, or the circuit's description"), in its two senses:
+# - Flock's: a unit's `flock-ir-unit/v2` text (and the older `flock-unit-io/v1` text) that the prover lowers, the verifier
+#   re-derives and a statement pins, is "the circuit description": `ir_lower.netlist` and its kin (`netlist_pieces`,
+#   `netlist_pins`, `NETLIST_ROWS`, `circuit._write_netlist`), `derive.netlist`, `lowering.netlist`, the Lean's
+#   `Derive.netlist`, `DeriveAll.netlist` and `RecSparse.netlist`, the Rust `verity_unit::Netlist` and `typed::netlist`,
+#   the Rust binaries' `--netlist` and `--netlist-other` flags, their selftest case names, and the word in prose and
+#   messages;
+# - the universal unit's: the gates and wiring `verity/circuits/private_circuits/universal.py` takes as a value is "the
+#   private circuit" (`universal.Netlist` becomes `PrivateCircuit`, the Lean's name in `Claims/Sampling.lean`), in its
+#   package, its benchmark (`benchmarks/private_circuit/`), the two prover tests that build one, and the vocabulary guard.
+# It leaves what a statement, a digest or upstream holds: Flock's tags, domains and format ids (`verity/flock-netlist/v1`,
+# `flock-netlist/v1`, `flock-netlist-inst/v1`, `verity/flock-netlist/sigma/v1`, the domain prefix
+# `flock-netlist-v1/fast100x2/rep`) and the names that carry them (`FLOCK_NETLIST`, `FLOCK_NETLIST_SIGMA`, the tag set
+# `Flock.Tags.netlistV1`, whose lock records stay); the v1 statement's public key `netlist_sha256`, which the recorded
+# sessions and the binaries' JSON hold; upstream's patched binary `flock-netlist` (`flock-netlist.rs`), its `--netlist`
+# flag where `agree.py` drives it, and the patch `netlist-vectors.patch`; the agreement vectors, the recorded runs, and the
+# lints and the Glossary row that name the word. A string a digest or a stored record holds keeps its bytes: the
+# private-circuit benchmark's Definition name `HiddenNetlistG…` (its circuit text is digested) and its result keys
+# `netlist` and `netlists`, the `netlist` key of `backend.py`'s lowering and of `cuda_live_patch.py`'s `G128` lines, the selftests' case
+# names (`union_other_netlist`, `gpu_unit_other_netlist`, `prover_lowering_other_netlist…`,
+# `netlist_paired_with_other_layout_kind`), the pod scripts' output files `netlists.sha256` and `netlist.check`, and the
+# fixed text of a record's field (the benchmarks' `preprocessing`, a selftest's `expect` and label).
+
+[words]
+# --- Flock's sense, its code names first: snake-case parts, qualified names, flags, files
+"netlist_pieces" = "circuit_description_pieces"
+"netlist_pins" = "circuit_description_pins"
+"NETLIST_ROWS" = "CIRCUIT_DESCRIPTION_ROWS"
+"_netlists" = "_circuit_descriptions"
+"_netlist" = "_circuit_description"
+"--netlist" = "--circuit-description"
+"ir_lower.netlist" = "ir_lower.circuit_description"
+"lowering.netlist" = "lowering.circuit_description"
+"derive.netlist" = "derive.circuit_description"
+"compose.netlist" = "compose.circuit_description"
+"IL.netlist" = "IL.circuit_description"
+"D.netlist" = "D.circuit_description"
+"DeriveAll.netlist" = "DeriveAll.circuitDescription"
+"Derive.netlist" = "Derive.circuitDescription"
+"RecSparse.netlist" = "RecSparse.circuitDescription"
+"`netlist`" = "`circuit_description`"
+"netlist={}" = "circuit_description={}"
+"Netlist" = "CircuitDescription"
+# --- and in prose, messages and docs
+"Netlists" = "Circuit descriptions"
+"netlists" = "circuit descriptions"
+"netlist" = "circuit description"
+
+# The universal unit's private circuit, in its package, its benchmark, the prover tests that build one and the vocabulary
+# guard (a glob each, so it still matches after a directory move)
+[[words_in]]
+files = ["**/private_circuits/universal.py", "**/private_circuits/README.md", "**/private_circuits/tests/test_boolean_universal.py",
+         "benchmarks/private_circuit/universal.py", "**/test_universal_same_shape.py", "**/test_wired_links.py",
+         "tests/test_lean_vocabulary.py"]
+[words_in.words]
+"test_random_netlists_agree_with_interpret" = "test_random_private_circuits_agree_with_interpret"
+"test_every_program_bit_flip_is_another_netlist_on_the_same_circuit" = "test_every_program_bit_flip_is_another_private_circuit_on_the_same_circuit"
+"test_malformed_netlists_are_refused" = "test_malformed_private_circuits_are_refused"
+"_netlist" = "_private_circuit"
+"Netlists" = "Private circuits"
+"Netlist" = "PrivateCircuit"
+"netlists" = "private circuits"
+"netlist" = "private circuit"
+
+# Python, Rust and shell that call the circuit description by its bare name (`def netlist(d, ...)`, `netlist(rows, ...)`)
+[[words_in]]
+files = ["**/*.py", "**/*.rs", "**/*.sh"]
+[words_in.words]
+"netlist(" = "circuit_description("
+
+# Lean code that calls the circuit description by its bare name, and prose that means the `verity/flock-netlist/v1` tags
+[[words_in]]
+files = ["**/*.lean"]
+[words_in.words]
+"the netlist tags" = "the `verity/flock-netlist/v1` tags"
+"(the netlist statement" = "(the `verity/flock-netlist/v1` statement"
+"def netlist" = "def circuitDescription"
+"return netlist" = "return circuitDescription"
+"netlist (done" = "circuitDescription (done"
+"netlist u name" = "circuitDescription u name"
+
+[[words_in]]
+files = ["**/test_lean_verifier.py"]
+[words_in.words]
+"the netlist one" = "the `verity/flock-netlist/v1` one"
+
+# Rust and Python that hold the circuit description in a variable, a quoted name or a JSON key
+[[words_in]]
+files = ["**/live/src/bin/flock-live.rs"]
+[words_in.words]
+"--netlist" = "--circuit-description"
+"netlist self-check" = "circuit description self-check"
+"Netlist" = "CircuitDescription"
+"netlist" = "circuit_description"
+
+[[words_in]]
+files = ["**/test_class_statement_unit_stager.py"]
+[words_in.words]
+"its netlist encoded" = "its circuit description encoded"
+'"netlist"' = '"circuit_description"'
+"netlist" = "circuit_description"
+
+[[words_in]]
+files = ["**/verity_flock/derive.py"]
+[words_in.words]
+'"netlist"' = '"circuit_description"'
+
+[[words_in]]
+files = ["benchmarks/verifier_cost/flock_rows.py"]
+[words_in.words]
+'.netlist"' = '.circuit_description"'
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), the agreement vectors and
+# the vectors patches (upstream's flags and names), the recorded runs, files whose bytes a digest pins, lock files, and the
+# two lints that name the retired word.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "benchmarks/numerical/tests/bench/data/**",
+           "tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py"]
+
+[keep]
+# Never rewritten wherever they stand: a domain tag or format id (anything shaped `a/b/v1`), Flock's `flock-netlist` names
+# (its tags and domain prefix, upstream's binary `flock-netlist` and its notes asset), the v1 statement's public key
+# `netlist_sha256`, the patch `netlist-vectors.patch`, the names that hold a tag (`FLOCK_NETLIST`, `FLOCK_NETLIST_SIGMA`,
+# `netlistV1`), a note, artifact or branch name, the Glossary's row of older names, and what a digest or a stored record
+# holds: a JSON key `netlist` or `netlists`, the private-circuit benchmark's Definition name, the selftests' case names and
+# the pod scripts' output files, and the fixed text of a record's field (the benchmarks' `preprocessing`, a selftest's
+# `expect` and its label `Σ (netlist sha256)`).
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'flock-netlist[\w./…-]*', '\bnetlist_sha256\b', 'netlist-vectors\.patch',
+            '\bFLOCK_NETLIST\w*', '\bnetlistV1\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '(?m)^\| "netlist".*$', '"netlists?"(?=:)', '\bHiddenNetlistG', '\b(?:union|gpu_unit|prover_lowering)_other_netlist\w*',
+            '\bnetlist_paired_with_other_layout_kind\b', '\bnetlists\.sha256\b', '\bnetlist\.check\b',
+            'the unit netlist are built once per process', "refused at load \\(the netlist's leaf maps\\)",
+            'Σ \(netlist sha256\)']
+
+[keep_in]
+# `agree.py` drives upstream's binary built with the vectors patch, whose flag is `--netlist`.
+"**/agreement/agree.py" = ["--netlist"]
+# the `G128` lines' JSON key, a run's stored output
+"**/flock/prover/cuda_live_patch.py" = ["netlist"]
+
+[keep_paths]
+"**/netlist-vectors.patch" = ["netlist"]
