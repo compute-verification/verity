@@ -28,7 +28,7 @@ from typing import Any
 
 from verity_vllm.records.schema_ids import PHI_SCHEMA
 
-__all__ = ["Phi"]
+__all__ = ["Phi", "served_phi"]
 
 
 @dataclass
