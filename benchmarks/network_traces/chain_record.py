@@ -29,18 +29,18 @@
   the clear, and the period's terms for `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` summed by
   `monitoringPeriodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
-  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled sample's
+  summary is `n2_zk.py prove`'s (Selection All: every execution phase's one unit proved) or a sampled sample's
   (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
-  run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
-  the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
-  reached the verifier (`scan_step`). A scan whose honest round's registration names a tied value (its
+  run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic network certifier run until its ``--warden-run``
+  takes the gate's network certifier rows, accepted only when every round's verdict is the one scan_zk expects and no
+  witness piece reached the verifier (`scan_step`). A scan whose honest round's registration names a tied value (its
   ``rests_on_period_check``, the slot entries ``prog``) is ``accepted on the period check`` (`RESTS`), never a bare
   accept: its acceptance rests on the network period check, which refuses scan_zk's stand-in block, and so does the
-  report's. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden
+  report's. A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a network certifier
   run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`,
   its ``scope``), and its verdict is ``scan accepted``, ``scan accepted on the period check`` or ``scan refused``: N2
   isn't required, and the rest is held as before. On the certifier-only path (``--job``'s ``path``,
-  `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
+  `CERTIFIER_ONLY`) there are no network certifier rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
   that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's sample
@@ -971,7 +971,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     phase), and its
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
-    rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
+    rows form's execution phases are the scan's registrations, which no step here holds, so that form is refused."""
     from verity.protocols.proofs.spot.verifier.one_stage import registration as R
     from verity.commitments.identity import tagged_sha512
 

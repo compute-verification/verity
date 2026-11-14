@@ -77,7 +77,7 @@ def test_the_period_check_agrees_with_its_mirror(server):
 
 
 def test_each_verdict_is_the_mirrors(server):
-    """A short run over an honest period, an undecided link-window and a forged certificate, in each form: all three
+    """A short run over an honest period, an undecided execution phase and a forged certificate, in each form: all three
     verdicts."""
     port = dataclasses.replace(PORT, inputs=cases(("honest", "answer-undecided", "cert-forged", "rows-honest",
                                                    "rows-answer-undecided", "rows-cert-forged")))
@@ -134,13 +134,13 @@ ROWS_REFUSALS = {
 
 
 def test_the_rows_form_refuses_what_it_must(server):
-    """A link-window missing one of its records' certificates, one the network certifier left uncertified for refusing a
-    connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
-    another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another response
-    cap or none), scans at two δ, a scan answered over
+    """An execution phase missing one of its records' certificates, one the network certifier left uncertified for
+    refusing a connection (traffic past its Program slots), a registration not under the deployment key, the scan's
+    answer for another window's rows, rows under a schedule whose digest isn't the bound one (one field off, or another
+    response cap or none), scans at two δ, a scan answered over
     other than its 2T + 1 units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output
     but no `SlotEntry_v1` or `SelectEntry_v1` template's entries, a scan whose state is not its wired audit's
-    `SCAN_STATE`, one whose start is not opened to the empty state, a period that is not the run's first link-window
+    `SCAN_STATE`, one whose start is not opened to the empty state, a period that is not the run's first execution phase
     alone, a tied audit registered under another Program than the class circuit, a scan whose ok bits are not
     at the schedule's constants, and one under a schedule of one tick, which has no constants: Lean and the mirror each
     refuse every one at that check."""
@@ -153,8 +153,8 @@ def test_the_rows_form_refuses_what_it_must(server):
 
 
 def test_the_rows_form_accepts_a_wired_state_tied_period(server):
-    """A rows-form period whose every link-window's scan's `prog` is a compute audit's slot entries and whose state is
-    that audit's `SCAN_STATE` passes every check: Lean accepts it with the mirror's public, and leaves one with an
+    """A rows-form period whose every execution phase's scan's `prog` is a compute audit's slot entries and whose state
+    is that audit's `SCAN_STATE` passes every check: Lean accepts it with the mirror's public, and leaves one with an
     undecided scan or audit answer undecided, as the mirror does."""
     for m, want in (("rows-honest", ACCEPT), ("rows-answer-undecided", UNDECIDED), ("rows-audit-undecided", UNDECIDED)):
         for n in range(3):
@@ -228,7 +228,7 @@ def test_bad_lengths_rows_and_content_rows_are_refused_as_the_schedules(server):
 def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypatch):
     """A slot's Program reads the requests from its audit's registered `SCAN_STATE`, and the scan's units read and
     register their states at the scan's state's root, each past the first its transition's output from the one before,
-    so the rows form refuses, in Lean and in the mirror and by name, each way a link-window's state tie can fail
+    so the rows form refuses, in Lean and in the mirror and by name, each way an execution phase's state tie can fail
     (`PC.UNSTATES`): a `SCAN_STATE` that skips or alters one of the scan's transitions (the scan's state entry, or the
     audit's, at another root or domain), no state entry on either side or the scan's under another name, the state of
     an audit the scan's `prog` isn't wired to, a root that is no string, a second state entry at another root on
@@ -324,7 +324,7 @@ def test_a_scan_whose_units_read_their_state_off_the_chain_is_refused(server, mo
 
 
 def test_a_scan_whose_start_is_not_the_empty_state_is_refused(server, monkeypatch):
-    """The start unit's input, which no unit computes, is a registered row the run's first link-window must open to
+    """The start unit's input, which no unit computes, is a registered row the run's first execution phase must open to
     the empty state, so the rows form refuses, in Lean and in the mirror and by name, each way the opening can fail
     (`PC.UNPINS`): a start whose row the prover chose, opened as committed, no opening, another salt, another word
     count, no start entry, one under another name, one named by port alone, a second at another root, and a field of
@@ -344,10 +344,10 @@ def test_a_scan_whose_start_is_not_the_empty_state_is_refused(server, monkeypatc
 
 
 def test_a_period_that_is_not_the_runs_first_link_window_alone_is_refused(server, monkeypatch):
-    """A link-window after the run's first starts from the state the one before it ended in, which the check holds to
-    nothing, so the rows form refuses, in Lean and in the mirror and by name, a period of a later link-window and one
-    of the first and the next (`PC.CARRIES`), each stating a start opened to the empty state; and a mirror that takes
-    any link-window's start accepts what Lean refuses."""
+    """An execution phase after the run's first starts from the state the one before it ended in, which the check holds
+    to nothing, so the rows form refuses, in Lean and in the mirror and by name, a period of a later execution phase and
+    one of the first and the next (`PC.CARRIES`), each stating a start opened to the empty state; and a mirror that
+    takes any execution phase's start accepts what Lean refuses."""
     carries = PC.CARRIES
     for u in carries:
         monkeypatch.setattr(PC, "CARRIES", (u,))
@@ -429,7 +429,7 @@ def test_two_members_at_one_root_are_each_held_to_it(server, monkeypatch):
 
 def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
     """The scan reads each lane's Programs' rows (`scan/prog<j>`) from a compute audit's output, so the rows form
-    refuses, in Lean and in the mirror and by name, each way a link-window's tie can fail at every lane
+    refuses, in Lean and in the mirror and by name, each way an execution phase's tie can fail at every lane
     (`PC.UNTIES`): its `scan/prog<j>` entries at another root or domain than the audit's ports', the audit's entries at
     ports that are no unit's output nor a chunk's entries port (`o0`, an input, `o01`, a non-ASCII digit, no unit, a
     chunk index with a leading zero or none), no `scan/prog<j>` entry or each under another name (`scan/prog`
@@ -454,7 +454,7 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
 
 def test_a_scan_whose_prog_is_no_slot_entries_is_refused(server, monkeypatch):
     """The scan reads each slot's entry, read bit included, from the `SlotEntry_v1` unit of that slot's Program, lane
-    j's from chunk j, so the rows form refuses, in Lean and in the mirror and by name, each way a tied link-window's
+    j's from chunk j, so the rows form refuses, in Lean and in the mirror and by name, each way a tied execution phase's
     wiring can fail at one lane (`PC.UNWIRES`): the audit's chunk entry at an output port (another unit's `o<j>`, or
     the chunk's own `o1`), at the entries port of a `SlotEntry_v1` template the audit's Program doesn't have, at
     another chunk's entries port, of other than T / every leaves, the scan's lane entry named another lane's, that
@@ -481,8 +481,8 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
     smallest circuit-check row, and `PC.select_entry`, `SelectEntry_v1` at its smallest binding) have each list's
     first, and a template under either's name and
     descriptor id (`PC.SLOT_KEY`, `PC.SELECT_KEY`) with another body (`PC.RENAMED_SLOT_ENTRY`,
-    `PC.RENAMED_SELECT_ENTRY`) has none, so Lean and the mirror refuse its link-window at the wiring, Lean by the pin;
-    and a mirror that pins that digest too accepts it, the pin being all that refuses it."""
+    `PC.RENAMED_SELECT_ENTRY`) has none, so Lean and the mirror refuse its execution phase at the wiring, Lean by the
+    pin; and a mirror that pins that digest too accepts it, the pin being all that refuses it."""
     others = {}
     for select, key, entry, pins in ((False, PC.SLOT_KEY, PC.SLOT_ENTRY, "SLOT_ENTRY_PINS"),
                                      (True, PC.SELECT_KEY, PC.SELECT_ENTRY, "SELECT_ENTRY_PINS")):
@@ -510,9 +510,9 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
 
 def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
     """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
-    audit's inputs are the link-window's: over honest rows periods, which Lean and the mirror accept with one public,
-    each scan's `free` is the parameters' `free` of the audits whose registration holds its `prog`'s root (the scan's
-    own is 0), some of them nonzero."""
+    audit's inputs are the execution phase's: over honest rows periods, which Lean and the mirror accept with one
+    public, each scan's `free` is the parameters' `free` of the audits whose registration holds its `prog`'s root (the
+    scan's own is 0), some of them nonzero."""
     charged = 0
     for n in range(8):
         case = build("rows-honest", n, small=n % 2 == 0)
@@ -532,7 +532,7 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
 
 
 def charged(case: dict, public: dict) -> list[int]:
-    """The audits of an accepted rows-form `case` its `public` charges: tied to a link-window's scan and sampled in
+    """The audits of an accepted rows-form `case` its `public` charges: tied to an execution phase's scan and sampled in
     part."""
     c = json.loads(bytes.fromhex(case["commitment"]))
     audits, windows = c["audits"], c["windows"]
@@ -564,14 +564,14 @@ SAMPLED_IN_PART = ("rows-tied-partial", "rows-tied-entries-sampled", "rows-tied-
 
 
 def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server):
-    """The scan reads a tied audit only through its `prog`, E_w entry bits a link-window, and its state is the scan's
-    own, so an incorrect proof block of any of the audit's templates, an unsampled `SelectEntry_v1` or `ScanSlots_v2`
-    one among them, changes only those bits: the rows form accepts a tied audit at any sample, Lean with the mirror's
-    public, in which that audit's link-windows' terms charge every entry its at most `b` incorrect proof blocks can
-    set, `faulty_entries` = E_w = lanes · T / every · the entry's bits, when `b ≥ 1` and none when `b = 0`, every other
-    link-window's none, and `eps` holds that audit's δ beside the scans'. Each way of sampling in part is charged, the
-    demo's sample at one proof block and at two, and the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`)
-    or don't (`SlotEntry_v1`)."""
+    """The scan reads a tied audit only through its `prog`, E_w entry bits an execution phase, and its state is the
+    scan's own, so an incorrect proof block of any of the audit's templates, an unsampled `SelectEntry_v1` or
+    `ScanSlots_v2` one among them, changes only those bits: the rows form accepts a tied audit at any sample, Lean with
+    the mirror's public, in which that audit's execution phases' terms charge every entry its at most `b` incorrect
+    proof blocks can set, `faulty_entries` = E_w = lanes · T / every · the entry's bits, when `b ≥ 1` and none when `b =
+    0`, every other execution phase's none, and `eps` holds that audit's δ beside the scans'. Each way of sampling in
+    part is charged, the demo's sample at one proof block and at two, and the cases' audits select (`SelectEntry_v1`
+    beside `ScanSlots_v2`) or don't (`SlotEntry_v1`)."""
     seen = Counter()
     for m in SAMPLED_IN_PART:
         for n in range(8):
@@ -913,8 +913,8 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     they fail (a digest only once the commitment decodes); an accepted period's eps is its units' deltas summed (the
     clock form's audits', the rows form's scans' and its tied audits' sampled in part), and its profile names no sync; in
     the clock form its evidence holds
-    each clock certificate alone, and in the rows form each link-window's three records' certificates and two row
-    registrations, with one scan a link-window, all at one δ, and a schedules term equal to the cells';
+    each clock certificate alone, and in the rows form each execution phase's three records' certificates and two row
+    registrations, with one scan an execution phase, all at one δ, and a schedules term equal to the cells';
     `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
     kinds = PC.kinds(form)
     assert kinds == KINDS, kinds
@@ -947,9 +947,9 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
 
 def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units, each committing 16 bits, sampled subset:3 at δ = 1/10 with at
-    most 4 incorrect, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3
-    steps; the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over audits at
-    δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
+    most 4 incorrect, 7 cells on one connection and none on another, 2 syncs over 3 execution phases, jitter below 2
+    over 3 steps; the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over
+    audits at δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 0), 0, 2, "a", None, b"", "",
                SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
@@ -967,13 +967,13 @@ def test_the_bound_counts_what_it_says():
 
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
-    bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
-    one scan of 20 units (T = 10) sampled at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
-    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit sampled, no term for incorrect
-    proof blocks; at w63's class with the egress tie (T = 32, every unit sampled), K the tied slot entries' free inputs,
-    8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit sampled in part with at most 2
-    incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
-    them."""
+    bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 execution
+    phase one scan of 20 units (T = 10) sampled at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs,
+    instances committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit sampled, no term for
+    incorrect proof blocks; at w63's class with the egress tie (T = 32, every unit sampled), K the tied slot entries'
+    free inputs, 8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit sampled in part
+    with at most 2 incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's
+    beside them."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])

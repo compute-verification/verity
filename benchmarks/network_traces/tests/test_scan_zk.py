@@ -12,11 +12,11 @@ pins, each later one from the record before's ``last/o1``, held to the verifier'
 A warden_serve run's directory (`--warden-run`, here the synthetic run published as `warden_serve.Publisher`
 publishes a served one) is read under its deployment's key, its registration's ``rows/<direction>/<w>`` roots
 (`scan_zk.warden_roots`) the root and domain of each row registration in ``cells.jsonl``, and refused by name where a
-row, the key or the schedule isn't the warden's. The honest round on the challenger's coins (``--challenger``): its
-flags refused by name where they can't sample, the root bound to the warden's signed execution phase, and its Spec
-what the round's registration shows (`service.check_public`) over the units its `Stream` takes. w63k4, w63's class at
-a window circuit's KO 4 and KI 32, serves w63's network certifier at egress_cells 5 and reads its rounds as w63's.
-Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
+row, the key or the schedule isn't the network certifier's. The honest round on the challenger's coins
+(``--challenger``): its flags refused by name where they can't sample, the root bound to the network certifier's signed
+execution phase, and its Spec what the round's registration shows (`service.check_public`) over the units its `Stream`
+takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at egress_cells 5 and
+reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 from __future__ import annotations
 
 import hashlib
@@ -809,8 +809,8 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
-    """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key, session and schedule (its integer fields, the id egress
+    """`scan_period.rows_case` of one execution phase in the rows form's formats (`NetworkCheck.Period`; its Lean checks
+    the case on a node: scan_period.sh): the deployment's key, session and schedule (its integer fields, the id egress
     form's), the registered Program and its
     descriptor (``joint/program.json``, the generator form, `scan_zk.scan_root`, whose one-stage reads are each unit's
     slot entries) as the scan, the block's audit (its descriptor, free inputs and no steps; its registration, whose

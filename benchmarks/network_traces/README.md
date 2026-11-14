@@ -134,7 +134,7 @@ form of the scan's execution phase (`scan_period.rows_case`). The answer is acce
 request of the audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
 `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window), is witness, as every
 case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
-never in the piece's directory, which the run publishes. The certificates of its evidence, the link-window's three
+never in the piece's directory, which the run publishes. The certificates of its evidence, the execution phase's three
 records' and its two row registrations', which the network certifier signed where the check accepts them, are
 published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request

@@ -17,11 +17,12 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `2 ^ K` is the product of the factors' bounds.
 
 `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
-(`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
+(`firstFinding_none`), each execution phase's `wiredCheck` and `stateCheck` among them.
 
 `RowsTiedCharged` reads the public the rows form accepts with (`check_rows`): with no finding, every audit's check gave
-its facts and every link-window's its scan's, so the public's `audits` and `units` hold them position for position
-(`getElem?_filterMap_of_isSome`), `charged` is `chargedOf` over the audits (`charged_eq`), and a link-window's term's
+its facts and every execution phase's its scan's, so the public's `audits` and `units` hold them position for position
+(`getElem?_filterMap_of_isSome`), `charged` is `chargedOf` over the audits (`charged_eq`), and an execution phase's
+term's
 `faultyEntries` is `faultyEntries` of its registration. An audit's facts are `factsOf`'s, which refuses a profile
 sampling more than its level holds (`factsOf_sampled_le_units`). It also refuses a stratified profile with a stratum
 sampling more than it holds, and one whose strata's sizes do not sum to the level's, so facts with `drawn = units` are
@@ -140,7 +141,7 @@ theorem rowsProgWired : RowsProgWired := by
     · assumption
     · cases h0
 
-/-- A link-window's window record whose `prog` is at the root `r` and the domain `d`. -/
+/-- An execution phase's window record whose `prog` is at the root `r` and the domain `d`. -/
 def tiedExecutionPhase : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
 
@@ -155,8 +156,8 @@ def slotReg : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
     [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
-/-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the slot audit
-is tied to it, so its free inputs are in the link-window's term. -/
+/-- Its honest side: an execution phase whose scan's `prog` is at that port's root and domain is wired, and the slot
+audit is tied to it, so its free inputs are in the execution phase's term. -/
 theorem rowsProgWired_honest :
     wired #[slotAudit] slotSchedule #[slotReg] tiedExecutionPhase = true ∧ tiedIn #[slotReg] #[tiedExecutionPhase] 0 = true := by
   decide +kernel
@@ -170,7 +171,7 @@ def selectReg : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj
     [("port", "SelectEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
-/-- Its honest side: a link-window whose scan's `prog` is at that port's root and domain is wired, and the audit is
+/-- Its honest side: an execution phase whose scan's `prog` is at that port's root and domain is wired, and the audit is
 tied to it. -/
 theorem rowsProgWired_select :
     wired #[selectAudit] slotSchedule #[selectReg] tiedExecutionPhase = true ∧ tiedIn #[selectReg] #[tiedExecutionPhase] 0 = true := by
@@ -180,7 +181,7 @@ theorem tiedExecutionPhase_unwired : wired #[] slotSchedule #[] tiedExecutionPha
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsProgWired`'s property** (its nontrivial lemma): such a check
-accepts a rows-form period of one link-window with no audit, whose scan's `prog` is no audit's slot entries. -/
+accepts a rows-form period of one execution phase with no audit, whose scan's `prog` is no audit's slot entries. -/
 theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
@@ -194,7 +195,7 @@ theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
 descriptor id, one member a slot, whose closure digest is none of `slotEntryPins`. -/
 def renamedAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, "")]⟩
 
-/-- A renamed body is no slot entries: the link-window `slotAudit` wires is unwired when its audit's template has
+/-- A renamed body is no slot entries: the execution phase `slotAudit` wires is unwired when its audit's template has
 another body, with its port, root, domain and members unchanged. -/
 theorem renamedAudit_unwired : wired #[renamedAudit] slotSchedule #[slotReg] tiedExecutionPhase = false := by
   decide +kernel
@@ -361,7 +362,8 @@ root (`t`) than the scan's state's, so its Programs compute on states the scan n
 theorem stateExecutionPhase_skipped : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateExecutionPhase = false := by
   decide +kernel
 
-/-- A link-window whose scan's `prog` is wired, but whose registration names no state (`tiedExecutionPhase`), is not tied. -/
+/-- An execution phase whose scan's `prog` is wired, but whose registration names no state (`tiedExecutionPhase`), is
+not tied. -/
 theorem tiedExecutionPhase_unstated : stateTied #[slotAudit] slotSchedule #[stateReg "s"] tiedExecutionPhase = false := by
   decide +kernel
 
@@ -385,7 +387,7 @@ theorem rowsStateTied_misindexed {p : Params} {sd : ByteArray} {scan : Scan} (e 
   cases hs
 
 /-- **No period check that accepts every period has `RowsStateTied`'s property** (its nontrivial lemma): such a check
-accepts a rows-form period of one link-window whose scan's `prog` is wired to the slot audit, and whose state is not
+accepts a rows-form period of one execution phase whose scan's `prog` is wired to the slot audit, and whose state is not
 that audit's `SCAN_STATE`, which skips or alters a transition of the scan's. -/
 theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
@@ -523,13 +525,13 @@ theorem findingOf_none {α : Type} {y : Found α} (h : findingOf y = none) : ∃
   | error r => cases h
   | ok v => exact ⟨v, rfl⟩
 
-/-- The rows form's link-windows' findings, as `check` computes them. -/
+/-- The rows form's execution phases' findings, as `check` computes them. -/
 def rowsWindows (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd : ByteArray) :
     Array (Found (Option (Facts × ℕ))) :=
   (c.windows.zip e.windows).zipIdx.map fun ((reg, x), i) =>
     some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + i) reg x
 
-/-- What acceptance in the rows form gives: the sizes, no finding of a link-window or an audit, and the public, the
+/-- What acceptance in the rows form gives: the sizes, no finding of an execution phase or an audit, and the public, the
 rows form's (`rowsPublic`) with the schedule's response cap. -/
 theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile} {s : Schedule}
     {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan) (h : check p c e = .accept pub prof) :
@@ -652,7 +654,7 @@ theorem factsOf_stratified_whole {what : String} {prof : Core.Integrity} {pub : 
     exact hw.trans hsum.symm
   exact fun st m => (strata_whole ss.toList hle 0 0 (Nat.le_refl 0) hk).2 st (Array.mem_toList_iff.mpr m)
 
-/-- A link-window with no finding has its scan's facts and its tied audits' free inputs. -/
+/-- An execution phase with no finding has its scan's facts and its tied audits' free inputs. -/
 theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
     (hws : ∀ y ∈ rowsWindows p c e s sd, findingOf y = none) :
     ∀ y ∈ rowsWindows p c e s sd, ∃ u, y = .ok (some u) := by
@@ -749,12 +751,12 @@ def otherAnswer : Core.Answer :=
 def chargedParams : Params :=
   ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1, none⟩
 
-/-- Its commitment: the slot audit's registration and the link-window whose scan's `prog` is its entries port. -/
+/-- Its commitment: the slot audit's registration and the execution phase whose scan's `prog` is its entries port. -/
 def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩
 
 /-- Its honest side, at the slot audit tied to `tiedExecutionPhase`: sampled 1 of its 2 units with a bound of one incorrect
-proof block, the audit is charged and its link-window's `β_w` is the scan's every entry bit; sampled whole, it is not
-charged and `β_w` is 0. -/
+proof block, the audit is charged and its execution phase's `β_w` is the scan's every entry bit; sampled whole, it is
+not charged and `β_w` is 0. -/
 theorem rowsTiedCharged_honest :
     (chargedOf chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] 0).isSome = true ∧
       faultyEntries chargedParams chargedCommitment #[.ok ⟨2, 1, ⟨0, 1⟩, 1⟩] ⟨0, 0, 0, 0, 7⟩ tiedExecutionPhase = 7 ∧
@@ -763,7 +765,7 @@ theorem rowsTiedCharged_honest :
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsTiedCharged`'s property** (its nontrivial lemma): such a check
-accepts a rows-form period whose audit 0 is tied to its link-window's scan, and publishes no facts of it and no
+accepts a rows-form period whose audit 0 is tied to its execution phase's scan, and publishes no facts of it and no
 charge. -/
 theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
   intro h
@@ -790,7 +792,7 @@ theorem rowsCapPublished : RowsCapPublished := by
   cases hf : p.form <;> simp only [hf] at h <;> split at h <;> cases h <;> simp [CapPublished, hf]
 
 /-- **`RowsCapPublished`'s honest lemma**: the period check accepts a period under a schedule with a response cap,
-`cappedPeriod` with nothing registered. A period with link-windows needs the network certifier's LMS signatures and
+`cappedPeriod` with nothing registered. A period with execution phases needs the network certifier's LMS signatures and
 one-stage's answers, which the period's difftest builds and checks against the mirror. -/
 theorem rowsCapPublished_honest :
     ∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
@@ -803,7 +805,7 @@ theorem rowsCapPublished_honest :
   · cases hb
 
 /-- **`RowsCapPublished`'s nontrivial lemma**: the public `acceptAllRows` publishes for `cappedPeriod`, the rows form's
-terms of no link-window, names no cap, and the period's schedule has one. -/
+terms of no execution phase, names no cap, and the period's schedule has one. -/
 theorem rowsCapPublished_nontrivial :
     ¬ CapPublished cappedPeriod
       (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] cappedPeriod.cells cappedPeriod.jitter cappedPeriod.windows) := by

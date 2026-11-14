@@ -1,9 +1,10 @@
 """scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form, one
-link-window a registration. A link-window's start unit (`ingress_scan.IngressScanStart`) copies the state its scan
-starts from, the one the record before it committed (the run's first: the empty state); ingress bucket t
-(`ingress_scan.IngressScanBucket`) reads the warden's ingress row t, the scan's state S_{t−1} and its boundary's slot
-entries, and computes S_t and its egress view; egress bucket t (`egress.EgressBucket`) reads that view and computes
-the warden's egress row t. Every row of every unit, input or output, is a registered read, proved by Flock
+execution phase a registration. An execution phase's start unit (`ingress_scan.IngressScanStart`) copies the state its
+scan starts from, the one the record before it committed (the run's first: the empty state); ingress bucket t
+(`ingress_scan.IngressScanBucket`) reads the network certifier's ingress row t, the scan's state S_{t−1} and its
+boundary's slot entries, and computes S_t and its egress view; egress bucket t (`egress.EgressBucket`) reads that view
+and computes the network certifier's egress row t. Every row of every unit, input or output, is a registered read,
+proved by Flock
 `prove --zk` behind the Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except
 the honest round on the challenger's coins (``--challenger``), a `service.Stream`'s.
 
@@ -15,19 +16,19 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a slot stride, 8 an execution phase) with the
   network certifier's delay D 27 (WITHIN + EVERY − 1), KO 64 outputs and KI 1,024 prompt ids a request,
-  egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the warden at `PARAMS`, 32-bucket
-  link-windows; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8 slots, 32 prompt ids and
-  4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5 (KO + 1); ``test``
-  (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI 100) and 16-bucket
-  link-windows, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two link-windows, with a
-  fourth request admitted in the first and anchored at the second's first boundary.
-* **The run** (`scan_traffic.serve`: the warden's own `_ingress` and `_egress`, ticked as `Warden._tick` ticks them)
-  carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the fifth waits
-  in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's arrivals
-  (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's), test's
-  three (the third in the first's slot past its egress). Each link-window of each link is committed by the warden and
-  its head signed by a test-size LMS key (`warden_rows.attest`); each registration is read back by the verifier
-  (`warden_rows.check_registration`).
+  egress at `CLASS.egress` (16 cells in lanes of 4, 4 request slots of 64 17-bit ids), the network certifier at
+  `PARAMS`, 32-bucket execution phases; ``w63k4`` (`W63K4`), w63's class at KO 4 and KI 32, a window circuit's of 8
+  slots, 32 prompt ids and 4 outputs a request (egress 4 request slots of 4 ids), its certifier w63's at egress_cells 5
+  (KO + 1); ``test`` (`TEST`), the certifier tests' class (B 512, r 2, 2 lanes, C 4, EVERY 2, WITHIN 3, D 5, KO 8, KI
+  100) and 16-bucket execution phases, whose units a CPU proves in minutes; and ``test2`` (`TEST2`), test's over two
+  execution phases, with a fourth request admitted in the first and anchored at the second's first boundary.
+* **The run** (`scan_traffic.serve`: the network certifier's own `_ingress` and `_egress`, ticked as `Warden._tick`
+  ticks them) carries the setup's warden-form id requests and their responses: w63's five (3, 40, 64, 8 and 5 ids; the
+  fifth waits in the queue until request 1's egress ends at bucket 27 and takes its slot at 28), w63k4's five at w63's
+  arrivals (prompts of at most 32 ids, responses of 3, 4, 1, 4 and 2, the fifth in request 1's slot at 28 as w63's),
+  test's three (the third in the first's slot past its egress). Each execution phase of each link is committed by the
+  network certifier and its head signed by a test-size LMS key (`warden_rows.attest`); each registration is read back by
+  the verifier (`warden_rows.check_registration`).
 * **A network certifier's run** (``--warden-run RUN``, `warden_run`) in its place: a warden_serve run's directory
   (``serve``'s, or the gate's ``warden-rehearse --scan``'s with its witness under ``witness/``) at the setup's schedule
   (w63's: ``scan_zk.py schedule``) carrying the scan's traffic (``rehearse --ids``). The verifier reads
@@ -35,35 +36,35 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   registration of each execution phase of the group in ``cells.jsonl``, its head's signature verified under that key;
   the prover's rows are the records under ``cells.salts``, held to that head. Each is refused by name where it doesn't
   hold, as is a schedule the class doesn't serve and a response that isn't id-form.
-* **The group** (``--group G``, default 1; `link`'s ``start``, its first link-window, 0): G link-windows of each
+* **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each
   link, each a registration of its own (`window_of`) and proved in rounds of its own, ``<kind>-<its number>``
-  (`round_name`), in link-window order on one verifier's log (`prove`). The scan's chain runs over the group's
-  buckets from the empty state, T a link-window, and link-window w's rounds read its buckets w·T … (w + 1)·T − 1 as
-  their buckets 0 … T − 1.
-* **A link-window's rows**, committed by the prover before the sample as hiding rows (`verity.commitments.advice`,
-  each tree's root in the registration, bound to the session and the link-window's ingress head): ``state``, T
-  leaves, leaf t the state bucket t reads, S_{t−1}, and leaf 0 the state the link-window starts from, the rows a
-  window circuit of the link-window reads as its `SCAN_STATE` (`ingress_scan.window_state`), so the state bucket
-  T − 1 computes, which no bucket of the link-window reads, has no leaf; ``prog<j>`` for each lane j < NR, lane j's
-  slot entries (`slot_entries`), nb leaves for the link-window's nb = T / EVERY boundaries, leaf b slot j's entry at
+  (`round_name`), in execution phase order on one verifier's log (`prove`). The scan's chain runs over the group's
+  buckets from the empty state, T an execution phase, and execution phase w's rounds read its buckets w·T … (w + 1)·T −
+  1 as their buckets 0 … T − 1.
+* **An execution phase's rows**, committed by the prover before the sample as hiding rows (`verity.commitments.advice`,
+  each tree's root in the registration, bound to the session and the execution phase's ingress head): ``state``, T
+  leaves, leaf t the state bucket t reads, S_{t−1}, and leaf 0 the state the execution phase starts from, the rows a
+  window circuit of the execution phase reads as its `SCAN_STATE` (`ingress_scan.window_state`), so the state bucket
+  T − 1 computes, which no bucket of the execution phase reads, has no leaf; ``prog<j>`` for each lane j < NR, lane j's
+  slot entries (`slot_entries`), nb leaves for the execution phase's nb = T / EVERY boundaries, leaf b slot j's entry at
   boundary b (the outputs of the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them),
   the o0 rows of the block round's lane-j member; and ``view``, T leaves, leaf t S_t's egress view.
 * **The block round** (`BLOCK`): the slot entries' stand-in (`SlotEntry{KO, IDB}`, whose Definition id,
   ``SlotEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
   NOTs, a committed row the verifier never opens; ``x`` a row-seg/v1 row, `ROW_SCHEMAS`), one unit a slot entry of the
-  link-window, cut as one-stage cuts a template into NR members of nb units, a lane each (``block-c<j>``,
+  execution phase, cut as one-stage cuts a template into NR members of nb units, a lane each (``block-c<j>``,
   `members_of`): unit j·nb + b's ``x`` slot entry b of lane j, its free input (the member's own rows, `Frame`), and
   its o0 a registered read of ``prog<j>`` leaf b, standing in for the anchored Programs' `SlotEntry_v1` units, whose
   outputs the slot entries are. Its entries, read bit included, are the prover's: the stand-in copies its input.
   Lane j's ``prog<j>`` tree is committed under the binding of its block member's o0 frame domain (`block_binding`,
-  over that member's statement's input set `block_set`, bound to the lane's value, the session and the link-window's
+  over that member's statement's input set `block_set`, bound to the lane's value, the session and the execution phase's
   ingress head), so its root is the o0 frame root Flock commits under the same salts, and `stage` refuses a block
   member whose o0 frame root and domain aren't its lane's tree's: the registration's ``SlotEntry_v1{…}/c<j>/o0`` (its
   ports named as one-stage names a template's chunk j's, `entries_port`) and the honest round's ``scan/prog<j>`` are
   one root and domain, the tie `NetworkCheck.Period`'s rows form checks for each lane (`progTied`, `wired`). Its
   registration also names the scan's ``state`` tree as ``scan/state``, as an anchored Program's names the
   `SCAN_STATE` it reads, the tie the rows form checks next (`stateTied`); the stand-in reads no state, so here that
-  tie is its registration's alone. A link-window's first round; accepted, with no output opened.
+  tie is its registration's alone. An execution phase's first round; accepted, with no output opened.
 * **V3c's trees** (``--v3c WINDOW``, `v3c_trees`; a group of 1): in place of the scan's own, the trees V3c's window
   (`prove_path.py window-commit`'s directory, at w63k4's class) committed before its coins: ``state`` its
   `SCAN_STATE` (its registration's window activations entry, the rows and salts its prover's `SCAN_STATE_FILE`) and lane
@@ -79,22 +80,23 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   `NetworkCheck.Period`'s `scanOf` reads), 2T + 1 units: the start unit (`IngressScanStart`), T ingress units
   (`IngressScanBucket`, buckets 0 … T − 1) and T egress units, each template one batch with its row, state and egress
   parameters inputs of its own and every ingress unit's ``prog<j>`` a row of lane j's input of its slot entries, its
-  members ``start``, ``ingress-0``, ``last`` (the link-window's last ingress unit, whose o1 has no leaf to open) and
+  members ``start``, ``ingress-0``, ``last`` (the execution phase's last ingress unit, whose o1 has no leaf to open) and
   ``egress-0`` (`members_of`), every unit sampled by the verifier's Lean. `program` refuses a Program whose one-stage
   partition or reads (`registered.reads`) aren't the members'. The start unit reads ``sin``, the state the
-  link-window starts from (the start, below), and outputs ``o0``, that row through two NOTs, committed as state leaf
+  execution phase starts from (the start, below), and outputs ``o0``, that row through two NOTs, committed as state leaf
   0, a committed row the verifier never opens: the row bucket 0's ``sin`` and the first boundary's Programs read is
-  the start by gates. Ingress unit t reads ``row`` (the warden's ingress row t), ``sin`` (state leaf t, S_{t−1}) and
-  each slot j's ``prog<j>`` (``prog<j>`` leaf ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary,
+  the start by gates. Ingress unit t reads ``row`` (the network certifier's ingress row t), ``sin`` (state leaf t,
+  S_{t−1}) and each slot j's ``prog<j>`` (``prog<j>`` leaf ⌊t / EVERY⌋, its boundary's entry of the slot, one table row
+  a boundary,
   `NetworkCheck.Period`'s `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1,
   and ``o2``, its view, committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its
-  render bit, and ``o1``, the row it computes, committed as the warden's egress row t. Each output row but a public
-  o0 is a registered read of the row it is committed as (`Registered.checkPort` holds a hidden-output statement's
+  render bit, and ``o1``, the row it computes, committed as the network certifier's egress row t. Each output row but a
+  public o0 is a registered read of the row it is committed as (`Registered.checkPort` holds a hidden-output statement's
   output rows, the verifier's PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the
-  view the one leaf ingress t computes and egress t reads, and the egress row the one the warden signed: the chains
-  are wires through the registered roots, not the prover's word. `Registered.checkPort` holds every instance of a
-  registered port, so the last unit's o1, the state the link-window ends in, which no state leaf holds, is a
-  member's own rows (`Frame`), committed and never opened: the port the next link-window's start reads
+  view the one leaf ingress t computes and egress t reads, and the egress row the one the network certifier signed: the
+  chains are wires through the registered roots, not the prover's word. `Registered.checkPort` holds every instance of a
+  registered port, so the last unit's o1, the state the execution phase ends in, which no state leaf holds, is a
+  member's own rows (`Frame`), committed and never opened: the port the next execution phase's start reads
   (`CARRY_PORT`). The registration's window states the state's reads, one run a port (``reads``, `state_reads`: the
   start unit's ``o0`` at leaf 0, the ingress units' ``sin`` from leaf 0 and their ``o1``, but the last's, from leaf
   1, as `NetworkCheck.Period`'s `stateRead` holds them). Accepted: every public o0 opens to 1. Its registration names
@@ -102,10 +104,10 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   verdict publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
   `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
   this run's stand-in block, no pinned `SlotEntry_v1` (`period_case.UNWIRED`). The registration's roots also name, as
-  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
-  reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
+  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each network certifier row registration a member's
+  network certifier port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The start**: the start unit's ``sin`` is one-stage's registered value `CARRY` (the Program's parameter ``0.sin``,
-  one row/v2 row), which the link-window's record, a v2 record, names with its root and domain. The run's first
+  one row/v2 row), which the execution phase's record, a v2 record, names with its root and domain. The run's first
   record holds `CARRY` at the root the verifier computes and pins, the empty state's row under one-stage's registered
   domain and the public salt of a value the verifier fills (`empty_start`), and its `window` opens it (``empty``,
   `NetworkCheck.Period`'s `startEmpty`: the state's zero words under that salt), public as that state is. Each later
@@ -113,10 +115,10 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   last ingress unit's o1), root and domain, which the verifier holds in the window-history form ``{"port": P}``, the
   port of its log's last record (`carry_of`); the start member's statement opens its ``sin`` row there, under the
   salt and at the frame domain the earlier statement committed it with, and the verifier's ``--registered`` port of
-  it is one-stage's (`registered.reads_file`, its ``domains``). The verifier's log takes a link-window's record once
-  its honest round's audit accepted it with every opened output 1 (`prove`), so no start is read from a link-window
-  the verifier refused. A record's changed forms are refused by the registration check (another root, `R7-held`; no
-  earlier record in the verifier's log, `R7-output`), and the start's leaf as a registered read frames it is the
+  it is one-stage's (`registered.reads_file`, its ``domains``). The verifier's log takes an execution phase's record
+  once its honest round's audit accepted it with every opened output 1 (`prove`), so no start is read from an execution
+  phase the verifier refused. A record's changed forms are refused by the registration check (another root, `R7-held`;
+  no earlier record in the verifier's log, `R7-output`), and the start's leaf as a registered read frames it is the
   earlier statement's frame leaf byte for byte (`frame_leaf`). One-stage accepts a record that names an older
   record's port in the explicit form ``{"record": D, "port": P}`` (``explicit-older``, recorded, not refused): which
   record a start may name is for the check that reads the records after it.
@@ -127,46 +129,48 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   it (`Frame`, value ``frame``), committed under its statement's frame binding (`frame_binding`, over the member's
   input set), so its root is the member's frame root of the port, which the round's registration names before any
   coin; `stage` refuses a member whose frame root isn't the tree's. A scan member's input set is its template's
-  (`set_of`), naming no round and no link-window, so the frame domain of such a port is its template's and its unit
+  (`set_of`), naming no round and no execution phase, so the frame domain of such a port is its template's and its unit
   count's in every round. A public o0's rows are committed under the verifier's public salts (`ok_salts`,
   `scan_ok.salt`), so the o0 frame root of a member whose every proof block is ok is a constant of its template and
   count, which a period check computes from the schedule's T and holds the registration's ``<member>/o0`` to
   (`scan_ok.constants`, the period check's `okChecks`); it is opened as before, under that salt, which the
   prover sends.
-* **The answers** (``answers.json``, `answers`): for each link-window W of the group, the scan's registration of W,
+* **The answers** (``answers.json``, `answers`): for each execution phase W of the group, the scan's registration of W,
   the network certifier's two row registrations of W and the scan's one-stage answer for W (`window_answer`), which
   `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records' certificates:
   accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a reject naming
-  the members Lean refused. Beside them, ``audits``: each link-window's block round's, the compute audit whose lanes'
-  o0 are that link-window's scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its free
-  inputs NR·nb·NE, every bit of every slot entry, which the rows form's K charges to the link-window tied to it, and
-  no steps).
-* **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
-  reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
-  alone differs from the warden's row. Its FAILs are in the group's last link-window (`link` refuses a group with
-  one earlier: the link-window after a refused one has no start the verifier holds). That link-window's block round
-  and its honest round are proved, the honest one expected refused by Lean's registered reads ("does not open") at
-  its egress member (`rounds_of`, `targets`), every other member held, and its answer is that refusal, so the period
-  check rejects the link-window by name. No negative is placed in a void run.
-* **Negatives**, each a registration of one link-window of the group in its honest round's place (`link` places
+  the members Lean refused. Beside them, ``audits``: each execution phase's block round's, the compute audit whose
+  lanes' o0 are that execution phase's scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its
+  free inputs NR·nb·NE, every bit of every slot entry, which the rows form's K charges to the execution phase tied to
+  it, and no steps).
+* **A void run** (a network certifier run whose network certifier failed a connection closed, its `FAIL` in the egress
+  row it signed, its reason in the ``fails`` record): the scan renders the connection's end where the network certifier
+  wrote `FAIL`, and that bucket alone differs from the network certifier's row. Its FAILs are in the group's last
+  execution phase (`link` refuses a group with one earlier: the execution phase after a refused one has no start the
+  verifier holds). That execution phase's block round and its honest round are proved, the honest one expected refused
+  by Lean's registered reads ("does not open") at its egress member (`rounds_of`, `targets`), every other member held,
+  and its answer is that refusal, so the period check rejects the execution phase by name. No negative is placed in a
+  void run.
+* **Negatives**, each a registration of one execution phase of the group in its honest round's place (`link` places
   them), chain's, tampered's and stale's refused by Lean's registered reads ("does not open"), unread's by one unit's
-  ok bit. ``chain``, in bucket ``A``'s link-window: the same Program on a state tree with S_a and S_{a+1} swapped
-  (leaves a + 1 and a + 2, a that bucket in its link-window): ingress unit a's o1, the S_a it computes, doesn't open
-  leaf a + 1, nor units a + 1's and a + 2's theirs. ``tampered``, in the first link-window with a `DATA` cell: an
-  egress-only Program of T units, one egress row's `DATA` id changed and the link-window re-signed (a warden that
-  saw a byte the scan doesn't render; a warden run's re-signed by the driver's own key, under which the verifier
-  reads it): egress unit t's o1, the row its view renders, doesn't open the signed row t. ``unread`` (`_unread`), in
-  the link-window of the group's first bucket U ≥ 1 where a request's Program starts (its slot's `occ` 1): a Program
-  of the T ingress units alone, its slot j's ``prog<j>`` tree the honest one but for its entry at U's boundary, its
-  read bit cleared (no Program reads the request): every registered read holds, since the read bit enters the unit's
-  ok bit alone and its S_U and view are the honest ones, and Lean holds its proofs, but bucket U's o0 opens to 0, so
-  the link-window is refused. Its units are every bucket's, not U's alone, so that unit m of the ingress template
-  is bucket m, which reads the warden's row m, as in every Program that batches the template; every one is sampled,
-  whatever ``--draw``. A prover that sets the bit with n 0 and no outputs passes here, since the stand-in's entries
-  are the prover's; an anchored Program's entry is its outputs on the `SCAN_STATE` it reads, which the period check
-  holds to the scan's state tree (`stateTied`). ``stale`` (`STALE`, ``stale-<the last link-window's number + 1>``):
-  a start unit alone, registered after the group's last record as the link-window after it would be, given the
-  state the last link-window started from in place of the one it ended in, which opens no leaf of the last record's
+  ok bit. ``chain``, in bucket ``A``'s execution phase: the same Program on a state tree with S_a and S_{a+1} swapped
+  (leaves a + 1 and a + 2, a that bucket in its execution phase): ingress unit a's o1, the S_a it computes, doesn't open
+  leaf a + 1, nor units a + 1's and a + 2's theirs. ``tampered``, in the first execution phase with a `DATA` cell: an
+  egress-only Program of T units, one egress row's `DATA` id changed and the execution phase re-signed (a network
+  certifier that saw a byte the scan doesn't render; a network certifier run's re-signed by the driver's own key, under
+  which the verifier reads it): egress unit t's o1, the row its view renders, doesn't open the signed row t. ``unread``
+  (`_unread`), in the execution phase of the group's first bucket U ≥ 1 where a request's Program starts (its slot's
+  `occ` 1): a Program of the T ingress units alone, its slot j's ``prog<j>`` tree the honest one but for its entry at
+  U's boundary, its read bit cleared (no Program reads the request): every registered read holds, since the read bit
+  enters the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proofs, but bucket U's o0
+  opens to 0, so the execution phase is refused. Its units are every bucket's, not U's alone, so that unit m of the
+  ingress template is bucket m, which reads the network certifier's row m, as in every Program that batches the
+  template; every one is sampled, whatever ``--draw``. A prover that sets the bit with n 0 and no outputs passes here,
+  since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the `SCAN_STATE` it
+  reads, which the period check holds to the scan's state tree (`stateTied`). ``stale`` (`STALE`, ``stale-<the last
+  execution phase's number + 1>``): a start unit alone, registered after the group's last record as the execution phase
+  after it would be, given the state the last execution phase started from in place of the one it ended in, which opens
+  no leaf of the last record's
   ``last/o1``.
 * **A sampled sample** (``--draw K``): Lean ``draw --stratified K`` on a development challenger's coins opened after
   the round's registration (`a0.challenger_draw`: the verifier has none of its own), each template's stratum its share
@@ -177,17 +181,17 @@ the honest round on the challenger's coins (``--challenger``), a `service.Stream
   table its instances' rows.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round
   sampled at the stratified rate of K in its N (`rule_of`: a stream's rule is a rate) as prove_path's records audit
-  samples (`a5_coins`): for each link-window, one session of the auditor's challenger on the link-window's root
-  (`window_root`: the warden's session and the link-window's signed registrations), and the round's `service.Stream`
-  (`spec_of`, `stream_of`: its own copy of the round's Program the generator form the round registers) on its coins
-  (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the registration's digest, and its
-  select samples once (Lean's `Select.select` on the bytes read). Once the session has ended, the outcome of record is
-  the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source the challenger) held to the
-  Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another window) refused by
+  samples (`a5_coins`): for each execution phase, one session of the auditor's challenger on the execution phase's root
+  (`window_root`: the network certifier's session and the execution phase's signed registrations), and the round's
+  `service.Stream` (`spec_of`, `stream_of`: its own copy of the round's Program the generator form the round registers)
+  on its coins (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the registration's digest,
+  and its select samples once (Lean's `Select.select` on the bytes read). Once the session has ended, the outcome of
+  record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source the challenger) held to
+  the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another window) refused by
   `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on this machine (its
   own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's challenger's through its
   gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The gate
-  opens a root once, ever: a run's link-window is sampled once (the synthetic run's registrations carry fresh salts,
+  opens a root once, ever: a run's execution phase is sampled once (the synthetic run's registrations carry fresh salts,
   so each synthetic run has a root of its own). The other rounds keep a development challenger's coins: one session
   serves one sample, and their refusal is Lean's registered reads, whatever the coins.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
@@ -298,8 +302,9 @@ TEST = Setup(
                    ingress_buckets=3, egress_cells=9, every=2),
     ((1000, 1007, 1014), tuple(2000 + 3 * k for k in range(60)), tuple(131071 - k for k in range(100))),
     (0, 1, 1), ((11, 22, 33), (131071, 0, 5, 6, 7, 8, 9, 10), (40, 41, 42, 43)), windows=1, A=6, max_tokens=5, seed=11)
-#: test's class and its three requests, and a fourth admitted at bucket 12 of link-window 0 and anchored at bucket 16,
-#: link-window 1's first boundary: the state link-window 1 starts from holds it live, its Program due at that boundary
+#: test's class and its three requests, and a fourth admitted at bucket 12 of execution phase 0 and anchored at bucket
+#16, : execution phase 1's first boundary: the state execution phase 1 starts from holds it live, its Program due at
+#that boundary
 TEST2 = TEST._replace(name="test2", prompts=(*TEST.prompts, (7, 8, 9)), arrivals=(*TEST.arrivals, 12),
                       responses=(*TEST.responses, (51, 52, 53)), windows=2)
 SETUPS = {s.name: s for s in (W63, W63K4, TEST, TEST2)}
@@ -307,8 +312,9 @@ SETUPS = {s.name: s for s in (W63, W63K4, TEST, TEST2)}
 CLASS, PARAMS = W63.cls, W63.params
 SHAPE = CLASS.egress
 SESSION = bytes(range(32))
-#: a link-window's scan's templates in its Program's order: the start unit (`IngressScanStart`), then every bucket's
-#: ingress unit (`IngressScanBucket`, bucket 0's too) and its egress unit, 2T + 1 units, one link-window a registration
+#: an execution phase's scan's templates in its Program's order: the start unit (`IngressScanStart`), then every
+#bucket's : ingress unit (`IngressScanBucket`, bucket 0's too) and its egress unit, 2T + 1 units, one execution phase a
+#registration
 TEMPLATES = ("start", "ingress", "egress")
 #: the unread round's: the ingress units alone, every bucket's
 UNREAD = ("ingress",)
@@ -318,9 +324,9 @@ BLOCK = ("block",)
 #: the stale round's: a start unit alone
 STALE = ("start",)
 #: the start: the start unit's ``sin`` as the Program names it (`scan_root`'s ``<i>.<name>``; a population's too), the
-#: one-stage registered value a link-window's record names the state its scan starts from by
+#: one-stage registered value an execution phase's record names the state its scan starts from by
 CARRY = "0.sin"
-#: the port of a link-window's record the next one's start reads: its last ingress unit's o1, the last state
+#: the port of an execution phase's record the next one's start reads: its last ingress unit's o1, the last state
 CARRY_PORT = "last/o1"
 #: the templates whose o0 is a committed row the verifier never opens (the slot entries', the start's copy), every
 #: other's its public word
@@ -332,8 +338,8 @@ ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
 #: each scan template's parameters before its entry ports (`scan_root`'s inputs of its own): row (and sin), or state
 FIXED = {"start": 1, "ingress": 2, "egress": 1}
 #: each kind of round's templates, and its outcome: accepted, refused by Lean's registered reads, or proved with every
-#: read held and one unit's ok bit 0; the block first, since the scan reads its outputs. A round is one link-window's,
-#: ``<kind>-<w>`` (`round_name`)
+#: read held and one unit's ok bit 0; the block first, since the scan reads its outputs. A round is one execution
+#phase's, : ``<kind>-<w>`` (`round_name`)
 ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chain": (TEMPLATES, "does not open"),
           "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0"), "stale": (STALE, "does not open")}
 #: the kinds of round with a start unit, whose record names the state its scan starts from (`carry_of`)
@@ -355,7 +361,7 @@ def value(kind: str) -> str:
 
 
 def round_name(kind: str, w: int) -> str:
-    """Link-window ``w``'s round of ``kind`` (`ROUNDS`), as the summary and the rounds' directories name it."""
+    """Execution phase ``w``'s round of ``kind`` (`ROUNDS`), as the summary and the rounds' directories name it."""
     return f"{kind}-{w}"
 
 
@@ -370,11 +376,11 @@ def lane_kinds(cls: IS.Class) -> tuple[str, ...]:
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
           "dense_m", "units", "ands_per_vu", "prover", "gpu")
 #: an honest round's stream on the auditor's challenger's coins (``--challenger``): its challenger, the format of the
-#: link-window's root its session opens on (`window_root`), and each member's share of the proof deadline
+#: execution phase's root its session opens on (`window_root`), and each member's share of the proof deadline
 CHALLENGER = "scan_zk.py on the auditor's challenger's coins"
 WINDOW_ROOT = "verity/certifier/scan-window-root/v3"
 MEMBER_DEADLINE_S = 5 * 3600
-#: the format of ``answers.json`` (`answers`): each link-window's registration, answer and rows, and the blocks'
+#: the format of ``answers.json`` (`answers`): each execution phase's registration, answer and rows, and the blocks'
 #: audits
 ANSWERS = "verity/certifier/scan-answers/v3"
 #: in V3c's window directory (``--v3c``), its `SCAN_STATE`'s rows (u16 little-endian, row-major) and then their salts,
@@ -416,7 +422,7 @@ def ports_of(cls: IS.Class) -> dict[str, tuple[tuple[tuple[str, int], ...], tupl
 
 
 def entries_of(cls: IS.Class, T: int) -> int:
-    """The slot entries of a link-window of T buckets: NR a boundary, T / EVERY boundaries."""
+    """The slot entries of an execution phase of T buckets: NR a boundary, T / EVERY boundaries."""
     return cls.NR * (T // cls.EVERY)
 
 
@@ -436,15 +442,15 @@ def slot_entries(cls: IS.Class, progs: list[list[int]]) -> list[list[list[int]]]
 
 
 def members_of(templates: tuple[str, ...], T: int, entries: int = 0, lanes: int = 1) -> list[SimpleNamespace]:
-    """A link-window's round's members in its Program's order: each one's name, its first unit (``base``) and the
-    link-window's buckets its units compute, unit ``base + k`` bucket ``buckets[k]``. The scan's (`TEMPLATES`):
+    """An execution phase's round's members in its Program's order: each one's name, its first unit (``base``) and the
+    execution phase's buckets its units compute, unit ``base + k`` bucket ``buckets[k]``. The scan's (`TEMPLATES`):
     ``start``, the start unit, which computes no bucket (its one unit is listed as bucket 0, the bucket whose ``sin``
     its o0 is); ``ingress-0``, buckets 0 … T − 2, and ``last``, bucket T − 1, a member of its own (its S_t has no
     state leaf, and a registered port holds every instance's row); ``egress-0``, buckets 0 … T − 1: the members
     `NetworkCheck.ScanOk` names. A round of some of those templates has their members: the stale round's (`STALE`)
     the start unit alone, the tampered round's the egress units, the unread round's (`UNREAD`) the ingress units, every
     bucket's, so that unit m of a template is bucket m in every Program that batches it. The block round's (`BLOCK`)
-    the link-window's ``entries`` slot entries (`entries_of`) cut into ``lanes`` members of consecutive units, as
+    the execution phase's ``entries`` slot entries (`entries_of`) cut into ``lanes`` members of consecutive units, as
     one-stage cuts a template (``block-c<j>``, lane j's, its ``lane``), unit j·nb + b slot entry b of lane j, since
     its o0 rows are the lane's ``prog<j>`` tree."""
     if templates == BLOCK:
@@ -482,7 +488,7 @@ def _bound(kind: str, heads: list, session: bytes) -> bytes:
 
 def block_set(heads: list, session: bytes, j: int) -> str:
     """Lane j's block member's statement's input set, which its frame domains bind: bound to the lane's value, the
-    session and the group's ingress link-windows' heads."""
+    session and the group's ingress execution phases' heads."""
     return f"scan-block-{_bound(f'prog{j}', heads, session).hex()}"
 
 
@@ -553,8 +559,8 @@ def _schema(reg: ADV.Committed) -> str:
 
 def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.Committed:
     """`kind`'s rows (bit rows of whole u16 words) committed as hiding rows, bound to the session and the group's
-    ingress link-windows' heads: lane j's ``prog<j>`` under its block member's o0 frame binding (`block_binding`), so
-    the tree is that member's o0, the others' by their value (`value`)."""
+    ingress execution phases' heads: lane j's ``prog<j>`` under its block member's o0 frame binding (`block_binding`),
+    so the tree is that member's o0, the others' by their value (`value`)."""
     n = len(rows)
     binding = block_binding(block_set(heads, session, int(kind[4:])), n) if kind.startswith("prog") else \
         _bound(kind, heads, session)
@@ -810,7 +816,7 @@ def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -
 def _unread(cls: IS.Class, ch) -> SimpleNamespace | None:
     """The unread round's bucket: the group's first ingress bucket b ≥ 1 at which a slot's Program starts (a request's
     anchor, the slot due and its `occ` 1), the first such slot j, and lane j's slot entries with slot j's at b's
-    boundary (row ``entry``) absent, its read bit cleared and its outputs kept (``rows``, which b's link-window
+    boundary (row ``entry``) absent, its read bit cleared and its outputs kept (``rows``, which b's execution phase
     commits in place of its ``prog<j>``, `window_of`); None when no request is anchored in the group past bucket
     0."""
     for b in range(1, len(ch.progs)):
@@ -926,13 +932,13 @@ def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
 
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0,
          v3c: Path | None = None) -> SimpleNamespace:
-    """The run (`synthetic`, or `warden_run`'s of a warden_serve run), link-windows start … start + group − 1 of each
-    link registered by the warden and read back by the verifier, and the scan's chain over their rows from the empty
-    state (`scan_traffic.chain`): what each link-window's rounds are cut from (`window_of`). The group's negatives are
-    placed here, each in one link-window: the chain round's swap in bucket ``setup.A``'s, the unread round's unit
-    (`_unread`) and the tampered round's egress link-window (`_tamper`); none in a void run, whose FAILs are in its
-    last link-window (the one after a refused link-window has no start the verifier holds). With ``v3c`` the state
-    and slot entries' trees are V3c's (`v3c_trees`)."""
+    """The run (`synthetic`, or `warden_run`'s of a warden_serve run), execution phases start … start + group − 1 of
+    each link registered by the network certifier and read back by the verifier, and the scan's chain over their rows
+    from the empty state (`scan_traffic.chain`): what each execution phase's rounds are cut from (`window_of`). The
+    group's negatives are placed here, each in one execution phase: the chain round's swap in bucket ``setup.A``'s, the
+    unread round's unit (`_unread`) and the tampered round's egress execution phase (`_tamper`); none in a void run,
+    whose FAILs are in its last execution phase (the one after a refused execution phase has no start the verifier
+    holds). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`)."""
     t0 = time.time()
     if group < 1 or start < 0:
         raise SystemExit(f"a group is 1 or more link-windows from link-window 0 on, not {group} from {start}")
@@ -999,7 +1005,7 @@ def registered_file(mr: SimpleNamespace) -> dict:
 
 
 def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespace:
-    """Round `name`'s member `mb` (`members_of`) of link-window `at` (`window_of`): each unit's input rows (in its
+    """Round `name`'s member `mb` (`members_of`) of execution phase `at` (`window_of`): each unit's input rows (in its
     signature's order, as bits or bytes), the salts its rows, inputs and outputs, are committed under, its header's
     `registered` entries and the verifier's own ports, one for every port of its circuit
     (`Flock.Registered.checkComplete`), the host's read of them (`warden_rows.refusal`, `tree_refusal`: the ports in
@@ -1007,11 +1013,11 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     references compute them (``made``, None where the ingress reference gives none), and the network certifier's row
     registration each of its ports reads (``warden``). An ingress unit's ``prog<j>`` is one table row a slot entry it
     reads of lane j's tree (``refs``, `registered.table`), since a timestep's units read their boundary's; its ``sin``
-    reads state leaf t and its o1 opens leaf t + 1, the link-window's last unit's none. The start unit's ``sin`` reads
-    the one leaf of the link-window's start (``at.start``: the verifier's own row of the empty state, or the last o1
-    of the link-window before), and its o0, that row, is a registered read of state leaf 0, no public word. Lane j's
-    block member's unit j·nb + b reads ``x``, slot entry b of the lane, its free input, and its o0, that entry, is a
-    registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or network certifier
+    reads state leaf t and its o1 opens leaf t + 1, the execution phase's last unit's none. The start unit's ``sin``
+    reads the one leaf of the execution phase's start (``at.start``: the verifier's own row of the empty state, or the
+    last o1 of the execution phase before), and its o0, that row, is a registered read of state leaf 0, no public word.
+    Lane j's block member's unit j·nb + b reads ``x``, slot entry b of the lane, its free input, and its o0, that entry,
+    is a registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or network certifier
     row registration holds (each proof block's public o0, the last proof block's o1, a block member's x) is the
     member's own rows of it (`Frame`, value ``frame``), registered as its frame root in its statement's input set
     ``set_name`` (its template's, `set_of`, which names no round and no execution phase; a block member's its lane's
@@ -1099,12 +1105,12 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
 
 
 def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
-    """The rounds link-window `at` (`window_of`) is proved in, by kind, each with its templates and outcome: the block
-    and the honest round (`ROUNDS`), and the group's negatives placed in it (`link`): chain, tampered and unread. A
-    void link-window's (the warden failed a connection closed, a `FAIL` in the egress row it signed) the block and
-    its honest round alone, refused by Lean's registered reads ("does not open") at its egress member, where the scan
-    renders the connection's end. With V3c's trees (``--v3c``) no block round: V3c's own audit proves its slot
-    entries. The stale round's link-window (``at.claimed``, `host`) has that round alone."""
+    """The rounds execution phase `at` (`window_of`) is proved in, by kind, each with its templates and outcome: the
+    block and the honest round (`ROUNDS`), and the group's negatives placed in it (`link`): chain, tampered and unread.
+    A void execution phase's (the network certifier failed a connection closed, a `FAIL` in the egress row it signed)
+    the block and its honest round alone, refused by Lean's registered reads ("does not open") at its egress member,
+    where the scan renders the connection's end. With V3c's trees (``--v3c``) no block round: V3c's own audit proves its
+    slot entries. The stale round's execution phase (``at.claimed``, `host`) has that round alone."""
     if at.claimed is not None:
         return {"stale": ROUNDS["stale"]}
     placed = {"chain": at.swapped, "tampered": at.tampered, "unread": at.unread}
@@ -1115,9 +1121,9 @@ def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
 
 def targets(at: SimpleNamespace, name: str) -> list[str]:
     """The members a refused round's refusal names: chain's, those of ingress units a, a + 1 and a + 2 (a the swap's
-    bucket in the link-window) whose o1 opens a state leaf (the link-window's last unit's opens none); stale's, the
-    start unit's; unread's, the member of the ingress unit whose slot entry is unread; tampered's and a void
-    link-window's honest round's, the egress member."""
+    bucket in the execution phase) whose o1 opens a state leaf (the execution phase's last unit's opens none); stale's,
+    the start unit's; unread's, the member of the ingress unit whose slot entry is unread; tampered's and a void
+    execution phase's honest round's, the egress member."""
     kind = kind_of(name)
     if kind == "chain":
         a = at.setup.A % at.T
@@ -1150,7 +1156,7 @@ def predicted(at: SimpleNamespace, name: str, members: list[SimpleNamespace]) ->
 def wired(members) -> list[str]:
     """Where a round's chains don't hold, on its members' b‖c (`member`'s ``bcs``, port to each proof block's): bucket b's
     o1 is bucket b + 1's ``sin`` and its o2 egress bucket b's ``state``, the one leaf of the registered roots both
-    commit to (the link-window's last bucket's o1 none). The start unit stands where the bucket before bucket 0
+    commit to (the execution phase's last bucket's o1 none). The start unit stands where the bucket before bucket 0
     would: its o0 is bucket 0's ``sin``. Empty when they hold."""
     o1, o2, sin, state = {}, {}, {}, {}
     for m in members:
@@ -1169,7 +1175,7 @@ def wired(members) -> list[str]:
 
 
 def empty_start(program: str, cls: IS.Class) -> REG.Registered:
-    """The start of a run's first link-window, as the verifier computes it: the empty state's row as one-stage's
+    """The start of a run's first execution phase, as the verifier computes it: the empty state's row as one-stage's
     registered value `CARRY` of the Program with digest ``program``, a row/v2 row under the public salt of a value the
     verifier fills (`registered.supplied_salts`). Nothing of it is the prover's, so the verifier pins its root."""
     return REG.Registered.commit(program, CARRY, [_words(IS.encode(cls, IS.empty(cls)))],
@@ -1177,16 +1183,16 @@ def empty_start(program: str, cls: IS.Class) -> REG.Registered:
 
 
 def window_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None = None) -> SimpleNamespace:
-    """Link-window w of `link`'s run as its rounds register it, alone: its number in the run (``number``), its rows of
-    each link (``sides``), the chain's buckets w·T … (w + 1)·T − 1 as its buckets 0 … T − 1, and the prover's trees
+    """Execution phase w of `link`'s run as its rounds register it, alone: its number in the run (``number``), its rows
+    of each link (``sides``), the chain's buckets w·T … (w + 1)·T − 1 as its buckets 0 … T − 1, and the prover's trees
     over them, bound to the session and its own ingress head: ``state``, T leaves, leaf t the state bucket t reads and
     leaf 0 the one it starts from; each lane's slot entries at its T / EVERY boundaries; ``view``; with V3c's window,
     its trees in their place (`v3c_trees`). ``start`` is the tree its start unit's ``sin`` opens, leaf 0:
-    `empty_start`'s for the run's first link-window, else the link-window before's last o1 (its member's `Frame`).
-    The group's negatives placed in it, each None elsewhere: ``swapped``, the chain round's state tree, leaves a + 1
-    and a + 2 swapped; ``unread``, the unread round's unit and slot entries' tree; ``tampered``, the tampered round's
-    egress rows; and ``void``, its buckets with a FAIL. With ``claimed`` (the stale round) the start unit is given
-    that row for its ``sin`` in place of ``start``'s, and the state tree is the one row it copies."""
+    `empty_start`'s for the run's first execution phase, else the execution phase before's last o1 (its member's
+    `Frame`). The group's negatives placed in it, each None elsewhere: ``swapped``, the chain round's state tree, leaves
+    a + 1 and a + 2 swapped; ``unread``, the unread round's unit and slot entries' tree; ``tampered``, the tampered
+    round's egress rows; and ``void``, its buckets with a FAIL. With ``claimed`` (the stale round) the start unit is
+    given that row for its ``sin`` in place of ``start``'s, and the state tree is the one row it copies."""
     cls, T, ch = whole.setup.cls, whole.T, whole.chain
     lo, nb, sides = w * T, T // cls.EVERY, {s: ws[w] for s, ws in whole.sides.items()}
     heads = [sides["ingress"].head]
@@ -1219,7 +1225,7 @@ def window_of(whole: SimpleNamespace, w: int, start, claimed: list[int] | None =
 
 
 def round_trees(at: SimpleNamespace, name: str, templates: tuple[str, ...]) -> dict:
-    """The prover's trees a round's registration names (``scan/<kind>``): the link-window's, the chain round's state
+    """The prover's trees a round's registration names (``scan/<kind>``): the execution phase's, the chain round's state
     tree and the unread round's slot entries' in their places; an egress-only round's the view alone, the block
     round's the state and each lane's slot entries, the stale round's the one state row its start unit copies."""
     kind = kind_of(name)
@@ -1232,19 +1238,19 @@ def round_trees(at: SimpleNamespace, name: str, templates: tuple[str, ...]) -> d
 def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Setup = W63, group: int = 1,
          start: int = 0, v3c: Path | None = None, program: str | None = None) -> SimpleNamespace:
     """The run (`link`'s, of `run` when given, on V3c's trees with `v3c`) and every round's members as the host reads
-    them (no lowering, no proof): what the test holds. Each of the group's link-windows is a registration of its own
-    (`window_of`), its rounds `rounds_of`'s, named ``<kind>-<its number>`` (`round_name`), in link-window order: its
+    them (no lowering, no proof): what the test holds. Each of the group's execution phases is a registration of its own
+    (`window_of`), its rounds `rounds_of`'s, named ``<kind>-<its number>`` (`round_name`), in execution phase order: its
     start unit's ``sin`` the first's `empty_start` and each later one's the honest round before's ``last`` member's
     o1, the `Frame` that round's record names `CARRY_PORT`; an honest round's chains are wired from the start unit's
     o0. Then, unless the run is void, the stale round (``stale-<last + 1>``, `STALE`): a start unit alone, as a
-    link-window after the group's last would register it, its ``sin`` given the state the last link-window started
-    from in place of the one it ended in, which opens no leaf of the last record's port ("does not open"). A sample
-    (`draw`) changes no round: each is refused by Lean's registered reads, which hold every table row, sampled or
-    not. ``program``: the digest of the Program the link-windows are registered under, the scan's own
+    execution phase after the group's last would register it, its ``sin`` given the state the last execution phase
+    started from in place of the one it ended in, which opens no leaf of the last record's port ("does not open"). A
+    sample (`draw`) changes no round: each is refused by Lean's registered reads, which hold every table row, sampled or
+    not. ``program``: the digest of the Program the execution phases are registered under, the scan's own
     (`scan_program`) by default, which the first start's domain and salt bind.
 
-    -> ``whole`` (`link`'s), ``rounds`` (by name, in order: its ``kind``, link-window ``number``, ``templates``,
-    ``outcome``, link-window ``at``, ``members`` and ``trees``, `round_trees`) and ``draw``."""
+    -> ``whole`` (`link`'s), ``rounds`` (by name, in order: its ``kind``, execution phase ``number``, ``templates``,
+    ``outcome``, execution phase ``at``, ``members`` and ``trees``, `round_trees`) and ``draw``."""
     whole = link(out, run, setup, group, start, v3c)
     cls, T, ch = setup.cls, whole.T, whole.chain
     first = empty_start(program or PA.program_digest(scan_program(cls, TEMPLATES, T)), cls)
@@ -1392,7 +1398,7 @@ def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Pr
 
 
 def scan_program(cls: IS.Class, templates: tuple[str, ...], T: int) -> Program:
-    """The scan's Program of `templates` (`TEMPLATES`) over a link-window of T buckets, in the generator form
+    """The scan's Program of `templates` (`TEMPLATES`) over an execution phase of T buckets, in the generator form
     (`scan_root`)."""
     defs, counts = _defs(cls), counts_of(members_of(templates, T))
     return scan_root([(defs[tp], counts[tp], FIXED[tp]) for tp in templates], T // cls.EVERY, cls.EVERY)
@@ -1550,9 +1556,9 @@ def staged_wires(members: list[dict]) -> list[str]:
 # --- the challenger's coins ---------------------------------------------------------------------------------------------
 
 def window_root(at: SimpleNamespace) -> str:
-    """The root the challenger's session opens on (128 hex digits) for link-window `at` (`window_of`): the SHA-512 of
-    the warden's session and the link-window's registrations, one a link, whose heads the warden signed. The gate
-    opens a root once, ever, so a warden run's link-window is sampled once."""
+    """The root the challenger's session opens on (128 hex digits) for execution phase `at` (`window_of`): the SHA-512
+    of the network certifier's session and the execution phase's registrations, one a link, whose heads the network
+    certifier signed. The gate opens a root once, ever, so a network certifier run's execution phase is sampled once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: x.registration
                                                             for s, x in sorted(at.sides.items())}})).hexdigest()
@@ -1560,11 +1566,11 @@ def window_root(at: SimpleNamespace) -> str:
 
 @contextmanager
 def challenger(a, at: SimpleNamespace | None, out: Path):
-    """The challenger's session for a link-window's honest round's sample (``--challenger``, as prove_path's
+    """The challenger's session for an execution phase's honest round's sample (``--challenger``, as prove_path's
     `records_audit.audit` starts it): `a5_coins.start` on `window_root` for one rank, its evidence copied to ``out``;
-    once the link-window's rounds are done the rank's turn ends whether or not it sampled (`Draws.skip`) and the
+    once the execution phase's rounds are done the rank's turn ends whether or not it sampled (`Draws.skip`) and the
     session's evidence is published, which the yielded namespace's ``published`` then holds. None without
-    ``--challenger``, and for no link-window (``at`` None: the stale round, which has no honest round). Needs
+    ``--challenger``, and for no execution phase (``at`` None: the stale round, which has no honest round). Needs
     `WZ._one_stage`'s path (a5_coins is one-stage's)."""
     if not a.challenger or at is None:
         yield None
@@ -1727,9 +1733,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
           port: int, k: int | None = None, coins: SimpleNamespace | None = None,
           carry: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
-    instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
-    on a development challenger's coins, `a0.challenger_draw`; every unit when `k` is None) or, given the challenger's
+    instance or a shared port's table row; the scan's registrations' roots; and the network certifier's row
+    registrations its network certifier ports read, `warden_roots`, before any coin), its units sampled by the
+    verifier's Lean (`draw --stratified k` on a development challenger's coins, `a0.challenger_draw`; every unit when
+    `k` is None) or, given the challenger's
     ``coins``, by the round's `service.Stream` on them (`stream_of`; `a5_coins.RankCoins`, rank 0), each member's
     sampled proof blocks proved --zk behind the ZK server and held by Lean with the verifier's own registered reads;
     then each held unit's public ``o0`` (none of the slot entries', `ROWS_O0`) opened under the salt the prover sends. A
@@ -1997,14 +2004,15 @@ def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tupl
 
 
 def answers(ats: Sequence[SimpleNamespace], out: Path, results: Mapping[str, dict], delta: Fraction) -> dict:
-    """``answers.json`` (`ANSWERS`) of the honest rounds' audits of link-windows ``ats`` (``results``, by round, each
-    round's files under ``out / <round>``): for each link-window W, in order, the scan's registration of W, its answer
-    (`window_answer`: accepted where the round's outputs all open to 1; a refused round's, a void link-window's, names
-    the members Lean refused) and the warden's ingress and egress row registrations of W, the rows form's evidence of
-    W but its certificates. With W's block round's audit, the compute audit whose lanes' o0 are W's scan's
-    ``prog<j>`` (``audits``, in link-window order): its registration and answer, and the terms a period's parameters
+    """``answers.json`` (`ANSWERS`) of the honest rounds' audits of execution phases ``ats`` (``results``, by round,
+    each round's files under ``out / <round>``): for each execution phase W, in order, the scan's registration of W, its
+    answer (`window_answer`: accepted where the round's outputs all open to 1; a refused round's, a void execution
+    phase's, names the members Lean refused) and the network certifier's ingress and egress row registrations of W, the
+    rows form's evidence of W but its certificates. With W's block round's audit, the compute audit whose lanes' o0 are
+    W's scan's
+    ``prog<j>`` (``audits``, in execution phase order): its registration and answer, and the terms a period's parameters
     give it, its Program's descriptor, its free inputs (every bit of every slot entry, the stand-in's ``x``: it
-    copies its input) and no steps. -> each link-window's answer in short, by its number."""
+    copies its input) and no steps. -> each execution phase's answer in short, by its number."""
     audits, windows, said = [], [], {}
     for at in ats:
         cls, honest, block = at.setup.cls, round_name("honest", at.number), round_name("block", at.number)
@@ -2025,7 +2033,7 @@ def answers(ats: Sequence[SimpleNamespace], out: Path, results: Mapping[str, dic
 
 def expected(at: SimpleNamespace, name: str, res: dict) -> bool:
     """An accepted round: accepted, every output 1; the unread round: its proofs held and its audit accepted, and
-    the unread bucket's unit's output opened to 0 (`unread_words`), so the link-window is refused; a refused one
+    the unread bucket's unit's output opened to 0 (`unread_words`), so the execution phase is refused; a refused one
     (`rounds_of`): refused by Lean's registered reads ("does not open") at each of its target members (`targets`),
     every other member's proof held."""
     lean = {k.split("/", 1)[1]: v for k, v in res["verdicts"].items() if k.startswith("lean-verify/")}
@@ -2114,7 +2122,7 @@ def unseen(rec: dict) -> bool:
 
 
 def frame_leaf(earlier: dict, start: dict) -> dict:
-    """A start's leaf on the staged files of two link-windows' honest rounds: ``earlier``, the one before's staged
+    """A start's leaf on the staged files of two execution phases' honest rounds: ``earlier``, the one before's staged
     ``last`` member, whose statement commits its o1 as a frame port of one leaf, so that port's root is that leaf as
     Flock's statement frames it; ``start``, this one's staged start member, whose ``sin`` row's b‖c one-stage's
     registered read frames at leaf 0 of that port's domain (`registered.leaf`, the leaf Lean's registered reads
@@ -2127,15 +2135,16 @@ def frame_leaf(earlier: dict, start: dict) -> dict:
 
 
 def prove(a) -> int:
-    """``prove``: every round of the group's link-windows (`host`), in link-window order on one verifier's log: each
-    member proved --zk and held by Lean, a start member's ``sin`` against the root and domain the verifier took from
-    its log (`carry_of`). A link-window's rounds with a start unit (`STARTED`) are registered against the log as that
-    link-window found it, and the log takes the honest round's record only once its audit accepted it with every
-    opened output 1, so no start is read from a link-window the verifier refused: the link-window after one stops at
+    """``prove``: every round of the group's execution phases (`host`), in execution phase order on one verifier's log:
+    each member proved --zk and held by Lean, a start member's ``sin`` against the root and domain the verifier took
+    from its log (`carry_of`). An execution phase's rounds with a start unit (`STARTED`) are registered against the log
+    as that execution phase found it, and the log takes the honest round's record only once its audit accepted it with
+    every opened output 1, so no start is read from an execution phase the verifier refused: the execution phase after
+    one stops at
     `carry_of`. A round is as expected when its outcome is its kind's (`expected`) and what the verifier received
     holds no witness piece (`unseen`); with a start unit, when its record's changed forms are also refused as named;
     and an accepted honest round, when the verdicts of record also opened its start against that root and, after
-    the first link-window, its start's leaf is the round before's frame leaf byte for byte (`frame_leaf`)."""
+    the first execution phase, its start's leaf is the round before's frame leaf byte for byte (`frame_leaf`)."""
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SETUPS[a.setup]

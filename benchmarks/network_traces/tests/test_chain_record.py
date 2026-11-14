@@ -134,7 +134,7 @@ def test_certs_refuses_a_changed_signature(honest, tmp_path):
 
 
 class _Accepting(audit.Audit):
-    """A reference audit that accepts every link-window it is asked about."""
+    """A reference audit that accepts every execution phase it is asked about."""
 
     def check_link(self, link, records, frames, syncs, *args, **kwargs):
         return [audit.Verdict(link, w, None) for w in range(len(syncs))]

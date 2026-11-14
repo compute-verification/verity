@@ -12,7 +12,8 @@ are the network certifier's (`warden.read_cell`): `DATA` of P = B − 9 bytes, `
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
 **Fixed slots a timestep.** A timestep is EVERY buckets,
-its boundary the bucket t ≡ 0 mod EVERY of the scan, and the warden's window is whole timesteps (EVERY divides T,
+its boundary the bucket t ≡ 0 mod EVERY of the scan, and the network certifier's window is whole timesteps (EVERY
+divides T,
 `Class.serves`), so every execution phase has its boundaries at the same buckets and one window circuit serves them all.
 A request admitted at bucket s is anchored at A(s), the first boundary at or after s + WITHIN (`Class.anchor`), WITHIN
 the class's ingress bound δ in buckets, and its Program reads its slot in S_{A−1}. Each boundary has SLOTS = lanes
@@ -54,20 +55,22 @@ offset t0 − 1, with row −1, the first execution phase's, the empty state's, 
 (71 words at w63's class), the row `SlotEntry_v1` writes. Entry j is the outputs of the
 Program in slot j of the boundary at or before t, its `read` 1. The unit reads entry j only where slot j is due and
 occupied (anchored at t, `occ` 1 in S_{t−1}); every other entry, and every entry's padding, is ignored, so a
-link-window's buckets of one timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n and
+execution phase's buckets of one timestep can all read their boundary's entries, and a due slot whose `occ` is 0 takes n
+and
 `out` zero: an empty slot's outputs are masked by its occupancy word and never reach the egress. An occupied slot whose
 entry is absent (`read` 0) is refused: a request no Program reads would reach the server with no Program's outputs
 counting it. It is the form the Programs' outputs are tied to: a Program gives all its outputs at its anchor, and the
-slot holds them in `out` through its last egress bucket, past the link-window's end where that is later (a group's scan
-carries its state across its link-windows). In a link-window of nb = T / EVERY boundaries, bucket t's `prog<j>` reads
-row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `readsEntries`), the row of slot j at boundary
-⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1` template's entries,
-its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no Program reads passes
-these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So the refusal of an
-absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), and one
-whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's state tree is the
-window state (`window_state`), each row but the empty state's the S_t one unit computes (its o1) and the next reads (its
-sin), both registered reads, so each row a Program reads is the one the scan's step computed from the row before.
+slot holds them in `out` through its last egress bucket, past the execution phase's end where that is later (a group's
+scan carries its state across its execution phases). In an execution phase of nb = T / EVERY boundaries, bucket t's
+`prog<j>` reads row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `readsEntries`), the row of
+slot j at boundary ⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1`
+template's entries, its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no
+Program reads passes these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So
+the refusal of an absent entry holds against an honest prover only, and the period check refuses such an execution phase
+(`wired`), and one whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's
+state tree is the window state (`window_state`), each row but the empty state's the S_t one unit computes (its o1) and
+the next reads (its sin), both registered reads, so each row a Program reads is the one the scan's step computed from
+the row before.
 
 **The egress view** (`view`) of S_t is `egress.EgressBucket`'s state at b = t: b, then each slot's live, q, admitted,
 n and its KO output ids at `egress`'s offsets (`egress.Shape(B, lanes·r, r, NR, KO, IDB, D)`): egress bucket t reads
@@ -114,12 +117,12 @@ from one bucket's ingress to a later bucket's gates: each step reads the state t
 arrivals and the prompt lengths, which stay private.
 
 **Where it runs.** `row`, `sin` and each `prog<j>` are a registered read, an input port `Registered.checkPort` accepts:
-`row` the warden's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>` the
-slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as the
-scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a hidden-output
-statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's `state`, which
-read those rows, read what bucket t computed: the carried state and the view are wires through the registered roots.
-Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and o2 are committed.
+`row` the network certifier's signed row t (`warden_rows.bucket_port`), `sin` the scan's state row t − 1 and `prog<j>`
+the slot-entries row of slot j at t's boundary. o1 and o2 are gates, never inputs: the unit's statement commits o1 as
+the scan's state row t and o2 as its view row t, each registered as a read of its row (`checkPort` accepts a
+hidden-output statement's output row, the verifier's PROTOCOL.md §16.13), so bucket t + 1's `sin` and egress bucket t's
+`state`, which read those rows, read what bucket t computed: the carried state and the view are wires through the
+registered roots. Only o0 is public: a unit proof's public output is at most 16 bits, and o1 and o2 are committed.
 
 **The start.** `IngressScanStart` is the first unit of every execution phase's scan: its `sin` is the state the scan
 starts from, a registered read of the value the execution phase's record names for it (the empty state in the run's

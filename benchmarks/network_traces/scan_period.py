@@ -5,13 +5,13 @@ and its Lean.
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
-  form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
+* **The case** (`rows_case`) of execution phase W: the parameters the network certifier run's ``deployment.json`` (its
+  key, session and one schedule, its integer fields and its response cap when it has one: the period check reads the id
+  egress form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
   `WardenParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
-  the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
+  the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits an execution phase, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
@@ -92,7 +92,8 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None,
               circuit: str | None = None) -> dict:
-    """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
+    """The rows form's case (module docstring) of the network certifier run ``run``'s execution phase, as scan_zk.py
+    proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,

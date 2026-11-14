@@ -1,5 +1,6 @@
 """leak_bounds, the one calculator of K, in its scaling by links. `per_link` and `at_link_rate` give chain_record.leak's
-rows on a warden run's files, and `datacenter` is links × `per_link` for identical links, each link at δ / links.
+rows on a network certifier run's files, and `datacenter` is links × `per_link` for identical links, each link at δ /
+links.
 
 K's terms are `NetworkCheck.Period`'s rows form's, transcribed here from the Lean (`clog2`, `capsTerm`, `rowsTerms`,
 `eps`) rather than from the calculator:
@@ -38,7 +39,7 @@ CENSUS = HERE.parents[1] / "benchmarks" / "census"
 RHO = HERE.parents[1] / "benchmarks" / "rho" / "data"
 #: the scan class of a window class of KO 1 at 4 lanes, a timestep every 16 buckets (`scan_state.scan_class(4, 1, 16)`)
 KO1 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=1, KI=1024)
-#: the warden's scan class, KO 64 (`scan_zk.CLASS`)
+#: the network certifier's scan class, KO 64 (`scan_zk.CLASS`)
 W63 = replace(KO1, KO=64)
 #: 8 requests a sampling block of 32 buckets of 100 ms
 RATE = 2.5

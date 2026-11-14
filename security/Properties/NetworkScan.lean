@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
 
-The sampled audit's scope at a link-window's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
+The sampled audit's scope at an execution phase's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
 (`Claims.SamplingGeneric.Compiled.Scope`, the compiled sampled verifier's own, which `Claims.ScopeMatches` equates with
 its scope check), and the statement's layout fitting its program over its horizon (`NetTiming.BoundaryGates.Fits`).
 The network check reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.

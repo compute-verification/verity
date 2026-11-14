@@ -62,7 +62,7 @@ def names(body: str) -> set[str]:
 
 def periods(monkeypatch) -> dict[int, dict]:
     """A rows-form period of each length, one to three execution phases, each under a schedule of `PC.EQUAL_T` ticks:
-    the run's first link-window alone, accepted, and it with the next one or two, each registration what an accepted
+    the run's first execution phase alone, accepted, and it with the next one or two, each registration what an accepted
     one's is and the period refused for holding more than the first (`PC.CARRIED`)."""
     real = PC._small_schedule
     monkeypatch.setattr(PC, "_small_schedule", lambda r, small, capped=False, T=None: real(r, small, capped, PC.EQUAL_T))
