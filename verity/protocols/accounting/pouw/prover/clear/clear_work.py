@@ -3,7 +3,7 @@
 served-ZK window, and its verifier is the Lean (`verity/protocols/accounting/pouw/verifier/lean/check`).  It runs the records
 core keeps (`verity.protocols.accounting.pouw.prover.schemes.pearl_c_work`: `Split`, `UnitRecord`, `records_root`), which vLLM's
 Pearl-C prover writes, through the clear audit (`clear_audit`).  It imports the `clear_audit` of its own name: the
-package's as `verity.protocols.accounting.pouw.clear.clear_work`, the bare one for a caller that put this directory on
+package's as `verity.protocols.accounting.pouw.prover.clear.clear_work`, the bare one for a caller that put this directory on
 ``sys.path`` (a caller keeps to one of the two: `clear_audit`'s docstring).
 
 * **The one exclusion rule (per row).**
