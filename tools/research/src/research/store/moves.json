@@ -4132,6 +4132,11 @@
       "paths": {
         "adapters/vllm/verity_vllm/pipeline/window_law.py": "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/poub/verifier/lean/tests/test_drawn.py": "verity/protocols/accounting/poub/verifier/lean/tests/test_sampled.py"
+      }
     }
   ]
 }
