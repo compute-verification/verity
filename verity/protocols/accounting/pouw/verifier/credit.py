@@ -6,7 +6,9 @@ Lean `PouwCheck.Credit.window` takes as given. Those outcomes are the Lean's (`P
 the Lean decides which statements the verifier runs on, with which inputs, and what its answers credit; `_verified` is
 its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`). Each round's live
 outcome is the Lean's too (`PouwCheck.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
-(`lean/check/tests/test_live_verified_difftest.py`).
+(`lean/check/tests/test_live_verified_difftest.py`). And so are the verdicts `window` and `period_credit` return: the Lean
+`Credit.window`'s and `Credit.periodCredit`'s on those outcomes (`_of_record`, `verifier.of_record`), the Python beside
+them as the twin they are held to, and a disagreement between the two is a refusal (``verifier.DISAGREE``).
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
 step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
@@ -2662,11 +2664,68 @@ def window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     the Lean's when `verifier.RECORD_VERDICT` is ``"lean"`` (`_lean_verified`, `_lean_live_verified`). `run` is the
     verifier (`proofs.verify`), the verifier's own, never the evidence's.
 
+    So is the window's verdict (`_of_record`): the Lean `PouwCheck.Credit.window`'s on the outcomes those runs gave, with
+    `_window` its Python twin. A refusal the runs made themselves stands as theirs, and so does the refusal of live
+    evidence not in the statements' form (`LIVE_STATEMENTS_FORM`), which the Lean, reading outcomes, never sees.
+
     `period_credit` ties `descriptor` to the circuit the window's period committed; a window counts only there."""
+    kept = _Outcomes(_runner(statements, circuit_files, entries, window, salt, run),
+                     _live_runner(circuit_files, entries, run))
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
-                       entries, _runner(statements, circuit_files, entries, window, salt, run), live,
-                       _live_runner(circuit_files, entries, run), LIVE_STATEMENTS, k, rows, verify)
-    return (None, why) if got is None else (got[0], None)
+                       entries, kept.proved, live, kept.lived, LIVE_STATEMENTS, k, rows, verify)
+    python = (None, why) if got is None else (got[0], None)
+    if kept.refused is not None or not _live_formed(live):
+        return python
+    return _of_record("window", {"key": key, "ledger": ledger, "pins": pins, "main": main, "window": window,
+                                 "session": session, "salt": salt, "calls": calls, "served": served, "commit": commit,
+                                 "rounds": rounds, "draw": draw, "descriptor": descriptor, "entries": entries,
+                                 "proofs": kept.proofs, "live": kept.live_of(live), "k": k, "rows": rows}, python)
+
+
+class _Outcomes:
+    """One window's statement runs (`_runner`'s `proved`, `_live_runner`'s `lived`), each run's outcomes kept in the form
+    the Lean `PouwCheck.Credit` reads (`PROOF_KEYS`: the sampled proof blocks' ``proofs``, the live rounds' ``live``),
+    none where a run never came, and the refusal a run made itself (the Lean's `Verified` or `LiveVerified` under the
+    Lean record), which no outcome carries."""
+
+    def __init__(self, proved: Proved | None = None, lived: Lived | None = None) -> None:
+        self._proved, self._lived = proved, lived
+        self.proofs: Any = []
+        self.live: Any = []
+        self.refused: tuple[str, str] | None = None
+
+    def proved(self, *a: Any) -> tuple[Any, tuple[str, str] | None]:
+        got, why = self._proved(*a)
+        self.proofs, self.refused = (got, None) if why is None else ([], why)
+        return got, why
+
+    def lived(self, *a: Any) -> tuple[Any, tuple[str, str] | None]:
+        got, why = self._lived(*a)
+        self.live, self.refused = (got, None) if why is None else ([], why)
+        return got, why
+
+    def live_of(self, live: dict) -> dict:
+        """The window's live evidence `live` (`LIVE_STATEMENTS`) as `LIVE_KEYS`: its descriptor and the kept outcomes."""
+        return {"descriptor": live["descriptor"], "proofs": self.live}
+
+    def evidence(self, w: dict) -> dict:
+        """Window evidence `w` (`PERIOD_KEYS`) as `PROVED_KEYS`, the kept outcomes in place of its statements."""
+        return {**{x: w[x] for x in PROVED_KEYS if x not in ("proofs", "live")}, "proofs": self.proofs,
+                "live": self.live_of(w["live"])}
+
+
+def _live_formed(live: Any) -> bool:
+    """`live` is in the statements' form `_live` reads (`LIVE_STATEMENTS`, its descriptor in hex)."""
+    return (isinstance(live, dict) and sorted(live) == list(LIVE_STATEMENTS) and type(live["descriptor"]) is str
+            and _HEX.fullmatch(live["descriptor"]) is not None)
+
+
+def _of_record(fn: str, value: dict, python: tuple[Any, tuple[str, str] | None]
+               ) -> tuple[Any, tuple[str, str] | None]:
+    """`verifier.of_record`'s answer to `fn` (``window`` or ``period``, ``{"credited": …}`` or ``{"refused": […]}``)
+    on `value`, `python` its Python twin's, as credit's ``(credit, refusal)``."""
+    got = V.of_record(fn, value, {"credited": python[0]} if python[1] is None else {"refused": list(python[1])})
+    return (got["credited"], None) if "credited" in got else (None, tuple(got["refused"]))
 
 
 def _runner(statements: Any, files: Any, entries: Any, window: Any, salt: Any, run: Run) -> Proved:
@@ -3089,8 +3148,23 @@ def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, window
                   run: Run = PF.verify) -> tuple[dict | None, tuple[str, str] | None]:
     """Period `name`'s credit and None, or None and the refusal: `_period_outcomes`' rules, each window's evidence
     (`PERIOD_KEYS`) carrying its statements' proof files, which `window` verifies on the circuit files the period's
-    open committed (`committed_files`, else ``circuit``) with the verifier `run`."""
-    return _period_of(key, ledger, pins, main, name, windows, verify, run)
+    open committed (`committed_files`, else ``circuit``) with the verifier `run`. The verdict is the Lean
+    `PouwCheck.Credit.periodCredit`'s on the outcomes those runs gave (`_of_record`), with `_period_of` its Python twin; a
+    refusal of the windows' or their live evidence's statements' form, of the committed circuit files or of a run
+    itself stands as that step's."""
+    kept: list[_Outcomes] = []
+    files = SimpleNamespace(refused=None)
+    python = _period_of(key, ledger, pins, main, name, windows, verify, run, kept, files)
+    if (not _formed(windows, PERIOD_KEYS) or not all(_live_formed(w["live"]) for w in windows)
+            or files.refused is not None or any(o.refused for o in kept)):
+        return python
+    return _of_record("period", {"key": key, "ledger": ledger, "pins": pins, "main": main, "name": name,
+                                 "windows": [(kept[i] if i < len(kept) else _Outcomes()).evidence(w)
+                                             for i, w in enumerate(windows)]}, python)
+
+
+def _formed(windows: Any, keys: tuple[str, ...]) -> bool:
+    return type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(keys) for w in windows)
 
 
 def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify
@@ -3117,9 +3191,12 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
 
 
 def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
-               run: Run | None) -> tuple[dict | None, tuple[str, str] | None]:
+               run: Run | None, kept: list[_Outcomes] | None = None, files_of: Any = None
+               ) -> tuple[dict | None, tuple[str, str] | None]:
+    """`_period_outcomes`, or with `run` `period_credit`'s Python twin, each window's statement runs appended to `kept`
+    and the committed circuit files' refusal set on `files_of` (``.refused``)."""
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
-    if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(keys) for w in windows)):
+    if not _formed(windows, keys):
         return None, ("period", form)
     roots = [r for w in windows for r in (w["window"].get("root") if isinstance(w["window"], dict) else None,
                                           w["draw"].get("root") if isinstance(w["draw"], dict) else None)]
@@ -3138,6 +3215,8 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     if run is not None:
         files, why = (_lean_committed_files if V.RECORD_VERDICT == "lean" else committed_files)(ledger, name)
         if why is not None:
+            if files_of is not None:
+                files_of.refused = why
             return None, why
     k = Ch.ChallengerKey.from_json(key)
     out, work, eps = [], [], []
@@ -3161,10 +3240,14 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
         why = _pin_hygiene(name, i, main, drawn.pinned, period_pin, floor, DRAW_UNIT)
         if why is not None:
             return None, why
-        proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None
-                  else _runner(w["statements"], files, w["entries"], w["window"], w["salt"], run))
-        lived, lk = ((_live_outcomes, LIVE_KEYS) if run is None
-                     else (_live_runner(files, w["entries"], run), LIVE_STATEMENTS))
+        if run is None:
+            proved, lived, lk = (lambda *_, p=w["proofs"]: (p, None)), _live_outcomes, LIVE_KEYS
+        else:
+            o = _Outcomes(_runner(w["statements"], files, w["entries"], w["window"], w["salt"], run),
+                          _live_runner(files, w["entries"], run))
+            if kept is not None:
+                kept.append(o)
+            proved, lived, lk = o.proved, o.lived, LIVE_STATEMENTS
         got, why = _window(key, ledger, pins, main, w["window"], w["session"], w["salt"], w["calls"], w["served"],
                            w["commit"], w["rounds"], w["draw"], w["descriptor"], w["entries"], proved, w["live"], lived,
                            lk, big_k, t, verify)

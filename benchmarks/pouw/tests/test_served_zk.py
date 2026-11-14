@@ -1222,8 +1222,8 @@ def test_a_disagreement_rejects_the_session(served, monkeypatch):
     with pytest.raises(S.Refused) as e:
         ch.select("honest")
     assert _codes(e) == {"coin"} and "already open" in e.value.verdict.detail["coin"]
-    case = CC.case
-    ch = disagrees("answer", lambda m: m.setattr(OR.CC, "case", lambda j: {**case(j), "reason": "forced"}),
+    case = CC.case_twin
+    ch = disagrees("answer", lambda m: m.setattr(OR.CC, "case_twin", lambda j: {**case(j), "reason": "forced"}),
                    lambda ch: _through(ch, rec))
     with pytest.raises(S.Refused) as e:
         ch.outcome("honest", [_unit(t) for t in ch.draws["honest"].units])
