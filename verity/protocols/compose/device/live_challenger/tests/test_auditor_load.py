@@ -199,7 +199,15 @@ ROOT, DIGEST, SIGNATURE = "ab" * 64, "9f" * 64, "e7" * 40
 LOAD_DOC = {"format": "load/v1", "values": [
     {"value": "w", "root": ROOT, "certificate": {"key": "0c" * 16, "digest": DIGEST, "signature": SIGNATURE}}]}
 LOAD_SUMMARY = {"values": 19, "registered": 19, "relayed": True}
-RELAY = {"shape": "tiny", "values": 19, "bytes": 34240, "streams": 4, "sinks": [{"accepted": True}] * 4}
+#: a relayed load's record with `load_relay.relay_load`'s keys (`test_load_relay` holds the relay to them): the
+#: shape's counts, the relay's own seconds, jobs and workers, and each stream's acknowledgement
+RELAY = {"shape": "tiny-h32-l1", "model": "verity/seeded-weights/v1/tiny-h32-l1/" + "5e" * 16, "values": 19,
+         "rows": 32, "link_bytes": 34240, "witness_bytes": 6144, "seconds": 0.375, "jobs": 3, "workers": 2,
+         "streams": [{"weights": 9000, "witness": 1536}, {"weights": 8000, "witness": 2048},
+                     {"weights": 9240, "witness": 512}, {"weights": 8000, "witness": 2048}]}
+#: what `out/` and the end hold of it (`auditor.load_relay_public`)
+RELAY_PUBLIC = {k: RELAY[k] for k in ("shape", "model", "values", "rows", "link_bytes", "witness_bytes")} | {
+    "streams": 4, "acknowledged": True}
 #: a stand-in for `warden_serve.py rehearse --load-store`'s files
 LOAD_FILES = (
     '(out / "deployment.json").write_text(json.dumps({"upstream": url, "session": "00" * 32}))\n'
@@ -236,8 +244,9 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_rel
     assert kw == {"sinks": [("127.0.0.1", p) for p in locals_], "store": stored.store}
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "ended"
     assert ended_why(stored, end) == "the rehearsal ended"
-    assert end["load"] == RELAY == json.loads((d / "out" / "load-relay.json").read_text())
-    assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
+    assert end["load"] == RELAY_PUBLIC == json.loads((d / "out" / "load-relay.json").read_text())
+    assert json.loads((d / A.WITNESS / "load-relay.json").read_text()) == RELAY
+    assert end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
                                                        "load": LOAD_SUMMARY}
     assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "cells-registrations.jsonl",
                                  "certificates.jsonl", "load-relay.json"}
@@ -289,7 +298,30 @@ def test_a_refused_load_publishes_one_word_of_why_and_its_sentence_stays_in_the_
         assert said in (d / A.WITNESS / "check.json").read_text()
     assert A.load_relay_public({"refused": "digest"}) == {"refused": "digest"}
     assert A.load_relay_public({"refused": None, "streams": [1]}) == {"refused": "other"}
-    assert A.load_relay_public(["refused"]) is None and A.load_relay_public(RELAY) == RELAY
+    assert A.load_relay_public(["refused"]) is None
+
+
+def test_of_a_relayed_load_the_gate_publishes_the_shapes_counts_and_no_streams_own():
+    """Of a relayed load's record `out/` and the end hold the shape and what it fixes (`LOAD_PUBLIC`), how many
+    streams carried it and whether their acknowledgements sum to the bytes sent. How the bytes fell across the
+    streams is the link's timing, which the developer's sink shares in, and the relay's seconds, jobs and workers
+    are the auditor's device's: none is published. A key out of its form is left out, and a record whose streams
+    don't sum to its bytes, which the relay would have refused, is not acknowledged."""
+    assert A.load_relay_public(RELAY) == RELAY_PUBLIC
+    assert set(RELAY) - set(RELAY_PUBLIC) == {"seconds", "jobs", "workers"} and A.LOAD_PUBLIC.keys() < RELAY.keys()
+    public = json.dumps(A.load_relay_public(RELAY))
+    assert not any(str(n) in public for a in RELAY["streams"] for n in a.values())
+    short = RELAY | {"streams": RELAY["streams"][:3]}
+    assert A.load_relay_public(short) == RELAY_PUBLIC | {"streams": 3, "acknowledged": False}
+    for key, value in (("shape", "tiny h32"), ("model", ["m"]), ("rows", 1.5), ("values", -1), ("link_bytes", True),
+                       ("witness_bytes", 1 << 63)):
+        got = A.load_relay_public(RELAY | {key: value})
+        assert key not in got and got.keys() == RELAY_PUBLIC.keys() - {key}
+        assert got["acknowledged"] is (key not in ("link_bytes", "witness_bytes"))
+    for streams in (None, "4", [], [1, 2], [{"weights": "9000", "witness": 0}]):
+        got = A.load_relay_public(RELAY | {"streams": streams})
+        assert got["acknowledged"] is False and got["streams"] == (1 if isinstance(streams, list) and streams
+                                                                    and isinstance(streams[0], dict) else 0)
 
 
 def test_a_loads_rehearsal_is_warden_serves_with_its_load_flags_after_the_rehearsals(tmp_path):

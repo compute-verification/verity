@@ -355,6 +355,12 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     assert (rep["link_bytes"], rep["rows"], rep["values"], rep["model"]) == (len(data), rows, len(TINY),
                                                                              LR.model_id(LR.TINY))
     assert len(rep["streams"]) == 4 and all(s["weights"] and s["witness"] for s in rep["streams"])
+    assert set(rep) == {"shape", "model", "values", "rows", "link_bytes", "witness_bytes", "seconds", "jobs", "workers",
+                        "streams"} and [set(a) for a in rep["streams"]] == [{"weights", "witness"}] * 4, (
+        "the gate publishes of this record by key (auditor.LOAD_PUBLIC, load_relay_public): rule a new key there")
+    assert [sum(a[k] for a in rep["streams"]) for k in ("weights", "witness")] == [rep["link_bytes"],
+                                                                                    rep["witness_bytes"]]
+    assert rep == json.loads((out / "load-relay.json").read_text())
     assert sorted(p.name for p in out.iterdir()) == ["load-heads.json", "load-relay.json"]
     shape, heads = LR.heads_of(json.loads((out / "load-heads.json").read_text()))
     at = 0

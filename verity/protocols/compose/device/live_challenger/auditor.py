@@ -347,8 +347,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
-  of the load `out/` publishes `load-relay.json` alone (the relay's counts and the sink's acknowledgements, or the
-  one word it was refused in, `LOAD_REFUSED`: the sentence is the witness's), and the end carries the relay's and the check's `load` (values and how many registered). The
+  of the load `out/` publishes `load-relay.json` alone, as `load_relay_public` holds it (the shape and what it
+  fixes, how many streams carried it and whether the sink acknowledged every byte, `LOAD_PUBLIC`; or the one word
+  it was refused in, `LOAD_REFUSED`: each stream's own counts, the relay's seconds and the sentence are the
+  witness's), and the end carries the relay's and the check's `load` (values and how many registered). The
   load's registrations (`load.json`, which the block record pins) stay in `witness/`.
 - **A rehearsal's sampling** (`sampling`, both verbs): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
@@ -539,6 +541,13 @@ LOAD_RELAY = "load-relay.json"
 #: sentence is the witness's (`check.json`'s problems, `rehearse.log`)
 LOAD_REFUSED = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
                 "store-size", "sink", "other")
+#: what `out/` and the end hold of a relayed load's record beside how many streams carried it and whether the sink
+#: acknowledged every byte sent: the shape and what the shape fixes, its model's name, its values, their rows and the
+#: bytes of the link and of the witness. Each stream's own counts, which the link's timing decides, and the relay's
+#: seconds, jobs and workers stay in `witness/`
+LOAD_PUBLIC = {"shape": str, "model": str, "values": int, "rows": int, "link_bytes": int, "witness_bytes": int}
+#: a published name of a load's record: a shape's or a model's
+LOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
 #: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
 #: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
 #: registration, or the execution phase it was refused for, and its cost; of a connection rows' registration
@@ -2699,13 +2708,24 @@ FAILED = ("cut", "fail", "error")
 def load_relay_public(doc: object) -> dict | None:
     """A load's relay's record (`LOAD_RELAY`) as `out/` and the end hold it, None for what isn't one. A refused
     load's is its word alone, one of `LOAD_REFUSED`: the last for anything that isn't one of the others, so no
-    sentence, value's name or path, and nothing the sink said, is published."""
+    sentence, value's name or path, and nothing the sink said, is published. A relayed load's is `LOAD_PUBLIC`'s
+    keys, each only in its form (a name, or a count below 2^63), `streams`, how many carried it, and
+    `acknowledged`, whether the streams' acknowledgements sum to the link's bytes and the witness's: the relay
+    refuses a load they don't, so this says only that the record agrees with itself."""
     if not isinstance(doc, dict):
         return None
     if "refused" in doc:
         word = doc["refused"]
         return {"refused": word if isinstance(word, str) and word in LOAD_REFUSED else LOAD_REFUSED[-1]}
-    return doc
+    public = {k: doc[k] for k, form in LOAD_PUBLIC.items()
+              if (type(doc.get(k)) is int and 0 <= doc[k] < 1 << 63 if form is int
+                  else isinstance(doc.get(k), str) and LOAD_NAME.fullmatch(doc[k]) is not None)}
+    streams = doc.get("streams")
+    acks = streams if isinstance(streams, list) and all(isinstance(a, dict) for a in streams) else []
+    sums = [sum(a[k] for a in acks) if all(type(a.get(k)) is int for a in acks) else None
+            for k in ("weights", "witness")]
+    return public | {"streams": len(acks),
+                     "acknowledged": bool(acks) and sums == [public.get("link_bytes"), public.get("witness_bytes")]}
 
 
 def failed_words(failed: object) -> list[str]:
@@ -2782,8 +2802,8 @@ def warden_outcome(out: Path, witness: Path) -> dict:
     each cells' registration less its private keys (`ROW_REGISTRATIONS`, `row_registration`),
     the check's verdict (`accepted`, how many problems, `WARDEN_COUNTS`, its `cell_rows` less the registrations'
     cost, its `failed` in `FAILED`'s words), each witness file by name and size alone, and a load's relay
-    (`LOAD_RELAY`, to `out` and the end as `load_relay_public` holds it: its counts and the sink's acknowledgements,
-    or the word it was refused in). A registrations' file with a line `ROW_LINE` doesn't rule is not
+    (`LOAD_RELAY`, to `out` and the end as `load_relay_public` holds it: `LOAD_PUBLIC`, its streams and whether
+    they were acknowledged, or the word it was refused in). A registrations' file with a line `ROW_LINE` doesn't rule is not
     published, no line of it, and the outcome says which line and what to change (``unruled``)."""
     for name in WARDEN_PUBLIC:
         if (witness / name).is_file():
