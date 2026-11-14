@@ -52,13 +52,12 @@ from verity.protocols.accounting.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
 
-from verity_vllm.commit import step_rows
 from verity.protocols.accounting.pouw.prover.serving.h1 import names as NM
 from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.accounting.pouw.prover.serving.h1.words import ids_words
 
-#: the scheme H1's own Commit commits under, and its run root's bytes
-SCHEME, ROOT_BYTES = step_rows.NAME, 64
+#: the scheme H1's own Commit commits under (the workload's Commit names it so), and its run root's bytes
+SCHEME, ROOT_BYTES = "rows-sha512", 64
 
 #: the credit refusal of every call of a window whose tables aren't the Commit's values (``details.roots1``)
 UNTIED = ("credit: a-not-the-commits: a call's A table or a round's input-ids table is not the Commit's value of its "

@@ -345,7 +345,7 @@ def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest"
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))
-    import a0
+    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
     import a8
     import numpy as np
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF

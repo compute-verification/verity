@@ -57,7 +57,7 @@ from pathlib import Path
 
 sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "sampling_plan")))
 
-import h200 as H
+from verity.protocols.proofs.spot.prover.cost import h200 as H
 
 from verity.protocols.accounting.pouw.verifier.window import eps_at
 from verity.protocols.proofs.spot.verifier.consumers import entropy_bits

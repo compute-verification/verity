@@ -65,11 +65,11 @@ from verity_vllm.pipeline.tp import serving_rows as SRT
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 VLLM = HERE.parents[2] / "adapters" / "vllm"
 sys.path.insert(0, str(HERE.parent))
-import prove_path as PP  # noqa: E402
-import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import prove_path as PP  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
 
 sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
-import a5 as A5  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
 
 PROMPTS = (5, 3)
 
@@ -314,7 +314,7 @@ def _forged(d: Path, lean_why: str | None, *, zk_server: bool, proofs: int | Non
     as `a0.run` writes one, whose ``LIVE`` line gives ``stopped`` as why it stopped short. Lean's verdict on the session
     refuses with ``lean_why`` (it accepts where None, and the audit with it), its own where ``digest``, else a0's stand-in
     for none. ``zk_server``: the sessions ran behind the ZK server; without it, plain."""
-    import a0
+    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
 
     accepted = lean_why is None
     m0_why = None if accepted else NO_PROOF if not proofs else PROOF_FAILS
@@ -408,7 +408,7 @@ def test_a_forged_window_of_several_members_passes_on_the_one_whose_proof_was_he
     """The records audit knows no forged member, so it reads every sampled member's session: the honest member's proof
     left and Lean accepted it, the false member's was held back, and Lean's refusal for want of its files is the only
     one, so ``lean_refused`` has no value."""
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     s, d = _two_members(tmp_path)
     row = RA.forged_outcome(s, d)
@@ -428,7 +428,7 @@ def test_a_session_the_audits_proof_server_proved_has_its_stop_in_that_servers_p
     no line of its own at all. Nor is a line of another form than the prover's: one not opened ``LIVE`` and a tab, or
     holding JSON that is no object, gives no stop, and one opened so that holds no JSON raises, so in neither case does
     the window pass. A session directory that holds a prover's log was a process pair's, and that log is read."""
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     s, d = _two_members(tmp_path)
     m0, m1 = ((d / f"session-m{k}").resolve() for k in (0, 1))
@@ -508,7 +508,7 @@ def test_a_window_whose_registered_read_opens_no_pinned_root_passes_on_lean_refu
     that left neither asked for nor held against it, behind the ZK server or behind none. Told the window forges a unit,
     the same record fails: no proof was held back, and Lean refused none it read. Nor is a proof that did not leave held
     against a forged read: with one session's proof held back, the window still passes on the read Lean refused."""
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     reads = {1: READ, 2: READ.replace("model.safetensors", "weights/model.embed_tokens.weight@64")}
     s = _served_as_registered(tmp_path, reads)
@@ -550,7 +550,7 @@ def test_a_forged_read_passes_on_nothing_but_lean_refusing_at_setup_a_read_that_
     statement's tables, or the registered reads where the verifier held no root to open a row against. A reason a0 wrote in place of
     a verdict Lean never gave is not Lean's refusal. Nor does the refusal pass a record that accepts, or a window a check
     before the sample failed."""
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     row = RA.forged_outcome(_served_as_registered(tmp_path, whys, **kw), tmp_path, read=True)
     assert (row["ok"], row["passes_on"], row["checks"]["read_refused"]) == (False, "read_refused", read_refused), row
@@ -561,7 +561,7 @@ def test_a_forged_read_passes_on_nothing_but_lean_refusing_at_setup_a_read_that_
 def test_a_false_units_record_does_not_pass_as_a_forged_read(tmp_path):
     """A window of a false unit is stopped by the ZK server holding its proof back, and Lean's refusal of that session is
     for want of its files: no read was refused. Told it forges a read, the audit fails it; told a unit, it passes."""
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     s, d = _two_members(tmp_path)
     row = RA.forged_outcome(s, d, read=True)
@@ -749,7 +749,7 @@ def test_a_partial_windows_charge_states_no_c_its_port_from_a_template_it_lacks_
     `expert_rows.wire` leaves it). `records_audit.leak_count` counts the port among the window's free inputs, past the
     advice's charge, and `charge_terms` then states no c: the leak bound c + λ_δ + β_δ + n·log2 D is stated only within
     the charge. The whole window, its port wired, is within it."""
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     writer = CS.Member("W", (("a", 4),), (("o0", 8),), 2)
     reader = CS.Member("R", (("x", 8), ("y", 2)), (("o0", 2),), 2, base=2, wired=(("x", "o0", (0, 1)),))
@@ -1921,7 +1921,7 @@ def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure
     the charge, only under its premise (`records_audit.WINDOW_PREMISE`), which the count names, and ``records_audit.py
     count`` prints both figures so. The verifier's window from the record is the one the prover's Programs make
     (`_circuit`), and the prover's record is the compiler's."""
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     s = _tiny_served(tmp_path, monkeypatch)
     (tmp_path / "part.json").write_text(json.dumps(LAYER0))

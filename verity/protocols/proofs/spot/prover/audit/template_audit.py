@@ -38,7 +38,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, pa
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
-import r2_population as R2
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 SCHEME = "frame-v3-sha512/hm96-sha512"

@@ -210,11 +210,11 @@ if TYPE_CHECKING:
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 sys.path.insert(0, str(HERE))
 
-import a0  # noqa: E402
-import a5_coins as AC  # noqa: E402
-import a5_memo as AM  # noqa: E402
-import member_trees as MT  # noqa: E402
-import r2_population as R2  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import check_memo as AM  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
+from verity.protocols.proofs.spot.verifier.tests import other_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
@@ -658,7 +658,7 @@ def compose_key(compose: Callable, defn: object, template: str) -> str | None:
     inputs = getattr(compose, "inputs", None)
     if inputs is None:
         return None
-    import compose_circuit as CM
+    from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CM
 
     return CM.cache_key(["a5/own", template, P.program_digest(Program(defn)), inputs],
                         files=(Path(CM.__file__), Path(inspect.getsourcefile(compose))))
@@ -670,7 +670,7 @@ def own_composed(a: argparse.Namespace, compose: Callable, defn: object, templat
     ``out``, bound to ``pd`` and ``program``: through ``a.compose_cache`` (`compose_circuit.cached`, keyed by `compose_key`)
     when given and the composer says what it composes from, else composed at ``out``. -> (compose's line with the circuit's
     META, whether the cache held it already: None off the cache)."""
-    import compose_circuit as CM
+    from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CM
 
     cache = getattr(a, "compose_cache", None)
     key = compose_key(compose, defn, template) if cache else None

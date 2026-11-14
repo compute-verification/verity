@@ -1288,7 +1288,7 @@ def challenger(a, at: SimpleNamespace, out: Path):
     if not a.challenger:
         yield None
         return
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     root = window_root(at)
     manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,

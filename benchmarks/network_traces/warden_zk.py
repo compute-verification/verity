@@ -236,7 +236,7 @@ def _statement():
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))
-    import a0
+    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
     import a7
     import a8
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registration as R, verifier as V
