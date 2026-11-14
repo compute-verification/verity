@@ -311,8 +311,8 @@ link_test() {  # LEAN DIR: the real Lean verifier at LEAN on a circuit file link
   "${PY:-$HERE/../../.venv/bin/python}" - "$1" "$2" "$HERE" <<'EOF'
 import hashlib, json, os, subprocess, sys
 from pathlib import Path
-sys.path.insert(0, sys.argv[3])
-import a0
+sys.path.insert(0, str(Path(sys.argv[3]).resolve().parents[1]))
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0
 lean, root = sys.argv[1], Path(sys.argv[2])
 root.mkdir(parents=True, exist_ok=True)
 circuit = root / "circuit.txt"
