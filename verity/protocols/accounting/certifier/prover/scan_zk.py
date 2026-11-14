@@ -1567,7 +1567,8 @@ def challenger(a, at: SimpleNamespace | None, out: Path):
 
     root = window_root(at)
     manager, turns, finisher = AC.start(a.challenger, root, [0], out, a.main, ssh_key=a.gate_key,
-                                        peer=a.peer, key_record=a.challenger_key)
+                                        peer=a.peer, key_record=a.challenger_key,
+                                        local=proof_drivers.drivers().local_challenger.Local)
     coins = SimpleNamespace(AC=AC, turns=turns, root=root, challenger=a.challenger, published=None)
     try:
         yield coins

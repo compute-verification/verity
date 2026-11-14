@@ -59,7 +59,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     members = [sz.stage(M, pg, mr, tmp_path / "honest" / f"stage-{mr.name}") for mr in honest.members]
     carry = sz.carry_of(pg, setup.cls, [], honest.members[0].ports["sin"])
 
-    A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    LC = sz.proof_drivers.drivers().local_challenger
+    A = LC._module("a5_auditor", LC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **kw: [sys.executable, str(STUB), *real(*a, **kw)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
