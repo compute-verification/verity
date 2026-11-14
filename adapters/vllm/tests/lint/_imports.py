@@ -50,6 +50,7 @@ LAYER = {
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
     "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.settings": "core",                            # the environment's registry; imports nothing from verity_vllm
+    "verity_vllm.gc_tuning": "core",                           # the offline processes' GC thresholds; imports only settings
     "verity_vllm.log": "core",                                 # the logger; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.commitments.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
