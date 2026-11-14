@@ -4,12 +4,12 @@
 # comparison (stress.py compare: summary.json); the integration's plugin as vLLM loads it, from a site directory declaring
 # the integration's entry points (stress.py site, then stress.py plugin: plugin.json); the timing
 # (stress.py time: time.json). A failed step is named in $OUT/failed and the script exits 1 after the rest.
-#   research run --on NODE --project verity --source . --cwd source -- bash benchmarks/moe_align/run.sh
+#   research run --on NODE --project verity --source . --cwd source -- bash benchmarks/kernels/moe_align/run.sh
 # VENV (default /workspace/venv312), PY (default $VENV/bin/python), OUT (research run sets it); MOE_ALIGN_REPS: the first
 # check's repetitions (default 100; the two concurrent ones run 10 each); MOE_ALIGN_SKIP_TIME=1: no timing.
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/../.." && pwd)
+ROOT=$(cd "$HERE/../../.." && pwd)
 OUT=${OUT:?set OUT}
 VENV=${VENV:-/workspace/venv312}
 PY=${PY:-$VENV/bin/python}

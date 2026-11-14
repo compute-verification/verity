@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Game
 
 /-!
-# Two laws for the free-compute proofs
+# Two sampling designs for the free-compute proofs
 
 * `Law.bernoulliOf num den` samples unit `u` independently with probability `num u / den`. A set escapes with
   `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
@@ -107,7 +107,7 @@ theorem meanDraws_restrict (L : Law n) (S : Finset (Fin n)) :
   rw [Finset.sum_map]
   rfl
 
-/-- A set of the restricted law is a set of `L`'s units of `S`, of the same size, doing the same work. -/
+/-- A set of the restricted sampling design is a set of `L`'s units of `S`, of the same size, doing the same work. -/
 theorem sum_map_restrict (S : Finset (Fin n)) (B : Finset (Fin S.card)) (w : Fin n → ℝ) :
     ∑ u ∈ B.map (S.orderEmbOfFin rfl).toEmbedding, w u = ∑ i ∈ B, w (S.orderEmbOfFin rfl i) := by
   rw [Finset.sum_map]

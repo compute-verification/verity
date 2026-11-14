@@ -48,7 +48,8 @@ A uniform `k`-subset of `n` blocks misses a set of `f` blocks with probability `
 set fixed before its own sample, every sample missing its window's set while the sets hold `F` blocks in total has
 probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
 (`pr_adaptive_le`, by induction over the windows: the first window's coins, then the rest's at each of them). With
-each window's soundness error added by a union bound, that is `pooledIncorrectBlocks`.
+each window's soundness error added by a union bound, that is `pooledIncorrectBlocks`. `pooledIncorrectBlocks_rate` is
+that bound at the share a rule that names a rate samples of whatever each window registers.
 -/
 
 @[expose] public section
@@ -286,5 +287,29 @@ theorem pooledIncorrectBlocks : Guarantees.PooledIncorrectBlocksLe := by
       _ = Real.exp (F * (-q)) := (Real.exp_nat_mul _ _).symm
       _ ≤ Real.exp (-Real.log (1 / δ)) := Real.exp_le_exp.2 (by nlinarith)
       _ = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
+
+/-- **The incorrect proof blocks over a monitoring period, at a rate**: `pooledIncorrectBlocks` at `q = num/den`, with
+every window's count at least `num/den` of the units it registers, `num · n i ≤ den · k i`, in the place of
+`q · n i ≤ k i`. A window's `n i` is the registration's, which the prover sizes. The count the rule `rate:NUM/DEN[:T]`
+names, `Spot.Rate.count NUM DEN T (n i)`, meets the hypothesis at every `n i` (`Spot.Rate.count_ge`;
+`Properties.Spot.RuleAtRate`), so under that rule the bound holds at `NUM/DEN` whatever each window registers; a
+fixed count `k i` meets it only while `n i ≤ den · k i / num`. The windows' populations are fixed before the period, as
+in `pooledIncorrectBlocks`. -/
+theorem pooledIncorrectBlocks_rate {m : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] (n k : Fin m → ℕ)
+    (draw : (i : Fin m) → Ω → Finset (Fin (n i))) (hcard : ∀ i x, (draw i x).card = k i)
+    (hunif : ∀ i (S : Finset (Fin (n i))), S.card = k i →
+      (Finset.univ.filter fun x => draw i x = S).card * (n i).choose (k i) = Fintype.card Ω)
+    (W : (i : Fin m) → (Fin m → Ω) → Finset (Fin (n i)))
+    (hW : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → W i ω = W i ω')
+    (acc : Fin m → (Fin m → Ω) → Prop) (ε : Fin m → ℝ)
+    (hsound : ∀ i, Pr (fun ω => acc i ω ∧ ¬Disjoint (draw i (ω i)) (W i ω)) ≤ ε i)
+    (num den : ℕ) (hden : 0 < den) (hle : num ≤ den) (hrate : ∀ i, num * n i ≤ den * k i) (F : ℕ) :
+    Pr (fun ω => (∀ i, acc i ω) ∧ F ≤ ∑ i, (W i ω).card) ≤ (1 - (num : ℝ) / den) ^ F + ∑ i, ε i ∧
+      ∀ δ : ℝ, 0 < δ → Real.log (1 / δ) ≤ (num : ℝ) / den * F → (1 - (num : ℝ) / den) ^ F ≤ δ := by
+  have hd : (0 : ℝ) < den := Nat.cast_pos.2 hden
+  refine pooledIncorrectBlocks n k draw hcard hunif W hW acc ε hsound ((num : ℝ) / den)
+    (div_nonneg (Nat.cast_nonneg _) hd.le) ((div_le_one hd).2 (Nat.cast_le.2 hle)) (fun i => ?_) F
+  rw [div_mul_eq_mul_div, div_le_iff₀ hd, mul_comm (k i : ℝ)]
+  exact_mod_cast hrate i
 
 end NetTiming

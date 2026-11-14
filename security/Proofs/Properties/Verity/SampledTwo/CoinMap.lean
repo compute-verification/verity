@@ -428,7 +428,7 @@ def ElemAgrees (L : Locate) (A : Live₂) (x : Msg) (reads : ℕ → Prop) (o : 
   ∀ i : Fin (A.L.V.k x), reads i.val → ∀ c, dev L o.log i.val = some c →
     ∀ j : Fin 65536, j.val < fitOf L i.val [] o.log → c j = r i j
 
-/-- **The coin map's law holds** at every vocabulary, statement, strategy, locator, prover and set of read rounds:
+/-- **The coin map's distribution holds** at every vocabulary, statement, strategy, locator, prover and set of read rounds:
 `CoinMapLaw` at the frame of `L` and the agreement `ElemAgrees`, with `hide` the hiding term (`gapOf`: the written
 openings' shortfalls and empty classes along the frame's play). -/
 def CoinMapHolds : Prop :=

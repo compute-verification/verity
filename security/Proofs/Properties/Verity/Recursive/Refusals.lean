@@ -256,7 +256,7 @@ theorem ins_inner {ri : FlockDeploy.Raw} {o : VStar.Recursive.Own} {dB : ByteArr
 
 /-- **The model's setup of `innerIns` is the compiled `innerOk`'s**, from `innerOk_peel`'s steps: the hm96-sha512 rows
 check, the inner checks, the session, each table's registered reads and identifier (`noIdentifier_of_check`), the full
-registration, V\*'s checks, check 5, the public rows and the sample's law, with no `--zk` shape check. -/
+registration, V\*'s checks, check 5, the public rows and the sample's sampling design, with no `--zk` shape check. -/
 theorem setup_inner {cB pB : ByteArray} {o : VStar.Recursive.Own} {j : Json} {n : ℕ} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt}
     (hhm : Flock.Tags.circuitPlainLeaves.hm96Rows = true)

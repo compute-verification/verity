@@ -3,7 +3,7 @@ module
 public import Spot.Partition
 
 /-!
-The sample (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a sample held to the
+The sample (`one_stage/draw.py`): the verifier's sampling design expanded over its own program and query (`derive`), a sample held to the
 registration and to that sampling design (`checkDraw`), and the proved statement's units held to the sample (`checkProved`). The strata,
 their rules, the sampling design object and the samplers are Flock's (`Flock.Draw`). The check samples nothing: the sample comes from
 the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
@@ -17,7 +17,7 @@ namespace Spot.Draw
 
 open Lean (Json)
 open Flock (V)
-/-- `draw.derive`'s expansion as Flock's law: `stratified` and `work` (the rule, or an expanded law, whose strata are
+/-- `draw.derive`'s expansion as Flock's sampling design: `stratified` and `work` (the rule, or an expanded sampling design, whose strata are
 ignored) over the strata of the verifier's program and query (`Flock.Draw.derive`, and `Flock.Draw.deriveWork` with its
 work table); `none` for `subset` and `bernoulli`, which `derive` leaves unchanged. An error when the query doesn't apply,
 `k` isn't in `[1, population]`, a work sampling design has no table, the table names no work for a template, or the population does
@@ -66,7 +66,7 @@ def ranges? : Json → Option (Array (Int × Int))
 private def natRanges (rs : Array (Int × Int)) : Option (Array (Nat × Nat)) :=
   rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
 
-/-- One stratum of a sample's law: exactly its keys, a string template, its units ranges, an integer `k` and, for a work
+/-- One stratum of a sample's sampling design: exactly its keys, a string template, its units ranges, an integer `k` and, for a work
 stratum, natural `work` and `floor`. A negative bound or `k` can't tile `[0, population)` or meet its rule, so it is a
 problem here already. -/
 private def stratum? (work : Bool) (s : Json) : Option Flock.Draw.WorkStratum := do
@@ -160,8 +160,8 @@ def strataMessage (law : Json) (population : Int) : Option String := Id.run do
     at_ := hi
   return if at_ == population then none else some "the strata don't tile the population"
 
-/-- `draw.check_draw`: the sample is well formed, over the registered population, under the verifier's law (for
-`stratified` and `work`, the expanded law of `derive`), each failure with Python's detail. -/
+/-- `draw.check_draw`: the sample is well formed, over the registered population, under the verifier's sampling design (for
+`stratified` and `work`, the expanded sampling design of `derive`), each failure with Python's detail. -/
 def checkDrawFull (draw population law : Json) : Check := Id.run do
   let kind := match getD draw "law" with | .str s => s | _ => ""
   if !(draw matches .obj _) || !["subset", "bernoulli", "stratified", "work"].contains kind then
@@ -260,9 +260,9 @@ def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray :
   set (at_ + need)
   return src.extract at_ (at_ + need)
 
-/-- The Flock law a one-stage law object (the verifier's law as `derive` expands it) names over `[0, population)`, as
+/-- The Flock sampling design a one-stage sampling design object (the verifier's sampling design as `derive` expands it) names over `[0, population)`, as
 `coins.draw_first` reads it: `subset`, `bernoulli` at its `NUM/DEN` as written, `stratified` or `work`. An error when
-the sampling design is not exactly a one-stage law's keys (`coins._law_problem`), a subset samples no unit or exceeds the
+the sampling design is not exactly a one-stage sampling design's keys (`coins._law_problem`), a subset samples no unit or exceeds the
 population, or a stratified or work sampling design isn't well formed over it (`strataProblem`). -/
 def flockLaw (law : Json) (population : Nat) : Except String Flock.Draw.Law := do
   let kind := match getD law "law" with | .str s => s | _ => ""
@@ -295,9 +295,9 @@ def drawUnits (law : Flock.Draw.Law) (population : Nat) (src : ByteArray) : Exce
     | throw "the draw did not end"
   return (d.units, read)
 
-/-- `coins.draw_first` without a closure map: the one-stage sample object of the verifier's law over `[0, population)`
+/-- `coins.draw_first` without a closure map: the one-stage sample object of the verifier's sampling design over `[0, population)`
 (the sampling design as `derive` expands it, with `population` and the sampled `units`), its units sampled from `src` (`drawUnits`) under
-the sampling design's Flock law (`flockLaw`). An error where either is. With the sample, the number of bytes of `src` it read. -/
+the sampling design's Flock sampling design (`flockLaw`). An error where either is. With the sample, the number of bytes of `src` it read. -/
 def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except String (Json × Nat) := do
   let (units, read) ← drawUnits (← flockLaw law population) population src
   return (Json.mkObj (entries law |>.toList |>.append [("population", Lean.toJson population), ("units", natsJson units)]),

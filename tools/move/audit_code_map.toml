@@ -80,6 +80,9 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "benchmarks/prove_path/tests/test_prove_path.py" = "verity/protocols/proofs/spot/prover/tests/test_prove_path.py"
 "benchmarks/prove_path/tests/test_kept_scan.py" = "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py"
 "benchmarks/prove_path/tests/test_class_size.py" = "verity/protocols/proofs/spot/prover/tests/test_class_size.py"
+"benchmarks/prove_path/tests/test_run_keep.py" = "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_keep.py"
+"benchmarks/prove_path/tests/test_run_request_values.py" = "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_request_values.py"
+"benchmarks/prove_path/tests/test_run_rules.py" = "verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_rules.py"
 
 # the cost model
 "benchmarks/sampling_plan/transformer.py" = "verity/protocols/proofs/spot/prover/cost/transformer.py"
@@ -118,6 +121,7 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean", "**/lakefile.toml",
            "tests/tree.toml", "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
 include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
+
 
 [modules]
 "benchmarks.one_stage.a0" = "verity.protocols.proofs.spot.prover.audit.template_audit"
@@ -168,6 +172,9 @@ include = ["**/fixtures/README.md", "**/fixtures/**/README.md"]
 "benchmarks.prove_path.tests.test_prove_path" = "verity.protocols.proofs.spot.prover.tests.test_prove_path"
 "benchmarks.prove_path.tests.test_records_audit" = "verity.protocols.proofs.spot.verifier.tests.test_records_audit"
 "benchmarks.prove_path.tests.test_remotetie" = "verity.protocols.proofs.spot.verifier.tests.test_remotetie"
+"benchmarks.prove_path.tests.test_run_keep" = "verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_keep"
+"benchmarks.prove_path.tests.test_run_request_values" = "verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_request_values"
+"benchmarks.prove_path.tests.test_run_rules" = "verity.protocols.proofs.spot.prover.tests.test_prove_path_sh_rules"
 "benchmarks.prove_path.tests.test_window_cost" = "verity.protocols.proofs.spot.prover.tests.test_window_cost"
 "benchmarks.prove_path.window_cost" = "verity.protocols.proofs.spot.prover.cost.window_cost"
 "benchmarks.sampling_plan.cpu_budget" = "verity.protocols.proofs.spot.prover.cost.cpu_budget"
