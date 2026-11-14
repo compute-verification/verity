@@ -5,7 +5,7 @@ parameters, so ``alpha = K / Gamma`` bits per gate. A row (one training method i
 in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
 
 * ``lower``: the thread theorem, ``InferenceOnly.SecurityProofs.ThreadedTraining`` (``security/Definitions/InferenceOnly/Guarantees/Threads.lean``):
-  ``rho >= kappa * b_a / (2 alpha Lambda)`` with ``Lambda = max(e, c K / (4 d b_w))``, and ``rho >= 1`` since a
+  ``slowdown >= kappa * b_a / (2 alpha Lambda)`` with ``Lambda = max(e, c K / (4 d b_w))``, and ``slowdown >= 1`` since a
   containing circuit is no smaller. The weight rate is capped at ``U_bits / n_updated``: a block that uses ``p`` updated
   weights can always read the whole update instead, so no larger rate is a valid charge. A seed-described update
   therefore gets a lower bound near 1, which is the truth about it, not an artifact.
@@ -166,7 +166,7 @@ def retrained(row: dict, parameters: list[dict]) -> bool:
 
 
 def efficiency(row: dict, calibration: dict, parameters: list[dict]) -> list[dict]:
-    """Pretraining efficiency under the policy, ``m / rho``, for each recipe: ``attack``, with the construction's cost.
+    """Pretraining efficiency under the policy, ``m / slowdown``, for each recipe: ``attack``, with the construction's cost.
     The best recipe is the attacker's choice."""
     ests = catalog.estimates(parameters)
     out = []
@@ -198,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
             for r in rows:
                 if r["model"] != c["model"] or not retrained(r, parameters):
                     continue
-                print(f"{r['id']} under {c['id']}: efficiency m / rho")
+                print(f"{r['id']} under {c['id']}: efficiency m / slowdown")
                 print(f"{'recipe':16} {'b_w':>5} {'b_a':>5} {'m (low-high)':>18} {'upper':>9} {'attack':>9}")
                 for x in efficiency(r, c, parameters):
                     m = x["m"]
