@@ -335,8 +335,8 @@ def class_windows(serve_dir: Path, cls: Mapping[str, int]) -> tuple[int, dict[in
     for a window with no request (its slots padded, the class's circuit still), a closed window with no seal, and a
     request past the class's prompt or outputs."""
     seals = {int(s["window"]): s for s in SV._lines(serve_dir / "seals.jsonl")}
-    lines = {int(w["window"]): w for w in SV._lines(serve_dir / "windows.jsonl")}
-    reqs = SV._lines(serve_dir / "requests.jsonl")
+    lines = {int(w["window"]): w for w in SV._lines(serve_dir / SV.WINDOWS_FILE)}
+    reqs = SV._lines(serve_dir / SV.REQUESTS_FILE)
     why = {k: "closed, with no seal" for k in lines if k not in seals}
     for k in sorted(seals):
         mine = [r for r in reqs if k in (r.get("windows") or ())]
@@ -436,7 +436,7 @@ def lean_said(call: Mapping[str, Any], gates: int) -> dict[str, Any]:
 
 def served_start(serve_dir: Path) -> str:
     """The serve's start (its ``serve.json`` clocks' time, stamped as the endpoint listens), UTC, ISO 8601."""
-    t = json.loads((serve_dir / "serve.json").read_text())["clocks"]["time"]
+    t = json.loads((serve_dir / SV.SERVE_FILE).read_text())["clocks"]["time"]
     return datetime.datetime.fromtimestamp(float(t), datetime.UTC).isoformat(timespec="seconds")
 
 

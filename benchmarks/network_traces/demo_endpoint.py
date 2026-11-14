@@ -59,6 +59,7 @@ from typing import Any, Callable, Protocol, Sequence
 import numpy as np
 
 from verity.commitments import advice as AC
+from verity.protocols.proofs.spot.verifier.workload import FILES
 
 SCHEMA = "verity-vllm/step-trace/v1"  # verity_vllm.engine.step_trace.SCHEMA
 ROW_BITS = 128
@@ -314,7 +315,7 @@ class Scheduler:
         rec = {"window": w, "run_id": run_id, "run_root": reg.root.hex(), "steps": self.window_steps_done,
                "rows": len(rows), "scheme": "demo-endpoint/served-rows/v1 (verity.commitments.advice, hm96-sha512)",
                "requests": [{"engine_id": q.rid, "user": q.user} for q in self.window_reqs.values()], "passed": True}
-        with open(self.out / "windows.jsonl", "a") as fh:
+        with open(self.out / FILES["Window"], "a") as fh:
             fh.write(json.dumps(rec) + "\n")
         self.window_open = False
         self.emit({"kind": "window", "window": w, "event": "close", "before_step": self.scheduled})
@@ -322,7 +323,7 @@ class Scheduler:
         return rec
 
     def write_finished(self) -> None:
-        with open(self.out / "requests.jsonl", "a") as fh:
+        with open(self.out / FILES["Io"], "a") as fh:
             for q in self.finished:
                 fh.write(json.dumps({"http_id": q.http_id, "engine_id": q.rid, "user": q.user, "arrival": q.arrival,
                                      "release": q.release, "admitted": q.admitted, "prompt_ids": q.prompt,
@@ -437,7 +438,7 @@ async def serve(a: argparse.Namespace, engine: Engine | None = None,
     server = server_of(sched)
     listener = await asyncio.start_server(server, a.host, a.port)
     host, port = listener.sockets[0].getsockname()[:2]
-    (a.out / "serve.json").write_text(json.dumps(serve_record(a, sched, server, (host, port)), indent=1))
+    (a.out / FILES["Settings"]).write_text(json.dumps(serve_record(a, sched, server, (host, port)), indent=1))
     print(json.dumps({"listening": f"http://{host}:{port}", "model": engine.name, "context": engine.context}), flush=True)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()

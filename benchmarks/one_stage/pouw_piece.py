@@ -58,7 +58,9 @@ from composite import line, outcome, write_private
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import period_check as PC
+from verity.protocols.accounting.pouw.verifier.workload import FILES as POUW_FILES
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.workload import FILES
 from verity_vllm.protocols.pouw.h1 import answers as A
 
 V1, PERIOD = CC.ID, PC.ID
@@ -118,7 +120,7 @@ def missing(out: Path, protocol: str, why: str) -> None:
 
 
 def _window(serve_dir: Path, k: int) -> dict:
-    path = serve_dir / "windows.jsonl"
+    path = serve_dir / FILES["Window"]
     if not path.is_file():
         raise Missing(f"{serve_dir} has no windows.jsonl, so no window {k}")
     line = next((w for w in map(json.loads, lines(path)) if int(w["window"]) == k), None)
@@ -156,7 +158,7 @@ def period_missing(serve_dir: Path, k: int) -> str:
         return (f"window {k}'s session {session.get('session')} is in no period of the auditor's ledger (reserved with "
                 f"no period open: a development window), and {PERIOD} credits only a period's windows, from the "
                 "period-open that commits their K, rows and weights")
-    if not (serve_dir / f"h1/w{k}/pouw-h1-calls.json").is_file():
+    if not (serve_dir / f"h1/w{k}" / POUW_FILES["Calls"]).is_file():
         return f"window {k} has no H1 record (h1/w{k}/pouw-h1-calls.json) in {serve_dir}"
     return (f"no proof outcomes of window {k}'s drawn units and live rounds: {PERIOD} reads each one's verdict of the "
             "verifier of record (credit.PROVED_KEYS's proofs and live), from their statements and the period's "
@@ -242,7 +244,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     name = doc["name"]
     if session["period"] != name:
         raise Missing(f"window {k}'s session is in period {session['period']}, not the run's {name}")
-    calls = serve_dir / f"h1/w{k}/pouw-h1-calls.json"
+    calls = serve_dir / f"h1/w{k}" / POUW_FILES["Calls"]
     if not calls.is_file():
         raise Missing(f"window {k} has no H1 record (h1/w{k}/pouw-h1-calls.json) in {serve_dir}")
     rec = json.loads(calls.read_text())
@@ -262,7 +264,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     if listed != [sid, dsid]:
         raise Missing(f"period {name}'s close in the ledger lists the sessions {listed}, and this piece is built for a "
                       f"period of one served window, its session {sid} and then its sample's {dsid} (period-open --cap 2)")
-    program = serve_dir / "h1/window-program.json.gz"
+    program = serve_dir / "h1" / POUW_FILES["WindowProgram"]
     if not program.is_file():
         raise Missing(f"no declared window Program (h1/window-program.json.gz) in {serve_dir}, the circuit the "
                       "period's open committed and credit reads the window's layout from")

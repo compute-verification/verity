@@ -186,10 +186,12 @@ CONTEXT = 512
 #: engine_id and its network certifier user (null for a body that sent none), a line in requests.jsonl's order:
 #: requests.jsonl less its values
 USERS = "request_users.jsonl"
+#: the serve dir's files that carry a message, by the names the list states (`tests/test_workload_messages.py`)
+WINDOWS_FILE, SERVE_FILE, REQUESTS_FILE = "windows.jsonl", "serve.json", "requests.jsonl"
 #: the endpoint's records its art publishes beside the endpoint step's report.json, from the serve dir
-RECORDS = ("windows.jsonl", "serve.json")
+RECORDS = (WINDOWS_FILE, SERVE_FILE)
 #: what the endpoint step reads in the serve dir, which stays there
-SERVED = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json", USERS)
+SERVED = ("advice_trace.jsonl", REQUESTS_FILE, WINDOWS_FILE, SERVE_FILE, USERS)
 #: the certified I/O file `io` writes in KEEP/RUN and the endpoint step reads
 CERTIFIED = "certified-io.json"
 #: a record that holds a request's values: a scheduler trace's record of these kinds (`verity_vllm.engine.step_trace`)
@@ -585,7 +587,7 @@ def rebuild(src: Path, dest: Path, records: list[dict], eos: list[int]) -> Path:
         shutil.rmtree(dest)
     dest.mkdir(mode=0o700, parents=True)
     for f in SERVED:
-        if f != "requests.jsonl":
+        if f != REQUESTS_FILE:
             shutil.copyfile(src / f, dest / f)
     by, lines = {r["user"]: r for r in records}, []
     for m in map(json.loads, filter(str.strip, (src / USERS).read_text().splitlines())):
@@ -594,7 +596,7 @@ def rebuild(src: Path, dest: Path, records: list[dict], eos: list[int]) -> Path:
                           "(none sent, not the warden's, or an earlier line's)")
         lines.append(json.dumps({"engine_id": m["engine_id"], "user": m["user"], "prompt_ids": r["prompt"],
                                  "streamed_ids": r["output"], "finish": finish(r["output"], r["max_tokens"], set(eos))}))
-    fd = os.open(dest / "requests.jsonl", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = os.open(dest / REQUESTS_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
         f.write("".join(line + "\n" for line in lines))
     return dest
@@ -660,7 +662,7 @@ def endpoint(a: argparse.Namespace) -> int:
         raise Refused(f"--out {out} is in the tree: give the run's $OUT, expanded on the node (inside bash -lc '...')")
     if missing := [f for f in SERVED if not (src / f).is_file()]:
         raise Refused(f"--from {src}: no {', '.join(missing)}: give the endpoint's serve dir, its --out")
-    if off := served_as(json.loads((src / "serve.json").read_text()), a.port):
+    if off := served_as(json.loads((src / SERVE_FILE).read_text()), a.port):
         raise Refused(f"the endpoint didn't serve with the session's flags: {'; '.join(off)}. Start it again with the "
                       "plan's endpoint and hand_start")
     doc = json.load(sys.stdin) if given is None else json.loads(given.read_text())
@@ -677,7 +679,7 @@ def endpoint(a: argparse.Namespace) -> int:
     rep["verdict"] = step["verdict"]
     publish = {"report.json": (json.dumps(rep, indent=1, sort_keys=True, default=str) + "\n").encode(),
                **{f: (src / f).read_bytes() for f in RECORDS}}
-    ps = [json.loads(x).get("prompt_ids") or [] for x in (src / "requests.jsonl").read_text().splitlines() if x.strip()]
+    ps = [json.loads(x).get("prompt_ids") or [] for x in (src / REQUESTS_FILE).read_text().splitlines() if x.strip()]
     marks = [*needles(ps + [r["prompt"] for r in io["records"]]),
              *(f'"{k}"'.encode() for k in ("prompt_len", "sampling", "emitted", "prompt_ids", "streamed_ids"))]
     if held := [f"{f}: {why}" for f, d in publish.items() if (why := valued(d, marks))]:

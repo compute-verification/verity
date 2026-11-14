@@ -127,7 +127,8 @@ import served_session as SS  # noqa: E402
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
 PRIVATE = Path("private") / "certifier"
 #: the endpoint's records the chain reads (network_e2e `chain.ENDPOINT`)
-ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
+REQUESTS_FILE = "requests.jsonl"
+ENDPOINT = ("advice_trace.jsonl", REQUESTS_FILE, "windows.jsonl", "serve.json")
 PROTOCOL = "verity/certifier/v0"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
 PREMISE = "trusted-host"
@@ -327,9 +328,9 @@ def placement(serve_dir: Path, run: str) -> dict:
 
 
 def window_requests(serve_dir: Path, window: int) -> list[dict]:
-    reqs = [r for r in _lines(serve_dir / "requests.jsonl") if window in (r.get("windows") or ())]
+    reqs = [r for r in _lines(serve_dir / REQUESTS_FILE) if window in (r.get("windows") or ())]
     if not reqs:
-        raise NotRun(f"window {window} has no request in {serve_dir / 'requests.jsonl'}")
+        raise NotRun(f"window {window} has no request in {serve_dir / REQUESTS_FILE}")
     return reqs
 
 

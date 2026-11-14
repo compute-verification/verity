@@ -208,6 +208,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.workload import FILES  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments.windows import interface as IF, rows as RW  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -503,21 +504,21 @@ def serve_window(run: str, window: int) -> SimpleNamespace:
     ``last``, the window it follows (``windows.jsonl``'s last non-empty one before it, as `advice_compile.carry_of` takes it:
     its number and its ``advice/w<J>/``), None when no window ran before it."""
     d, k = Path(run), int(window)
-    lines = _jsonl(d / "windows.jsonl")
+    lines = _jsonl(d / FILES["Window"])
     commits = [w for w in lines if int(w["window"]) == k]
     if len(commits) != 1:
         raise ValueError(f"{d}/windows.jsonl: {len(commits)} lines for window {k}, not one")
     j = max((int(w["window"]) for w in lines if not w.get("empty") and int(w["window"]) < k), default=None)
     adv = d / "advice" / f"w{k}"
-    return SimpleNamespace(dir=d, window=k, serve=json.loads((d / "serve.json").read_text()), commit=commits[0],
+    return SimpleNamespace(dir=d, window=k, serve=json.loads((d / FILES["Settings"]).read_text()), commit=commits[0],
                            registration=json.loads((adv / "registration.json").read_text()), requests=serve_requests(d, k),
-                           advice=adv / "private" / "advice.bin", opening=adv / "private" / "opening.json",
+                           advice=adv / "private" / FILES["Advice"], opening=adv / "private" / "opening.json",
                            last=None if j is None else SimpleNamespace(window=j, dir=d / "advice" / f"w{j}"))
 
 
 def serve_requests(run: str | Path, window: int) -> list[dict]:
     """The requests of a serve-openai run's ``requests.jsonl`` with rows in Commit window ``window``."""
-    return [q for q in _jsonl(Path(run) / "requests.jsonl") if int(window) in (q.get("windows") or [])]
+    return [q for q in _jsonl(Path(run) / FILES["Io"]) if int(window) in (q.get("windows") or [])]
 
 
 def serve_id(q: Mapping[str, Any]) -> str:
@@ -601,7 +602,7 @@ def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None
     (`served_identity`), listing its model's transfer gates of record (`served_gates`, which ``transfer_gates`` may only
     restate). Its digest is a single-GPU window's I2's over that code (`I2Compiler.digest`), so it covers every field of
     ``serve.json`` the compile reads."""
-    serve = json.loads((Path(run) / "serve.json").read_text())
+    serve = json.loads((Path(run) / FILES["Settings"]).read_text())
     name, code = served_identity()
     return I2Compiler(registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)),
                       str(programs_root), name=name, transfer_gates=served_gates(serve, transfer_gates), code=code, own=own)
@@ -1280,7 +1281,7 @@ def compiler_doc(serve_run: str | None, hf_config: str | None, target: str | Non
     (``inner``, what `verity-vllm advice --compiler-name --compiler-digest` takes, its digest `I2Compiler.digest`'s), the
     server's code (``served``), and the φ and default seed I2 compiles each window's Programs under."""
     name, digest = served_identity()
-    serve = json.loads(Path(serve_file or Path(str(serve_run)) / "serve.json").read_text())
+    serve = json.loads(Path(serve_file or Path(str(serve_run)) / FILES["Settings"]).read_text())
     reg = registered_of_serve(serve, hf_config, target, cap_bits)
     inner = I2Compiler(reg, {}, "", name=name, transfer_gates=served_gates(serve, transfer_gates), code=digest)
     c = Capped(inner, cap_bits)
@@ -1322,7 +1323,7 @@ def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.pipeline.advice import registered_weights
     from verity_vllm.program.predict.window_weights import deployment_record, weights_registration
 
-    serve = json.loads((Path(a.serve_run) / "serve.json").read_text())
+    serve = json.loads((Path(a.serve_run) / FILES["Settings"]).read_text())
     cos_sin = Path(a.tables or Path(a.serve_run) / "private") / "cos_sin_cache.npy"
     doc = weights_registration(registered_of_serve(serve, a.hf_config, a.target, CAP_BITS), committer_key(Path(a.key)),
                                a.checkpoint_dir, checkpoints_manifest=a.checkpoints,
@@ -1834,15 +1835,15 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
     phi, out, root = rec.registered.phi, Path(a.out), bytes(record1(str(a.bundle), str(a.row_dir)).run.run_root).hex()
     run_id = f"{r.row.get('label')}/w0"
     out.mkdir(parents=True, exist_ok=True)
-    (out / "serve.json").write_text(json.dumps({
+    (out / FILES["Settings"]).write_text(json.dumps({
         "model": phi.model["repo"], "revision": phi.model["revision"], "default_seed": DEFAULT_SEED,
         "engine": {"execution": phi.execution, "pin": {"world": 1}}, "target": phi.target, "run_id": run_id,
         "stand_in": f"prove_path.py serve-standin: the Commit of record {r.row.get('label')} laid out as a serve-openai run"}, indent=1))
     reqs = [{"http_id": i, "engine_id": i, "user": i, "prompt_ids": body["prompt"],
              "ingress": {"brought": standin_brought(body, rec.registered.default_seed)}, "windows": [0]}
             for i, body in rec.ingress.items()]
-    (out / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
-    (out / "windows.jsonl").write_text(json.dumps({"window": 0, "run_id": run_id, "run_root": root,
+    (out / FILES["Io"]).write_text("".join(json.dumps(q) + "\n" for q in reqs))
+    (out / FILES["Window"]).write_text(json.dumps({"window": 0, "run_id": run_id, "run_root": root,
                                                    "requests": [q["engine_id"] for q in reqs], "passed": True}) + "\n")
     compiler = Capped(i2_of_serve(str(out), 0, a.row_dir, a.hf_config, None, a.cap_bits), a.cap_bits)
     data = AW.codec_of().encode(AW.advice_of_workload(json.loads(Path(a.workload).read_text())))
@@ -1853,7 +1854,7 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
         "schema": "verity-vllm/advice-registration/v1", "scheme": AW.SCHEME, "binding": bound,
         "compiler": {**bound["compiler"], "cap_bits": compiler.cap_bits, "inner": {"name": compiler.inner.name, "digest": compiler.inner.digest}},
         "rows": len(reg.salts), "row_bits": AW.ROW_BITS, "window": 0, "commit": {"run_id": run_id, "run_root": root}}, indent=1))
-    (adv / "private" / "advice.bin").write_bytes(data)
+    (adv / "private" / FILES["Advice"]).write_bytes(data)
     (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(data, reg)) + "\n")
     return {"run": str(out), "window": 0, "run_root": root, "compiler": bound["compiler"], "advice": bound["advice"],
             "requests": len(reqs)}

@@ -82,24 +82,24 @@ TODAY = {
     "Settings": Line("a file: `serve.json`",
                      writes=_all(r"serve\.json", f"{V}/pipeline/serve_openai.py", f"{TRACES}/certifier_serve.py",
                                  f"{TRACES}/demo_endpoint.py"),
-                     reads=_all(r"serve\.json", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/inference_only.py",
-                                f"{ONE_STAGE}/served_compare.py", POUS_PIECE, f"{TRACES}/served_session.py",
+                     reads=_all(r"serve\.json", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/served_compare.py", POUS_PIECE, f"{TRACES}/served_session.py",
                                 f"{V}/pipeline/advice.py", f"{TOOLS}/advice_compile.py", f"{E2E}/chain.py", CERTIFIER_PIECE,
                                 f"{ONE_STAGE}/served_overhead.py", LAUNCHER, f"{PROVE_PATH}/run.sh", SERVE,
-                                f"{V}/pipeline/serve_commit.py", f"{TOOLS}/admit_rows_check.py", f"{TOOLS}/retain_device_gpu.sh")),
+                                f"{V}/pipeline/serve_commit.py", f"{TOOLS}/admit_rows_check.py", f"{TOOLS}/retain_device_gpu.sh")
+                     + ((f"{ONE_STAGE}/inference_only.py", r"SV\.SERVE_FILE"),)),
     "Window": Line("a record in a log: a line of `windows.jsonl`",
                    writes=_all(r"windows\.jsonl", f"{V}/pipeline/serve_commit.py", f"{TRACES}/demo_endpoint.py"),
-                   reads=_all(r"windows\.jsonl", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/pouw_piece.py",
-                              f"{ONE_STAGE}/inference_only.py", LAUNCHER, f"{PROVE_PATH}/run.sh", f"{V}/pipeline/advice.py",
+                   reads=_all(r"windows\.jsonl", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/pouw_piece.py", LAUNCHER, f"{PROVE_PATH}/run.sh", f"{V}/pipeline/advice.py",
                               f"{E2E}/chain.py", CERTIFIER_PIECE, f"{TRACES}/served_session.py",
                               f"{ONE_STAGE}/served_overhead.py", SERVE, f"{TOOLS}/advice_compile.py",
-                              f"{TOOLS}/retain_device_gpu.py", f"{TOOLS}/retain_device_gpu.sh")),
+                              f"{TOOLS}/retain_device_gpu.py", f"{TOOLS}/retain_device_gpu.sh")
+                   + ((f"{ONE_STAGE}/inference_only.py", r"SV\.WINDOWS_FILE"),)),
     "Io": Line("a record in a log: a line of `requests.jsonl`",
                writes=_all(r"requests\.jsonl", f"{V}/pipeline/serve_commit.py", f"{TRACES}/demo_endpoint.py"),
-               reads=_all(r"requests\.jsonl", DRIVER, f"{ONE_STAGE}/served_verdicts.py", f"{ONE_STAGE}/inference_only.py",
-                          CERTIFIER_PIECE, f"{V}/pipeline/advice.py", f"{E2E}/chain.py", f"{TRACES}/served_session.py",
+               reads=_all(r"requests\.jsonl", DRIVER, f"{ONE_STAGE}/served_verdicts.py", CERTIFIER_PIECE, f"{V}/pipeline/advice.py", f"{E2E}/chain.py", f"{TRACES}/served_session.py",
                           LAUNCHER, SERVE, f"{TOOLS}/advice_compile.py", f"{TOOLS}/admit_rows_check.py",
-                          f"{TOOLS}/retain_device_gpu.sh")),
+                          f"{TOOLS}/retain_device_gpu.sh")
+               + ((f"{ONE_STAGE}/inference_only.py", r"SV\.REQUESTS_FILE"),)),
     "Summary": Line("a file: `summary.json`",
                     writes=((f"{V}/pipeline/serve_openai.py", r"summary\.json"),),
                     reads=_all(r"summary\.json", f"{V}/pipeline/advice.py", SERVE, f"{V}/pipeline/serve_commit.py",
@@ -277,22 +277,11 @@ EXCEPTIONS_MAX = 38
 #: The programs outside ``adapters/`` that still spell the name of a file they write or read, each with the messages
 #: whose names it spells.  Delete a line when its file takes the names from the list, and lower ``PROGRAMS_MAX`` with it.
 SPELLED_BY_PROGRAMS: dict[str, tuple[str, ...]] = {
-    "benchmarks/network_e2e/chain.py": ("Settings", "Window", "Io"),
-    "benchmarks/network_traces/certifier_piece.py": ("Io",),
-    "benchmarks/network_traces/certifier_serve.py": ("Settings",),
-    "benchmarks/network_traces/demo_endpoint.py": ("Settings", "Window", "Io"),
-    "benchmarks/network_traces/served_session.py": ("Settings", "Window", "Io"),
-    "benchmarks/one_stage/inference_only.py": ("Settings", "Window", "Io"),
-    "benchmarks/one_stage/pouw_piece.py": ("Window", "WindowProgram", "Calls"),
-    "benchmarks/one_stage/served_compare.py": ("Circuit", "Settings"),
-    "benchmarks/one_stage/served_verdicts.py": ("Settings", "Window", "Io", "WindowProgram"),
     "benchmarks/one_stage/served_verdicts.sh": ("Circuit", "Settings", "Window", "Io", "Advice", "Weights", "WindowProgram"),
-    "benchmarks/pous/served_piece.py": ("Settings", "Weights"),
-    "benchmarks/prove_path/prove_path.py": ("Settings", "Window", "Io", "Advice"),
     "benchmarks/prove_path/run.sh": ("Settings", "Window"),
     "demos/vllm/serve.sh": ("Circuit", "Settings", "Window", "Io", "Summary", "Weights"),
 }
-PROGRAMS_MAX = 14
+PROGRAMS_MAX = 3
 
 #: The same for the files under ``adapters/``, with ``ADAPTERS_MAX``.
 SPELLED_BY_ADAPTERS: dict[str, tuple[str, ...]] = {

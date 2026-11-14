@@ -342,6 +342,8 @@ PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdi
 PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor host re-checks"
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
+#: the serve dir's files that carry a message, by the names the list states (`tests/test_workload_messages.py`)
+SERVE_FILE, WINDOWS_FILE, REQUESTS_FILE, H1_PROGRAM_FILE = "serve.json", "windows.jsonl", "requests.jsonl", "window-program.json.gz"
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
                 "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
@@ -349,7 +351,7 @@ WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input 
 WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
 #: ... by a file's name (`fnmatch`)
 WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.bin": "a private file (prover only)",
-                 "*salt*.bin": "a commitment's salts (prover only)", "*.key": "a key", "requests.jsonl": "the requests' prompt and served ids, rows and seeds",
+                 "*salt*.bin": "a commitment's salts (prover only)", "*.key": "a key", REQUESTS_FILE: "the requests' prompt and served ids, rows and seeds",
                  "request_users.jsonl": "the requests' users", "step_trace.jsonl": "the step trace (each request's rows)",
                  "advice_trace*.jsonl": "the advice trace (each request's rows)", "load*.jsonl": "the load's requests",
                  "tokens*.json": "the requests' token ids", "match_stoch.json": "the sampler's rows",
@@ -414,8 +416,8 @@ def _refusal(k: int, seal: Mapping[str, Any], line: Mapping[str, Any] | None, mi
 def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]:
     """The window to audit (module docstring); ValueError when none qualifies, or ``want`` doesn't."""
     seals = {int(s["window"]): s for s in _lines(serve_dir / "seals.jsonl")}
-    lines = {int(w["window"]): w for w in _lines(serve_dir / "windows.jsonl")}
-    reqs = _lines(serve_dir / "requests.jsonl")
+    lines = {int(w["window"]): w for w in _lines(serve_dir / WINDOWS_FILE)}
+    reqs = _lines(serve_dir / REQUESTS_FILE)
     refused: dict[int, str] = {}
     ok: list[tuple[int, list[dict[str, Any]]]] = []
     for k in sorted(seals):
@@ -482,7 +484,7 @@ PUBLISH_MAX = 256 << 20
 #: The files under the published dir that `publish` leaves as they are, unread: the serve dir's declared Program, the
 #: window's class Program, which is public structure. Its JSON runs to hundreds of MB, beyond what `PUBLISH_MAX` lets
 #: `publish` read.
-PUBLIC_FILES = frozenset({"serve/h1/window-program.json.gz"})
+PUBLIC_FILES = frozenset({f"serve/h1/{H1_PROGRAM_FILE}"})
 
 
 def _numbered(v: Any) -> bool:
@@ -807,7 +809,7 @@ def program(out: Path, model: str, rows: int, steps: int, like: Path | None = No
 
     want, cfg = None, SH.config_of(config)
     if like is not None:
-        serve = json.loads((like / "serve.json").read_text())
+        serve = json.loads((like / SERVE_FILE).read_text())
         proto = serve.get("protocols") or {}
         model, rows, steps, want = serve.get("served_model_name") or model, proto["rows"], proto["steps"], proto["program"]
         cfg = proto.get("config") or {}
@@ -838,7 +840,7 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     and `period_served` holds the one it then declares to it."""
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
-    served = serve_dir / "serve.json"
+    served = serve_dir / SERVE_FILE
     proto = (json.loads(served.read_text()).get("protocols") or {}) if served.is_file() else None
     try:
         meta = json.loads((serve_dir / H1_META).read_text())
@@ -902,7 +904,7 @@ def period_served(serve_dir: Path) -> dict[str, Any]:
     declared (serve.json's ``protocols.program``); ValueError naming both when it declared another, since credit refuses
     every window of a period whose open committed another Program."""
     doc = json.loads((serve_dir / PERIOD).read_text())
-    got = (json.loads((serve_dir / "serve.json").read_text()).get("protocols") or {}).get("program")
+    got = (json.loads((serve_dir / SERVE_FILE).read_text()).get("protocols") or {}).get("program")
     if got != doc["circuit"]:
         raise ValueError(f"serve-openai declared Program {str(got)[:16]}..., not period {doc['name']}'s "
                          f"{doc['circuit'][:16]}... (`program`'s, built from DECLARED): its windows credit nothing")
@@ -1065,7 +1067,7 @@ def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | 
     (``--period``, `PERIOD`), the sampled calls' statements (``--statements``) and the live evidence (``--live-evidence``,
     ``h1_prove/live.py evidence``'s), each where it exists."""
     got: dict[str, str] = {}
-    if (p := serve_dir / "h1" / "window-program.json.gz").is_file():
+    if (p := serve_dir / "h1" / H1_PROGRAM_FILE).is_file():
         got["--descriptor"] = str(p)
     if (p := serve_dir / PERIOD).is_file():
         got["--period"] = json.loads(p.read_text())["name"]
@@ -1142,7 +1144,7 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
     memo of its runs' answers (``--lean-answers``, `answers.Answers`), whose counts are its ``lean_answers``."""
     out.mkdir(parents=True, exist_ok=True)
     inputs = credit_inputs(serve_dir, statements, live)
-    line = next((w for w in _lines(serve_dir / "windows.jsonl") if int(w["window"]) == window), {})
+    line = next((w for w in _lines(serve_dir / WINDOWS_FILE) if int(w["window"]) == window), {})
     h1 = line.get("pouw_h1") or {}
     calls = serve_dir / H1_CALLS.format(k=window)
     doc: dict[str, Any] = {"window": window, "credited": False, "why": DEV_WHY, "coin_source": h1.get("coin_source"),

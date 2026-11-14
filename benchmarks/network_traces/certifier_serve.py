@@ -240,6 +240,7 @@ from verity.protocols.accounting.certifier.verifier.served import Admission, Ser
 from verity.protocols.accounting.certifier.verifier.service import LinkWindows
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
+from verity.protocols.proofs.spot.verifier.workload import FILES
 
 HERE = Path(__file__).resolve().parent
 BUCKET_MS, WINDOW_BUCKETS, FRAME_BYTES, QUEUE = 100, 60, 4096, 1 << 16
@@ -1128,7 +1129,7 @@ async def serve(plan: dict, report: dict, out: Path, *, url: str, upstream: dict
     certifier.shutdown()
     log |= {"revealed": sorted(proxy.revealed), "issuer_refused": [[l, d.value, w] for l, d, w in refused],
             "shim_exit": shim.exitcode}
-    (out / "serve.json").write_text(json.dumps(log, indent=1))
+    (out / FILES["Settings"]).write_text(json.dumps(log, indent=1))
     if timing is not None:
         (out / "publisher_timing.json").write_text(json.dumps(
             {"origin": origin, "switchinterval": sys.getswitchinterval(),

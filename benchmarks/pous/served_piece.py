@@ -97,6 +97,7 @@ from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
+from verity.protocols.proofs.spot.verifier.workload import FILES
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 from verity_vllm import protocols as PO
@@ -323,9 +324,9 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     over the held store once PoUS's has completed (`held_bandwidth.session`, under ``bw_request``, by default
     `held_bandwidth.request`'s), its public answer to ``bw_out`` (by default ``out``'s sibling ``bandwidth``) and its
     case to ``bw_private`` (by default ``SERVE_DIR/private/bandwidth``)."""
-    if not (serve_dir / "serve.json").is_file():
+    if not (serve_dir / FILES["Settings"]).is_file():
         raise Refusal(f"{serve_dir} has no serve.json")
-    serve = json.loads((serve_dir / "serve.json").read_text())
+    serve = json.loads((serve_dir / FILES["Settings"]).read_text())
     repo, rev = serve.get("model"), serve.get("revision")
     if not (isinstance(repo, str) and isinstance(rev, str)):
         raise Refusal(f"serve.json names no model and revision ({repo!r}, {rev!r})")
@@ -339,7 +340,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
     bw_out = bw_out or out.parent / "bandwidth"
     bw_private = bw_private or serve_dir / "private" / "bandwidth"
     out.mkdir(parents=True, exist_ok=True)
-    reg_file = serve_dir / "weights_registration.json"
+    reg_file = serve_dir / FILES["Weights"]
     reg_sha = hashlib.sha512(reg_file.read_bytes()).hexdigest() if reg_file.is_file() else None
     bind = binding(repo, rev, window, reg_sha)
     summary: dict[str, Any] = {"window": window, "model": repo, "revision": rev, "node": node, "challenger": party.host,

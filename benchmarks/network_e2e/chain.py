@@ -68,6 +68,7 @@ import negatives as NG  # noqa: E402
 import window_chain as WC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.active import compact_record_data  # noqa: E402
+from verity.protocols.proofs.spot.verifier.workload import FILES  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
 from verity_vllm.pipeline import window_advice as WA  # noqa: E402
@@ -179,7 +180,7 @@ def bits(adv, T: int, windows: int, config: dict | None, io: list[dict] | None) 
 
 # --- the endpoint's own advice ----------------------------------------------------------------------------------------
 
-ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
+ENDPOINT = ("advice_trace.jsonl", FILES["Io"], FILES["Window"], FILES["Settings"])
 SLACK_S = 1.0  # the endpoint's clock against the certifier's: a Commit window opening this soon before the run's origin
 COUNTS = ("v0_bits", "derived_bits", "derived_shaped_bits", "forced_bits")
 ROW_ORDER = {"runner": "batch", "scheduling": "scheduling"}
@@ -252,10 +253,10 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
     the link-windows of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
     window's row."""
     recs = _jsonl(ep / "advice_trace.jsonl")
-    serve = json.loads((ep / "serve.json").read_text())
+    serve = json.loads((ep / FILES["Settings"]).read_text())
     index = json.loads((adv_dir / "windows.json").read_text())
     commits = {int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
-               for d in _jsonl(ep / "windows.jsonl")}
+               for d in _jsonl(ep / FILES["Window"])}
     first = _first_steps(recs)
     origin, span = deployment["origin_unix"], deployment["windows"] * deployment["window_s"]
     bucket_s = deployment["window_s"] / T
@@ -547,7 +548,7 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
     which the report's OK requires of every such arm), and an honest arm's is one of the honest run's."""
     srcs = [src] if isinstance(src, Path) else list(src)
     served = info is not None and bool(info.get("served"))
-    commits = {int(d["window"]): d for d in _jsonl(ep / "windows.jsonl")} if served and ep is not None else {}
+    commits = {int(d["window"]): d for d in _jsonl(ep / FILES["Window"])} if served and ep is not None else {}
     closed = closes(_jsonl(ep / "advice_trace.jsonl")) if served and ep is not None else {}
     adv_dir = Path(info["file"]) if served and info.get("file") else None
     arms = {}
@@ -660,7 +661,7 @@ def served_rows(ep: Path, deployment: dict) -> dict[str, dict]:
     arrived = {r["request"] for r in _jsonl(ep / "advice_trace.jsonl")
                if r["kind"] == "arrive" and origin - SLACK_S <= r["t"] < origin + span}
     out: dict[str, dict] = {}
-    for r in _jsonl(ep / "requests.jsonl"):
+    for r in _jsonl(ep / FILES["Io"]):
         if r["engine_id"] in arrived and r.get("user"):
             if r["user"] in out:
                 raise ValueError(f"{r['user']} reached the endpoint twice in the run's link-windows")

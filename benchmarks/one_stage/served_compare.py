@@ -39,6 +39,8 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKLOADS = ROOT / "adapters" / "vllm" / "workloads"
 #: PRED's copy of the checkpoint config its Build was predicted from, beside its predicted.json
 CONFIG_COPY = "checkpoint_config.json"
+#: the Build's and the serve dir's files that carry a message, by the names the list states (`tests/test_workload_messages.py`)
+PREDICTED_FILE, SERVE_FILE = "predicted.json", "serve.json"
 #: the circuit's values W registers: each linear's A rows and its y rows
 PEARL_VALUES = ("pearl-a/", "pearl-y/")
 #: what W registers beside them at its version 2 (`pearl_c.window`): each weight's B rows, ``pearl-b/<w>``, which the
@@ -61,7 +63,7 @@ def checkpoint_config(pred: Path) -> Path:
     kept = pred / CONFIG_COPY
     if kept.is_file():
         return kept
-    named = read_json(pred / "predicted.json").get("config")
+    named = read_json(pred / PREDICTED_FILE).get("config")
     if named and Path(named).is_file():
         return Path(named)
     raise ValueError(f"{pred} keeps no {CONFIG_COPY}, and its predicted.json names a checkpoint config that is not on this "
@@ -129,7 +131,7 @@ def build(pred: Path, of_record: str) -> dict[str, Any]:
     want = of_record.split(":")
     if len(want) != 2:
         raise ValueError(f"--of-record {of_record!r} is PROGRAM_DIGEST:MANIFEST_DIGEST")
-    p = read_json(pred / "predicted.json")
+    p = read_json(pred / PREDICTED_FILE)
     got = [p.get("program_digest"), p.get("manifest_digest")]
     return {"ok": got == want, "names": got, "of_record": want}
 
@@ -208,7 +210,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     def phi_verdict() -> dict[str, Any]:
         config = checkpoint_config(a.pred)
         read = {"file": str(config), "sha256": hashlib.sha256(config.read_bytes()).hexdigest()}
-        fields, served, declared = lowered_facts(read_json(a.serve / "serve.json"), a.row, str(config), a.cls,
+        fields, served, declared = lowered_facts(read_json(a.serve / SERVE_FILE), a.row, str(config), a.cls,
                                                  a.pearl_tables)
         circuits.update(served=served, declared=declared)
         (a.out / "circuit_facts.json").write_text(json.dumps(circuits, indent=1) + "\n")
