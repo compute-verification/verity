@@ -644,9 +644,13 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     (`period_case.SLOT_ENTRY_PINS`), and refuses the honest case at the wiring (`period_case.UNWIRED`); with that digest
     pinned it accepts it, its scan's terms read off the test class's own templates with no free inputs, accepts it
     with the block's audit as V3c's ``period.json`` (`rows_case`'s ``v3c``) sampled at one or two proof blocks
-    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), refuses that audit at
+    (``subset:1``, ``subset:2``, the demo's sample: the consistency check holds at any sample), a stand-in for a
+    record whose state entry is among the audit's ``roots``, which the record check reads and which no served run
+    writes today, refuses that audit at
     the state tie (`period_case.UNSTATED`) where its registration holds its `SCAN_STATE` as a served window's does, in
-    its window's ``activations.values`` alone and in no ``roots`` or ``registered`` entry, and refuses the
+    its window's ``activations.values`` alone and in no ``roots`` or ``registered`` entry, which is the refusal the
+    runner (`scan_period.main`) expects of an honest round under ``--v3c``, by its name, an accept unexpected, and
+    refuses the
     forged case (a certificate's signature changed) at the certificates, a registration whose egress member's o0
     root is of a row that is not the ok row, or that names no o0 for a member or for any, at the ok bits
     (`period_case.UNOK`), the tampered case (another Program's
@@ -779,6 +783,15 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
             "value": sz.SCAN_STATE, "words": st.n_bits // 16, **state}
         got = PC.reference(SP.rows_case(run, scan, v3c=served, circuit=SP.circuit_of_record(window_record)))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
+    monkeypatch.setattr(SP, "mirror", lambda path: PC)
+    monkeypatch.setattr(SP, "lean_check", lambda exe, case, d: PC.reference(case))
+    for name, period, rc in (("served", served, 0), ("stated", v3c, 1)):
+        argv = ["--mirror", str(PERIOD_CASE), "--lean", "unused", "--out", str(tmp_path / name), "--v3c", str(period),
+                "--circuit", str(window_record), f"honest={run},{scan}"]
+        assert SP.main(argv) == rc
+        ran = json.loads((tmp_path / name / "period.json").read_text())
+        assert (ran["ok"], ran["cases"]["honest"]["want"]) == (rc == 0, "reject at the state tie"), ran
+        assert (PC.UNSTATED in (ran["cases"]["honest"]["mirror"].get("reason") or "")) == (rc == 0), ran
     with pytest.raises(SystemExit, match="held to the verifier's own window-circuit record"):
         SP.rows_case(run, scan, v3c=v3c)
     (unnamed := tmp_path / "no-circuit.json").write_text(json.dumps({"format": SP.CIRCUIT}))

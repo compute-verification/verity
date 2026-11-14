@@ -26,7 +26,8 @@ and its Lean.
   certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
-  answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
+  answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's), or with ``--v3c`` at the state
+  tie (its ``UNSTATED``, below). The block round's o0 is a
   `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`entryPins`: the scan's
   `prog` is a ``scan/prog<j>`` a lane, and lane j's must be chunk j, ``<descriptor id>/c<j>/o0``, of a pinned
   `SlotEntry_v1`'s or `SelectEntry_v1`'s own entries, as the block round's lane-j o0 is of the stand-in's), so the
@@ -43,7 +44,9 @@ and its Lean.
   whose registration states its `SCAN_STATE` among its ``roots`` or its ``registered``, the two places the check reads
   an audit's state entry (`stateEntries`). A served window's registration, as ``prove_path.py window-commit`` writes
   it, holds that state in its window's ``activations.values`` alone, so a served period's case is refused at the state
-  tie (`period_case.UNSTATED`), in Lean and in the mirror.
+  tie (`period_case.UNSTATED`), in Lean and in the mirror. No served run writes the entry in either of the two places
+  today, so with ``--v3c`` an honest round is expected refused there, by that refusal's name in both reasons, and an
+  accept is unexpected.
 """
 from __future__ import annotations
 
@@ -196,15 +199,12 @@ def main(argv=None) -> int:
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
-        if honest and a.v3c:
-            want = "accept"
-            good = (py.get("verdict") == lean.get("verdict") == "accept"
-                    and py.get("public") == lean.get("public"))
-        else:
-            why = m.UNWIRED if honest else None
-            want = "reject" + (" at the wiring" if why else "")
-            good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
-                    and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
+        why, where = (m.UNSTATED, " at the state tie") if a.v3c else (m.UNWIRED, " at the wiring")
+        if not honest:
+            why, where = None, ""
+        want = "reject" + where
+        good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
+                and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
         got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}
