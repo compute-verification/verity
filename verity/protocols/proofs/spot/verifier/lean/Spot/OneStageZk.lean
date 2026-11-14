@@ -120,7 +120,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   member's or two members' refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is
   held to its slice of the
   registration (`Member.slice`, `headerHeld`): the window's scheme, the member's roots and their domains under their
-  bare ports, and the member's count of units as its instances. A member may read registered values, with its own
+  bare ports, and the member's count of units as its instances. Where the parameters name a wiring, a wired port with
+  no tree under the member is its writer's output root: the slice holds it at the root and domain the record names
+  under the writer, the one member the wiring's closed-form bounds place every writer of the member's units in
+  (`membersRootsOf`, `wiredRoots`), and a port of the public file with no root in the slice, whose writer the wiring
+  does not name, is refused by name (`UNWIRED_WHY`). A member may read registered values, with its own
   registered file as the one statement's, and a value is one tree for every member (`classHeld`): two members' ports of
   one value that differ in its root, leaves, row width, domain or leaf schema refuse, whether or not either is sampled.
 
@@ -630,24 +634,70 @@ def membersWiresPiece (j : Json) : V Json := do
       | none => throw "no such member"
   pure (Json.mkObj [("refusal", match out with | .ok () => Json.null | .error why => .str why)])
 
+/-- **A wired port's root at the member `m`** (its name, first unit and count), on the wiring `W`, the partition's
+ranges `rs` (each its template, first unit and count), the members `ms` and the roots `rootsOf` gives each member:
+for the wire `w` reading its whole port (one row, `cuts` 1) into the template whose range holds `m`'s units, and
+covering every one of them, the writers of `m`'s reader indices lie in `Wire.box`'s closed-form bounds, in the
+writer template's range; where both bounds are units of one member, the root that member's roots hold of the wire's
+output port, the last of that port's as `Record.byPort` keeps it, under the reader's port name. None where any of
+that fails: the wiring names no one writer member of the port. It walks no unit. -/
+def wiredRoot (W : Spot.Wires.Wiring) (rs ms : Array (String × Nat × Nat)) (roots : Std.HashMap String (Array Json))
+    (m : String × Nat × Nat) (w : Spot.Wires.Wire) : Option Json := do
+  let (_, f, n) := m
+  let (_, tf, _) ← rs.find? fun (t, a, c) => t == w.reader && decide (a ≤ f) && decide (f + n ≤ a + c)
+  guard (w.cuts == 1 && W.cutsOf w.reader w.port == 1 && decide (0 < n))
+  let lo := f - tf
+  guard (decide (w.start ≤ lo) && decide (lo + n ≤ w.start + w.readerUnits))
+  let (a, b) := w.box (lo - w.start) (lo - w.start + n - 1)
+  let (_, wf, wc) ← rs.find? (·.1 == w.writer)
+  guard (decide (0 ≤ a) && decide (b < (wc : Int)))
+  let (wa, _) ← memberAt ms (wf + a.toNat)
+  let (wb, _) ← memberAt ms (wf + b.toNat)
+  guard (wa == wb)
+  let e ← (roots.getD wa #[]).toList.reverse.find? fun r => getD r "port" == Json.str w.out
+  pure (e.setObjVal! "port" (Json.str w.port))
+
+/-- **The members' roots with their wired ports'**: each member's roots `rootsOf` gives (`roots`), then, for each
+wire of the wiring `W` whose port the member has no root of, the writer's root `wiredRoot` gives, at the partition's
+ranges `rs`. A wired port with no tree of its own is its writer's output root: the member's public file names it at
+that root and domain, and `headerHeld` holds it there; one whose writer the wiring does not name gets none, so its
+member's public file naming it is refused by name (`UNWIRED_WHY`). Its cost is the members' and the wires' numbers. -/
+def wiredRoots (W : Spot.Wires.Wiring) (rs : Array (String × Nat × Nat)) (ms : Array Member)
+    (roots : Std.HashMap String (Array Json)) : Std.HashMap String (Array Json) :=
+  let spans := ms.map fun m => (m.name, m.first, m.count)
+  ms.foldl (fun acc m =>
+    let mine := roots.getD m.name #[]
+    let extra := W.wires.filterMap fun w =>
+      if mine.any (getD · "port" == Json.str w.port) then none else wiredRoot W rs spans roots (m.name, m.first, m.count) w
+    acc.insert m.name (mine ++ extra.toArray)) roots
+
+/-- **The registration's roots each member's statement reads**: `rootsOf`'s, and where the parameters name a wiring,
+each member's wired ports at their writers' roots (`wiredRoots`, at the ranges of the verifier's partition). -/
+def membersRootsOf (p : Params) (ms : Array Member) (rec : Json) : V (Std.HashMap String (Array Json)) := do
+  let roots ← rootsOf ms rec
+  let some (W, _) := p.wiring | pure roots
+  let rs ← Partition.evaluate (← Program.parse p.own.program) (getD p.own.partition "query")
+  pure (wiredRoots W (rs.map fun r => (r.template, r.first, r.count)) ms roots)
+
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
-member's (`rootsOf`), then every member's files and each statement's session on the blobs, at its member's slice of
-the registration (`Member.slice`, `runMembers`), then the wires of the sample's units (`wiresHeld`). -/
+member's, with each member's wired ports at their writers' (`membersRootsOf`), then every member's files and each
+statement's session on the blobs, at its member's slice of the registration (`Member.slice`, `runMembers`), then the
+wires of the sample's units (`wiresHeld`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run :=
   membersStructure p ms c e sts bs >>= fun _ =>
-  rootsOf ms c.record >>= fun roots =>
+  membersRootsOf p ms c.record >>= fun roots =>
   runMembers (fun m => m.slice c.record roots) ms sts e.base.provedUnits bs >>= fun r =>
   wiresHeld p ms e.base.provedUnits bs >>= fun _ => pure r
 
 /-- **Where the per-member form's run returns, every member's files are held, sampled or not**: at the roots
-`rootsOf` gives each member, each member of the parameters has its statement read and its files pass what a session's
-verdict checks of them (`Member.FilesHeld`), at its slice of the registration, whatever the evidence's statements
-name and whatever the sample holds. -/
+`membersRootsOf` gives each member, each member of the parameters has its statement read and its files pass what a
+session's verdict checks of them (`Member.FilesHeld`), at its slice of the registration, whatever the evidence's
+statements name and whatever the sample holds. -/
 theorem membersRun_files {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
     {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
-    ∃ roots, rootsOf ms c.record = .ok roots ∧ ∀ m ∈ ms, m.FilesHeld (m.slice c.record roots) bs := by
+    ∃ roots, membersRootsOf p ms c.record = .ok roots ∧ ∀ m ∈ ms, m.FilesHeld (m.slice c.record roots) bs := by
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨roots, hr, h⟩ := Flock.HmNets.bind_ok h
@@ -1445,10 +1495,36 @@ private def headerT (n : Nat) (roots : List (String × String)) : Json :=
 #guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb"), ("t/c0/y", "cc")] "t/c0")
   (headerT 2 [("x", "aa")])) == "public file: not the registration's: roots, domains"
 #guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb")] "t/c0")
-  (headerT 2 [("x", "aa"), ("y", "cc")])) == "public file: not the registration's: roots"
+  (headerT 2 [("x", "aa"), ("y", "cc")])) == UNWIRED_WHY "y"
 #guard refusal (headerHeld (sliceT [("t/c0/x", "aa"), ("t/c1/y", "bb")] "t/c0") (headerT 5 [("x", "aa")])) ==
   "public file: not the registration's: population"
 #guard refusal (headerHeld (sliceT [("t/c0/x", "aa")] "t/c1") (headerT 3 [])) == ""
+
+/-- A writer `w`, template `W`'s two units, and a reader `r`, template `R`'s two after them. -/
+private def wiredMs : Array Member := #[memberT "w" #[(0, 2)], memberT "r" #[(2, 4)]]
+
+/-- `R`'s port `x` at unit `u` wired from the output `y` of the template `writer` at unit `u`, or no wire. -/
+private def wiringT (wired : Bool) (writer : String := "W") : Spot.Wires.Wiring :=
+  { templates := [("R", { units := 2, rows := [("x", { words := 1, outer := 1 })], outs := [] }),
+                  ("W", { units := 2, rows := [], outs := [("y", 1)] })],
+    cuts := [],
+    wires := if wired then [{ reader := "R", port := "x", writer, out := "y", start := 0, radix := [2], base := 0,
+      step := [1], cut0 := 0, cuts := 1 }] else [] }
+
+/-- The reader `r`'s slice at the wiring `W`, on the registration of `w`'s `y` and `r`'s own `z`, `r` with no tree of
+`x`. -/
+private def wiredSliceT (W : Spot.Wires.Wiring) : Json :=
+  let reg := recordT 4 [("w/y", "aa"), ("r/z", "bb")]
+  match rootsOf wiredMs reg with
+  | .ok rs => (memberT "r" #[(2, 4)]).slice reg (wiredRoots W #[("W", 0, 2), ("R", 2, 2)] wiredMs rs)
+  | .error _ => Json.null
+
+#guard refusal (headerHeld (wiredSliceT (wiringT true)) (headerT 2 [("x", "aa"), ("z", "bb")])) == ""
+#guard refusal (headerHeld (wiredSliceT (wiringT true)) (headerT 2 [("x", "cc"), ("z", "bb")])) ==
+  "public file: not the registration's: roots, domains"
+#guard refusal (headerHeld (wiredSliceT (wiringT false)) (headerT 2 [("x", "aa"), ("z", "bb")])) == UNWIRED_WHY "x"
+#guard refusal (headerHeld (wiredSliceT (wiringT true "V")) (headerT 2 [("x", "aa"), ("z", "bb")])) ==
+  UNWIRED_WHY "x"
 
 #guard Flock.hexOf (evidenceBytes #["ab".toUTF8]) == "0000000000000001" ++ "0000000000000002" ++ "6162"
 #guard (evidenceParts (evidenceBytes #["ab".toUTF8, .empty, "c".toUTF8])).map (·.map Flock.hexOf) ==

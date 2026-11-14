@@ -38,7 +38,7 @@ import catalog  # noqa: E402
 import bracket  # noqa: E402
 
 TRAITS = {
-    "theorem_applies": "the thread theorem covers it (end-to-end training of the reference circuit)",
+    "theorem_applies": "the thread theorem covers it (end-to-end training by the reference training algorithm)",
     "updated_fraction": "fraction of the model's parameters updated",
     "state_bits_per_param": "bits of state a reader needs per updated parameter",
     "state_splits": "a slice of the model needs only its own share of the state (false for seeds)",
@@ -152,10 +152,10 @@ def query(alg_id: str, model_id: str, policy_id: str, data: str = "novel", conve
     m = (alg.get("multiplier") or {}).get("value")
     ref = construct(profile(by_id("algorithms")[REFERENCE], model, policy, data, convention), policy["K"], policy["Gamma"])
     return {"algorithm": alg_id, "model": model_id, "policy": policy_id, "data": data, "convention": convention,
-            "multiplier": m, "multiplier_needed": c["rho"] / ref["rho"],
-            "efficiency_achievable": m / c["rho"] if m else None,
+            "multiplier": m, "multiplier_needed": c["slowdown"] / ref["slowdown"],
+            "efficiency_achievable": m / c["slowdown"] if m else None,
             "efficiency_ceiling": m / lo if m else None, "lower": lo, "lower_basis": why,
-            "upper": c["rho"], "slices": 1 / c["phi"], "tokens_per_block": c["tokens"],
+            "upper": c["slowdown"], "slices": 1 / c["phi"], "tokens_per_block": c["tokens"],
             "read_shares": {k: v / total for k, v in c["reads"].items()}, "reads": c["reads"], "work": c["work"]}
 
 

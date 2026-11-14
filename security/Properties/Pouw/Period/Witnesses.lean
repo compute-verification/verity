@@ -182,7 +182,7 @@ noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=
 
 /-- The period's windows as the check reads them: the honest registration, and the service's answer accepting the
 units of the window's sample. -/
-noncomputable def windows (n : ℕ) : Executions Ω1 n where
+noncomputable def executionPhases (n : ℕ) : Executions Ω1 n where
   reg := fun _ _ => reg
   ev := fun x w => h1Evidence reg (unitsOf (coinAt x w).2)
 
@@ -202,11 +202,11 @@ def flat : ByteArray → Fin 144 → (ℕ → Unit) → Prop := fun _ _ _ => Tru
 
 /-- The period's proofs under the check. -/
 noncomputable def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 144) × Unit) circuit.rounds 24 144 n Unit :=
-  checkedRun hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
+  checkedRun hK24 prm (executionPhases n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
 
 noncomputable def layer (n : ℕ) :
     SampledLayer Bool (Equiv.Perm (Fin 144) × Unit) n circuit.rounds 24 (Fin 144) ℕ (Fin n × ℕ) Unit :=
-  checkedLayer circuit hr1 hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
+  checkedLayer circuit hr1 hK24 prm (executionPhases n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
 
 /-- The honest run's anatomy: the 128 words fixed. -/
 noncomputable def anatomy : Anatomy Unit Unit Unit Unit := { Honest.anatomy with fixed := 128 }
@@ -224,7 +224,7 @@ instance (priority := high) fintypePaths64 : Fintype (Paths Ω1 64) := Paths.ins
 
 /-- **The deployed check accepts the period**: `PouwCheck.protocol.check` accepts every window on the coins `x`. -/
 def checkedAccepts (n : ℕ) (x : Paths Ω1 n) : Prop :=
-  ∀ w, Accepts prm ((windows n).reg x w) ((windows n).ev x w)
+  ∀ w, Accepts prm ((executionPhases n).reg x w) ((executionPhases n).ev x w)
 
 /-- The honest play, accepted where the deployed check accepts every window. -/
 noncomputable def checkedPlay (n : ℕ) : Play Ω1 n Unit Unit Unit Unit :=

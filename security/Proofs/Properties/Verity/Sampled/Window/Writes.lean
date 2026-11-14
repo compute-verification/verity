@@ -147,7 +147,7 @@ theorem member_step_accepts {nJ : ℕ} (m : Member nJ) (t : ℕ) {a : StepAt} (h
 /-! ## The members' steps -/
 
 /-- A member of Flock's window at `t` calls is a member of the window at that place, as Flock's (`Member.toV5`). -/
-theorem Window.joint_getElem? (W : Window) (t i : ℕ) {m : Flock.Guarantees.MemberV5 ByteArray W.nJ}
+theorem ExecutionPhase.joint_getElem? (W : ExecutionPhase) (t i : ℕ) {m : Flock.Guarantees.MemberV5 ByteArray W.nJ}
     (h : (W.joint t).ms[i]? = some m) : ∃ m' : Member W.nJ, W.ms[i]? = some m' ∧ m = m'.toV5 t := by
   have h' : (W.ms.map fun m => m.toV5 t)[i]? = some m := h
   rw [List.getElem?_map] at h'
@@ -164,7 +164,7 @@ of each member `m` with a proof block in the sample, under `MemberSteps.step`'s 
 and the position past the stop after its session's end, a session's verdict (`SessionVerdict`) at a statement that is
 `m`'s (`StatesMember`), and its outcome's moves those the verdict's record decodes to with the verdict's proof files
 (`MemberMovesOf`). The acceptance of what the member's writer writes is `member_step_accepts`. -/
-theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
@@ -198,12 +198,12 @@ theorem memberSteps_of_verdicts (k : Verity.Registration.Composite) (P : Exchang
     MemberSteps V θ F c k P W t rd σ D M BL B I where
   start := hstart
   step ω i mv p q r out hm hd hI hpi hS hmr hqr hri hacc := by
-    obtain ⟨m, hm', rfl⟩ := Window.joint_getElem? (W.extend M.widening) t i hm
+    obtain ⟨m, hm', rfl⟩ := ExecutionPhase.joint_getElem? (W.extend M.widening) t i hm
     obtain ⟨hI', a, bs, keys, s, record, spec, tabs, rest, proofs, units, hst, hv, hmo⟩ :=
       hstep ω i m p q r out hm' hd hI hpi hS hmr hqr hri hacc
     exact ⟨hI', member_step_accepts m t hst hv hmo⟩
   skip ω i mv p r hm hd hI := by
-    obtain ⟨m, hm', rfl⟩ := Window.joint_getElem? (W.extend M.widening) t i hm
+    obtain ⟨m, hm', rfl⟩ := ExecutionPhase.joint_getElem? (W.extend M.widening) t i hm
     exact hskip ω i m p r hm' hd hI
   ends := hends
 

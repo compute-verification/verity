@@ -44,6 +44,7 @@ from verity_vllm.pipeline import serve_pearl as SPL
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols import pouw
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
@@ -181,10 +182,10 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(PP, "model_runners", lambda: (Forward,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
+    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
         w: bytes([w + 1]) * 32 + salt_key for w in weights})
-    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPD.weight_roots)
-    monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
+    monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(verifier, "coins", random.Random(0).randbytes)
