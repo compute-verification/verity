@@ -16,7 +16,7 @@ tick (`CausalFrom`), the one assumption it uses.
 
 `Recall` is B2's count: given what reaches a location during `[t, u)`, what it does then is a function of a string of
 at most `mem X t` bits, its state's content at `t`. The proofs are in
-`Security/Proofs/Accounting/Actual/Localization.lean`.
+`security/Proofs/Accounting/Actual/Localization.lean`.
 -/
 
 @[expose] public section

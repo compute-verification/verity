@@ -7,7 +7,7 @@ public import CircuitRequirement
 # The requirement difftest: `CircuitRequirement` behind `Difftest.serve`
 
 `requirement-difftest` serves `table` to the core difftest harness (`verity/core/difftest`), whose Python half
-(`tests/test_requirement_difftest.py`) holds it to `verity.ml.circuits.requirement`. Its one function, `requirement`,
+(`tests/test_requirement_difftest.py`) holds it to `verity.circuits.requirement`. Its one function, `requirement`,
 takes an instance, value by value, with the store, a plan per step, the block size and the number of steps:
 
     {"width": [w], "registered": [v], "inputs": [v], "ops": [[v]], "uses": [[v]], "step": [s | null], "value": [x],

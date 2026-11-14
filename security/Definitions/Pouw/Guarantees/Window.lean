@@ -29,7 +29,7 @@ the picked unit's disagreement with the window's committed transcript on the sam
 `ExecutionPhaseDelta` gives gap (4)'s premises (`ExecutionPhaseBoundOfService` on `cursor/pouw-work-bound-stmt2-c7a9`, `KnowledgeSound εks`
 and `BindSound δlink`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `δlink := ∑_c δlink_c`.
 
-**The deployed sample** (decision 102, `verity/core/protocols/pouw/window.py`). The window's calls are the service's
+**The deployed sample** (decision 102, `verity/protocols/accounting/pouw/verifier/window.py`). The window's calls are the service's
 sessions and its units the `N` tiles in each (`serviceLaw`): after the receipt the verifier samples one uniform
 `K′`-subset, and session `σ` proves the sampled tiles of rank `σ·cap` to `σ·cap + cap − 1`. The sessions' laws `L σ` are
 uniform `share σ`-subsets on coins of their own (`sessionLaw`), so `η = 0` (`ServiceMissProb`). PoUW reads `ExecutionPhaseDelta` at
