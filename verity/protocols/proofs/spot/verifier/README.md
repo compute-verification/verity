@@ -302,8 +302,8 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`. Its two modes (`CostModel.commit_weight`, `PROVING_ONLY`) and its prices of
-  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the laws of
-  the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
+  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the sampling designs
+  of the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
