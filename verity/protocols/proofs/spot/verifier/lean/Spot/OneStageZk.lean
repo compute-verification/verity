@@ -292,11 +292,11 @@ theorem Member.files_header {m : Member} {slice : Json} {bs : Core.Blobs} {a : S
   obtain ⟨⟨⟩, -, hf⟩ := Flock.HmNets.bind_ok hf
   obtain ⟨⟨⟩, hh, -⟩ := Flock.HmNets.bind_ok hf
   unfold Member.statement at hs
-  obtain ⟨a'', hs, hb⟩ := Flock.HmNets.bind_ok hs
+  obtain ⟨a'', hst, hb⟩ := Flock.HmNets.bind_ok hs
   obtain ⟨⟨⟩, -, hb⟩ := Flock.HmNets.bind_ok hb
   have ha : a'' = a' := Except.ok.inj hb
   subst ha
-  obtain ⟨tags0, circuitB, pubB, rd, rfl⟩ := statementOf_ofOwn hs
+  obtain ⟨tags0, circuitB, pubB, rd, rfl⟩ := statementOf_ofOwn hst
   exact hh
 
 /-- Where `membersFiles` reads the members `ms`, each of them has its files held. -/
