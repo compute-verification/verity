@@ -268,7 +268,7 @@ def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
     return write(private, case, got), got
 
 
-#: the answer fields the wipe's verifier and its Lean agree on, as `wipe_period.leg` holds them (the reasons may differ)
+#: the answer fields the wipe's verifier and its Lean agree on, as `wipe_run.leg` holds them (the reasons may differ)
 WIPE_FIELDS = ("commitment", "protocol", "public", "verdict")
 
 

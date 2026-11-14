@@ -18,8 +18,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from verity.protocols.accounting.pous.prover import wipe_run
 from verity.runtime.stream import Side
-from verity.protocols.accounting.pous.verifier import wipe_period as W
 
 SIDE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "wipe_side.py"
 
@@ -51,7 +51,7 @@ def main(argv: list[str]) -> int:
         (out / "period.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
         (Path(t) / "periods" / "wipe-challenger").mkdir()
         with open(out / "summary.json", "w") as f, contextlib.redirect_stdout(f):
-            return W.main(["--period", str(period), "--out", str(out), "--node", a.node], side_of=stand_in)
+            return wipe_run.main(["--period", str(period), "--out", str(out), "--node", a.node], side_of=stand_in)
 
 
 if __name__ == "__main__":

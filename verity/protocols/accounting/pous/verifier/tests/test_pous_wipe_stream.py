@@ -16,10 +16,11 @@ import pytest
 from pous_fakes import Clock
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_run
+from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
-from verity.protocols.accounting.pous.verifier import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import wipe_stream as WN
 
 KEY = hashlib.sha512(b"wipe stream test").digest()[:32]
@@ -75,10 +76,10 @@ def test_a_streamer_deriving_other_labels_is_refused(tmp_path) -> None:
 
 @pytest.mark.parametrize("store", ["python", "host"])
 def test_a_native_fill_is_judged_as_the_python_fill(wipe_streamer, store: str) -> None:
-    """The challenger's side streams natively over a socket pair to `streamed_wipe.Prover` or to `wipe_store`'s prover
+    """The challenger's side streams natively over a socket pair to `wipe_store.Prover` or to `wipe_store.StoreProver`
     on host memory, which reads each frame straight into staging; the signed session is accepted."""
     signer = ts.TestSigner(b"native fill " + store.encode(), 1)
-    prover = sw.Prover(SMALL) if store == "python" else WS.StoreProver(SMALL, WS.HostMemory(), clock=Clock(10 ** 9, 1))
+    prover = WS.Prover(SMALL) if store == "python" else WS.StoreProver(SMALL, WS.HostMemory(), clock=Clock(10 ** 9, 1))
     a, b = socket.socketpair()
     got: dict = {}
 
@@ -93,7 +94,7 @@ def test_a_native_fill_is_judged_as_the_python_fill(wipe_streamer, store: str) -
     t = threading.Thread(target=side)
     t.start()
     with b, b.makefile("rwb") as f:
-        answered = WP.answer(f, prover, None)
+        answered = wipe_run.answer(f, prover, None)
     t.join()
     c = got["c"]
     a_ = W.answer(b"n0", c.commitment.session, (signer.public_key,), c.commitment, c.signed, ts.SCHEMES,

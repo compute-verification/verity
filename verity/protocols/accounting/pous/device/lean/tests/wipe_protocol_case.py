@@ -41,6 +41,7 @@ import wipe_cases as WC
 from verity_difftest import protocol as P
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_period as WP
 
@@ -119,7 +120,7 @@ test_answer = reference(TEST_ID, M.ts.SCHEMES)
 # --- wipes -------------------------------------------------------------------------------------------------------------
 
 
-def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipeParams], sw.Prover] = sw.Prover,
+def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipeParams], WS.Prover] = WS.Prover,
          spends: Callable[[int], int] = lambda b: 1, stop_after: int | None = None,
          coins: bytes = b"coins", session_id: bytes = bytes(32), server: bytes = SERVER,
          start: int = 1_000) -> tuple[sw.WipeCommitment, sw.SignedWipe | None]:
@@ -178,7 +179,7 @@ def _build(m: str, seed: int) -> dict:
     elif m == "egress-range":
         egress = r.choice([-1, -1 - r.randrange(1 << 20), sw.EGRESS_MAX_UNITS + 1, 10 ** 15])
     if m == "foreign":
-        kw["prover"] = WP.keeping(WP.foreign_labels("fM", params))
+        kw["prover"] = WS.keeping(WP.foreign_labels("fM", params))
     elif m == "late":
         at = r.randrange(params.k)
         kw["spends"] = lambda b: params.limit_ns + 1 if b == at else 1

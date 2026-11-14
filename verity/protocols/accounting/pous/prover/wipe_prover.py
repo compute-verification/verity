@@ -1,7 +1,7 @@
 """The streamed wipe's prover as a party of the deployment layer (`verity.runtime`), on its node: `Prover`, over the
 messages `verity.protocols.accounting.pous.verifier.wipe_parties` declares.
 
-Its machine gives it `store` (`capabilities["store"]`, the prover a `WipeParams` makes: `streamed_wipe.Prover` unless
+Its machine gives it `store` (`capabilities["store"]`, the prover a `WipeParams` makes: `wipe_store.Prover` unless
 given, `wipe_store.StoreProver` on a node). It finishes with the batches it answered, refused by name when the
 challenger leaves (`closed`) or sends a frame the wire refuses, and refused `schema` on parameters `wipe_party.params_of`
 refuses. `PROTOCOL` declares its one role.
@@ -14,9 +14,10 @@ from typing import Any
 from verity.protocol import ProtocolDef
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message, Phase, Refused
-from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier.wipe_parties import CHALLENGER, MANIFEST, PROVER
+
+from . import wipe_store
 
 
 class Prover:
@@ -25,7 +26,7 @@ class Prover:
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
         self.answered = 0
         try:
-            self.store = identity.capabilities.get("store", sw.Prover)(WP.params_of(params))
+            self.store = identity.capabilities.get("store", wipe_store.Prover)(WP.params_of(params))
         except ValueError:
             return [Finish({"answered": 0}, "schema")]
         self.phase = Phase("Fill", "FillDone")

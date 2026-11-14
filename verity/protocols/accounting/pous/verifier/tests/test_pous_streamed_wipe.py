@@ -17,9 +17,10 @@ import pytest
 import pous_test_signer as ts
 from pous_fakes import Clock
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_run
+from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
-from verity.protocols.accounting.pous.verifier import wipe_period
 from verity.commitments.randomness import derive
 
 SECRET, SERVER = b"auditor secret", b"server-7"
@@ -40,7 +41,7 @@ def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=N
 
 def run(c: sw.WipeMemoryChallenger, respond=None, *, clock: Clock | None = None,
         spend=lambda b: 20_000) -> sw.SignedWipe:
-    prover = sw.Prover(c.params)
+    prover = WS.Prover(c.params)
     for start, data in c.fill(100):
         prover.receive(start, data)
     b = 0
@@ -158,7 +159,7 @@ def test_the_default_clock_is_the_raw_one_and_its_resolution_is_checked(monkeypa
     monkeypatch.setattr(sw.time, "clock_gettime_ns", lambda clk: asked.append(("ns", clk)) or 7)
     assert sw.raw_clock_ns() == 7 and asked == [("ns", sw.time.CLOCK_MONOTONIC_RAW)]
     assert DEFAULT_CLOCK is sw.raw_clock_ns
-    assert WP.serve.__kwdefaults__["clock"] is sw.raw_clock_ns and wipe_period.run.__kwdefaults__["clock"] is sw.raw_clock_ns
+    assert WP.serve.__kwdefaults__["clock"] is sw.raw_clock_ns and wipe_run.run.__kwdefaults__["clock"] is sw.raw_clock_ns
     monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 1e-9)
     assert challenger(clock=sw.raw_clock_ns).clock is sw.raw_clock_ns
     monkeypatch.setattr(sw.time, "clock_getres", lambda clk: asked.append(("res", clk)) or 4e-3)

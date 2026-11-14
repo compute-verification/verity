@@ -24,11 +24,12 @@ from verity.runtime.runner import run
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.prover import wipe_prover as WR
+from verity.protocols.accounting.pous.prover import wipe_run
+from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WPS
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
-from verity.protocols.accounting.pous.verifier import wipe_store as WS
 from verity.channel import canonical
 from verity.commitments.crypto import lms
 
@@ -74,7 +75,7 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.WipeMemoryCha
     t = threading.Thread(target=side)
     t.start()
     with b, b.makefile("rwb") as f:
-        WP.answer(f, sw.Prover(params))
+        wipe_run.answer(f, WS.Prover(params))
     t.join()
     return got["c"]
 
@@ -83,7 +84,7 @@ def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
     return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "reads": params.k}
 
 
-def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
+def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=WS.Prover,
          prover=WR.Prover, state=None, request=None):
     caps = {C: challenger_caps(secret, params), P: {"store": store}}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WC.MemoryChallengerParty(chunk), P: prover})
@@ -125,7 +126,7 @@ def test_an_honest_prover_on_host_memory_is_accepted():
 
 
 def test_a_prover_keeping_foreign_content_is_rejected():
-    r = wipe(PARAMS, b"foreign", store=W.keeping(PARAMS.labels // 2))
+    r = wipe(PARAMS, b"foreign", store=WS.keeping(PARAMS.labels // 2))
     out = r.outcomes[C]["outcome"]
     assert out["ended"] == sw.WRONG and verdict(out, b"foreign")["verdict"] == "reject"
 

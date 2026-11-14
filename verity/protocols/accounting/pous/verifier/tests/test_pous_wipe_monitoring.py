@@ -17,6 +17,7 @@ import pytest
 import pous_test_signer as ts
 from verity import protocol
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_monitoring as WM
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
@@ -30,7 +31,7 @@ LINK = WP.link("control", "n0", "outside", "eth0")
 
 def _answer(egress_mib: int | None) -> dict:
     """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU leg records."""
-    w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
+    w = wipe_run.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
               coin_secret=b"coins", egress_mib=egress_mib)
     assert w.verdict == "accept"

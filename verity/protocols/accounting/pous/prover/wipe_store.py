@@ -1,5 +1,8 @@
-"""The prover's side of the streamed wipe on a GPU: the fill kept in device memory as it arrives, and each timed spot read
-answered from it (`StoreProver`), so the wipe covers the memory the fill occupied (the tier `gpu-hbm`).
+"""The prover's side of the streamed wipe: the stores it keeps the fill in and answers each timed spot read from.
+`Prover` is the honest server in Python memory, which keeps every label it is sent and answers from them, and
+`Keeping(params, foreign)` (`keeping(foreign)`, its factory) the cheat that keeps `foreign` labels' worth of its own prior
+content in place of the first `foreign` labels it is sent. On a GPU the fill is kept in device memory as it arrives, and
+each read answered from it (`StoreProver`), so the wipe covers the memory the fill occupied (the tier `gpu-hbm`).
 
 `Cuda(ordinal)` is one GPU through the CUDA driver API (`libcuda.so.1` through ctypes: no toolkit and no build on the
 node): one allocation for the whole fill, a pinned staging buffer the connection is read into, a synchronous copy to the
@@ -24,7 +27,7 @@ each read back; a mismatch raises, so a wrapped or truncated address shows befor
 keeps each frame (`receive_into`, read from the connection straight into staging), `sync()`s the store once the fill is
 in (a disk's writes on the media) before the fill is acknowledged, answers each read (`answer`), and `record()`s its
 timings: the fill from its first frame to its last, the copies' share, the sync, and each read's device latency.
-With `foreign=n` it is the cheat `wipe_period.Keeping` is on host memory: the first `n` labels' places keep prior content
+With `foreign=n` it is the cheat `Keeping` is in Python memory: the first `n` labels' places keep prior content
 of its own, so a wipe of it must reject once `n` labels exceed the published `foreign_bits` (`wipe_period.certify`).
 """
 
@@ -45,11 +48,44 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol
 
-from . import streamed_wipe as sw
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 
 LABEL = sw.LABEL_BYTES
 STAGING = 1 << 20
 """Bytes of pinned staging: one fill frame of `wipe_party.CHUNK` labels."""
+
+
+class Prover:
+    """The honest server: it keeps every label it is sent and answers from them."""
+
+    def __init__(self, params: sw.WipeParams) -> None:
+        self.store = bytearray(params.labels * LABEL)
+
+    def receive(self, start: int, data: bytes) -> None:
+        self.store[LABEL * start:LABEL * start + len(data)] = data
+
+    def answer(self, indices: Sequence[int]) -> bytes:
+        return b"".join(bytes(self.store[LABEL * i:LABEL * (i + 1)]) for i in indices)
+
+
+class Keeping(Prover):
+    """A prover that keeps `foreign` labels' worth of its own prior content in place of the first `foreign` labels it
+    is sent, and answers from what it holds."""
+
+    def __init__(self, params: sw.WipeParams, foreign: int) -> None:
+        super().__init__(params)
+        self.foreign = foreign
+
+    def receive(self, start: int, data: bytes) -> None:
+        super().receive(start, data)
+        end = min(self.foreign, start + len(data) // LABEL)
+        for i in range(start, end):
+            self.store[LABEL * i:LABEL * (i + 1)] = hashlib.sha512(b"prior content %d" % i).digest()
+
+
+def keeping(foreign: int) -> Callable[[sw.WipeParams], Prover]:
+    """`Keeping`'s factory: a prover that keeps `foreign` labels' worth of prior content."""
+    return lambda params: Keeping(params, foreign)
 
 
 def percentiles(xs: Sequence[int]) -> dict[str, int]:
@@ -293,8 +329,6 @@ DEPTH = 16
 DISK_RESERVE = 10 << 30
 """The free space a fill file leaves its filesystem."""
 FILL_FILE = "verity-wipe-fill-{pid}-{i}.bin"
-VIRTUAL_DRIVERS = ("virtio_blk", "xen_blkfront", "vmw_pvscsi")
-"""Drivers of a virtual disk, whose backing store is the hypervisor's."""
 
 
 def whole_disks(dev: int) -> dict[str, int]:
@@ -778,6 +812,6 @@ class StoreProver:
         self.memory.free(self.base)
 
 
-__all__ = ["BLOCK", "COMPUTE_CAPABILITY", "Cuda", "DEPTH", "DISK_RESERVE", "Disk", "HostMemory", "Joint", "Memory",
-           "NVML", "NvmlMemory", "STAGING", "StoreProver", "VIRTUAL_DRIVERS", "driver", "gate_indices", "gbps", "load",
-           "nvml_total", "percentiles", "whole_disks"]
+__all__ = ["BLOCK", "COMPUTE_CAPABILITY", "Cuda", "DEPTH", "DISK_RESERVE", "Disk", "HostMemory", "Joint", "Keeping",
+           "Memory", "NVML", "NvmlMemory", "Prover", "STAGING", "StoreProver", "driver", "gate_indices", "gbps", "keeping",
+           "load", "nvml_total", "percentiles", "whole_disks"]
