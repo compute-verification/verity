@@ -285,9 +285,9 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     `benchmarks/network_traces/warden_serve.py session`: the key, the relay for exactly `--windows` execution phases,
     and the check.
   - *Where a client connects.* 127.0.0.1:CLIENT_PORT on the peer, one TCP connection a request, speaking the
-    relay's cells both ways (`verity.protocols.accounting.certifier.verifier.warden`: `cells` sending, `Shim`
-    reading) at the schedule the deployment names. The port answers only while the unit's ssh is up: a connection
-    refused there is the forward down, and the run's `tunnel.log` says why.
+    relay's cells both ways (the relay's module, named above: `cells` sending, `Shim` reading) at the schedule the
+    deployment names. The port answers only while the unit's ssh is up: a connection refused there is the forward
+    down, and the run's `tunnel.log` says why.
   - *Ready.* `status RUN` carries `relay`: null until the relay listens, then `{"client": "127.0.0.1:CLIENT_PORT",
     "deployment": {...}}`, the relay's `deployment.json` as the run publishes it (its key, the session, the schedule,
     `origin_unix`, `windows`, the run id). Bucket 0 starts at the origin, a few seconds after the relay listens; a
