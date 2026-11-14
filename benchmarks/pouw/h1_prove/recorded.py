@@ -906,11 +906,11 @@ def cmd_summarize(a: argparse.Namespace) -> int:
         pe = out / s["tag"] / "prove.err"
         fw = text + (pe.read_text(errors="replace") if pe.exists() else "")
         proofs[s["tag"]] = {"instances": s["n"], "prove": t, "prove_out": text[-1500:] or None,
-                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.firewall" in fw}
-    zk_server = a.firewall == "1"
+                            "serve": _time(out / s["tag"] / "serve.time"), "firewall_timed": "t.zk_server" in fw}
+    zk_server = a.zk_server == "1"
     checks, ok = [], bool(record["z_only_registration"]["refused"])
     if zk_server and not proofs.get("honest", {}).get("firewall_timed"):
-        print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no ZK server times")
+        print("FAIL: H1_ZK_SERVER=1 but the honest prover's records carry no ZK server times")
         ok = False
     # the selftest build's controls: its honest record passes every check and is refused last, for its statement
     # (`ProvedScope.servedForm`); a forged one is refused before that, by the check it breaks
@@ -1009,7 +1009,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--work", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--controls", default="")
-    p.add_argument("--firewall", default="0", help="1: the provers ran under the ZK server (FC_FIREWALL=1), whose times "
+    p.add_argument("--zk-server", default="0", help="1: the provers ran under the ZK server (FC_ZK_SERVER=1), whose times "
                                                     "the honest prover's records must carry")
     a = ap.parse_args(argv)
     return {"prepare": cmd_prepare, "summarize": cmd_summarize}[a.cmd](a)

@@ -772,7 +772,7 @@ def prove(a) -> int:
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1,
                          plain=a.plain, timing=WZ.TIMING)
     res = audit(M, av, sg, m, units, binds, out / "slice", a.port,
-                env={"FC_COINS": "tree"} if a.plain else WZ.firewall(M, m))
+                env={"FC_COINS": "tree"} if a.plain else WZ.zk_server(M, m))
     pieces, held, public = scan_pieces(M.a8, units, m["salts"], ch, srv, (m["dir"] / "circuit.txt").read_bytes())
     short = sum(len(x) < M.a8.PIECE for x in pieces.values())
     vdir, inst, carry = out / "slice" / "verifier", m["dir"] / f"inst-{n}.bin", carry_rows(units, ch)
