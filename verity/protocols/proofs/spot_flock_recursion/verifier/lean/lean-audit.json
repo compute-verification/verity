@@ -1,14 +1,14 @@
 {
  "format": 1,
  "roots": [
-  "VStarRecursion"
+  "VStarRecursion.Protocol"
  ],
  "exempt": {
   "VStarRecursiveMain": "the vstar-recursive executable's entry point: its command line sends `sampled ...` to VStar.Recursive.Sampled.protocol (audited under VStarRecursive, verity/protocols/proofs/spot_flock/verifier/lean) and the rest to VStar.Recursive.main, audited under VStarRecursion"
  },
  "escapes": {},
  "layers": {
-  "VStarRecursion": {
+  "VStarRecursion.Protocol": {
    "imports": [
     "Lean",
     "Std.Data.HashMap",
