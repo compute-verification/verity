@@ -83,7 +83,7 @@ theorem responseCapped : Guarantees.ResponseCapped := by
 and its request's `max_tokens` data cells. -/
 theorem responseCapped_run {κ Cell Srv Dev : Type} (s : CertifierSchedule κ) (cap : ℕ) (mt : κ → Option ℕ)
     (arr : Srv → κ → Arrivals Cell) (dev : Dev) (run : Dev → Srv → κ → List (ℕ × CellView Cell))
-    (htrust : Verity.Assumptions.TrustedHost dev run fun σ => cappedCode s cap mt (arr σ)) (σ : Srv) (c : κ) :
+    (htrust : Verity.Assumptions.TrustedDevice dev run fun σ => cappedCode s cap mt (arr σ)) (σ : Srv) (c : κ) :
     dataCells (run dev σ c) ≤ cap ∧ dataCells (run dev σ c) ≤ (mt c).getD 0 := by
   rw [htrust σ]
   exact responseCapped s cap mt (arr σ) c
