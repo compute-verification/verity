@@ -41,6 +41,12 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   as its producer's type and computes the limbs and their carries. A composite keeps the type of each word it returns (it
   declares it) and never fixes one. Below the word types, every leaf is read at the width it was committed with
   (`defs.Builder.finish`, `E_REINTERPRET`).
+* **Certified rows.** `In(certified="in")` on a parameter of a template (a composite the root calls or batches) says its
+  leaves are one row of the certified table labelled ``in``, which the proof block reads; `Out(certified="out")` on its
+  return, one row it writes. The label matches the word types' pattern and is the Program's; the certified values it stands
+  for are the verifier's. No rule here reads it and it types no leaf: a primitive, a program function and the root never
+  declare it (`E_PORT_DECL`), and a harness (`forward`) drops it. Which row a proof block's port is, from its place in the
+  root, is the sampled-proofs verifier's reading (`Spot.CertifiedRows`).
 * **Coin flow.** A primitive with a coin port is a noise primitive when its return isn't all sinks (it derives noise, or
   adds it to an operand it takes) and a receipt fold when it is (the coin is its key). A Definition, primitive or composite,
   with a coin port and a position port whose return holds no sink is a seed: it derives a unit's seed from the coin and the
@@ -72,7 +78,7 @@ from __future__ import annotations
 
 import bisect
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 from .refs import Affine, Coll, Concat, Explicit, Refs, runs as ref_runs
@@ -80,6 +86,7 @@ from .types import RecordType, Tuple as TupleT, Type, range_widths, remove_axis
 
 KINDS = ("value", "coin", "static", "position")
 WORD = re.compile(r"[a-z][a-z0-9_]*")
+LABEL = WORD
 MAX_SAFE_INT = 2**53 - 1  # the descriptor's integers (`codec.MAX_SAFE_INT`)
 
 #: where a leaf's value comes from: a gate that computes it, a constant (a primitive without operands), a run input, a coin
@@ -116,16 +123,24 @@ def _word(w: Any) -> None:
         raise _decl(f"a word type is a name matching {WORD.pattern}, not {w!r}")
 
 
+def _label(c: Any) -> None:
+    """A certified table's label (`In.certified`, `Out.certified`): the one parse of the key."""
+    if c is not None and not (isinstance(c, str) and LABEL.fullmatch(c)):
+        raise _decl(f"a certified table's label is a name matching {LABEL.pattern}, not {c!r}")
+
+
 @dataclass(frozen=True)
 class In:
     """A parameter's port. `bound`: the interval the Definition assumes of every operand leaf. `kind`: ``value``, ``coin`` (a
     live verifier coin), ``static`` (a constant) or ``position`` (a unit's position, a run input). `receipt`: the port takes
-    sinks. `word`: the type it reads each word as."""
+    sinks. `word`: the type it reads each word as. `certified`: the label of the certified table one row of which these
+    leaves are, which the unit reads (a template's only; no rule here reads it)."""
 
     bound: tuple[int, int] | None = None
     kind: str = "value"
     receipt: bool = False
     word: str | None = None
+    certified: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "bound", _pair(self.bound, "a bound"))
@@ -134,6 +149,7 @@ class In:
         if not isinstance(self.receipt, bool):
             raise _decl(f"receipt is a boolean, not {self.receipt!r}")
         _word(self.word)
+        _label(self.certified)
 
     @property
     def interval(self) -> tuple[int, int] | None:
@@ -149,23 +165,28 @@ class In:
             j["receipt"] = True
         if self.word is not None:
             j["word"] = self.word
+        if self.certified is not None:
+            j["certified"] = self.certified
         return j
 
 
 @dataclass(frozen=True)
 class Out:
     """The return's port. `interval`: every leaf returned there is in it. `sink`: it reaches only a receipt port or the
-    program's outputs. `word`: the type of each word, fixed here by a primitive and kept by a composite."""
+    program's outputs. `word`: the type of each word, fixed here by a primitive and kept by a composite. `certified`: the
+    label of the certified table one row of which these leaves are, which the unit writes (a template's only)."""
 
     interval: tuple[int, int] | None = None
     sink: bool = False
     word: str | None = None
+    certified: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "interval", _pair(self.interval, "an interval"))
         if not isinstance(self.sink, bool):
             raise _decl(f"sink is a boolean, not {self.sink!r}")
         _word(self.word)
+        _label(self.certified)
 
     def to_json(self) -> dict:
         j: dict[str, Any] = {}
@@ -175,10 +196,21 @@ class Out:
             j["sink"] = True
         if self.word is not None:
             j["word"] = self.word
+        if self.certified is not None:
+            j["certified"] = self.certified
         return j
 
 
-_KEYS = {In: ("bound", "kind", "receipt", "word"), Out: ("interval", "sink", "word")}
+_KEYS = {In: ("bound", "kind", "receipt", "word", "certified"), Out: ("interval", "sink", "word", "certified")}
+
+
+def _marked(rows: Sequence[tuple]) -> bool:
+    """Whether a row of `rows` (bound runs, or a root's input runs, each with its port second to last) is certified."""
+    return any(r[-2].certified is not None for r in rows)
+
+
+def _unmarked(p: Any) -> Any:
+    return replace(p, certified=None)
 
 
 def _port_from_json(cls: type, j: Any, where: str) -> In | Out:
@@ -269,6 +301,8 @@ class PortTypes:
                 raise _decl(f"{owner}: ports name input node {k}, of {0 if nodes is None else len(nodes)} nodes")
             by_node.setdefault(k, []).append((lo, hi, _port_from_json(In, pj, f"{owner} input node {k}")))
         ins = tuple((k, *r) for k in sorted(by_node) for r in _merged(owner, f"input node {k}", nodes[k], by_node[k]))
+        if nodes is not None and (_marked(rs) or _marked(ins)):
+            raise _unmarkable(owner, "the root")
         pt = _bound(owner, ps, rs, ret, ins)
         if pt is None or pt.to_json() != j:
             raise _decl(f"{owner}: ports are not canonical (ascending, maximal runs; what the writer gives is "
@@ -439,7 +473,14 @@ def bind_ports(owner: str, params: Sequence[tuple[str, Type]], ret: Type, decl: 
     rs = _merged(owner, "its return", ret, out)
     if decl.transfer is not None and any(o.interval is not None for _lo, _hi, o, _w in rs):
         raise _decl(f"{owner}: its transfer gives its return's interval: declare no Out(interval) beside it")
+    if primitive and (_marked(rs) or any(map(_marked, ps))):
+        raise _unmarkable(owner, "a primitive")
     return _bound(owner, tuple(ps), rs, ret, transfer=decl.transfer)
+
+
+def _unmarkable(owner: str, what: str) -> PortError:
+    return _decl(f"{owner}: {what} declares no certified table's row: a row is a port of a composite the root calls or "
+                 f"batches, its proof block's")
 
 
 def port_types(fn: Any) -> PortTypes | None:
@@ -455,13 +496,14 @@ def declared(fn: Any) -> dict | None:
 
 def forward(fn: Any) -> Ports | None:
     """The declaration that gives a wrapper of `fn` (`fn`'s parameters, returning `fn`'s output) `fn`'s ports, so that a one-Call
-    Program of `fn` (`evaluation.standalone_call`, `cut.call_scope`) takes its inputs at `fn`'s bounds, kinds and words."""
+    Program of `fn` (`evaluation.standalone_call`, `cut.call_scope`) takes its inputs at `fn`'s bounds, kinds and words. It
+    leaves out `fn`'s certified marks, which no root carries."""
     pt = port_types(fn)
     if pt is None:
         return None
     params, _ = fn.signature()
-    return Ports(params={name: Leaves(tuple((lo, hi, p) for lo, hi, p, _w in rs)) for (name, _t), rs in zip(params, pt.params) if rs},
-                 ret=Leaves(tuple((lo, hi, o) for lo, hi, o, _w in pt.ret)) if pt.ret else None)
+    return Ports(params={name: Leaves(tuple((lo, hi, _unmarked(p)) for lo, hi, p, _w in rs)) for (name, _t), rs in zip(params, pt.params) if rs},
+                 ret=Leaves(tuple((lo, hi, _unmarked(o)) for lo, hi, o, _w in pt.ret)) if pt.ret else None)
 
 
 def harness(defn: Any) -> Any:
@@ -481,10 +523,12 @@ def root_ports(fn: Any, input_colls: Sequence[Coll], registered: Sequence[bool],
     """A root's port types: its input nodes (of output types `nodes`, referenced by `input_colls` per parameter) take the
     program function's parameter ports, its return the function's return ports. A coin is flipped per run, so a coin parameter is
     never registered; a parameter is an input, so never static and never bounded narrower than its width (but in a
-    `harness`)."""
+    `harness`); and a program function marks no certified table's row."""
     pt = port_types(fn)
     if pt is None:
         return None
+    if _marked(pt.ret) or any(map(_marked, pt.params)):
+        raise _unmarkable(f"program function {fn.id}", "a program function")
     params, ret = fn.signature()
     runs: dict[int, list] = {}
     for (name, _t), rs, coll, reg in zip(params, pt.params, input_colls, registered):
@@ -868,11 +912,18 @@ class Facts:
         return iter(self._params.values())
 
 
+def _types(pt: PortTypes | None) -> bool:
+    """Whether `pt` declares a port a rule reads: anything but certified marks."""
+    return pt is not None and (pt.transfer is not None or bool(pt.inputs) or any(
+        _unmarked(p).to_json() for rs in (*pt.params, pt.ret) for _lo, _hi, p, _w in rs))
+
+
 def _reachable(root: Any) -> tuple[list, bool]:
-    """The specializations `root` instantiates, callers before callees, and whether any reachable Definition declares ports."""
+    """The specializations `root` instantiates, callers before callees, and whether any reachable Definition declares a port
+    a rule reads (`_types`)."""
     from .defs import SpecializedDefinition
 
-    typed = port_types(root) is not None
+    typed = _types(port_types(root))
     post: list = []
     seen = {id(root)}
     stack: list[tuple[Any, int]] = [(root, 0)]
@@ -882,7 +933,7 @@ def _reachable(root: Any) -> tuple[list, bool]:
         while i < len(nodes):
             fn = nodes[i].fn
             i += 1
-            if not typed and port_types(fn) is not None:
+            if not typed and _types(port_types(fn)):
                 typed = True
             if isinstance(fn, SpecializedDefinition) and id(fn) not in seen:
                 seen.add(id(fn))

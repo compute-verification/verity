@@ -1049,3 +1049,69 @@ def test_leaves_and_field_trees_bind_to_the_same_runs():
     whole = P.bind_ports("T", (("r", t),), V16, Ports(params={"r": In(bound=(0, 9))}))
     assert by_field == by_tuple == by_leaves == whole
     assert whole.to_json() == {"params": [[0, 0, 4, {"bound": [0, 9]}]]}
+
+
+# --- certified rows -----------------------------------------------------------------------------------------------------------
+
+def _marked_row(name: str = "PortsTestMarkedRow", ports=None) -> CompositeDefinition:
+    """A template reading one row of the certified table ``in`` at `row` and writing one of ``out`` as its field 1."""
+    return comp(name, [("row", Array(2, V16)), ("x", V16)], TupleT(V16, V16),
+                lambda B, S, row, x: tuple_of(B.call(Add16, row[0], x), B.call(Add16, row[1], x)),
+                ports=ports if ports is not None else Ports(params={"row": In(certified="in")}, ret=(None, Out(certified="out"))))
+
+
+def _marked_program(t: CompositeDefinition, name: str = "PortsTestMarked") -> Program:
+    def body(B, S, rows, x):
+        a = B.call(bind(t), rows[0], x)
+        b = B.batch(bind(t), rows, x, axes=(0, None), n=2)
+        return tuple_of(a, b)
+    return Program(comp(name, [("rows", Array(2, Array(2, V16))), ("x", V16)], TupleT(TupleT(V16, V16), Array(2, TupleT(V16, V16))), body))
+
+
+def test_a_certified_mark_is_a_templates_port_and_types_no_leaf():
+    """The mark is written on the template's entry and survives the decoder, and no rule reads it: a Program whose only
+    ports are marks is checked by none."""
+    t = _marked_row()
+    assert definition_entry(bind(t))["ports"] == {"params": [[0, 0, 2, {"certified": "in"}]], "ret": [[1, 2, {"certified": "out"}]]}
+    desc, dec = roundtrip(_marked_program(t))
+    (key,) = [k for k in desc["definitions"] if k.startswith("PortsTestMarkedRow")]
+    assert desc["definitions"][key]["ports"] == definition_entry(bind(t))["ports"]
+    assert "ports" not in desc["definitions"][desc["root"]]
+    assert P.port_types(next(n.fn for n in dec.root.body.nodes if not n.fn.id.startswith("Input"))).ret[0][2] == Out(certified="out")
+    assert P.check(dec.root) is None and P.facts(dec.root).typed is False
+
+
+def test_a_certified_mark_with_another_key_is_one_port():
+    t = comp("PortsTestMarkedWord", [("row", V16)], V16, lambda B, S, row: B.call(Add16, row, row),
+             ports=Ports(params={"row": In(word="s16", certified="in")}))
+    assert definition_entry(bind(t))["ports"] == {"params": [[0, 0, 1, {"certified": "in", "word": "s16"}]]}
+
+
+def test_a_certified_label_is_a_name():
+    for bad in ("In", "1in", "in-out", "", 3, True):
+        with pytest.raises(PortError, match="E_PORT_DECL.*a certified table's label is a name"):
+            In(certified=bad)
+        with pytest.raises(PortError, match="E_PORT_DECL.*a certified table's label is a name"):
+            Out(certified=bad)
+
+
+def test_a_primitive_a_program_function_and_the_root_declare_no_certified_row():
+    with pytest.raises(PortError, match="E_PORT_DECL.*a primitive declares no certified table's row"):
+        primitive("PortsTestMarkedPrim", 1, (("x", V16),), V16, ports=Ports(params={"x": In(certified="in")}))(lambda x: x)
+    with pytest.raises(PortError, match="E_PORT_DECL.*a primitive declares no certified table's row"):
+        primitive("PortsTestMarkedPrimOut", 1, (("x", V16),), V16, ports=Ports(ret=Out(certified="out")))(lambda x: x)
+    for ports in (Ports(params={"x": In(certified="in")}), Ports(ret=Out(certified="out"))):
+        f = comp("PortsTestMarkedFn", [("x", V16)], V16, lambda B, S, x: B.call(Add16, x, x), ports=ports)
+        refused("E_PORT_DECL", lambda: Program(f), "a program function declares no certified table's row")
+    desc = encode_program(_marked_program(_marked_row()))
+    for ports in ({"ret": [[0, 1, {"certified": "out"}]]}, {"inputs": [[1, 0, 1, {"certified": "in"}]]}):
+        tampered = copy.deepcopy(desc)
+        tampered["definitions"][desc["root"]]["ports"] = ports
+        refused("E_PORT_DECL", lambda: decode_program(tampered, REGISTRY), "the root declares no certified table's row")
+
+
+def test_a_harness_of_a_marked_template_drops_the_mark():
+    t = _marked_row()
+    prog, _call = standalone_call(bind(t))
+    assert "ports" not in encode_program(prog)["definitions"][encode_program(prog)["root"]]
+    assert evaluate(bind(t), [1, 2], 3) == (4, 5)
