@@ -55,7 +55,7 @@ import threading
 from pathlib import Path
 
 #: the directory of Flock's reader, `redigest.py`, and the modules it imports beside it
-sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/proofs/flock/prover/agreement/redigest.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[5] / "verity/protocols/proofs/flock/prover/agreement/redigest.py").parent))
 import redigest as RD  # noqa: E402
 
 #: The verifier's files the statement fixes before any witness: its program and partition, and the staged circuit.

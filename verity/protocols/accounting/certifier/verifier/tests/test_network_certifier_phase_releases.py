@@ -18,7 +18,7 @@ from verity.protocols.accounting.certifier.verifier.warden import WardenParams, 
 
 #: the lengths tests' schedule at form 2: two lanes, sixteen buckets an execution phase
 SMALL = dataclasses.replace(LEN, lengths=2)
-#: the schedule `benchmarks/network_traces/connection_rows_run.py` costs by default, at form 2, and the same with
+#: the schedule `verity/protocols/accounting/certifier/device/connection_rows_run.py` costs by default, at form 2, and the same with
 #: ingress half as long
 WIDE = WardenParams(cell_bytes=512, slots=8, bucket_ms=100, delay=30, lanes=16, queue=64, window=600, ingress_cells=96,
                     ingress_buckets=30, egress_cells=4097, every=1, lengths=2)

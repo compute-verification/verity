@@ -42,7 +42,7 @@ TRACES = Path(__file__).resolve().parents[2] / "benchmarks/network_traces"
 sys.path.insert(0, str(TRACES))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 
 
@@ -163,7 +163,7 @@ def rehearse(args) -> int:
     params = ws._params(args)
     sent = traffic(args.serve_run, args.serve_window, start_s=args.start, gap_s=args.gap)
     (out / "traffic.json").write_text(json.dumps(sent))
-    warden = [sys.executable, str(Path(__file__).resolve().parents[2] / "benchmarks/network_traces/warden_serve.py")]
+    warden = [sys.executable, str(Path(__file__).resolve().parents[2] / "verity/protocols/accounting/certifier/device/warden_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-replay-"))
     procs: list[subprocess.Popen] = []
     try:

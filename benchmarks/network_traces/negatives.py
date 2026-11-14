@@ -142,7 +142,7 @@ def warden_frame(run: Path, at: int | None = None) -> dict:
     signed root and the changed one's doesn't (`WARDEN_READ`)."""
     try:
         WR = importlib.import_module(WARDEN_ROWS_MODULE)
-        WS = importlib.import_module("benchmarks.network_traces.warden_serve")
+        WS = importlib.import_module("verity.protocols.accounting.certifier.device.warden_serve")
     except ModuleNotFoundError as err:
         raise NotApplicable(f"no warden cells: {err.name} isn't in this tree") from None
     link, direction = RC.CERTIFIED[RC.EGRESS]
