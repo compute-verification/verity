@@ -380,12 +380,12 @@ def separation(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Map
 #: with (exactly one: the node it guards, inside whose isolation boundary it runs), those it must be separate from (every one,
 #: at least one each unless absent), whether it must be a VM guest, and whether it runs on dedicated cores.
 GATE_RULES: dict[str, dict[str, Any]] = {
-    "firewall": {"same": (), "separate": ("worker", "challenger"), "vm": True, "cores": True},
-    "certifier": {"same": ("worker",), "separate": ("firewall", "challenger"), "vm": False, "cores": True},
-    "memory-challenger": {"same": ("worker",), "separate": ("firewall", "challenger"), "vm": False, "cores": True},
-    "challenger": {"same": (), "separate": ("firewall", "worker"), "vm": False, "cores": False},
+    "zk-server": {"same": (), "separate": ("worker", "challenger"), "vm": True, "cores": True},
+    "certifier": {"same": ("worker",), "separate": ("zk-server", "challenger"), "vm": False, "cores": True},
+    "memory-challenger": {"same": ("worker",), "separate": ("zk-server", "challenger"), "vm": False, "cores": True},
+    "challenger": {"same": (), "separate": ("zk-server", "worker"), "vm": False, "cores": False},
 }
-PEER_ROLES = ("worker", "firewall", "challenger")
+PEER_ROLES = ("worker", "zk-server", "challenger")
 GATE_SCHEMA = "verity/placement-gate/v1"
 PROC = "/proc"
 
