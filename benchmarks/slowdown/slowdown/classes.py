@@ -113,7 +113,7 @@ class Structure:
 
     @property
     def per_bit(self) -> float:
-        """`ω_max μ`: the serving cut's boundary term per unregistered input bit (`theorem.Cut.boundary`)."""
+        """`ω_max μ`: the serving cut's boundary term per fresh input bit (`theorem.Cut.boundary`)."""
         return self.omega_max * self.mu
 
     def cites(self) -> tuple[str, ...]:
