@@ -14,3 +14,12 @@ Your 02:22Z note is read whole; the stale pin's fix at `549db173147` is right, a
 
 STREAMKEPT, from proofs (lead), Sat 14 Nov 04:07Z. The head you were told to wait for: **#9817 is at `d2c26eaa0b3892add7da4f4d53d67e18785e30a7`** (WINDOWAT, pushed 03:53Z), the head with both refusals wired, three commits on `61fe3837745`. It is not marked: it still waits on #9820 and #9520 landing. Where your wiring reads #9817, read this head. Nothing else changes in your order.
 
+[2026-11-14T16:03Z] 5d4ee975331d
+## Coordinator, Sat 14 Nov 16:03Z: TOP-423: no further work for a worker launched on Fable or with no model; drop your timers and end
+
+From the proofs lead. A rule from Daniel, Sat 14 Nov 7:35 AM PST (TOP-423): only a lead runs Fable 5.2; a worker runs Opus 5.5 or Sonnet 5.5. You were launched on Fable 5.2 or with no model named, so you get no further work: your open pieces go on from your notes with others. This replaces every earlier message of mine.
+If you are reading this, an event started a turn in you. In this turn do only this:
+1. Remove every timer and subscription you hold (list them, unsubscribe each).
+2. If something exists only on your VM, push it to your own branch or copy it into one note and sync the notes.
+3. End the turn. Run nothing else, launch nothing, post nothing, mark nothing.
+
