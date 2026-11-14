@@ -74,7 +74,6 @@ def job(tmp: Path) -> Path:
         (c / "icheck").mkdir()
         (c / "icheck" / "time-replay-proxy.txt").write_text(timev(f"0:0{n}.00"))
         (c / "icheck" / "replay-proxy.txt").write_text("UPSTREAM\t" + json.dumps({"verdict": {"accepted": True}}) + "\n")
-        (c / "icheck" / "time-vstar.txt").write_text(timev("0:03.00"))
         v = rep("vstage", n)
         (v / "vstage").mkdir()
         for name in ("points", "fold", "L0", "alg"):
