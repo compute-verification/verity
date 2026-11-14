@@ -1,14 +1,14 @@
-# CIR-278 LINTFIX checkpoint, 2026-11-13T21:53:53Z
+# CIR-278 LINTFIX checkpoint, 2026-11-14T06:04:38Z
 
-LINTFIX on CIR-278. Pull request #9835 is open and unmarked: head `9cdadd330996`, branch `cursor/circuits-cir278-lint-self-fixes-6f04`. The CIR-278 comment is posted (as circuits/LINTFIX, no ring).
+LINTFIX on CIR-278, piece 1 (#9835 made again on today's main) and piece 2 (the rest sized).
 
-Count of the files open changes touch (of the 392 files that hold any circuits entry): 117 touched by an open PR under their current path, 52 more only under an older path, 223 untouched. Of circuits' six-rule files: 48 touched, holding 133 entries.
+Piece 1: branch `cursor/circuits-cir278-lint-self-fixes-6f04` at `7bc07334513b`, pushed. The merge commit `6634f89a5e37` makes the tree equal to main `5eb2c77ef848`; then I001 in two files, the ruff_vllm.json update, and the stale frozen.py entry out of repo_ruff.json. Circuits' six-rule entries go from 124 to 121.
 
-Runs:
-- r20261113-182828-14b7 (suites at 9cdadd33): ended STAGE_TIMEOUT. 20 of 25 suites passed. verity-vllm: 17865 passed, 3 failed, from the length of the temporary directory.
-- r20261113-204955-a048: base and head both pass the 3 with a short basetemp and both fail them with a long one.
-- In flight: r20261113-215108-80fd (vy-nebius-cpu-14), the four suites without a verdict (verity-flock, verity-numerical, research, circuit-check). It was waiting for a slot at 21:53Z. I stopped waiting on it under the 20-minute rule.
+Runs (ids only):
+- r20261114-055759-73c3: suites selection, done; 23 selected, verity-flock among them.
+- r20261114-055841-a543: gate, done. failures [], retired-terms test passed; merge-tree with main is clean. With the refactor line it stops in one file outside the change, which main stops on alone.
+- In flight: r20261114-060030-384e (the 22 suites but verity-flock) and r20261114-060151-8531 (verity-flock, --timeout 21600).
 
-Left: that run's verdict, to the coordinator.
+Left: read the suites run, rewrite #9835's body, then piece 2's table and its CIR-278 comment.
 
 Stuck: nothing.
