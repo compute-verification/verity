@@ -6,9 +6,9 @@ products and `F2fpBf16_v2` over bits, `boolean_rope.RoPEHeadGptJ_v3` and `DsMlaF
 
 `DsaLatentRowDsMla_v3{KVL, R, TILE, EPS}` is the `_v2`'s function with its scale written as Calls: `DsaRMSNormSumSq_v3`'s body
 (`boolean_dsa_norm.sum_sq_calls`: batches of `DsaRMSNormSquares` and `DsaRMSNormSquareFma`, `F32Add_v3`s and
-`DsaRMSNormMeanRsqrt`) in place of a Call of the traced `DsaRMSNormSumSq_v2`, whose description is every gate of it, so every
-Definition the row Calls is cut within the partition's budget.  `boolean_version` gives the `_v3`; the `_v2` serves only a
-caller that binds it."""
+`DsaRMSNormMeanRsqrt`) in place of a Call of the traced `DsaRMSNormSumSq_v2`, whose description is every gate of it, so the
+row's Boolean body can be cut at its scale and at its tiles.  `boolean_version` gives the `_v3`; the `_v2` serves only a caller
+that binds it."""
 from __future__ import annotations
 
 from types import SimpleNamespace
