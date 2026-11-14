@@ -21,15 +21,17 @@ def _at(mode, mhz, ctx, ms):
 
 
 ROWS = [
-    {"mode": "gate", "what": "cublaslt", "m": 16, "ok": True},  # a gate line has no clock
-    {"mode": "bw", "mhz": 1994, "gb_per_s": 900.0}, {"mode": "bw", "mhz": 1995, "gb_per_s": 1000.0},
+    # dcap's two kinds of gate line, which have no clock
+    {"mode": "gate", "what": "cublaslt", "m": 16, "ok": True},
+    {"mode": "gate", "what": "attention", "B": 16, "L": 2048, "ok": True},
+    {"mode": "bw", "mhz": 1993, "gb_per_s": 900.0}, {"mode": "bw", "mhz": 1994, "gb_per_s": 1000.0},
     # out of order; up to 256 rows a line's time holds lm_head's, which is its second algorithm here
-    _lin(1996, 8192, 384.0), _lin(1997, 256, 16.0, lm=4.0), _lin(1998, 1, 2.0, lm=0.5), _lin(1999, 16, 4.0, lm=1.0),
+    _lin(1995, 8192, 384.0), _lin(1996, 256, 16.0, lm=4.0), _lin(1997, 1, 2.0, lm=0.5), _lin(1998, 16, 4.0, lm=1.0),
     # 16 rows at L = 2,048 i read 2^31 i bytes of KV: 0.5 ms and 4 ms each, 0.1 ms over at the ends and under between
-    _at("att", 2000, 2048, 4.6), _at("att", 2001, 4096, 8.4), _at("att", 2002, 6144, 12.4),
-    _at("att", 2003, 8192, 16.6),
+    _at("att", 1999, 2048, 4.6), _at("att", 2000, 4096, 8.4), _at("att", 2001, 6144, 12.4),
+    _at("att", 2002, 8192, 16.6),
     # a whole step: its linears (4 ms), its attention as measured, and 0.7 ms and 0.1 ms more
-    _at("step", 2004, 2048, 9.3), _at("step", 2005, 8192, 20.7),
+    _at("step", 2003, 2048, 9.3), _at("step", 2004, 8192, 20.7),
 ]
 
 
@@ -44,7 +46,9 @@ def _att(p, eta):
 
 def test_the_fit_of_a_runs_lines(m):
     assert m.bw == 1e12  # the fastest read
-    assert m.mhz == MHZ  # of the twelve clocks in order, the one at half the 13 lines: the gate line is counted
+    # of the twelve clocks in order, the one at half the 14 lines: the gate lines are counted, so it is the eighth,
+    # one past the median's two (1998 and 1999)
+    assert m.mhz == MHZ
     assert m.capacity == CAP and m.capacity_max == 1024 * 188 * 2430e6
     assert (m.lm_m, m.lm_ms) == ([1, 16, 256], [0.5, 1.0, 4.0])
     assert m.lin_m == [1, 16, 256, 8192] and m.lin_body == [1.5, 3.0, 12.0, 384.0]  # without lm_head
