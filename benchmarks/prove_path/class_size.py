@@ -208,7 +208,7 @@ FEED_K = ((1024, 23), (2048, 24))
 
 def rows_k(rows: int) -> int:
     """The least k_log of a unit of ``rows`` rows in and out (`proof_block_k_log` at no logic, one row past
-    `LAST_BLOCK_BYTES` and the rest a byte): C-Flock's composer gives each an hm96 slot, the slots rounded up
+    `LAST_BLOCK_BYTES` and the rest a byte): Flock's composer gives each an hm96 slot, the slots rounded up
     to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every copy unit of W + 1 rows composed (W 2
     to 128, `COMPOSED`) takes exactly this, so a unit of 257 rows takes 2^28."""
     return proof_block_k_log([LAST_BLOCK_BYTES + 1] + [1] * (rows - 1))
