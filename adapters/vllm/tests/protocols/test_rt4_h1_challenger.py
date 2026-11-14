@@ -108,7 +108,7 @@ class _Session:
         self.reason: str | None = None
         self._ledger: Path | None = None
         self.window: dict = CH.WINDOW
-        self._thread = threading.Thread(target=self._serve, args=(ours, session))
+        self._thread = threading.Thread(target=self._serve, args=(ours, session), daemon=True)
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
         self.commitment = self.challenger.commitment.root.hex()
