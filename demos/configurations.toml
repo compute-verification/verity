@@ -1,0 +1,4 @@
+# The committed configurations' hashes: each demo's configuration (`demos/NAME/config.toml`, the file `verity demo NAME`
+# runs) by its path, and its hash as `verity config hash` prints it, which covers the keys the configuration pins.
+# `tests/test_configurations.py` holds this file to those files, so a change to a configuration changes its line here.
+"demos/onsite_served/config.toml" = "401ecf453cd7fadf790593220e67cf6d8b517a3fe07850dca0ea862d124ed9aa3e0ec0b098cbe66aad1254513eb9ec439e8cff681c33ffddc9b53cde8b5714f1"
