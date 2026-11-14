@@ -14,7 +14,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # over `verity`. The run's variables are read through `verity_config.settings`, and the count's executable and module
 # are named by its Lake package's `lakefile.toml`. The served number is written into the run's result by the harness
 # kit's writer (`benchmarks/harness/verity_bench`: `kit` and its `settings`). The tests check the count's refusal with its Python reference
-# (`nci_reference.py`), which the count's difftest holds the Lean to. A served record's check is the package's record
+# (`inference_only_reference.py`), which the count's difftest holds the Lean to. A served record's check is the package's record
 # check, run through its script (`scripts/served_record_case.py`, under `verity`) and its compiled command, which one
 # test builds with `lake` where it is (`check` runs the suite after its Lean steps). The script reads the difftest
 # harness (`tools/difftest`: `verity_difftest`). The class's card and the calculator's H200 servers are read from the
@@ -25,8 +25,8 @@ inputs = ["benchmarks/rho",
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
           "benchmarks/harness/verity_bench/settings.py",
           "adapters/vllm/verity_vllm", "adapters/vllm/manifests", "verity", "hardware/cards",
-          "verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_reference.py",
-          "verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml",
+          "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py",
+          "verity/protocols/policy/inference_only/verifier/inference_only/lean/lakefile.toml",
           "security/lean-audit.json", "security/Properties/lean-audit.json",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
           "benchmarks/nci/tiers.py", "benchmarks/nci/bracket.py",

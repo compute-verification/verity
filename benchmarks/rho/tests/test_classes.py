@@ -156,7 +156,7 @@ def test_premise_status_is_the_weakest_and_never_strengthens_with_k():
     assert premise_status(CLASSES["cover"].cites, K) == "assumed"
     assert premise_status(CLASSES["threaded"].cites, K) == "assumed"
     assert premise_status(CLASSES["fanout-priced"].cites, WINDOW.inputs) == "contested"
-    assert premise_status(("Nci.Guarantees.CoveringBound",), K) == "supported"
+    assert premise_status(("InferenceOnly.Guarantees.CoveringBound",), K) == "supported"
     for arg in CLASSES.values():
         s = [STANDINGS.index(premise_status(arg.cites, 10 ** e)) for e in range(4, 13)]
         assert s == sorted(s), arg.name
@@ -168,8 +168,8 @@ def test_every_class_cites_its_statement_first():
 
 
 def test_cover_cites_every_premise_its_guarantee_takes_at_a_block():
-    assert {"Nci.Cover.Assumptions.BlockFits", "Nci.Cover.Assumptions.CapBelowDepth",
-            "Nci.Cover.Assumptions.UpdateHardness", "Nci.Cover.MulBlocks.Upstream"} <= set(CLASSES["cover"].cites)
+    assert {"InferenceOnly.Cover.Assumptions.BlockFits", "InferenceOnly.Cover.Assumptions.CapBelowDepth",
+            "InferenceOnly.Cover.Assumptions.UpdateHardness", "InferenceOnly.Cover.MulBlocks.Upstream"} <= set(CLASSES["cover"].cites)
 
 
 def test_a_structure_states_mu_and_none_defaults_it():

@@ -79,7 +79,7 @@ chained through the state wire. The monitoring period is three execution phases 
    with the rows, and the wipe holds them to the fill. PoUW's answer is its window's remote and its period's onsite, one
    declaration at a time. Both composites run the
    inference-only policy's check (`inference_only`), which reads no coins: the record names the block's Program, and the
-   policy's Python check (`nci_reference.check_desc`, the reference `NciCheck` is held to) finds that the block divides
+   policy's Python check (`inference_only_reference.check_desc`, the reference `InferenceOnlyCheck` is held to) finds that the block divides
    into inference blocks, one per request (19,620 gates reading 48 bits of fresh input: its input and the state word),
    within Γ = 2^15 gates and α = 1/256 fresh-input bits per gate, with theta registered. Each subprotocol answers in
    `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols, after

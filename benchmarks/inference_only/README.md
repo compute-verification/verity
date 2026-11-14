@@ -119,7 +119,7 @@ default: a file that isn't there is named as one the run did not write. It print
 - **The check's verdicts, public form only.** The policy's record check runs on the run's files: its script writes the
   case (`served_record_case.py --case-only`) and its compiled command (`inference-only-record-check`) judges it. The
   command prints each rule's whole detail, the private record's; the benchmark keeps of it only what the public form
-  gives, `NciCheck.Record.check` for the rate rule and `NciCheck.RecordCount.check` for the count: `complies`, or the
+  gives, `InferenceOnlyCheck.Record.check` for the rate rule and `InferenceOnlyCheck.RecordCount.check` for the count: `complies`, or the
   refusal's `error` and `message`. Which of `c`, `k` and `n` failed, any count and any block stay in the detail, which
   is written to a scratch directory outside the run's and deleted.
 - **What the check costs in the clear** at the record's size: its wall and CPU seconds and peak memory, and the case's

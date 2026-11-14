@@ -47,7 +47,7 @@ H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb")["sm
         "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
+PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:

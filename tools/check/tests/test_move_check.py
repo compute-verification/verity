@@ -1617,7 +1617,7 @@ JOIN = ('import sys\nfrom pathlib import Path\n\nHERE = Path(__file__).resolve()
 CIRCUITS = "# Steps as Boolean circuits (rho/circuits.py): what the census counts\nx = 1\n"
 RHO = {"bench/rho/rho/__init__.py": "", "bench/rho/rho/classes.py": "Y = 1\n",
        "bench/rho/rho/circuits.py": 'X = 1\nSOURCE = f"circuit.{X}: its gates over its FLOPs (rho/circuits.py units)"\n',
-       "bench/rho/data/circuits.toml": CIRCUITS, "bench/nci/statement.py": JOIN, "bench/nci/notes.toml": CIRCUITS}
+       "bench/rho/data/circuits.toml": CIRCUITS, "bench/inference_only/statement.py": JOIN, "bench/inference_only/notes.toml": CIRCUITS}
 
 
 def _rho(tmp_path: Path, edits: dict[str, str], files: dict[str, str] | None = None) -> dict:
@@ -1631,19 +1631,19 @@ def _rho(tmp_path: Path, edits: dict[str, str], files: dict[str, str] | None = N
 
 
 def test_join_on_the_files_own_place_naming_a_moved_directory_is_certified(tmp_path):
-    r = _rho(tmp_path, {"bench/nci/statement.py": JOIN.replace('"rho"', '"overhead"')})
+    r = _rho(tmp_path, {"bench/inference_only/statement.py": JOIN.replace('"rho"', '"overhead"')})
     assert r["certified"], r["refusals"]
-    assert {"path": "bench/nci/statement.py", "kind": "python"} in r["edits"]
+    assert {"path": "bench/inference_only/statement.py", "kind": "python"} in r["edits"]
 
 
 def test_join_with_any_other_change_or_on_a_shadowed_name_is_refused(tmp_path):
-    [f] = _rho(tmp_path / "a", {"bench/nci/statement.py": JOIN.replace('(0, str(HERE.parent / "rho"',
+    [f] = _rho(tmp_path / "a", {"bench/inference_only/statement.py": JOIN.replace('(0, str(HERE.parent / "rho"',
                                                                          '(1, str(HERE.parent / "overhead"')})["refusals"]
-    assert f["path"] == "bench/nci/statement.py" and '+sys.path.insert(1, str(HERE.parent / "overhead"))' in f["hunk"]
+    assert f["path"] == "bench/inference_only/statement.py" and '+sys.path.insert(1, str(HERE.parent / "overhead"))' in f["hunk"]
     shadowed = JOIN + '\n\ndef f(HERE):\n    return HERE.parent / "rho"\n'
-    [f] = _rho(tmp_path / "b", {"bench/nci/statement.py": shadowed.replace('"rho"', '"overhead"')},
-               {"bench/nci/statement.py": shadowed})["refusals"]
-    assert f["path"] == "bench/nci/statement.py" and '+sys.path.insert(0, str(HERE.parent / "overhead"))' in f["hunk"]
+    [f] = _rho(tmp_path / "b", {"bench/inference_only/statement.py": shadowed.replace('"rho"', '"overhead"')},
+               {"bench/inference_only/statement.py": shadowed})["refusals"]
+    assert f["path"] == "bench/inference_only/statement.py" and '+sys.path.insert(0, str(HERE.parent / "overhead"))' in f["hunk"]
 
 
 def test_mention_of_a_moved_file_inside_its_moved_package_is_certified(tmp_path):
@@ -1658,7 +1658,7 @@ def test_mention_with_any_other_change_elsewhere_or_outside_the_package_is_refus
     for i, (path, text) in enumerate([
             ("bench/overhead/data/circuits.toml", CIRCUITS.replace("(rho/", "(overhead/").replace("counts", "measures")),
             ("bench/overhead/data/circuits.toml", CIRCUITS.replace("(rho/circuits.py", "(overhead/classes.py")),
-            ("bench/nci/notes.toml", CIRCUITS.replace("(rho/", "(overhead/"))]):
+            ("bench/inference_only/notes.toml", CIRCUITS.replace("(rho/", "(overhead/"))]):
         [f] = _rho(tmp_path / str(i), {path: text})["refusals"]
         assert f["path"] == path and "+" + text.splitlines()[0] in f["hunk"]
 

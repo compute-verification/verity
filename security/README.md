@@ -83,18 +83,18 @@ premises (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`) and `
 **Start here: training's bound of record.** Two theorems state it, both proved; (H) and (E) are the first one's named
 assumptions.
 
-- **The min-cut theorem**, `Nci.Cut.Guarantees.HE` and `HEShared` (`Definitions/Nci/Guarantees/Cut.lean`, proved in
-  `Proofs/Nci/Cut.lean`): under (H) and (E), every partition of a circuit into m blocks, each reading at most k gates
+- **The min-cut theorem**, `InferenceOnly.Cut.Guarantees.HE` and `HEShared` (`Definitions/InferenceOnly/Guarantees/Cut.lean`, proved in
+  `Proofs/InferenceOnly/Cut.lean`): under (H) and (E), every partition of a circuit into m blocks, each reading at most k gates
   outside θ, has N ≤ m·(k + α) + (k/2)·√(m·O/(β_w·β_x)), α = ½·√(k³/(β_w·β_x·b)), for the N MACs and O output wires
   of its charged matmuls, so ρ = m·c/|C| is bounded below at every c; `HEShared` is it for matmuls sharing arrays,
-  each term times F = √(2(1 − 1/ω)), and `CountHE` is it at the count's verdict, `Nci.CompliesAtMost c k m`.
-- **(H), hardness**, `Nci.Cut.Assumptions.Hardness` (`Definitions/Assumptions.lean`), conjectured: every set S of words
+  each term times F = √(2(1 − 1/ω)), and `CountHE` is it at the count's verdict, `InferenceOnly.CompliesAtMost c k m`.
+- **(H), hardness**, `InferenceOnly.Cut.Assumptions.Hardness` (`Definitions/Assumptions.lean`), conjectured: every set S of words
   with κ(S) ≤ k has Σ_r β_r·|val(S ∩ A_r)| ≤ κ(S), so words behind a cut of κ gates carry at most κ in values, a value
   of array r costing β_r.
-- **(E), exports**, `Nci.Cut.Assumptions.Exports` (`Definitions/Assumptions.lean`), conjectured: every set B of
+- **(E), exports**, `InferenceOnly.Cut.Assumptions.Exports` (`Definitions/Assumptions.lean`), conjectured: every set B of
   computed gates has κ(B → E(B)) ≥ b·|E(B)|, E(B) the outputs a MAC inside B feeds that have no wire in B.
-- **The counting bound over kinds of work**, `Nci.Formalism.Guarantees.Counting`
-  (`Definitions/Nci/Guarantees/Formalism.lean`, proved in `Proofs/Nci/Formalism/Slowdown.lean`): every partition into
+- **The counting bound over kinds of work**, `InferenceOnly.Formalism.Guarantees.Counting`
+  (`Definitions/InferenceOnly/Guarantees/Formalism.lean`, proved in `Proofs/InferenceOnly/Formalism/Slowdown.lean`): every partition into
   inference blocks has ρ ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a cap cap_K on
   the gates of it an inference block holds, and kinds J each bounded by Λ_J over the whole partition; `Slowdown` beside
   it takes the token kind's cap from the named assumption `training-token-work`.
@@ -217,7 +217,7 @@ arithmetic, and the range T_max of computation the claim rules out. Information 
 through preparation that isn't charged. The setting does not say that θ can't produce an acceptable model cheaply: that
 is the question.
 
-**Coverage of efficient methods** (`Nci.Assumptions.CoversEfficientMethods`). Let Core(A, x) say that the
+**Coverage of efficient methods** (`InferenceOnly.Assumptions.CoversEfficientMethods`). Let Core(A, x) say that the
 computation meets the premises of one of part 2's assemblies at the block budgets and carries at least its minimum
 weighted total Ω_*. Uniformly over the programs, the initial information and the experiment,
 
@@ -243,8 +243,8 @@ A block can **import** information, spending its k fresh bits, or **reconstruct*
 bound has three ingredients, each with its own premises: **information** (which jointly selected values are expensive
 to reconstruct), **structure** (how much counted computation the held values support) and **counting** (from a
 block yield to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
-`Nci.Capability` (vocabulary), `Nci.Assumptions` (premises) and `Nci.Guarantees` (the repertoire), one module per role;
-`security/Definitions/Nci/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
+`InferenceOnly.Capability` (vocabulary), `InferenceOnly.Assumptions` (premises) and `InferenceOnly.Guarantees` (the repertoire), one module per role;
+`security/Definitions/InferenceOnly/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
 test each. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
 named as one.
 
@@ -255,18 +255,18 @@ $$ \mathrm{LDL}_{t,R}(y_I) \;\le\; k' := k + \lceil \log_2 B \rceil + a_{\mathrm
 
 #### Information: what a block can hold
 
-An **item family** X (`Nci.Capability.Items`) lists things a block may hold, each with eligible **cells** (the gates
+An **item family** X (`InferenceOnly.Capability.Items`) lists things a block may hold, each with eligible **cells** (the gates
 holding one version of its value) and a **price** p_i in bits. One premise schema covers every family:
 
 $$ \textbf{description hardness:}\quad \mathrm{LDL}_{t,R}(x_U) \;\ge\; \sum_{i \in U} p_i \;-\; \lambda
    \quad\text{for every selection } U \text{ of } X\text{'s items, one cell each} $$
 
-(`Nci.Assumptions.DescriptionHard`). It covers every selection a block can make, charges an item once however often it
+(`InferenceOnly.Assumptions.DescriptionHard`). It covers every selection a block can make, charges an item once however often it
 is reused, and is time-bounded: replaying training counts only within t. With Lemma 1 it gives the **held budget**
-(`Nci.Guarantees.HeldBudget`): every block holds a selection priced at most h = k' + λ, whether it loads, decompresses
+(`InferenceOnly.Guarantees.HeldBudget`): every block holds a selection priced at most h = k' + λ, whether it loads, decompresses
 or computes it. A second measure makes a different claim: **min-entropy hardness**
-(`Nci.Assumptions.MinEntropyHard`) says the values are unpredictable under the run's randomness, not slow to compute;
-it gives the budget h = k + λ with no decoder or time budget (`Nci.Guarantees.StatHeldBudget`), is tested by retraining
+(`InferenceOnly.Assumptions.MinEntropyHard`) says the values are unpredictable under the run's randomness, not slow to compute;
+it gives the budget h = k + λ with no decoder or time budget (`InferenceOnly.Guarantees.StatHeldBudget`), is tested by retraining
 with fresh randomness, and fails when training is a deterministic function of registered information. Either measure's
 meaning is its family's:
 
@@ -277,9 +277,9 @@ meaning is its family's:
 | both, priced together | joint hardness | the same bits describe both families; an additive budget is a hypothesis of its own |
 
 **Recovery** derives an information bound rather than assuming one. A source z of length ℓ_z with
-LDL_{τ,R}(z) ≥ ℓ_z − δ (`Nci.Assumptions.SourceHard`), recoverable from a block's program and a complement of at most
-ℓ_z − β_v·|𝒥_I| + amb bits (`Nci.Assumptions.Recovers`, amb the index among at most 2^amb candidates), gives the
-**recovered budget** (`Nci.Guarantees.RecoveredBudget`)
+LDL_{τ,R}(z) ≥ ℓ_z − δ (`InferenceOnly.Assumptions.SourceHard`), recoverable from a block's program and a complement of at most
+ℓ_z − β_v·|𝒥_I| + amb bits (`InferenceOnly.Assumptions.Recovers`, amb the index among at most 2^amb candidates), gives the
+**recovered budget** (`InferenceOnly.Guarantees.RecoveredBudget`)
 
 $$ \beta_v\,|\mathcal J_I| \;\le\; k' + \delta + \mathrm{amb}; $$
 
@@ -295,17 +295,17 @@ information are different situations even when a codec gives them the same lengt
 
 #### Structure: how much the held values support
 
-**Dependency** (`Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`): a **consumer** is something a block
+**Dependency** (`InferenceOnly.Capability.Consumers`, `InferenceOnly.Capability.Consumers.Upstream`): a **consumer** is something a block
 finishes, such as a use j (`Consumers.ofUses`) or an output accumulating many products (a weight's gradient over tokens,
 `Consumers.ofOutputs`). It has an upstream region A_j holding no registered gate, and required gates G_j ⊆ A_j, at least
 g of them. The **upstream certificate**, checkable on a named circuit, says every required gate reaches, inside A_j, a
-gate the consumer's finishing gates read. **Overlap weights** ω_j ≥ 0 (`Nci.Capability.Consumers.OverlapWeights`) sum to
+gate the consumer's finishing gates read. **Overlap weights** ω_j ≥ 0 (`InferenceOnly.Capability.Consumers.OverlapWeights`) sum to
 at most 1 over the regions holding any one gate: disjoint regions take 1 each, overlapping ones less. Then:
 
-- **import or recompute** (`Nci.Guarantees.ImportOrRecompute`): each served use either spends an imported gate of its
+- **import or recompute** (`InferenceOnly.Guarantees.ImportOrRecompute`): each served use either spends an imported gate of its
   region or contains G_j, so the served weight is at most k plus the weight of the recomputed uses;
-- **recomputing costs gates** (`Nci.Guarantees.RecomputeByGates`): the recomputed weight is at most c/g;
-- **recomputing costs updated state** (`Nci.Guarantees.RecomputeByState`): if every G_j needs updated state priced above
+- **recomputing costs gates** (`InferenceOnly.Guarantees.RecomputeByGates`): the recomputed weight is at most c/g;
+- **recomputing costs updated state** (`InferenceOnly.Guarantees.RecomputeByState`): if every G_j needs updated state priced above
   the held budget, nothing is recomputed.
 
 These hold for the counted uses with an upstream certificate: for those, the block must import the specified context or
@@ -343,8 +343,8 @@ statement.
 block's boundary count by the bits they represent; a compressed code counts as the code, and decoding it spends gates;
 values reconstructed inside the block spend gates. For decoding, whether cached keys and values cost fresh bits or gates
 is a question of the cheapest admissible placement and reconstruction, not of which data the argument elects to
-charge. The threaded read costs (`Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`), under which
-`Nci.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)), assume read costs rather than
+charge. The threaded read costs (`InferenceOnly.Threading.Threaded`, `InferenceOnly.Assumptions.WeightsIncompressible`), under which
+`InferenceOnly.Guarantees.ThreadedReads` proves q(c, k) = (k/β)·max(a_out, w_out·k/(4·a_in·b_w)), assume read costs rather than
 derive them; they are a candidate sufficient condition, not part of the repertoire.
 
 ### Part 3: the protocol forces most physical compute into those blocks
@@ -408,7 +408,7 @@ $$ \rho \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 
 
 and the bound holds except with probability η + δ: an accepted run reaches the target in less fleet-time only if it
 lacks the covered structure, which coverage allows below T_max with probability at most η
-(`Nci.Guarantees.CapabilityFloor`), or lies outside 𝒜, which protocol soundness allows with probability at most δ
+(`InferenceOnly.Guarantees.CapabilityFloor`), or lies outside 𝒜, which protocol soundness allows with probability at most δ
 (part 3). Let Ω_ref be the reference's count in the same convention and ζ_ref = Ω_ref/C_ref. Under the required-count
 floor Ω_* ≥ Ω_ref/α,
 
@@ -448,26 +448,26 @@ None of these is assumed silently; each would restate the conclusion:
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
 | Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.RegisteredCircuit`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
-| Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
+| Coverage | `InferenceOnly.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
-| Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
-| Structure | `Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`, `Nci.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
-| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.StatHeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` | Proved (`Proofs/Nci/Capability/`), over premises not yet tested |
+| Information premises | `InferenceOnly.Assumptions.DescriptionHard`, `InferenceOnly.Assumptions.MinEntropyHard`, `InferenceOnly.Assumptions.SourceHard`, `InferenceOnly.Assumptions.Recovers`, `InferenceOnly.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
+| Structure | `InferenceOnly.Capability.Consumers`, `InferenceOnly.Capability.Consumers.Upstream`, `InferenceOnly.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
+| The repertoire | `InferenceOnly.Guarantees.HeldBudget`, `InferenceOnly.Guarantees.StatHeldBudget`, `InferenceOnly.Guarantees.RecoveredBudget`, `InferenceOnly.Guarantees.ImportOrRecompute`, `InferenceOnly.Guarantees.RecomputeByGates`, `InferenceOnly.Guarantees.RecomputeByState` | Proved (`Proofs/InferenceOnly/Capability/`), over premises not yet tested |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
-| The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
+| The threaded refinement | `InferenceOnly.Threading.Threaded`, `InferenceOnly.Assumptions.WeightsIncompressible`, `InferenceOnly.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
 | The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`, which both run |
 | The utilization policy | not yet in Lean | Not a policy yet |
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
-| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
+| The inference-only policy | `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses`, `InferenceOnly.CompliesRate`, `InferenceOnly.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `InferenceOnlyCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.MonitoringPeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
-| Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
-| The floor | `Nci.Guarantees.CapabilityFloor` | Proved, under coverage |
+| Rate ceiling ζ̄ | the inline hypotheses of `InferenceOnly.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
+| The floor | `InferenceOnly.Guarantees.CapabilityFloor` | Proved, under coverage |
 | Slowdown | `Accounting.Slowdown.slowdown`, `Accounting.Slowdown.threshold`, `Accounting.Slowdown.cost` | Defined, with cost in fleet-time; no theorem reads it |
-| The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
+| The bounds | `InferenceOnly.Guarantees.DampenerRemote`, `InferenceOnly.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
 ## Three trees
 
@@ -541,7 +541,7 @@ PoUW has other guarantees, outside protocol soundness.
 
 Remote (`verity/protocols/compose/verifier/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes three subprotocols, SPOT (one-stage v2; the recursive audit refused), PoUW's period check
-(`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`NciCheck.Protocol`), and
+(`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`InferenceOnlyCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
 policy and the one-stage audit commit to one record and every window of the period names it as its Commit record
 (`Core.Composition.tiedSame`, `Core.Remote.windows`). Onsite holds the same two ties (`Core.Onsite.ties`) and adds PoUS,

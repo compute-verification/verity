@@ -9,13 +9,13 @@ from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[2]
 #: the policy's Lake package and the executable `served_cases.build` builds in it
-LEAN = (ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean", "inference-only")
-REFERENCE = LEAN[0] / "scripts" / "nci_reference.py"
+LEAN = (ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean", "inference-only")
+REFERENCE = LEAN[0] / "scripts" / "inference_only_reference.py"
 
 
 def reference() -> ModuleType:
-    """`nci_reference`, the Python the policy's Lean check is held to."""
-    spec = importlib.util.spec_from_file_location("nci_reference", REFERENCE)
+    """`inference_only_reference`, the Python the policy's Lean check is held to."""
+    spec = importlib.util.spec_from_file_location("inference_only_reference", REFERENCE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
