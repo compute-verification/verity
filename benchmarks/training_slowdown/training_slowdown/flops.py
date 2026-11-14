@@ -887,10 +887,12 @@ class Counter(TorchDispatchMode):
         """A fused attention kernel, counted as the ops the math kernel computes attention by, each on its own operands'
         provenance: they are the ops a step's trace holds (`capture` traces under the math kernel), so a job's record
         is one record under either kernel in its ops, their shapes and their MACs. Each row names the dtype of the
-        kernel's operands, the one a fused kernel computes in; the math kernel casts half-width operands to float32
-        first, and its rows, and a trace's nodes, name that. With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the
-        product of q's batch dims (k and v counted at q's heads, as grouped-query attention repeats them):
-
+        kernel's operands (`dtype_of` of the stand-ins `_shaped` makes in the query's), the one a fused kernel
+        computes in; the math kernel casts half-width operands to float32 first, and its rows, and a trace's nodes,
+        name that. A trace counts a call's ops at the dtype the call computes in all the same
+        (`capture.structure._counted_dtype`), so its gates there are this count's. With q [*b, L, E], k [.., S, E],
+        v [.., S, Ev] and n the product of q's batch dims (k and v counted at q's heads, as grouped-query attention
+        repeats them):
         - forward: the scalings of q and of kᵀ (`mul`, each by the root of the scale); the scores (`bmm`, [n, L, E] by
           [n, E, S]); a mask added to them, where that combines token data with an updated weight (`add`, as any
           such op counts); dropout's scaling of its keep mask and of the weights by it (`div_` and `mul`, at
@@ -898,6 +900,9 @@ class Counter(TorchDispatchMode):
         - backward, for the gradients the step asks for: v's product ([n, S, L] by [n, L, Ev]); the weights' ([n, L, Ev]
           by [n, Ev, S]) where q, k or the mask asks, and with it dropout's scaling; and for each of q and k its
           product ([n, L, S] by [n, S, E]; [n, E, L] by [n, L, S]) and its scaling.
+
+        The card's fused backward computes the scores again, a fifth product: this count, and the library's table with
+        it, holds six of the kernel's seven products, and a circuit of the kernel as it runs holds seven.
 
         What the step asks for is the kernel's own word where it takes one (`grad_input_mask`), else which of q, k and v
         require a gradient. A kernel that takes no such word computes all three gradients whatever `autograd.grad` was

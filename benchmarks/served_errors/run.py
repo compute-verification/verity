@@ -16,7 +16,7 @@ The served sizes it reads:
 - SPOT: the GLM-5.3 workload card (`benchmarks/spot_figures/cards/workload.glm-5.3.json`): its window of one
   request (the floor), and one request of 3,320.5 computed tokens (`benchmarks/spot_figures/breakeven/reprice.py`), at
   the card's cut.
-- Monitoring periods: `verity/protocols/reporting.py`'s week, month and year, in hourly phases.
+- Monitoring periods: `verity/protocol.py`'s week, month and year, in hourly phases.
 """
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ lg = math.log2
 CARD = Path(__file__).resolve().parents[1] / "spot_figures" / "cards" / "workload.glm-5.3.json"
 #: the prover's budget in SHA-512 calls, log2; each row also gives `2^64` where the budget moves it
 T = 80
-#: hourly phases in a week, a month and a year (`verity/protocols/reporting.py`'s PERIODS)
+#: hourly phases in a week, a month and a year (`verity/protocol.py`'s MONITORING_PERIODS)
 PHASES = {"week": 7 * 24, "month": 30 * 24, "year": 365 * 24}
 
 # Flock, one `--zk` session (`security/Proofs/Flock/Claims/NumbersDeploy.lean`): κ ≤ n·2^-202.98 at n tables, at most

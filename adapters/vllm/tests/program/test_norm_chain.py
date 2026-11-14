@@ -249,12 +249,9 @@ def test_rsqrt_of_widened_refused():
 
 def test_kinds_registered_in_the_pinned_vocabulary_only():
     from verity_vllm.program.frontend.rules.vocab import PROFILES
-    from verity.definitions.registry import dense as DN
-    from verity_vllm.program.quarantine.dense import mean_triton as q
     v3 = PROFILES["b1-eager-v3"]
     assert v3.kinds["mean_triton"](N=2304).id == "MeanTriton_v1{N=2304}"
     assert v3.kinds["attention_softcap"](T=5, NH=8, KVH=4, D=256, CAP=50.0).id == "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}"
-    assert q.MeanTriton is DN.MeanTriton, "quarantine must re-export the promoted Definition (no registry clash)"
     for k in ("mean_triton", "square_bf16", "narrow_f32_bf16", "gelu_tanh_mul", "attention_softcap"):
         assert k not in PROFILES["b1-eager"].kinds and k not in PROFILES["b1-eager-v2"].kinds, "the accepted b1-eager vocabularies are unchanged"
     assert PROFILES["dense2-eager-v1"].kinds.keys() == v3.kinds.keys()

@@ -1,7 +1,8 @@
 """The circuit database (`verity_vllm.pipeline.circuit_db`): the index, a TP row published from its row dir, pinned and loaded back
 by row id, its conformance (captures of record, named gaps, a property left silent refused), the in-stage manifest a manifest of record
 supersedes, a row file not done only at its public cap refused by publish, pull and switch before anything is written, a job's
-bundle read with no store, and a checkpoint's staging event."""
+bundle read with no store, a checkpoint's staging event, and the index's rule on its writers: a row names a record only beside that
+record's Programs."""
 from __future__ import annotations
 
 import gzip
@@ -445,6 +446,28 @@ def test_a_row_is_switched_by_a_comparison_equal_on_every_rank_and_publishes_onl
     art = circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
     assert circuit_db.index()[ROW] == {"record": art, "tier": "fast", "pinned_from": {"record": art, "build": build, "tree": "cursor/x@1b53f685a"},
                                     "manifest_digest": "mm", "programs": e["programs"], "aot": e["aot"]}
+
+
+def test_the_index_s_writers_leave_a_record_only_beside_its_own_programs(tmp_path, store, monkeypatch):
+    """`switch` moves no pinned row, so the record a row names stays beside the pins it was written with; `publish` and `pull` write
+    a record and that record's Programs together, over whatever the row pinned and named; and a switch at the record's own Programs
+    keeps both."""
+    d = _row_dir(tmp_path)
+    build, run, trace = _build_art(store, d, tmp_path / "run"), "r20261018-001500-aaaa", "art:" + "5" * 64
+    other = {"record": "art:" + "9" * 64, "tier": "fast", "pinned_from": {"build": "art:" + "8" * 64}, "manifest_digest": "m-other",
+             "programs": {r: {"step": "s", "workload": "w", "requests": {"build_request_LP9_T2": "q"}} for r in ("0", "1")}}
+    _w(circuit_db.INDEX, {"schema": CR.INDEX_SCHEMA, "rows": {ROW: other}})
+    with pytest.raises(UsageError, match="re-pin it first"):
+        circuit_db.switch(ROW, _comparison(d), run=run, trace=trace)
+    assert circuit_db.index() == {ROW: other}
+    art = circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", summary=_served(d))
+    published = circuit_db.index()[ROW]
+    assert (published["record"], published["pinned_from"]["record"], published["programs"]) == (art, art, epoch.build_programs(d))
+    switched = circuit_db.switch(ROW, _comparison(d), run=run, trace=trace)
+    assert {k: v for k, v in switched.items() if k != "aot"} == published
+    monkeypatch.setattr(circuit_db, "INDEX", tmp_path / "checkout.json")
+    _w(circuit_db.INDEX, {"schema": CR.INDEX_SCHEMA, "rows": {ROW: other}})
+    assert circuit_db.pull(art) == ROW and circuit_db.index() == {ROW: published}
 
 
 def test_switch_refuses_a_row_not_done_only_at_its_public_cap_before_it_touches_the_index(tmp_path, store):

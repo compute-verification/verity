@@ -6,7 +6,7 @@
 #   research run --on MACHINE --project verity --source . --cwd clone --timeout 240m \
 #     --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200.sh
 #
-# Outside any lease: the ship (build.sh's tree) unpacked into this directory and held to its MANIFEST.sha256, nvcc and the
+# Outside any lease: the ship (ship.sh's tree) unpacked into this directory and held to its MANIFEST.sha256, nvcc and the
 # card recorded.  MODEL (default glm53, GLM-5.3's one TP8 rank; llama32_1b, Llama-3.2-1B's on one card) names whose
 # in-domain linears every step below runs at (this directory's <MODEL>.py; glm53_passes.py and glm53_timing.py --model).
 # Under one lease of at most LEASE_MIN minutes (default 60): run.py's check at the fixture's shape with its

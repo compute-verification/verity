@@ -45,7 +45,7 @@ addopts = "-q -p no:cacheprovider"
 # tests/regression (the reference regression; skipped unless VERITY_REGRESSION=1) is run explicitly: `pytest tests/regression -m regression`.
 markers = [
     "slow: takes over about 5 s; deselect with -m 'not slow'",
-    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality on every merge)",
+    "boolean_sweep: a random Boolean-vs-word sweep; skipped unless VERITY_VLLM_BOOLEAN_SWEEPS=1 (circuit-check's word_view checks the equality, off the merge gate)",
     "regression: the v1 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
@@ -67,7 +67,6 @@ untraced = [
     "tests/lint/test_mypy.py",
     "tests/lint/test_ruff.py",
     "tests/lint/test_ruff_vllm.py",
-    "tests/migrate/test_superseded_quarantine.py",
     "tests/ops/test_epoch_row.py",
     "tests/ops/test_pod_bootstrap.py",
     "tests/ops/test_vllm_env.py",

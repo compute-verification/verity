@@ -249,7 +249,7 @@ until more types have runs of their own.
 
 ## The metrics
 
-`run.py`'s `METRICS` are four rows of `benchmarks/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
+`run.py`'s `METRICS` are the four rows of `benchmarks/prove/metrics.toml`: the prover GPUs a serving GPU needs (the headline),
 the prover GPU-seconds, the Lean verifier's seconds and the proof's bytes a served token, each SPOT's at the
 workload's sampling plan of record. Under a research run, `--system spot` writes them into the run's `result.json`
 through the harness kit (`prove_records.record`) and `--system flock` writes nothing; outside one neither writes, and

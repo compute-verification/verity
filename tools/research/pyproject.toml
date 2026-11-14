@@ -26,6 +26,7 @@ tmp_path_retention_policy = "failed"
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
     "tests/test_agents.py",
+    "tests/test_asker.py",
     "tests/test_at_main.py",
     "tests/test_auto.py",
     "tests/test_binprov.py",
@@ -86,7 +87,6 @@ untraced = [
     "tests/test_queue_stale.py",
     "tests/test_record_driver.py",
     "tests/test_record_result.py",
-    "tests/test_records_short_head.py",
     "tests/test_remote_adopt.py",
     "tests/test_remote_cwd.py",
     "tests/test_remote_local.py",
@@ -106,12 +106,14 @@ untraced = [
     "tests/test_scopemem.py",
     "tests/test_secret_hint.py",
     "tests/test_slack.py",
+    "tests/test_slot_only.py",
     "tests/test_spec_alert.py",
     "tests/test_steward.py",
     "tests/test_store_honing.py",
     "tests/test_store_labels_durability.py",
     "tests/test_store_prov.py",
     "tests/test_store_vllm_tools.py",
+    "tests/test_stranded.py",
     "tests/test_telemetry.py",
     "tests/test_tool_rules.py",
     "tests/test_treelock.py",
@@ -120,6 +122,7 @@ untraced = [
     "tests/test_vqueue_loop.py",
     "tests/test_vqueue_moves.py",
     "tests/test_vqueue_records.py",
+    "tests/test_vqueue_signed.py",
     "tests/test_vqueue_slim.py",
 ]
 # Test-only, and to move: some tests exercise this repository's Tools, workspace and fixtures rather than the tool itself.
@@ -140,10 +143,10 @@ untraced = [
 # tools/verity/check/gates/markdown_caps.py and tests/test_repository.py: test_queue commits them into its origin, so its sync
 # runs the Markdown caps' landing gate on the caps it reads. tools/verity/check/pins.py: test_queue commits it into its origin, so
 # the sync's pin rebuild (`repinned`) reads the real `PINS`. tools/verity/graph/tests/key_vectors.json: test_executor holds
-# the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_changed.py
-# and the files its `--inputs-key` loads (lean_audit.py, settings.py, module_keys.py, headers.py, check.py, siblings.py, axiom_probe.py,
-# tools/verity/check/common.py, slot.py, lean_slot.py, tools/verity/graph/verity_graph/contract.py): test_queue commits them
-# into its origin, so the records gate keys each commit's Lean inputs with its own code (`lean_keys`). tools/move/rename.py,
+# the executor client's graph/v2 key rule to the vectors both sides of the contract reproduce. tools/verity/lean/lean_audit.py
+# and the files it loads (settings.py, module_keys.py, headers.py, tools/verity/check/common.py,
+# tools/verity/graph/verity_graph/contract.py): test_vqueue_slim loads it (`vqueue_slim._declaration`), whose declaration names
+# a candidate's Lean inputs. tools/move/rename.py,
 # layout.py and restack.py: test_queue_moves_carry commits them into its origin and restacks a head across the moves they make.
 inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "benchmarks/numerical/bench-instances", "infra/ops", "adapters/vllm", "verity", "verity/circuits", "verity/circuits/kernels",
           "tools/verity/check/lean_slot.py", "tools/verity/check/slot.py", "tools/verity/check/tool.py", "tools/verity/check/drive.toml", "benchmarks/tc_probe",
@@ -154,9 +157,9 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "bench
           "infra/cluster", "tools/verity/lean/pyproject.toml", "tools/verity/lean/run_daily.py", "tools/verity/lean/merge.py",
           "tools/verity/lean/check.py", "tools/verity/check/suites.py", "tools/verity/check/gates/markdown_caps.py", "tests/test_repository.py", "tests/test_retired_terms.py", "tools/verity/check/pins.py", "benchmarks/native_peak/pyproject.toml",
           "benchmarks/tc_probe_fp4/pyproject.toml", "tools/move/rename.py", "tools/move/layout.py", "tools/move/restack.py",
-          "tools/verity/graph/tests/key_vectors.json", "tools/verity/lean/lean_changed.py",
+          "tools/verity/graph/tests/key_vectors.json",
           "tools/verity/lean/lean_audit.py", "tools/verity/lean/module_keys.py", "tools/verity/lean/headers.py",
-          "tools/verity/lean/siblings.py", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/settings.py", "tools/verity/check/common.py",
+          "tools/verity/lean/settings.py", "tools/verity/check/common.py",
           "tools/verity/graph/verity_graph/contract.py",
           "tools/verity/graph/verity_graph/__init__.py"]
 parallel = true
@@ -218,6 +221,7 @@ tests = [
     "tests/test_landing.py",
     "tests/test_mem_admission.py",
     "tests/test_merge_gate.py",
+    "tests/test_pods_address.py",
     "tests/test_remote_preflight.py",
     "tests/test_remote_ship_source.py",
     "tests/test_remote_version.py",

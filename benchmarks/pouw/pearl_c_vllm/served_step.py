@@ -4,7 +4,7 @@
   python served_step.py analyze REPORT.sqlite --steps DIR/steps.json --out DIR/step-profile.json
   python served_step.py table ARM_DIR... [--base stock-fp8_compiled] --out breakdown.json
 
-``run`` builds the arm's engine as verity-bench's worker does (`runner._VllmEngine` with the spec's preset, arm settings and
+``run`` builds the arm's engine as verity-bench's worker does (`engine._VllmEngine` with the spec's preset, arm settings and
 the arm's execution), runs its own gate, then ``--warmups`` and ``--reps`` runs of the point (`_VllmEngine.measure`: the
 harness's own metrics, ``reps.json``), and records every engine step's host phases (``steps.json``): its wall time, the
 tokens and requests it scheduled, the model runner's ``execute_model`` and ``sample_tokens``, and inside them the Pearl-C
@@ -146,7 +146,7 @@ def _live(arm):
 def _engine(spec_name: str, arm_id: str):
     from verity_bench.vllm.arms import resolve_arms
     from verity_bench.vllm.presets import load_spec, served
-    from verity_bench.vllm.runner import _VllmEngine, arm_execution
+    from verity_bench.vllm.engine import _VllmEngine, arm_execution
     from verity_vllm.engine.env import INDUCTOR_DIR_MARK
     spec = load_spec(spec_name)
     preset, eager = served(spec.preset, spec.eager)

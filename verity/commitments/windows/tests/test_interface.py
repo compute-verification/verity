@@ -1037,7 +1037,8 @@ def test_a_history_is_declared_by_its_writers_output_and_runs_and_read_as_a_tabl
 
 def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_the_description():
     """`input_count` counts each kind of input from the circuit's description alone, never its program; the one free row is
-    the third token. A declaration outside its port, units, parameter or table, or on a row another fills, is refused."""
+    the third token. A declaration outside its port, units, parameter or table, or on a row another fills, is refused, and
+    so is one whose reader is no template of the circuit, an opening as a read, a table read and an ingress are."""
     rec = declared().description()
     words = 3 * (2 + 32 + 32 + 16 + 96 + 64) + 6 * (16 + 128) + 3 * (16 + 256)
     assert I.input_count(rec, pins=PIN, roots=PIN) == {"units": 12, "inputs": 16 * words, "wired": 16 * (6 * 16 + 6 * 8),
@@ -1056,11 +1057,18 @@ def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_th
         (dict(registered=replace(reg, openings=(replace(reg.openings[0], verdict="o2"),))), "verdict"),
         (dict(registered=replace(reg, tables=(I.Table("embed", "weights", 512, 16, 5),))), "registered parameter's leaves"),
         (dict(registered=replace(reg, reads=(*reg.reads, I.Read(G8ID, "x", "weights", 0, (1,), 0, (0,))))), "both fill rows"),
+        (dict(registered=replace(reg, reads=(replace(reg.reads[0], reader="other"),))), "names no parameter of a template"),
+        (dict(registered=replace(reg, roots=(replace(reg.roots[0], reader="other"),))), "names no parameter of a template"),
+        (dict(registered=replace(reg, openings=(replace(reg.openings[0], reader="other"),))), "names no parameter of a template"),
+        (dict(ingress=(I.Ingress("other", "tok", 0, 2, 0),)), "names no parameter of a template"),
     ]:
         with pytest.raises(ValueError, match=why):
             declared(**edit)
     with pytest.raises(ValueError, match="both fill rows"):
         I.input_count({**rec, "ingress": [*rec["ingress"], {**rec["ingress"][0], "at": 1}]})
+    opening = {**rec["registered"]["openings"][0], "reader": "other"}
+    with pytest.raises(ValueError, match="names no parameter of a template"):
+        I.input_count({**rec, "registered": {**rec["registered"], "openings": [opening]}}, pins=PIN, roots=PIN)
 
 
 def test_a_registered_read_is_registered_only_where_the_windows_root_is_the_one_the_verifier_pinned_before_the_run():

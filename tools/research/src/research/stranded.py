@@ -66,7 +66,7 @@ TRAIN_GB = 200
 NO_ASK_GB = AUTO_MEM_GB
 #: where auto.PROBE's functions end and its own ending begins
 MARK = "\n\nout = {}\n"
-PEERS = "/etc/vy/peers"
+PEERS = auto.PEERS_FILE
 SLOT_PY, LEAN_SLOT_PY = auto.SLOT_PY, auto.LEAN_SLOT_PY
 #: the tree this module runs from: its slot.py and lean_slot.py are the ones sent
 TREE = Path(__file__).resolve().parents[4]
@@ -106,14 +106,6 @@ def scrub(x):
     if isinstance(x, dict):
         return {k: scrub(v) for k, v in x.items() if k != "cmd"}
     return [scrub(v) for v in x] if isinstance(x, list) else x
-
-
-def peers():
-    try:
-        lines = open(PEERS).read().splitlines()
-    except OSError:
-        return None
-    return sorted({f[0] for f in (ln.split("#")[0].split() for ln in lines) if len(f) >= 2})
 
 
 def available_gb():
