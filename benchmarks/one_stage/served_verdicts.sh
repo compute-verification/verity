@@ -1214,7 +1214,7 @@ day_held() {  # a follow-on under DAY: the deferral's copy of the day's log, whi
   local got
   got=$("$TREE/.venv/bin/python" -c 'import json, sys
 from verity import device as S
-from verity.hardware import registration as G
+from verity.protocols.accounting.registration.verifier import registration as G
 decl, day = json.load(open(sys.argv[1])), int(sys.argv[3])
 composite, log = G.log_of(json.load(open(sys.argv[2])))
 p = G.params_of(json.load(open(sys.argv[4]))) if len(sys.argv) > 4 else (composite, S.Auditor())

@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity import device as ST
-from verity.hardware import registration as G
+from verity.protocols.accounting.registration.verifier import registration as G
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_day as SD
 from verity_vllm.pipeline import serve_h1 as SH
