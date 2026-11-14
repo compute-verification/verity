@@ -177,6 +177,8 @@ class NodeWindow:
         self.outs: dict[int, _Out | str] = {}
         self.free: list[Free] = []
         self.ingress: list[IF.Ingress] = []
+        #: the circuit's external ports (`interface.Circuit.external`): each select's combine's token (`node_window_select`)
+        self.external: list[str] = []
         #: each registered entry a lowering lays out from the weights record (`node_window_sparse.entry`), by parameter: the
         #: record's leaves it holds, in turn
         self.entries: dict[str, Refs] = {}
@@ -539,8 +541,8 @@ class NodeWindow:
 
     def circuit(self) -> IF.Circuit:
         """The lowered units settled (`_Builder.settle`) and emitted as one Circuit: its registered reads the weights', its
-        ingress the prompt's reads (`ingress`), its blocks one slot (the request) at the Program's steps, its free ports the
-        ones `free` lists."""
+        ingress the prompt's reads (`ingress`), its external ports `external`, its blocks one slot (the request) at the Program's
+        steps, its free ports the ones `free` lists."""
         if not self.lowered:
             self.lower()
         b = self.b
@@ -559,7 +561,7 @@ class NodeWindow:
         wires = tuple(IF.coalesce(b.wires))
         starts = {tid: [at for at, _n, _slot, _step in spans] for tid, spans in b.spans.items()}
         return IF.Circuit(self.name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()), wires=wires, cuts=b.cuts,
-                          registered=reg, ingress=tuple(self.ingress),
+                          registered=reg, ingress=tuple(self.ingress), external=tuple(self.external),
                           blocks=IF.Blocks(1, self.steps, tuple(inference(b.spans, 1))),
                           order=IF.ordered(b.units, wires, starts) if wires else None)
 

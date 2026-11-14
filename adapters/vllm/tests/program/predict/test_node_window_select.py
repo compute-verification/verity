@@ -145,6 +145,7 @@ def test_joined_with_select():
     (stop,) = [t for t in circuit.units if t.startswith("GreedyStopCheck_v1{")]
     ids = sorted((x.at, x.cut, x.writer, x.base) for x in circuit.wires if x.reader == stop and x.port == "ids")
     assert circuit.units[stop] == 1 and ids == [(0, (0, 1), combine, 0), (0, (1, 1), combine, 1)]
+    assert circuit.external == (f"{combine}/o0",)
     assert {(x.port, x.writer, x.base) for x in circuit.wires if x.reader == stop and x.port.startswith("r")} == {
         (f"r{c}", descriptor_id(G.plan(V)[c].defn), 1) for c in range(K - 1)}
     assert not [f for f in w.free if f.tid == stop and f.port != "logits"]

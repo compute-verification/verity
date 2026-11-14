@@ -2,7 +2,8 @@
 `greedy_stages`): a `TokenSelect_v4{V}` node (or the `TokenSelect_v1{V}` row it is the function of) as the units of
 `greedy_stages.plan(V)`, the K - 1 chunks `GreedyChunk_v2{N,OFF}`, each its own template, then the combine
 `GreedyCombine_v2{V,N}`, which reads the last chunk's lanes itself and each other chunk's result through its parameter
-``r<c>``. The node's output is the combine's one field, the token's low and high words, which are its I32's two words.
+``r<c>``. The node's output is the combine's one field, the token's low and high words, which are its I32's two words, and
+the combine's ``o0`` is an external port of the circuit (`NodeWindow.external`).
 
 `TokenSelect_v4` and `TokenSelect_v1` are one function: from (logits[0], 0), lane i is taken iff it is strictly above the
 best (``Bf16GtStrict_v1``), so the lowest index of the largest logit wins, a NaN is never taken and the token is 0 when
@@ -144,6 +145,8 @@ def token_select(w: NodeWindow, j: int, node: Any) -> None:
             w.feed(t, param, a, [(Row(wt, wa + m, "o0", 3),) for m in range(M)], (M,))
     w.combines[j] = (V, N, M, grids, [(param, *at[key]) for param, key, _field in plan[-1][0].wires])
     t, a = at[plan[-1][0].key]
+    if f"{t}/o0" not in w.external:
+        w.external.append(f"{t}/o0")
     w.out(j, node, [Piece(0, 2, Row(t, a, "o0", 2), 1, 1)])
 
 

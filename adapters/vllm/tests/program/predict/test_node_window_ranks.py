@@ -54,6 +54,7 @@ def test_eight_ranks_joined():
     j = NJ.join(ranks)
     assert isinstance(j.circuit, IF.Circuit) and not j.unwired
     assert j.circuit.units == {t: WORLD * n for t, n in ranks[0].circuit.units.items()}
+    assert j.circuit.external == ranks[0].circuit.external
     peers = [(x.rank, f) for x in ranks for f in x.free if f.kind == "peer"]
     assert len(j.wired) == len(peers) and {(r, f.name) for r, f in j.wired} == {(r, f.name) for r, f in peers}
     assert j.free == ()

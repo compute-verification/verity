@@ -210,7 +210,8 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
     wires += IF.coalesce(added)
     ingress = tuple(replace(g, at=g.at + first[x.rank][g.reader]) for x in ranks for g in x.circuit.ingress)
     circuit = IF.Circuit(name, tuple((fns[tid], total[tid]) for tid in fns), wires=tuple(wires), cuts=cuts,
-                         registered=registered, ingress=ingress, blocks=IF.Blocks(1, ranks[0].steps, tuple(inference(spans, 1))),
+                         registered=registered, ingress=ingress,
+                         external=tuple(dict.fromkeys(e for x in ranks for e in x.circuit.external)), blocks=IF.Blocks(1, ranks[0].steps, tuple(inference(spans, 1))),
                          order=IF.ordered(dict(total), wires, starts))
     return Joined(circuit, first, tuple(free), tuple(wired), tuple(unwired))
 
