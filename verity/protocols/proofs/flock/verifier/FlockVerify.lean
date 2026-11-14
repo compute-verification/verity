@@ -845,7 +845,8 @@ def UPSTREAM_PLAIN : String :=
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins tree] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`), and every session of a legacy
-statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`); `--comp` is the row leaf's
+statement (`ProvedScope.legacyStatements`) is refused before any file is read (`ProvedScope.legacyWhy`), as is every session of a
+wide-leaf statement (`Tags.wideLeaf`) without `--zk` or with a `--rec-…` argument (`ProvedScope.wideLeafWhy`); `--comp` is the row leaf's
 pinned compression circuit; `J` (default 1) is the tables of every session (`Stmt.setupTables`), which split one sample of fixed count, a
 subset or a stratified one, into `J` equal parts (`Draw.tablesWhy`). A session with a work sample needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified sample its own
@@ -999,6 +1000,9 @@ def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List Strin
     IO.eprintln "verify --zk: a --zk session's coins are its keyed coin tree, so --coins (a plain session's) does not apply"; return 2
   if zk && tags.plainLeaves then
     IO.eprintln s!"verify --zk: refused: {tags.name}, a statement with plain SHA-512 leaves (flock-leaf/sha512-unsalted): --zk's hiding needs hm96-sha512/v1 leaves"
+    return 2
+  if let some why := ProvedScope.wideLeafWhy tags zk (args.any (·.startsWith "--rec-")) then
+    IO.eprintln s!"verify: {why}"
     return 2
   let some coins := if zk then some (Coins.tree (Zk.coinSpec (tags.tableNames count)))
       else plainCoinsArg (argOf args "--coins") (tags.tableNames count)

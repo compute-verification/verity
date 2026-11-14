@@ -558,7 +558,7 @@ def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str 
             "hf": {"repo": G.HF_REPO, "revision": G.HF_REVISION, "file": G.HF_FILE, "url": G.HF_URL, "header": st.header_info(),
                    "fused_row_order": "vLLM TP=1: qkv_proj rows = q_proj (1536) | k_proj (256) | v_proj (256); gate_up_proj rows = gate_proj (8960) | up_proj (8960); "
                                       "lm_head = model.embed_tokens.weight (tie_word_embeddings, no lm_head.weight in the checkpoint)",
-                   "tensors": tensors, "rows_per_activation": G.ROWS_PER_X, "drawn_rows": {f"{fam}/layer-{layer}": rows for (fam, layer), rows in rows_of.items()}},
+                   "tensors": tensors, "rows_per_activation": G.ROWS_PER_X, "sampled_rows": {f"{fam}/layer-{layer}": rows for (fam, layer), rows in rows_of.items()}},
             "tiers": {
                 "vu-k1536": {"n": N_VU, "K": K, "steps": STEPS, "block": BLOCK, "corners_per_block": CORNERS_PER_BLOCK, "corner_slots": list(CORNER_SLOTS),
                              "composition": {"real": N_VU - n_corner, "real_seed": len(seeds), "real_other_rows": N_VU - n_corner - len(seeds), "corner": n_corner,

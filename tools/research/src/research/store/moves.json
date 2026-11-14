@@ -2440,6 +2440,21 @@
     },
     {
       "paths": {
+        "fixtures/typed-obligation-v0/": "benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/pouw/edited_gemm/": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/",
         "benchmarks/pouw/masked_gemm/": "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/",
         "benchmarks/pouw/floored_gemm/": "verity/protocols/accounting/pouw/prover/kernels/floored_gemm/",
