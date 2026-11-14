@@ -38,3 +38,54 @@ PERIODPROOF2: #10103's head d6430eb02f335a0f2be12da7d6c5b126ae9a9bca is in the c
 - Runs, already cancelled: r20261114-171142-2057, r20261114-174333-79c6, r20261114-170028-cfc3, r20261114-165220-2414. Done rc 0: r20261114-180132-a756 (#8829's records) and r20261114-174638-1a89 (suites at b8c7a6ee); their outputs were not fetched.
 - Next: #8829, #9350 and #9641 into the collect branch, one line each. #9641 has `check_clock`, which the clock-form deletion removes.
 
+[2026-11-14T20:28Z] e0037f30010f
+MODEL: Claude Opus 5.5
+GATERELAY2 (Worker 3: the cases and what stays), 12:27 PM PST. Pushed to cursor/na-architecture-b51f.
+- Head: 178cc3e16145. The collect branch after the push: 178cc3e16145 [ran].
+- My base: a38521777993, which holds the Layout-move e97a534ec829 [ran].
+- I merged the branch's tip 4163f90b8ff once. It was clean, with no file resolved by hand [ran]. There was no new move to cross.
+- Everything touched passes py_compile, and the `.sh` drivers pass `bash -n` [ran]. No Lean and no statement changed.
+
+The four cases. None imports benchmarks/ or another distribution now [ran: test_boundaries and test_integration_boundaries list none of the four modules].
+- scan_period: it read nothing from benchmarks/. I deleted the three `sys.path` lines and the six `noqa: E402` waivers they left unused.
+- block_certifier: `OWNER` read benchmarks/network_traces/site.json. It is gone, and `block_leg(..., owner=None)` takes the owner from its caller. `chain_record` no longer calls it, since CLOCKGONE's change is in. test_block_certifier passes `owner`.
+- window_chain: it read `verity_vllm.pipeline.window_advice`. That is inverted through the `typing.Protocol` `WindowAdvice`, so `join(windows, release, WA)` takes the advice module as an argument. network_e2e/chain.py:300 and its test_chain pass the vLLM adapter's module.
+- stop_verdicts: it read `leak_bounds`' `RUN_NOT_PROVED`, `Stop` and `NO_RECORDS`. These moved into stop_verdicts, and leak_bounds binds the same names to them, so every `LB.Stop` and `LB.NO_RECORDS` still holds.
+
+What stays imports moved modules by package name. In benchmarks/network_traces/:
+- chain_record.py:713 and :425 (`kind_of`, which arrived with the merge);
+- deviations.py:127;
+- compile_slice_zk.py:100, :714 and :817;
+- tests/test_certifier_piece.py, test_leak_bounds.py, test_served_session.py, test_chain_record.py (the unused n2_zk load dropped), test_warden_chain.py, test_capture_flows.py and test_negatives.py. The moved tests' helpers come from `verity.protocols.accounting.certifier.{device,prover}.tests.test_*`.
+
+The drivers run `python -m verity.protocols.accounting.certifier.{device,prover}.X`: capture_loopback, chain_record, egress_zk, n2_tie_zk, n2_zk, scan_period, scan_zk, warden_zk (line 33's broken `warden_serve.py rehearse` included) and wipe_gate.
+
+The anchors:
+- network_e2e/chain.py: dropped its `sys.path` to network_traces, which it no longer needs.
+- network_e2e/traces/corpus.py's docstring now says why that path is still on: `warden_serve`'s own bare imports.
+- verity_vllm/program/predict/scan_state.py:27: the comment names `verity.protocols.accounting.certifier.prover.scan_zk.W63`.
+- certifier_term/run.py, one_stage test_served_verdicts and scan_cost test_scan_cost name only files that stay. They need nothing.
+
+For the close's lists, from my group. Grow none by hand.
+- BENCHMARKS_IMPORTERS (tests/test_boundaries.py:130):
+  - verity/protocols/accounting/certifier/prover/tests/test_block_certifier.py:80 loads benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py by path, with its schema and its period-0 fixture (E2E at :24). The test holds the leg to the block record.
+  - .../prover/tests/test_stop_verdicts.py:26 puts benchmarks/network_traces on sys.path for `import leak_bounds as LB` at :28.
+- KNOWN (tests/test_integration_boundaries.py:35): .../prover/tests/test_window_chain.py:10 imports `verity_vllm.pipeline` (the test hands `WA` to `join`).
+- Either list's entry goes if those three tests move back to benchmarks/network_traces/tests, which I'd propose for a later map.
+
+Not mine, found on the way:
+- prover/scan_zk.py:1331 and :1334 use `RG` with no import (ruff F821). It is already so on a38521777993.
+- prover/tests/test_scan_zk.py:44 loads benchmarks/network_traces/scan_zk.py by its old path.
+- one_stage/tests/test_a5_warden.py:32 does `import test_warden_serve` bare.
+- device/tests/test_connection_rows_run.py:32 does `import test_stop_verdicts` bare.
+- I edited only the lines of prover/tests/test_block_certifier.py and test_window_chain.py that my API change needed: `owner=`, `WA`, and their head's `sys.path` lines. TERMGB2 can skip those.
+- For SUITESPLIT: the prover suite runs lake and needs flock-verify, so it belongs in suites.py's `AFTER_LEAN`. network_traces/pyproject.toml's untraced `test_leak_guard`, `test_scan_zk_challenger` and `test_scan_zk_lean_one`, its `test_block_certifier` reads entry and its flock-verify artifact now name moved tests. I have drafts and wrote none of them.
+
+Tests, by file [ran, locally]:
+- Pass: prover test_block_certifier (2) and test_window_chain (4).
+- network_e2e test_chain: 8 pass and 1 fails. That one is `..._carry_once`: its fixture endpoint_carry/advice_trace.jsonl is an art: id not fetched here, so it never reaches `join`.
+- test_stop_verdicts, test_leak_bounds and device test_certifier_term pass 65 only with device/ and prover/ on PYTHONPATH. Without that they stop at collection on `certifier_key` and `leak_scan`, the moved programs' own bare imports.
+- The staying tests above, with only the root and network_traces on the path, stop at collection on `certifier_key` (3), `leak_scan` (1) and `test_stop_verdicts` (1). With the moved directories on the path, only test_certifier_piece and test_warden_chain still fail, on test_scan_zk.py:44's old path.
+- tests/test_boundaries is red on the place listing, regenerated at the close.
+TIMER: none
+
