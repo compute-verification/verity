@@ -275,7 +275,7 @@ def registryFn (j : Json) : V Json := do
     | .null => pure ({} : Registry)
     | v => Registry.ofJson v
   let ops ← (← J.arr j "ops" "input").mapM opOf
-  let mut drawn : Array Registration := #[]
+  let mut sampled : Array Registration := #[]
   let mut out : Array Json := #[]
   for op in ops do
     match op with
@@ -284,12 +284,12 @@ def registryFn (j : Json) : V Json := do
       r := r'
       match reg? with
       | some reg =>
-        drawn := drawn.push reg
+        sampled := sampled.push reg
         out := out.push (Json.mkObj [("codec_seed", hexJ reg.codecSeed), ("digest", hexJ reg.digest)])
       | none => out := out.push refusedJ
     | .session which params coins appendCoins notBeforeNs index f g =>
       let reg ← match which with
-        | .inl i => match drawn[i]? with
+        | .inl i => match sampled[i]? with
           | some reg => pure reg
           | none => throw s!"no registration drawn at {i}"
         | .inr reg => pure reg
@@ -706,10 +706,10 @@ private def spanResultJ (x : Session.Result × Session.State) : Json :=
 none); refused for a window with no samples awaiting their check. -/
 def spanPublicFn (j : Json) : V Json := do
   let (s, t) ← sampledRun j
-  let some (w, drawn) := s.awaiting t | throw "the window has no draws awaiting their check"
-  pure (Json.mkObj [("draws", .arr (drawn.map pairJ)), ("rows", .arr (drawn.map fun (i, p) =>
+  let some (w, sampled) := s.awaiting t | throw "the window has no draws awaiting their check"
+  pure (Json.mkObj [("draws", .arr (sampled.map pairJ)), ("rows", .arr (sampled.map fun (i, p) =>
     Json.mkObj [("pub", toJson (Span.publicWords s.reg w i p)), ("signs", toJson (Span.signWords s.reg w i))])),
-    ("supplied", (Span.supplied s.reg w drawn).getD .null)])
+    ("supplied", (Span.supplied s.reg w sampled).getD .null)])
 
 /-- `{session…, "t", "layout", "held": [{"public", "instances"}]}`: window t decided by `Span.spanHeld` on the public
 files given, taken as accepted (`Session.verifyHeld`). -/

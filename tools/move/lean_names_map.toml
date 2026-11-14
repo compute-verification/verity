@@ -526,10 +526,11 @@ files = [
 ]
 words = { "transcriptOf" = "traceOf" }
 
-# proofs: move_check drops it here: the file spells `runFailures` already (line 155)
+# proofs: `runFailures` is the file's other check (ranks-run's), so ranks-window's, which reads the served pairs,
+# takes `servedFailures`
 [[words_in]]
 files = ["verity/protocols/proofs/spot/verifier/lean/Spot/Ranks.lean"]
-words = { "windowFailures" = "runFailures" }
+words = { "windowFailures" = "servedFailures" }
 
 # proofs, compute-accounting, top
 [[words_in]]
