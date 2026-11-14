@@ -2,7 +2,7 @@
 and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror
 and its Lean.
 
-    python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
+    python verity/protocols/accounting/certifier/prover/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
 * **The case** (`rows_case`) of execution phase W: the parameters the network certifier run's ``deployment.json`` (its key and its
@@ -63,9 +63,9 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402

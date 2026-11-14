@@ -207,7 +207,7 @@ _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\
 
 ALLOWED: dict[str, str] = {
     "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
-    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`benchmarks/network_traces/scan_zk.py`): "
+    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`verity/protocols/accounting/certifier/prover/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
                                                         "(`certifier.service`): `Spec.digest` hashes it",

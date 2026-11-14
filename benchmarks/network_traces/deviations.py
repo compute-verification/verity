@@ -127,7 +127,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for bench
 from runner_cli import _address, _announce  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import negatives as N  # noqa: E402
-from benchmarks.network_traces import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_tie as IT  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import release as REL  # noqa: E402

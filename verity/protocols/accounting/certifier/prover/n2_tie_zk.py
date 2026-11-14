@@ -7,7 +7,7 @@ and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
 
-    python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
+    python verity/protocols/accounting/certifier/prover/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`PARAMS`, the pinned size class): a span, three id requests of 5, 40 and 5 prompt tokens
@@ -65,9 +65,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import NamedTuple
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 import leak_scan as LS  # noqa: E402
@@ -185,7 +185,7 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     certifier's run"): each window's rows under the network certifier's salts, held to the head the verifier read off
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
     doesn't hold."""
-    from benchmarks.network_traces import warden_serve as WS
+    from verity.protocols.accounting.certifier.device import warden_serve as WS
     from verity.protocols.accounting.certifier.verifier import record_files as RF
 
     dep = json.loads(_found(run, "deployment.json").read_text())

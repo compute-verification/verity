@@ -289,7 +289,7 @@ A spec-level reference for network accounting's timing channel:
   `io_tie.parse_cell` reads it ("The egress record"), and fails the connection (`format`) at any other, never
   rewriting it. It records and certifies exactly the cells it sends, and each failure's reason in a third record,
   `fails`.
-  `PROTOCOL.md`'s "The active network certifier" has its leak bound, and `benchmarks/network_traces/warden_serve.py`
+  `PROTOCOL.md`'s "The active network certifier" has its leak bound, and `verity/protocols/accounting/certifier/device/warden_serve.py`
   runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
   0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
@@ -307,7 +307,7 @@ A spec-level reference for network accounting's timing channel:
   certifier's signer, beside a salted digest of the window's wiring. The registration is what a proof block's
   `--registered` port reads, and the verifier places each read, the (connection, cell) the Program's proof blocks'
   wiring pins (`Units`, whose digest the port's value names), with the network certifier's wiring (`PROTOCOL.md`,
-  "The network certifier's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+  "The network certifier's cells as rows"; `verity/protocols/accounting/certifier/prover/warden_zk.py`);
 - the network certifier's connection rows (`connection_rows`), in a schedule with lengths rows
   (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
   and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
@@ -342,7 +342,7 @@ A spec-level reference for network accounting's timing channel:
   (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
   `check_registration` is the verifier's read of it for the transfer it expects, and `port` the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
-  `benchmarks/network_traces/load_relay.py`);
+  `verity/protocols/accounting/certifier/device/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class window circuit, and which host runs which
   units, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
   proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public, and its ``blocks``
@@ -389,7 +389,7 @@ A spec-level reference for network accounting's timing channel:
   unit, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
   its anchor. A window whose network certifier refused a connection, traffic past its slots, has no certified record, and the
   period check refuses it. `Class.serves` names the network certifier parameters it takes every run of.
-  `benchmarks/network_traces/scan_zk.py` proves both sides of a group of execution phases in one registration: ingress unit
+  `verity/protocols/accounting/certifier/prover/scan_zk.py` proves both sides of a group of execution phases in one registration: ingress unit
   t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
   t + 1 and egress unit t read, and egress unit t's row as a registered read of the network certifier's egress row t, so the
   chains are wires through the registered roots;
@@ -463,7 +463,7 @@ N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` pr
 block (`NetworkTransferBlocks` v5, served `NetworkServedTransferBlocks` v4) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
 output row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`),
-and the window's sync is declared. It reads no head, salt or sibling. `benchmarks/network_traces/n2_zk.py` proves a
+and the window's sync is declared. It reads no head, salt or sibling. `verity/protocols/accounting/certifier/prover/n2_zk.py` proves a
 certifier-serve run's execution phases this way through the link's own stream, and scans what the verifier received. The
 in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's

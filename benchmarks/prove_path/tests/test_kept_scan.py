@@ -45,7 +45,7 @@ import prove_path as PP  # noqa: E402
 with PP.network_traces():
     import certifier_piece as CP
     from benchmarks.network_traces import warden_chain as WCH
-    from benchmarks.network_traces import warden_serve as WS
+    from verity.protocols.accounting.certifier.device import warden_serve as WS
 
 _spec = importlib.util.spec_from_file_location("scan_traffic", ROOT / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py")
 ST = sys.modules["scan_traffic"] = importlib.util.module_from_spec(_spec)

@@ -29,7 +29,7 @@ from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.accounting.certifier.verifier.warden import END
 
-HERE = Path(__file__).resolve().parents[1]
+HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE / "tests"))
 import test_warden_serve as tws  # noqa: E402
 

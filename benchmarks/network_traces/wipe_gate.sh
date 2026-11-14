@@ -68,7 +68,7 @@ release() {   # on every exit: the leak guard on the run dir and the hold, which
     exit "$rc"
   fi
   [ -z "$RUN" ] || [ ! -e "$KEEP/$RUN/fetch.tar.gz" ] || gates=(--gates "$KEEP/$RUN/fetch.tar.gz")
-  "${PY:-python3}" benchmarks/network_traces/leak_guard.py "${RESEARCH_RUN_DIR:-$(dirname "$PUB")}" "$Q" \
+  "${PY:-python3}" verity/protocols/accounting/certifier/device/leak_guard.py "${RESEARCH_RUN_DIR:-$(dirname "$PUB")}" "$Q" \
     ${gates[@]+"${gates[@]}"} --hold "$HELD" --release-to "$PUB" --report "$PUB/leak-guard.json"
   g=$?
   if [ -n "$SIGNALED" ]; then echo "wipe gate: $SIGNALED ended the leak guard (exit $g): nothing more released"; exit 143
