@@ -2136,6 +2136,8 @@ def prove_carried(a) -> int:
     """``prove --carried``: the carried shape's rounds (`carried`) proved in order on one verifier's log, each
     link-window's record after the first naming the record before it: every unit sampled, each member proved --zk and
     held by Lean, the start member's ``sin`` against the root and domain the verifier took from its log (`carry_of`).
+    The log takes a record only once its audit accepted it with every opened output 1, so no start is read from a
+    link-window the verifier refused: the link-window after one stops at `carry_of`.
     A ``carried-<w>`` round is as expected when it is accepted with every output 1, the verdicts of record opened its
     start against that root, its record's changed forms are refused as named, and, after the first, its start's leaf
     is the round before's frame leaf byte for byte (`frame_leaf`); the stale round when Lean's registered reads refuse
@@ -2182,7 +2184,7 @@ def prove_carried(a) -> int:
         carry = carry_of(pg, cls, records, r.members[0].ports["sin"])
         av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
         res = audit(M, av, r.at, pg, r.name, members, r.trees, out / r.name, a.port and a.port + 8 * j, carry=carry)
-        if res["checks_before_draw"]["registration"]:
+        if res["window_accepted"]:
             records.append(json.loads((out / r.name / "registration.json").read_text()))
         inst = out / r.name / "instances.bin"
         inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
