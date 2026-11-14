@@ -2793,6 +2793,11 @@
       "paths": {
         "benchmarks/pouw/commit_gpu/": "verity/commitments/cuda/commit_gpu/"
       }
+    },
+    {
+      "paths": {
+        "demos/onsite_served/config.toml": "demos/onsite_full.toml"
+      }
     }
   ]
 }

@@ -165,7 +165,7 @@ HEADER = ("The onsite run of the served window: onsite's seven subprotocols, eac
 
 
 def configuration(commit: str) -> dict[str, Any]:
-    """The configuration `demos/onsite_served/config.toml` holds, at program ``commit``: `config new`'s over
+    """The configuration `demos/onsite_full.toml` holds, at program ``commit``: `config new`'s over
     `PROTOCOLS`, each party at its `PLACEMENT`, the workload's and PoUS's parameters stated, and the memory challenger's
     `PINS`."""
     cfg = K.new(SERVED_WINDOW, list(PROTOCOLS), MANIFESTS, {SERVED_WINDOW: SERVED}, commit)
