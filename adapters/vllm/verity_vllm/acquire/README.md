@@ -19,9 +19,11 @@ Value acquisition: how a served run's values reach the Commit. The package's doc
   `differences`, `pinned`, `seed`, `winners` and the command `verity-vllm served-pin`. `served_device` gives `card_of`
   and `device_of`. `served_moe` gives `REQUIRED` and `expand`. `stage` gives `MANIFEST_ENV` and `plan_at_stage`. Each
   of these modules states an `__all__`, which holds its names here, a command's `COMMANDS` and `main`, and what the
-  package's own modules read from it. The names of `sources` are not listed here.
-- **Loaded by:** the integration's `pipeline`, `commit`, `program.predict`, `properties` and `protocols` packages,
+  package's own modules read from it by a public name; `h1_commit`'s holds every public name it defines. The names
+  of `sources` are not listed here.
+- **Loaded by:** the integration's `pipeline`, `commit`, `program.predict` and `protocols` packages,
   `benchmarks/served_commit` and `benchmarks/harness`.
-- **Loads:** torch, and vLLM inside functions; the integration's `engine`, `query`, `commit`, `config`,
-  `settings`, `program`, `protocols`, `correspondence`, `records` and `log`; and `verity.definitions`,
-  `verity.circuits` and `verity.hardware`.
+- **Loads:** torch and numpy, vLLM inside functions, and Triton in the norm tap's kernel
+  (`norm_tap_src.rms_norm_tap`); the integration's `engine`, `query`, `commit`, `config`, `settings`, `program`,
+  `protocols`, `correspondence`, `records` and `log`; and `verity.definitions`, `verity.circuits` and
+  `verity.hardware`.
