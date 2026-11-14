@@ -197,3 +197,12 @@ def test_the_relay_keeps_its_place_through_an_unmounted_log_and_a_failed_post(tm
     fail_on.clear()
     W.relay(ns)
     assert posted == ["t0", "t1", "t2", "t3"]
+
+
+def test_kubectl_that_times_out_names_no_pod_and_says_why(monkeypatch, capsys):
+    def slow(*a, **kw):
+        raise W.subprocess.TimeoutExpired("kubectl", 60)
+
+    monkeypatch.setattr(W.subprocess, "run", slow)
+    assert W.kube_pods("/nowhere/kubeconfig") == {}
+    assert "write_probe: kubectl's pods unread, so no pod is named (TimeoutExpired" in capsys.readouterr().err
