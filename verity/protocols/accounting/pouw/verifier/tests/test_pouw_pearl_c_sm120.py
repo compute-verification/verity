@@ -30,8 +30,8 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES, H100, SM120, SM120_UNPROMOTED, Device, Prices
 
-# the clear audit is a reference tool (verity/protocols/accounting/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
+# the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
 import clear_work as CW  # noqa: E402
 
 SM120_ATOM = BLACKWELL_SM120_E4M3_M16N8K32

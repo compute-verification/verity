@@ -59,8 +59,8 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.verifier import audit as au
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, tagged
 
-# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 import clear_audit as CA
 import clear_work as CW
 
