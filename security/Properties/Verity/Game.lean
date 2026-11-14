@@ -237,10 +237,10 @@ def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
 /-- **The inference-only policy's case in what the prover sent composite `k`**, decoded: the three byte strings decode
-under the composition's formats, one of the subprotocols' cases is the policy's (`NciCheck.Protocol.protocol`, which
-reads no blobs, as one of `k`'s subprotocols), and under the parameters `k` names for it that case decodes to the
-policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k NciCheck.Protocol.protocol s`
-without the check's acceptance. -/
+under the composition's formats, one of the subprotocols' cases is the policy's (its protocol, which reads no blobs,
+as one of `k`'s subprotocols), and under the parameters `k` names for it that case decodes to the policy's parameters
+`p`, its record `c` and its evidence `e`. It is `CaseAccepts` of the policy's protocol, without the check's
+acceptance. -/
 def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : NciCheck.Protocol.Params)
     (c : NciCheck.Protocol.Commitment) (e : NciCheck.Protocol.Evidence) : Prop :=
   ∃ ps cm ev, Decoded s ps cm ev ∧
@@ -866,8 +866,8 @@ files until both exist. Neither is a premise of the claim.
 
 1. **The case's wires are the committed record's wires.** The circuit the clause speaks of is the Program's own layout.
    SPOT's claim is on the committed files' units, and no check holds the rows a unit commits to the Program's gates or
-   a wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled proof blocks, and no
-   protocol calls it.
+   a wired row to its writer's row: SPOT's wire summary (`Spot.Wires`) states that check on the sampled proof blocks, and
+   no protocol calls it.
 2. **The case's unit is the committed `Γ`'s unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the
    committed files' circuit (`computed`). No check holds the one unit to the other, or gives how many of those a
    Program gate is.
