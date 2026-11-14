@@ -986,7 +986,7 @@ def check(win: DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int 
     if g["y"] is not None and which == "gate":
         eq, rel = 0, []
         for w in range(L):
-            # the op's own body, not the op: an -xl arm serves verity_int8::scaled_mm from exactlin
+            # the reference body, not the op: on CUDA the op serves verity_int8::scaled_mm from int8_fused's kernel
             yt = E.dequantize(E.int_mm(g["a"][w][:m], win.wt[w]), g["sa"][w][:m], REG[w][1].weight_scale).float()
             yk = g["y"][w].float()
             eq += int(torch.equal(yt, yk))

@@ -1,23 +1,34 @@
 """`research goals audit`: what on the Goals page keeps a lead's plan from being read, by lead, each line with its fix.
 
   overdue    an open goal past its due
+  stale      an open off-track goal, not parked, last written over STALE_H hours ago
+  near       an open goal, not parked, due within NEAR_H hours and not written in the NEAR_H hours before its due
   unplaced   an open goal with no tier set that no goal waits on and that waits on no goal: tier 1 only by default
   order      an open goal due before an open goal it waits on, or waiting on a goal the page doesn't hold
   title      a title of more than TITLE_WORDS words
   no-step    a lead whose open goals have none due in the next STEP_H hours
   no-goal    a lead named with --owner who owns no open goal
 
+A date gets more precise as it nears (Daniel, 13 Nov): a day more than a week out, the day now expected inside a week,
+and inside a day the hour the last step ends. So a goal is written again inside its last day, with that hour, a new day,
+or `research goals confirm` when the hour stands; and an off-track goal says what is true today. A goal is written by
+`set` and by `confirm`; one the page gives no `updatedAt` for is named by neither finding.
+
 Pure functions of the page's goals (`research goals show --json`) and a time. Stdlib only."""
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from .goals import PACIFIC, _when
 
 TITLE_WORDS = 8
 STEP_H = 12
-KINDS = ("overdue", "unplaced", "order", "title", "no-step", "no-goal")
+STALE_H = 24
+NEAR_H = 24
+#: the goal whose subgoals are paused: each keeps the state it stopped in until its review
+PARKED = "top/parked"
+KINDS = ("overdue", "stale", "near", "unplaced", "order", "title", "no-step", "no-goal")
 
 
 def due_at(due: str) -> datetime:
@@ -28,8 +39,39 @@ def due_at(due: str) -> datetime:
     return at if at.tzinfo else at.replace(tzinfo=PACIFIC)
 
 
+def _hours(span: timedelta) -> int:
+    return int(span.total_seconds() // 3600)
+
+
 def _waits(goal: dict) -> list[str]:
     return [w["goal"] for w in goal.get("waitingOn") or () if isinstance(w, dict) and w.get("goal")]
+
+
+def written(goal: dict) -> datetime | None:
+    """When the goal was last written (UTC where it carries no offset); None where the page doesn't say."""
+    if not goal.get("updatedAt"):
+        return None
+    at = datetime.fromisoformat(str(goal["updatedAt"]).replace("Z", "+00:00"))
+    return at if at.tzinfo else at.replace(tzinfo=UTC)
+
+
+def parked(goals: list[dict]) -> set[str]:
+    """The parked goals' ids: PARKED and what it waits on, through other goals too, less whatever an open goal outside
+    that also waits on. A goal a live goal still needs is live."""
+    by = {g["id"]: g for g in goals}
+
+    def under(start: Iterable[str]) -> set[str]:
+        seen: set[str] = set()
+        todo = list(start)
+        while todo:
+            gid = todo.pop()
+            if gid in by and gid not in seen:
+                seen.add(gid)
+                todo += _waits(by[gid])
+        return seen
+
+    held = under([PARKED])
+    return held - under(g["id"] for g in goals if g.get("status") != "done" and g["id"] not in held)
 
 
 def findings(goals: list[dict], now: datetime, owners: Iterable[str] = ()) -> dict[str, dict]:
@@ -38,6 +80,7 @@ def findings(goals: list[dict], now: datetime, owners: Iterable[str] = ()) -> di
     by = {g["id"]: g for g in goals}
     open_ = [g for g in goals if g.get("status") != "done"]
     needed = {w for g in open_ for w in _waits(g)}
+    paused = parked(goals)
     out: dict[str, dict] = {o: {"open": 0, "off_track": 0, "findings": []} for o in owners}
     for g in open_:
         lead = out.setdefault(g.get("owner") or "nobody", {"open": 0, "off_track": 0, "findings": []})
@@ -52,6 +95,16 @@ def findings(goals: list[dict], now: datetime, owners: Iterable[str] = ()) -> di
             if at < now:
                 found.append(("overdue", gid, f"`{gid}` was due {_when(g['due'])}: give the date you now believe (`research goals set "
                               f"{gid} --due D`), or mark it done with its evidence (`research goals done {gid}`)"))
+            last = None if gid in paused else written(g)
+            if last and g.get("status") == "off-track" and now - last > timedelta(hours=STALE_H):
+                found.append(("stale", gid, f"`{gid}` is off track and was last written {_hours(now - last)} hours ago: say what is "
+                              f"true today and the one thing it waits on (`research goals set {gid} --blockers @why.md`, with "
+                              f"`--due D` or `--status on-track` when a date now holds), or `research goals confirm {gid}` if every "
+                              f"word still stands"))
+            if last and now <= at <= now + timedelta(hours=NEAR_H) and last < at - timedelta(hours=NEAR_H):
+                found.append(("near", gid, f"`{gid}` is due {_when(g['due'])} and was last written {_hours(at - last)} hours before "
+                              f"that: set the hour you now expect it true (`research goals set {gid} --due YYYY-MM-DDTHH:MM-08:00`), "
+                              f"or its new day, or `research goals confirm {gid}` if the hour stands"))
             if not g.get("tier") and gid not in needed and not _waits(g):
                 found.append(("unplaced", gid, f"`{gid}` is tier 1 only because nothing waits on it: list it under its project (`research "
                               f"goals set PROJECT --wait goal:{gid}`, repeating the project's other links), or say it is a project "

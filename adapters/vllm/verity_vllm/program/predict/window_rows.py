@@ -448,7 +448,7 @@ class Served:
             raise ValueError(f"position {p}'s node {k} is {descriptor_id(node.fn)}, served as {d['spec']} ({d['op_path']})")
         members = list(d["members"])
         if len(members) > 1:
-            if not all(str(m[0]).isdigit() for m in members):
+            if not all(str(m[0]).isdecimal() for m in members):
                 raise ValueError(f"{d['op_path']}: members {[m[0] for m in members]}, not its return fields by index")
             members.sort(key=lambda m: int(m[0]))
         step, op = int(d["step"]), str(d["op_path"])

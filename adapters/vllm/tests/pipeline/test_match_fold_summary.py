@@ -6,10 +6,13 @@ folds a declared MoE construction through its own hook, a run whose header recor
 the Programs' two options reach the profile and the document.  The peak resident size is in GiB on either platform, and
 `_jsonable` leaves a document that `json` writes.  The instances' stored form is the one the environment names, a result
 whose digest is not its Program's own is refused before a file is written, and the Program written is the fold's own encoding
-under its digest, or else the one made here."""
+under its digest, or else the one made here.  The instances' file states each instance whole, its operands' references as runs
+or as progressions, and the access journal each entry's view and references the same way, compressed at the level given."""
 from __future__ import annotations
 
+import dataclasses
 import enum
+import gzip
 import json
 import re
 import resource
@@ -18,6 +21,7 @@ import types
 
 import pytest
 from verity.circuits import codec
+from verity.circuits.refs import Affine, Strided
 
 from verity_vllm.check import gates as G
 from verity_vllm.observe import events as EV
@@ -26,6 +30,7 @@ from verity_vllm.observe.fold import fold as FOLD
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.pipeline import match_fold as MF
 from verity_vllm.program.frontend.target_profile import TargetProfile
+from verity_vllm.records import schema_ids
 
 PROFILES = "verity_vllm.observe.fold.profiles"
 VIEW = EV.ViewDesc(alloc=0, offset=0, shape=(1,), strides=(1,), dtype="int64", device="cpu")
@@ -127,10 +132,12 @@ def test_the_summary_states_the_fold_s_result_its_roots_by_class_its_steps_and_e
 
 def test_the_requests_are_the_fold_result_s_before_the_header_s_and_none_when_neither_has_any(tmp_path, profiles, folded):
     profiles("stand_in", PROFILE=_profile())
-    kept = [types.SimpleNamespace(request_id="q0", prompt_token_ids=[5, 6], max_tokens=7), {"request_id": "q1", "prompt_token_ids": [8], "max_tokens": 9}]
+    kept = [types.SimpleNamespace(request_id="q0", prompt_token_ids=[5, 6], max_tokens=7), {"request_id": "q1", "prompt_token_ids": [8], "max_tokens": 9},
+            types.SimpleNamespace()]                                            # a request that states nothing
     folded(_result(requests=kept, sampled={"q0": [(0, 1)]}, instances=[], steps=[], errors=[], notes=[]))
     doc, _ = MF.fold_summary_result(_log(tmp_path), "stand_in", with_program=False)
-    assert doc["requests"] == [{"request_id": "q0", "prompt_len": 2, "max_tokens": 7, "n_tokens": 1}, {"request_id": "q1", "prompt_len": 1, "max_tokens": 9, "n_tokens": 0}]
+    assert doc["requests"] == [{"request_id": "q0", "prompt_len": 2, "max_tokens": 7, "n_tokens": 1}, {"request_id": "q1", "prompt_len": 1, "max_tokens": 9, "n_tokens": 0},
+                               {"request_id": None, "prompt_len": 0, "max_tokens": None, "n_tokens": 0}]
     assert (doc["with_program"], doc["per_step"], doc["n_steps"], doc["opaque_fallbacks"], doc["errors"], doc["unbound_roots"]) == (False, [], 0, 0, 0, [])
     folded(_result(requests=[]))
     assert [r["request_id"] for r in MF.fold_summary_result(_log(tmp_path), "stand_in")[0]["requests"]] == ["r0", "r1", "r2"]
@@ -290,3 +297,87 @@ def test_the_program_s_document_states_the_result_s_parameters_by_name_its_ranks
                                            "peers_layout": [["peers_0", [0, 1]]], "witness_layout": [{"name": "schedule_0"}],
                                            "supplied": {"table": [1, 2]}}
     assert (doc["program"], doc["digest"], doc["n_input_nodes"], doc["n_instances"]) == ({}, "cd" * 64, 0, 1)
+
+
+@dataclasses.dataclass
+class _Window:
+    """A view that is no `ViewDesc`."""
+    lo: int
+    hi: tuple
+
+
+SEEN = EV.ViewDesc(alloc=3, offset=8, shape=(2, 5), strides=(5, 1), dtype="int64", device="cpu")
+SEEN_STORED = {"alloc": 3, "offset": 8, "shape": [2, 5], "strides": [5, 1], "dtype": "int64", "device": "cpu"}
+ROWS = Strided("n", 2, 0, 2, 4, 1, 6)                                           # node 2's leaves 0-1, 4-5 and 8-9: three runs, or one progression
+ROWS_STORED = {"runs": [["n", 2, 0, 2], ["n", 2, 4, 6], ["n", 2, 8, 10]], "progressions": [["N", 2, 0, 2, 0, 4, 4, 3]]}
+META = ("node", "step", "event", "resolution", "pattern", "spec", "row", "rows", "name", "hint", "request", "position")
+
+
+def _node(*operands):
+    return types.SimpleNamespace(args=[types.SimpleNamespace(refs=refs) for refs in operands])
+
+
+@pytest.mark.parametrize("form", ["runs", "progressions"])
+def test_the_instances_file_states_each_instance_whole_and_its_operands_references_in_the_stored_form(tmp_path, monkeypatch, form):
+    monkeypatch.setenv(MF.INSTANCES_FORM_ENV, form)
+    whole = {"node": 1, "step": 4, "event": 17, "resolution": "exact", "pattern": "Linear", "spec": "Mul", "row": 0, "rows": (0, 2), "name": "h.0",
+             "hint": _Opaque(), "request": "r0", "position": 3}
+    instances = [{**whole, "operand_roots": ["w", "b"], "collective": {"kind": "gather", "peers": (1,)}, "operand_views": [SEEN, _Window(1, (2, 3))],
+                  "output_views": [{"alloc": 9}], "not a field of the record": 1},
+                 {"node": 0, "step": 5, "operand_roots": [], "collective": {}},  # node 0 is a node; an empty list of roots or collective is left out
+                 {"step": 6}]                                                    # an instance of no node
+    result = types.SimpleNamespace(program=None, digest="cd" * 64, instances=instances, body=types.SimpleNamespace(nodes=[
+        _node(Affine("p", 0, 3, 2)), _node(ROWS, Affine("n", 1, 5, 1))]))
+    written = MF.persist_program(result, tmp_path, profile_name="stand_in", log_path="log")
+    text = (tmp_path / "instances.jsonl").read_text()
+    assert written == {"instances": {"path": str(tmp_path / "instances.jsonl"), "bytes": len(text), "n": 3, "operand_refs_form": form}}
+    assert [p.name for p in tmp_path.iterdir()] == ["instances.jsonl"]         # a result with no Program and no access writes neither file
+    absent = dict.fromkeys(META)
+    stored = [
+        {**whole, "rows": [0, 2], "hint": "<opaque>", "operand_roots": ["w", "b"], "collective": {"kind": "gather", "peers": [1]},
+         "operand_views": [SEEN_STORED, {"lo": 1, "hi": [2, 3]}], "output_views": [{"alloc": 9}], "operand_refs": [ROWS_STORED[form], [["n", 1, 5, 6]]]},
+        {**absent, "node": 0, "step": 5, "operand_views": [], "output_views": [], "operand_refs": [[["p", 0, 3, 5]]]},
+        {**absent, "step": 6, "operand_views": [], "output_views": []}]
+    schema = {"runs": schema_ids.REALIZED_INSTANCES_SCHEMA, "progressions": schema_ids.REALIZED_INSTANCES_PROGRESSIONS_SCHEMA}[form]
+    head = {"schema": schema, "profile": "stand_in", "digest": "cd" * 64, "n_instances": 3,
+            "note": "root-circuit node of instance k = n_input_nodes + k (program.json)", "requests": [], "operand_refs_form": form}
+    assert text == json.dumps(head) + "\n" + "".join(json.dumps(line, separators=(",", ":")) + "\n" for line in stored)
+    assert list(stored[0]) == [*META, "operand_roots", "collective", "operand_views", "output_views", "operand_refs"]
+    assert schema_ids.REALIZED_INSTANCES_SCHEMA != schema_ids.REALIZED_INSTANCES_PROGRESSIONS_SCHEMA
+    no_body = types.SimpleNamespace(program=None, digest=None, instances=[{"node": 1, "step": 4}], body=None)
+    MF.persist_program(no_body, tmp_path, profile_name="stand_in", log_path="log")
+    assert [json.loads(line) for line in (tmp_path / "instances.jsonl").read_text().splitlines()[1:]] == [
+        {**absent, "node": 1, "step": 4, "operand_views": [], "output_views": []}]     # a result that holds no body states no references
+
+
+@pytest.mark.parametrize("form", ["runs", "progressions"])
+def test_the_access_journal_states_each_entry_s_view_and_references_in_the_stored_form_at_the_level_given(tmp_path, monkeypatch, form):
+    monkeypatch.setenv(MF.INSTANCES_FORM_ENV, form)
+    really_open, opened = gzip.open, []
+
+    def gzip_open(path, mode, compresslevel):
+        opened.append((path, mode, compresslevel))
+        return really_open(path, mode, compresslevel=compresslevel)
+
+    monkeypatch.setattr(gzip, "open", gzip_open)
+    accesses = [{"kind": "alloc", "event": 1, "view": SEEN, "refs": None},
+                {"kind": "read", "event": 2, "view": None, "refs": [("n", 2, 0, 2), ("p", 0, 3, 5)]},      # references that are runs already
+                {"kind": "write", "event": 3, "refs": ROWS, 7: (1, _Opaque())}]                         # the fold's own; a key that is no string
+    result = types.SimpleNamespace(program=None, digest="cd" * 64, instances=[], body=None, accesses=accesses)
+    journal = tmp_path / "accesses.jsonl.gz"
+    for given, level in (({}, 9), ({"journal_level": 1}, 1)):
+        written = MF.persist_program(result, tmp_path, profile_name="stand_in", log_path="log", **given)
+        assert list(written) == ["instances", "accesses"] and written["accesses"] == {"path": str(journal), "bytes": journal.stat().st_size, "n": 3}
+        assert opened.pop() == (journal, "wt", level) and opened == []
+        with really_open(journal, "rt") as f:
+            text = f.read()
+        stored = [{"kind": "alloc", "event": 1, "view": SEEN_STORED, "refs": None},
+                  {"kind": "read", "event": 2, "view": None, "refs": [["n", 2, 0, 2], ["p", 0, 3, 5]]},  # runs they stay, in either form
+                  {"kind": "write", "event": 3, "refs": ROWS_STORED[form], "7": [1, "<opaque>"]}]
+        assert text == "".join(json.dumps(line, separators=(",", ":")) + "\n" for line in stored)
+    journal.unlink()
+    no_access: tuple[dict[str, object], ...] = ({}, {"accesses": None}, {"accesses": []})
+    for none in no_access:
+        quiet = types.SimpleNamespace(program=None, digest="cd" * 64, instances=[], body=None, **none)
+        assert list(MF.persist_program(quiet, tmp_path, profile_name="stand_in", log_path="log")) == ["instances"] and not journal.exists()
+    assert opened == []
