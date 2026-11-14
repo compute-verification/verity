@@ -131,9 +131,10 @@ structure Summary where
 /-- The functions a check of a circuit record exports. `read j tr` reads the instance `j` and the trusted input `tr`
 (the registration log and the digest of the run's own record), or refuses. Of a record it has read: `inst` is the
 instance's fields, `wiring` the record's wires as `Spot.Wires.check` takes them, `slot tid u` the block of unit `u` of
-template `tid`, `held r` whether row `r` counts as θ and why, and `summarize` the summary. `rate Γ num den s` is the
-rate rule on a summary, `none` where it complies, and `layout d` the roles of a reader whose Definition is `d`, none
-where it has no reader's layout. -/
+template `tid`, `held r` whether row `r` counts as θ and why, `openedRow r` the output that returns the row opened
+where an opening fills row `r` and declares it (its role `row`), none otherwise, and `summarize` the summary.
+`rate Γ num den s` is the rate rule on a summary, `none` where it complies, and `layout d` the roles of a reader whose
+Definition is `d`, none where it has no reader's layout. -/
 structure Form where
   Case : Type
   read : Json → Json → Except String Case
@@ -141,6 +142,7 @@ structure Form where
   wiring : Case → Spot.Wires.Wiring
   slot : Case → String → ℕ → Option ℕ
   held : Case → Row → Option Held
+  openedRow : Case → Row → Option String
   summarize : Case → Summary
   rate : ℕ → ℕ → ℕ → Summary → Option String
   layout : Defn → Option Roles
