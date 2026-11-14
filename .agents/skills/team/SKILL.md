@@ -19,13 +19,11 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   fast path. Everything else (every suite, `verity check`, circuit-check, any build of `security`, cargo, nvcc, every
   e2e and GPU job) runs through `research run --on auto --cwd source [--wait] -- CMD` (the writing-runs skill): an
   `agent-test` job on the cluster queue (4 CPUs, 16 GiB, 60 min unless `--cpus`, `--mem-gb` or `--timeout` say
-  otherwise), or a `research` pool when one starts sooner. The shell hook refuses those locally and names the remote
-  command; `AGENT_GUARD_LOCAL_OK=1` in the command opts in.
+  otherwise), or a `research` pool when one starts sooner. The shell hook refuses those locally.
 
   ~~~text
   research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # --quick: no slow tests
-  uv run python tools/verity/check/check.py --record --on auto --pool research  # the whole check, recorded (the testing skill)
-  research status RUN  # check back on a run; research run --wait only under 20 min
+  research status RUN  # check back on a run
   ~~~
 
 - **No tool call blocks more than 20 minutes.** Every `--wait` stops there, cancels nothing and exits 79 naming the
@@ -39,8 +37,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   when its work there ends.
 - **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
   print the environment, every process's command line, or a key or env file (its names: `envnames.py` beside the
-  hook); on a VM where it doesn't run, `research` says so, with the fix. A secret is stored as one line (a
-  key as base64, `NAME_B64`).
+  hook). A secret is stored as one line (a key as base64, `NAME_B64`).
 
 ## Landing
 
@@ -122,11 +119,11 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   detached, and message someone only to unblock them or change their plan.
 - **Workers run where they can't take you down**: as cloud subagents (`Task` with `environment: "cloud"`, a standing
   request for every agent here, so nobody asks first) or as detached `research run`s; a local subagent only for a short
-  read-only lookup. A cloud worker boots from the environment's snapshot, so its brief is complete (the task, the
-  done-condition, the deadline, "reread `git show origin/main:AGENTS.md`") and tells it to create
-  `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there. Write no brief or message to a branch (Daniel,
-  13 Nov): later word goes by `inbox.py send` or a resume, a document on a Linear issue or in Notion. It opens its own
-  PR, or reports its branch and SHA for its launcher to.
+  read-only lookup or a turn handed off (below). A cloud worker boots from the environment's snapshot, so its brief is
+  complete (the task, the done-condition, the deadline, "reread `git show origin/main:AGENTS.md`") and tells it to
+  create `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there. Write no brief or message to a branch:
+  later word goes by `inbox.py send` or a resume, a document on a Linear issue or in Notion. It opens its own PR, or
+  reports its branch and SHA for its launcher to.
 - **Pick a worker's model by its task**, as `Task`'s `model`, a standing request for every agent here: name it on every
   launch, never `inherit` or left out. `claude-opus-5-5-high` is the default: moving files, reading code, a count or a
   sweep, a specified change with its tests, a merge, a review, a swarm seat, a proof of a fixed statement.
@@ -134,12 +131,13 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   protocol or an attack, an open root cause, a ruling, review of a verifier, a lock or a statement, a claim to Daniel.
   Leads run Fable: they plan and launch. A resume keeps its model, so a Fable worker whose task is Opus's is not
   resumed: it tells its launcher, who briefs an Opus worker from its note.
+  A turn a worker's own timer or subscription starts may run on another model than the launch's. The shell hook says so
+  at its first command where the machine's log holds the launch turn; on a wake's new machine, read `inbox.py turns`.
+  Such a turn hands its job to a local child started with the launch model named, or ends and is resumed.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`,
-  and its next shell command delivers it (`--local`: a subagent on your VM, no
-  push). Nothing delivers it at a turn's end, and one waiting then may be gone by the next turn: an agent whose turn
-  has ended is resumed with the text itself.
-  `inbox.py selftest` checks your own VM end to end.
+  and its next shell command delivers it (`--local`: a subagent on your VM, no push). An agent whose turn has ended
+  is resumed with the text itself. `inbox.py selftest` checks your own VM end to end.
 - **Stay reachable.** Push and write a one-line checkpoint note every 60 minutes and before ending a turn: a resume
   or a timer's wake puts a worker on a new machine, with only what it pushed. When you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
