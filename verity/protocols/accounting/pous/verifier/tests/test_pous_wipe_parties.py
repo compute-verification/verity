@@ -81,11 +81,14 @@ def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
 
 
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
-         prover=WPS.Prover, state=None, request=None):
+         prover=WPS.Prover, state=None, request=None, sources=None):
+    """One wipe on the runtime: in a live run on `sources` (the challenger's virtual clock and `SEED`'s coins unless
+    given; `{}` for the runtime's own)."""
     caps = {C: challenger_caps(secret, params), P: {"store": store}}
     protocol = ProtocolDef(WPS.MANIFEST, {C: lambda: WPS.MemoryChallengerParty(chunk), P: prover})
-    given = {} if mode == "simulated" else {
-        "sources": {C: {"clock": S.VirtualClock(S.VirtualTime(T0), STEP), "coins": S.SeededCoins(SEED)}}}
+    if sources is None:
+        sources = {C: {"clock": S.VirtualClock(S.VirtualTime(T0), STEP), "coins": S.SeededCoins(SEED)}}
+    given = {} if mode == "simulated" else {"sources": sources}
     return run({"protocol": WPS.ID, "params": request or WP.request_of("n0", params)}, BOTH, mode, state,
                protocols={WPS.ID: protocol}, keys={p: PartyKey(p) for p in BOTH}, verify=verify, capabilities=caps,
                seed=SEED if mode == "simulated" else None, clock_step_ns=STEP, **given)
@@ -110,6 +113,33 @@ def test_the_ported_challenger_signs_the_bytes_serve_signs(monkeypatch, chunk):
     assert (out["ended"], out["reads"]) == (sw.COMPLETE, PARAMS.k)
     fills = [e for e in r.transcripts[C] if e.dir == "out" and e.channel == P and e.kind == "private"]
     assert len(fills) == PARAMS.labels // min(chunk, PARAMS.labels)
+
+
+def test_on_the_runtimes_own_clock_the_challenger_signs_nothing(monkeypatch):
+    """Run live on the runtime's defaults, the challenger is given the runtime's own real clock, which reads
+    `CLOCK_MONOTONIC`, not the raw clock its header names: it refuses by name (`clock`) before any coin or fill, unsigned,
+    and says what to give it. The runtime's clock is read here through an injected counter, under its own name."""
+    real = S.RealClock
+    monkeypatch.setattr(S, "RealClock", lambda: real(itertools.count(T0, STEP).__next__))
+    assert S.RealClock().name == S.MONOTONIC != sw.CLOCK
+    r = wipe(PARAMS, b"monotonic", sources={})
+    out = r.outcomes[C]
+    assert (out["refused"], out["outcome"]["ended"], out["outcome"]["signed"]) == ("clock", None, None)
+    assert f"reads {S.MONOTONIC}" in out["outcome"]["detail"]
+    assert "RealClock(streamed_wipe.raw_clock_ns, streamed_wipe.CLOCK)" in out["outcome"]["detail"]
+    assert r.outcomes[P]["refused"] == "closed"
+    assert not [e for e in r.transcripts[C] if e.dir == "out" and e.channel in ("coins", P)]
+
+
+def test_on_the_raw_clock_handed_to_it_the_challenger_signs_and_is_accepted():
+    """Given the raw clock by name (`RealClock(raw_clock_ns, CLOCK)`, its read injected), the challenger signs, and the
+    header it signs names the clock it read."""
+    raw = S.RealClock(itertools.count(T0, STEP).__next__, sw.CLOCK)
+    r = wipe(PARAMS, b"raw", sources={C: {"clock": raw, "coins": S.SeededCoins(SEED)}})
+    assert r.status == "completed", r.outcomes
+    out = r.outcomes[C]["outcome"]
+    assert out["signed"]["commitment"]["clock"] == out["commitment"]["clock"] == sw.CLOCK
+    assert verdict(out, b"raw")["verdict"] == "accept"
 
 
 def test_an_honest_prover_on_host_memory_is_accepted():

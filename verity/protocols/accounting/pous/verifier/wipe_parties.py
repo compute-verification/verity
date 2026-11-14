@@ -10,9 +10,12 @@ The challenger drives the same `streamed_wipe.WipeMemoryChallenger` as `wipe_par
 labels' secret and the session id from its coins (64 bytes, the secret first), the fill's start and end, each batch's
 send and receipt on its clock, the coin secret sampled when the first batch is revealed, the session signed once it
 ends. It is given no egress count and signs none. On the same coins, clock readings and key it signs the same bytes as
-`serve`. Its header names the raw monotonic clock (`streamed_wipe.CLOCK`), so the clock its machine gives it is to read
-that one, `sources.RealClock(streamed_wipe.raw_clock_ns)`: the runtime's own real clock reads `time.monotonic_ns`,
-which time synchronisation slews. Its machine gives it `signing-key` (`capabilities["signer"]`, a
+`serve`. Its header names the raw monotonic clock (`streamed_wipe.CLOCK`), so it refuses by name (`clock`), before any
+coin and unsigned, a clock source that reads another real clock (`Identity.clock`): the runtime's own real clock reads
+`CLOCK_MONOTONIC`, which time synchronisation slews, and the run that starts it hands it
+`RealClock(streamed_wipe.raw_clock_ns, streamed_wipe.CLOCK)` instead. Virtual time (a simulated or seeded run) and a
+replay name no clock, and it signs their readings under the header's name, as `streamed_wipe.WipeMemoryChallenger` signs
+a clock a test injects. Its machine gives it `signing-key` (`capabilities["signer"]`, a
 `memory_challenger.Signer`, with `capabilities["log"]`, its session log) and the reads it times
 (`capabilities["reads"]`, `wipe_party.READS` when none, as `wipe_party`'s `--reads`); the prover's gives it `store`
 (`capabilities["store"]`, the prover a `WipeParams` makes: `streamed_wipe.Prover` unless given, `wipe_store.StoreProver`
@@ -72,6 +75,11 @@ class MemoryChallengerParty:
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
         caps = identity.capabilities
         self.signer, self.log = caps["signer"], caps["log"]
+        if identity.clock not in (None, sw.CLOCK):
+            return [Finish({"ended": None, "signed": None, "detail": (
+                f"the wipe's header names {sw.CLOCK}, and this challenger's clock source reads {identity.clock}: the run "
+                f"that starts it gives it sources={{{CHALLENGER!r}: {{'clock': RealClock(streamed_wipe.raw_clock_ns, "
+                "streamed_wipe.CLOCK)}}")}, "clock", kind="private")]
         try:
             self.request, self.wp = dict(params), WP.params_of(params, caps.get("reads", WP.READS))
         except ValueError:

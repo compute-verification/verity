@@ -17,7 +17,8 @@ is `manifest`'s `Manifest`, `Role`, `Channel` and `ProtocolDef` and `config`'s `
 `manifest.place` and `site_of` for a placement (`Topology`, `PlaceResult`). The configuration is the rest of `config`:
 `check`, `digest`, `new`, `parse`, `render`, `canonical`, `declared` and `composite`, with `COMPOSITES`, `LOCAL`,
 `PARTY`, `CHANNEL` and `TRANSPORT`. The runtime is `runtime`'s `run` and `RunResult`, `stream`'s `Side`, and the sources
-a caller hands `runtime.run` (`sources`): `VirtualClock` on a `VirtualTime`, `SeededCoins`, `seeded` and `OWNER`. A
+a caller hands `runtime.run` (`sources`): `VirtualClock` on a `VirtualTime`, `RealClock` (a machine's clock and its
+name, `MONOTONIC` by default, which the party reads as `Identity.clock`), `SeededCoins`, `seeded` and `OWNER`. A
 refusal by name is raised as the wire's `Refused`: import it from `verity.channel`.
 
 | Entry point | What it is |
@@ -35,7 +36,7 @@ Internal, which no code outside this directory imports and `runtime.run` reaches
 - `transcript` (`transcript.py`): `PartyLog` and `record`, which outside code reads as a `RunResult`'s `transcripts`
   and `record()`.
 - the rest of `sources` (`sources.py`, clocks and coins as parties on the same machine): their messages, and
-  `RealClock` and `OsCoins`, which a run with no seed attaches itself.
+  `OsCoins`, which a run with no seed attaches itself, as it attaches `RealClock()`.
 - `process.spawn` (`process.py`): a party in a process of its own on this machine, over TCP to the run that spawned it.
 
 The served table of `verity run` doesn't go through `runtime.run`: it runs `served_verdicts.sh`.
