@@ -17,5 +17,5 @@ inputs = [
     "adapters/vllm/manifests/checkpoints.json",
     "tools/config/verity_config",
     "verity/__init__.py",
-    "verity/settings.py",
+    "tools/config/verity_config/verity_settings.py",
 ]
