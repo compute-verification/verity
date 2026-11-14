@@ -3,6 +3,7 @@ module
 public import Spot.Program
 public import Spot.Registered
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 
 /-!
 # The certified rows a proof block reads or writes, from the Program's description (`Spot.CertifiedRows`)

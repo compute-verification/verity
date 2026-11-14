@@ -24,7 +24,7 @@ the ids it is asked for as a set (`evaluate_congr`), so it accepts the wiring's 
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Lean (Json)
 
 /-- `finish` takes its wiring's templates from the front's own piece of the text. -/

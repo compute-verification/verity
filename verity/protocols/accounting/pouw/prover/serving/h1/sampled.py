@@ -101,7 +101,7 @@ from verity.errors import Refused
 from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.accounting.pouw.prover.serving.h1.drawn_rows import (
+from verity.protocols.accounting.pouw.prover.serving.h1.sampled_rows import (
     LEAF_NAMES,
     LEAF_OUT_ROWS,
     LEAF_PROGRAM,

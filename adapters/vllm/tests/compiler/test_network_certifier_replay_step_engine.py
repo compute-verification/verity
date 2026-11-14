@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.compiler import compile_slice as CS
-from verity.protocols.accounting.certifier.verifier import replay_step as RS
+from verity_vllm.compiler import replay_step as RS
 
 FIXTURES = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures"
 SLICES = ("compile_slice_smallkv", "compile_slice_w1", "compile_slice_w1_class", "compile_slice_w212",
