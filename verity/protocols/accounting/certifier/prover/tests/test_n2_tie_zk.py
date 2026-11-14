@@ -11,24 +11,21 @@ from __future__ import annotations
 import importlib.util
 import json
 import struct
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_n2_tie_zk", HERE / "n2_tie_zk.py")
+from verity.protocols.accounting.certifier.prover import n2_tie_zk as tz
+
+
+def _fresh():
+    """A copy of `n2_tie_zk` of its own, so its `use` changes no other test's module."""
+    spec = importlib.util.spec_from_file_location("n2_tie_zk_fresh", tz.__file__)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-tz = _load()
 
 
 def _tie():
@@ -71,7 +68,7 @@ def test_the_provers_known_rows_are_the_verifiers_exactly_where_the_reference_ac
 
 
 def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_honest_tied_and_forged_refused():
-    sv = _load()
+    sv = _fresh()
     sv.use("served")
     tie = sv.TS.IngressTie(sv.LINK, sv.PARAMS, sv.SESSION)
     assert tie.key == (4096, 1, 1) and sv.T == 60 and sv.HC.pinned(tie.gates()[0])

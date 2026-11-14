@@ -32,14 +32,8 @@ inputs = ["verity",
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/breakeven",
           "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/tests/test_warden_chain.py",
           "benchmarks/network_traces/tests/test_out_request_values.py", "benchmarks/network_traces/chain_record.sh",
-          "benchmarks/network_traces/n2_zk.sh", "benchmarks/network_traces/scan_zk.sh"]
+          "benchmarks/network_traces/n2_zk.sh", "benchmarks/network_traces/scan_zk.sh",
+          "benchmarks/network_traces/zk_drivers.py"]
 # The Lean verifier, whose statement setup test_warden_zk and test_egress_zk run on their staged members (`check` builds
 # it before this suite).
 artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_block_certifier.py"]
-paths = ["verity"]

@@ -48,7 +48,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
-import leak_scan as LS  # noqa: E402
+import zk_drivers  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 import served_tie_zk as STZ  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import served_rows as SR  # noqa: E402
@@ -367,7 +368,7 @@ def prove(a) -> int:
     if a.dry or not ref_ok:
         return 0 if ref_ok else 1
 
-    N2 = __import__("n2_zk")
+    zk_drivers.install()
     M = N2._one_stage()
     defn = SS.unit(**d.st)
     secret = os.urandom(32)

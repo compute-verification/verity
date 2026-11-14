@@ -4,11 +4,9 @@ the earlier window didn't leave, a carry in from a window that isn't among them,
 aborted request are refused."""
 from __future__ import annotations
 
-
 import pytest
 from verity.protocols.accounting.certifier.verifier import advice as I1
 from verity_vllm.pipeline import window_advice as WA
-
 
 from verity.protocols.accounting.certifier.prover import window_chain as WC
 

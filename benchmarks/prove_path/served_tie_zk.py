@@ -49,7 +49,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
-import leak_scan as LS  # noqa: E402
+import zk_drivers  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import served_rows as SR  # noqa: E402
 from verity.protocols.accounting.certifier.prover import served_tie as ST  # noqa: E402
@@ -377,7 +378,7 @@ def prove(a) -> int:
     if a.dry or not ref_ok:
         return 0 if ref_ok else 1
 
-    N2 = __import__("n2_zk")
+    zk_drivers.install()
     M = N2._one_stage()
     defn = ST.unit(**d.st)
     secret = os.urandom(32)
@@ -442,7 +443,7 @@ def rescan(a) -> int:
     lowered again and held to the run's pin). A found salt `prove` drew isn't recomputed, so its summary's find of it
     stays and reads leaked."""
     d = units_of(a)
-    N2 = __import__("n2_zk")
+    zk_drivers.install()
     M = N2._one_stage()
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())
