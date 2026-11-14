@@ -82,6 +82,10 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 paths = ["adapters/vllm/verity_vllm/protocols/pouw/h1/", "adapters/vllm/verity_vllm/protocols/pouw/lead/",
          "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/"]
 
+[split]
+# references to a directory this move splits that stay right: "old file: old directory" = why
+"adapters/vllm/verity_vllm/protocols/pouw/h1/registered.py: adapters/vllm/tests/protocols" = "prose naming the adapter's GPU test of the device path, which stays with the adapter's tests"
+
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
 # whose bytes a digest pins, every Lean file, every kernel source, and the layout of record.
