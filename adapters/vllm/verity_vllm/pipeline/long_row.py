@@ -62,6 +62,8 @@ from verity.definitions.registry import dsa_topk_mask_cut as X
 from verity.definitions.registry import dsa_topk_reads as R
 from verity_vllm.pipeline import boundary_rows as BR
 
+__all__ = ["SERVED", "DsaTopKReadRowsCut", "layout", "served"]
+
 #: the long row's served statics: a class of 2^17 keys, GLM-5.3's INDEX_TOPK, `dsa_topk_reads.BLOCK` keys a block
 SERVED = {"N": 1 << 17, "TOPK": 2048, "BLOCK": R.BLOCK}
 #: the history table READ opens: its capacity in rows and a row's u16 words (GLM-5.3's kv row)
