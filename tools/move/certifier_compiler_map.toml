@@ -28,6 +28,7 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "verity/protocols/accounting/certifier/prover/compile_slice_v6.py" = "adapters/vllm/verity_vllm/compiler/compile_slice_v6.py"
 "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.py" = "adapters/vllm/verity_vllm/compiler/compile_slice_v6.circuit-check.py"
 "verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.json" = "adapters/vllm/verity_vllm/compiler/compile_slice_v6.circuit-check.json"
+"verity/protocols/accounting/certifier/prover/compile_slice_v6.circuit-check.unkeyed.json" = "adapters/vllm/verity_vllm/compiler/compile_slice_v6.circuit-check.unkeyed.json"
 "verity/protocols/accounting/certifier/prover/compile_slice_v7.py" = "adapters/vllm/verity_vllm/compiler/compile_slice_v7.py"
 "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.py" = "adapters/vllm/verity_vllm/compiler/compile_slice_v7.circuit-check.py"
 "verity/protocols/accounting/certifier/prover/compile_slice_v7.circuit-check.json" = "adapters/vllm/verity_vllm/compiler/compile_slice_v7.circuit-check.json"
