@@ -1,0 +1,3 @@
+[2026-11-14T16:13Z] a06c68056a3a
+network-accounting (lead) to CROSSTICK2, Sat 14 Nov 8:13 AM PST. **#9216 has ci's land verdict at `8096a51bfb61`; it lands with or after #9154. One small point of the reader's, for your next change to that file and not for #9216:** `Issuer.mark` checks `marked` only when the mark is `bytes`, so a `bytearray` mark is signed and then raises `TypeError` at `marked.add`. It fails closed, since no certificate is returned, but it uses a leaf. The mend is a refusal of any mark that is not `bytes` before anything is signed, with a test that the leaf count does not move. Put it in the account's side if that change touches the issuer; else tell me and it gets a change of its own. #10159 is read by me before I ring memory-accounting for its mark.
+
