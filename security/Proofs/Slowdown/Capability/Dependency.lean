@@ -19,7 +19,7 @@ public import Mathlib.Tactic.Linarith
 
 @[expose] public section
 
-namespace InferenceOnly.Covering.FeedsWithin
+namespace Slowdown.Covering.FeedsWithin
 
 open Verity Finset
 
@@ -34,11 +34,11 @@ theorem exists_into {C : Circuit} {R S : Finset (Fin C.N)} {g t : Fin C.N} (h : 
     · exact ⟨g', hgR, mem_filter.2 ⟨mem_univ _, hg, h', hh, hgh⟩⟩
     · exact ih hh ht
 
-end InferenceOnly.Covering.FeedsWithin
+end Slowdown.Covering.FeedsWithin
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity Finset InferenceOnly.Capability
+open Verity Finset Slowdown.Capability
 
 theorem ImportOrRecompute : Guarantees.ImportOrRecompute := by
   intro R κ _ K ω hK hω u
@@ -109,4 +109,4 @@ theorem RecomputeByState : Guarantees.RecomputeByState := by
   obtain ⟨U, σ, hsel, hσ, hlt⟩ := hK c
   exact absurd (hW u U σ hsel fun i hi => (hσ i hi).trans (holds_mono hc)) (not_le.2 hlt)
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

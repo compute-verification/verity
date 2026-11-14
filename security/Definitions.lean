@@ -43,6 +43,7 @@ public import Definitions.Certifier.Tap
 public import Definitions.Certifier.RecordRows
 public import Definitions.Certifier.MonitoringPeriod
 public import Definitions.Certifier.Witness
+public import Definitions.Certifier.ResponseTie
 public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
 public import Definitions.Spot
@@ -104,6 +105,8 @@ public import Definitions.Accounting.Assumptions.TS.Fixed
 public import Definitions.Accounting.Guarantees
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
+public import Definitions.Certifier.Guarantees.MonitoringPeriodFails
+public import Definitions.Certifier.Guarantees.PooledReg
 public import Definitions.Certifier.Guarantees.MonitoringPeriod
 public import Definitions.Certifier.Guarantees.PooledLeak
 public import Definitions.Certifier.Guarantees.Checked

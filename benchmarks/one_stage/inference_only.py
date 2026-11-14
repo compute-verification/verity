@@ -178,7 +178,7 @@ PRICES = ("BitAtx{W}_v1", price)
 def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, Any]], list[str]]:
     """The gate table over the primitives ``fns`` reach: `definitions.boolean.gate_table`'s, each primitive it can't
     price priced by `price` where it can be, and the keys of the rest."""
-    from verity_vllm.definitions import boolean as BL
+    from verity.circuits.ops.boolean import versions as BL
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     table, unpriced = BL.gate_table(fns)

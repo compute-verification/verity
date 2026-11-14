@@ -12,7 +12,7 @@ The game is `Security/Definitions/Accounting/RateAuditSketch.lean`; proofs are i
 `Security/Proofs/Accounting/RateAudit/Sketch.lean`, `SketchHonest.lean`, `SketchRank.lean` and `SketchTable.lean`. No
 named assumption: the device's bounds (on-chip state `S`, side link `L`, oracle queries `q`, the compute budget `F` at
 `c_tag` per tag and `c_enc` per rebuilt sector) and its class, a device that obtains sectors only whole and verbatim, define what the guarantees quantify over;
-the claims registry carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
+a deployment premise carries the class to a deployed device (`rate-sketch-verbatim`) beside `RateAudit`'s.
 
 * `RateAuditSketch`: in one window, for any digest, an accepted device's footprint reaches the floor except with
   probability `((k − 1)/N)^s + s/2^h + Pr_σ[g < fib_σ] + q·g/|X|`.
@@ -136,7 +136,7 @@ footprint reaches the floor except with probability
   `((k − 1)/N)^s + s/2^h + Pr_σ[¬ SectorsBind σ] + q/2^256`.
 
 **The reading.** At `k_s = 64` the signs bind but for the chance that some sector's `64 × 32` block of uniform signs
-has a column dependency, a number of the signs' law that is evaluated outside Lean. At `k_s = 16` no block binds, and
+has a column dependency, a number of the signs' distribution that is evaluated outside Lean. At `k_s = 16` no block binds, and
 the bound to read is `RateAuditSketch`'s at the sketch's largest fiber `g`. Proof:
 `Accounting.SecurityProofs.RateAuditTensorSketch`, from the two.
 
@@ -158,7 +158,7 @@ with probability
 
 **The reading.** It is the per-pass reading, `q·2^-8r + Pr_σ[∃ u, rank < r]`, as a theorem for the verbatim class.
 At `k_s = 16` no block binds (its rank is at most 16), and `r` trades the guess, `2^-8r` per query, against the chance
-that some sector's `16 × 32` block of uniform signs has rank below `r`, a number of the signs' law evaluated outside
+that some sector's `16 × 32` block of uniform signs has rank below `r`, a number of the signs' distribution evaluated outside
 Lean (`r* = 12`). Outside the verbatim class no bound of this form holds (`RateTensorSketchTable`). A
 session's passes and the grinding of their keys are not modeled here. Proof:
 `Accounting.SecurityProofs.RateAuditTensorSketchRank`, from `RateAuditSketch` and `SketchRankFiber`.

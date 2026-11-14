@@ -39,13 +39,13 @@ import Mathlib.Topology.Sheaves.Init
 # The openings' pooled bound (trusted)
 
 The memory line's `LiveCoins` premise (`Accounting.Remote.Held.Assumptions.LiveCoins`), derived from the verifier's
-opening draw as it runs it (`Accounting.Remote.Draw`): a session of windows `D`, each window's size and correct receipts
+opening sample as it runs it (`Accounting.Remote.Draw`): a session of windows `D`, each window's size and correct receipts
 fixed before its own openings coin (`Live`), whose opened receipts an accepted session found correct or moved off the
 rows their roots hold (`Refused`, at the receipts `R`), and whose wrong receipts count the trace's (`Counted`). The
 prover is sent each coin as it is released, and the challenger's commitment to the session's coins only once the
 session has its outcome (`coins.Released`, `audit.Session.disclose`), so the session it plays is `D` itself: nothing it
 holds before window `t`'s openings coin is released reads that coin. Window `t`'s openings are `Key.subset` on the
-first blocks `prf t` gives its uniform coin, the sampler exact on each draw's first block and the fallbacks `rest` free;
+first blocks `prf t` gives its uniform coin, the sampler exact on each sample's first block and the fallbacks `rest` free;
 `prf` is any function, the deployed one being SHA-512's keyed stream under
 `derive(coin_t, OPENINGS_DOMAIN, {registration, window: t})`.
 
@@ -53,7 +53,7 @@ first blocks `prf t` gives its uniform coin, the sampler exact on each draw's fi
   bound (`Run.pooled δ`, `audit.pooled`'s `wrong`) is at most `δ + Σ_t s_t / 2^256 + Σ_t adv_t + bind`, `adv_t` the
   advantage on `prf t` of window `t`'s distinguisher (`Run.distinguisher prf δ t`). The bound is read at the
   outcome, so it holds however the prover sizes each window after the earlier windows' coins, at any number of passes
-  a window. On uniform first blocks window `t`'s draw lands on correct receipts with probability at most
+  a window. On uniform first blocks window `t`'s sample lands on correct receipts with probability at most
   `(g_t/U_t)^(s'_t)` given the earlier windows, those multiply over the session, and by weighted AM–GM their product is
   at most `δ` once the wrong receipts pass the bound. The hybrid over windows trades window `t`'s uniform blocks for
   `prf t` at the cost of `s_t / 2^256` (every word of some first block rejected) and `adv_t`. `bind`
@@ -62,7 +62,7 @@ first blocks `prf t` gives its uniform coin, the sampler exact on each draw's fi
   continuations): off it, every receipt `Refused` lets through is correct.
 * **LiveCoinsSampled**: `LiveCoins W` at that error for every `W` at least the pooled bound on every accepted outcome.
 * **HeldSampled**, **HeldOverTimeSampled**, **HeldOverTimeLinksSampled**: `Held` and its time-held forms with `LiveCoins`
-  replaced by the draw's premises and `W` by the record's own pooled bound at error `δc`, so the line the ledger reads
+  replaced by the sample's premises and `W` by the record's own pooled bound at error `δc`, so the line the ledger reads
   at the record's `audit.pooled` is the one stated.
 
 The advantages are C3's terms (claim `prf/sha-512`, `verity.ml.randomness`'s keyed streams). Each is against one
@@ -80,7 +80,7 @@ chance of moving is at most the square root of the chance that the two runs show
 `t`'s share of the term is at most `√(|L_t|·s_t·(q_t²/2^513 + split_t))`, `q_t` the finder's SHA-512 calls and
 `split_t` the chance that the two runs' roots differ (`Receipts.split`). With roots fixed by the cut, `split_t = 0` and
 the bound has `ledger.binding`'s form, `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, which the code reads at the session's bounds on
-a window's receipts and draws. The prover sends window `t`'s roots before it holds anything of window `t`'s openings
+a window's receipts and samples. The prover sends window `t`'s roots before it holds anything of window `t`'s openings
 coin, but that the receipts' roots read only the cut is not a premise here (the gap `binding-split`), and
 `ledger.binding` takes `split_t` as 0.
 -/
@@ -95,7 +95,7 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
 /-- **The openings' pooled bound.** On a session whose windows' sizes and correct receipts are fixed before their
 openings coins (`Live`), whose accepted outcomes found every opened receipt correct or moved off the row its root holds
 (`Refused`, at the receipts `R`) and count the trace's wrong receipts among the windows' (`Counted`), with every
-window's draw on the first blocks `prf t` its coin gives and `m < 18446744073709551616` (2^64) receipts a window at
+window's sample on the first blocks `prf t` its coin gives and `m < 18446744073709551616` (2^64) receipts a window at
 most, the probability that the session is accepted with more wrong receipts than the record's pooled bound at `δ` is at
 most `δ + Σ_t s_t / 2^256`, plus the windows' distinguishers' advantages on `prf`, plus the receipts' binding term
 (`R.binding`: some opened receipt moved off the row its root holds). -/
@@ -123,7 +123,7 @@ def LiveCoinsSampled : Prop :=
       (R.binding D prf rest).toReal)
 
 /-- **The snapshot held at the record's pooled bound, under Identity.** `Held` on a trace over a session's coins, with
-`LiveCoins` replaced by the draw's premises (`Live`, `Refused`, `Counted`) and `W` by the record's pooled bound at
+`LiveCoins` replaced by the sample's premises (`Live`, `Refused`, `Counted`) and `W` by the record's pooled bound at
 `δc`, on windows of `m < 18446744073709551616` (2^64) receipts. -/
 def HeldSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
@@ -138,7 +138,7 @@ def HeldSampled : Prop :=
       (T.planned ω : ℝ) - D.pooled δc ω - ((s / E + β) * ((e : ℝ) - s₀) + (Br + Bd)) - T.passes * S ≤ T.held ω
 
 /-- **Held over time at the record's pooled bound, under Identity.** `HeldOverTime` with `LiveCoins` replaced by the
-draw's premises and `W` by the record's pooled bound at `δc`, on windows of `m < 18446744073709551616` (2^64)
+sample's premises and `W` by the record's pooled bound at `δc`, on windows of `m < 18446744073709551616` (2^64)
 receipts. -/
 def HeldOverTimeSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
@@ -157,7 +157,7 @@ def HeldOverTimeSampled : Prop :=
         ≤ T.heldOver ω (K.start ω) (K.stop ω)
 
 /-- **Held over time with the links charged, at the record's pooled bound** (no Identity). `HeldOverTimeLinks` with
-`LiveCoins` replaced by the draw's premises and `W` by the record's pooled bound at `δc`, on windows of
+`LiveCoins` replaced by the sample's premises and `W` by the record's pooled bound at `δc`, on windows of
 `m < 18446744073709551616` (2^64) receipts. -/
 def HeldOverTimeLinksSampled : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)

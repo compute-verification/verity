@@ -8,7 +8,7 @@ public import Mathlib.Tactic.NormNum
 /-!
 # The covering bound is not vacuous
 
-One circuit where every hypothesis of `InferenceOnly.Guarantees.CoveringBound` holds and `𝓜*` is nonempty
+One circuit where every hypothesis of `Slowdown.Guarantees.CoveringBound` holds and `𝓜*` is nonempty
 (`coveringBound_nonvacuous`), at `c = r · b = 1`, `D = 3`, `k = 2` and `s = 3`. Weights `w₀ … w₃` (gates 0–3) and a token
 input `x` (gate 4) are unregistered inputs (`θ = ∅`). The products `pᵢ = wᵢ · x` (gates 5–7) feed the activation
 `a = (p₀ + p₁) + p₂` (gates 8, 9), and `p₃ = w₃ · a` (gate 10) is chained through `a` by the weights 0, 1 and 2. A block
@@ -18,9 +18,9 @@ three gates, each with two inputs, cover it.
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.Covering
+namespace Slowdown.SecurityProofs.Covering
 
-open Verity Finset InferenceOnly.Covering
+open Verity Finset Slowdown.Covering
 
 /-- The gates each gate reads. -/
 def exReads : Fin 11 → Finset (Fin 11) :=
@@ -136,4 +136,4 @@ theorem coveringBound_nonvacuous :
   ⟨exDecl, exBlocks, 3, 2, 3, 1, 1, 6, exCover, by norm_num, ex_parameterHard, ex_covers,
     ⟨(3, 0), ex_mem⟩⟩
 
-end InferenceOnly.SecurityProofs.Covering
+end Slowdown.SecurityProofs.Covering

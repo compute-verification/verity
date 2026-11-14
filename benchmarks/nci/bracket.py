@@ -4,7 +4,7 @@ A policy is a calibration: blocks of at most ``Gamma`` gates, each reading at mo
 parameters, so ``alpha = K / Gamma`` bits per gate. A row (one training method in one configuration) gives the inputs
 in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
 
-* ``lower``: the thread theorem, ``InferenceOnly.SecurityProofs.ThreadedTraining`` (``security/Definitions/Slowdown/Guarantees/Threads.lean``):
+* ``lower``: the thread theorem, ``Slowdown.SecurityProofs.ThreadedTraining`` (``security/Definitions/Slowdown/Guarantees/Threads.lean``):
   ``slowdown >= kappa * b_a / (2 alpha Lambda)`` with ``Lambda = max(e, c K / (4 d b_w))``, and ``slowdown >= 1`` since a
   containing circuit is no smaller. The weight rate is capped at ``U_bits / n_updated``: a block that uses ``p`` updated
   weights can always read the whole update instead, so no larger rate is a valid charge. A seed-described update
@@ -47,7 +47,7 @@ INPUTS = {
     "flops_per_token": "the reference training algorithm's work per token",
 }
 
-THREAD_THEOREM = "InferenceOnly.SecurityProofs.ThreadedTraining"
+THREAD_THEOREM = "Slowdown.SecurityProofs.ThreadedTraining"
 
 
 def rates(i: dict, K: float, b_tok: float) -> tuple[float, float, float, float]:

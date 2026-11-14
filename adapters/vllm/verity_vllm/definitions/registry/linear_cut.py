@@ -3,7 +3,7 @@ PoUW's call of it commits and takes its y as that call commits it, computing nei
 
     LinearARow_v1{K,R,ROUND,CALL}   (x: Array<R, Array<K/R, BF16>>) -> Array<K, F32>   its A row: each of x's K elements widened
     LinearOut_v1{N,W,ROUND,CALL}    (y: Array<N, F32>) -> N/W × Array<W, BF16>         y: each committed word's high half, no gate
-    each _v2                        σ of its _v1 (`verity_vllm.definitions.boolean.sigma_lift`)
+    each _v2                        σ of its _v1 (`verity.circuits.ops.boolean.versions.sigma_lift`)
 
 **The A row** is the FP32 input row Pearl-C's A rows are (`verity.protocols.accounting.pouw.verifier.circuit.pc8`): the call's x widened to
 FP32, exact (`Bf16ToF32_v1` on each element, the encoding << 16), x read as R rows of K/R elements in order, so a cut reads
@@ -22,7 +22,7 @@ from verity.circuits.defs import composite
 from verity.circuits.ops.scalar import U32Hi16
 from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity_vllm.definitions.boolean import sigma_lift
+from verity.circuits.ops.boolean.versions import sigma_lift
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.int8_exact import row_parts_refusal
 from verity_vllm.definitions.registry.prims import BF16, F32

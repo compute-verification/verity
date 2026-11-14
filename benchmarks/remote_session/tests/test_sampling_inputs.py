@@ -1,7 +1,7 @@
 """`sampling_inputs`' closed form for the paced line's sampling term is `paced_line`'s arithmetic on uniform sessions,
 with the wrong receipts spilling past one group and not, and with one openings coin over several groups; that arithmetic
 is a stretch worked by hand; a region's solution meets the constraints it was solved under; and the code's coin over g
-groups (`groups_per_coin`) is the model's shared draws, each plan at g agreeing with it."""
+groups (`groups_per_coin`) is the model's shared samples, each plan at g agreeing with it."""
 from __future__ import annotations
 
 import sys
@@ -53,8 +53,8 @@ def test_a_region_solution_meets_its_constraints():
 
 
 def test_the_code_reads_one_coin_over_g_groups_as_the_merged_window_the_model_drew():
-    """`audit.pooled` on each group's receipts and draws naming `groups_per_coin` g is the model's reading of shared
-    draws, one window of g groups' receipts and the coin's samples, however the coin's samples fall in its groups."""
+    """`audit.pooled` on each group's receipts and samples naming `groups_per_coin` g is the model's reading of shared
+    samples, one window of g groups' receipts and the coin's samples, however the coin's samples fall in its groups."""
     from verity.protocols.accounting.poub.verifier import audit
     for g, shares in ((2, (0, 3)), (4, (1, 0, 2, 0)), (3, (0, 0, 1))):
         n, u = 5, 7_000

@@ -20,8 +20,8 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
   the family the adversary picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the unregistered share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
-  at `a = 1/MFU₀` (peak) without it, Lean's `InferenceOnly.Slowdown.remoteSlowdown` and, for a remote regime,
-  the slowdown `InferenceOnly.Guarantees.SlowdownRemote` bounds. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
+  at `a = 1/MFU₀` (peak) without it, Lean's `Slowdown.Slowdown.remoteSlowdown` and, for a remote regime,
+  the slowdown `Slowdown.Guarantees.SlowdownRemote` bounds. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
   comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
@@ -102,7 +102,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   inference-only policy's check is the registration (`Policy`). A regime is the envelopes that run, and builds the server blocks with their
   cuts.
 - **The slowdown lower bound** (`classes.py`, `attacks.py`, `theorem.py`): the pricing arguments as inference-block yields
-  `q_T(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
+  `q(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
   (`theorem.local`), summed over blocks (`theorem.slowdown`), with the minimum of global bounds beside it
   (`theorem.aggregate`).
 
@@ -112,7 +112,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `ε_unreg`, `L_unreg` | `fleet.<name>.eps_unreg`, `Partition.eps_unreg` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
 | server block `S`, `(c_S, k_S)`, `n_S` | `ServerBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
-| `q_T(c, k)` | `Cap`, from a class's `Allowance` by `classes.per_block` |
+| `q(c, k)` | `Yield`, from a class's `Allowance` by `classes.per_block` |
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
 | the serving cut's boundary term `ω_max μ k_S` | `Structure.per_bit` times `Cut.boundary` (`ServingBlockBound`) |
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect` (`Cut.uncertified`) |
@@ -120,7 +120,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
 | the padded size ratio `\|A\| / T_0`, the slowdown, the time to the target | `Slowdown.padded`, `Slowdown.value`, `Scenario.seconds` |
 
-**The uncertified cap.** A bound counts an uncertified or unregistered gate at `ω_max / s_×`, `s_×` the fewest gates in any
+**The free-compute yield.** A bound counts an uncertified or unregistered gate at `ω_max / s_×`, `s_×` the fewest gates in any
 counted operation's subcircuit. `structure.reference` takes `s_×` at the reference's gates per counted product, which
 is valid only under the named assumption `draft:no-straddle` (no counted operation straddles verified and free
 compute), so every bound counting such gates cites it. A structure states its `basis`, and `Structure.check` refuses one
@@ -206,7 +206,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 
 | module | interface |
 |---|---|
-| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
+| `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Yield`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
 | `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `clique`, `slowdown_of(c, k, n, size, work) → Chosen`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size, rows) → Charged`, `best_w`, `capped` |
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout; `held_layers`, the forward products of a block that holds whole layers, against E1's Proposition 3 |
@@ -257,7 +257,7 @@ The package and its outputs (`benchmarks/slowdown`, `slowdown.md`, `slowdown.jso
 identifiers `Slowdown.value`, `Estimate.slowdown`, `slowdown_worst`, `Corner.slowdown` and a bound's or an attack's `slowdown` in the
 JSON all name the slowdown, once called the overhead; a result's or a family's `slowdown` and
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is what Lean's
-`InferenceOnly.Guarantees.SlowdownRemote` bounds (`remoteSlowdown`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
+`Slowdown.Guarantees.SlowdownRemote` bounds (`remoteSlowdown`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
 slowdown `D`; the padded size ratio `|A| / T_0` (`Slowdown.padded`, `Estimate.padded`, the JSON's `padded`) is the
 intermediate, not the slowdown. The one key that keeps the older name is the board's `"rho"`
 (`nci.bracket.search`), which `tests/test_attacks.py` reads.

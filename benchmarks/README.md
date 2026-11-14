@@ -28,10 +28,9 @@ says. These are the directories that have one:
 | `verity bench inference_only` | the inference-only policy of Llama 3.2 1B as served, and its one number: the least slowdown of training run inside the policy's inference blocks |
 | `verity bench int8_class_rate` | one card's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 |
 | `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
+| `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
 | `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
 | `verity bench moe_align` | the canonical `moe_align_block_size` on one GPU: its outputs run to run, the plugin as vLLM loads it, and its cost |
-| `verity bench network_e2e` | network certification end to end on a served model, as one report with its negatives |
-| `verity bench network_sim` | the device graph's demo, and the mock datacenter of network namespaces running the real network certifier |
 | `verity bench network_traces` | one chunk of per-token timing traces of real vLLM serving on one GPU, for the network certifier's calibration |
 | `verity bench numerical` | one of `verity_numerical`'s tools by name: input sets, the subcircuit catalog, the per-unit-type cost inventory and its tables, a measured cell, the reference checker |
 | `verity bench overhead` | the front door for a scheme's γ over stock at a card's operating points: `points`, `run` and `table` |
@@ -244,9 +243,9 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `network_traces/` | the network certifier's runs in front of a served endpoint, and their zero-knowledge proofs | maintained |
-| `network_e2e/` | network certification end to end on a served model, as one command and one report, with its negatives | maintained |
-| `certifier_term/` | the network certifier's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan and N2 as the monitoring-period check charges them, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
-| `network_sim/` | the device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier | maintained |
+| `network_e2e/` | the network chain's steps after N2 (`chain.py`) held on fakes and recorded endpoint runs, the advice encodings (`encodings/`) and vLLM's scheduler traces (`traces/`) | maintained |
+| `certifier_term/` | the network certifier's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan as the monitoring-period check charges it, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
+| `network_sim/` | the simulated datacenter's workload (`workload/`): a Boolean Program or vLLM's serving Program placed on blocks and framed across certified links, which `verifier_cost` measures a verifier on | maintained |
 | `certifier_timing/` | the bits an interval a server moves through when the network certifier releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
 | `scan_cost/` | what the network certifier's scan costs for each second of execution phase it covers: proving seconds (the round's sessions and their staging) and the Lean verifier's CPU seconds on one core, at a fixed identity, each with its stages, a guard on the round's answer, a baseline and two targets | maintained |
 | `mempool/` | the certifier's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
@@ -283,6 +282,7 @@ How long the team's own changes take to reach `main`: measured on the verified q
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `landing/` | mark to `main`: for each PR the verified queue landed in the last 7 days, the hours from its ready mark at the head that landed to the move of `main` that holds it, split as the queue batches (plain, Lean), each class's p90, median, count and share within 2 h | maintained |
+| `lean_unread_gate/` | the unread gate a ready mark's preflight runs (`tools/verity/lean/unread_gate.py`) on one change: its time by stage and its git calls, from an empty gate cache, and its guard, the same verdict and `--json` as the gate at another revision | maintained |
 
 ### Communication
 
@@ -304,3 +304,9 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 | --- | --- | --- |
 | `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
 | `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |
+
+### Security
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `security_findings/` | the security review's serious findings still open (`findings.toml`): each closed only by the check `open_findings.py` holds for it, run on the checkout | maintained |

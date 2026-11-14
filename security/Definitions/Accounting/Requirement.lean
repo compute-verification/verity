@@ -4,9 +4,9 @@ public import Definitions.Accounting.Device
 public import Definitions.Core.Requirement
 
 /-!
-# A declared circuit's requirement (trusted)
+# A registered circuit's requirement (trusted)
 
-What a declared circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a kernel):
+What a registered circuit `W` needs of a device's memory, read from its wiring and its schedule (the IR, never a kernel):
 the values its execution keeps live when each step begins (`live`) and the values each step reads (`reads`), in bits,
 in all, by block of the store and over a window; the live values in complete blocks, which the audit credits
 (`credited`); and when the audit's store and plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`), so that
@@ -83,7 +83,7 @@ end Accounting
 
 namespace Accounting.Requirement
 
-/-- A declared circuit's wiring over its values `G`. -/
+/-- A registered circuit's wiring over its values `G`. -/
 structure Wiring (G : Type) where
   /-- a value's width in bits (`Value<w>`) -/
   width : G → ℕ

@@ -1,5 +1,5 @@
 """PoUB-P2's core case: a session over PoUS's P2 store (`p2_parties.session`) in the core interface's form, which
-`RemoteAudit.P2Protocol` (`remote-audit-p2-protocol`, in `lean/`) replays, and the store it names, which onsite holds
+`Poub.P2Protocol` (`poub-p2-protocol`, in `lean/`) replays, and the store it names, which onsite holds
 to PoUS's.
 
 A case (`case_of`) is ``{"params", "commitment", "evidence", "store_root"}``, the commitment and evidence canonical JSON
@@ -18,7 +18,7 @@ in hex:
   "line"}``, ``{"op": "p2_openings", "t", "line"}`` and ``{"op": "p2_fail"}``. The close (`close_of`) is the memory
   challenger's signature over the whole case: its key, the log's length, the chain (`chain`) of the case's head
   (`head`: the commitment's digest and the params' clock floor) and then its log, and the signature on the role's
-  message (`lms.memory_challenger_message`) of the session and `close_record`, `RemoteAudit.P2Close`'s bytes. That
+  message (`lms.memory_challenger_message`) of the session and `close_record`, `Poub.P2Close`'s bytes. That
   chain is the one SHA-512 the verifier's device keeps of the case (`p2_parties.case_digest`);
 * ``store_root``: the store the session audits, its registration's root, 128 lowercase hex characters. That root is the
   root of `C*` PoUS's setup published (`pous.run.Setup.root`), so `same_store` holds it to PoUS's run case. No digest
@@ -50,16 +50,16 @@ from verity.protocols.accounting.pous.verifier.run import Setup
 from . import p2_parties
 
 PROTOCOL = p2_parties.PROTOCOL
-EXE = "remote-audit-p2-protocol"
+EXE = "poub-p2-protocol"
 DIGEST_DOMAIN = b"verity/remote-bandwidth/p2/commitment/v0\0"
 STORE_ROOT = re.compile(r"[0-9a-f]{128}")
 CASE, ANSWER = "case.json", "answer.json"
-#: what an accepted case's `eps` sums, as `RemoteAudit.P2Protocol.certify` does
+#: what an accepted case's `eps` sums, as `Poub.P2Protocol.certify` does
 EPS_TERMS = p2_parties.EPS_TERMS
-#: P2's tag, NUL-ended (`RemoteAudit.P2Close.CLOSE_TAG`): the log's chain starts from it and the close's record opens
+#: P2's tag, NUL-ended (`Poub.P2Close.CLOSE_TAG`): the log's chain starts from it and the close's record opens
 #: with it
-CLOSE_TAG = domains.REMOTE_BANDWIDTH_P2_CLOSE.encode() + b"\0"
-#: a coin as the log carries it, the challenger's whole coin (`RemoteAudit.P2Protocol.COIN_BYTES`)
+CLOSE_TAG = domains.POUB_P2_CLOSE.encode() + b"\0"
+#: a coin as the log carries it, the challenger's whole coin (`Poub.P2Protocol.COIN_BYTES`)
 COIN_BYTES = 64
 
 
@@ -156,9 +156,9 @@ def same_store(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> str | N
 
 def answer(case: Mapping[str, Any], session: Mapping[str, Any]) -> dict[str, Any]:
     """The case's answer in the core interface's form from the session's own answer `session` (`p2_parties.answer`'s,
-    `P2Session.answer`), as `RemoteAudit.P2Protocol` answers a case of `p2_parties.SESSION`'s session: accepted,
+    `P2Session.answer`), as `Poub.P2Protocol` answers a case of `p2_parties.SESSION`'s session: accepted,
     `{"eps", "q_bytes", "span_ns"}` and the rest of the answer as its profile; rejected with the failure, its window and
-    its draw; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
+    its sample; or undecided. It takes the live verifier's word for the session's parameters, so a toy party's case,
     which the replay refuses, is answered here as its session was."""
     out: dict[str, Any] = {"commitment": digest(case).hex(), "profile": None, "protocol": PROTOCOL, "public": None,
                            "reason": None}
@@ -193,8 +193,8 @@ def judged(case: Mapping[str, Any], session: Mapping[str, Any], exe: str | os.Pa
     return serve(exe, [case])[0] if exe is not None else answer(case, session)
 
 
-#: why a case no `remote-audit-p2-protocol` answered is undecided where its session accepted (`unjudged`)
-NO_JUDGE = ("no remote-audit-p2-protocol answered the case: the Lean decides it, and the session's own accept decides "
+#: why a case no `poub-p2-protocol` answered is undecided where its session accepted (`unjudged`)
+NO_JUDGE = ("no poub-p2-protocol answered the case: the Lean decides it, and the session's own accept decides "
             "nothing alone")
 
 

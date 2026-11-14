@@ -15,7 +15,7 @@ least `min_A lo_A`. A bound above an attack is a contradiction: one of the bound
 algorithm, and `contradictions` names it.
 
 The overhead is the hardware multiple over the reference training algorithm at its MFU, `MFU₀` (the scenario's `mfu`),
-at least 1: Lean's `hardwareMultiple`, and for a remote regime the slowdown `InferenceOnly.Guarantees.SlowdownRemote` bounds
+at least 1: Lean's `hardwareMultiple`, and for a remote regime the slowdown `Slowdown.Guarantees.SlowdownRemote` bounds
 (`theorem.Slowdown`). The padded size ratio `|A| / T_0`, each server block padded to its capacity, is the intermediate
 the bound gives (`Slowdown.padded`), and a contradiction compares it. The time to the target, wall-clock, is reported
 beside the overhead: at least the overhead times `T_0 / (MFU₀ Φ_total)`, the reference's own time (`Scenario.seconds`).
@@ -93,7 +93,7 @@ class Scenario:
 
     @property
     def reference(self) -> float:
-        """`T_0`: the reference circuit's gates to the run's target (its FLOPs through `hardware.Units`)."""
+        """`T_0`: the reference training algorithm's gates to the run's target (its FLOPs through `hardware.Units`)."""
         return self.context.units.gates(self.run.target(self.model))
 
     def seconds(self, overhead: float) -> float:
@@ -132,7 +132,7 @@ class Estimate:
     #: where its premises stand at the largest block that bounds it (`classes.premise_status`: supported, assumed,
     #: contested, refuted); empty for an attack
     premise: str = ""
-    #: the overhead inside one inference block `(c, k)` alone: `w c / q_T(c, k)`, the declared circuit's overhead
+    #: the overhead inside one inference block `(c, k)` alone: `w c / q(c, k)`, the registered circuit's overhead
     declared: float = math.nan
     #: every bound at once only: the bounds left out at a block that binds, their premises refuted there
     excluded: tuple[str, ...] = ()

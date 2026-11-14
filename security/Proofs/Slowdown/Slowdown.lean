@@ -16,9 +16,11 @@ hypothesis. `SlowdownThreadedSlots` discharges the declared computation's bound 
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs
+open InferenceOnly
 
-open Verity InferenceOnly.Slowdown
+namespace Slowdown.SecurityProofs
+
+open Verity Slowdown.Slowdown
 
 /-- **The four sources, summed** (the slowdown's arithmetic core, its tight form): with the residual and the declared
 computation under the memory cap together, `η ≤ s + (1 − s) min(r, μ) + ν + χ`. -/
@@ -242,7 +244,7 @@ theorem SlowdownThreaded : Guarantees.SlowdownThreaded := by
 
 /-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`
 and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and an incorrect proof
-block, every hypothesis of `InferenceOnly.Guarantees.Slowdown` holds and `η = 3/4 = s + min(r, μ) + ν + χ`: the hypotheses can
+block, every hypothesis of `Slowdown.Guarantees.Slowdown` holds and `η = 3/4 = s + min(r, μ) + ν + χ`: the hypotheses can
 hold together, and the inequality is not loose there. -/
 theorem slowdown_attained :
     ((0 : ℕ) : ℝ) ≤ 2 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 2 * (4 - 3) / 2 ∧ ((1 : ℕ) : ℝ) ≤ 4 / 4 ∧
@@ -252,4 +254,4 @@ theorem slowdown_attained :
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, ?_⟩
   norm_num [efficiency, unregisteredShare, residualShare, declaredShare, min_def]
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs
