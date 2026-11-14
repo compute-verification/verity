@@ -3,6 +3,18 @@
 # tools keep their names. Declarations keep their place in the locks' records: `rename.py --moves` prints the renames
 # that `check.py --update --moved` takes. A word that names other declarations too goes by file ([[words_in]]), each
 # entry listing a module that declares the name it renames, since `move_check.py` keeps a scoped word only there.
+#
+# By hand, in a commit of its own after the map's, with a build: `Accounting.Rate.DeployedSession` becomes
+# `DeployedRun`, a name the module `Proofs.Accounting.RateAudit.DeployedRun` already spells.
+# The map's rename stands beyond its words where a file already spells the new name, which move_check reads as a
+# merge of two names: the six one-file entries below that say so, and `instBEqSessionCommitment`, the instance
+# Lean derives.
+# Left out: `exWindow`, whose file declares `exRun`; `Flock.Guarantees.WindowRec`, renamed with its field `wrong`
+# by another word, which `check.py --moved` can't read back in one move; the four `session`s of the network
+# certifier's advice and window charge, whose files spell `run` already (the carry's field); the two network
+# certifier `Instance.session`s, each punned with the issuer's field `session`; `Core.Account.Example.session`,
+# whose file spells `run` already; `Pouw.Window.flockKnowledgeSound_analysisZC`, whose word is only its namespace's;
+# `Accounting.Window`, its `ticks`, `steps` and `card_ticks`, a refactor.
 [words]
 # proofs
 "extraction_audit_window_split_of_record_of_le_slack" = "extraction_audit_executionPhase_split_of_record_of_le_slack"
@@ -918,18 +930,6 @@ files = [
 ]
 words = { "window" = "period" }
 
-# comms: the GPU kind, the constructor alone.
-[[words_in]]
-files = ["security/Definitions/Core/Site.lean", "verity/protocols/interface/CoreProtocol/Site.lean"]
-words = { "| device" = "| accelerator" }
-
-[[words_in]]
-files = ["security/Definitions/Core/Site.lean", "security/Properties/Core/Site.lean",
-         "verity/protocols/interface/CoreProtocol/Site.lean", "verity/protocols/interface/CoreProtocol/Registration.lean",
-         "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Registered.lean",
-         "security/Proofs/Core/Site.lean"]
-words = { ".device" = ".accelerator" }
-
 [rewrite]
 # Never rewritten: records of what was, files a digest pins, locks, and what isn't Lean or its prose.
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/*.py", "benchmarks/**", "adapters/**", "tools/**"]
@@ -940,4 +940,3 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
             'lanes/[\w.-]+', '"(?:window|windows|session|sessions|period|periods|wrong|transcript|escape|horizon)"',
             '(?<=let \.arr ws := )e\.windows']
-strings = ["Site.device"]
