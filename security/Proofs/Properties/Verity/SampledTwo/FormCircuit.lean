@@ -5,6 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.FormSetup
 public import Proofs.Properties.Verity.SampledTwo.FormCount
 public import Proofs.Properties.Verity.SampledTwo.FormStmts
 public import Proofs.Properties.Verity.SampledTwo.FormLast
+public import Proofs.Properties.Verity.SampledTwo.FormLink
 
 /-!
 # The messages' piece at the form's reading, at the circuit statement's table
@@ -26,13 +27,14 @@ piece at that table, where the three are theorems, and with them the statements'
   `MemberAtFixed` and `DrawAtFixed`.
 * `LastFixed` is `lastFixed_of` (`FormLast.lean`), from `StmtAtFixed`, the sessions the verdict accepted
   (`SessionCoins.verdictsAt_of`) and each session's evidence on the case (`SessionCoins.logCloses_run`).
+* `LinkFixed` is `linkFixed_of` (`FormLink.lean`), from `StmtAtFixed`, the sessions the verdict accepted and the
+  members' check on the log the check read (`SessionCoins.membersNamed`).
 
 The reading's statements and messages are taken to be the case's (`hS`, `hM`), which holds by definition at
 `SessionMsgs.sessionReading`.
 
 **Not established here**: `StmtsRead`, `PartsHeldAt`, `SessionCoins.StmtsPrint`, `SessionCoins.StmtsFit`,
-`SessionCoins.SessionsLive`, `MemberAtFixed`, `DrawAtFixed` and `LinkFixed`, each a hypothesis, and `agreed_form`'s
-`hR`.
+`SessionCoins.SessionsLive`, `MemberAtFixed` and `DrawAtFixed`, each a hypothesis, and `agreed_form`'s `hR`.
 -/
 
 @[expose] public section
@@ -51,7 +53,8 @@ and messages are the case's. Its hypotheses on the sessions' records are theorem
 record is its session's, accepted at its statement's setup (`SessionCoins.msgsOfRecords_form`). The evidence holds one
 statement a template (`stmtsCount_of`), so the statements' message is fixed where each template's statement is
 (`stmtsFixed_of_each`), which it is where the member it names and the sample its record prints are
-(`stmtAtFixed_of`); and a session's last message is fixed by its evidence where its statement is (`lastFixed_of`). -/
+(`stmtAtFixed_of`); and where its statement is fixed, a session's first message is fixed by the string shown at its
+first round (`linkFixed_of`) and its last by its evidence (`lastFixed_of`). -/
 theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
@@ -66,8 +69,7 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hparts : PartsHeldAt A C)
     (hprint : SessionCoins.StmtsPrint C Good) (hfit : SessionCoins.StmtsFit C Good)
     (hlive : SessionCoins.SessionsLive C Good) (hsent : CaseIsSent C) (hmemb : MemberAtFixed A C Good L)
-    (hdraw : DrawAtFixed A C Good L) (hLink : LinkFixed A C S Good L) (hC : CaseCommits C)
-    (hx : stmtOf c = some x)
+    (hdraw : DrawAtFixed A C Good L) (hC : CaseCommits C) (hx : stmtOf c = some x)
     (hR : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x),
       FormAccepts C ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
       Good ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
@@ -86,9 +88,10 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
   have hclose : SessionCoins.LogCloses A C Good L := by
     rw [hL]
     exact SessionCoins.logCloses_run A C Good (CoinMap.stageLocate ℓ₁ ℓ₂) _ hsz hlog hcov
-  have hLast : LastFixed A C S Good L :=
-    lastFixed_of A C S Good L _ hM (SessionCoins.verdictsAt_of hS hof hst hrounds hscope hcount hprint hfit hlive)
-      hclose hfix
+  have hverd : SessionCoins.VerdictsAt A C Good fun _ => Flock.Tags.circuit.table :=
+    SessionCoins.verdictsAt_of hS hof hst hrounds hscope hcount hprint hfit hlive
+  have hLast : LastFixed A C S Good L := lastFixed_of A C S Good L _ hM hverd hclose hfix
+  have hLink : LinkFixed A C S Good L := linkFixed_of A C S Good L hM hsz hverd hfix
   exact agreed_form V A x θ F c σ C S dev P' (fun _ => Flock.Tags.circuit.table) ℓ₁ ℓ₂ Good L hL q hne hSecond hDraw
     hsz hlog hθ
     (SessionCoins.logRising_of (SessionCoins.located_rising A C _ hsz) hlog (SessionCoins.interiorReads C hsz))
