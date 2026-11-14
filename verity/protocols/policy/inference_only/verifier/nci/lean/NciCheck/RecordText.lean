@@ -184,13 +184,15 @@ structure TableRead where
   units : Nat
 
 /-- A table opening: template `reader`'s units `[start, start + units)` each open a row of `table` by the key in input
-row `key`, filling input rows `ports`, with the verdict in output `verdict`. -/
+row `key`, filling input rows `ports`, with the verdict in output `verdict`; and, where the record declares it, the
+row each returns in output `row`. -/
 structure Opening where
   reader : String
   table : String
   key : String
   ports : List String
   verdict : String
+  row : Option String
   start : Nat
   units : Nat
 
@@ -207,6 +209,7 @@ def REGISTERED : List String := ["params", "tables", "reads", "roots", "openings
 def READ : List String := ["reader", "port", "param", "at", "radix", "base", "step"]
 def TABLE : List String := ["name", "param", "offset", "words", "rows"]
 def TABLE_READ : List String := ["reader", "port", "table", "of", "at", "units"]
+/-- An opening's keys; it may declare its `row` beside them. -/
 def OPENING : List String := ["reader", "table", "key", "ports", "verdict", "at", "units"]
 def INGRESS : List String := ["reader", "port", "at", "units", "step"]
 /-- A history table's keys; it may state its `capacity` beside them. -/
@@ -309,7 +312,9 @@ It reads `W`'s cuts and wires and nothing else of it: no template of its own and
 * `registered.roots`, `{reader, port, table, of, at, units}`: units `[at, at + units)` of the reader read, in a row
   of 32 words, the table's root (`of` = `root`) or its domain id (`domain`);
 * `registered.openings`, `{reader, table, key, ports, verdict, at, units}`: units `[at, at + units)` of the reader
-  open a row of the table by the key in row `key`, filling `ports`, with the verdict in output `verdict`;
+  open a row of the table by the key in row `key`, filling `ports`, with the verdict in output `verdict`. One may
+  declare its `row` beside them, the output that returns the row opened, an output of the reader as the verdict is;
+  nothing fills a row by it, and an opening that declares none is read as before;
 * `ingress`, `{reader, port, at, units, step}`: units `[at, at + units)` of the reader read that row from outside. -/
 def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except String Inputs := do
   let reg := (doc.getObjVal? "registered").toOption.getD NO_REGISTERED
@@ -369,11 +374,14 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
   let .arr openingsJ := valueAt reg "openings" | throw "inputs"
   let mut openings : List Opening := []
   for o in openingsJ do
-    if !keyed o OPENING then throw "inputs"
+    let declaresRow := keyed o ("row" :: OPENING)
+    if !(keyed o OPENING || declaresRow) then throw "inputs"
     let reader ← strIn o "reader"
     let table ← strIn o "table"
     let key ← strIn o "key"
     let out ← strIn o "verdict"
+    let row := stringAt o "row"
+    if declaresRow && row.isNone then throw "inputs"
     let .arr portsJ := valueAt o "ports" | throw "inputs"
     if portsJ.isEmpty then throw "inputs"
     let t ← tmplIn ts reader
@@ -382,6 +390,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
     if !(units ≥ 1 && start + units ≤ t.units) then throw "inputs"
     let _ ← rowIn t key
     if !(tables.any (·.name == table)) || (t.outs.lookup out).isNone then throw "inputs"
+    if row.any fun r => (t.outs.lookup r).isNone then throw "inputs"
     let mut ports : List String := []
     for pj in portsJ do
       let .str p := pj | throw "inputs"
@@ -389,7 +398,7 @@ def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except Stri
       let k := W.cutsOf reader p
       decls := decls.push { w := rect reader p start units k, bits := 16 * words / k, fill := .opening openings.length }
       ports := ports ++ [p]
-    openings := openings ++ [({ reader, table, key, ports, verdict := out, start, units } : Opening)]
+    openings := openings ++ [({ reader, table, key, ports, verdict := out, row, start, units } : Opening)]
   let .arr ingressJ := (doc.getObjVal? "ingress").toOption.getD (Json.arr #[]) | throw "inputs"
   for g in ingressJ do
     if !keyed g INGRESS then throw "inputs"

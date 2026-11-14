@@ -244,7 +244,7 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest": {"audit": {"window_accepted": True}}}}),
-        job=put("job.json", job), warden_run="g1/warden")
+        job=put("job.json", job), network_certifier_run="g1/warden")
 
 
 def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(tmp_path):
@@ -256,7 +256,7 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
     assert cr.report(_steps(tmp_path, ok | {"profile": "planned"}, endpoint=False))["verdict"] == "accepted"
     assert cr.report(_steps(tmp_path, ok | {"stand_in": {"n2": "the simulated link"}}))["verdict"] == "refused"
     steps = _steps(tmp_path, ok)
-    steps.warden_run = None
+    steps.network_certifier_run = None
     assert cr.report(steps)["verdict"] == "refused"
     failed = cr.report(_steps(tmp_path, {"profile": "advice", "rc": {"n2": "1", "scan": "0"},
                                          "why": {"n2": "ValueError: no profile"}}))
@@ -345,7 +345,7 @@ def test_no_block_entry_is_written_for_an_answer_the_period_check_accepts(tmp_pa
     assert f"no certifier entry: {cr.ROWS_FORM}" in cr.markdown(got)
     out = tmp_path / "out"
     assert cr.main(["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint,
-                    "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.warden_run,
+                    "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.network_certifier_run,
                     "--audit", *steps.audit, "--period-answer", steps.period_answer, "--out", str(out)]) == 0
     assert not (out / "block.json").exists()
 
@@ -365,7 +365,7 @@ def test_no_block_entry_is_written_for_an_answer_the_period_check_accepts(tmp_pa
     steps.period_case = None
     assert why(period_answer=str(tmp_path / "none.json")).endswith("none.json: not a file")
     assert why(period_answer=None) == cr.NO_PERIOD_ANSWER
-    refused = cr.report(SimpleNamespace(**{**vars(steps), "period_answer": honest, "warden_run": None}))
+    refused = cr.report(SimpleNamespace(**{**vars(steps), "period_answer": honest, "network_certifier_run": None}))
     assert refused["verdict"] == "refused" and refused["block"]["why"].startswith("the chain is refused")
     assert "no certifier entry: the chain is refused" in cr.markdown(refused)
     scan_only = cr.report(SimpleNamespace(**{**vars(steps), "n2": None, "period_answer": honest}))
@@ -380,7 +380,7 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     put = lambda honest, forged, ok=True: Path(steps.scan).write_text(json.dumps(
         {"ok": ok, "T": 32, "rounds": {"honest": honest, "forged": forged}}))
     args = ["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint, "--scan",
-            steps.scan, "--job", steps.job, "--warden-run", steps.warden_run]
+            steps.scan, "--job", steps.job, "--warden-run", steps.network_certifier_run]
     run = lambda name: (cr.main(args + ["--out", str(tmp_path / name)]),
                         json.loads((tmp_path / name / "report.json").read_text()))
 
@@ -494,7 +494,7 @@ def test_subset_bound():
 def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
     job = {"profile": "advice", "rc": {"n2": "0", "scan": "2"}, "path": cr.CERTIFIER_ONLY}
     steps = _steps(tmp_path, job)
-    steps.scan = steps.warden_run = None
+    steps.scan = steps.network_certifier_run = None
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
         {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
          "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))

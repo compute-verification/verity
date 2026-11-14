@@ -32,7 +32,10 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
   `connection_rows_run.py` is a run's connection rows (`--lengths 1|2 [--content P,O[,ROWS] ...]`: the schedule's flags,
   the publisher's keep of each execution phase's tables, or under `--lengths 2` of the network certifier's word that
-  it has none, their check, and `cost`, which measures a close);
+  it has none, their check, which is handed the SHA-512 of the network certifier's public key and its session
+  (`check --key-sha512 HEX --session HEX`), holds the run's deployment record to them and, with `--registrations FILE`
+  and no problem found, writes what it was checked under and then each registration it held, and `cost`, which
+  measures a close);
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
   system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
@@ -131,8 +134,10 @@ rehearsal's is. The runner refuses a session without all three, and under any ot
 records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
 Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
-form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every
-request of the audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
+form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network certifier's
+records pass `network-rows check` (each record held to its certified head, then the certifier program's rows audit,
+which refuses cells cut, clocked or ordered otherwise than the schedule), the chain accepted, every request of the
+audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
 `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window), is witness, as every
 case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
 never in the piece's directory, which the run publishes. The certificates of its evidence, the link-window's three
@@ -140,8 +145,8 @@ records' and its two row registrations', which the network certifier signed wher
 published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
-profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
-on the developer's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
+profile names its placement, as labels read from the run: the machine the certifier ran on, and the machine that ran
+each of the piece's steps; the piece establishes no `trusted-host` and gives no bound on that ground. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
 other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's
@@ -150,7 +155,9 @@ declare out of its directory. Split in two around V3c
 (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
 (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
 consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
-releases through its own hold.
+releases through its own hold. The check reads an audit's state entry among its `roots` and its `registered` alone,
+and a served window's registration holds its `SCAN_STATE` in its window's `activations.values` alone, so a served
+period's answer is a reject at the state tie.
 
 ## A cheating server
 
@@ -341,17 +348,18 @@ The run of record takes the network chain end to end on the gate's machines:
    reads.
 5. The verdict is the per-execution-phase acceptance that the certification period's leak bound reads.
 
-**How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate certifier-rehearse --peer HOST --port
-PORT --minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20` (or
-`warden-rehearse --scan`, the network certifier as a relay), then `status` and `fetch`. A prompt range shorter than the
-chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one prompt, so such an endpoint
-takes its prompts on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate
-certifier-rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4`
-(`--prompts`: request j sends the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). The
-fetched tarballs go to one job, `chain_record.sh`, with the endpoint's records (`benchmarks/network_e2e/chain.py`'s
-`ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and `serve.json` from the endpoint's serve
-directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's binding and the two provers, and writes
-`out/report/report.json` and `report.md`:
+**How it runs.** The gate runs on the auditor's machine: `sudo vy-challenger-gate warden-rehearse --scan --peer HOST
+--port PORT --minutes 30` (the network certifier as a relay), then `status` and `fetch`. The proxy's rehearsal is no
+verb of the gate's: `certifier_serve.py rehearse --upstream URL --traffic varied --requests 100 --tokens 64 --seed 1
+--eos-ids 128001 --height 20` runs it off the gate's machine, and `demo_chain.sh` keeps its run as the gate keeps one. A
+prompt range shorter than the chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one
+prompt, so such an endpoint takes its prompts from a file and a wider margin: `demo_stub.py prompts --count 100 >
+PROMPTS`, then `certifier_serve.py rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0
+--prompts-file PROMPTS --margin 4` (`--prompts-file`: request j sends the (j mod n)-th; `--margin`: the plan's over the
+probes, 1 to 8, 2 otherwise). The fetched tarballs go to one job, `chain_record.sh`, with the endpoint's records
+(`benchmarks/network_e2e/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and
+`serve.json` from the endpoint's serve directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
+binding and the two provers, and writes `out/report/report.json` and `report.md`:
 
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|

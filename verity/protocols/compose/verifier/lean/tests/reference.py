@@ -15,6 +15,9 @@ recursive form's params refused by name (`RECURSIVE_REFUSED`), the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, and for space (`verity/pous/p2/v4/run`) and bandwidth (PoUB-P2,
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
+Onsite's development composite with the wipe's count held (`ONSITE_COUNTED`, `Core.Onsite.counted`) adds the count over
+the wipe's span on its host's one link (`HOST_SPAN`: the count's mirror, `span_case.reference`, behind `wipe_link`) and
+the counted wipe (`COUNTED_WIPE`, `wipe_protocol_case.counted_reference`), tied by `WIPE_NODE` and `WIPE_COUNT`.
 
 The trial's rule, onsite's and remote's over their subprotocols' statements:
 
@@ -51,6 +54,10 @@ from typing import Any, Callable
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
+from verity.protocols.accounting.certifier.verifier import registered as RH
+from verity.protocols.accounting.certifier.verifier import span
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.verifier import wipe_period as WP
 from verity.protocols.accounting.pouw.verifier import core_check, credit, period_check
 from verity.protocols.proofs.spot.device import challenger as CH
 from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
@@ -86,6 +93,9 @@ PERIOD = module("network_period_difftest", ROOT / "verity/protocols/accounting/c
 INFERENCE = module("inference_only_protocol_difftest", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
 WIPE_CASES = module("wipe_protocol_case", ROOT / "verity/protocols/accounting/pous/device/lean/tests/wipe_protocol_case.py")
+#: The count over a span's difftest helper: `reference` is the count's mirror behind a parameters decoder, and `build`
+#: makes a span with one change, around what runs between its two marks when given.
+SPAN_CASES = module("span_case", ROOT / "verity/protocols/accounting/certifier/verifier/network/tests/span_case.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -343,6 +353,53 @@ BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
 
 
+def _site_kind(site: dict, i: str) -> str | None:
+    """`Core.Site.kind?`: the outside's kind, or that of the first location registered under `i`."""
+    if i == RH.OUTSIDE:
+        return RH.OUTSIDE
+    return next((x["kind"] for x in site["locs"] if x["id"] == i), None)
+
+
+def _site_joins(site: dict, k: dict, a: str, b: str) -> bool:
+    """`Core.Site.Joins`: link `k` joins kinds `a` and `b`, in either order."""
+    return (_site_kind(site, k["ends"][0]), _site_kind(site, k["ends"][1])) in ((a, b), (b, a))
+
+
+def wipe_link(site: dict, host: str) -> str:
+    """`Core.Onsite.wipeLink`: the one link what leaves `host` leaves on, as the registered hardware `site` (a
+    `registered.site_of`) has it; `span.Refused`, with the Lean's message, otherwise."""
+    if _site_kind(site, host) != "host":
+        raise span.Refused(f"{host} is no host of the registered hardware")
+    own = [k for k in site["links"] if host in k["ends"] and not _site_joins(site, k, "challenger", "host")]
+    if not own:
+        raise span.Refused(f"host {host}: it has no link besides the memory challengers'")
+    if len(own) > 1:
+        raise span.Refused(f"host {host}: it has {len(own)} links besides the memory challengers' "
+                           f"({', '.join(k['id'] for k in own)}); a count on one of them is not of what left on the others")
+    k = own[0]
+    if not _site_joins(site, k, "certifier", "host"):
+        raise span.Refused(f"host {host}: its one link, {k['id']}, joins no network certifier, so no certificate counts "
+                           "what leaves on it")
+    return k["id"]
+
+
+def host_span_params(j: Any) -> span.Params:
+    """`Core.Onsite.spanParams`: the count's parameters (`span.params`), which must hold the registered hardware, the
+    link they name being its host's one link (`wipe_link`)."""
+    p = span.params(j)
+    if p.registered is None:
+        raise span.Refused("the parameters hold no registered hardware (site and head): a wipe's count is on a "
+                           "registered host's link")
+    wipe_link(RH.site_of(j["site"]), p.registered.host)
+    return p
+
+
+#: `Core.Onsite.hostSpan`: the count over the span between a wipe's two marks, on its host's one link.
+HOST_SPAN = Ported(span.ID, lambda case: SPAN_CASES.reference(case, host_span_params))
+#: `Core.Onsite.countedWipe`: the wipe whose count the composition holds, under the accepted schemes.
+COUNTED_WIPE = Ported(WP.COUNTED, WIPE_CASES.counted_reference(WP.COUNTED, WIPE_CASES.mc.SCHEMES))
+
+
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
     """`Core.Composition.bind`: SHA-512 over the composition's id, a zero byte and the canonical JSON of the subprotocols'
     digests in order."""
@@ -508,10 +565,12 @@ class Same(Product):
 class Tie:
     """`Core.Composition.Tie`: every value that each subprotocol of ``names`` names must be one value, ``what``; each
     reads the values it names off its case's commitment and evidence bytes with its function (None: its case doesn't
-    decode)."""
+    decode). With ``cased``, each function reads its whole case, ``(id, canonical params, commitment, evidence)``, as
+    the Lean's `Case → …` does."""
 
     what: str
     names: tuple = ()
+    cased: bool = False
 
     def values(self, ev: list) -> list[tuple[str, bytes]] | None:
         """Each value the subprotocols of ``names`` name on the cases ``ev``, in their order; None when one of them has no
@@ -521,20 +580,21 @@ class Tie:
             cases.setdefault(k[0], k)
         out: list[tuple[str, bytes]] = []
         for s, f in self.names:
-            ds = f(cases[s][2], cases[s][3]) if s in cases else None
+            ds = None if s not in cases else f(cases[s]) if self.cased else f(cases[s][2], cases[s][3])
             if not isinstance(ds, list):
                 return None
             out += [(s, d) for d in ds]
         return out
 
     def strays(self, ev: list) -> str | None:
-        """`Core.Composition.Tie.strays`: the first value that isn't the first one, with both; none when they all named
-        it, or when a subprotocol names none."""
+        """`Core.Composition.Tie.strays`: the tie's name, the subprotocol that named the first value and the one that
+        named the first value that isn't it, and nothing of either value; none when they all named it, or when a
+        subprotocol names none."""
         got = self.values(ev)
         if not got:
             return None
         (s, d), *rest = got
-        return next((f"{self.what}: {s} committed {d.hex()}, {t} committed {e.hex()}" for t, e in rest if e != d), None)
+        return next((f"{self.what}: {s} and {t} named different values" for t, e in rest if e != d), None)
 
 
 def _commitment_hex(key: str) -> Callable[[bytes, bytes], list[bytes]]:
@@ -638,6 +698,77 @@ RUN = Tie("record", ((INFERENCE_ONLY.id, policy_record), (PEARL_PLUS.id, run_rec
 WINDOW = Tie("window", ((INFERENCE_ONLY.id, policy_previous), (PEARL_PLUS.id, run_window)))
 
 
+def wipe_named(k: tuple) -> dict | Exception | None:
+    """`Core.Onsite.wipeNamed`: what the wipe's case names of its span (`wipe_period.named`); else what refused its
+    commitment, its evidence or its message, or None while it names nothing, any of which reads as no value."""
+    try:
+        e = WIPE_CASES.decode_evidence(k[3])
+        return WP.named(WIPE_CASES.decode_commitment(k[2]), e.signed, e.egress_mib)
+    except (Reject, ValueError, KeyError, TypeError, OverflowError) as x:
+        return x
+
+
+def span_named(k: tuple) -> dict | Exception:
+    """`Core.Onsite.spanNamed`: what the count's case names of its span (`span.named`, `NetworkCheck.Span.namedOf`);
+    else what refused its parameters or its commitment, which reads as no value."""
+    try:
+        return span.named(span.params(json.loads(k[1])), span.commitment(k[2]))
+    except (span.Refused, ValueError) as x:
+        return x
+
+
+def mib_bytes(n: int) -> bytes:
+    """`Core.Onsite.mibBytes`: a count of egress in whole MiB as the bytes a tie compares, its decimal digits."""
+    return str(n).encode()
+
+
+def wipe_server(k: tuple) -> list[bytes] | Exception:
+    """The wipe's side of `Core.Onsite.wipeNode`: the server its parameters name; else what refused them."""
+    try:
+        return [WIPE_CASES.decode_params(json.loads(k[1])).server]
+    except (Reject, ValueError, KeyError, TypeError) as x:
+        return x
+
+
+def span_host(k: tuple) -> list[bytes] | Exception:
+    """The count's side of `Core.Onsite.wipeNode`: the host end of the count's link, as the registered hardware in its
+    parameters has it (`host_span_params`), its id's UTF-8; else what refused them."""
+    try:
+        return [host_span_params(json.loads(k[1])).registered.host.encode()]
+    except (span.Refused, ValueError) as x:
+        return x
+
+
+def _named_value(named: Callable[[tuple], Any], key: str) -> Callable[[tuple], list[bytes] | Any]:
+    """A side of a tie of `wipe_count`: the value `key` of what `named` reads off the case, else what `named` gave."""
+    return lambda k: [n[key]] if isinstance(n := named(k), dict) else n
+
+
+def _wipe_egress(k: tuple) -> list[bytes] | Any:
+    """The wipe's side of the egress tie: the count its evidence gives, as `mib_bytes`."""
+    n = wipe_named(k)
+    return [mib_bytes(n["egress_mib"])] if isinstance(n, dict) else n
+
+
+def _span_egress(k: tuple) -> list[bytes] | Any:
+    """The count's side of the egress tie: its bits over the span and its tail in whole MiB
+    (`streamed_wipe.egress_units`), as `mib_bytes`; None where its marks are out of order."""
+    n = span_named(k)
+    if not isinstance(n, dict):
+        return n
+    return None if n["egress_bits"] is None else [mib_bytes(sw.egress_units(n["egress_bits"]))]
+
+
+#: `Core.Onsite.wipeNode`: the wipe is of the host the count's link is on.
+WIPE_NODE = Tie("node", ((WP.COUNTED, wipe_server), (span.ID, span_host)), cased=True)
+#: `Core.Onsite.wipeCount`: the wipe and the count over its span name one span and one count, a tie a value.
+WIPE_COUNT = (
+    *(Tie(what, ((WP.COUNTED, _named_value(wipe_named, key)), (span.ID, _named_value(span_named, key))), cased=True)
+      for what, key in (("start mark", "start_mark"), ("start message", "start_message"),
+                        ("end message", "end_message"))),
+    Tie("egress", ((WP.COUNTED, _wipe_egress), (span.ID, _span_egress)), cased=True))
+
+
 @dataclass(frozen=True)
 class TiedSame(Same):
     """`Core.Composition.tiedSameB id ss ties components`: `same`, except that when it doesn't reject, the subprotocols
@@ -681,3 +812,6 @@ REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROO
                   (WINDOWS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
                   (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (WINDOWS, STORE))
+#: `Core.Onsite.counted`: onsite with the count over the wipe's span beside it and the wipe's count held to it.
+ONSITE_COUNTED = TiedSame("verity/onsite/counted/v0", (HOST_SPAN, *ONSITE.components[:-1], COUNTED_WIPE), ONSITE.same,
+                          (*ONSITE.ties, WIPE_NODE, *WIPE_COUNT))

@@ -37,7 +37,7 @@ for f in ${KV_FIELDS:-512 768}; do
   [[ $tag == *m* ]] && flags+=(-DKV_MASK=1)
   [[ $tag == *f6* ]] && flags+=(-DKV_FOLD6=1)
   nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=$n \
-    "${flags[@]}" -o "$B/kv-$lib.so" $WC/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
+    "${flags[@]}" -o "$B/kv-$lib.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$O/kv-$lib.ptxas" 2>&1 || { tail -30 "$O/kv-$lib.ptxas"; exit 4; }
   LIBS+=(--lib "$lib=$B/kv-$lib.so")
 done
 sha256sum "$B"/*.so > "$O/libs.sha256"
@@ -45,6 +45,8 @@ if "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $WC/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
 KV_SCRIPT=${KV_SCRIPT:-kv_bench.py}
+# kv_bench.py is with PoUB's prover; any other KV_SCRIPT is a file of this directory
+case $KV_SCRIPT in kv_bench.py) KV=verity/protocols/accounting/poub/prover/word_codec/kv_bench.py ;; *) KV=$WC/$KV_SCRIPT ;; esac
 if [ "${SANITIZE:-0}" != 0 ]; then
   SAN=/usr/local/cuda-13.0/bin/compute-sanitizer
   # shellcheck disable=SC2086
@@ -54,7 +56,7 @@ if [ "${SANITIZE:-0}" != 0 ]; then
       "$0" --tool $tool --error-exitcode 9 "$1" "$2" "${@:4}" --out "$3/san-$tool" --sanitize > "$3/san-$tool.log" 2>&1
       r=$?; echo "$tool rc=$r"; tail -4 "$3/san-$tool.log"; [ $r = 0 ] || rc=$r
     done
-    exit $rc' "$SAN" "$PY" $WC/$KV_SCRIPT "$O" "${LIBS[@]}" ${KV_ARGS:-} || exit 6
+    exit $rc' "$SAN" "$PY" $KV "$O" "${LIBS[@]}" ${KV_ARGS:-} || exit 6
   # SANITIZE=2: the timed run follows a clean smoke
   [ "$SANITIZE" = 2 ] || exit 0
 fi
@@ -70,7 +72,7 @@ if [ "${KV_NCU:-0}" = 1 ]; then
       > "$o/ncu-kv.log" 2>&1 || { tail -20 "$o/ncu-kv.log"; exit 7; }
     "$ncu" --import "$o/ncu-kv.ncu-rep" --csv --page raw > "$o/ncu-kv.csv" 2>&1
     "$ncu" --import "$o/ncu-kv.ncu-rep" --csv --page source --print-source sass > "$o/ncu-kv-sass.csv" 2>&1
-    exit 0' _ "$NCU_BIN" "$O" "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" ${KV_ARGS:-}
+    exit 0' _ "$NCU_BIN" "$O" "$PY" $KV "${LIBS[@]}" ${KV_ARGS:-}
   exit $?
 fi
 # KV_REPEAT=N (default 1) runs KV_SCRIPT N times in one lease, each its own process, writing under $O/repI; with
@@ -79,12 +81,12 @@ if [ "${KV_REPEAT:-1}" = 1 ]; then
   LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
   [ "${QUEUED:-0}" = 1 ] && LEASE=()
   # shellcheck disable=SC2086
-  "${LEASE[@]}" "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" --out "$O" ${KV_ARGS:-}
+  "${LEASE[@]}" "$PY" $KV "${LIBS[@]}" --out "$O" ${KV_ARGS:-}
   exit $?
 fi
 # shellcheck disable=SC2086,SC2016
 gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" -- bash -c '
   n=$1 o=$2; shift 2
   for i in $(seq 1 "$n"); do "$@" --out "$o/rep$i" || exit $?; done' _ "$KV_REPEAT" "$O" \
-  "$PY" $WC/$KV_SCRIPT "${LIBS[@]}" ${KV_ARGS:-}
+  "$PY" $KV "${LIBS[@]}" ${KV_ARGS:-}
 exit $?

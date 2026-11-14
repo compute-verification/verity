@@ -21,7 +21,7 @@
 #include <cstring>
 #include <cuda_runtime.h>
 
-#include "sha512.cuh"
+#include "../../verity/protocols/accounting/poub/prover/codec_tensor/sha512.cuh"
 
 #ifndef WT_FIELD
 #define WT_FIELD 1279
@@ -81,7 +81,7 @@ constexpr int MAXK = 3;
 constexpr int TASK_BYTES = 8192;
 constexpr int SB = TW * S;                              // a task's stored bytes
 // WT_MASK=1: `wide.py`'s masked word, σ_K (kMask) between consecutive rounds. WT_FOLD6=1: sqr is the squaring ceiling's
-// FOLD 6 (`benchmarks/word_codec/kv.cu`'s KV_FOLD6), its half squares ordered to fit the p1024 12-warp fused kernels;
+// FOLD 6 (`verity/protocols/accounting/poub/prover/word_codec/kv.cu`'s KV_FOLD6), its half squares ordered to fit the p1024 12-warp fused kernels;
 // 2: its half squares folded as they are made (sqr_fold6_lean).
 #ifndef WT_MASK
 #define WT_MASK 0
@@ -267,7 +267,7 @@ __device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
   fold_top(x, c0, c1);
 }
 
-// WT_FOLD6=1: the squaring ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`, as `benchmarks/word_codec/kv.cu`'s
+// WT_FOLD6=1: the squaring ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`, as `verity/protocols/accounting/poub/prover/word_codec/kv.cu`'s
 // KV_FOLD6). sqr_dbl_n is its FOLD 5 square: the off-diagonal products column by column, each column's accumulator
 // starting at the previous one's carry, then y = 2 S + sum a_i^2 2^(64 i) in one carry chain.
 template <int N>

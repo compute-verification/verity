@@ -662,8 +662,9 @@ def main(argv=None) -> int:
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
     p.add_argument("--class", dest="cls", choices=sorted(CLASSES), default="test", help="the size class (`CLASSES`)")
-    p.add_argument("--warden-run", type=Path, help="--class warden: a warden_serve run's directory (the gate's "
-                                                   "warden-rehearse's, its witness under witness/)")
+    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+                   help="--class warden: a warden_serve run's directory (the gate's warden-rehearse's, its witness "
+                        "under witness/)")
     p.add_argument("--windows", type=int, default=1, help="--class warden: its first execution phases proved")
     p.add_argument("--gpu", action="store_true", help="each session's prover on the GPU (`flock-circuit prove --gpu`)")
     p.add_argument("--port", type=int, default=7981)
@@ -677,7 +678,7 @@ def main(argv=None) -> int:
     Z.one_session(a.jobs)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
-    use(a.cls, a.warden_run, a.windows)
+    use(a.cls, a.network_certifier_run, a.windows)
     return prove(a)
 
 

@@ -76,7 +76,9 @@ rows' form's (`counted`):
   class and no other, at most R = `WardenParams.phase_releases` of them, a bound on an execution phase's releases.
 
 A class of the other form's is refused where the schedule is built, with what to change (`sized` is each class with
-the most rows its tables have under either form).
+the most rows its tables have under either form). So is a schedule none of whose classes of the largest P holds the
+most ids a response of it releases (`most_released`): the longest request the schedule admits is one that only a
+class of that P holds, and with more ids than it holds the release would be filed in none.
 
 **The tables** (`tables`) of an execution phase are made from its releases in release order, each with its request's
 bytes and its ids as the network certifier cut and released them (`warden.Released`), and from each release's class,
@@ -103,7 +105,10 @@ more than O, is refused, never cut short.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
 release as the network certifier cut it and nothing a server says. It has one caller, `connection_rows.tables`, and
-`tables` lays whatever class that caller gives.
+`tables` lays whatever class that caller gives. The network certifier releases no request longer than the
+schedule's largest class holds (the schedule's `request_bound`: ingress refuses it), so none it releases is unfiled
+for its request's length; and a class of the largest P holds the most ids a response releases ("The classes"), so
+none is unfiled for its ids. Every release of a schedule's own network certifier fits a class.
 
 **A row of zero bytes** is what every table of form 1 holds where no release is filed (`empty_rows`, the one
 statement of it), and each table's decoder reads it its own way. `request_of` refuses it: its count is 0, and a
@@ -320,10 +325,19 @@ def counted(params: WardenParams) -> bool:
     return params.closes
 
 
+def most_released(params: WardenParams) -> int:
+    """The most ids a response of the schedule releases: the limit it registers on every response where it registers
+    one, since a released request asks for no more and its response is held to what it asks, and else one `DATA`
+    cell fewer than its `egress_cells`, an id a cell."""
+    return params.egress_cells - 1 if params.max_tokens_cap is None else params.max_tokens_cap
+
+
 def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
     """A schedule's classes as its parameters hold them (the module docstring's "The classes"), each (P, O, rows)
-    under the lengths rows' form 1 and (P, O) under form 2, or ValueError naming what is none. `WardenParams` calls
-    it where it is built and keeps what it returns, so no schedule holds classes of another form."""
+    under the lengths rows' form 1 and (P, O) under form 2, or ValueError naming what is none: a class of the
+    other form's numbers, a size that is none, or no class of the largest P that holds the most ids a response
+    releases (`most_released`). The schedule calls it where it is built and keeps what it returns, so no schedule
+    holds classes of another form."""
     if params.lengths is None:
         raise ValueError("the content rows' tables are listed in the connection rows' head, so a schedule with "
                          "content has lengths rows (lengths is 1 or 2)")
@@ -356,6 +370,14 @@ def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
             raise ValueError(f"content class {i} has 1 to {slots} rows, the lengths table's slots, since an "
                              f"execution phase releases no more, not {c[2]!r}")
         out.append(tuple(c))
+    longest = max(c[0] for c in out)
+    held, ids = max(c[1] for c in out if c[0] == longest), most_released(params)
+    if held < ids:
+        raise ValueError(f"the content classes of P={longest} prompt ids, the schedule's largest, hold at most "
+                         f"O={held} ids, and a response of the schedule releases up to {ids}: a release of more ids "
+                         f"than every class that holds its request holds would be filed in none. Give a class of "
+                         f"P={longest} an O of at least {ids}, or hold a response to {held} ids (egress_cells of "
+                         f"{held + 1}, or a max_tokens_cap of {held})")
     return tuple(out)
 
 

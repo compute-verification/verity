@@ -350,7 +350,9 @@ private theorem pairwise_lt_eraseDups : ∀ (m : ℕ) (l : List ℕ), l.length �
     · exact (List.length_filter_le _ _).trans (by simpa using hm)
 
 variable (c n) in
-private theorem outGate_eq_some {u k j t a : ℕ} : Spot.Bits.outGate c n u k j t = some a ↔
+/-- **When Bits gives a gate on a returned output's bit**, and which: unit `u`'s instance `k`'s row on the output's
+column, a computed one. -/
+theorem outGate_eq_some {u k j t a : ℕ} : Spot.Bits.outGate c n u k j t = some a ↔
     u < n ∧ k < c.upv ∧ j < (c.leavesOut.getD k #[]).size ∧ t < 16 ∧
       (Spot.Bits.Rows.ofNet c.unit).nIn ≤ Spot.Bits.outCol c j t ∧
       Spot.Bits.outCol c j t <

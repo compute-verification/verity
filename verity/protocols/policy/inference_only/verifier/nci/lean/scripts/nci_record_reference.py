@@ -80,6 +80,7 @@ REGISTERED = {"params", "tables", "reads", "roots", "openings"}
 HISTORY = {"name", "program", "writer", "out", "words", "runs"}
 TABLE = {"name", "param", "offset", "words", "rows"}
 TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
+#: an opening's keys; it may declare its `row` beside them
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
 INGRESS = {"reader", "port", "at", "units", "step"}
 #: `Record.Kind`: what an input row of a unit is classed as, each row exactly one. `inside`: a wire fills it
@@ -395,8 +396,9 @@ def entries(w: dict):
         yield w["at"] + i // w["C"], w["c0"] + i % w["C"], source(w, i)
 
 
-def _objects(xs, keys: set[str]) -> list[dict]:
-    if not (isinstance(xs, list) and all(isinstance(x, dict) and set(x) == keys for x in xs)):
+def _objects(xs, keys: set[str], beside: frozenset[str] = frozenset()) -> list[dict]:
+    """`xs`, a list of objects of the keys `keys`, each with or without the keys `beside`; `inputs` otherwise."""
+    if not (isinstance(xs, list) and all(isinstance(x, dict) and set(x) - beside == keys for x in xs)):
         raise Malformed("inputs")
     return xs
 
@@ -423,7 +425,8 @@ class Inputs:
     unless it is well formed for the templates and cuts, and unless no row is filled twice (`fill`, row by row):
     `params`, the registered parameters' leaves; `tables`, by name, each over its `param`: the entries of
     `registered.tables`, then the history tables (`histories_of`), each over a parameter of its own name, which is no
-    registered parameter's; `reads`, the registered reads; `roots`, the table reads; `openings`; and `fill`, by
+    registered parameter's; `reads`, the registered reads; `roots`, the table reads; `openings`, each with the `row`
+    it declares, if any, an output of its reader as its verdict is, by which nothing is filled; and `fill`, by
     `(template, port)`, each filled `(unit, row)` with what fills it: `("wire", index)`, `("read", parameter)`,
     `("root", table, what it reads of it)`, `("opening", index)` or `("ingress",)`."""
 
@@ -490,14 +493,16 @@ class Inputs:
                 raise Malformed("inputs")
             put(r["reader"], r["port"], ((u, j) for u in range(r["at"], r["at"] + r["units"]) for j in range(k)),
                 ("root", r["table"], r["of"]))
-        self.openings = _objects(reg["openings"], OPENING)
+        self.openings = _objects(reg["openings"], OPENING, frozenset({"row"}))
         for i, o in enumerate(self.openings):
-            if not (all(isinstance(o[k], str) for k in ("reader", "table", "key", "verdict"))
+            if not (all(isinstance(o[k], str) for k in ("reader", "table", "key", "verdict", *({"row"} & set(o))))
                     and isinstance(o["ports"], list) and o["ports"] and all(isinstance(p, str) for p in o["ports"])):
                 raise Malformed("inputs")
             units(o["reader"], o["at"], o["units"])
             port(o["reader"], o["key"])
             if o["table"] not in self.tables or o["verdict"] not in dict(by[o["reader"]].outs):
+                raise Malformed("inputs")
+            if "row" in o and o["row"] not in dict(by[o["reader"]].outs):
                 raise Malformed("inputs")
             for p in o["ports"]:
                 k = port(o["reader"], p)[1]

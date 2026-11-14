@@ -59,6 +59,9 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
   case is asked for; on a tree that leaves the policy out the case is refused saying so.
+* **The inference-only rows case** (`inference_only_rows_case`, `INFERENCE_ONLY_ROWS`: `verity/inference-only/rows/v1`,
+  the policy's check counted in rows of the templates' circuit files) is an interface whose body is not written; no
+  composite lists the protocol, and `produce` makes no such case.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
@@ -136,6 +139,11 @@ SAMPLED_CMD = ("sampled",)
 ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
+#: the policy's check in rows of the templates' circuit files (`InferenceOnly.RowsProtocol`), whose case
+#: `inference_only_rows_case` makes
+INFERENCE_ONLY_ROWS = "verity/inference-only/rows/v1"
+#: the goal `inference_only_rows_case` serves
+ROWS_GOAL = "network/policy-check-counts-rows"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
 #: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
@@ -428,6 +436,17 @@ def inference_only_case(v1: Mapping[str, Any], alpha: Fraction | int | str, gamm
               "parameters": parameters(desc, root, v1["params"].get("parameters")), "program": text}
     evidence = {"owner": ["input" if i else 0 for i in inputs], "provenance": [], "theta": []}
     return {"commitment": v1["commitment"], "evidence": codec.canonical_json(evidence).hex(), "params": params}
+
+
+def inference_only_rows_case(v1: Mapping[str, Any], record: str, circuits: Sequence[tuple[str, Path]],
+                             alpha: Fraction | int | str, gamma: int, log: Sequence[Mapping[str, Any]] = (),
+                             pins: Sequence[str] = (), order: Any = None) -> dict[str, Any]:
+    """The rows case (`INFERENCE_ONLY_ROWS`) from v1's case of the window's audit: params ``alpha`` and ``gamma`` (α
+    and Γ in rows), ``circuits`` (each of ``record``'s templates, in its order, with the SHA-512 of its circuit file
+    in ``circuits``), ``log``, ``pins`` and ``program`` (v1's params' Program as canonical text); commitment R;
+    evidence ``{"record"}``, or ``{"order", "record"}`` given ``order``: the execution phase's circuit record ``record``
+    (the text R commits); blobs the circuit files."""
+    raise NotImplementedError(f"{INFERENCE_ONLY_ROWS}'s served case is not written: goal {ROWS_GOAL}")
 
 
 def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe: str | os.PathLike,

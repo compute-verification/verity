@@ -2,7 +2,7 @@
 changed ids are placed on the compact records as `negatives.tie_run` places them (`active.compact_record_data`), so
 the run gets its verdict and the link-windows its changed ids fall in, where reading its 8-byte cells as id events
 raised `struct.error` out of the report. A frame neither reading places gives the run no verdict, with the reason.
-The runs are the gate's own compact rehearsal (network_traces' `gate_compact`), with `io_tie`'s parts all holding
+The runs are a compact rehearsal's (network_traces' `gate_compact`), with `io_tie`'s parts all holding
 (`HOLDS`, a stand-in), so the token run is refused by its finish alone.
 """
 from __future__ import annotations

@@ -17,6 +17,7 @@ host: a run's own pin, or a rehearsal's host name, gives a rehearsal with no bou
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -92,6 +93,21 @@ def test_an_uncounted_egress_bounds_nothing() -> None:
         assert w.verdict == "accept" and w.answer["public"] == VACUOUS and w.answer["profile"]["gaps"] == gaps
         assert json.loads(bytes.fromhex(w.case["evidence"]))["egress_mib"] == egress
     assert W.egress_of(None) == sw.EGRESS_MAX_UNITS and W.egress_of(0) == 0
+
+
+def test_the_counted_check_rejects_a_session_with_no_end_message(monkeypatch) -> None:
+    """Where the signed session's end message can't be formed (a batch record past a field's width), `named` raises
+    and the counted check rejects, as the Lean's `checkCounted` does where its `named` refuses. `outcome` accepts no
+    such session, its signature being over that message, so here `outcome` is made to accept it."""
+    w = _run(egress_mib=2)
+    c, (b0, *rest) = w.signed.commitment, w.signed.batches
+    wide = dataclasses.replace(w.signed, batches=(dataclasses.replace(b0, b=2 ** 32), *rest))
+    with pytest.raises(OverflowError):
+        W.named(c, wide, 2)
+    monkeypatch.setattr(W, "outcome", lambda *a, **kw: ("accept", W.uncounted(c.params), W.profile(c.params, 2)))
+    verdict, reason = W.outcome_counted(c.server, c.session, [], c, wide, egress_mib=2)
+    assert verdict == "reject" and reason not in (W.NO_COUNT, W.NO_MARK), reason
+    assert W.outcome_counted(c.server, c.session, [], c, w.signed, egress_mib=2) == ("reject", W.NO_MARK)
 
 
 @pytest.mark.parametrize("egress", [0, sw.EGRESS_MAX_UNITS - 1])

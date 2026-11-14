@@ -1,9 +1,9 @@
 """Byte-for-byte interop of the two implementations of `p2-audit-wire/v4`: the Python reference
-`benchmarks/pous/p2_v1/wire.py` and the Lean `pous_check` (`PousCheck.Wire`, `PousCheck.Audit.check`).
+`verity/protocols/accounting/pous/verifier/p2_v1/wire.py` and the Lean `pous_check` (`PousCheck.Wire`, `PousCheck.Audit.check`).
 
     uv run python verity/protocols/accounting/pous/verifier/check/interop.py --all [--out FILE]
 
-The transcripts are every vector the P2 vectors files (`benchmarks/pous/p2_v1/`) hold:
+The transcripts are every vector the P2 vectors files (`verity/protocols/accounting/pous/verifier/p2_v1/`) hold:
 
 * every transcript of `audit-negative-vectors.json`, `audit-vectors.json`'s two-round end-to-end one, and its full-width
   response in a one-block setup, public and private (`scripts/difftest_vectors.py` builds them, and checks both files against
@@ -34,7 +34,6 @@ from pathlib import Path
 from verity_difftest import Server, build, canonical
 
 HERE = Path(__file__).resolve().parent
-ROOT = Path(__file__).resolve().parents[6]
 
 
 def _generator():
@@ -110,7 +109,7 @@ def _lean_side(server: Server, fn: str, value) -> str:
 def compare() -> tuple[list[dict], int]:
     """Every transcript with both outputs, and how many vectors the files hold."""
     gen = _generator()
-    reference, wire, _ = py = gen._python(ROOT)
+    reference, wire, _ = py = gen._python()
     doc = json.loads(reference.VECTORS.read_bytes())
     if hashlib.sha512(reference.VECTORS.read_bytes()).hexdigest() != reference.VECTORS_SHA512:
         raise SystemExit("vectors.json is not the file reference.VECTORS_SHA512 pins")

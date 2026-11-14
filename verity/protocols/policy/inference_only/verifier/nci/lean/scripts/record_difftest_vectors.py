@@ -56,6 +56,10 @@ read, a table read, an opening's port and ingress, each refused. Then a template
 templates. Then a template keyed as an input id (`KEYED`), bound per run and bound at registration: a composite, so
 its gates are computed and a root node of it is no input. The record of that one template, and the served shape's
 record with a unit of it more at the Program's root that the record does not list, each refused with its templates.
+Then an opening that declares its `row` (`ROW_ROLE`): the served shape's record with its opening naming the output
+that returns the row opened, taken where it is an output of the reader, the verdict's among them, and refused with
+the declarations where it is no output or no string; and the one whose row is its verdict's output under no pin
+(`ROW_UNPINNED`), its opening's ports fresh as they are with no row declared.
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -869,6 +873,20 @@ HISTORIES: dict[str, tuple] = {
 }
 LOOSE = "a history of no template's rows"
 
+#: `lowered(2, 3)`'s record with its opening declaring its `row`, a case each: the stage that refuses the record, None
+#: where the form takes it, and the opening's `row`. An output of the reader is taken, whichever it is: the form holds
+#: the row to the reader's outputs as it holds the verdict, and reads nothing else of it.
+ROW_ROLE: dict[str, tuple] = {
+    "an opening that declares its row": (None, "o0"),
+    "an opening whose row is its verdict's output": (None, "o1"),
+    "an opening whose row is no output of its reader": ("inputs", "o2"),
+    "an opening whose row is an input row of its reader": ("inputs", "row"),
+    "an opening whose row is no string": ("inputs", 0),
+}
+#: the second of those under no pin: nothing holds its opening, and the row it declares holds none of its ports
+ROW_VERDICT = "an opening whose row is its verdict's output"
+ROW_UNPINNED = f"{ROW_VERDICT}, no pin"
+
 
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
@@ -1064,6 +1082,12 @@ def shaped() -> list[dict]:
     for k, (what, (stage, declare)) in enumerate(HISTORIES.items()):
         first(f"2x3 {what}", lowered(2, 3), 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + k, edit=declare,
               broken=stage)
+    for k, (what, (stage, row)) in enumerate(ROW_ROLE.items()):
+        first(f"2x3 {what}", lowered(2, 3), 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + k,
+              edit=opening(row=row), broken=stage)
+    first(f"2x3 {ROW_UNPINNED}", lowered(2, 3),
+          47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(ROW_ROLE), pins=[],
+          edit=opening(row=ROW_ROLE[ROW_VERDICT][1]))
     return out
 
 
@@ -1678,7 +1702,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES)
+    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES) + len(ROW_ROLE) + 1
 
 
 def results(case: dict) -> dict:

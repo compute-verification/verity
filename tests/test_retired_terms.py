@@ -21,6 +21,9 @@ The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name th
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
 sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
+The network certifier's older name is held in every tracked file but the few that spell it to move or find it
+(``CERTIFIER_LEFT_OUT``): in no file's name, and in a file's text only in what the Glossary's row says keeps it
+(``CERTIFIER_KEPT``), by count (``CERTIFIER_NAMES``).
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
@@ -72,8 +75,8 @@ DOC_TERMS = {
     "verity example": "verity demo",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
-    "warden, network warden": "the network certifier (`warden.py`, `WardenParams` and the `warden_*` modules stay in backticks "
-                              "until renamed)",
+    "warden, network warden": "the network certifier (what keeps the older name, a format's value or a name a caller "
+                              "outside the tree gives, stays in backticks: GLOSSARY.md, Older names)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
     "coin server, coin source, coin device, randomness source": "the challenger",
@@ -476,6 +479,122 @@ def test_the_spot_scan_reads_each_form():
            "c.toml": 'id = "verity/sampled-proofs/v1"\n'}
     assert spot_names(list(toy), read=toy.get) == {"sampled proof(s)": 3, "sampled_proofs": 2, "SampledProofs": 2,
                                                    "sampled-proofs": 1}
+
+
+#: The network certifier's older name (GLOSSARY.md, Older names), as a word or as a part of a name in any of its three
+#: spellings; `BackwardEntry` holds none of them.
+CERTIFIER_OLD = re.compile(r"(?<![a-z])warden|Warden|WARDEN")
+#: The files the scan leaves out, each for what it holds the name for today.
+CERTIFIER_LEFT_OUT = {
+    MAPS: "the word maps, the move tool, its tests and its fixtures spell the name to move it",
+    "tools/research/src/research/store/moves.json": "the store's record of the moves names the paths each one renamed",
+    "tools/research/tests/test_queue.py": "a test of the words a word map retires spells one in its map",
+    "tools/research/tests/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
+    LINTS[0]: "this test spells the name to find it",
+}
+#: What keeps it, as the Glossary's row says: each kind's spellings and what ends it. A site is the first kind's that
+#: spells it: the row's own line first, and the quoted word alone after every spelling that holds it but the trace
+#: corpus's `ingress="warden"`.
+CERTIFIER_KEPT = {
+    "said": (r"(?m)^\| \"warden\", \"network warden\".*$|\bsay \"warden\"|\ban \*?active warden\b|\ba passive warden\b",
+             "the Glossary's row of older names, the domain table's sentence on what its tags say, and network "
+             "steganography's terms"),
+    "domain tag": (r"verity-network-warden/[a-z-]+/v\d+|\ba5[/-]warden(?:-stand-in/v1\b|/rest/)",
+                   "a domain tag of the network certifier's records or of a stand-in for them, which a digest takes in, "
+                   "until the network certifier's next format version"),
+    "circuit": (r"\bWardenRowIdentity\b|\bunit/(?:warden-row|a5-warden)\b",
+                "a circuit's name and the name its units are staged under, which the circuit's pin takes in, until the "
+                "network certifier's next format version"),
+    "caller's": (r"\bwarden-rehearse\b|(?<![A-Z0-9])(?:(?:A5|CR|N2|SC)_WARDEN_RUN|A5_WARDEN_UNITS|WARDEN_SERVE_C_ALLOCATOR)"
+                 r"(?![A-Z0-9_])|--warden(?:-run)?(?![\w-])|(?:--class (?:test\|served\|)?|\bN2_CLASS=|\bserved or )warden\b"
+                 r"|\bCR_PATH(?::-\}\")?(?: = |=)warden\b|\bnegatives\.py warden\b",
+                 "the auditor gate's verb, and a variable, a flag, a class, a path or a subcommand that a caller outside "
+                 "the tree gives, until its callers change with it"),
+    "kind": (r"\bwarden/(?:(?:e|in)gress|<direction>|\{d\})/|\bwarden-fails\b|(?<!ingress=)\"warden\"",
+             "a row registration's value, a fails certificate's link, and a link window's kind and its key in a case and "
+             "in a statement, until the network certifier's next format version"),
+    "recorded": (r"\bwarden-(?:heavy|smallkv)\b|\bwarden\.(?:released|ordinal|admitted|json)\b|\bingress=\"warden\""
+                 r"|[\"']warden_run[\"']|(?<=/)warden(?![\w-]|\.\w)|(?<![\w./-])warden/(?=[\w$<{*])|[\"']warden:"
+                 r"|\['warden'\]|\bclient or warden\b",
+                 "a kept run's log, its directory and its reports' key, which programs read back, and the trace corpus's "
+                 "labels, keys and values, which recorded data holds"),
+}
+#: Each kind's count, which only falls (`_held`).
+CERTIFIER_NAMES = {"said": 43, "domain tag": 27, "circuit": 18, "caller's": 201, "kind": 172, "recorded": 149}
+
+
+def certifier_files(files: list[str]) -> list[str]:
+    """``files`` but those CERTIFIER_LEFT_OUT names, a file by its path and a directory by its prefix."""
+    out = tuple(CERTIFIER_LEFT_OUT)
+    return [f for f in files if not f.startswith(tuple(o for o in out if o.endswith("/"))) and f not in out]
+
+
+def certifier_names(files: list[str], read=_read) -> tuple[dict[str, int], list[str]]:
+    """The network certifier's older name in ``files``: each of CERTIFIER_KEPT's count, and what it keeps nowhere, a file's
+    name that holds it (`FILE`) and a site none of the kinds spells (`FILE:LINE TEXT`)."""
+    kept = {k: re.compile(spelling) for k, (spelling, _) in CERTIFIER_KEPT.items()}
+    counts, other = dict.fromkeys(kept, 0), []
+    for f in sorted(files):
+        if CERTIFIER_OLD.search(f):
+            other.append(f)
+        if (text := read(f)) is None or not CERTIFIER_OLD.search(text):
+            continue
+        spans = {k: [m.span() for m in spelling.finditer(text)] for k, spelling in kept.items()}
+        for m in CERTIFIER_OLD.finditer(text):
+            kind = next((k for k, ss in spans.items() if any(s <= m.start() and m.end() <= e for s, e in ss)), None)
+            if kind is None:
+                n = text.count("\n", 0, m.start())
+                other.append(f"{f}:{n + 1} {text.splitlines()[n].strip()[:120]}")
+            else:
+                counts[kind] += 1
+    return counts, other
+
+
+def test_the_network_certifier_s_older_name_stays_only_where_the_glossary_keeps_it():
+    """No file's name holds the network certifier's older name, a file's text holds it only in what a format fixes, a
+    caller outside the tree gives, recorded data holds or a sentence says of the name itself, and each kind's count
+    only falls. The files it reads are every tracked one but CERTIFIER_LEFT_OUT's."""
+    counts, other = certifier_names(certifier_files(_tracked()))
+    assert not other, ("the network certifier's older name, outside what keeps it: say the network certifier "
+                       "(GLOSSARY.md, Older names), or name a kept value as CERTIFIER_KEPT spells it:\n  "
+                       + "\n  ".join(other))
+    _held("CERTIFIER_NAMES", CERTIFIER_NAMES, counts, "the network certifier's older name",
+          "a new format, flag or key says the network certifier (GLOSSARY.md, Older names): " + "; ".join(
+              f"{k}: {why}" for k, (_, why) in CERTIFIER_KEPT.items()))
+
+
+def test_the_certifier_scan_leaves_out_only_files_that_hold_the_name():
+    """Each of CERTIFIER_LEFT_OUT's entries names tracked files that hold the older name today: an entry whose files
+    no longer hold it goes, and the scan reads them."""
+    files = _tracked()
+    idle = [o for o in CERTIFIER_LEFT_OUT
+            if not any(CERTIFIER_OLD.search(f + (_read(f) or "")) for f in files if f not in certifier_files([f]) and f.startswith(o))]
+    assert not idle, f"CERTIFIER_LEFT_OUT names files that no longer hold the network certifier's older name: drop {idle}"
+
+
+def test_the_certifier_scan_reads_each_form():
+    """On toy files: each kept kind counts under its own key, the Glossary's row is one kind whatever it quotes, the
+    quoted word alone is a kind and a tag's or the trace corpus's value isn't, a name that only spells the letters
+    (`BackwardEntry`) is no site, and a file's name, a name in code and a word in prose are kept nowhere. A directory is
+    left out by its prefix and a file by its whole path."""
+    toy = {"a.py": 'TAG = "verity-network-warden/cells/v2"\nKIND = "warden"  # say "warden"\nbind(EmbeddingBackwardEntry)\n'
+                   'ROOT = b"verity/a5/warden-stand-in/v1", b"a5-warden/rest/%d"\nUnitStager(defn, "unit/warden-row")\n',
+           "b.md": "`warden-rehearse --scan`, `A5_WARDEN_RUN`, `--warden-run`, `--warden`; `WardenRowIdentity{B}`\n"
+                   '| "warden", "network warden"; the kind `warden`, `--warden-run`, `warden.json` | the network certifier |\n'
+                   "It is an *active warden*, never a passive warden.\n",
+           "c.json": '{"source": "warden-heavy.released", "about": "warden.ordinal", "note": "an active warden"}\n',
+           "d/warden_rows.py": "class WardenParams:\n    pass  # the warden's schedule, MY_WARDEN_RUN\n",
+           "e.sh": 'CR_PATH=warden N2_CLASS=warden n2_tie_zk.py --class warden; negatives.py warden\n'
+                   'cp "$W/warden/$f" "$OUT/warden/"; ls warden/check.json d/warden.json\n',
+           "f.py": 'got = {"warden_run": run, "value": "warden/egress/0", "link": "warden-fails", "watch": "warden:7"}\n'
+                   "label, note = \"warden-smallkv\", f'{meta['warden']} at ingress=\"warden\": client or warden'\n"}
+    counts, other = certifier_names(list(toy), read=toy.get)
+    assert counts == {"said": 9, "domain tag": 3, "circuit": 2, "caller's": 8, "kind": 3, "recorded": 12}
+    assert other == ["d/warden_rows.py", "d/warden_rows.py:1 class WardenParams:",
+                     "d/warden_rows.py:2 pass  # the warden's schedule, MY_WARDEN_RUN",
+                     "d/warden_rows.py:2 pass  # the warden's schedule, MY_WARDEN_RUN"]
+    assert certifier_files([MAPS + "a_map.toml", LINTS[0], LINTS[0] + ".orig", "tools/mover.py"]) == \
+        [LINTS[0] + ".orig", "tools/mover.py"]
 
 
 def test_the_lean_name_scan_reads_each_form():

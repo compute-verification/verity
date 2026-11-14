@@ -25,6 +25,9 @@ root, and a decoded Program's index sends each Definition's key to its own place
 
 `form_layoutReads` (`Properties.Record.LayoutReads`): the form's layout reads a Definition's parameters and return
 type alone (`layoutOf_reads`).
+
+`form_pinnedOpens` (`Properties.Record.PinnedOpens`): the reader of an opening the check holds under a pin is the pinned
+Definition, for the form, from the closure digest's pin (`Properties.Record.DigestPins`, by `pinnedOpens_of`).
 -/
 
 @[expose] public section
@@ -100,5 +103,10 @@ theorem form_provenance : Provenance form := by
     · show (layoutOf _).map _ = _
       rw [hl]
       rfl
+
+/-- **The reader of a held opening is the pinned Definition**, for the record check's own form, from the closure
+digest's pin. -/
+theorem form_pinnedOpens (hpins : DigestPins) : PinnedOpens form :=
+  pinnedOpens_of hpins form_provenance form_layoutReads
 
 end NciCheck.Properties.Record.SecurityProofs

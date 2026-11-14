@@ -108,7 +108,7 @@ untraced = [
 # tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
 # (benchmarks/one_stage/glm53_*.json), and tests/tools/test_description_sizes.py holds the description of every template
 # they name to its size (each glm53_*_tp8_step*.json, so a partition file added there is listed here);
-# tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (benchmarks/pous/p2_v1/store.py and the
+# tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (verity/protocols/accounting/pous/prover/p2/p2_store/store.py and the
 # reference decode it imports) and imports the store's load (load.py, with the library's wrapper gpu.py); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
@@ -124,12 +124,12 @@ inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_c
           "verity/protocols/accounting/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
-          "benchmarks/remote_session/prover.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/session/wire.py",
+          "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/session/wire.py",
           "verity/protocols/accounting/poub/verifier/session/checks.py", "verity/protocols/accounting/poub/verifier/session/lean_verifier.py", "verity/protocols/accounting/poub/verifier/session/challengers.py",
           "benchmarks/remote_session/store_layout.py", "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json",
           "verity/protocols/compose/device/live_challenger/models.py", "verity/protocols/accounting/pouw/prover/sass_gate.py",
-          "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
-          "benchmarks/pous/p2_v1/load.py", "benchmarks/pous/p2_v1/gpu.py",
+          "benchmarks/pous/p2_v1/__init__.py", "verity/protocols/accounting/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
+          "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
           "benchmarks/one_stage/glm53_prefill_tp8_step0.json", "benchmarks/one_stage/glm53_prefill_tp8_step0_core.json",
           "benchmarks/one_stage/glm53_moe_w13_tp8_step16.json", "benchmarks/one_stage/glm53_moe_w2_tp8_step16.json",
@@ -277,7 +277,7 @@ paths = ["adapters/vllm/tests", "adapters/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_row.py"]
-paths = ["benchmarks/remote_session", "adapters/vllm", "verity"]
+paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "adapters/vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -294,7 +294,8 @@ tests = [
     "tests/pipeline/test_serve_remote.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
-paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/verifier"]
+paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/remote_session/device.py",
+         "verity/protocols/accounting/poub/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_serve_row.py"]
@@ -331,7 +332,8 @@ paths = ["verity/definitions"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/protocols/test_pous_option.py"]
-paths = ["benchmarks/pous/p2_v1"]
+paths = ["benchmarks/pous/p2_v1", "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
+         "verity/protocols/accounting/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/query/test_word.py"]

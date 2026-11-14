@@ -127,13 +127,6 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # the served path: verity_vllm runs benchmarks' code
-    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store and its load "
-                                                       "(`benchmarks/pous/p2_v1`), through its `P2_V1`",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
-                                                                          "(`benchmarks/remote_session`, "
-                                                                          "its `REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/gemm_hill.py", "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
@@ -150,10 +143,8 @@ BENCHMARKS_IMPORTERS = {
     # tests and vector scripts that check against a benchmark's reference
     "verity/protocols/accounting/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
-    **dict.fromkeys(("verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py",
-                     "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py"),
-                    "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
-                    "responder (`benchmarks/pous/band_gpu/harness.py`)"),
+    "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py": "memory-accounting: the harness's control "
+                                                                      "responder (`benchmarks/pous/band_gpu/harness.py`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
@@ -166,11 +157,11 @@ BENCHMARKS_IMPORTERS = {
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
         "loaded by path since before the move; goes when the session's code moves under `verity/`",
     "verity/protocols/accounting/poub/device/live_verifier/tests/stub_verifier.py":
-        "memory-accounting: the remote session (`benchmarks/remote_session`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+        "memory-accounting: the remote session's in-process harness "
+        "(`benchmarks/remote_session/tests/test_session.py`), loaded by path",
     "verity/protocols/accounting/poub/device/live_verifier/tests/test_host.py":
-        "memory-accounting: the remote session (`benchmarks/remote_session`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+        "memory-accounting: the remote session's store layout and line of record "
+        "(`benchmarks/remote_session/store_layout.py`, `auditor_line.py`), loaded by path",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).

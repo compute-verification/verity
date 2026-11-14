@@ -102,7 +102,7 @@ inputs = [
     "benchmarks/vllm_encoded/step_spans.py",
     "benchmarks/vllm_encoded/paged.cu",
     "benchmarks/codec_tensor/wt.cu",
-    "benchmarks/codec_tensor/reader.cu",
+    "verity/protocols/accounting/poub/prover/codec_tensor/reader.cu",
     "benchmarks/kv_filler/topup.cu",
     # a direct point's command must pass a slot-only node's launcher rule (research's slot_only.through_slot), which a
     # test checks
@@ -124,9 +124,11 @@ inputs = [
     # `verity bench exfiltration` reads the network certifier's calculator of K for its term, which its tests run beside
     # fixture rows; the calculator counts the sampling plan's requests, which it reads from the break-even planner (its
     # modules, with the figure's model, the cost model and the cards they read, and rho's world fleet); a test runs its
-    # runner
+    # runner. How the calculator charges the stop class is the stop verdicts' reader's answer on the command's runs of
+    # record, which its tests ask through the reader's own format
     "benchmarks/spot_figures/breakeven", "benchmarks/spot_figures/figure1.py", "benchmarks/spot_figures/total_cost.py",
     "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/cards", "benchmarks/network_traces/leak_bounds.py",
+    "benchmarks/network_traces/stop_verdicts.py",
     "benchmarks/exfiltration/run.py",
     # a steady-state point's node side runs the stager and the timing script by their paths in the tree, which a test
     # checks are there and in the point's tool's closure, with the timing script's fewest timed sessions a prover

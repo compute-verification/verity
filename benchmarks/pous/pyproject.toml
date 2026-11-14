@@ -62,10 +62,10 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime", "verity/channel.py", "verity/tests/tests/test_channel.py",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/poub/__init__.py", "verity/protocols/proofs/spot/__init__.py", "verity/protocols/proofs/spot/device/__init__.py",
           "verity/protocols/accounting/pouw/__init__.py", "benchmarks/numerical/python/verity_numerical/__init__.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
-          # p2_v1/store.py gives the store as the circuit requirement's `Store`, whose module reads the census
+          # p2_store/store.py gives the store as the circuit requirement's `Store`, whose module reads the census
           "verity/definitions/__init__.py",
           "verity/circuits/census.py", "verity/circuits/requirement.py",
-          # the P2 store's default weights generator (`p2_v1/store.py`'s `GENERATOR`), which its test lays out and commits
+          # the P2 store's default weights generator (`p2_store/store.py`'s `GENERATOR`), which its test lays out and commits
           "benchmarks/torch_gpu/p2_stage/served_weights.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
