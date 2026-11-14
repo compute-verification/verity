@@ -252,7 +252,8 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_rel
                                  "certificates.jsonl", "load-relay.json"}
     assert (d / "out" / "cells-registrations.jsonl").read_text() == ""
     assert json.loads((d / A.WITNESS / "load.json").read_text()) == LOAD_DOC
-    assert {"load.json", "load-heads.json", "rehearse.log", "tunnel.log"} <= set(end["witness"])
+    assert {"load.json", "load-heads.json", "rehearse.log", "tunnel.log"} <= {
+        p.name for p in (d / A.WITNESS).iterdir()} and "witness" not in end
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     assert not any(x.encode() in public for x in (SALT, ROOT, DIGEST, SIGNATURE))
 
@@ -267,7 +268,7 @@ def test_a_load_whose_sink_tunnel_doesnt_come_up_runs_nothing_and_its_end_says_w
     assert end["rc"] == 2 and end["ended"] == "tunnel" and LOAD[2] not in json.dumps(end)
     assert ended_why(stored, end) == "a tunnel to vy-nebius-1's sink at 127.0.0.1:8021 didn't come up (tunnel.log)"
     assert len(ups) == 3 and end["verdict"] is None and "load" not in end
-    assert end["files"] == {} and end["witness"] == {"tunnel.log": 0}
+    assert end["files"] == {} and "witness" not in end
 
 
 def test_a_refused_load_publishes_one_word_of_why_and_its_sentence_stays_in_the_witness(stored):

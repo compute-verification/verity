@@ -282,6 +282,11 @@ def ended_why(host, end: dict) -> str:
     return (host.certifier / end["run"] / A.WITNESS / A.ENDED_WHY).read_text().removesuffix("\n")
 
 
+def end_text(d) -> str:
+    """A run's `end.json` as written, which `status` and a `fetch` without the witness give."""
+    return (d / "end.json").read_text()
+
+
 def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
     seen = []
     run, end = run_warden(host, WARDEN_FILES, seen)
@@ -296,9 +301,11 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
                                                                    if k != "load"},
                               "cell_rows": {"registered": 4, "of": 4}} and "load" not in end
     assert "registrations" not in end
-    assert end["witness"] == {n: (d / A.WITNESS / n).stat().st_size for n in (
+    assert {p.name for p in (d / A.WITNESS).iterdir()} == {
         "deployment.json", "cells.jsonl", "rows.jsonl", "certified.jsonl", "cells.salts", "requests.records",
-        "client.json", "check.json", "rehearse.log", "tunnel.log")}
+        "client.json", "check.json", "rehearse.log", "tunnel.log", A.ENDED_WHY}
+    assert "witness" not in end and not any(n in end_text(d) for n in ("cells.salts", "requests.records",
+                                                                         "client.json", "rehearse.log"))
     assert set(end["files"]) == {"deployment.json", "certificates.jsonl", "cells-certificates.jsonl",
                                  "rows-certificates.jsonl", "cells-registrations.jsonl"}
     assert sorted((d / A.WITNESS / "rehearse.log").read_text().splitlines()) == sorted([STDERR, LAST_LINE])
@@ -483,7 +490,7 @@ def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_wh
     assert end["rc"] == 2 and end["ended"] == "tunnel"
     assert "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in ended_why(host, end)
     assert REQUEST[2] not in json.dumps(end)
-    assert end["verdict"] is None and "registrations" not in end and end["witness"] == {"tunnel.log": 0}
+    assert end["verdict"] is None and "registrations" not in end and "witness" not in end
     assert end["files"] == {}
 
     run, end = run_warden(host, "raise SystemExit(1)", token="cd34")
@@ -787,7 +794,7 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     assert (end["verdict"]["accepted"], end["verdict"]["problems"]) == (True, 0)
     assert {k: end["verdict"][k] for k in ("windows", "certified_windows", "certificates")} == {
         k: CHECK["summary"][k] for k in ("windows", "certified_windows", "certificates")}
-    assert "client.json" not in end["witness"] and "deployment.json" in end["files"]
+    assert not (d / A.WITNESS / "client.json").exists() and "deployment.json" in end["files"]
     assert status() | {"active": False} == {"run": run, "request": req, "end": end, "active": False,
                                            "relay": {"client": "127.0.0.1:8012", "deployment": deployment}}
     rehearsal_status = json.loads(A.gate(["--ssh", f"status {run_warden(host, token='cd34')[0]}"], host,
@@ -855,7 +862,8 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal(grouped, seen), wait=lambda proc, s: proc.wait())
     (got, work, url), = seen
-    assert got == req and work == w and end["rc"] == 0 and end["witness"][A.PROMPTS] == len(b"[[70001,3],[5],[7]]")
+    assert got == req and work == w and end["rc"] == 0 and "witness" not in end
+    assert (w / A.PROMPTS).read_bytes() == b"[[70001,3],[5],[7]]" and A.PROMPTS not in end_text(d)
     argv = A.warden_command(got, work, url)
     assert argv[argv.index(A.SCAN_SCHEDULE[-2]) + 2:] == ["--prompts", str(w / A.PROMPTS), "--window-per-group",
                                                        "--max-tokens", "2"]

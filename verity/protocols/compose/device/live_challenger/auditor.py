@@ -255,8 +255,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   registration) and a `--window-per-group` run's `groups.json`. Of the connection rows' registrations and a load's,
   `out/` and the end hold the certificates and nothing else: no root, domain or layout. Of the word that an
   execution phase has no head, `out/` holds its certificate likewise.
-  `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
-  `WARDEN_COUNTS` names) and each witness file by name and size. `fetch RUN` gives
+  `end.json` adds `device` and the check's verdict (`warden_outcome`: accepted, the number of problems and the
+  counts `WARDEN_COUNTS` names). Of `witness/` the end says nothing, no file's name or size: `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 - **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
   the rehearsals): the network certifier's relay kept up here, as the auditor's device, for a served run's own load.
@@ -2801,10 +2801,11 @@ def warden_outcome(out: Path, witness: Path) -> dict:
     (`out/certificates.jsonl`), each row registration's certificate without its registration (`ROW_CERTIFICATES`),
     each cells' registration less its private keys (`ROW_REGISTRATIONS`, `row_registration`),
     the check's verdict (`accepted`, how many problems, `WARDEN_COUNTS`, its `cell_rows` less the registrations'
-    cost, its `failed` in `FAILED`'s words), each witness file by name and size alone, and a load's relay
-    (`LOAD_RELAY`, to `out` and the end as `load_relay_public` holds it: `LOAD_PUBLIC`, its streams and whether
-    they were acknowledged, or the word it was refused in). A registrations' file with a line `ROW_LINE` doesn't rule is not
-    published, no line of it, and the outcome says which line and what to change (``unruled``)."""
+    cost, its `failed` in `FAILED`'s words) and a load's relay (`LOAD_RELAY`, to `out` and the end as
+    `load_relay_public` holds it: `LOAD_PUBLIC`, its streams and whether they were acknowledged, or the word it was
+    refused in). Of `witness` itself the outcome says nothing: a file's name says what the run got to, and its size
+    follows what the peer sent. A registrations' file with a line `ROW_LINE` doesn't rule is not published, no line
+    of it, and the outcome says which line and what to change (``unruled``)."""
     for name in WARDEN_PUBLIC:
         if (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
@@ -2843,14 +2844,13 @@ def warden_outcome(out: Path, witness: Path) -> dict:
             verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS if k in verdict["cell_rows"]}
         if "failed" in verdict:
             verdict["failed"] = failed_words(verdict["failed"])
-    sizes = {str(p.relative_to(witness)): p.stat().st_size for p in sorted(witness.rglob("*")) if p.is_file()}
     try:
         load = load_relay_public(json.loads((witness / LOAD_RELAY).read_text()))
     except (OSError, ValueError):
         load = None
     if load is not None:
         (out / LOAD_RELAY).write_text(json.dumps(load, indent=1, sort_keys=True) + "\n")
-    return {"verdict": verdict, "witness": sizes, **({} if load is None else {"load": load}),
+    return {"verdict": verdict, **({} if load is None else {"load": load}),
             **({} if unruled is None else {"unruled": unruled})}
 
 
