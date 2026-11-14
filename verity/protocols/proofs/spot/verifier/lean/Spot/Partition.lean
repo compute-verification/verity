@@ -1,12 +1,4 @@
-module
-
-public import Flock.HmRow
-public import Flock.Registered
-public import Spot.Json
-public import Spot.Program
-public import Std.Data.HashMap
-
-/-!
+/-
 The partition as a named query over the verifier's own program (`one_stage/partition.py`): core's `verity/partition/v1`
 object and its digest (Flock's `HmRow.checkPartitionObject` and `HmRow.partitionDigest`), and the queries one-stage
 applies to the program: the template queries (Flock's `TemplateQuery`), `Q_word` v1 at `X = 16` (`Flock.Extract`) and
@@ -22,6 +14,13 @@ program and applies the query itself; it never takes a population or a unit inde
 once, where `TemplateQuery.gates` recomputes both per unit. `unitGates` reads a range at a time instead
 (`TemplateQuery.unitGates`), so nothing runs as `unitGatesFast`.
 -/
+module
+
+public import Flock.HmRow
+public import Flock.Registered
+public import Spot.Json
+public import Spot.Program
+public import Std.Data.HashMap
 
 @[expose] public section
 

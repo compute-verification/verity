@@ -1,30 +1,4 @@
-module
-
-public import Spot.OneStage
-public import Spot.Slots
-public import Spot.FilePart
-public import Spot.Service
-public import Spot.Run
-public import Spot.RecordAcross
-public import Spot.Stream
-public import Spot.Fleet
-public import Spot.Hello
-public import Spot.ChallengerRecord
-public import Spot.ChallengerSession
-public import Spot.ChallengerCoins
-public import Spot.ChallengerTrees
-public import Spot.ChallengerInnerTrees
-public import Spot.Produced
-public import Spot.HiddenDraw
-public import Spot.PartitionRef
-public import Spot.Returned
-public import Spot.WiresDrawn
-public import Spot.OneStageZk
-public import Spot.HistoryTable
-public import Spot.PublicUnits
-public import Spot.LinkPoints
-
-/-!
+/-
 The one-stage audit's pieces as JSON functions, which `sampled-proofs-difftest` serves (`Difftest.serve`) for the
 difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proofs-one-stage serve`):
 
@@ -145,6 +119,31 @@ outcome to it),
 `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
+module
+
+public import Spot.OneStage
+public import Spot.Slots
+public import Spot.FilePart
+public import Spot.Service
+public import Spot.Run
+public import Spot.RecordAcross
+public import Spot.Stream
+public import Spot.Fleet
+public import Spot.Hello
+public import Spot.ChallengerRecord
+public import Spot.ChallengerSession
+public import Spot.ChallengerCoins
+public import Spot.ChallengerTrees
+public import Spot.ChallengerInnerTrees
+public import Spot.Produced
+public import Spot.HiddenDraw
+public import Spot.PartitionRef
+public import Spot.Returned
+public import Spot.WiresDrawn
+public import Spot.OneStageZk
+public import Spot.HistoryTable
+public import Spot.PublicUnits
+public import Spot.LinkPoints
 
 @[expose] public section
 set_option backward.privateInPublic true

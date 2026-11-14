@@ -1,15 +1,14 @@
-module
-
-public import Flock.ProvedScope
-meta import Flock.ProvedScope
-
-/-!
+/-
 `ProvedScope.servedForm`, the last of `verify`'s refusals: a session is taken only at `verity/flock-circuit`,
 `verity/flock-circuit+plain-leaves` or the templated `verity/flock-circuit/tmpl` on the challenger's keyed coin tree. Every
 other version `Tags.all` knows (the superseded hm96 versions and the selftest builds' `+seed-injection` ones among them)
 and a plain session on seed coins are refused, each with its reason; a version before hm96 rows, or typed, is refused
 earlier by `ProvedScope.check`, and the version is named first.
 -/
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
 
 @[expose] public section
 

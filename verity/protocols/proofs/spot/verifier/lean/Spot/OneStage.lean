@@ -1,15 +1,4 @@
-module
-
-public import CoreProtocol.Cli
-public import CoreProtocol.Profile
-public import CoreProtocol.Live
-public import Spot.Registration
-public import Spot.Record
-public import Spot.ChallengerDraw
-public import Spot.Select
-public import Spot.HistoryTable
-
-/-!
+/-
 Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, with `registration.check` before it):
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
@@ -83,6 +72,16 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   and each template's own under a stratified or work sampling design), and the **profile** is `audit.profile`'s `IntegrityProfile`:
   one level `unit`, the partition's units, sampled by the verifier's law.
 -/
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Profile
+public import CoreProtocol.Live
+public import Spot.Registration
+public import Spot.Record
+public import Spot.ChallengerDraw
+public import Spot.Select
+public import Spot.HistoryTable
 
 @[expose] public section
 set_option backward.privateInPublic true

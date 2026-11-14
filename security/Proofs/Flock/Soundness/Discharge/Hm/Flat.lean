@@ -1,3 +1,12 @@
+/-
+A row's `b ‖ c` in a satisfying witness of the untyped statement `Stmt.setupH` accepted (`row_bc_setupH`). Without a typed
+template Δ is its slot constants' pairs, the rows' constant bits, the units' leaf and cut bits and the wires' bits, and
+nothing after (`delta_flat_eq`). Past a row net's input rows Δ writes only slot constants (`Layout.not_inBit`), so the
+`sha512x3` and `hm96` slots hold their nets' rows (`shaSlot_flat`, `hmSlot_flat`). At their `cv` and `pad` input bits the
+leaf and cut bits are elsewhere (the unit is neither row net), and so are the wires after the rows' own (`RowWires`,
+`HmRow.parse`'s wire check): Δ's one copy there is `rowCopies`' or the rows' wires' (`inBit_copyL`). The constant bits
+read the pin and the unit range's forced-zero row (`Aliased.zeroPos_block`).
+-/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
@@ -22,16 +31,6 @@ import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.SparseRows
 public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
 public import Proofs.Flock.Soundness.Discharge.Aliased
-
-/-!
-A row's `b ‖ c` in a satisfying witness of the untyped statement `Stmt.setupH` accepted (`row_bc_setupH`). Without a typed
-template Δ is its slot constants' pairs, the rows' constant bits, the units' leaf and cut bits and the wires' bits, and
-nothing after (`delta_flat_eq`). Past a row net's input rows Δ writes only slot constants (`Layout.not_inBit`), so the
-`sha512x3` and `hm96` slots hold their nets' rows (`shaSlot_flat`, `hmSlot_flat`). At their `cv` and `pad` input bits the
-leaf and cut bits are elsewhere (the unit is neither row net), and so are the wires after the rows' own (`RowWires`,
-`HmRow.parse`'s wire check): Δ's one copy there is `rowCopies`' or the rows' wires' (`inBit_copyL`). The constant bits
-read the pin and the unit range's forced-zero row (`Aliased.zeroPos_block`).
--/
 
 @[expose] public section
 

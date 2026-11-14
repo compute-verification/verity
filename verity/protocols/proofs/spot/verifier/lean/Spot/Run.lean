@@ -1,14 +1,4 @@
-module
-
-public import Spot.OneStage
-public import Spot.Select
-public import Spot.Slots
-public import Spot.PopOrder
-public import Spot.Service
-public import Spot.ChallengerCoins
-public import Spot.SecondStage
-
-/-!
+/-
 The proof system's run of one registration, from its public check through its verdict, as `service.Stream` makes it on a Spec
 whose selection rule `Select.Rule` reads: what the challenger holds once a delivered proof's outcome is decided, and every
 check the stream ran on it, in the stream's order.
@@ -64,6 +54,15 @@ audit record as the text of Python's `canonical_json`, and under a two-stage rul
 `Stream.outcome` holds its own outcome to this run (`verifier.run`). A run whose proof came after the proof deadline is
 the clock's (`late`).
 -/
+module
+
+public import Spot.OneStage
+public import Spot.Select
+public import Spot.Slots
+public import Spot.PopOrder
+public import Spot.Service
+public import Spot.ChallengerCoins
+public import Spot.SecondStage
 
 @[expose] public section
 set_option backward.privateInPublic true

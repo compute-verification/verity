@@ -1,9 +1,4 @@
-module
-
-public import VStarRecursive.Protocol
-meta import VStarRecursive.Protocol
-
-/-!
+/-
 SPOT (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
 (`Spot.OneStageZk`). One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's
 are its own run of the verifier. The recursive audit (`VStar.Recursive`) is refused too (`RECURSIVE_REFUSED`): SPOT's
@@ -20,6 +15,10 @@ soundness covers the one-stage form only, and the verifier refuses every form it
 * **check**: that form's check on the blobs; evidence of the other form rejects, so with the recursive params refused
   only one-stage v2's check runs.
 -/
+module
+
+public import VStarRecursive.Protocol
+meta import VStarRecursive.Protocol
 
 @[expose] public section
 set_option backward.privateInPublic true

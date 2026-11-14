@@ -1,14 +1,13 @@
-module
-
-public import Flock.Verify
-public import Flock.ZkLigerito
-
-/-!
+/-
 `flock-circuit --zk` (live PROTOCOL.md §1–§7, M1 with M2's committed coins): the verifier. The zerocheck and lincheck are
 replayed on masked values, every check an affine constraint on the committed pads `h` (`Lin`); the opening's two masked
 claims' ring-switch checks and level 0's lane phase become constraints too; the inner proof shows that the pads satisfy every
 constraint at once (`verifyInner`). The session around the reps is `Flock.verify`'s, with the keyed coin tree.
 -/
+module
+
+public import Flock.Verify
+public import Flock.ZkLigerito
 
 @[expose] public section
 set_option backward.privateInPublic true

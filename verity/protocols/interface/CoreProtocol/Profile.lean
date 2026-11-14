@@ -1,14 +1,4 @@
-module
-
-public import Base.Canon
-public import Commitments.Draw
-public import CoreProtocol.Ratio
-meta import Lean.Data.Json
-meta import Base.Canon
-meta import Commitments.Draw
-meta import CoreProtocol.Ratio
-
-/-!
+/-
 The integrity profile: what an accepted check established, as `verity.core.protocols.profile.IntegrityProfile`
 records it. These are the facts checked exhaustively, the verifier's sampling design over named levels of a partition
 hierarchy (coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
@@ -18,6 +8,15 @@ A protocol whose acceptance is not a sampling design over proof blocks (a timed 
 its own profile type; this one is shared by the protocols that sample. `Integrity.ofJson` reads it back, for a protocol
 that consumes another's answer.
 -/
+module
+
+public import Base.Canon
+public import Commitments.Draw
+public import CoreProtocol.Ratio
+meta import Lean.Data.Json
+meta import Base.Canon
+meta import Commitments.Draw
+meta import CoreProtocol.Ratio
 
 @[expose] public section
 set_option backward.privateInPublic true
