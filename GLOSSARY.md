@@ -398,7 +398,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Land verdict**: a reviewer's `land` or `hold` on one PR head, recorded as a label; the owner's own doesn't count.
   - **Verified queue**: the one landing path, ci's loop (`research queue vqueue`): it merges the PRs ready to land onto
     `main` as candidates, and fast-forwards `main` only to one with no new failure: each gating task passed or fails on its
-    base too.
+    base too. Under `--gate verdict` a plain candidate (each member with a land verdict of its own, no move, and nothing
+    drive.toml's `verdict_excludes` names) lands on those verdicts and the quick tier, and `main`'s whole check follows:
+    its red reverts the one culprit or, with none, sends plain candidates back to the whole check.
   - **Candidate**: `main`'s tip, or the candidate below it, with one `Queue: #N` merge per PR on top, pushed as
     `queue/<sha12>` and checked as one.
   - **Suspect**: a PR of a failed candidate whose change touches what a failure its base doesn't share names (every PR
@@ -416,7 +418,8 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     spec; the lock records it regenerated are committed on top (`Lock records regenerated for #N...`), and that commit is
     what is checked.
   - **After-landing run**: the whole check (every ci.toml job: `--kind after-landing`), which gates a candidate when the
-    verified queue runs with `--gate check`: one beside each candidate and beside `main` each time it moves, `main`'s saying
+    verified queue runs with `--gate check` (under `--gate verdict`, every candidate but a plain one): one beside each
+    candidate and beside `main` each time it moves, `main`'s saying
     which failures a candidate inherits. Under `--gate graph2`, the default, graph2's tasks check a candidate, with
     lean-agreement and ratchet-gate run beside them.
   - **Pass**: a part of the check, reused while its declared inputs are unchanged. A verdict is a review's, never a pass.

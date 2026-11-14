@@ -1,4 +1,6 @@
 """The verified queue: `main` moves only to a candidate tree with no new failure: each gating task passed or fails on its base.
+Where the land verdicts gate (the loop's `--gate verdict`), a plain candidate's gating task is the quick tier on its own merge,
+and `main`'s whole check follows its landing (`culprit`).
 
 A candidate is `main`'s tip, or the candidate below it, with one `Queue: #N` merge per member on top (built by `Queue._merge`,
 as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.  Its verdict decides what happens:

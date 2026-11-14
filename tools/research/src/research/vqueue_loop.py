@@ -94,7 +94,14 @@ The gate (`--gate`).  With `graph2`, the default, a candidate's verdict is the t
 after-landing check gates in graph2's place: the run beside each candidate, and beside `main`, is every after-landing step
 as `--shards` shards on `--on`'s machines (`vqueue_slim.start` with ``shards``: N, ci.toml's plan, or `auto:N`, an auto
 plan of the candidate's tree, which splits pytest by suite), judged on every step `main` waits for,
-and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  A Lean
+and its verdict alone is the candidate's; a run started while graph2 gated is started again as the check.  With `verdict`,
+the land verdicts gate: as `check`, but a plain candidate (`Loop._plain`: each member has a land verdict of its own at its
+head, is no move, changes no Lean input and meets nothing drive.toml's `verdict_excludes` at `main` names) lands on those
+verdicts and the quick tier on its own merge (`vqueue_slim.start_quick`).  `main`'s whole check follows each such landing
+(`Loop._below`), and a red of it (`Loop._main_red`) reverts the one PR landed since `main`'s last passed check whose change
+meets what the failure read (`World.revert`), holding the ready PRs that meet it too until `main`'s check passes again; with
+no such PR it reverts none, and every candidate takes the whole check until `main`'s passes.  Every other candidate takes the
+whole check before it lands, as under `check`.  A Lean
 candidate's records run comes first under either gate: neither its graph2 check nor its check starts until that run passed,
 and both start on its records commit, or on it as built when the run regenerated nothing (`Loop._enqueue`).  A candidate built
 on another in flight, no member of it changing a Lean input against its merge base with `main` (`vqueue_slim.lean_inputs`),
@@ -4407,15 +4414,15 @@ def main(argv: list[str]) -> int:
                          "landed), with graph2's check in shadow: read, compared with the check's verdict in one logged line "
                          f"once both end, a drop's after it (at most {KEPT_MAX} so at once, the oldest cancelled past them), "
                          f"and deciding nothing; `{VERDICT_GATE}`, `{CHECK_GATE}` but for a plain candidate, each member with a "
-                         "land verdict of its own at its head and no change to a Lean input or a path of drive.toml's "
-                         "`lowrisk_excludes`, which lands on those verdicts and the quick tier on its own merge (a `research "
+                         "land verdict of its own at its head, no move, and no change to a Lean input or a path of drive.toml's "
+                         "`verdict_excludes`, which lands on those verdicts and the quick tier on its own merge (a `research "
                          "run` on --on's machines), `main`'s whole check following each such landing; a red of it reverts "
                          "the one PR landed since `main`'s last passed check whose change meets what the failure read "
                          "(`git revert -m 1`, pushed as the loop lands) and holds the ready PRs that meet it too, and with no "
                          "such PR reverts none and sends plain candidates through the whole check until `main`'s passes, "
-                         "ringing ci either way. While it is on, `main` holds commits whose whole check runs only after "
-                         "they land, which breaks AGENTS.md's rule that `main` holds only fully checked commits: it is "
-                         "turned on only on top's and Daniel's word")
+                         "ringing ci either way. While it is on, `main` holds a plain candidate's commits before their whole "
+                         "check has run; every other candidate (Lean, a lock, a move, the check or the landing code itself) "
+                         "takes the whole check before it lands")
     ap.add_argument("--shards", type=_shards, default=SHARDS,
                     help=f"with --gate {CHECK_GATE} or {VERDICT_GATE}, the shards each check runs as, one launch each: an N "
                          "ci.toml has a shard "
