@@ -1206,6 +1206,90 @@
     "256",
     "6900000000000000020100"
    ]
+  ],
+  "wide": [
+   {
+    "context": {},
+    "domain": "verity/test/kat/v1",
+    "key": "9b0d64a0cc2b6857c1d0719299ff3bc7e07454d23436729dd47bcbe02c04f8b8e9de9768cfc20f3e29c5400e0e69cd991d53895b65aca7c964f7ad7241305f41",
+    "source": "00",
+    "stream": {
+     "bytes": "cb2704729824377141a2fb3f2f04e7a5c6e69c387f33f4fbe60c910893fc3fffa22447b235fe8439f5faba4cd37e4ae3770f28ce032f65b8f7181d0a9c96d8b92f7142e5f08f20c818cb77ab0392a9d8",
+     "index": [
+      "s",
+      3
+     ]
+    }
+   },
+   {
+    "context": {
+     "boundary_root": {
+      "bytes": "2222222222222222222222222222222222222222222222222222222222222222"
+     },
+     "epoch": {
+      "int": 7
+     },
+     "program": {
+      "bytes": "1111111111111111111111111111111111111111111111111111111111111111"
+     }
+    },
+    "domain": "verity/sampled-proofs/ru-sample/v1",
+    "key": "ec2f63cbf650739cb3938439931788781bb8f96b21b5b034836afef07089862d6163efb7b4b1b412ede530aa03619da1a1a123ff1c841b93ae739c0b0b14e420",
+    "source": "626561636f6e2d726f756e642d3432",
+    "stream": {
+     "bytes": "eddf77e368538d97e1c08aa17da2b23ba7ef279f13045e7396a432e44ffc976bc2cefc1f1455ba18834666f9d04fd7d541e0c52690e5264be149b80f72c1323fc8129946c65e86938e86c090749d991d",
+     "index": [
+      "s",
+      3
+     ]
+    }
+   },
+   {
+    "context": {
+     "device": {
+      "str": "gpu0"
+     },
+     "request": {
+      "str": "r0"
+     },
+     "zero": {
+      "int": 0
+     }
+    },
+    "domain": "verity/pouw/noise-seed/v1",
+    "key": "a817d30ae1e8a04d53e8d915c636f5d24be155a08e8922228fc45028427fc772a5cb9a7e784e71f42e35d0e1a3e9f207013f24205d889d2bd508e4ce9ab0b717",
+    "source": "6465766963652d6b6579",
+    "stream": {
+     "bytes": "b3f5d2e60975b66ab24298d578a209e40c72a73d476101399b10d05234859e0056e49229258eaa985ab9ddfdbadd3822cecd091c5924a680bfe6ba38622c2929f98d67513207060ca1617333835fb649",
+     "index": [
+      "s",
+      3
+     ]
+    }
+   },
+   {
+    "context": {
+     "k": {
+      "int": 64
+     },
+     "n": {
+      "int": 4096
+     },
+     "tag": {
+      "str": "sketch-sha512"
+     }
+    },
+    "domain": "verity/remote-bandwidth/sketch-signs/v1",
+    "key": "b844824fb8704537ad7e865cc186b22f116ef99a0e48d8034d76cc07cf9ab10bd3e8ca87fb456891833fe7d994a5141c4b52bf3446f163a1a954024dfa5e8583",
+    "source": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "stream": {
+     "bytes": "2097854cb1d1d9acd2e16a3064868d2ba26465daf42677aa7d0d968b4455ac5f4b623ba30d70c20d93bc687dba04bb10a46ce25bc6e1fdd954a90bb397c32b7a46d1f314cadd3aad33ae22ad8e0cc78f38089515f458c3fe9a596980528e34d9398eae2965e944ac4f3cd8dda30d302c58a0503d7fd7097b2d197e51799014b25ef4d8bdac41f36166ecc4ce335ef72de3097decac6010aaf78a1eff521b95d9e1215e0625d8f2ac1a143a1e88289a27350f9523a364830210247e1f7a3f8d5d718330358e6bcc0242e091f272ba445de868be756cc330904f6768da981b6008ea8ec495f584e297d3c7d71f48031352168bdb637e7e64241657f9acd9dd2af7a29dd3e5dc3696972596e75d75635a0541d385ef197ee7981675bfe569af64cd3fefc2e0d8c4fc00d9fb7b664ebda84514d38f604aaff9833553788775e07de02551c3b49411bb8ed4027cb43589c842e9d7ac2776c6227a571e6478d949d7f9d88b059cdc42e758814650d34c499a461282e8becee954ba0fdadc5b3c4c3c27f1c0edea29727671db7a270ed1aa499eec2b72f990c9b3ae3d483a746fc116569edde05ba3eaf270eff06c0182d5652ed099a7e63de188d2c3f4e828fd63123bc3b56164cec69a58ecb863e8c8b26abd07d28692ac40c80541a505b4bb59624436952e0cf9e739dd029b890652a8ec413333608eddf01f1e530f7d92d002db91",
+     "index": [
+      "row",
+      63
+     ]
+    }
+   }
   ]
  },
  "source": "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh",
@@ -1330,9 +1414,9 @@
   }
  ],
  "inputs": {
-  "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean": "5b1024c1af9465f718fc4b39d4f383ff6b1cbc94c429888d316dee7505a5c1a5",
-  "verity/commitments/randomness/tests/vectors.json": "ddf31f7f92ac4e022bd9cbe26f2df3a3b66b529825c5d57efda665454eea1b63",
-  "verity/commitments/randomness/Randomness.lean": "b0482e78fadc73784c430fed1a9517a31c34ba51159130ebfced110e8aa2fa32",
+  "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean": "eb6c82e79a7fb3d404487b02dd7455c9e46141321b9ab83b59dbaf4bdba571f8",
+  "verity/commitments/randomness/tests/vectors.json": "70fd524498edf905cfed705b94f6eb84037ce5f46e15ede6dbb9094c9122b442",
+  "verity/commitments/randomness/Randomness.lean": "b94f89b4970d03d8fd7140b0989f4262c13c08c3afa91b7522d9db92a8234cf9",
   "security/Proofs/Flock/Soundness/PlanDraw.lean": "e850f9254f1c0b80c4b3c4540ba1a7ffc4da189557b882a528ab8901606965e8",
   "security/Proofs/lake-manifest.json": "8021bbef4f4f86e9ab1a08fb173113c49a5547999b3a875ad5e5e5d57fdc2592",
   "security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",

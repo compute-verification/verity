@@ -1075,6 +1075,8 @@ def main() -> int:
     ap.add_argument("--seed-payload-key", action="store_true",
                     help="tests only: salt the payload under the backend's own key (from --seed) instead of the one the "
                          "verifier sends, which a verifier that binds the store to a model refuses")
+    ap.add_argument("--rows", type=int, default=None, choices=rb.ROWS,
+                    help="the registration's sketch rows k_s, sent in the hello (default: the receipt kind's, 16)")
     ap.add_argument("--kv-every", type=int, default=1, help="a kv session's passes per memory-map step")
     ap.add_argument("--kv-pool", type=int, default=64, help="a kv session's registered slots the KV pool writes over")
     ap.add_argument("--ahead", type=int, default=None, metavar="K",
@@ -1105,7 +1107,7 @@ def main() -> int:
                    defer_openings=not a.overlap_openings, warmup_ns=round(a.warmup_ms * 1e6), kv_every=a.kv_every,
                    kv_pool=a.kv_pool, kv_headroom=a.kv_headroom, ahead=a.ahead, seed_payload_key=a.seed_payload_key,
                    log=lambda m: print(m, flush=True))
-    cal = p.register(codec=wire.codec_named(a.codec)) if a.cpu else p.register()
+    cal = p.register(codec=wire.codec_named(a.codec), rows=a.rows) if a.cpu else p.register(rows=a.rows)
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)
     stalls = getattr(backend, "calibration_trace", None)
     (a.out / "prover.json").write_text(json.dumps({"calibration": cal, "gates": backend.gates,

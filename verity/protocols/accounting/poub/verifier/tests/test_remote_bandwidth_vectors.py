@@ -12,6 +12,7 @@ import pytest
 import remote_bandwidth_vectors as rv
 from remote_bandwidth_fakes import Clock
 
+from verity.commitments.randomness import derive, frame
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
 
 # `verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py` (at 5b8decfc5), numpy, run on these
@@ -53,40 +54,40 @@ SKETCH_CASES = [
      "6dd31d65ca1d94c620420c240e3834c3d09159020309c455514f6384f5bc0d566c31936d25ef206d6481b907ed3cff83ac3e4e245c2d7c9e9ca7004e99b3de6d"),
 ]
 
-# The same reference at 64 rows (at f666d887b, `SketchReceipter(seed, 64)`, `signs(seed,
-# 64)`), on the same inputs: the sign bits' SHA-512 per seed, and each case with SHA-512 of σ_j's 256 bytes in place of
-# σ_j.
+# The same reference at 64 rows (`SketchReceipter(seed, 64)`, `signs(seed, 64)`), under sketch-signs/v1's
+# 512-bit keys, on the same inputs: the sign bits' SHA-512 per seed, and each case with SHA-512 of σ_j's 256 bytes in
+# place of σ_j.
 SKETCH64_SIGN_BITS_SHA512 = [
-    "2ffa7ce504e16a4a8d9e0d19abb2318ce0d7e4f6245c0dd64d15e8bff5640a035da1da231aa63a56ae45d67291d831543c4fde5b020fbde8494451b5eaf023b1",
-    "e53861f81d5515c5e6fd423e66ef64c6d84e3c770acdcb98fecf7345e30c2da6cde8efeff25c2235e61fc701e7d8a537906499326f3cd8dfb630a4271c6db80a",
+    "e68a78d58193e3693f5a70385e26c00207b70b158ddbbb07d31ca5640d36def2cb259ed5752b1ffd9efa599986147b13908e67d3060d1e319e81e48c3575283e",
+    "d9e8dc2b5e32024254d01c3f1da7236444a61ce3beb69d302f4077a023fee17ec3661fc68b1e729f0f066fd8bd5f8574e37dfff94f19be9c9bce08db88dab8f0",
 ]
 SKETCH64_CASES = [
     (0, "0x80", "one", 0,
-     "12543d8b982b5dd2a3e001e128f77d320a96908cd1d5c35bdc00549106147f720d65153356833a8ee0c8aa3d789449d32ae9651d18acaa83c2498bf3a43a8b2d",
-     "2aff6a29daa438d20b11ead8d629a639d31de55435ad18dcbad8571100cc4f671625fb3d262b9e4c9520e6682b7067f0ab854293810d4010c86d97a65beea9da"),
+     "f2148d301be0f59e945b10f1df23c563b081625c38982e4c1c0629eba33643e2ade05321ba60e74df7fb5862bf51c08740fea8f0bd0e94f7959d5aad7304c212",
+     "379827dd29b77c9058ac6dc4ca7eca036ee8a5b3100f2431f7ae96151e11563414b897dee608098eac0956334a73dfa32fa91679364baa983d8c188e215037c8"),
     (0, "0x7f", "short", 1,
-     "29c7ca9063e3c31ae69ee4af19cb105f7f35c15843eb9aa2850c3963a6e596b7429a27eb056326344688bd69b39a032097ee20805a9356bf6cb2963ffa7c1c74",
-     "44c6291a83cb95aa8975dbdfa2490eae7e92ae948c6801b735512ec50590aabdb11931a2bf2745ee169cac6fe1b7778ce4eef7f6cc89565e99864d9974c5efa4"),
+     "603676feb73f3bd722a8aec4fb1285172c6c6b2ec06fe41492ba1c4a87f0a561cfcd98d0f202bd31afdfffbdeafb7645112cfa18fb4796c8e700da68006608d3",
+     "194a81867de36b9340e3f1785b744e6756289d4fae4e9fd6d09b3dd9fa1085eda318cb3f4d2271fe35437edecdf8fb2b3247cbc42fa06da2bd9e34ca010a13d9"),
     (0, "counter", "folded", 20,
-     "1130863d7c53c5a7290ec883daadfe074e43208e1040741391ecbc1aea9a99ecba254160d9e1f5adc4553086ba3575fdbd79cd28d67eb54015e8597a72c4758b",
-     "d8cbd5b0bc3f2f0672e5bfeac4580af1bf0d9b280e37228ff594c429a831019764824d6c4feaf06ca26d359f4c2ca5b8e8ba62d471a3554c3b7a678a0016c668"),
+     "831cbfd6b702646357c9e14dc7bb5d11a18844e1871729c849d6c008a0e8d3f8283bfb131ddce2865c91a48f05c4699c5efacc35f0513e73ac950c205b32c4bd",
+     "820b9121c04359c0c7633f046e331d3765a88f5f8ab30a08761743eb71dbd59c3a9da5006435b91fd2d5cd5fc51091be5edf1631c34ae830a148d5694e934936"),
     (1, "counter", "short", (1 << 64) - 1,
-     "fb7ffb9430b69637cdab800965f3ab07e27f0e73be1243c3c57ea4cc6f9966ba939d84ca923d90c2720fa904433a4033edcb4b446eddb26ea08034b280de6d0a",
-     "af5c0c67da2fd9c06b0ebf26827408faf0d9a904e6271a4a1997f0d725b6b6187ca4f6bcf75b6c79d37e949df6257c535868ea7320be7d0265733b27c0d7c903"),
+     "c6d6b8e568f156b7e127c1e77e84831274ca566e5d9543747fa18c73f25da13e3788b30d016c6cdcba27d3658686efea8a253ec755c48b6ccf7799e9a92485d2",
+     "2802a95cd6fb90624559c48b1fe3f3035997e929243b80c5cef9d909f26becca8593fad0b2dba8aa0cda4ff98c347323b23957ac2134d335ef7ef75f0d0a1a8a"),
 ]
 SKETCH64_UNBOUND_CASES = [
     (0, "0x80", 0,
-     "f6ef757affdfff0e2fc03f3871458ed7b8a46dc80c3b1368b9d0e6be0e4aadf16697e9109e2e0670b5785fb37b48bedb550116619005adf251d1638695176fc1",
-     "0eb1e5ba0305b80b1f8029bf0027144bafb71bdfab2a0146a09c5cbdfb8ae8df0ddf93b78f78802e8ef1f6205a09936e9fda1bed694cecd9b488e960eb8abda8"),
+     "db5c88fe4fb15c0280b9f572a3cb34a995c35b9abf3ec08b488ba2a66ba81a306d14249fe81e2031822ea098dbf6d773a3657d36041eb2b16531c7c5c755e489",
+     "34ea18952244f0c385b2552dab843962362ec2524080f10594649aff34f44f51e2b28d6d6a73b923b2bdd462384b1c0b0d39805617e723bfe2a94bf8c18c3064"),
     (0, "0x7f", 1,
-     "da8204d492a263c2d87f973f06a01cb49adb25341ce91eb3abcbcce932bb029081fc30b3c8266a77b11694393ab572a11fa096c398dbbf61abf1e07aa50d0064",
-     "6b6b08fbf5dea1439d82e03aa25f900ea2124a00da078adcf45dcaea62430cc02058cb689b2cc69e5f8f3e021e5bacf0cac91ca77fd57f258e07e1174f86ba98"),
+     "a0a20f39edf4d8f8ccb5c3a1d73b522d9f05e204f5b76082303e10e1713d8660b98f33018379103b651ff5cf7603a3d607c645b457f5dd83a4ca108b85663abd",
+     "aae8dce2a72e0b804ea5cd1d8a3b5ef9bd53b91230d8167bce74a7063ddb32c9d14ca7a0bdc878580ebf9c59e30b0f39c8d023a4dd0a41c6f035b5b2069d5f43"),
     (0, "counter", 20,
-     "3fa5828e6ea5cee3ce548d2e3100a99615ed19cc5fc0d411c818eaac08530647a9660d802606ddbbed24a134d2a3766935e663487d90b00764a8c357550146f4",
-     "da3866b87520a10c6e183a69de5c04d3051b749d6c7a6e4173c411253e58d159f4b8ca1d08dee4bb6b5efcb586a325e39f0b66a7d2127b750e40b74261f462cf"),
+     "8d38dc8566062bec74307d56ce05bcec4fb6e45ef6d28a0e7769f91ba0f681404fdfb754a5c049fe6fe9fc06db904e1a22b0de824ede39f8f88bfbfc89ba6ec3",
+     "ca4eb6ff4d900ae362b55ddea20389f8830cf7bb2829f24c5b00c2b799bbcb6e3e14154923c0e66ec8ea631886e60ffd831bb6b0dc9c51d882963216d4d3b040"),
     (1, "counter", (1 << 64) - 1,
-     "fb24d011c28947cf9d50722c439582cdccdec8fb713d562742637266e7dd2ae740619d35c56aa02dfb4de0b94e637a364221fed9d6d1e754571abd1f382ee585",
-     "a391d7324adcc28de3d7d5b780c433a2cdceb8755b795dd7d818401aa814074279c1e00b21e08307d961a433026089aadcb2f0e49f0ff966903906ad4cef9b95"),
+     "d2ba3856454f913578dfd37d426cd56afcd389f9cd0e2ed6a3b560d5c7c78db490475561d32771455c1d956b49649feb77875584f052ee33891683142bc719da",
+     "0b2d2775d13857d168f8e7e42493eec0423c33b2be1036eee87d4e668fb16df80a71e440645032710acf734816734db5c4477303360023daa9cb1f65a466b4db"),
 ]
 
 # `verity/protocols/accounting/poub/prover/word_codec/kv_vectors.json` ("p512/k2", at 56818bb77): the kv/v0 codec
@@ -160,6 +161,47 @@ KV_BOUND = {
     "b": "92e5925319a3cfb7146e7cb4826ac25e88c9c85dce2fa938bde6ca4ac8480b79d2337cd0d18252ab6101c7c2c98008a3e836d6f87121fe9b548cc493a7cbdf05",
     "words_sha512": "19fd802486f9d44335f474e428159469768fb12670b776684c686ca27840d43f412d18652032671e7db2621411301b1b8788b1ece4ba45c964e3c1309e6c4b99",
 }
+
+
+# The signs at a seed of 64 zero bytes: at 64 rows the key is all 64 bytes of SHA512("verity/randomness/derive-wide/v1\0"
+# ‖ frame(seed) ‖ frame("verity/remote-bandwidth/sketch-signs/v1") ‖ frame(ctx)), ctx {"k": 64, "n": 4096, "tag":
+# "sketch-sha512"} in key order, its rows streamed under "verity/randomness/stream-wide/v1\0", with row 0's first 16
+# bytes and row 63's last 16; v0's row 0 under `derive`'s 32 bytes,
+# at 16 rows (the registration's default) and at 64 (what 64 rows read before v1, which no registration reads now).
+SIGNS_V1_ZERO_SEED = {
+    "key": "b844824fb8704537ad7e865cc186b22f116ef99a0e48d8034d76cc07cf9ab10b"
+           "d3e8ca87fb456891833fe7d994a5141c4b52bf3446f163a1a954024dfa5e8583",
+    "row_0": "3f2ad9ff6856261e62ea25da12b64840",
+    "row_63": "3333608eddf01f1e530f7d92d002db91",
+}
+SIGNS_V0_ZERO_SEED_ROW_0 = {16: "fbec5d4f3cbc4bbed972e48453b9013e", 64: "bd6463d27edb16f3520d50da0fc7fde6"}
+
+
+def test_the_rows_pick_the_signs_version_and_its_key() -> None:
+    """64 rows' signs are `sketch-signs/v1`'s under a 512-bit key (`derive_wide`, its stream `WideKey.stream`, each under
+    its own tag), so two candidate seeds' signs collide at `(Q + P)²/2^513`, the ε `SketchBoundDeployed` reads; 16 rows'
+    stay `sketch-signs/v0`'s under `derive`'s 256 bits, and so do v0's own 64-row signs under `derive`, byte for byte."""
+    seed = bytes(receipts.DIGEST_BYTES)
+    rows = receipts.sign_bits(seed, 64)
+    assert rows[0][:16].hex() == SIGNS_V1_ZERO_SEED["row_0"] and rows[63][-16:].hex() == SIGNS_V1_ZERO_SEED["row_63"]
+    assert receipts.sign_bits(seed, 16)[0][:16].hex() == SIGNS_V0_ZERO_SEED_ROW_0[16]
+    key = receipts.sign_key(seed, 64)
+    assert key.value.hex() == SIGNS_V1_ZERO_SEED["key"] and len(key.value) * 8 == receipts.sign_key_bits(64) == 512
+    assert len(receipts.sign_key(seed, 16).value) * 8 == receipts.sign_key_bits(16) == 256
+    ctx = {"tag": receipts.SKETCH_SHA512, "k": 64, "n": codec.BLOCK_BYTES}
+    wide = hashlib.sha512(b"verity/randomness/derive-wide/v1\0" + frame(seed) + frame(receipts.SIGN_DOMAIN_WIDE)
+                          + frame(b"".join(frame(k) + frame(ctx[k]) for k in sorted(ctx)))).digest()
+    assert wide.hex() == SIGNS_V1_ZERO_SEED["key"]
+    head = b"verity/randomness/stream-wide/v1\0" + wide + frame(frame("row") + frame(63))
+    row_63 = b"".join(hashlib.sha512(head + c.to_bytes(8, "big")).digest() for c in range(8))
+    assert len(head) == 128 and row_63 == rows[63]
+    v0 = derive(seed, receipts.SIGN_DOMAIN, ctx)
+    assert v0.stream(("row", 0), 16).hex() == SIGNS_V0_ZERO_SEED_ROW_0[64]
+    pinned = json.loads(rv.PATH.read_text())["sketch"]
+    assert pinned["sign_domain_wide"] == receipts.SIGN_DOMAIN_WIDE == "verity/remote-bandwidth/sketch-signs/v1"
+    assert pinned["zero_seed"]["64"] == {"key": SIGNS_V1_ZERO_SEED["key"], "row_0": SIGNS_V1_ZERO_SEED["row_0"],
+                                         "row_last": SIGNS_V1_ZERO_SEED["row_63"]}
+    assert pinned["zero_seed"]["16"]["row_0"] == SIGNS_V0_ZERO_SEED_ROW_0[16]
 
 
 @pytest.mark.slow
@@ -350,8 +392,8 @@ def test_sketch_sha512_is_ra_codec_tensors_reference() -> None:
 
 
 def test_sketch_sha512_at_64_rows_is_ra_codec_tensors_reference() -> None:
-    """The same inputs at k_s = 64, a registration's other row count: the signs under the key that binds k = 64, σ_j's
-    256 bytes and y, three compressions after the seed's block."""
+    """The same inputs at k_s = 64, a registration's other row count: the signs under `sketch-signs/v1`'s 512-bit key,
+    which binds k = 64, σ_j's 256 bytes and y, three compressions after the seed's block."""
     seeds = [hashlib.sha512(SKETCH_PINS + bytes([k])).digest() for k in range(2)]
     assert [hashlib.sha512(b"".join(receipts.sign_bits(s, 64))).hexdigest() for s in seeds] == SKETCH64_SIGN_BITS_SHA512
     blocks = {"0x80": b"\x80" * codec.BLOCK_BYTES, "0x7f": b"\x7f" * codec.BLOCK_BYTES,

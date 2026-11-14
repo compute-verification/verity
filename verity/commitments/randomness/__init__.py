@@ -1,6 +1,7 @@
 """verity.commitments.randomness: the one challenge derivation every protocol samples through (decision 42).
 
     derive(source, domain, context) -> Key
+    derive_wide(source, domain, context) -> WideKey
 
 `source` is a key holder's secret (an auditor key, a device's challenger key, a seed derived earlier).  It is never a prover's own commitment: Fiat-Shamir over a prover's root lets the prover re-commit until the
 sample misses its incorrect proof blocks, so outer challenges must not use it (Fiat-Shamir stays inside proofs).  `domain`
@@ -23,6 +24,12 @@ Byte formats (pinned by ``verity/commitments/randomness/tests/vectors.json``):
 * ``shard(index)`` = the first 32 bytes of SHA-512(``verity/randomness/shard/v2\\0`` || key || frame(frames(index))).
 * A `Key` is 32 bytes: SHA-512 truncated to 256 bits is SHA-512 (one hash, SP 800-107 §5.1), and a 256-bit key keeps
   128-bit security against a quantum search.
+* ``derive_wide`` = all 64 bytes of SHA-512(``verity/randomness/derive-wide/v1\\0`` || frame(source) || frame(domain) ||
+  frame(ctx)), ctx as ``derive``'s, a `WideKey`.
+* A `WideKey`'s ``stream(index)`` block c = SHA-512(``verity/randomness/stream-wide/v1\\0`` || key || frame(frames(index))
+  || c as 8 bytes big-endian), the stream the blocks' concatenation.  Each wide form hashes under a tag of its own, so a
+  `WideKey` holds no `Key` and the split of a block's message between key and index is fixed by its tag.  A `WideKey`
+  offers ``stream`` alone: no ``shard`` and no sampler reads it.
 * ``uniform(n, index)`` reads w-byte big-endian words from ``stream(("u", *index))``, w = ceil((bitlen(n) + 64) / 8),
   and returns the first word below the largest multiple of n that fits, reduced mod n (exact, no modulo bias).
 * ``bernoulli(p, index)`` = uniform(denominator) on ``("b", *index)`` < numerator; p = 0 and p = 1 sample nothing.
@@ -42,6 +49,8 @@ DOMAIN = re.compile(r"verity/[a-z0-9-]+/[a-z0-9-]+/v[0-9]+")
 _DERIVE = b"verity/randomness/derive/v2\0"
 _STREAM = b"verity/randomness/stream/v2\0"
 _SHARD = b"verity/randomness/shard/v2\0"
+_DERIVE_WIDE = b"verity/randomness/derive-wide/v1\0"
+_STREAM_WIDE = b"verity/randomness/stream-wide/v1\0"
 
 type Part = bytes | str | int
 type Index = Part | tuple[Part, ...]
@@ -162,4 +171,34 @@ def derive(source: bytes, domain: str, context: Mapping[str, Part]) -> Key:
     return Key(hashlib.sha512(_DERIVE + frame(source) + frame(domain) + frame(ctx)).digest()[:32])
 
 
-__all__ = ["DOMAIN", "Index", "Key", "Part", "derive", "frame", "uniform_from_words"]
+@dataclass(frozen=True, slots=True)
+class WideKey:
+    """A derived 64-byte key, `derive_wide`'s, which streams and does nothing else.  Its value is secret when its source
+    is, so it is kept out of `repr`."""
+
+    value: bytes = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, bytes) or len(self.value) != 64:
+            raise ValueError("a WideKey is 64 bytes")
+
+    def stream(self, index: Index, n: int) -> bytes:
+        """The first `n` bytes of the wide counter-mode stream at `index` (a prefix of every longer read)."""
+        head = _STREAM_WIDE + self.value + _frames(index)
+        return b"".join(hashlib.sha512(head + c.to_bytes(8, "big")).digest() for c in range((n + 63) // 64))[:n]
+
+
+def derive_wide(source: bytes, domain: str, context: Mapping[str, Part]) -> WideKey:
+    """`derive` at 64 bytes, under a tag of its own: the key for a sampler whose bound reads the key's width (two keys of
+    `n` bits collide at `q²/2^(n+1)` over `q` derivations)."""
+    if not isinstance(source, bytes) or not source:
+        raise TypeError("source must be nonempty bytes: a key holder's secret")
+    if not DOMAIN.fullmatch(domain):
+        raise ValueError(f"domain {domain!r} is not verity/{{protocol}}/{{purpose}}/v{{n}}")
+    if not all(isinstance(key, str) for key in context):
+        raise TypeError("context keys are str")
+    ctx = b"".join(frame(key) + frame(context[key]) for key in sorted(context))
+    return WideKey(hashlib.sha512(_DERIVE_WIDE + frame(source) + frame(domain) + frame(ctx)).digest())
+
+
+__all__ = ["DOMAIN", "Index", "Key", "Part", "WideKey", "derive", "derive_wide", "frame", "uniform_from_words"]

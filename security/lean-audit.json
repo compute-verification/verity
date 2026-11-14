@@ -4812,6 +4812,10 @@
   "Verity.Sampled.remote_soundness_deployedReady": {
    "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
    "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
+  },
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
+   "honest": ["Accounting.SecurityProofs.Remote.SketchBoundDeployed_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Remote.SketchBoundDeployed_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5146,10 +5150,6 @@
   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
    "type_hash": "b548507034d640166412194e4e7aabc59a646d57368d1120f89faeb1c1f59067",
    "unfolded_hash": "1826c248103ee473e7bfc7ccfca9e60d891b5af99315f53baa07de093a3de544"
-  },
-  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
-   "type_hash": "42cd7637cbeda10f0dea20c41dddce4b130640fe40f534eede323e10ea9661c0",
-   "unfolded_hash": "079af6362b399e62eb0cd29029d54038c0cd22c0fcb62389cfd0fa81c1bd63af"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundLine": {
    "type_hash": "9a2761d958d2d306a7d19b3244834d2b40d50f94d9553792ff9ad8de177c92ab",
@@ -9365,7 +9365,56 @@
     "reads": ["Accounting.Remote.Held.Assumptions.SketchBound"]
    },
    "type_hash": "42cd7637cbeda10f0dea20c41dddce4b130640fe40f534eede323e10ea9661c0",
-   "unfolded_hash": "079af6362b399e62eb0cd29029d54038c0cd22c0fcb62389cfd0fa81c1bd63af"
+   "unfolded_hash": "391f404a8594a08982672053827a0d8ae1ae6e57d19fc1b2ecfde2954c49b6f8"
+  },
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.SketchBoundDeployed_honest :",
+    "  And (Accounting.Remote.Sketch.Assumptions.KeyBudget Accounting.Remote.Sketch.Toy.honest fun x => 1)",
+    "    (And",
+    "      (Accounting.Remote.Sketch.Assumptions.Receipted Accounting.Remote.Sketch.Toy.honest",
+    "        Accounting.Remote.Sketch.Toy.honestTrace)",
+    "      (And",
+    "        (Accounting.Remote.Sketch.Assumptions.Present Accounting.Remote.Sketch.Toy.honest",
+    "          Accounting.Remote.Sketch.Toy.honestTrace)",
+    "        (Accounting.Assumptions.SketchHashRandom Accounting.Remote.Sketch.Toy.honest",
+    "          (instHDiv.hDiv (instHPow.hPow (instHAdd.hAdd (Nat.cast 1) (Nat.cast 1)) 2) (instHPow.hPow 2 513)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Accounting.Assumptions.SketchHashRandom",
+     "Accounting.Remote.Sketch.Assumptions.KeyBudget",
+     "Accounting.Remote.Sketch.Assumptions.Present",
+     "Accounting.Remote.Sketch.Assumptions.Receipted"
+    ]
+   },
+   "type_hash": "28a195ab3e879637d99494d9fab8a1cdf07d60aaf5cc4228c7233f75799ad4aa"
+  },
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.SketchBoundDeployed_nontrivial :",
+    "  Not",
+    "    (Accounting.Remote.Held.Assumptions.SketchBound Accounting.Remote.Sketch.Toy.acceptAll",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd (instHDiv.hDiv (Nat.cast 0) (instHPow.hPow 2 216))",
+    "          (instHMul.hMul (instHAdd.hAdd (Nat.cast 0) (Nat.cast 1))",
+    "            (instHAdd.hAdd 0 (instHDiv.hDiv (Nat.cast 1) (instHPow.hPow 2 512)))))",
+    "        (instHDiv.hDiv (instHPow.hPow (instHAdd.hAdd (Nat.cast 0) (Nat.cast 1)) 2) (instHPow.hPow 2 513))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["Accounting.Remote.Held.Assumptions.SketchBound"]
+   },
+   "type_hash": "0ce3158b21ca83e3524b8c9d3832c22ebe3db5bc17c556d84dcd5f5dd6ff4282"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundLine": {
    "owner": "@memory-accounting",
@@ -28366,7 +28415,7 @@
    "Pous.SecurityProofs.SegMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Pous.SecurityProofs.SegTagMeets14": "frozen (no-function,hash): a `Meets` in an ideal model, which no Lean function computes.",
    "Accounting.SecurityProofs.Remote.SketchBoundRun": "frozen (no-function,hash): It is about a model of the receipts' sketch over a remote session (Accounting.Remote.Sketch: a uniform registered store, verbatim-sector devices chosen by the prover's coins and the earlier passes' keys, and each candidate seed's signs and receipt-hash key what the session's key map (Session.keys) gives at the outcome's SHA-512), not the verifier's code (remote_bandwidth.receipts); its random-oracle step is one named premise, Accounting.Assumptions.SketchHashRandom at ε_ro (claim random-oracle: at every prover coin and store, the keys SHA-512 gives at the candidate seeds are within ε_ro of uniform on every event, not uniform: two distinct seeds can share a 256-bit sign key; note:20261024T1817Z-report-rt4-fixes), which the proof uses once to carry the bound from the model's coins to the outcomes at the cost of ε_ro, added to δs (Session.pr_coins_le), and the store's uniformity stays in the outcome's coins; it derives SketchBound on a trace over the outcomes that Receipted and Present tie to that model, under SketchRank and the per-pass hash budget KeyBudget (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named)",
-   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundRun at the deployed receipts (4096-byte blocks of 128 sectors, 16 sign rows, SHA-512 tags) and rank 12, with at most Q + P candidate seeds and Q receipt-hash queries for Q = F·C the hashes the prover can try over the session, C the node's SHA-512 compressions and F the outside-compute factor: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257, timing.sketch_failure(C, P, 16, N, outside=F), under SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundRun at the deployed receipts (4096-byte blocks of 128 sectors, 64 sign rows under 512-bit sign keys, SHA-512 tags) and rank 27, with at most Q + P candidate seeds and Q receipt-hash queries for Q = F·C the hashes the prover can try over the session, C the node's SHA-512 compressions and F the outside-compute factor: SketchBound at Q/2^216 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^513, timing.sketch_failure(C, P, 64, N, outside=F), under SketchHashRandom at ε_ro = (Q + P)^2/2^513, the sign keys' birthday among at most Q + P seeds; a 16-row session is SketchBoundRun at rank 12 and ε_ro = (Q + P)^2/2^257 (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.SpareCapacityAtDeadline": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.PearlCSampledByDeadline": "frozen (no-function,hash): It carries GγSampled, Pearl-C's γ-gap property under the sampled audit (a premise its instances derive from the named open conjecture TTOutTilePearlCDevRev1W1, at W1), to the deadline under the named assumption HonestClock (honest-clock), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
@@ -28398,7 +28447,7 @@
    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Accounting.SecurityProofs.Remote.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the statement, the files and the draw, proved from it; it reads SampledKSLiveV3 (security/Proofs/Flock/Bridge/ScopeGate.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots; Flock.KsScope.check: an untyped statement in scopeOkH, the --zk tags, a draw the tables divide) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundRun at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
+   "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundRun at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors and 64 rows, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
    "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified proof-system verdict whose soundness is the premise ProofSystemSound, not a property of one function; it gets the shape when the proof system's verdict is a named Lean function the event reads.",
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv.",
    "Pouw.SecurityProofs.Dither.FleetSound": "frozen (verdict): the accepted replicas' moments pooled by convexity, each at its own quantified verdict, as WorkSound.",
@@ -28649,7 +28698,9 @@
    "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
+   "Accounting.SecurityProofs.Remote.SketchBoundDeployed_honest": "frozen (no-function): SketchBoundDeployed's honest witness, about the model of the receipts' sketch (Accounting.Remote.Sketch) and not the verifier's code: at one pass of one candidate over one 4096-byte block at the deployed receipts, a device that holds the block on chip and tags it with one query, SHA-512's keys the outcome's own, and a trace that accepts where the block's receipt is right and holds it in node memory, KeyBudget at one query, Receipted, Present and SketchHashRandom hold",
+   "Accounting.SecurityProofs.Remote.SketchBoundDeployed_nontrivial": "frozen (no-function): SketchBoundDeployed's nontrivial witness, about the trace SketchBound is stated on and not the verifier's code: on a trace that accepts everything, one pass's correct receipt of a block never present has probability 1, above the deployed δs at Q = 0, P = 1, ε = 0 and N = 1"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -32608,9 +32659,9 @@
    }
   },
   "Definitions.Accounting.Guarantees.RemoteSketch": {
-   "digest": "ba30942d8172e725480b0b6fea9f1c1c0b242a463adacd0e48b55efcf999115c",
+   "digest": "be98b63ae262a4fc4f81f349e2e88984f6ad9828f7ac056b25e80a6e83a1dfbc",
    "definitions": {
-    "Accounting.Guarantees.Remote.SketchBoundDeployed": "76cd2e1e22a8cdab3e9f6d004c4d5b1d28f4f8ce7217f83091746d3afbd39ab9",
+    "Accounting.Guarantees.Remote.SketchBoundDeployed": "16fbf4d61d73e8e6488cdecd86e30149cca6e7851ea7e4c12abf9452666cc674",
     "Accounting.Guarantees.Remote.SketchBoundRun": "b22d864588367111f3845f015194bd5f5ee5652e7e1e623e1185eed929ec81a8"
    }
   },
@@ -33731,6 +33782,17 @@
    "definitions": {
     "Accounting.Remote.Held.Trace.sketch": "dd2daea16519c1c95e0d1455dd315879ddb039b390438882eb39e0ab45a57d47",
     "Accounting.Remote.Sketch.lineCoins": "2d4e2a7ed1a65d94c289c14441e48e94aaf5d5a9ef995ddbfcbce5946adcc796"
+   }
+  },
+  "Definitions.Accounting.Remote.SketchToy": {
+   "digest": "419e8c2b12f9a86f9e2ffd87d5c371902e9ffca32b1e440d64de9ee310d62dac",
+   "definitions": {
+    "Accounting.Remote.Sketch.Toy.G₁": "0da2ef80c7082332aaacd76c481e1811e25aff153197b013fdccc861f69d0f11",
+    "Accounting.Remote.Sketch.Toy.Hs₁": "6563ae5861a528669339f81d2134761af491752250334cf4ba0f55cf43eade38",
+    "Accounting.Remote.Sketch.Toy.acceptAll": "c33c582588c4d1bc65f853434d57b4450015c2486bc5a6697254b3dbd2662949",
+    "Accounting.Remote.Sketch.Toy.device": "70deea5bea2716046e42afd79b49eda5613deeedf6874287f293824c1a64f26f",
+    "Accounting.Remote.Sketch.Toy.honest": "54c39be14865eb9788f1321477632e44aad221e866f578ce865961d78a3760d9",
+    "Accounting.Remote.Sketch.Toy.honestTrace": "131743d0708854950c4674de347ed6225d0eae0e76f3f2e1eb40645827c56aca"
    }
   },
   "Definitions.Accounting.Requirement": {
@@ -58547,9 +58609,10 @@
    }
   },
   "Randomness": {
-   "digest": "9dfad7e8f3fdcbf95415b82601591b675823188153e398da612b3c78b2003906",
+   "digest": "50c9dc4199d46f69270942a6a93c134315578a87a41e753338d0b64711844ec1",
    "definitions": {
     "FlockSoundness.Randomness.DERIVE": "4f1e35253525d49b40411ca19cbd61e33280a498804787949007731d40d67268",
+    "FlockSoundness.Randomness.DERIVE_WIDE": "0e95258ae78966fa808cbab35187158303a171b9c5b7a91e8bf93c4aa0701387",
     "FlockSoundness.Randomness.Part": "87772eec16bb07abce57e54a80efd1055b56a4b9129a0a78453a8c6401543aa7",
     "FlockSoundness.Randomness.Part.bytes": "28ad28b904e3969cf448161ab65cb52a729d2a0e3e2b34b8fc847d60314ccee8",
     "FlockSoundness.Randomness.Part.casesOn": "23cb7ad36b920b415c6f4506aaf3e931b35d2a15dcf834ea71e420d93c5bd39d",
@@ -58557,13 +58620,17 @@
     "FlockSoundness.Randomness.Part.rec": "7116f89f2312fb29aa1d0827e7be67cbc6c94a6be1e4a8ba0d5eda1e57885e15",
     "FlockSoundness.Randomness.Part.str": "bb888ea4f866c6ac87e909f5635bee5e81dd793c4c4781a8e96c8898c882fe0f",
     "FlockSoundness.Randomness.STREAM": "76b5814e557ec2472934f6dfd20455336fa37ec2af4f46d4dcc157440f89ac5e",
+    "FlockSoundness.Randomness.STREAM_WIDE": "98c692568d12887e3fc60a901156ec94a5d21a262b87a39259180a36e353515a",
     "FlockSoundness.Randomness.be8": "981b5e5beea07a6b31289c792bb7b233b86fdb96cd4d651d6889d9447f08147f",
     "FlockSoundness.Randomness.block": "48f31a9460e23746e5c5373a5370d49a53d371b982c961e716bb2899724c2014",
+    "FlockSoundness.Randomness.blockWide": "2e21f12844c9dd8e5ae5201cd5db87eeb154396edc1ab9e61dd017c8fc5049cc",
     "FlockSoundness.Randomness.derive": "d1dbd683b4f535ea6da38d34f3f891c250e829be1316536d4e6051825ece3646",
+    "FlockSoundness.Randomness.deriveWide": "dab1669d7130db2b318501b1b8fd748dac23ceff07723c39d470e62fa8ef2c76",
     "FlockSoundness.Randomness.frame": "001ba6e9a0d8d677fd987da64834154b0c9a9b303bd789b259544c52aacca192",
     "FlockSoundness.Randomness.frames": "b4ce2e2a425222f5deda18719e652ae806cc16de6ab2ac3fc80b44c813e2c974",
     "FlockSoundness.Randomness.natBytes": "4691b1d1c58f9ca54b7f69454736a0f7a1a8879a70a7b82d440dcc1993c34ae1",
     "FlockSoundness.Randomness.stream": "c9341e65512faac26b25051db21161ea0cdc2c8ba8072aac2fd17a5dbe9f1ed9",
+    "FlockSoundness.Randomness.streamWide": "b6d93762d354e67d46f15baa07a0fe988a707f6d7419940be24e1fabdf7026a3",
     "FlockSoundness.Randomness.subset": "fab95226f79335b65b0d4c93962fb5aa62e4a4950bab9839a26f60dd0b6fe82c",
     "FlockSoundness.Randomness.subsetExact": "27555fa885153afef676f9b488be1e53a3dfb9c91a0a65ca1e140b36697e9d2e",
     "FlockSoundness.Randomness.subsetOn": "b95f2fdc402ead230bac3e64ad5bd83b7d7875369a1aea98f118120d2e3340a7",
@@ -58650,7 +58717,7 @@
    }
   },
   "RemoteAudit.P2": {
-   "digest": "647bbed1323a883f3ef9d7c5f7c92ee48c9575ea0b85911ce0a699c84dbb0df2",
+   "digest": "70f48f5b266e600d2653e5ecb9728f8afc23ed6f57575b661da9491b7f91a540",
    "definitions": {
     "RemoteAudit.P2.BLOCK_BYTES": "1d7ade01be47941fd47c086b050eb3fd04847b57ce957191600ae6c181d7a1d9",
     "RemoteAudit.P2.C0": "497c7dfdf407666f5cba2eb6231c53ff1aaf1a5db29be8db747796a81fbaddcc",
@@ -58688,7 +58755,7 @@
     "RemoteAudit.P2.instInhabitedOpening.default": "01ee575a47bda438bbd3f3b08ca3a0c6bc2252f0e4acb0068916c060062ad9c8",
     "RemoteAudit.P2.int32s": "289ef88eeac9a64602b699f0b60917ac40ed114bc139be8c104948f050369f13",
     "RemoteAudit.P2.unitReceipt": "3e301fb86c0f6e2779a0781a8548a5c3f8ad16ca90d1dec06757ea8955fa5c70",
-    "RemoteAudit.P2.unitSigns": "82cbb1ae51faec3da61330789293c2d1a7c0439d71780a53b5e54a46fe0da765",
+    "RemoteAudit.P2.unitSigns": "478e62105f959dc87c480e6e45bec3f95d9e54ad1232c47c9955b99738b0b235",
     "RemoteAudit.P2.unitSketch": "5d96ab6f5037cd0bb358ca297175616d7900615ba3a99411f0a4344cba4560c6",
     "_private.RemoteAudit.P2.0.RemoteAudit.P2.int8": "a6b7564df0f15c7f0c5d4d3fe55faae184b031782c4c38de9208cffb9e1173ef"
    }
@@ -58834,7 +58901,7 @@
    }
   },
   "RemoteAudit.Receipts": {
-   "digest": "211ce1a10172adae6737b597ed8fa98425cec871bce19cea5b68c03a8c538ad4",
+   "digest": "95add7bd2ed79d173b59c5ea66f3de4c6a595d65ee185d95f1a4341cbd069e69",
    "definitions": {
     "RemoteAudit.APPENDS_DOMAIN": "2b166138902859bc94cc8e9e904e194f5b309ec600d0c099da1ef655f5e74c08",
     "RemoteAudit.CHAINED_DOMAIN": "25494f754865049cbc11e58b7f9ca62fd1d50eb9942d66846f5b0caac5889948",
@@ -58857,8 +58924,10 @@
     "RemoteAudit.SCHEMA": "e0f1ad1147cf2cd07a16d707d5965ec24e6d88c9cacc5a84b96306794794d5ff",
     "RemoteAudit.SEED_DOMAIN": "c3fdd1df265a57d07b995eb75f237e9ceec19ce28aa0a40eb5a59c9fc3439be6",
     "RemoteAudit.SIGN_DOMAIN": "2b8ac7608980fbeac5a2842edec42583d21fc499fb6e3d52e8aefc7fdd1603ed",
+    "RemoteAudit.SIGN_DOMAIN_WIDE": "80ea5ef7a589d4ac8d4b7cf0791301a10cee1cbd6107469411b942eed7339d3c",
     "RemoteAudit.SKETCH_RECEIPT_DOMAIN": "0655a9411c63208c628a8326bdd0e0dbe66f746af7de259425f00215c12a1e3f",
     "RemoteAudit.TREE_DOMAIN": "058c56725cee3289def1d54ea27655391411c53ef18d6c1d81245adce918d946",
+    "RemoteAudit.WIDE_ROWS": "f5dcb6d739175fac77a9afddc7491b7e86fc894f7407c43fbc8a540d578567b4",
     "RemoteAudit.appendHead": "801cd5bcbb1bba9aa7f72f8c89117f533461a161e507307ac665e735dfd71ac0",
     "RemoteAudit.chained": "35a48c157314caf1b01e9b0ffbe1b34808d866e63f3f1c4a73160368cd3508a5",
     "RemoteAudit.hidden": "553e2f94e5b9dfeaa1a483fb015adfa2bd432086963f6d86100e9044d300f9df",
@@ -58868,7 +58937,9 @@
     "RemoteAudit.receiptPrefix": "5e2a5df80c24780436a943ec3d56902f723851eb1c7fb247c7a0c643ef517717",
     "RemoteAudit.receipter": "60484da0bfde77a300d57088a27066be3a58bdd3bdd7b3c554c1ef982fed0b81",
     "RemoteAudit.seed": "7df340f6163af393af2e3dcd6659c47863451d594e3c6f8be3b1c8ebbef01b92",
-    "RemoteAudit.signBits": "aa2c9c434d06c7e0af0eb033c348c5f6950cf1052053a29c90b1e905374bbd7e",
+    "RemoteAudit.signBits": "34db0ba92243dc389f9aa1ad3abf72b3145394c105b87888bd63c3d36a16f080",
+    "RemoteAudit.signKey": "831b9d042d9153939f373055cb3c1ad81a2a7dfbaf23ad62b2ec450af8a3e57c",
+    "RemoteAudit.signStream": "2fdf234d42e47094ed57385e93c298fe165cacb21bb826a2e017b419cf974410",
     "RemoteAudit.sketch": "1ad8b9d7cc0b52ce3fc74ceb114b516aabc9529efa5053500cd456a829be80c8",
     "RemoteAudit.treeDomain": "d8654cadfde3f08fd0a6ddd5b6ea1d2db17e2492aca8f66d1141d5c65aa2161b",
     "RemoteAudit.verifyLeaf": "3bd052db5fc4a9c9a1d1c4da8998e9d806689cacdf7e86943c5ff2c7231082e8",
