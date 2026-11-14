@@ -202,12 +202,19 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
-  with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
-  the check, all the prover's. Its unit publishes to `out/` only what isn't: `deployment.json` (the warden's key,
-  session and schedule), `cells.jsonl` (each link-window's registration, `warden_rows`, and its cost),
-  `certificates.jsonl` (the certificates alone) and a `--window-per-group` run's `groups.json`.
+  with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
+  the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
+  (each link-window's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
+  (`rehearse.log`, its stdout and stderr: free text, whose last line prints the registrations' cost) and its
+  tunnels' (`tunnel.log`, what each `ssh` prints: free text, a line for each connection the peer's port refused),
+  all the prover's. Its unit publishes to `out/` only what isn't:
+  `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records' certificates
+  alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate alone,
+  `ROW_CERTIFICATES`: of a registration `out/` and the end hold nothing else, no root, wiring, domain or layout,
+  and no cost; of the word that an execution phase has no head, its certificate likewise) and a
+  `--window-per-group` run's `groups.json`.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
-  `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
+  `WARDEN_COUNTS` names) and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 - **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
   the rehearsals): the network certifier's relay kept up here, as the auditor's device, for a served run's own load.
@@ -304,10 +311,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
-  `out/` publishes `load.json` (the load's registrations, which the block record pins), and the end's verdict carries
-  the check's `load` (values and how many registered). `load-relay.json` (the relay's counts and the sink's
-  acknowledgements, or why it was refused) varies with the load and nothing decides on it, so it is witness, beside
-  the cells' salts.
+  of the load `out/` publishes nothing, and the end's verdict carries the check's `load` (values and how many
+  registered). The load's registrations (`load.json`, which the block record pins) stay in `witness/`, as the row
+  registrations do, and so does `load-relay.json` (the relay's counts and the sink's acknowledgements, or why it was
+  refused), which varies with the load and which nothing decides on.
 - **A rehearsal's sampling** (`sampling`): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
@@ -458,11 +465,28 @@ WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
-#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
-#: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone.
+#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`);
+#: everything else `warden_serve.py rehearse` writes, what it prints (`rehearse.log`) and what the run's tunnels
+#: print (`tunnel.log`) are witness and stay in `witness/`, which `fetch` gives the run's own lane alone.
 #: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
-#: public counts and the scan's schedule alone
-WARDEN_PUBLIC = ("deployment.json", "cells.jsonl", "groups.json", "load.json")
+#: public counts and the scan's schedule alone. Of a load, nothing: its registrations (`load.json`, each value's
+#: whole) stay in `witness/`, as the row registrations do, and so does its relay's `load-relay.json`
+WARDEN_PUBLIC = ("deployment.json", "groups.json")
+#: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
+#: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
+#: registration, or the execution phase it was refused for, and its cost; of a registration `out/` holds the
+#: certificate and nothing else, and of the word that an execution phase has no head (`ROWS_NO_HEAD`) the same
+ROW_CERTIFICATES = {"cells.jsonl": "cells-certificates.jsonl", "rows.jsonl": "rows-certificates.jsonl"}
+#: the direction a connection rows' certificate signs, which its registration doesn't name
+#: (`connection_rows.check_registration`)
+ROWS_DIRECTION = "egress"
+#: what a line of `rows.jsonl` holds in place of a registration where its execution phase ends in the network
+#: certifier's word that it has no head (the lengths rows' form 2): the word's record, which `connection_rows.no_head`
+#: calls public, under this key (`connection_rows_run.NO_HEAD`)
+ROWS_NO_HEAD = "no_head"
+#: of the check's `cell_rows`, what an end carries: how many of the cells' registrations it accepted, and of how
+#: many. Its other keys are the registrations' cost
+CELL_ROWS = ("registered", "of")
 WITNESS = "witness"
 #: the shapes of interface 1's weights a store holds and a load relays (`load_relay.SHAPES`)
 LOAD_SHAPES = ("h200", "tiny")
@@ -2423,17 +2447,33 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
 
 
 #: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a
-#: connection's own (a load's are its values and how many registered)
+#: connection's own (a load's are its values and how many registered), and `cell_rows` is cut to `CELL_ROWS`
 WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates",
                  "signer_refused", "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
                  "load")
 
 
+def row_certificate(line: dict) -> dict:
+    """A row registration's line (`ROW_CERTIFICATES`) as `out/` holds it: its certificate, the key, digest and
+    signature under the link, direction and window its registration names (`certificate.Certificate`'s fields), or
+    the execution phase it was refused for. Nothing else of the registration, and not the line's cost. A connection
+    rows' line that holds the word in place of a registration (`ROWS_NO_HEAD`) gives the word's certificate in the
+    same fields, each one of the word's public record, and no cost: a reader tells it from a head's by its digest,
+    which is a function of the link, the execution phase and the schedule's digest."""
+    r = line.get("registration") or line.get(ROWS_NO_HEAD)
+    if r is None:
+        return {k: line[k] for k in ("refused",) if k in line}
+    c = r["certificate"]
+    return {"certificate": {"key_id": c["key"], "link": r["link"], "direction": r.get("direction", ROWS_DIRECTION),
+                            "window": r["window"], "digest": c["digest"], "signature": c["signature"]}}
+
+
 def warden_outcome(out: Path, witness: Path) -> dict:
     """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
     `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
-    (`out/certificates.jsonl`), each registration's root by value, the check's verdict (`accepted`, how many problems,
-    `WARDEN_COUNTS`), and each witness file by name and size alone."""
+    (`out/certificates.jsonl`), each row registration's certificate without its registration (`ROW_CERTIFICATES`),
+    the check's verdict (`accepted`, how many problems, `WARDEN_COUNTS`, its `cell_rows` less the registrations'
+    cost), and each witness file by name and size alone."""
     for name in WARDEN_PUBLIC:
         if (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
@@ -2442,8 +2482,11 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         (out / "certificates.jsonl").write_text("".join(
             json.dumps({k: doc[k] for k in ("certificate", "refused") if k in doc}, sort_keys=True) + "\n"
             for doc in docs))
-    cells = (out / "cells.jsonl").read_text().splitlines() if (out / "cells.jsonl").is_file() else []
-    registrations = {r["value"]: r["root"] for r in (json.loads(x).get("registration") for x in cells) if r}
+    for name, public in ROW_CERTIFICATES.items():
+        if (witness / name).is_file():
+            (out / public).write_text("".join(
+                json.dumps(row_certificate(json.loads(x)), sort_keys=True) + "\n"
+                for x in (witness / name).read_text().splitlines()))
     try:
         check = json.loads((witness / "check.json").read_text())
     except (OSError, ValueError):
@@ -2453,8 +2496,10 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         summary = check.get("summary") or {}
         verdict = {"accepted": check.get("accepted"), "problems": len(check.get("problems") or []),
                    **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
+        if isinstance(verdict.get("cell_rows"), dict):
+            verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS if k in verdict["cell_rows"]}
     sizes = {str(p.relative_to(witness)): p.stat().st_size for p in sorted(witness.rglob("*")) if p.is_file()}
-    return {"verdict": verdict, "registrations": registrations, "witness": sizes}
+    return {"verdict": verdict, "witness": sizes}
 
 
 def forward_argv(ssh: list[str], local: int, remote: int, back: tuple[int, int] | None = None) -> list[str]:
@@ -2564,9 +2609,10 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     `tunnel_argv`'s third argument, and the session is stopped when that ssh exits), as `auditor`: open the tunnel to
     the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
-    `end.json`. A warden rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
-    end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
-    the store's record. A SIGTERM while either runs (its unit's stop, `stop`) still ends it so (`_Stop`)."""
+    `end.json`. A warden rehearsal writes to `witness/`, its own output (`rehearse.log`) and its tunnels'
+    (`tunnel.log`) with it, and its public outcome (`warden_outcome`) to `out/` and the end. A store's write opens
+    no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries the store's record. A
+    SIGTERM while either runs (its unit's stop, `stop`) still ends it so (`_Stop`)."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
@@ -2599,7 +2645,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
             back, command = ((req["client_port"], listen),), _listening(command, listen, held.fileno())
         argv = (tunnel_argv or
                 (lambda ssh, local, *back: forward_argv(ssh, local, req["port"], *back)))(ssh, local, *back)
-        with open(out / "tunnel.log", "wb") as log:
+        with open(work / "tunnel.log", "wb") as log:
             tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
             for s in sinks:
                 tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
@@ -2616,7 +2662,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
             stop.armed = False
         if why is None:
             to = {"sinks": [("127.0.0.1", s) for s in sinks], "store": host.store} if load else {}
-            with open(out / "rehearse.log", "wb") as log:
+            with open(work / "rehearse.log", "wb") as log:
                 proc = stop.start(lambda: subprocess.Popen(
                     command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL, stdout=log,
                     stderr=subprocess.STDOUT, env=certifier_env(), start_new_session=True,

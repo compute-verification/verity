@@ -1,6 +1,6 @@
 """The network chain on an active network certifier's run (`warden_chain`, `chain_record`'s network certifier path),
 here the synthetic run published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness
-under ``witness/``, its public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the
+under ``witness/``, and under ``out/`` what the gate's own outcome publishes of it): the
 certificates step reruns the network certifier's own check and holds the public certificates to the certified lines,
 refusing a changed one and a changed cell; the run's deployment is the auditor's record's (`warden_chain.deployment_of`),
 and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
@@ -14,6 +14,7 @@ run's."""
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
 import re
@@ -28,7 +29,10 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
 
+import auditor as G  # noqa: E402
+from test_connection_rows_run import ANSWERS, CR, ENDS, PROMPTS, T, device_key, served  # noqa: E402
 from test_scan_zk import published, sz  # noqa: E402
 
 from benchmarks.network_traces import warden_chain as WC  # noqa: E402
@@ -41,23 +45,52 @@ def _load(name: str):
     return mod
 
 
-cr, n2 = _load("chain_record"), _load("n2_zk")
-PUBLIC = ("deployment.json", "cells.jsonl")
+cr, n2, LG = _load("chain_record"), _load("n2_zk"), _load("leak_guard")
 
 
 def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
     """The synthetic network certifier run in the gate's layout, under the network certifier key ``seed`` makes: its
-    files under ``witness/``, its public ones copied to ``out/`` with ``certificates.jsonl``, each certified line's
-    certificate or refusal (`auditor.warden_outcome`)."""
+    files under ``witness/``, and under ``out/`` what the gate publishes of them (`auditor.warden_outcome`)."""
     run = published(d / "flat", seed=seed)
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
-    for name in PUBLIC:
-        shutil.copyfile(run / name, d / "gate" / "out" / name)
-    lines = [json.loads(x) for x in (run / "certified.jsonl").read_text().splitlines()]
-    (d / "gate" / "out" / "certificates.jsonl").write_text("".join(
-        json.dumps({k: x[k] for k in ("certificate", "refused") if k in x}, sort_keys=True) + "\n" for x in lines))
+    G.warden_outcome(d / "gate" / "out", d / "gate" / "witness")
     return d / "gate"
+
+
+def test_the_gate_publishes_a_row_registrations_certificate_and_the_leak_guard_holds_the_rest_of_it(tmp_path):
+    """Of each registration of an execution phase's cells, the gate's ``out/`` holds the certificate, with the link,
+    direction and window the registration names, and no root, wiring or domain; the line whole is in ``witness/``,
+    where the chain reads it. So the record's leak guard, which reads a job's files against the gate run's witness,
+    releases a file of those certificates and the gate's own public files, and holds a file with a registration
+    whole, with its root alone or with its wiring alone."""
+    run = gate_run(tmp_path / "g")
+    lines = [json.loads(x) for x in (run / "witness" / "cells.jsonl").read_text().splitlines()]
+    regs = [x["registration"] for x in lines if "registration" in x]
+    public = [json.loads(x) for x in (run / "out" / "cells-certificates.jsonl").read_text().splitlines()]
+    assert len(regs) == 2 * sz.W63.windows and len(public) == len(lines)
+    assert [x["certificate"] for x in public] == [
+        {"key_id": r["certificate"]["key"], "link": r["link"], "direction": r["direction"], "window": r["window"],
+         "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]} for r in regs]
+    assert not (run / "out" / "cells.jsonl").exists()
+    out = b"".join(p.read_bytes() for p in sorted((run / "out").rglob("*")) if p.is_file())
+    assert not [(r["value"], k) for r in regs for k in ("root", "wiring", "domain") if r[k].encode() in out]
+    assert WC.WS.check(WC.witness(run))["summary"]["cell_rows"]["registered"] == len(regs)
+
+    record = tmp_path / "record"
+    shutil.copytree(run / "out", record / "gates" / "out")
+    (record / "certificates.json").write_text(json.dumps({"rows": [x["certificate"] for x in public]}, indent=1,
+                                                         sort_keys=True))
+    (record / "registration.json").write_text(json.dumps(regs[0], indent=1, sort_keys=True))
+    (record / "root.json").write_text(json.dumps({"roots": [{"port": "p", "root": regs[1]["root"]}]}))
+    (record / "wiring.json").write_text(json.dumps({"wiring": regs[1]["wiring"]}))
+    rc = LG.main([str(record), str(tmp_path / "q"), "--gates", str(tmp_path / "g"), "--report",
+                  str(tmp_path / "report.json")])
+    assert rc == 3
+    assert sorted(f["path"] for f in json.loads((tmp_path / "report.json").read_text())["found"]) == [
+        "registration.json", "root.json", "wiring.json"]
+    assert sorted(p.relative_to(record).as_posix() for p in record.rglob("*") if p.is_file()) == [
+        "certificates.json", *(f"gates/out/{p.name}" for p in sorted((run / "out").iterdir()))]
 
 
 def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
@@ -153,6 +186,39 @@ def test_a_certifier_rehearsals_run_is_refused_by_name_by_every_reader(tmp_path,
     with pytest.raises(SystemExit, match="--extra and --late are certifier-serve's runs"):
         n2.main(["prove", "--warden-run", str(run), "--extra", str(certifier_run), "--dry", "--out",
                  str(tmp_path / "n2x")])
+
+
+def test_the_gate_publishes_the_word_that_an_execution_phase_has_no_head_and_a_reader_checks_it(tmp_path):
+    """A run at the lengths rows' form 2 whose first two execution phases end in the network certifier's word that
+    they have no head, and its last two in their heads. Of each line of its `rows.jsonl` the gate publishes one
+    certificate in the same six fields and nothing of the line's cost. The word's fields, with the schedule's digest,
+    are the word's public record whole, which `connection_rows.check_no_head` accepts under the deployment's key and
+    session for its own execution phase alone; a head's certificate read as the word is refused. So a reader tells
+    the two apart from what the gate publishes, and nothing but the word's record leaves by the word's line."""
+    out = tmp_path / "run"
+    params = dataclasses.replace(ENDS, queue=5)
+    served(out, tmp_path / "key", params=params, prompts=(*PROMPTS, (14,), (15, 16)),
+           answers=(*ANSWERS[:5], (3,), (4, 5)), arrive={6: T + 2, 7: 2 * T + 2})
+    key, session = device_key(out)
+    lines = [json.loads(x) for x in (out / "rows.jsonl").read_text().splitlines()]
+    assert [sorted(x) for x in lines] == [["cost", G.ROWS_NO_HEAD]] * 2 + [["cost", "registration"]] * 2
+    for w, line in enumerate(lines):
+        public = G.row_certificate(line)
+        c = public["certificate"]
+        assert sorted(public) == ["certificate"]
+        assert sorted(c) == ["digest", "direction", "key_id", "link", "signature", "window"]
+        assert (c["link"], c["direction"], c["window"]) == (WC.WS.LINK, G.ROWS_DIRECTION, w)
+        word = {"format": CR.NO_HEAD, "link": c["link"], "window": c["window"], "parameters": params.digest.hex(),
+                "certificate": {"key": c["key_id"], "digest": c["digest"], "signature": c["signature"]}}
+        if G.ROWS_NO_HEAD in line:
+            assert word == line[G.ROWS_NO_HEAD]
+            CR.check_no_head(word, key, session, params, c["link"], w)
+            with pytest.raises(ValueError, match="the word's window"):
+                CR.check_no_head(word, key, session, params, c["link"], w + 1)
+        else:
+            assert c["digest"] == line["registration"]["certificate"]["digest"]
+            with pytest.raises(ValueError, match="doesn't sign that the execution phase has no head"):
+                CR.check_no_head(word, key, session, params, c["link"], w)
 
 
 def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_signed_digest(tmp_path):
