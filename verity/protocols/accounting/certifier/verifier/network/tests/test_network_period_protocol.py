@@ -1288,7 +1288,8 @@ def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
     every payload's length, so its record would not read back (`NetTiming.RowsFormat.Wf`). As parameters it is refused
     before its cells, which a period that long could never list, by Lean and the mirror alike, and the honest period's
     schedule passes `rowsWf` up to the last whole period under 2^32. The check refuses it too (`rowsWfCheck`), which the
-    mirror's check shows at an empty period whose B is 2^32: no parameters `params` reads reach it."""
+    mirror's check shows at an empty period whose B is 2^32, with no entries and so no starts to show: no parameters
+    `params` reads reach it."""
     fragment = "rows format: a frame's ordinal and payload length are u32s"
     for n in range(2):
         case = build("rows-honest", n, small=True)
@@ -1301,10 +1302,10 @@ def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
         assert reference(broken)["reason"].startswith(f"params: {fragment}"), (n, reference(broken))
         verdict, out = D.replay(PORT, broken, server)
         assert verdict == REJECT and json.loads(out)["reason"].startswith(f"params: {fragment}"), (n, out)
-        empty = dataclasses.replace(p, audits=(), windows=0)
+        empty = dataclasses.replace(p, audits=(), windows=0, entries=())
         for b, refused in ((PC.U32 - 1, False), (PC.U32, True)):
             q = dataclasses.replace(empty, schedule=dataclasses.replace(p.schedule, cell_bytes=b))
-            got = PC.check(q, PC.Commitment([], [], b""), ([], []))
+            got = PC.check(q, PC.Commitment([], [], b""), ([], [], []))
             assert (got[0] == REJECT and got[1].startswith(fragment)) == refused, (n, b, got)
 
 
