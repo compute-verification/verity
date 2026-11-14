@@ -225,7 +225,7 @@ def class_doc(serve: Mapping[str, Any], cls: Any, scheme: str | None = None) -> 
     member stated, which is work per template the counts don't read), and the parameters it registers; `Undecided` where
     the vocabulary can't express it."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "prove_path"))
-    import prove_path as PP
+    from verity.protocols.proofs.spot.prover.audit import prove_path as PP
     from verity_vllm.program.predict.common import Unexpressible
     from verity_vllm.program.predict.window_circuit import class_circuit
     from verity_vllm.program.predict.window_class import PearlTables

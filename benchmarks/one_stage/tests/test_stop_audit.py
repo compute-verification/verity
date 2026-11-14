@@ -27,7 +27,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
 T = importlib.import_module("test_two_stage_driver")
-SA = importlib.import_module("stop_audit")
+SA = importlib.import_module("verity.protocols.proofs.spot.prover.audit.stop_audit")
 SMALL = importlib.import_module("stop_audit_small")
 
 DESIGN = f"rate:{T.Q}/{T.N}"
