@@ -3,6 +3,7 @@ module
 public import Properties.Composition
 public import Proofs.Flock.Claims.Complete.Json.Canon
 public import Proofs.Flock.Claims.Complete.Json.RoundTrip
+public import Proofs.Flock.Claims.Complete.Json.Hex
 import all Init.Data.String.Defs
 
 /-!
@@ -130,10 +131,42 @@ theorem plain_nat (n : Nat) : Plain (.num ⟨(n : Int), 0⟩) := .num n
 /-- **A printable-ASCII string is `Plain`.** -/
 theorem plain_str {s : String} (h : PlainStr s) : Plain (.str s) := .str h
 
-/-- **An object built from a list of members is `Plain`** when it is a well-formed tree with printable keys and `Plain`
-values, which is how the honest witness writes its objects (keys in `canon`'s strictly sorted order). -/
+/-- **An object is `Plain`** when it is a well-formed tree with printable keys and `Plain` values. -/
 theorem plain_obj {m : Std.TreeMap.Raw String Json} (hm : m.WF)
     (hk : ∀ k, (m.get? k).isSome = true → PlainStr k) (h : ∀ k v, m.get? k = some v → Plain v) :
     Plain (.obj m) := .obj hm hk h
+
+/-- **An object given as a key–value list is `Plain`** (`Lean.Json.mkObj`, the `.obj` of `Std.TreeMap.Raw.ofList`), which
+is how the honest witness writes its objects (keys in `canon`'s strictly sorted order). The tree is well formed for free
+(`Std.TreeMap.Raw.WF.ofList`); the keys and values are read, as the verifier reads them, through the built map's `get?`. -/
+theorem plain_mkObj (l : List (String × Json))
+    (hk : ∀ k, ((Std.TreeMap.Raw.ofList l).get? k).isSome = true → PlainStr k)
+    (h : ∀ k v, (Std.TreeMap.Raw.ofList l).get? k = some v → Plain v) :
+    Plain (Json.mkObj l) := by
+  unfold Lean.Json.mkObj
+  exact plain_obj Std.TreeMap.Raw.WF.ofList hk h
+
+/-! ## Convenience: printable strings -/
+
+/-- **Every lowercase-hex digit is printable** (`0`–`9`, `a`–`f`): a byte in `0x30…0x39 ∪ 0x61…0x66`, below `0x7f` and
+neither quote nor backslash. -/
+theorem plainStr_hd : ∀ d < 16,
+    0x20 ≤ (Flock.Hex.hd d).toNat ∧ (Flock.Hex.hd d).toNat < 0x7f ∧
+      Flock.Hex.hd d ≠ '"' ∧ Flock.Hex.hd d ≠ '\\' := by
+  decide +kernel
+
+/-- **A byte string's lowercase-hex rendering is printable** (`Flock.hexOf`): every character is a hex digit. -/
+theorem plainStr_hexOf (bs : ByteArray) : PlainStr (Flock.hexOf bs) := by
+  intro c hc
+  rw [Flock.Hex.hexOf_toList] at hc
+  obtain ⟨x, -, hx⟩ := List.mem_flatMap.1 hc
+  have hx256 : x.toNat < 256 := x.toNat_lt
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hx
+  rcases hx with rfl | rfl
+  · exact plainStr_hd _ (by omega)
+  · exact plainStr_hd _ (by omega)
+
+/-- **A byte string's hex rendering is a `Plain` string.** -/
+theorem plain_hexOf (bs : ByteArray) : Plain (.str (Flock.hexOf bs)) := .str (plainStr_hexOf bs)
 
 end Properties.CanonRoundTrip
