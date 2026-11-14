@@ -276,17 +276,32 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------------------------------------------------------------ the GPU
+_MUFU_SRC = {"ex2_ftz": "ex2.approx.ftz.f32 $0, $1;", "rcp_ftz": "rcp.approx.ftz.f32 $0, $1;",
+             "lg2_ftz": "lg2.approx.ftz.f32 $0, $1;", "ex2": "ex2.approx.f32 $0, $1;", "lg2": "lg2.approx.f32 $0, $1;"}
+
+
 def _mufu(op: str, x: np.ndarray) -> np.ndarray:
+    """One PTX instruction of `_MUFU_SRC` on every word of `x` (Triton inline asm on the GPU)."""
     import torch
+    import triton
+    import triton.language as tl
 
-    from verity_vllm.program import mla_capture as MC
+    @triton.jit
+    def k(X, Y, n, BLOCK: tl.constexpr, ASM: tl.constexpr):
+        i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+        v = tl.load(X + i, mask=i < n)
+        y = tl.inline_asm_elementwise(ASM, "=r,r", [v], dtype=tl.float32, is_pure=True, pack=1)
+        tl.store(Y + i, y, mask=i < n)
 
-    return MC._mufu(op, torch.from_numpy(x.view(np.float32).copy()).to("cuda")).cpu().numpy().view(np.uint32)
+    t = torch.from_numpy(x.view(np.float32).copy()).to("cuda")
+    y = torch.empty_like(t)
+    k[(triton.cdiv(t.numel(), 1024),)](t, y, t.numel(), BLOCK=1024, ASM=_MUFU_SRC[op])
+    return y.cpu().numpy().view(np.uint32)
 
 
 def sweep_words() -> np.ndarray:
-    """The sm_120 measurement's sweep (`mla_capture.mufu_probe`)."""
-    from verity_vllm.program import mla_capture as MC
+    """The sm_120 measurement's sweep: 2^20 splitmix64 words (`mla_inputs._splitmix`)."""
+    from tests.program import mla_inputs as MC
 
     return MC._splitmix(np.arange(1 << 20, dtype=np.uint64) + (np.uint64(0xABC) << np.uint64(40))).astype(np.uint32)
 
