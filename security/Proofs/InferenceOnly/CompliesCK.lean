@@ -7,9 +7,9 @@ public import Mathlib.Tactic.Linarith
 /-!
 # Proofs of the inference-only policy as a `(c, k)`-partition
 
-A Boolean declaration's novel reads are its unregistered input gates, so a complying inference block of `|I| ≤ Γ` gates reads at
+A Boolean declaration's fresh input bits are its unregistered input gates, so a complying inference block of `|I| ≤ Γ` gates reads at
 most `α |I| ≤ α Γ` of them, and the division is a `(Γ, ⌊αΓ⌋)`-partition. Through the bit-level expansion,
-an inference block's size becomes its width, at least `|I|` and at most `W |I|`, and its novel reads do not grow (`ExpandSize`).
+an inference block's size becomes its width, at least `|I|` and at most `W |I|`, and its fresh input bits do not grow (`ExpandSize`).
 
 With its constants registered (`RegisteredCircuit.constInputs`) a declaration needs neither assumption:
 `constInputs_isCK` and `constInputs_expand_isCK` take a complying division to those partitions with only the gates'
@@ -100,7 +100,7 @@ theorem floor_bound {x r K : ℕ} {α : ℝ} (hx : (x : ℝ) ≤ α * r) (hr : 0
       _ ≤ α * K := mul_le_mul_of_nonneg_left (by exact_mod_cast hr hpos) hα.le
 
 /-- A unit of `P` with `d`'s constants registered has at most the gates of its unit in `P`, and unregistered reads
-at most as wide as that unit's novel reads. -/
+at most as wide as that unit's fresh input bits. -/
 theorem constInputs_bounds (d : RegisteredCircuit) {n : ℕ} (P : Partition d.D n) (u : Fin n) :
     (P.constInputs.gates u).card ≤ (P.gates u).card ∧
       d.constInputs.D.width (d.constInputs.unregistered (P.constInputs.gates u)) ≤ freshInput d (P.gates u) := by
@@ -126,7 +126,7 @@ theorem constInputs_isCK {Γ : ℕ} {α : ℝ} {d : RegisteredCircuit} {n : ℕ}
 /-- **A complying division expands to a `(ΓW, ⌊αΓW⌋)`-partition with the constants registered**, on a declaration
 whose gates are at most `W` bits wide: registering the constants gives positive fan-in in bits
 (`Circuit.constInputs_bitFaninPos`), so the expansion is Boolean, and an expanded unit has at most `W` bits a gate
-and reads no more than its unit's novel reads (`ExpandSize`). -/
+and reads no more than its unit's fresh input bits (`ExpandSize`). -/
 theorem constInputs_expand_isCK {Γ W : ℕ} {α : ℝ} {d : RegisteredCircuit} {n : ℕ} {P : Partition d.D n}
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (freshInput d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hW : ∀ g, d.D.w g ≤ W) :
