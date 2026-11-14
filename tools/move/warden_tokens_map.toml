@@ -45,6 +45,9 @@
 files = ["*"]
 
 [words_in.words]
+"network certifier's warden" = "network certifier"   # the relay beside the term it becomes, which it would repeat
+"certifier front's warden" = "certifier front"
+"warden-paced" = "network-certifier-paced"
 "warden's" = "network certifier's"
 "wardens'" = "network certifiers'"
 "the warden-" = "the network-certifier-"

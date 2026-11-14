@@ -50,7 +50,7 @@ def _tape(seed: int):
     return rand
 
 
-def test_the_draw_reproduces_the_specs_vectors():
+def test_the_sample_reproduces_the_specs_vectors():
     t = CT.CoinTree.sample(SPEC9, NONCE, _spec_tape())
     r = t.rules
     assert t.key.hex() == (
