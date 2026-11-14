@@ -27759,6 +27759,10 @@
     "function": "Accounting.Actual.Run.acts",
     "outcome": "none"
    },
+   "Accounting.SecurityProofs.EgressRegistered": {
+    "function": ["Accounting.Placed.egress", "Accounting.linkCapacity"],
+    "outcome": "none"
+   },
    "Pouw.SecurityProofs.Receipt.DuoWordInjective": {
     "function": "Pouw.Receipt.duoWord",
     "outcome": "none"
