@@ -68,3 +68,10 @@ WALKER, Sat 14 Nov, 12:44 AM PST.
 - RAN: `test_work.py` 122 of 122; `training_slowdown`'s `test_program_reading.py -m "slow or not slow"` 7 of 7 (the honest small model, no refusal under the new key); ruff clean.
 - RAN, each mutation alone and undone: M-A1 9 failed (the reader's 9), M-A2 2 failed (the reader's 2), M-A3 5 failed, and the fourth (the member key back to the activation's index) fails `test_a_specific_row_repeated_across_members_is_refused_at_the_word_by_word_point` alone.
 
+[2026-11-14T08:30Z] a0b5587a71b8
+RECORD, Sat 14 Nov 12:30 AM PST. **#9968's fix head is 548936694a7b93b8edd6bbc71f0ec0a94e6bde2e: RECORDREAD's must-fix and should-fix, on #9502's 449132da9bf, merged once (3905e2f4445).**
+- MUST: the refusal test is parametrized over the count alone (n = 1), the rate rule alone (alpha 1/84, gamma 84), and both. Each gives 1, `measured`, and names its rule. RAN: mutation (a), "count" only, now fails the rate-rule and both-rules cases; reverted.
+- SHOULD: `built.timed` gains `private`. The record's case script and check run with it, so a nonzero exit raises "inference-only-record-check exited 3" and none of its standard error (tested). `lean_count` is unchanged.
+- RAN on this VM: the benchmark's two test files, 45 passed.
+- READSTEP said READY on #10012 at 5be997485a9. Its one quick run there is r20261114-082712-ffac, and I mark when it is done there. #9968's one quick run at 548936694a7 goes when r20261114-070225-4972 ends (still running).
+
