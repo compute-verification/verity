@@ -32,7 +32,7 @@
 //             free operand is shared across a hand-off (d1, d2) or (d3, the next d0): the filler's rows are hashed
 //      XIN13  y <- (rotl(y, 13) ^ d0) a0 + d1;  y <- (rotl(y, 19) ^ d2) a1 + d3   (SHF, LOP3, IMAD: three ops a pair)
 //           Each has an all-state kernel of fixed word bijections, complement flips that spare no product
-//           (tests/test_pfill_fold.py); duo has none
+//           (../../../../../../../benchmarks/pouw/filler/tests/test_pfill_fold.py); duo has none
 //   2  duo  per word p, keys (k, a, r): u = y ^ p ^ k;  y <- u a + z;  z <- rotl(u, r) + y   (three ops a word)
 //   1  xor  y <- y ^ d0 ^ d1 ^ d2 ^ d3, the cheapest fold that reads every word: a cost reference, not a receipt (it is
 //           linear, so it binds nothing)
@@ -68,8 +68,8 @@
 // hands them to the block through shared memory. dcap's dgate also runs pf_bu_uniform, the histograms of U and of A on
 // the host generators that dfill_ref (and so dgate's receipts) holds the GPU to.
 #pragma once
-#include "../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c/sha512.cuh"
-#include "../../../verity/protocols/accounting/pouw/verifier/receipts/receipt_folds.cuh"
+#include "../pearl_c/sha512.cuh"
+#include "../../../verifier/receipts/receipt_folds.cuh"
 
 #define PF_W 8
 #ifndef PF_CTAS
@@ -532,7 +532,7 @@ __global__ void __launch_bounds__(32 * PF_PW, PF_PMIN)
 #endif
 
 // ---------------------------------------------------------------- the host's tile, from the matrices (pfill_host.cpp builds
-// this part with g++ for tests/test_pfill_ref.py)
+// this part with g++ for ../../../../../../../benchmarks/pouw/filler/tests/test_pfill_ref.py)
 static void pf_block_h(uint64_t dom, uint64_t c0, uint64_t c1, uint64_t tile, uint64_t ctr, uint64_t* st) {
   uint64_t w[16] = {c0, c1, tile, dom, ctr, 0x8000000000000000ull, 0, 0, 0, 0, 0, 0, 0, 0, 0, 320};
   sx::iv(st);

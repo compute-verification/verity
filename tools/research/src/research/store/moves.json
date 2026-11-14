@@ -3072,6 +3072,17 @@
       "paths": {
         "adapters/vllm/verity_vllm/program/mla_capture.py": "adapters/vllm/tests/program/mla_inputs.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/filler/dcap.cu": "verity/protocols/accounting/pouw/prover/kernels/filler/dcap.cu",
+        "benchmarks/pouw/filler/pfill.cuh": "verity/protocols/accounting/pouw/prover/kernels/filler/pfill.cuh",
+        "benchmarks/pouw/filler/lfill.cuh": "verity/protocols/accounting/pouw/prover/kernels/filler/lfill.cuh",
+        "benchmarks/pouw/filler/flin.cuh": "verity/protocols/accounting/pouw/prover/kernels/filler/flin.cuh",
+        "benchmarks/pouw/filler/pfill_host.cpp": "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_host.cpp",
+        "benchmarks/pouw/filler/pfill_ref.py": "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_ref.py",
+        "benchmarks/pouw/filler/dfill_ref.py": "verity/protocols/accounting/pouw/prover/kernels/filler/dfill_ref.py"
+      }
     }
   ]
 }

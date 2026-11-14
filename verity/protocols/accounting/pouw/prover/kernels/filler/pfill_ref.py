@@ -2,7 +2,7 @@
 the round's coins (c0, c1) and the tile's id, for each tile kind: the s8 tile on ±1 (K = 32), the e2m1 tile on ±1 (K = 64,
 -DPFILL_E2M1), the s8 tile on {0,1} bits (K = 32, -DPFILL_BITS, Theorem K's setting) and the bU tile (K = 32, A on {0, 1}
 and B on {±1, ..., ±64}, -DPFILL_BU). Written from the matrices with hashlib's SHA-512, as pfill.cuh's host `dfill_ref` is
-with its own; `dcap dgate` holds the GPU to that `dfill_ref`, and tests/test_pfill_ref.py holds this file to that
+with its own; `dcap dgate` holds the GPU to that `dfill_ref`, and ../../../../../../../benchmarks/pouw/filler/tests/test_pfill_ref.py holds this file to that
 reference built with g++ (pfill_host.cpp).
 
 The cheats against the folds are here too, each as the words it hands the same fold:
