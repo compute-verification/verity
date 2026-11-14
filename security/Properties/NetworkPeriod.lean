@@ -437,7 +437,7 @@ def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map 
 /-- What `AnswersVerified` says of a period its check accepted: each answer the check reads is the one one-stage's
 compiled verifier gives (`Spot.OneStage.protocol.answer`) on some parameters, commitment and evidence. The answer's
 digest is that commitment's, which the check holds to the registration (`answered`), and an accepting one-stage check
-holds its parameters' Program to that registration's; the parameters' query, law and δ are not yet the period's. -/
+holds its parameters' Program to that registration's; the parameters' query, samplingDesign and δ are not yet the period's. -/
 def AnswersVerifiedAt (e : Evidence) : Prop :=
   ∀ a ∈ answersRead e, ∃ params commitment evidence : ByteArray,
     Spot.OneStage.protocol.answer params commitment evidence = a

@@ -1299,11 +1299,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         taken = program_values(program)
 
         def registration(name: str, program_: Program, ports: dict, layer: str | None, **day: Any) -> dict[str, dict]:
-            v = V.check(rec, program_, query, law, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **tie(a), **day)
+            v = V.check(rec, program_, query, sampling_design, CS.SCHEME, ports, leaf_layer=layer, work_table=table, **tie(a), **day)
             return {name: a0.negative(v)}
 
         def history_root(name: str, wrong: dict) -> dict[str, dict]:
-            v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
+            v = V.check(rec, program, query, sampling_design, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
                         **tie(a))
             return {name: a0.negative(v)}
 
@@ -1329,17 +1329,17 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             wrong = {**hist, "registered": {**hist["registered"], written: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
             name = "history-root-not-its-writers-strings"
             parts.append(workers.submit(name, functools.partial(history_root, name, wrong)))
-        v = outside_the_partition(union_sample, rec, sampled_law, n_all)
+        v = outside_the_partition(union_sample, rec, sampled_design, n_all)
         parts.append({"draw-outside-the-partition": a0.negative(v)})
         parts.append(wiring_negatives(mine.members, publics))
         if proved:
             v = V.check_proved(union_sample, proved[1:], len(proved) - 1)
             parts.append({"proved-set-short-of-the-draw": a0.negative(v)})
         parts.append(workers.submit("transfer gates", functools.partial(
-            transfer_gate_negatives, getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_sample, sampled_law, proved,
+            transfer_gate_negatives, getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_sample, sampled_design, proved,
             tie(a))))
         parts.append(workers.submit("audit record", functools.partial(
-            a0.audit_negatives, result, sampled_law, a.delta, session_roots, served=sorted(served_units))))
+            a0.audit_negatives, result, sampled_design, a.delta, session_roots, served=sorted(served_units))))
         parts += coin_neg
         workers.run()
         for part in parts:

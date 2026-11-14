@@ -42,7 +42,7 @@ the network certifier's composite without PoUW, that is the composite of record,
 over its verdict and its subprotocols', remote's aside too, its error has no PoUW term, and no verified compute is
 credited.
 SPOT's guarantee is its window's ε at δ beside its pooled count over any number of windows, and that count for
-each monitoring period's node, datacenter and world with its share of their proof blocks, the line stating both; a law
+each monitoring period's node, datacenter and world with its share of their proof blocks, the line stating both; a sampling_design
 other than a k-subset has no pooled figure, a draw of several members is named refused, and an answer not accepted
 states none. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing
 where it states none; runs' records at two settings go beside each other, each run's figures labelled with its own
@@ -375,8 +375,8 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
 
 
 def chain_report(n2: str = "all", scan: str = "all") -> dict:
-    """The network certifier's published chain report (`certifier_piece.PUBLIC`), its draws at these laws."""
-    return {"steps": {s: {"eps_at_delta": {"law": law, "eps": "0"}} for s, law in (("n2", n2), ("scan", scan))}}
+    """The network certifier's published chain report (`certifier_piece.PUBLIC`), its draws at these sampling_designs."""
+    return {"steps": {s: {"eps_at_delta": {"law": sampling_design, "eps": "0"}} for s, sampling_design in (("n2", n2), ("scan", scan))}}
 
 
 #: the chain report whose draws each take everything, and the record's chain draws read from it
@@ -642,7 +642,7 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     assert all(x in OR.PREMISES["padding-out-of-free"]["is"] for x in ("refuses a tied audit whose units read into",
                                                                        "a column no unit reads", "`TIGHT`"))
     wrong = OR.PREMISES["wrong-bounds"]["is"]
-    assert all(x in wrong for x in ("RegMatches", "`sampled-leg-bridge`", "v.law is g.rule.lawOver n",
+    assert all(x in wrong for x in ("RegMatches", "`sampled-leg-bridge`", "v.law is g.rule.samplingDesignOver n",
                                     "Draw.sameLaw", "jeq a (toJson n) → nat? a = some n"))
     assert all(x in OR.PREMISES[OR.CERTIFIER_KEY]["is"] for x in ("certifier-key/v1", "beside trusted-device",
                                                                  "`NOT_ESTABLISHED`", "`UNCHARGED`", "hA, hr and hkey"))

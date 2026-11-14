@@ -1433,7 +1433,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
 
     def record(ports: dict) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
-        law, table = sz.S.params_law(rule, program, query, None)
+        law, table = sz.S.params_sampling_design(rule, program, query, None)
         return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
 
     assert sz.S.check_public(spec, record(want)).ok
