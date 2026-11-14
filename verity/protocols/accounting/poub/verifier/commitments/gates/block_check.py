@@ -145,7 +145,7 @@ from verity.commitments.gates.frame_v3 import opens_at, read_at
 from verity.commitments.gates.hm96 import Hm96Sha512Leaf, reference as hm96_leaf
 from verity.commitments.gates.sha512 import IV, commit as _commit, compress_gadget, compress_ref, midstate, pad_tail, words_be
 
-__all__ = ["BlockOpeningCheck", "BlockOpeningCheckV2", "FIELDS", "LEVELS", "LIMITS_V2", "TOY", "VERDICT", "key", "opening_args",
+__all__ = ["BlockOpeningCheck", "BlockOpeningCheckV2", "BlockOpeningUnitV2", "FIELDS", "LEVELS", "LIMITS_V2", "TOY", "VERDICT", "key", "opening_args",
            "opening_args_v2", "opening_check", "opening_check_v2", "opening_public", "opening_public_v2", "opening_rows",
            "opening_rows_v2", "receipt", "row_words", "sketch", "verdict"]
 
@@ -816,6 +816,34 @@ BlockOpeningCheckV2 = CompositeDefinition(
         "to payload under the codec key at j, with b_j(c_a) of the payload's own digest and coin if bound (codec); the payload "
         "on its path to the payload root or its append's and, if bound, to the value commitment (payload-path); the block's "
         "sketch receipt the leaf's entry pos & 15 (receipt). Returns bit 0 accepted, bits 1-4 each check's failure")
+
+
+def _unit_signature_v2(S):
+    rows = opening_rows_v2(S)
+    return tuple((name, _uwords(bits)) for name, bits, _ in rows), U16
+
+
+def _unit_body_v2(B, S, *colls):
+    """`BlockOpeningCheckV2` on its parameters cut from the six rows, no gate of its own."""
+    params, _ret = _opening_signature_v2(S)
+    types = dict(params)
+    parts = {}
+    for (_row, _bits, names), c in zip(opening_rows_v2(S), colls, strict=True):
+        refs, at = _Wires.refs(c), 0
+        for n in names:
+            w = sum(types[n].leaf_widths())
+            parts[n] = _Wires.coll(types[n], refs[at:at + w])
+            at += w
+    return B.call(bind(BlockOpeningCheckV2, **{k: getattr(S, k) for k in BlockOpeningCheckV2.statics}),
+                  *(parts[n] for n, _ in params))
+
+
+BlockOpeningUnitV2 = CompositeDefinition(
+    "BlockOpeningUnit", 2, ("N", "C", "K", "MASKED", "BYTES", "ROWS", "LEAF", "DR", "DP", "DV"), _unit_signature_v2,
+    _unit_body_v2, conformance="exact-model-tested",
+    doc="BlockOpeningCheck_v2 as a proof block's unit commits it, in `opening_rows_v2`'s six rows: `pub` (its public "
+        "parameters in `PUBLIC`'s order), `signs`, `block`, `payload`, `leaf` and `aux` (`AUX`'s); its verdict word as "
+        "BlockOpeningCheck_v2's")
 
 
 # --- references --------------------------------------------------------------------------------------------------------------
