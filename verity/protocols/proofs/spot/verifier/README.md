@@ -274,6 +274,26 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 
 Tests: `uv run tools/verity/check/suites.py protocols/spot`.
 
+### Verdicts of record
+
+No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
+`sampled-proofs-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
+refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
+`NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
+
+| Verdict | Entry | Lean of record | Twin |
+| --- | --- | --- | --- |
+| R1-R8 on a registration | `verifier.check` | `registration` (`OneStage`) | `registration.check` |
+| The audit record | `verifier.audit_record` | `Record.record` | `audit.audit_record` |
+| A registration's whole run | `verifier.run` | `Run.run` | the stream's own outcome |
+| A two-stage outcome | `Stream.outcome` (`_audit_two`) | `Run.run`'s symbol; it refuses every two-stage run while `SecondStage.FORM` is off | the two records' join |
+| Round 2's statements | `second_stage.check` | `SecondStage.checkAny`, which only `Run.run` reaches | `check_twin` |
+| A two-stage outcome's completeness | `second_stage.complete` | none yet | `complete_twin` |
+
+A two-stage run whose stages read no coin bytes gives `Run.run` nothing to read, so `_audit_two` raises rather than
+join its records. `parties`' `_held` and `one_stage.proofs`' `ks_form_why`, `template_why` and `population_why` are
+guards: they only turn an accept into a refusal, never accept.
+
 ## Core API
 
 ~~~python
