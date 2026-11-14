@@ -1180,13 +1180,16 @@ def test_a_stop_class_is_handed_its_stop_population_and_a_class_without_a_stop_b
     assert at(4, spans=3).stop_program is not first.stop_program
 
 
-def test_the_long_rows_check_is_found_by_its_id_in_a_process_that_never_imported_it():
-    """`check_template` finds the long row's check (`long_row`'s `DsaTopKReadRowsCut_v1`, which no registry module
-    registers) by the descriptor id a class's ``commit.json`` names, as the serve and ``two_stage.py first`` look it up:
-    in a process of its own, since this one has imported `long_row`."""
+def test_a_serve_finds_the_long_rows_check_by_its_id_in_a_process_that_never_imported_it(tmp_path):
+    """A serve's hook (`BoundaryWindows.of`) finds the long row's check (`long_row`'s `DsaTopKReadRowsCut_v1`, which no
+    registry module registers) by the descriptor id its configuration names: in a process of its own, since this one
+    has imported `long_row`."""
     t = descriptor_id(bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=read(16, 1)))
-    code = ("import sys\nfrom verity.circuits.codec import descriptor_id\nfrom verity_vllm.pipeline import boundary_rows as BR\n"
-            "assert 'verity_vllm.pipeline.long_row' not in sys.modules\nprint(descriptor_id(BR.check_template(sys.argv[1])))")
-    got = subprocess.run([sys.executable, "-c", code, t], capture_output=True, text=True, check=False)
+    code = ("import sys\nfrom pathlib import Path\nfrom verity.circuits.codec import descriptor_id\n"
+            "from verity_vllm.pipeline.boundary_windows import BoundaryWindows\n"
+            "assert 'verity_vllm.pipeline.long_row' not in sys.modules\n"
+            "hook = BoundaryWindows.of({'check': sys.argv[1], 'inline': True, 'verdicts': True}, Path(sys.argv[2]))\n"
+            "print(descriptor_id(hook.check))\nhook.stop()")
+    got = subprocess.run([sys.executable, "-c", code, t, str(tmp_path)], capture_output=True, text=True, check=False)
     assert got.returncode == 0, got.stderr[-2000:]
     assert got.stdout.strip() == t

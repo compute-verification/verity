@@ -138,7 +138,6 @@ INDEX, SALTS = "index.json", "salts.bin"
 
 def check_template(t: str) -> SpecializedDefinition:
     """The check template a serving template's descriptor id ``t`` names (`serving_templates.template`)."""
-    from verity_vllm.pipeline import long_row  # noqa: F401  registers DsaTopKReadRowsCut_v1, the long row's check
     from verity_vllm.pipeline import serving_templates as ST
 
     return ST.template(t).fn

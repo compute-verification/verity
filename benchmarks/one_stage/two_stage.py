@@ -500,6 +500,10 @@ def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapp
 
 
 def template_fn(t: str) -> SpecializedDefinition:
+    """The check template descriptor id ``t`` names (`boundary_rows.check_template`), the long row's among them, which
+    `long_row` registers and no registry module does."""
+    from verity_vllm.pipeline import long_row  # noqa: F401
+
     return BR.check_template(t)
 
 

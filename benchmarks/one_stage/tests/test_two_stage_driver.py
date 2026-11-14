@@ -11,6 +11,7 @@ import importlib
 import itertools
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import threading
@@ -744,6 +745,18 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     (tmp_path / "empty").mkdir()
     got = second("empty-host", first, challenger="local", challenger_host=str(tmp_path / "empty"))
     assert AC.NO_HOST in got["refused"] and len(opened) == sessions, "no challenger of the second stage's own was started"
+
+
+def test_the_command_finds_the_long_rows_check_by_its_id_in_a_process_that_never_imported_it():
+    """The command looks a class's check up by the descriptor id its ``commit.json`` names (`template_fn`): the long
+    row's (`long_row`'s `DsaTopKReadRowsCut_v1`, which no registry module registers) is found in a process of its own,
+    since this one has imported `long_row`."""
+    t = descriptor_id(bind(LR.DsaTopKReadRowsCut, N=12, TOPK=2, BLOCK=4, READ=E.read(16, 1)))
+    code = ("import sys\nsys.path.insert(0, sys.argv[2])\nimport two_stage\nfrom verity.circuits.codec import descriptor_id\n"
+            "assert 'verity_vllm.pipeline.long_row' not in sys.modules\nprint(descriptor_id(two_stage.template_fn(sys.argv[1])))")
+    got = subprocess.run([sys.executable, "-c", code, t, str(HERE.parent)], capture_output=True, text=True, check=False)
+    assert got.returncode == 0, got.stderr[-2000:]
+    assert got.stdout.strip() == t
 
 
 @pytest.mark.slow
