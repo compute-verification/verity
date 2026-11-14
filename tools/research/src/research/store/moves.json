@@ -3223,6 +3223,11 @@
         "verity/hardware/tests/test_package.py": "verity/tests/tests/test_imports.py",
         "verity/hardware/tests/test_sheet_lean.py": "verity/tests/tests/test_sheet_lean.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/program/dsa_table.circuit-check.py": "adapters/torch/verity_torch/dsa_table.circuit-check.py"
+      }
     }
   ]
 }
