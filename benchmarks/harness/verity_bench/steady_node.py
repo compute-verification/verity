@@ -22,16 +22,18 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    node (`steady.card_file`) before and after;
    runs `benchmarks/one_stage/server_rate.py` at the point's load (`steady_spec.timed_sessions`); and keeps the row,
    with the versions it read (`steady_spec.VERSIONS`) and the period its sessions were sized by (`steady.PERIOD`, which
-   `level` reads), and the sessions' record under `out/rate/`.
+   `level` reads), and the sessions' record under `out/rate/`, with one accepted timed session's proof for the Lean
+   verifier where a verifier filed one (`keep_session`).
 3. **After the lease has ended**, so that its usage line is among the run's files, the verdict: the row is a passed point
    when `steady_spec.point_why` finds nothing against it, from the run's own files. `result.json` passes with it,
-   and a passed point's rate is its one measurement, appended by the kit's writer under the step's host stamp.
+   and a passed point's rate is its one measurement, written with it as the kit's writer makes it under the step's
+   host stamp.
 
 It exits 0 for a passed point, `steady_spec.NOT_PASSED` for a point that was timed and didn't pass, and `REFUSED` where
 nothing was timed. Its records are `out/point.json` (the point, the prover, the cores, the cards its lease was asked
 of, the card and the versions), `out/verdict.json` (each check's answer) and `out/rate/`; `result.json` lists every
 file a verdict reads (`kept`), so the store holds what `plan` judges the run by. The statement and the provers' session
-files stay in a scratch directory that it removes, also when the run is cancelled or timed out: TERM and INT end it
+files but the kept one stay in a scratch directory that it removes, also when the run is cancelled or timed out: TERM and INT end it
 with `STOPPED`, after the command it was waiting for (`_run`) and with no result.
 """
 
@@ -80,6 +82,11 @@ NODES, DEVICES = Path("/sys/devices/system/node"), Path("/sys/bus/pci/devices")
 CARDS = ("nvidia-smi", "--query-gpu=index,pci.bus_id", "--format=csv,noheader")
 #: the bytes kept of each of the server's logs, from its end
 KEPT_LOG_BYTES = 200_000
+#: one verifier's session as it files it (`keep_session`): the two repetitions' proofs, the session's record (the
+#: verdict, the challenge tree, the transcript, each proof's SHA-512) and the verifier's
+SESSION_FILES = ("circuit.rep0.bin", "circuit.rep1.bin", "session.json", "verifier.json")
+#: where `keep_session` puts the kept session in the step's records, and the most of it a run keeps
+KEPT_SESSION, KEPT_SESSION_BYTES = "kept-session", 64 * 2**20
 
 #: a command's exit code, its output to a log file
 Runner = Callable[[Sequence[str], Path], int]
@@ -373,7 +380,8 @@ def snapshot(path: Path, run_id: str, ask: Asker, now: Callable[[], float]) -> N
 def keep(scratch_rate: Path, out_rate: Path, item: steady_spec.SteadyPoint, read: Mapping[str, str]) -> int:
     """The step's records under `out/rate/`: the script's rows, each with the versions this step read on the node and
     the period its timed sessions were sized by (a row that declares one), the sessions' record, the device's samples
-    and the end of each log. The verifiers' session files stay in the scratch. How many rows it kept."""
+    and the end of each log. The verifiers' session files stay in the scratch, but the one `keep_session` keeps. How
+    many rows it kept."""
 
     out_rate.mkdir(parents=True, exist_ok=True)
     rates = scratch_rate / "rate.json"
@@ -389,6 +397,68 @@ def keep(scratch_rate: Path, out_rate: Path, item: steady_spec.SteadyPoint, read
     for log in sorted(step.glob("*.log")):
         (kept / log.name).write_bytes(log.read_bytes()[-KEPT_LOG_BYTES:])
     return len(rows)
+
+
+def keep_session(step: Path, kept: Path, pin: str) -> dict[str, Any]:
+    """One accepted timed session's proof, as its verifier filed it, copied to `kept`/`KEPT_SESSION` for the Lean
+    verifier (`lean_verify --proof`): the newest of the verifiers' sessions under `step` that is one session's four
+    files (`SESSION_FILES`), accepted with every repetition, not aborted, whose proofs are the ones the session
+    recorded (size and SHA-512), that exactly one verifier's `SESSION` line carries (by its two timings: the session's
+    directory has no label) and whose label is one row of the step's `sessions.jsonl`, a timed one, accepted, with
+    no error and the circuit `pin`, and that is at most `KEPT_SESSION_BYTES`. Its label and its proofs' digests, or,
+    with nothing kept, why the newest session isn't such a one."""
+
+    said = [json.loads(line.split("\t", 1)[1]) for log in sorted(step.glob("verifier-*.log"))
+            for line in log.read_text(errors="replace").splitlines() if line.startswith("SESSION\t")]
+    rows = [json.loads(line) for line in (step / "sessions.jsonl").read_text().splitlines() if line.strip()] \
+        if (step / "sessions.jsonl").is_file() else []
+    sessions = sorted((path for path in step.glob("verifier-*/*") if path.is_dir()), key=lambda path: path.stat().st_mtime,
+                      reverse=True)
+    whys = []
+    for session in sessions:
+        why, label = _not_kept(session, said, rows, pin)
+        if why is None:
+            shutil.copytree(session, kept / KEPT_SESSION)
+            proofs = json.loads((session / "session.json").read_text())["proof_sha512"]
+            return {"session": f"{kept.name}/{KEPT_SESSION}", "label": label, "proof_sha512": proofs}
+        whys.append(f"{session.parent.name}/{session.name}: {why}")
+    return {"session": None, "why": whys[0] if whys else "the verifiers filed no session"}
+
+
+def _not_kept(session: Path, said: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]],
+              pin: str) -> tuple[str | None, str | None]:
+    """Why `session` isn't the one `keep_session` keeps, else None; and its label."""
+
+    names = sorted(path.name for path in session.iterdir())
+    if names != sorted(SESSION_FILES):
+        return f"it holds {', '.join(names)}, not one session's {', '.join(SESSION_FILES)}", None
+    if sum(path.stat().st_size for path in session.iterdir()) > KEPT_SESSION_BYTES:
+        return f"it is over {KEPT_SESSION_BYTES} bytes", None
+    record = json.loads((session / "session.json").read_text())
+    verdict = record.get("verdict") or {}
+    if verdict.get("accepted") is not True or record.get("aborted") or not all(
+            rep.get("ok") is True for rep in verdict.get("reps") or [{}]):
+        return "it wasn't accepted with every repetition", None
+    for proof in record.get("proof_sha512") or []:
+        path = session / (proof["stream"].replace("/", ".") + ".bin")
+        if not path.is_file() or path.stat().st_size != proof["bytes"] or \
+                hashlib.sha512(path.read_bytes()).hexdigest() != proof["sha512"]:
+            return f"{path.name} isn't the proof the session recorded for {proof['stream']}", None
+    lines = [line for line in said if (line.get("handle_s"), line.get("verify_s")) ==
+             (verdict.get("handle_s"), verdict.get("verify_s"))]
+    if len(lines) != 1:
+        return f"{len(lines)} of the verifiers' {len(said)} SESSION lines carry its timings", None
+    label = lines[0].get("label")
+    mine = [row for row in rows if (row.get("live") or {}).get("label") == label]
+    if len(mine) != 1:
+        return f"{len(mine)} rows of sessions.jsonl carry its label {label!r}", label
+    live = mine[0]["live"]
+    if live.get("warm") or live.get("accepted") is not True or lines[0].get("accepted") is not True or \
+            mine[0].get("error") is not None:
+        return "its row in sessions.jsonl isn't a timed, accepted session without an error", label
+    if live.get("circuit_sha512") != pin:
+        return "its circuit isn't the row's pin", label
+    return None, label
 
 
 def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: Path, run_dir: Path, *,
@@ -422,6 +492,8 @@ def timed(spec: steady_spec.SteadySpec, item: steady_spec.SteadyPoint, scratch: 
                   "--ahead", str(spec.ahead)], out / "rate" / "server-rate.log")
         snapshot(run_dir / steady.card_file(row, "end"), settings.RESEARCH_RUN_ID, ask, now)
         record |= {"exit": rc, "rows": keep(scratch / "rate", out / "rate", item, read)}
+        step = f"{item.row.name}-k{item.provers}"
+        record["kept_session"] = keep_session(scratch / "rate" / step, out / "rate" / step, item.row.pin)
     except Refused as refused:
         record["refused"] = str(refused)
         rc = REFUSED

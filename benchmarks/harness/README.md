@@ -303,11 +303,14 @@ the node's disk. A point whose row names its statement in the store is launched 
    machine throttled them while the row ran. Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
    the toolkit's version from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version
    that isn't, records what else is on the node before and after the provers run (`steady.card_file`), and times the
-   row;
+   row. It keeps one accepted timed session's proof as its verifier filed it, for the Lean verifier
+   (`out/rate/TYPE-kK/kept-session/`, `steady_node.keep_session`): the newest session whose proofs are the ones it
+   recorded and that exactly one verifier's log line and one row of `sessions.jsonl` say was timed, accepted and of the
+   row's `pin`. `out/timed.json` names it with its label and its proofs' digests, or says why none was kept;
 3. after the lease has ended, so that its usage line is among the run's files, computes the verdict from the run's own
    files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it. A passed
-   point's rate is the result's one measurement, appended by the kit's writer (`kit.Writer`) under the host stamp the
-   timed step ran under.
+   point's rate is the result's one measurement, written with it once, as the kit's writer makes it (`kit.Writer`'s `entry`)
+   under the host stamp the timed step ran under.
 
 It exits 0 for a passed point, 3 for a point that was timed and didn't pass, 4 where nothing was timed, and 143 where
 TERM or INT ended it (a cancel, a timeout): it then ends the command it was waiting for first and removes its scratch,

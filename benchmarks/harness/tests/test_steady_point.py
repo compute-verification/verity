@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import signal
 import sys
@@ -1146,7 +1147,8 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert point["cores"] == {"count": 10, "list": "20-29"}
     assert point["statement"]["pin"] == PIN and point["statement"]["from"] == SP.STAGER
     assert point["timed"] == {"refused": None, "device": "3", "host": STAMP,
-                              SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}, "exit": 0, "rows": 1}
+                              SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}, "exit": 0, "rows": 1,
+                              "kept_session": {"session": None, "why": "the verifiers filed no session"}}
     assert STAMP["cuda"] != CUDA, "the stamp's `cuda` is the driver's newest, never the toolkit's version"
     verdict = node.read(N.VERDICT_FILE)
     assert (verdict["identity"], verdict["point"], verdict["passed"], verdict["why"]) == (node.identity, POINT, True, None)
@@ -1279,6 +1281,65 @@ def test_a_node_that_lists_nothing_of_its_numa_nodes_leases_any_card(tmp_path, m
     node = Node(tmp_path, monkeypatch)
     assert node.point() == 0 and "--on" not in node.ran[1]
     assert node.read(N.POINT_FILE)["lease_on"]["cards"] is None
+
+
+def filed(step: Path, name: str, label: str, *, mtime: int, warm: bool = False, accepted: bool = True,
+          circuit: str = PIN, said: int = 1, proof: bytes = b"rep0") -> None:
+    """A session a verifier filed under `step` (its four files), its verifier's SESSION lines (`said` of them carry
+    its timings) and its row of sessions.jsonl."""
+
+    session = step / "verifier-0" / name
+    session.mkdir(parents=True)
+    (session / "circuit.rep0.bin").write_bytes(proof)
+    (session / "circuit.rep1.bin").write_bytes(b"rep1")
+    (session / "verifier.json").write_text("{}")
+    timings = {"handle_s": 1.5, "verify_s": float(mtime)}
+    (session / "session.json").write_text(json.dumps({
+        "verdict": {"accepted": accepted, **timings, "reps": [{"ok": accepted}, {"ok": True}]}, "aborted": False,
+        "proof_sha512": [{"stream": f"circuit/rep{i}", "bytes": 4, "sha512": hashlib.sha512(b"rep%d" % i).hexdigest()}
+                         for i in (0, 1)]}))
+    for path in session.iterdir():
+        os.utime(path, (mtime, mtime))
+    os.utime(session, (mtime, mtime))
+    with (step / "verifier-0.log").open("a") as log:
+        log.writelines(f"SESSION\t{json.dumps({'label': label, 'accepted': accepted, **timings})}\n" for _ in range(said))
+    with (step / "sessions.jsonl").open("a") as rows:
+        rows.write(json.dumps({"error": None, "live": {"label": label, "accepted": accepted, "warm": warm,
+                                                       "circuit_sha512": circuit}}) + "\n")
+
+
+def test_one_accepted_timed_session_is_kept_for_the_lean_verifier_with_its_label_and_proofs(tmp_path):
+    """The kept proof is what the Lean verifier is handed: a warm, refused or other-circuit session, or one whose
+    files aren't the proofs it recorded, would be a verdict on something the row didn't time."""
+
+    step, kept = tmp_path / "rate" / "gemm64-k2", tmp_path / "out" / "gemm64-k2"
+    step.mkdir(parents=True)
+    kept.mkdir(parents=True)
+    filed(step, "s1", "gemm64/k2/3", mtime=100)
+    filed(step, "s2", "gemm64/k2/4", mtime=200, warm=True)
+    assert N.keep_session(step, kept, PIN) == {
+        "session": "gemm64-k2/kept-session", "label": "gemm64/k2/3",
+        "proof_sha512": json.loads((step / "verifier-0" / "s1" / "session.json").read_text())["proof_sha512"]}
+    assert sorted(p.name for p in (kept / N.KEPT_SESSION).iterdir()) == sorted(N.SESSION_FILES)
+
+
+@pytest.mark.parametrize("change, says", [
+    ({"warm": True}, "its row in sessions.jsonl isn't a timed, accepted session without an error"),
+    ({"accepted": False}, "it wasn't accepted with every repetition"),
+    ({"circuit": "0" * 128}, "its circuit isn't the row's pin"),
+    ({"said": 2}, "2 of the verifiers' 2 SESSION lines carry its timings"),
+    ({"proof": b"rep9"}, "circuit.rep0.bin isn't the proof the session recorded for circuit/rep0"),
+])
+def test_no_session_is_kept_where_none_is_an_accepted_timed_one_of_the_pin_and_the_record_says_why(tmp_path, change,
+                                                                                                   says):
+    step, kept = tmp_path / "rate" / "gemm64-k2", tmp_path / "out" / "gemm64-k2"
+    step.mkdir(parents=True)
+    kept.mkdir(parents=True)
+    filed(step, "s1", "gemm64/k2/3", mtime=100, **change)
+    record = N.keep_session(step, kept, PIN)
+    assert record["session"] is None and record["why"] == f"verifier-0/s1: {says}"
+    assert not (kept / N.KEPT_SESSION).exists()
+    assert N.keep_session(tmp_path / "none", kept, PIN) == {"session": None, "why": "the verifiers filed no session"}
 
 
 def test_the_result_lists_every_file_plan_judges_the_run_by(tmp_path, monkeypatch):
