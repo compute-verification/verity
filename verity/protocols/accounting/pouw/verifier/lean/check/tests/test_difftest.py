@@ -270,7 +270,7 @@ def credit(case: dict) -> dict:
 
 
 def drawn(case: dict) -> dict:
-    got, refused = Cr.drawn(*(case[k] for k in credit_cases.DRAWN_KEYS))
+    got, refused = Cr.drawn_twin(*(case[k] for k in credit_cases.DRAWN_KEYS))
     _counted(refused, "drawn")
     return {"drawn": got} if refused is None else {"refused": list(refused)}
 

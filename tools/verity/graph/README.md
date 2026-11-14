@@ -192,7 +192,7 @@ runs them, one task a step:
 | `flock-rust-tests:verity/protocols/proofs/flock/prover/live` | rust | `check_build.sh test`, cargo's jobs and test threads at the task's cores | as flock-circuit-build's | none |
 
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
-`artifacts`); `lean-unit-cut` and `lean-agreement` read `verity-verify-proof` and get its path as their var `verify`, and
+`artifacts`); `lean-unit-cut` and `lean-agreement` read the Lean verifier's executable and get its path as their var `verify`, and
 `lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`), and unpacks
 `lake-build` into the tree and runs `lake build` there under check's lock (its var `tree`), once a tree (the stamp
 `.lake/graph-build.sha512`, which lean-build writes in its own), so the tree is as check's lean-build step leaves it: the

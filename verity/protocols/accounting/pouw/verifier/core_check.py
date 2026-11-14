@@ -565,7 +565,7 @@ def unit_draw(j: Any) -> dict:
 
 
 def law_name(d: dict) -> str:
-    """`parse_design`'s spelling of a sample's law."""
+    """`parse_design`'s spelling of a sampling design."""
     return f"bernoulli:{d['p']}" if d["law"] == "bernoulli" else f"{d['law']}:{d['k']}"
 
 

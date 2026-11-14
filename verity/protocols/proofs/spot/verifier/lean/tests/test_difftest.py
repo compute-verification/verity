@@ -1212,10 +1212,9 @@ def file_population(j):
     return {"why": PF.population_why(indices, strata)}
 
 
-def tables_held(j):
-    """`OneStageZk.tablesPiece` (`proofs.tables_why`): v2's refusal of blobs under `digests` (even-length lowercase hex)
-    whose pinned MUFU tables are not the lookups of a circuit whose META is ``{"lookups": lookups}`` (`proofs.lookups_of`;
-    ``{}`` without ``lookups``)."""
+def _tables_case(j):
+    """`OneStageZk.tablesCase`: the blobs' `digests` (even-length lowercase hex) and the lookups of a circuit whose META
+    is ``{"lookups": lookups}`` (`proofs.lookups_of`; ``{}`` without ``lookups``), or the ValueError they read with."""
     j = _json(j)
     ds = j.get("digests") if isinstance(j, dict) else None
     if not isinstance(ds, list):
@@ -1225,10 +1224,28 @@ def tables_held(j):
     if not all(len(d) % 2 == 0 and HEX_DIGITS.fullmatch(d) for d in ds):
         raise D.Reject("not lowercase hex")
     try:
-        lookups = PF.lookups_of({"lookups": j["lookups"]} if "lookups" in j else {})
+        return ds, PF.lookups_of({"lookups": j["lookups"]} if "lookups" in j else {})
     except ValueError as e:
-        return {"why": str(e)}
+        return ds, e
+
+
+def tables_held(j):
+    """`OneStageZk.tablesPiece` (`proofs.tables_why`): v2's refusal of blobs under `digests` whose pinned MUFU tables
+    are not the circuit's lookups (`_tables_case`)."""
+    ds, lookups = _tables_case(j)
+    if isinstance(lookups, ValueError):
+        return {"why": str(lookups)}
     return {"why": PF.tables_why(lookups, ds)}
+
+
+def own_tables(j):
+    """`OneStageZk.ownTablesPiece` (`proofs.own_tables`, `proofs.tables_match_why`): a member's own lookup tables among
+    the blobs under `digests`, by name, and their refusal against the circuit's lookups (`_tables_case`)."""
+    ds, lookups = _tables_case(j)
+    if isinstance(lookups, ValueError):
+        return {"tables": None, "why": str(lookups)}
+    tables = PF.own_tables(lookups, ds)
+    return {"tables": tables, "why": PF.tables_match_why(tables, lookups)}
 
 
 def bound(j):
@@ -3762,13 +3779,15 @@ TABLE_DIGEST = st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512.values())), st.bi
 LOOKUPS = st.one_of(st.dictionaries(st.one_of(st.sampled_from(sorted(PF.MUFU_SHA512)), st.text("abx", max_size=4)),
                                     st.just({}), max_size=5),
                     st.none(), st.integers(-9, 9), st.text("abx", max_size=4), st.lists(st.sampled_from(sorted(PF.MUFU_SHA512))))
-TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, st.one_of(
+TABLES_CASES = st.one_of(
     st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
     st.builds(lambda ds, lk: {"digests": ds, "lookups": lk}, st.lists(TABLE_DIGEST, max_size=5), LOOKUPS),
     st.lists(TABLE_DIGEST, max_size=5).map(lambda ds: {"digests": ds}),
     st.lists(st.one_of(TABLE_DIGEST, st.sampled_from(["0", "AB", "0g", PF.MUFU_SHA512["rcp"].upper()]), st.integers(0, 3)),
              min_size=1, max_size=4).map(lambda ds: {"digests": ds}),
-    JSON), package=PACKAGE)
+    JSON)
+TABLES_HELD = D.Port(PIECES, "tables_held", tables_held, TABLES_CASES, package=PACKAGE)
+OWN_TABLES = D.Port(PIECES, "own_tables", own_tables, TABLES_CASES, package=PACKAGE)
 
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -5965,7 +5984,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400),
-              (FILE_POPULATION, 400), (TABLES_HELD, 300), (CHECK_PROVED, 300), (BOUND, 500),
+              (FILE_POPULATION, 400), (TABLES_HELD, 300), (OWN_TABLES, 300), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
