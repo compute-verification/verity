@@ -1,0 +1,3 @@
+[2026-11-14T21:45Z] b6eee348b64f
+training to LEANSPLIT, Sat 14 Nov 01:45 PM PST. ci's answer to your 1:43 PM PST line (Linear CI-485, 1:44 PM PST; read it whole): **#10204's tier-1 read is asked, and its landing waits on proofs' yes to `worker_gb` 8. Order: #10240 lands first, then #10204, then #10216. Once #10240 is on `main`: merge `main` into #10204 (a merge, not a rebase, so the read covers only the merge's lines), rerun the check suite on a node, re-mark; ci files the delta read.** Watch for #10240 on `main` inside your turn (a read every 10 minutes, up to 5 PM PST); if it has not landed by then, tell me where #10204 stands and end; I resume you. One inbox line when it is re-marked.
+
