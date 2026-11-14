@@ -1,4 +1,4 @@
-"""The integration's internal import graph and the layer map, for the P2/P4/P5/P9 lints; and which modules of ``verity``
+"""The integration's internal import graph and the layer map, for the P2/P4/P9 lints; and which modules of ``verity``
 are core (``core``, ``core_less_definitions``), for P1, ``conftest.py``'s guard and the boundary tests of ``tests/program``.
 
 An edge is one import statement in a library module that names another library module (``verity_vllm``'s, the
@@ -7,15 +7,14 @@ function-level (lazy) imports alike, plus ``importlib.import_module`` with a lit
 resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 
 ``LAYER`` places every module in the layer of its top-level package (longest prefix wins).  The order, top to bottom,
-is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
+is ``pipeline``, ``check``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
 sits in ``pipeline``.  ``OPTIONAL`` names the packages a
 tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``settings``,
 the environment's registry, and ``log``, the logger, import nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
-(``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
-restricts a peer edge.
+(``observe|commit``, ``query|correspondence``) may import each other; no rule restricts a peer edge.
 """
 from __future__ import annotations
 
@@ -26,15 +25,14 @@ from typing import TypeGuard
 
 from . import _ratchet as R
 
-LAYERS = ("tests", "pipeline", "check|properties", "acquire", "observe|commit", "engine", "query|correspondence",
+LAYERS = ("tests", "pipeline", "check", "acquire", "observe|commit", "engine", "query|correspondence",
           "program", "collectives", "config", "core")
 RANK = {name: len(LAYERS) - i for i, name in enumerate(LAYERS)}
 
 LAYER = {
     "verity_vllm": "pipeline",
     "verity_vllm.pipeline": "pipeline",
-    "verity_vllm.check": "check|properties",
-    "verity_vllm.properties": "check|properties",
+    "verity_vllm.check": "check",
     "verity_vllm.acquire": "acquire",
     "verity_vllm.protocols": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
     "verity_vllm.observe": "observe|commit",
@@ -67,9 +65,6 @@ OPTIONAL = ("verity_vllm.protocols.remote_bandwidth", "verity_vllm.commitments")
 
 #: the packages whose modules are graph nodes
 LIBRARY_PACKAGES = ("verity_vllm",)
-
-#: The property harnesses.
-PROPERTY_MODULES = ("verity_vllm.properties",)
 
 #: The replay drivers (check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
