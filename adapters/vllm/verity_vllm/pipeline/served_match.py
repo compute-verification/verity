@@ -380,7 +380,10 @@ def main(a: Options) -> int:
     from verity_vllm.engine.arrivals import run_requests_arrivals
 
     t0 = time.perf_counter()
-    log = lambda s: print(f"[served-match {time.perf_counter() - t0:7.1f}s] {s}", flush=True)
+
+    def log(s: str) -> None:
+        print(f"[served-match {time.perf_counter() - t0:7.1f}s] {s}", flush=True)
+
     wl = read_json(a.workload)
     schedule, steps = schedule_of(wl)
     reqs = [SimpleNamespace(request_id=s["request_id"], prompt_token_ids=[int(t) for t in r["prompt_token_ids"]],
