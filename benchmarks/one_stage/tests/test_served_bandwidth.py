@@ -1,5 +1,5 @@
 """The bandwidth audit's piece (`served_bandwidth.sh`, BANDWIDTH_CMD) as `served_verdicts.py pieces` runs it, on the toy's
-P2 store on the CPU (P2's reference decode) against `p2_party --listen` on loopback in the auditor gate's party shape:
+P2 store on the CPU (P2's reference decode) against `p2_parties --listen` on loopback in the auditor gate's party shape:
 the honest session's answer is a core accept that `piece_row` reads, with its credited reads, eps, δ and γ, and the
 scope beside the served window; a prover that serves later passes from its cache of the first's, reading nothing of
 the store, is rejected (`receipt`); and a session that left no record, asked about a window that wasn't served, is a
@@ -27,7 +27,7 @@ import served_verdicts as S  # noqa: E402
 from p2_v1 import bandwidth as B  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
-from verity.protocols.accounting.poub.verifier import ledger, p2, p2_party  # noqa: E402
+from verity.protocols.accounting.poub.verifier import ledger, p2, p2_parties  # noqa: E402
 
 CMD = 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 
@@ -41,16 +41,31 @@ def _serve_dir(path: Path) -> Path:
     return path
 
 
+#: a stand-in for `remote-audit-p2-protocol serve`, so the toy builds no Lean: one undecided answer per case
+CASE_EXE = f"""#!{sys.executable}
+import json, sys
+from verity.protocols.accounting.poub.verifier import p2_case
+assert sys.argv[1:] == ["serve"]
+for line in sys.stdin:
+    print(json.dumps({{"commitment": p2_case.digest(json.loads(line)).hex(), "reason": "stand-in",
+                      "verdict": "undecided"}}))
+"""
+
+
 def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
     toy = tmp / "toy"
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_party "
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_parties "
              f"--device {tmp / 'party'} --listen 127.0.0.1:0 --registration {toy / 'registration.json'} "
              "--windows 1 --passes 2 --samples 64 --window-ns 1000000 --deadline-ns 1000000")
+    exe = tmp / "remote-audit-p2-protocol"
+    exe.write_text(CASE_EXE)
+    exe.chmod(0o755)
     return dict(os.environ) | {"BANDWIDTH_CMD": CMD, "PY": sys.executable, "BW_STORE": str(toy / "store"),
             "BW_LAYOUT": str(toy / "layout.json"), "BW_REGISTRATION": str(toy / "registration.json"),
             "BW_NODE": "p2-toy-node", "BW_DEVICE": "cpu", "BW_REF_DECODE": "1", "BW_LEASE_MIN": "0", "BW_WORKERS": "1",
             "BW_WINDOWS": "1", "BW_PASSES": "2", "BW_SAMPLES": "64", "BW_WINDOW_S": "0.001", "BW_DEADLINE_S": "0.001",
-            "BW_PARTY": party, "BW_PARTY_HOST": "127.0.0.1", "BW_R_BYTES_PER_S": "1000000000", "BW_CHEAT": cheat}
+            "BW_PARTY": party, "BW_PARTY_HOST": "127.0.0.1", "BW_R_BYTES_PER_S": "1000000000", "BW_CHEAT": cheat,
+            "BW_CASE_EXE": str(exe)}
 
 
 def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_path, monkeypatch) -> None:
@@ -74,9 +89,12 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
     served = json.loads((tmp_path / "honest" / "bandwidth" / "served.json").read_text())
     assert served["served"] == {"window": 0, "serve_dir": str(serve), "steps": [0, 3], "requests": 1}
     kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
-    assert p2_party.core_answer(kept[-1], 10**9)["public"] == {k: q[k] for k in ("eps", "gamma", "q_bytes",
+    assert p2_parties.core_answer(kept[-1], 10**9)["public"] == {k: q[k] for k in ("eps", "gamma", "q_bytes",
                                                                                   "r_bytes_per_s", "span_ns")}
     assert not (tmp_path / "honest" / "bandwidth" / "scratch").exists()
+    assert not (tmp_path / "honest" / "bandwidth" / "lake-build.log").exists()
+    case = json.loads((serve / "private" / "bandwidth" / "answer.json").read_text())
+    assert (case["verdict"], case["reason"]) == ("undecided", "stand-in")
 
     got = S.pieces(serve, 0, tmp_path / "cheat", env=_env(tmp_path, "cache"))
     row = S.piece_row("bandwidth", tmp_path / "cheat")
@@ -86,7 +104,7 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
 
 
 COLLECT = 'python benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'
-HELD = {"commitment": "ab" * 64, "protocol": p2_party.PROTOCOL, "reason": None, "verdict": "accept",
+HELD = {"commitment": "ab" * 64, "protocol": p2_parties.PROTOCOL, "reason": None, "verdict": "accept",
         "public": {"eps": "1/1099511627776", "gamma": "1/2", "q_bytes": 8224, "r_bytes_per_s": 1000, "span_ns": 16448},
         "profile": {"delta": "1/1099511627776", "draws": [0], "receipts": 1, "wrong": 0, "units": 1,
                     "scope": "beside the served window"}}
@@ -133,7 +151,7 @@ def test_collect_replaces_another_windows_answer_and_errs_on_another_protocols(t
     assert a["verdict"] == "undecided" and "is window 2's, not window 3's" in a["reason"] and S.check_answer(a)
     out = _held(tmp_path, 3, HELD | {"protocol": "verity/pous/p2/v4/run"})
     assert SB.main(["collect", "--serve-dir", str(tmp_path), "--window", "3", "--out", str(out)]) == 1
-    assert "not the remote bandwidth audit's" in capsys.readouterr().out.splitlines()[-1]
+    assert "not PoUB's" in capsys.readouterr().out.splitlines()[-1]
 
 
 def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_served(tmp_path, monkeypatch) -> None:
@@ -149,10 +167,10 @@ def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_serve
 
 def test_the_served_pieces_request_is_the_auditors_session() -> None:
     """`served_bandwidth.sh` requests, by default, the session the auditor's party holds every session to
-    (`p2_party.SESSION`, the held session's in the PoUS piece), as `bandwidth.py session` turns its flags into the
+    (`p2_parties.SESSION`, the held session's in the PoUS piece), as `bandwidth.py session` turns its flags into the
     request: one off it is refused before any coin."""
     text = (ROOT / "benchmarks" / "one_stage" / "served_bandwidth.sh").read_text()
     got = dict(re.findall(r"\$\{BW_(WINDOWS|PASSES|SAMPLES|WINDOW_S|DEADLINE_S):-([0-9.]+)\}", text))
     assert {"windows": int(got["WINDOWS"]), "passes": int(got["PASSES"]), "samples": int(got["SAMPLES"]),
             "window_ns": int(float(got["WINDOW_S"]) * 1e9),
-            "deadline_ns": int(float(got["DEADLINE_S"]) * 1e9)} == p2_party.SESSION
+            "deadline_ns": int(float(got["DEADLINE_S"]) * 1e9)} == p2_parties.SESSION

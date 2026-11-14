@@ -48,7 +48,7 @@ HOURS, OVER_MIN = 24.0, 15.0
 LOOKBACK_H = 12.0
 #: run records read at once
 READ_JOBS = 32
-CHECK = "tools/verity/check/check.py"
+CHECK = "tools/check/check.py"
 RECORDS = re.compile(r"lean_changed\.py --records (\S+)")
 SUITES_STEP = "lean-suites"
 STEPS = (LEAN_AUDIT_STEP, SUITES_STEP, "lean-build")

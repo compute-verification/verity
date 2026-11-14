@@ -476,16 +476,185 @@ def test_tops_daily_line_names_the_teams_the_audit_cant_read(tmp_path):
     assert to == "top" and body.endswith("; no line 24 h earlier yet; not audited, the app can't read team(s) HASH, TRN")
 
 
-def test_the_sweep_saves_the_goals_page_each_hour_and_drops_the_dumps_past_their_keep(tmp_path):
-    dump = [{"id": "top/velocity-loop", "status": "on-track", "due": "2026-10-23", "title": "Vélocité"}]
-    out = tmp_path / T.GOALS_DIR
-    T.save_goals(at(1, 9, 0), lambda: dump, out)
-    T.save_goals(at(19, 20, 0), lambda: dump, out)
-    T.save_goals(at(19, 21, 2), lambda: dump[:0], out)                      # the first dump is past KEEP_S now, and goes
-    assert sorted(p.name for p in out.iterdir()) == ["goals-20261019T2000Z.json.gz", "goals-20261019T2102Z.json.gz"]
-    assert T.json.loads(gzip.decompress((out / "goals-20261019T2000Z.json.gz").read_bytes())) == dump
-    T.save_goals(at(19, 22, 0), lambda: dump, None)                          # a dry run reads the page and saves nothing
-    assert len(list(out.iterdir())) == 2
+DUMP = [{"id": "top/velocity-loop", "status": "on-track", "due": "2026-10-23", "title": "Vélocité"}]
+
+
+class Store:
+    """`velocity.save`'s stand-in: each save of a copy, and the copies it reports preserved (the others put here and not
+    pushed, as with the store's remote down)."""
+
+    def __init__(self, up=True, clock=None):
+        self.up, self.saves, self.stores, self.clock = up, [], [], clock
+
+    def __call__(self, goals, taken, store):
+        self.saves.append(f"{taken:%Y%m%dT%H%MZ}")
+        self.stores.append(store.root)
+        if self.clock:
+            self.clock.t += 200
+        up = self.up if isinstance(self.up, bool) else self.up(self.saves[-1])
+        return f"art:{len(self.saves):064x}", "" if up else "OSError: the store is down"
+
+
+def names(out):
+    return sorted(p.name for p in out.iterdir() if p.name != T.GOALS_LOCK)
+
+
+def arts(state):
+    return {n: r["art"] for n, r in state["goals_preserved"].items()}
+
+
+def test_the_sweep_saves_the_goals_page_each_hour_and_puts_each_copy_in_the_store(tmp_path):
+    out, state, store = tmp_path / T.GOALS_DIR, {}, Store()
+    T.save_goals(at(19, 20, 0), lambda: DUMP, out, state, store)
+    T.save_goals(at(19, 21, 2), lambda: DUMP[:0], out, state, store)
+    assert names(out) == ["goals-20261019T2000Z.json.gz", "goals-20261019T2102Z.json.gz"]
+    assert T.json.loads(gzip.decompress((out / "goals-20261019T2000Z.json.gz").read_bytes())) == DUMP
+    assert store.saves == ["20261019T2000Z", "20261019T2102Z"]
+    assert arts(state) == {"goals-20261019T2000Z.json.gz": f"art:{1:064x}", "goals-20261019T2102Z.json.gz": f"art:{2:064x}"}
+    assert state["goals_preserved"]["goals-20261019T2000Z.json.gz"]["sha256"] == T.digest(out / "goals-20261019T2000Z.json.gz")
+    assert not any(root.exists() for root in store.stores)                # each save's scratch store is gone once it returns
+    T.save_goals(at(19, 22, 0), lambda: DUMP, None, state, store)          # a dry run reads the page and saves nothing
+    assert len(names(out)) == 2 and len(store.saves) == 2
+
+
+def test_a_copy_past_its_keep_is_deleted_only_once_the_store_reported_it_preserved(tmp_path, capsys):
+    out, state = tmp_path / T.GOALS_DIR, {}
+    T.save_goals(at(1, 9, 0), lambda: DUMP, out, state, Store())
+    T.save_goals(at(1, 10, 0), lambda: DUMP, out, state, Store(up=False))
+    T.save_goals(at(19, 20, 0), lambda: DUMP, out, state, Store(up=False))   # both are past KEEP_S: only the preserved one goes
+    assert names(out) == ["goals-20261001T1000Z.json.gz", "goals-20261019T2000Z.json.gz"]
+    assert list(state["goals_preserved"]) == []
+    assert "goals: goals-20261019T2000Z.json.gz is not preserved in the store (OSError: the store is down); the next pass puts it again" \
+        in capsys.readouterr().out
+    T.save_goals(at(19, 21, 0), lambda: DUMP, out, state, Store())            # the store is back: each is put, and the old one goes
+    assert names(out) == ["goals-20261019T2000Z.json.gz", "goals-20261019T2100Z.json.gz"]
+    assert sorted(state["goals_preserved"]) == names(out)
+
+
+def test_a_failed_save_is_logged_tried_at_the_next_pass_and_stops_none_of_the_rest(tmp_path, capsys):
+    out, state = tmp_path / T.GOALS_DIR, {}
+    T.save_goals(at(1, 9, 0), lambda: DUMP, out, state, Store())
+    (out / "goals-20261002T0900Z.json.gz").write_bytes(gzip.compress(b"[{cut short"))     # a copy that can't be read
+    store = Store(up=lambda stamp: stamp != "20261019T2000Z")
+    T.save_goals(at(19, 20, 0), lambda: DUMP, out, state, store)
+    assert store.saves == ["20261019T2000Z"]                                   # the unreadable copy never reaches the store
+    assert names(out) == ["goals-20261002T0900Z.json.gz", "goals-20261019T2000Z.json.gz"]     # and the preserved old one still went
+    log = capsys.readouterr().out
+    assert "goals: goals-20261019T2000Z.json.gz is not preserved in the store (OSError: the store is down)" in log
+    assert "goals: goals-20261002T0900Z.json.gz is not preserved in the store (JSONDecodeError: " in log
+    assert "goals: 2 of the 3 copies here are not preserved in the store yet" in log
+    store = Store()
+    T.save_goals(at(19, 21, 0), lambda: DUMP, out, state, store)
+    assert store.saves == ["20261019T2100Z", "20261019T2000Z"]
+    assert sorted(state["goals_preserved"]) == ["goals-20261019T2000Z.json.gz", "goals-20261019T2100Z.json.gz"]
+
+
+def test_each_pass_puts_the_copies_the_store_lacks_oldest_first_and_at_most_save_max(tmp_path):
+    out, state, store = tmp_path / T.GOALS_DIR, {}, Store(up=False)
+    for hour in range(T.SAVE_MAX + 6):
+        T.save_goals(at(18, 0) + 3600 * hour, lambda: DUMP, out, state, store)
+    assert len(names(out)) == T.SAVE_MAX + 6 and state["goals_preserved"] == {}
+    store = Store()
+    T.save_goals(at(19, 20, 0), lambda: DUMP, out, state, store)
+    hours = [f"20261018T{h:02d}00Z" for h in range(24)] + [f"20261019T{h:02d}00Z" for h in range(6)]
+    assert store.saves == ["20261019T2000Z", *hours[:T.SAVE_MAX]]
+    T.save_goals(at(19, 21, 0), lambda: DUMP, out, state, store)
+    assert store.saves[T.SAVE_MAX + 1:] == ["20261019T2100Z", *hours[T.SAVE_MAX:]]
+    assert sorted(state["goals_preserved"]) == names(out)
+
+
+def test_a_copy_rewritten_within_its_minute_stays_until_its_own_bytes_are_preserved(tmp_path, capsys):
+    out, state = tmp_path / T.GOALS_DIR, {}
+    T.save_goals(at(1, 9, 0), lambda: DUMP, out, state, Store())
+    T.save_goals(at(1, 9, 0) + 30, lambda: DUMP[:0], out, state, Store(up=False))   # a second read that minute, the store down
+    assert arts(state) == {}
+    T.save_goals(at(19, 20, 0), lambda: DUMP, out, state, Store(up=False))
+    assert "goals-20261001T0900Z.json.gz" in names(out)
+    store = Store()
+    T.save_goals(at(19, 21, 0), lambda: DUMP, out, state, store)               # its own bytes preserved: now it goes
+    assert "20261001T0900Z" in store.saves and "goals-20261001T0900Z.json.gz" not in names(out)
+
+
+def test_a_copy_whose_file_is_not_the_one_preserved_is_not_deleted_and_is_put_again(tmp_path, capsys):
+    out, state = tmp_path / T.GOALS_DIR, {}
+    T.save_goals(at(1, 9, 0), lambda: DUMP, out, state, Store())
+    (out / "goals-20261001T0900Z.json.gz").write_bytes(gzip.compress(b"[]", mtime=0))
+    T.save_goals(at(19, 20, 0), lambda: DUMP, out, state, Store(up=False))
+    assert "goals-20261001T0900Z.json.gz" in names(out) and "goals-20261001T0900Z.json.gz" not in arts(state)
+    assert "goals: goals-20261001T0900Z.json.gz is not the file the store reported preserved; the next pass puts it again" \
+        in capsys.readouterr().out
+
+
+def test_a_pass_that_finds_another_holding_the_lock_saves_and_deletes_nothing(tmp_path, capsys):
+    import fcntl
+
+    out, state = tmp_path / T.GOALS_DIR, {}
+    T.save_goals(at(1, 9, 0), lambda: DUMP, out, state, Store())
+    store = Store()
+    with open(out / T.GOALS_LOCK, "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        T.save_goals(at(19, 20, 0), lambda: DUMP, out, state, store)
+    assert store.saves == [] and names(out) == ["goals-20261001T0900Z.json.gz"]
+    assert f"goals: another pass holds {out / T.GOALS_LOCK}, so this one saves nothing" in capsys.readouterr().out
+
+
+class Clock:
+    t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def test_a_pass_starts_no_save_of_an_earlier_copy_once_its_saves_have_taken_save_s(tmp_path, capsys):
+    out, state = tmp_path / T.GOALS_DIR, {}
+    for hour in range(4):
+        T.save_goals(at(18, 0) + 3600 * hour, lambda: DUMP, out, state, Store(up=False))
+    clock = Clock()
+    store = Store(clock=clock)                                                  # each save takes 200 s
+    T.save_goals(at(19, 20, 0), lambda: DUMP, out, state, store, clock=clock)
+    assert store.saves == ["20261019T2000Z", "20261018T0000Z"] and T.SAVE_S == 300
+    assert "goals: 300 s of saves this pass; 3 copies wait for the next" in capsys.readouterr().out
+
+
+def test_a_pass_writes_its_state_with_what_it_rang_before_the_goals_saves_start():
+    state, written = {}, []
+    seen = []
+    T.sweep_pass(state, None, {"goals": lambda: seen.append(list(written)),
+                               "traffic": lambda: state.setdefault("rung", {}).update({"ask:1": NOW})},
+                 lambda: written.append(json.dumps(state)))
+    assert seen == [[json.dumps({"rung": {"ask:1": NOW}})]]
+
+
+def test_the_sweep_loads_and_its_other_checks_run_when_research_velocity_cant_be_imported(tmp_path, monkeypatch, capsys):
+    import research
+
+    monkeypatch.delattr(research, "velocity", raising=False)
+    monkeypatch.setitem(sys.modules, "research.velocity", None)
+    spec = importlib.util.spec_from_file_location("top_watch_without_velocity", CONTROL / "top_watch.py")
+    tw = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tw)
+    ran = []
+    tw.sweep_pass({}, None, {"traffic": lambda: ran.append("traffic"),
+                             "goals": lambda: tw.save_goals(NOW, lambda: DUMP, tmp_path / "goals", {})})
+    assert ran == ["traffic"]
+    log = capsys.readouterr().out
+    assert "is not preserved in the store (ModuleNotFoundError: import of research.velocity halted" in log
+    assert "goals: 1 of the 1 copies here are not preserved in the store yet" in log
+
+
+def test_the_sweeps_save_of_a_copy_and_research_velocitys_are_one_artifact(tmp_path, monkeypatch):
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "bucket"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    from research import velocity
+    from research.store.local import LocalStore
+
+    out, state = tmp_path / T.GOALS_DIR, {}
+    T.save_goals(at(19, 20, 0), lambda: DUMP, out, state)                    # the sweep, with `velocity.save`
+    assert LocalStore().index.select_artifacts(kind=velocity.KIND) == []     # and no store of the pod's keeps the copy
+    art, why = velocity.save(DUMP, velocity.when("20261019T2000Z"))          # a person's `research velocity` of that copy
+    assert why == "" and arts(state) == {"goals-20261019T2000Z.json.gz": art}
+    assert len(list((tmp_path / "bucket" / "manifests").iterdir())) == 1
 
 
 def test_the_goals_page_is_read_with_the_pods_site_key_and_its_absence_says_where_it_goes(tmp_path, monkeypatch):

@@ -8,8 +8,8 @@ comparison to each verdict, which decides nothing.
 
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
-      --lean flock-verify --out DIR [--jobs 1] [--gpu] [--debug-clear] [--dry]
-    python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
+      --lean verity-verify-proof --out DIR [--jobs 1] [--gpu] [--debug-clear] [--dry]
+    python benchmarks/network_traces/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--draw K]
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
@@ -345,7 +345,7 @@ def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest"
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))
-    import a0
+    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
     import a8
     import numpy as np
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -436,7 +436,7 @@ def zk_server_env(M, sg: SimpleNamespace) -> dict:
     """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``) on the
     statement's partition and Program."""
     if not os.environ.get("FC_FIREWALL_LEAN"):
-        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (flock-verify's flock-firewall)")
+        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (verity-verify-proof's flock-firewall)")
     return {"FC_FIREWALL": "1", **M.a0.firewall_env({"partition_file": sg.partition_file,
                                                      "program_file": sg.program_file})}
 

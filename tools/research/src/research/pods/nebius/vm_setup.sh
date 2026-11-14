@@ -143,7 +143,7 @@ apt-get install -y -q git rsync fio jq python3-venv python3-numpy python3.12-dev
 # trusts a distrusted root.
 apt-get install -y -q --only-upgrade ca-certificates 'libnss3*'
 systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
-UV_VERSION=0.12.20        # tools/verity/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
+UV_VERSION=0.12.20        # tools/check/pod_setup.sh's pin, the only uv check's preflight accepts (tests/test_uv_pin.py)
 [ "$(uv --version 2> /dev/null | cut -d' ' -f2)" = "$UV_VERSION" ] \
   || curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh
 if [ ! -x /usr/local/bin/nebius ]; then
@@ -226,8 +226,9 @@ AccuracySec=5s
 WantedBy=timers.target
 EOF
 
-# Fixed clocks node-wide at every boot, so timings repeat: 2,100 MHz graphics held under full bf16 load at ~555 W, where unlocked
-# GPUs ride the 600 W power limit and drift (2,190 -> 2,167 MHz); the RTX PRO 6000 has one memory clock.  Only root can change them.
+# Fixed clocks node-wide at every boot, so timings repeat: the graphics lock below holds under full bf16 load beneath the board's
+# power limit, where unlocked GPUs ride the power limit and drift; the RTX PRO 6000 has one memory clock (its card's
+# clock.memory).  Only root can change them.
 cat > /etc/systemd/system/vy-clocks.service <<EOF
 [Unit]
 Description=lock every GPU's clocks (graphics ${VY_GPU_CLOCK_MHZ:-2100} MHz, memory ${VY_MEM_CLOCK_MHZ:-12481} MHz)

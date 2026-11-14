@@ -66,7 +66,7 @@ from typing import BinaryIO
 
 import numpy as np
 
-from verity.commitments.windows.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
+from verity.commitments.periods.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
 
@@ -636,7 +636,7 @@ def block_log(rows: list[Port], unit_log: int, unit_packed: bool, stage_logs: li
 
 
 def _unit_ports(definition, cuts: dict | None = None) -> tuple[list[Port], list[Port]]:
-    """``definition``'s rows as `UnitStager` takes them (`verity.commitments.windows.interface.unit_rows`), ``(ins, outs)``: a bit row
+    """``definition``'s rows as `UnitStager` takes them (`verity.commitments.periods.interface.unit_rows`), ``(ins, outs)``: a bit row
     per parameter, or ``k`` of a parameter ``cuts`` cuts ``k`` ways, and one per return field, each whole u16 words."""
     from verity.circuits.evaluation.reference import resolve
 
@@ -1120,7 +1120,7 @@ def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | Non
         raise ValueError("META: shared_reads without public_inputs (a shared read's position is a public input)")
     rs = meta["shared_reads"]
     if not isinstance(rs, list):
-        raise ValueError("META shared_reads: not a list")  # noqa: TRY004 (one refusal type, the verifier's text)
+        raise ValueError("META shared_reads: not a list")  # one refusal type, the verifier's text
     if not rs:
         raise ValueError("META: shared_reads names no port")
     if counts is None or refs is None:
@@ -1130,7 +1130,7 @@ def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | Non
     seen = set()
     for r in rs:
         if not isinstance(r, dict):
-            raise ValueError("META: a shared read is not an object")  # noqa: TRY004
+            raise ValueError("META: a shared read is not an object")
         port, pos, g = r.get("port"), r.get("position"), r.get("group")
         if (sorted(r) != ["group", "port", "position"] or not isinstance(port, str) or not port or not isinstance(pos, str)
                 or not pos or type(g) is not int or g <= 0):

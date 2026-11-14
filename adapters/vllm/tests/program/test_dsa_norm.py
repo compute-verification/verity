@@ -15,14 +15,14 @@ import pytest
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions import boolean as SW
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics import dsa_norm_rows as NR
-from verity.definitions.numerics import rows as RK
-from verity.definitions.registry import boolean_dsa_norm as BN
-from verity.definitions.registry import boolean_rope as BR
-from verity.definitions.registry import dsa_norm as DN
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import dsa_norm_rows as NR
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.registry import boolean_dsa_norm as BN
+from verity_vllm.definitions.registry import boolean_rope as BR
+from verity_vllm.definitions.registry import dsa_norm as DN
+from verity_vllm.definitions.registry import prims as P
 
 from tests.program.test_dsa import _butterfly, _fadd
 from tests.program.test_fp8_moe import _bf16, _ffma, _fmul
@@ -141,8 +141,8 @@ def test_its_scale_is_not_the_batch_invariant_triton_familys(N: int) -> None:
     other = DR.rmsnorm_triton_rows(x, w, EPS)
     differ = ours["r"] != other["inv"]
     assert differ.sum() >= 16, int(differ.sum())
-    gap = np.abs(ours["r"][differ].astype(np.int64) - other["inv"][differ].astype(np.int64))
-    assert gap.max() <= 4 and (ours["out"] != other["out"]).mean() < 1e-3
+    ulps = np.abs(ours["r"][differ].astype(np.int64) - other["inv"][differ].astype(np.int64))
+    assert ulps.max() <= 4 and (ours["out"] != other["out"]).mean() < 1e-3
 
 
 def test_registrations() -> None:

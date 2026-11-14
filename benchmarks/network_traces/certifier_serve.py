@@ -238,7 +238,7 @@ from verity.protocols.accounting.certifier.verifier.lean_audit import DISAGREEME
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, expected_grids, handing_buckets
 from verity.protocols.accounting.certifier.verifier.served import Admission, ServedProfile
 from verity.protocols.accounting.certifier.verifier.service import LinkWindows
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 HERE = Path(__file__).resolve().parent
@@ -1711,7 +1711,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--compact", type=int, metavar="B",
                        help="varied: compact egress records (`active.compact_record`) in cells of B >= 8 bytes, "
                             "the shim writing each token's record (default: id events in 4096-byte frames); the "
-                            "gate's certifier-rehearse --traffic varied --compact B runs it on the auditor's host")
+                            "gate's certifier-rehearse --traffic varied --compact B runs it on the auditor's device")
         q.add_argument("--margin", type=float, default=2.0,
                        help="varied: the plan's margin over the probed rates and latencies (an endpoint that slows "
                             "under load the probes didn't meet needs more)")

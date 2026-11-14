@@ -1,5 +1,5 @@
 """The streamed wipe's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the
-challenger host, `trusted-host`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
+challenger host, `trusted-device`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
 
 The challenger listens and the prover connects. The challenger streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
 labels` and ends it with `D`, which the prover acknowledges with `A` once it holds the fill, so that no read's time
@@ -19,10 +19,11 @@ interval a network certifier counts the session's egress over.
 [--streamer build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"labels", "limit_ns",
 "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
-report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `side_of(period, node, device)` is
-where `period.json` puts that side (`stream.Side`), and `session(side, request, prover)` is the prover's: it starts the
-side, connects to it, answers from `prover` (`answer`) and adds the connection's two addresses as it saw them. The
-wipe's two parties as the deployment layer runs them are `wipe_parties`.
+report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `command(device, extra)` is the argv
+that starts that side on this machine, `Side` the side as what starts a run hands it over, wherever `period.json` puts
+it, and `session(side, request, prover)` is the prover's: one session with the side, answered from `prover` (`answer`),
+with the connection's two addresses as it saw them. The wipe's two parties as the deployment layer runs them speak
+`wipe_parties`'s messages: `pous/device/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
 """
 
 from __future__ import annotations
@@ -35,11 +36,10 @@ import secrets
 import socket
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Protocol, TypeVar
 
-from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
 from . import period, wipe_stream
@@ -47,13 +47,9 @@ from . import streamed_wipe as sw
 
 MODULE = "verity.protocols.accounting.pous.verifier.wipe_party"
 logger = logging.getLogger(__name__)
-PREMISE = "trusted-host"
-AUDITOR_KEYS = {"vy-auditor-2": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
-                                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
-"""Each auditor host's wipe party's public key, by its SHA-512 in 128 lowercase hex digits: the one key under which
-`placement` says `trusted-host` holds for a challenger on that host. A run's own pin (`--trusted-sha512`) decides only
-which session the verifier accepts, never this."""
-REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
+PREMISE = mc.PREMISE
+PARTY = "memory-challenger"
+"""The configuration's party whose `[[pin]]` entries for the wipe name the keys `placement` reads."""
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
@@ -182,17 +178,23 @@ def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
                          bytes.fromhex(j["signature"]))
 
 
+T = TypeVar("T")
+
+
+class Side(Protocol):
+    """The wipe challenger's side as what starts a run hands it over (the runtime's `Side` is one): the machine it runs
+    on, and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the side's
+    report back with what `drive` returned."""
+
+    host: str
+
+    def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
+
+
 def command(device: str | Path, extra: Sequence[str] = ()) -> tuple[str, ...]:
     """The argv that starts the challenger's side as a process on this machine, its key and session log in `device`,
     `extra` more of `main`'s arguments (`--streamer build`)."""
     return (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0", *extra)
-
-
-def side_of(period: Mapping[str, Any], node: str, device: str | Path, extra: Sequence[str] = ()) -> Side:
-    """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-    node (with `extra`), else `challenger.wipe`'s `command` and `address`, which infra writes once the host serves the
-    challenger's side."""
-    return Side.of(period, node, "wipe", command(device, extra), "the wipe")
 
 
 def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
@@ -203,17 +205,20 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
 
 
-def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None,
-              store: Mapping[str, Any] | None = None, simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
+def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Mapping[str, str]] = (),
+              configuration: str | None = None, committed: Collection[str] = frozenset(), verifier: str | None = None,
+              store_gaps: Sequence[str] = (), simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control. It holds (`holds: …`) only when `key_sha512`, the SHA-512 of the key the
-    session was signed under, is `AUDITOR_KEYS`' pin for `host`; under any other key, a run's own pin included, it reads
-    `REHEARSAL`, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
+    """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory challenger ran on a
+    machine the developer doesn't control (`memory_challenger.trusted_device`). It holds (`holds: …`) only under a
+    configuration whose hash `configuration` is one of `committed`, when `key_sha512`, the SHA-512 of the key the
+    session was signed under, is a key that configuration's `pins` (its `[[pin]]` entries) give `PARTY` for the wipe;
+    under any other configuration or key, a run's own pin included, it reads rehearsal, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
     `simulated` (the challenger a process of its own on the developer's node, standing in for its own host) or
-    `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
-    `links` are the links leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's
-    declared tiers (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
+    `prover-node`. `store_gaps` is what the memory the prover kept the fill in leaves outside the bound
+    (`wipe_period.store_gaps`), by tier and never by device: the placement names no device. `links` are the links
+    leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's declared tiers
+    (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
     if simulated and host != node:
         raise ValueError(f"a simulated placement runs the memory challenger on the developer's node {node}, not on {host}")
     kind = "own-host" if host != node else "simulated" if simulated else "prover-node"
@@ -221,16 +226,16 @@ def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | N
              "simulated": f"the memory challenger ran as a process of its own on the developer's node {node}, standing "
                           "in for a host the developer doesn't control",
              "prover-node": f"the memory challenger ran on the developer's node {node}"}[kind]
-    premise = (f"holds: the session is signed under {host}'s pinned key; {names}"
-               if key_sha512 is not None and AUDITOR_KEYS.get(host) == key_sha512 else f"{REHEARSAL}; {names}")
-    out = {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-           PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
-    return out if store is None else out | {"prover_store": dict(store)}
+    premise = mc.trusted_device(pins, PARTY, "wipe", key_sha512, names, configuration=configuration,
+                                committed=committed)
+    return {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
+            PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared],
+            "store_gaps": list(store_gaps)}
 
 
 def holds(where: Mapping[str, Any]) -> bool:
-    """Whether a placement's `trusted-host` holds: the session signed under the challenger host's pinned key."""
-    return where[PREMISE].startswith("holds: ")
+    """Whether a placement's `trusted-device` holds: the session signed under a key the committed configuration pins."""
+    return mc.holds(where)
 
 
 def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
@@ -298,7 +303,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 __all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "answer", "command", "commitment_of", "link",
-           "main", "params_of", "placement", "report", "request_of", "serve", "session", "side_of", "signed_of", "utc"]
+           "main", "params_of", "placement", "report", "request_of", "serve", "session", "signed_of", "utc"]
 
 if __name__ == "__main__":
     sys.exit(main())

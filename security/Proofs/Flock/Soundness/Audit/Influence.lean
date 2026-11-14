@@ -9,7 +9,7 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Data.Fintype.BigOperators
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -27,7 +27,7 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
 * `separates_exits`: the committed wires of the units of `B` separate `B`. For a replay unit, those are its exports.
   `Separates.mono` and `Separates.union` build separators for larger sets from smaller ones.
 * `influenceSet D e a δ`: what the transcripts with the anchors' inputs deliver on `D` when their wrong units form a set
-  whose escape `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the law and `δ`, never by
+  whose escape `e B` is at least `δ`. It is fixed by the circuit, the partition, the anchors, the samplingDesign and `δ`, never by
   the prover, and `card_influenceSet_le` bounds its size by `∑_{B : δ ≤ e B} 2^|K B|`.
 * `audit_influence`: the audit accepts while the delivered values lie outside the influence set with probability at most
   `δ + ε_ks + δ_link + δ_in`. The influence in bits is `log₂ |influenceSet|`.
@@ -237,7 +237,7 @@ theorem card_exits_le (B : Finset (Fin n)) : (P.exits B).card ≤ ∑ u ∈ B, (
 
 section Harm
 
-variable {L : Law n} {a : Fin C.N → Bool} {D : Finset (Fin C.N)}
+variable {L : SamplingDesign n} {a : Fin C.N → Bool} {D : Finset (Fin C.N)}
 
 /-- **Influence from a harm bound**: when every set's separator is no wider than the harm `hb` of its units and `H` is a
 harm bound at `δ`, `|influenceSet| ≤ 2^H · #{B : δ ≤ escape B}`. -/
@@ -273,7 +273,7 @@ end Harm
 
 section OneStage
 
-variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
+variable {L : SamplingDesign n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
   {X : (R : Reg) → Cont L Reg session R → (Fin C.N → Bool)}
   {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
   {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)}

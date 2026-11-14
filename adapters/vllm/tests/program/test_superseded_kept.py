@@ -6,14 +6,14 @@ from __future__ import annotations
 import hashlib
 
 import pytest
-
 from verity.circuits.codec import canonical_json, definition_entry, program_digest
 from verity.circuits.defs import bind
 from verity.circuits.program import Program
-from verity.definitions.registry import b1, prims as P, serve3
-from verity.definitions.registry import boolean_silu as BS
+from verity_vllm.definitions.registry import b1, serve3
+from verity_vllm.definitions.registry import boolean_silu as BS
+from verity_vllm.definitions.registry import prims as P
 
-TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
+TINY: dict[str, object] = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
         "QKV": 64, "GU": 64, "EPS": 1e-5, "ROPE_THETA": 1e4, "MAX_POS": 8, "BIAS": True, "tie_word_embeddings": True, "profile": {}}
 
 #: version: (binding, its id, sha512 of its definition entry, its Program's digest or None for a primitive)

@@ -26,7 +26,7 @@ two sides must agree; the side of record is the verdict a `Mismatch` holds the o
 
 The harness never skips: when `lake` is missing or the build fails it raises. A port's test module skips on `lake` itself
 (`pytestmark = pytest.mark.skipif(shutil.which("lake") is None, ...)`), which puts its suite among those `check` runs after
-its Lean steps (`AFTER_LEAN` in `tools/verity/check/check.py`, held by `tests/test_no_wall_clock.py`).
+its Lean steps (`AFTER_LEAN` in `tools/check/check.py`, held by `tests/test_no_wall_clock.py`).
 
 Only `run` imports Hypothesis: `build`, `Server` and `canonical` need the stdlib alone, so a port's Lean can serve at run
 time (the memory challenger's `verdict.py` in the PoUS harness) where no test dependency is installed.

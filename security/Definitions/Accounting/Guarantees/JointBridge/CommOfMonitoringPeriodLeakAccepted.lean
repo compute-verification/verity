@@ -53,7 +53,7 @@ open Claims.SamplingGeneric (Arg Compiled)
 set_option linter.unusedVariables false
 
 /-- **The network certifier's per-period guarantee.** On a run that realizes the network certifier's period of `n`
-sampled audits at the claim `c.K`, whose deployed network certifier runs its code on its host (`trusted-host`, the
+sampled audits at the claim `c.K`, whose deployed network certifier runs its code on its host (`trusted-device`, the
 realization's `trusted`), at a compiled sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds and the
 trace's commitment binds (`CommitmentScheme.Binds`), at `δ ≥ 0`,
 where each window's prover has `κ − δ + √(γ·Pr[B]) ≤ ε_ks`, `Pr[B_ext] ≤ ε_bind` and `Pr[B_tap] ≤ ε_tap` (`ε_ks` and

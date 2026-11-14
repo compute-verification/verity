@@ -12,7 +12,7 @@ from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -141,15 +141,6 @@ def plane_copies(d: dict) -> list[dict]:
     module's own output).  A description states `copies` only for such a row; every other row has none."""
     copies = d.get("copies")
     return copies if copies else []
-
-
-def described(pi: ProgramIndex, r: dict) -> dict:
-    """`pi.describe(r)` of a row the caller took from the population (a picked VU, a row a request's replay needs), which holds
-    only modelled rows."""
-    d = pi.describe(r)
-    if d is None:
-        raise TypeError(f"row {r.get('i')} ({RM.spec_family(r['spec'])}) is unmodelled")
-    return d
 
 
 def index_of(inst: dict[str, Any], reuse: Iterable[ProgramIndex] = (), **kw: Any) -> ProgramIndex:
@@ -387,7 +378,8 @@ class ProgramIndex:
         `[k]` name index when the Program names one; a violation yields members [] + `plane_error` -> counted by NAME as a mapping failure
         (population), never a silent read of another pair's words."""
         s = self.step_of(i)
-        g = self._moe_geo[s][mod]                 # there: the kind that sends the row here put its module in its step's geometry
+        geometry = self._moe_geo[s].get(mod)      # a module its step's geometry does not hold has no router rows: M = TOPK = 0, named below
+        g = geometry if geometry else {}
         layer = RM.layer_of(mod)
         M, TOPK = int(g.get("M", 0) or 0), int(g.get("TOPK", 0) or 0)
         ord_ = int(self._moe_ord.get(i, -1))

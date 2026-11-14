@@ -14,7 +14,7 @@ counts, span and windows in the serve dir's ``private/out``. `served_stock.sh`'s
 is a full aggregate (a stock run's file, or the composed run's ``private/out/serve/overhead.json``, each on the node), or
 a serve dir when it runs on the node; it refuses a published one.
 
-Two rulers, each the same code in both arms. The client's is `demos/vllm/serve_load.py`'s timings file, a ``--varied``
+Two rulers, each the same code in both arms. The client's is `adapters/vllm/tools/served_run/serve_load.py`'s timings file, a ``--varied``
 or a ``--fixed`` load's alike (``load.timings.json`` beside its record, on the node, which `metrics` reads there): each request's
 send, first-token and done times on the client's monotonic clock. Per load, from it:
 
@@ -40,7 +40,7 @@ with the gaps inside its span. Without timings files a load is one busy period. 
 
 The trace doesn't see the HTTP side and the client, anything after a load's last step but a
 window's on-loop close (the seal runs off the loop; the verdict pieces run after serving), or anything before the first
-arrival (the model load, the weights registration).
+arrival (the model load, the weights docket).
 
 `table` takes each composed run's first load and each stock run's first load (the first load after its endpoint listens, as
 the composed run's one load is), refuses runs whose engines differ (`identity`, except a key ``--allow`` names), and writes

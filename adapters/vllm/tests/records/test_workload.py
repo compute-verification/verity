@@ -9,7 +9,6 @@ import json
 import pytest
 
 from verity_vllm.config import WORKLOAD_SCHEMA, RowConfig, workload_files
-from verity_vllm.properties.holdout import make_workload
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
 from verity_vllm.records.workload import SCHEMA, V1, Workload
 
@@ -49,10 +48,6 @@ def test_every_row_file_loads_and_dumps_back_to_itself():
 def test_the_writers_records_load():
     from verity_vllm.pipeline import workload as PW
 
-    held = make_workload(case="B0", model="m/x", vocab=1000, seed=7, n_requests=2, tokenizer_revision="0" * 40)
-    w = Workload.of(held, "holdout")
-    assert (w.sampling, w.sampling_variant, [r.prompt_len for r in w.requests]) == (None, None, [None, None])
-    assert [r.prompt_length for r in w.requests] == [len(r["prompt_token_ids"]) for r in held["requests"]]
     plan = PW.plan("m__bf16__x__tp1__b2__i64__o8__mixed__greedy__eager", 2, 64, 8, sampling="greedy", arrivals="staggered")
     lengths_only = PW.workload_doc(plan, hf_repo="m/x", revision="0" * 40, case=None, tok=None)
     w = Workload.of(lengths_only, "plan")

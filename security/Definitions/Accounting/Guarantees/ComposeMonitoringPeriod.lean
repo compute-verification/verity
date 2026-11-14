@@ -151,7 +151,7 @@ proof block reads by the sample. A window with one salt, opened before its activ
 salt, which reaches the prover before its operands are committed, so the window is seeded. A live window needs the
 live challenger's coins, under a coin commitment the challenger signs with its LMS key and the verifier reads. Coins
 from a challenger that runs in the prover's process are seeded. A window whose salt and round coins come from one live
-session on the auditor host's challenger, read under the auditor's key (`remote.trusted_session`), is still seeded
+session on the auditor device's challenger, read under the auditor's key (`remote.trusted_session`), is still seeded
 when its salt is opened after the weights' root alone, before the activations are committed, as a certified one is.
 The seeded pair has no period form: its premium is per window, so it would not divide by `j`.
 

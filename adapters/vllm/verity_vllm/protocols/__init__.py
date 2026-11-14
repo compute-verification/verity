@@ -1,4 +1,4 @@
-"""The protocol options of a vLLM run: PoUW, POUS and sampled proofs, each enabled on its own, any of them in one run.
+"""The protocol options of a vLLM run: PoUW, POUS and SPOT, each enabled on its own, any of them in one run.
 
 A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off by default.  `verity_vllm.LLM` takes it as
 ``protocols=`` and fills the settings an adapter takes from the built engine (`engine_fills`, `from_engine`); a row takes it from ``PROTOCOLS`` (``verity-vllm row --protocols``) or its workload target, and every stage
@@ -23,10 +23,10 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
-not wired); two executors at one site; beside sampled proofs, an executor whose protocol package has no circuit for its
+not wired); two executors at one site; beside SPOT, an executor whose protocol package has no circuit for its
 scheme (`CIRCUITS`, `traced_as`: every PoUW scheme but ``ncp-v2``), unless the window's circuit is cut at its sites (`CUT`,
 below); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
-whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
+whatever an adapter refuses for its context (SPOT outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
 ``Installed.weights()``; the Commit's replay reads and re-registers the live weights through `weights_view` /
@@ -39,9 +39,9 @@ record's digest (`Composition.verdict`); it is of record like any other, because
 Program describes: POUS's decode is bit-identical and leaves the circuit untouched, and an executor is refused until its
 protocol package has a circuit for its scheme (``traced_as``).
 
-**Circuits.**  What sampled proofs traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
+**Circuits.**  What SPOT traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
 `verity.protocols.accounting.pouw.prover.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
-executed call).  The selector admits an executor beside sampled proofs only for a scheme with a circuit, and `traced_as`
+executed call).  The selector admits an executor beside SPOT only for a scheme with a circuit, and `traced_as`
 gives the Commit the circuit of each executed call.  An executor with none whose calls commit tables a window's circuit
 can be cut at (an adapter's ``cuts``: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
 sampled-proofs setting ``cut`` (`CUT`) names it: serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose
@@ -65,7 +65,7 @@ from verity_vllm.errors import Refused
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
 from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
-__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target",
+__all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Target",
            "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
            "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
@@ -79,11 +79,11 @@ ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
 DRIVERS = {"remote-bandwidth": "remote_bandwidth"}
 #: Each hook site and who is at it, outermost first; the last may execute there (``EXECUTES``, or per scheme the adapter's
 #: ``executes(scheme)``: PoUW's H1 executes nowhere, since the int8_exact arm serves its own y), the others wrap.  At a
-#: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  Sampled proofs commits at the
+#: linear layer's ``apply`` POUS hands the decoded weight inward and PoUW replaces the GEMM.  SPOT commits at the
 #: module boundary, outside every site, and its replay evaluates Definitions, never an executor.  `config.PROTOCOLS`, the
 #: install order, is innermost first at every site.
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
-#: protocol -> the module of its protocol package that says what sampled proofs traces its executed computation as:
+#: protocol -> the module of its protocol package that says what SPOT traces its executed computation as:
 #: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
 CIRCUITS = {"pouw": "verity.protocols.accounting.pouw.prover.circuit"}
 #: the sampled-proofs setting naming the executor whose sites the window's circuit is cut at (`refusals`)
@@ -146,7 +146,7 @@ def circuit_registry(name: str) -> ModuleType | None:
 
 
 def traced_as(entry: str, m: int, k: int, n: int) -> Any:
-    """The circuit sampled proofs traces for one executed call of ``entry`` (``pouw:ncp-v2``) of shape m × k → n: its
+    """The circuit SPOT traces for one executed call of ``entry`` (``pouw:ncp-v2``) of shape m × k → n: its
     Definition, partition query, served outputs and sampling layout.  None when the scheme has no circuit; a shape outside the
     circuit raises the protocol package's ``DomainError``."""
     name, _, scheme = entry.partition(":")
@@ -293,7 +293,7 @@ class Composition:
         return next((i for i in self.installed if i.name.partition(":")[0] == name), None)
 
     def bind(self, name: str, **commitment: Any) -> None:
-        """Add to what protocol ``name`` commits to, once its commitment is known (the Commit's roots, for sampled proofs)."""
+        """Add to what protocol ``name`` commits to, once its commitment is known (the Commit's roots, for SPOT)."""
         opt = self.get(name)
         if not isinstance(opt, Option):
             raise ValueError(f"no bindable option {name!r} in {list(self.entries)}")
@@ -431,8 +431,7 @@ def undeclared(enabled: tuple[str, ...] = ()) -> tuple[str, ...]:
 
 
 def commit_context(profile: Any, *, world: int = 1, settings: Any = None) -> Context | None:
-    """The Commit's composition context from its declared target.  None when the target declares no protocols (sampled
-    proofs alone): the Commit runs as it always has, and no adapter is imported.  `Refused` names every refusal."""
+    """The Commit's composition context from its declared target.  None when the target declares no protocols (SPOT alone): the Commit runs as it always has, and no adapter is imported.  `Refused` names every refusal."""
     if profile is None or getattr(profile, "protocols", None) is None:
         return None
     ctx = Context(stage="commit", enabled=tuple(profile.protocols), world=int(world),
@@ -445,8 +444,8 @@ def commit_context(profile: Any, *, world: int = 1, settings: Any = None) -> Con
 
 def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[str, ...] | None:
     """A row's protocol set, checked before any stage runs (the fail-closed point of single-GPU and TP rows alike): the
-    ``PROTOCOLS`` knob, else the workload's ``engine.target.protocols``; None for sampled proofs alone, the row as it has always
-    run.  Either is the whole set, sampled proofs included.  `Refused` names every refusal: a set without sampled proofs,
+    ``PROTOCOLS`` knob, else the workload's ``engine.target.protocols``; None for SPOT alone, the row as it has always
+    run.  Either is the whole set, SPOT included.  `Refused` names every refusal: a set without SPOT,
     a knob that contradicts the target, and every refusal of the set at the Commit (a TP row, an adapter not on this tree)."""
     enabled, declared = parse(knob), parse((config.RowEngine.of(workload).target or {}).get("protocols"))
     if enabled and declared and enabled != declared:
@@ -467,7 +466,7 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
 def own_auditor(config: str | Path | Mapping[str, Any] | None, profile: Any) -> dict[str, dict[str, Any]]:
     """The protocols config (`load_settings`) of a pipeline that is its run's own auditor (the Commit, a Match capture):
     PoUW's ``coins`` a challenger of the epoch held in this process when ``profile`` declares PoUW (`pouw.challenged`),
-    unless the config names the auditor host's ``challenger``, the coins' one source."""
+    unless the config names the auditor device's ``challenger``, the coins' one source."""
     from verity_vllm.protocols import pouw
     return pouw.challenged(load_settings(config), getattr(profile, "protocols", None))
 
@@ -477,7 +476,7 @@ def commit_guard(profile: Any, *, world: int = 1, installs: bool = True, setting
     """The Commit's check before its engine is built: ``profile`` back unchanged when the Commit can run its set, else
     exit 3 (fail-closed) with every reason printed.  ``installs`` False is a Commit that installs no options (the TP
     Commit): it refuses any declared set.  ``commit_scheme``, the committer's
-    (``--commit-scheme``), must be the one sampled proofs is declared with."""
+    (``--commit-scheme``), must be the one SPOT is declared with."""
     try:
         ctx = commit_context(profile, world=world, settings=settings)
         if ctx is not None and not installs:
@@ -493,7 +492,7 @@ def commit_guard(profile: Any, *, world: int = 1, installs: bool = True, setting
 
 
 def capture_context(profile: Any, *, settings: Any = None) -> Context | None:
-    """A Match capture's composition context: the declared target's executors and wrappers without sampled proofs, which
+    """A Match capture's composition context: the declared target's executors and wrappers without SPOT, which
     commits only in the Commit, so the captured run executes what the Commit serves. None when the target declares no
     other protocol. `Refused` names every refusal."""
     enabled = tuple(e for e in (getattr(profile, "protocols", None) or ()) if e.partition(":")[0] != "sampled-proofs")
@@ -532,7 +531,7 @@ def at_commit(profile: Any, model: Any, versions: dict[str, Any], settings: Any 
 
 def into_verdict(comp: Composition | None, verdict: dict[str, Any], out: str | Path, profile: Any, *,
                  program_digest: str | None, manifest: Mapping[str, Any] | None) -> None:
-    """At the Commit's end: close the composition, bind sampled proofs' commitment (the run roots, the Program and
+    """At the Commit's end: close the composition, bind SPOT's commitment (the run roots, the Program and
     manifest digests), add the ``protocols`` block to ``verdict`` and write ``protocols.json``.  Nothing without one."""
     if comp is None:
         return

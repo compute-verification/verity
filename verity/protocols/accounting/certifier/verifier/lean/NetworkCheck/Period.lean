@@ -21,7 +21,7 @@ meta import NciCheck.DefinitionDigest
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
 
 The network certifier, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
-link-windows beside the period's compute audits (sampled proofs' one-stage, one answer per registered window of the
+link-windows beside the period's compute audits (SPOT's one-stage, one answer per registered window of the
 workload). Its link-windows come in one of two forms, which the parameters name:
 
 * **the clock form**: N2's link-windows (`service.LinkWindows`, Selection `All`), each proved, both its ends certified
@@ -112,7 +112,7 @@ device, issued for it:
 the public part of `certificate.CertifiedClock`, which signs the window's sync salted, `clock_commitment` =
 SHA-512("verity/net-cert/v1" ‖ salt_c ‖ `clock_digest(sync)`). What the certifier signs is witness: the sync and its
 salt are in neither the evidence nor the profile, and the check takes neither. The certifier is the auditor's trusted
-device (`trusted-host`), and its own code picks each window's sync from its schedule set Σ_sync, so no
+device (`trusted-device`), and its own code picks each window's sync from its schedule set Σ_sync, so no
 clear-text check that the sync is in Σ_sync is needed. N2's proof reading each window's sync through its opening
 against that salted digest is a later change to its circuit (the certifier PROTOCOL.md's gap "The clock's opening").
 
@@ -189,7 +189,7 @@ the client read), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms
 of a sync of Σ_sync to the `m` execution phases, so it is the same whichever syncs the certifier ran them under, and
 needs none of them. `eps` is the `δ` part of the probability that `K` fails to bound the period's leak, the union of
 its audits' `δ`; each audit's knowledge error and collision errors add to it, and the check evaluates neither: their
-exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry
+exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and PoUB's publics carry
 theirs.
 
 In the rows form the terms are `MonitoringPeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read

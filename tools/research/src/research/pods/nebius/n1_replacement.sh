@@ -64,7 +64,7 @@ plan() {
   names=$(printf '%s\n' "$NODES" | cut -d' ' -f1 | tr '\n' ' ')
   read -r first _ <<< "$NODES"
   quota_note=""
-  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session caps too (cpu-1\'s 700G and 600G are for 755 GB).'
+  [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session limits too (cpu-1\'s 700G and 600G are for 755 GB).'
   cat <<EOF
 # n1's replacement, path "$path": ${names}from $REF
 # Each step: who runs it, about how long, then the commands. Steps marked (coordinator) spend or create.
@@ -97,7 +97,7 @@ EOF
     echo "    research pods ssh $n -- 'cd /etc/systemd/system && for t in vy-*.timer; do sudo systemctl enable --now \$t; done'   # install enables none"
     echo "    research pods ssh vy-nebius-2 -- 'tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | research pods ssh $n -- 'umask 077; tar -C ~/.ssh -xf -'   # peers' key and its .pub, node to node: copied, never printed"
     echo "    research pods ssh $n -- 'echo from=\\\"IPS\\\" \$(cat ~/.ssh/vy-cluster.pub) >> ~/.ssh/authorized_keys'   # IPS: each node's egress (curl ifconfig.me)"
-    echo "    research run --on $n --project verity --source . --cwd source -- bash tools/verity/check/pod_setup.sh"
+    echo "    research run --on $n --project verity --source . --cwd source -- bash tools/check/pod_setup.sh"
   done
   echo
   echo "L4  (infra, 2 min a node) the slot files, one train slot a node, Lean slots on $first (cpu-1's form):"

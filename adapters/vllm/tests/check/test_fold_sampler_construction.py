@@ -15,8 +15,8 @@ from pathlib import Path
 import pytest
 import torch
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1, dead_free, sampling_vocab, topp_words
-from verity.definitions.registry import sampling as SM
+from verity_vllm.definitions.registry import b1, dead_free, sampling_vocab, topp_words
+from verity_vllm.definitions.registry import sampling as SM
 
 from verity_vllm.check.match import split_selects
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, RunHeader, ViewDesc
@@ -28,7 +28,7 @@ from verity_vllm.observe.fold.patterns.sampling import (
 from verity_vllm.observe.fold.resolver import Profile, StepContext
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program import sampling_event as SE
-from verity_vllm.program.frontend.rules.base import RuleSet
+from verity_torch.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
@@ -70,7 +70,7 @@ def _program_dir(tmp_path: Path, V: int, S: int) -> tuple[Path, str]:
     `result.json` spec histogram the Build writes.  -> (dir, select)."""
     from verity_vllm.pipeline.build import _spec_histogram
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
     from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
     LP, STEPS = 3, 1
@@ -98,7 +98,7 @@ def _fold_select(V: int, pattern: TokenSelectGumbelTopP, target: TargetProfile |
                                   "sparse_grad=False) -> Tensor", [local_argmax, 1, idx], {}, 7, None), DispatchExit(1, out))
     header = RunHeader("verity-capture/log/v1", "2026-09-28T00:00:00Z", "toy", {"target": target.to_json()} if target else {}, {}, {})
     stage2 = {"local_argmax": local_argmax, "bf16": logits, "S": 4, "kernels": (), "specs": [("r0", 5, 7, 0.8, 0.9)]}
-    ctx = StepContext(header, None, None, [], {}, {}, None, scratch={SCRATCH_TOPP_SELECT: {"stage2": {idx.alloc: stage2}}})
+    ctx = StepContext(header, None, None, [], {}, {}, None, scratch={SCRATCH_TOPP_SELECT: {"winning_block": {idx.alloc: stage2}}})
     return pattern._stage3(node, ctx).spec.id
 
 

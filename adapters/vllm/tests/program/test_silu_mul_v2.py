@@ -7,14 +7,13 @@ import numpy as np
 import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.numerics import rows as RK
-from verity.definitions.registry import b1
-from verity.definitions.registry import prims as P
-from verity.definitions.registry.act import SiluMul, SiluMulBf16
+from verity_vllm.definitions.numerics import rows as RK
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
+from verity_vllm.definitions.registry.act import SiluMul, SiluMulBf16
 
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.quarantine.act import silu_mul_difftest as DT
 
 V1 = P.SiluMulBf16.evaluate
 V2 = SiluMulBf16.evaluate
@@ -83,7 +82,7 @@ def test_the_served_vocabulary_binds_v2():
 
 
 def test_the_served_kind_has_its_boolean_version():
-    from verity.definitions import boolean as BB
+    from verity_vllm.definitions import boolean as BB
 
     assert BB.boolean_version(bind(SiluMul, I=8)).id == "SiluMul_v4{I=8}"
     assert BB.boolean_version(SiluMulBf16).id == "SiluMulBf16_v4"
@@ -102,7 +101,7 @@ def test_the_replay_row_is_v2_past_expf_overflow():
     assert [int(w) for w in got] == want == [V2(g, u) for g, u in pairs]
     band = [k for k, (g, _) in enumerate(pairs) if _f(g) >= -97.0]
     assert len(band) == 4 * 17 and all(int(old[k]) not in (POS_ZERO, NEG_ZERO) for k in band)
-    assert RK.EVALUATORS["SiluMul_v2"].startswith("verity.definitions.numerics.act_rows.silu_mul_expf_rows")
+    assert RK.EVALUATORS["SiluMul_v2"].startswith("verity_vllm.definitions.numerics.act_rows.silu_mul_expf_rows")
 
 
 @pytest.mark.slow
@@ -112,15 +111,3 @@ def test_the_replay_row_is_the_element_on_every_gate_word():
         gu = np.concatenate([np.arange(1 << 16, dtype=np.uint16), np.full(1 << 16, u, dtype=np.uint16)])
         got = RK.ROWS["SiluMul_v2"].fn({"I": 1 << 16}, [gu])["out"]
         assert [int(w) for w in got] == [V2(g, u) for g in range(1 << 16)], hex(u)
-
-
-def test_the_adapter_covers_every_edge_kind_and_the_edge_words():
-    from verity_vllm.properties.admission import REQUIRED_EDGE_KINDS
-
-    cases = [DT.cases(None, i) for i in range(60)]
-    kinds = {s.get("kind") for c in cases for s in c["inputs"]}
-    assert set(REQUIRED_EDGE_KINDS) <= kinds
-    words = [c for c in cases if "words" in c["inputs"][0]]
-    assert words and all(len(c["inputs"][0]["words"]) == 2 * c["statics"]["I"] for c in words)
-    pairs = {(w["words"][k], w["words"][len(w["words"]) // 2 + k]) for c in words for w in c["inputs"] for k in range(len(w["words"]) // 2)}
-    assert {(g, u) for g in DT.GATES for u in DT.UPS} <= pairs

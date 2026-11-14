@@ -14,14 +14,14 @@ import types
 
 import pytest
 from verity.circuits.defs import bind
-from verity.definitions.registry import moe_pad as MP
+from verity_vllm.definitions.registry import moe_pad as MP
 
 from tests.engine.test_gen_ov_moe import (
+    INTER,
     TOPK,
     C,
     E,
     H,
-    I,
     _ctx,
     _start,
     moe_scope_events,
@@ -46,7 +46,7 @@ OV = importlib.import_module("verity_vllm.observe.fold.profiles.derived_OLMOE")
 
 PADDED = OV.with_moe_construction(OV.PROFILE, "padded")
 KERNEL_ORDER = OV.with_moe_construction(OV.PROFILE, "indexed-read")
-FIXED_ID = f"MoeFfnFixedL_v1{{E={E},TOPK={TOPK},VPT=8,H={H},I={I}}}"
+FIXED_ID = f"MoeFfnFixedL_v1{{E={E},TOPK={TOPK},VPT=8,H={H},I={INTER}}}"
 
 
 def _resolve_padded(M: int, profile=PADDED, **kw):
@@ -73,7 +73,7 @@ def test_padded_scope_folds_to_one_moe_ffn_fixed_compute_per_token(M, naive):
     x, logits, w13, w2 = one.operands
     assert x.view.alloc == 295 and x.view.shape == (M, H) and x.view.dtype == "bfloat16"                     # hidden_states rows
     assert logits.view.alloc == 296 and logits.view.shape == (M, E) and logits.view.dtype == "bfloat16"      # router_logits rows (the gate GEMM's output)
-    assert w13.view.shape == (E, 2 * I, H) and w2.view.shape == (E, H, I)                                    # the whole expert tables
+    assert w13.view.shape == (E, 2 * INTER, H) and w2.view.shape == (E, H, INTER)                                    # the whole expert tables
     assert [type(o).__name__ for o in one.outputs] == ["PerRow"] and one.outputs[0].view.alloc == 300 and one.outputs[0].view.shape == (M, H)
     assert one.roots == (None, None, "model.layers.0.mlp.experts.routed_experts.w13_weight", "model.layers.0.mlp.experts.routed_experts.w2_weight")
     assert len(one.attribution) == M                                                                          # per-row (request, position)
@@ -89,15 +89,15 @@ def test_padded_scope_folds_to_one_moe_ffn_fixed_compute_per_token(M, naive):
 def test_padded_compute_is_the_frontend_definition_and_its_operand_leaf_counts_are_the_views():
     """The fold's spec IS the Definition the padded frontend rule binds (vocab kind `moe_ffn_fixed`): one id, one digest, one lift of
     record (`LMoeFfnL_v1`, hand-registered) -- the global match compares Build and record in that vocabulary."""
-    from verity.definitions.registry import lifted as L
+    from verity_vllm.definitions.registry import lifted as L
 
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-    fold_spec = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=8, H=H, I=I)
-    front_spec = V.kinds["moe_ffn_fixed"](E, TOPK, 8, H, I)
+    fold_spec = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=8, H=H, I=INTER)
+    front_spec = V.kinds["moe_ffn_fixed"](E, TOPK, 8, H, INTER)
     assert fold_spec.id == front_spec.id == FIXED_ID and fold_spec.defn is front_spec.defn and fold_spec.bindings == front_spec.bindings
     assert L.lift_callee(fold_spec).name == "LMoeFfnL"
     sig, out = fold_spec.signature()
-    assert [t.leaves for _, t in sig] == [H, E, E * 2 * I * H, E * H * I] and out.leaves == H                 # = the operand views' numel
+    assert [t.leaves for _, t in sig] == [H, E, E * 2 * INTER * H, E * H * INTER] and out.leaves == H                 # = the operand views' numel
 
 
 @pytest.mark.parametrize("kw,needle", [

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The proof leg (prove_leg.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the
-# Lean flock-verify, cached under $LEG_CACHE) with the ZK server's Lean frame and the sampled-proofs verifier built in the
+# Lean verity-verify-proof, cached under $LEG_CACHE) with the ZK server's Lean frame and the sampled-proofs verifier built in the
 # tree. From a clone:
 #   LEG_CACHE=/workspace/research/cache/pouw-hidden-zk bash benchmarks/one_stage/prove_leg.sh
 #   (a job run from a clone of the tree, 8 CPUs, 32 GB)
@@ -12,7 +12,7 @@
 #      refuses, for Flock's own refusal)  LEG_READS=slots|inline (with LEG_DEFS: a unit's MUFU table reads in lookup
 #      slots or inline; unset, its template's own, chunk_rows.reads)  FLOCK_CHALLENGER=1 (each verifier's coin trees from
 #      a challenger of its own, its audit in the leg's verdicts)
-# Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, sample), the public files and the sessions; never a
+# Kept in $OUT/leg: the leg's records (leg.json, audit.json, docket, sample), the public files and the sessions; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
 # kept however the job ends, a timeout or a cancel included.
 set -uo pipefail

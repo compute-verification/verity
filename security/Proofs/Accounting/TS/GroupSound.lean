@@ -65,7 +65,7 @@ reads its one-row ports at their rows (`RowsSession.readsOwnRow_of`). Every unit
 (`RowsSession.ServedRegistered`) wherever the one-read check (`PouwWindow.Lanes.checkOneRead`) holds, which the
 sessions' reads built from `own` give (`RowsSession.servedRegistered_canon`). The sessions' registrants' rows agree
 unless two records clash (`rowsAgree_or_leafColl`, from `FlockSoundness.Registered.enc_eq_of_not_clash`), and the
-known rows hold unless a known-content tie collides (`knownHeld_or_coll`, from flock-verify's known-content check).
+known rows hold unless a known-content tie collides (`knownHeld_or_coll`, from verity-verify-proof's known-content check).
 Under the complete check the registered reads the checked layer opens are the port rows
 (`RowsSession.rowsReg_eq_portRead`), so each session's committed rows are the port rows of a wire assignment its
 circuit's evaluation agrees with, which `GroupRealizes` reads. The union bound over the group gives `|ι| δ`.
@@ -122,7 +122,7 @@ theorem full_of_check {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Wr
   have e := s.hCust.2 S D hD
   subst e
   have hkd : s.kd = k := by
-    have h : Flock.Draw.Law.subset s.kd = .subset k := hl
+    have h : Flock.Draw.SamplingDesign.subset s.kd = .subset k := hl
     injection h
   have hn : k = s.n := hp
   refine ⟨?_, hkd.trans hn, by rw [← hn]; exact hk⟩
@@ -131,11 +131,11 @@ theorem full_of_check {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Wr
   have hm : u.val ∈ (FlockSoundness.Discharge.ZkLink.drawOf (.subset s.kd) s.n S).units := by
     rw [hu, hn]
     exact Array.mem_range.2 u.isLt
-  obtain ⟨u', hu', he⟩ := (FlockSoundness.Discharge.ZkLink.drawOf_mem _ _ S u.val).1 hm
+  obtain ⟨u', hu', he⟩ := (FlockSoundness.Discharge.ZkLink.sampleOf_mem _ _ S u.val).1 hm
   exact (Fin.ext he) ▸ hu'
 
 /-- **At a written accepted outcome that samples every unit, every unit reads a one-row port at its row**
-(`Accounting.TS.Lanes.ReadsOwnRow`): the unit is sampled and proved (`drawn_of_acceptsZKR`, `drawOkZKHJ_of_file`), so
+(`Accounting.TS.Lanes.ReadsOwnRow`): the unit is sampled and proved (`sampled_of_acceptsZKR`, `sampleOkZKHJ_of_file`), so
 acceptance gives `own`'s port a position at the unit's index (`reads_of_acceptsZKR`), which is the unit's read
 (`ServedRegistered`); a port of one read has it at index 0. -/
 theorem readsOwnRow_of {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Written o)
@@ -150,9 +150,9 @@ theorem readsOwnRow_of {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.W
   have hd : recordDraw (s.wr S R o').record = some (s.dj S) :=
     (s.hCust.1 S R o' (acceptsZK_of_R (t := s.wr S R o') hacc)).1
   obtain ⟨D, dp, idx, hD, hdp, hidx⟩ :=
-    drawn_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o') hacc hd u.val
+    sampled_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o') hacc hd u.val
   have hmD : u.val ∈ D.proved :=
-    ((FlockSoundness.Discharge.ZkReg.drawOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 S)
+    ((FlockSoundness.Discharge.ZkReg.sampleOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 S)
       (partOf s.I (s.dj S) u.val)).1 D hD u (mem_partS hu)
   obtain ⟨pos, hpos⟩ :=
     reads_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o') hacc hmem hd hD hdp hidx hmD
@@ -191,7 +191,7 @@ theorem rowsReg_eq_portRead (hS : ∀ u, s.ServedRegistered u)
   · rw [dite_eq_right h, dite_eq_right h]
 
 /-- **Under the complete check every port row of a sampled proof block is registered and opens at its registered root**: at
-an outcome flock-verify `--zk --registered` accepts, a sampled proof block `u` whose registrant reads its served roots' rows
+an outcome verity-verify-proof `--zk --registered` accepts, a sampled proof block `u` whose registrant reads its served roots' rows
 (`ServedRegistered`), in a circuit whose every port is a port of `own` (`Flock.Registered.checkComplete`; acceptance
 has the circuit name each port once), reads `u`'s row of every port `q` (each input port and output row, so whatever an
 output's cone reads, the lane index included) as a registered read through `own`'s port of `q`'s name (`ownPort`), and
@@ -227,7 +227,7 @@ theorem rowsAgree_or_leafColl {ι : Type} (sess : ι → RowsSession) : RowsAgre
         ht.2.2.2 hat
 
 /-- **The known-content tie at any known port** (`Accounting.TS.Held.tie_ok` at a port `nm` and its known rows `ks`,
-any row): where flock-verify's known-content check accepted `own` at `known`, which names `nm` with rows `ks`, and every
+any row): where verity-verify-proof's known-content check accepted `own` at `known`, which names `nm` with rows `ks`, and every
 unit's served roots are registered, a registrant's row at a registered read of a port named `nm` is at a position of
 the known rows (`checkKnown`'s one known row a leaf, and `opensLeaf`'s position below the leaves) and is the bytes of the
 known row there, unless the tie collides (`OkColl` at `nm`). -/

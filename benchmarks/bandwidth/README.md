@@ -4,7 +4,7 @@ The measurements PoUB's timing cites (`verity/protocols/accounting/poub/verifier
 fill a tier with labels, and how much a card holds on chip. Each probe is one Attempt on a GPU node.
 
 **Run:** `verity bench bandwidth chip|write_gpu|write_host [ARGS]` (`run.sh`) runs one probe's script, named below, as
-the command of a `research run`. `uv run tools/verity/check/suites.py benchmarks/bandwidth` tests the runner, on any
+the command of a `research run`. `uv run tools/check/suites.py benchmarks/bandwidth` tests the runner, on any
 machine.
 
 **Writes:** a probe's records are its result, under its run's `$OUT`: `chip.json` and `ur.jsonl` (`chip`),

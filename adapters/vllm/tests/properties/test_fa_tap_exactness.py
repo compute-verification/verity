@@ -12,14 +12,14 @@ from typing import Any
 
 import numpy as np
 import pytest
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
-from verity.definitions.registry import attention_vocab
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
+from verity_vllm.definitions.registry import attention_vocab
 
+from tests.commit.hidden_stream import SRC_BITS, StreamLayout
 from tests.properties import fa_tap_exactness as X
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
-from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from verity_vllm.records.property_record import digest_of
 
 ADAPTER = Path(__file__).parents[2]
@@ -29,7 +29,7 @@ ADAPTER = Path(__file__).parents[2]
 CHILD = ("import importlib, json, sys\n"
          "from verity.circuits.defs import REGISTRY\n"
          "def loaded():\n"
-         "    return sorted(m for m in sys.modules if m.startswith(('verity.circuits.evaluation', 'verity.definitions')))\n"
+         "    return sorted(m for m in sys.modules if m.startswith(('verity.circuits.evaluation', 'verity_vllm.definitions')))\n"
          "X = importlib.import_module(sys.argv[1])\n"
          "at_import, held = loaded(), set(REGISTRY.defs)\n"
          "X.ir_guard(0x3F800000)\n"
@@ -46,7 +46,7 @@ def _loaded() -> dict[str, Any]:
 
 def test_importing_the_property_loads_no_definition_and_no_evaluator():
     """A Definition enters the Definition table (`verity.circuits.defs.REGISTRY`) as its module loads, and a reader of the table by id
-    (`verity.commitments.windows.interface.resolve`) answers for it from then on.  With the evaluator and the Definitions imported
+    (`verity.commitments.periods.interface.resolve`) answers for it from then on.  With the evaluator and the Definitions imported
     at the module's head they are in the table from the import on, in a process that has checked no word.  The import runs in a
     process of its own: this one has loaded the Definitions for its other tests."""
     assert _loaded()["at_import"] == []
@@ -55,7 +55,7 @@ def test_importing_the_property_loads_no_definition_and_no_evaluator():
 def test_the_definitions_enter_the_table_with_the_first_ir_call():
     """`ir_guard` is what loads them, so the test above holds something."""
     got = _loaded()
-    assert "verity.definitions.registry.prims" in got["after_a_call"] and got["entered_with_a_call"]
+    assert "verity_vllm.definitions.registry.prims" in got["after_a_call"] and got["entered_with_a_call"]
 
 
 def _record(**fields):

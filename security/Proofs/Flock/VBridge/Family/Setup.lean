@@ -339,18 +339,18 @@ theorem ligeritoRun_k {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c
 
 /-- `ligerito` returns only after Ligerito up to its final check, having sampled every recorded round
 (RecAlgebra.lean:511–513). -/
-theorem ligerito_drawn {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages F128} {tIn : F128}
+theorem ligerito_sampled {sch : Flock.Schedule} {M : Flock.RecAlgebra.Messages F128} {tIn : F128}
     {sws : Array Flock.Switched} {k k' : ℕ} {src : Flock.RecAlgebra.CoinSource}
     {r : Array F128 × Flock.RecAlgebra.LgPts} (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok (r, k')) :
     ∃ st₀ out stV k₁, (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k src = .ok ((out, stV), k₁) ∧
-      src.drawnAll k₁ = true := by
+      src.sampledAll k₁ = true := by
   unfold Flock.RecAlgebra.ligerito at h
   obtain ⟨⟨out, stV⟩, k₁, h1, h⟩ := Flock.RecAlgebra.cm_bind h
   obtain ⟨a, k₂, ha, h⟩ := Flock.RecAlgebra.cm_bind h
   cases ha
   obtain ⟨b, k₃, hb, h⟩ := Flock.RecAlgebra.cm_bind h
   cases hb
-  by_cases cd : src.drawnAll k₁ = true
+  by_cases cd : src.sampledAll k₁ = true
   · exact ⟨_, out, stV, k₁, h1, cd⟩
   · rw [ite_eq_left (by simpa using cd)] at h
     obtain ⟨_, _, h0, _⟩ := Flock.RecAlgebra.cm_bind h
@@ -437,7 +437,7 @@ theorem chunks_ligFrames_le (sch : Flock.Schedule) (T : F128) (cap : Array ByteA
 
 /-- **`LigRoundsLe` at a schedule of the seams**: the rounds `verifierRows` takes are the zerocheck's, the
 lincheck's, ring switching's and then exactly `ligCoins` (`ligeritoRun_k`, at the evaluated messages `ligerito_sim`
-gives, and `drawnAll`), and Ligerito's frames close at most that many (`chunks_ligFrames_le`). -/
+gives, and `sampledAll`), and Ligerito's frames close at most that many (`chunks_ligFrames_le`). -/
 theorem ligRoundsLe_of {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Schedule} {n : ℕ}
     (hS : Flock.RecAlgebra.structureOf sh = .ok S) (hcl : sh.claims = 2 + n) (hm : 14 ≤ sh.m) (hsch : sh.sched = sch)
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) :
@@ -464,7 +464,7 @@ theorem ligRoundsLe_of {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sche
   rw [hlc] at hk2
   rw [hcs] at hk3
   have h3' := Flock.RecAlgebra.ligerito_sim (Flock.RecAlgebra.Lin.eval_hom fun _ => 0) _ _ _ _ _ _ _ _ h3
-  obtain ⟨st₀, out, stV, k₄, hrun, hdr⟩ := ligerito_drawn h3'
+  obtain ⟨st₀, out, stV, k₄, hrun, hdr⟩ := ligerito_sampled h3'
   rw [hsch] at hrun
   have : Fact (Flock.RecAlgebra.NoEmpty (Flock.RecAlgebra.zeroRounds (roundSizes sh))) := ⟨hneZ⟩
   have hk := ligeritoRun_k hdim hlv hrun
@@ -489,7 +489,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 

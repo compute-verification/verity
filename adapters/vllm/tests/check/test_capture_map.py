@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 import torch
-from verity.definitions.registry import catalog
+from verity_vllm.definitions.registry import catalog
 
 from tests.check.capture_map_check import check, check_target, report
 from verity_vllm.acquire.sources import moe_source
@@ -156,10 +156,10 @@ def test_an_unregistered_definition_fails(registry):
 def test_the_captures_are_registered_properties_and_the_map_is_its_checkpoints_at_its_world():
     """Each property a Program's `captures` names is registered (an unknown one fails the check), and the circuit database finds the
     map by the Build's checkpoint and world (`records.due`)."""
-    caps = CM.captures(CMAP)
-    assert caps["glm53_dsa_capture"] == ["fused-rope-triton", "mla-sparse-attention", "dsa-indexer-q", "dsa-indexer-k", "dsa-mqa-logits",
+    captures = CM.captures(CMAP)
+    assert captures["glm53_dsa_capture"] == ["fused-rope-triton", "mla-sparse-attention", "dsa-indexer-q", "dsa-indexer-k", "dsa-mqa-logits",
                                          "dsa-topk"]
-    assert caps["glm53_fa3_split_capture"] == ["mla-sparse-attention"] and caps["deepgemm_capture"] == ["fp8-block-linear-deepgemm"]
+    assert captures["glm53_fa3_split_capture"] == ["mla-sparse-attention"] and captures["deepgemm_capture"] == ["fp8-block-linear-deepgemm"]
     cmap = copy.deepcopy(CMAP)
     cmap["programs"]["silu-mul"]["captures"] = ["glm53_silu_capture"]
     assert _check(cmap) == ["program silu-mul: capture 'glm53_silu_capture' is not a registered property"]

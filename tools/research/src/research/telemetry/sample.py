@@ -88,8 +88,8 @@ class Sampler:
         if self.bytes_written > self.a.max_bytes and self.cadence < 60:
             self.cadence = min(60.0, self.cadence * 2)
             self.emitter.emit("sampler_degraded", cadence_s=self.cadence, bytes_written=self.bytes_written, max_bytes=self.a.max_bytes,
-                              reason="output cap reached: cadence doubled")
-            self.a.max_bytes *= 2   # next doubling at the next cap
+                              reason="output limit reached: cadence doubled")
+            self.a.max_bytes *= 2   # next doubling at the next limit
 
     def err(self, kind: str, msg: str) -> None:
         self.errors[kind] = self.errors.get(kind, 0) + 1
@@ -278,7 +278,7 @@ def add_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--mount", action="append", default=[], help="additional mount paths to statvfs (scratch, evidence)")
     ap.add_argument("--max-pids", type=int, default=512)
     ap.add_argument("--max-outsiders", type=int, default=32, help="largest other processes of the pod cgroup recorded per sample")
-    ap.add_argument("--max-bytes", type=int, default=200_000_000, help="output cap before the cadence doubles")
+    ap.add_argument("--max-bytes", type=int, default=200_000_000, help="output limit before the cadence doubles")
     ap.add_argument("--linger", type=float, default=5.0, help="seconds of sampling after the root pid is gone")
     ap.add_argument("--stream-suffix", default=None)
 

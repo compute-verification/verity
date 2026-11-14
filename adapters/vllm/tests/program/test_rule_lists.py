@@ -1,11 +1,12 @@
-"""`verity_vllm.program.frontend.rules`' two named lists: every rule of `TORCH_RULES` targets ATen ops only, every rule of
-`VLLM_RULES` targets an op that is not ATen's, and the default rule set holds exactly their members, in the sequence of its
-four lists (views, reference, profile, padding)."""
+"""`verity_vllm.program.frontend.rules`' lists: every rule of `VLLM_RULES` targets an op that is not ATen's, the package's
+`TORCH_RULES` is the PyTorch adapter's, and the default rule set holds exactly the two lists' members, in the sequence of
+its four lists (views, reference, profile, padding)."""
 from __future__ import annotations
 
+from verity_torch.frontend import rules as T
 from verity_vllm.program.frontend import rules as R
 from verity_vllm.program.frontend.rules import padding, profile
-from verity_vllm.program.frontend.rules.base import ANY
+from verity_torch.frontend.rules.base import ANY
 
 
 def _namespaces(rule) -> set[str]:
@@ -18,9 +19,8 @@ def _ids(rules) -> list[str]:
     return [r.info.rule_id for r in rules]
 
 
-def test_every_torch_rule_targets_aten_ops_only():
-    assert R.TORCH_RULES
-    assert {r.info.rule_id: _namespaces(r) for r in R.TORCH_RULES if _namespaces(r) != {"aten"}} == {}
+def test_torch_rules_are_the_pytorch_adapters():
+    assert R.TORCH_RULES is T.TORCH_RULES
 
 
 def test_every_vllm_rule_targets_an_op_that_is_not_atens():
