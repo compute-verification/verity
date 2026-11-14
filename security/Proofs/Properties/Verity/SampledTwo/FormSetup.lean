@@ -52,7 +52,9 @@ What `verdictsAt_of` takes beside the join's fields (`HeldOfAt`, `StmtsRead`, `R
   printable. Nothing the setup checks holds them to that; the parameters' reader does, and `stmtsPrint_of`
   (`FormPrint.lean`) proves it of every case.
 * `StmtsFit`: the statements' message holds fewer than `2^64` statements of fewer than `2^64` bytes each. The form
-  refuses a field its statement can't hold, which bounds each field and no sum of them. No check gives it here.
+  refuses evidence of `2^64` statements or more, so the count is the form's (`stmtsFit_of_bytes`) and what is left
+  is each statement's bytes (`StmtsBytesFit`): the form refuses a field its statement can't hold, which bounds each
+  field and no sum of them, and no check gives the sum here.
 -/
 
 @[expose] public section
@@ -290,6 +292,22 @@ def StmtsFit (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
   ∀ o k p e xs, FormAccepts C o → Good o → C o = some k → SessionMsgs.formOf k = some (p, e) →
     (List.range e.stmts.size).mapM (SessionMsgs.stmtAtCase k) = some xs →
       xs.length < 2 ^ 64 ∧ ∀ x ∈ xs, x.length < 2 ^ 64
+
+/-- **Each statement of the statements' message fits its length word**: on a play the form accepts whose log the
+check read is the device's, each statement the statements' message holds is of fewer than `2^64` bytes. -/
+def StmtsBytesFit (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
+  ∀ o k p e xs, FormAccepts C o → Good o → C o = some k → SessionMsgs.formOf k = some (p, e) →
+    (List.range e.stmts.size).mapM (SessionMsgs.stmtAtCase k) = some xs → ∀ x ∈ xs, x.length < 2 ^ 64
+
+/-- **`StmtsFit`, from each statement's bytes**: the statements' message holds one statement for each of the
+evidence's (`Properties.Challenger.Limits.mapM_length`), and the form's evidence parses only with fewer than `2^64`
+of them (`VStar.Recursive.SampledTwo.evidenceOf_ok`, its refusal `STMTS_COUNT`). -/
+theorem stmtsFit_of_bytes {C : CaseOf} {Good : Verity.Exchange → Prop} (h : StmtsBytesFit C Good) :
+    StmtsFit C Good := by
+  intro o k p e xs hacc hgood hk hf hxs
+  refine ⟨?_, h o k p e xs hacc hgood hk hf hxs⟩
+  rw [Properties.Challenger.Limits.mapM_length hxs, List.length_range]
+  exact (VStar.Recursive.SampledTwo.evidenceOf_ok (SessionMsgs.formOf_evidence hf)).2
 
 /-- **`VerdictsAt`, at the table `Flock.Tags.circuit.table`**: on an accepted play, the statement the statements'
 message states for template `t` is the template's session statement on the case (`SessionMsgs.stmtAt_stmtsMsg`),
