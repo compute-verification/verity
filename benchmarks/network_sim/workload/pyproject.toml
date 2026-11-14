@@ -20,5 +20,6 @@ pythonpath = ["..", "../../datacenter"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# accounting.py reads the workload with the accounting layer's `datacenter`.
-inputs = ["benchmarks/datacenter"]
+# accounting.py reads the workload with the accounting layer's `datacenter`, whose examples.py reads the RTX PRO 6000
+# node's file and its cards (load_node reads every card).
+inputs = ["benchmarks/datacenter", "hardware/cards", "hardware/nodes/rtx-pro-6000-server-x8.toml"]
