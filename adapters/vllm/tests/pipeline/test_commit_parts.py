@@ -140,7 +140,8 @@ def test_an_instance_file_that_cannot_be_read_is_named_and_counts_no_rows(tmp_pa
                            {"file": str(bad), "error": repr(raised.value)[:200]}]
 
 
-def engine(**runner: Any) -> SimpleNamespace:
+def engine(**runner: Any) -> Any:
+    """An engine whose runner holds ``runner`` and whose model has two modules, as `assert_pristine` reads one."""
     return SimpleNamespace(runner=SimpleNamespace(**runner), model=torch.nn.Sequential(torch.nn.Linear(1, 1), torch.nn.ReLU()))
 
 
@@ -151,24 +152,24 @@ BASELINE: dict[str, Any] = {"runner_had": {}, "hooks": 0, "sampler_hooks": 0}
 def test_a_runner_method_still_wrapped_is_refused_unless_the_runner_had_it_before(nm: str) -> None:
     eng = engine(**{nm: lambda *a: None})
     with pytest.raises(AssertionError, match=rf"^runner\.{nm} still wrapped$"):
-        commit.assert_pristine(eng, BASELINE)  # type: ignore[arg-type]
-    commit.assert_pristine(eng, BASELINE | {"runner_had": {nm: True}})  # type: ignore[arg-type]
+        commit.assert_pristine(eng, BASELINE)
+    commit.assert_pristine(eng, BASELINE | {"runner_had": {nm: True}})
 
 
 def test_a_module_forward_still_wrapped_is_refused_unless_the_baseline_counts_it() -> None:
     eng = engine()
-    commit.assert_pristine(eng, BASELINE)  # type: ignore[arg-type]
+    commit.assert_pristine(eng, BASELINE)
     eng.model[0].forward = lambda x: x
     with pytest.raises(AssertionError, match=r"^wrapped module\.forward present: 1 != baseline 0$"):
-        commit.assert_pristine(eng, BASELINE)  # type: ignore[arg-type]
-    commit.assert_pristine(eng, BASELINE | {"wrapped_forwards": 1})  # type: ignore[arg-type]
+        commit.assert_pristine(eng, BASELINE)
+    commit.assert_pristine(eng, BASELINE | {"wrapped_forwards": 1})
 
 
 def test_a_hook_left_on_the_sampler_is_refused_unless_the_baseline_counts_it() -> None:
     sampler = torch.nn.Identity()
     eng = engine(sampler=sampler)
-    commit.assert_pristine(eng, BASELINE)  # type: ignore[arg-type]
+    commit.assert_pristine(eng, BASELINE)
     sampler.register_forward_hook(lambda *a: None)
     with pytest.raises(AssertionError, match=r"^sampler hooks present$"):
-        commit.assert_pristine(eng, BASELINE)  # type: ignore[arg-type]
-    commit.assert_pristine(eng, BASELINE | {"sampler_hooks": 1})  # type: ignore[arg-type]
+        commit.assert_pristine(eng, BASELINE)
+    commit.assert_pristine(eng, BASELINE | {"sampler_hooks": 1})
