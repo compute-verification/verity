@@ -85,7 +85,7 @@ inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "tools/config/verity_config",
           "verity/protocols/proofs/spot/verifier/__init__.py",
-          "verity/hardware/record.py",
+          "verity/channel.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto", "verity/circuits/kernels", "verity/circuits/private_circuits",
           "verity/commitments/randomness", "verity/definitions", "verity/protocols/proofs/flock/prover/python/verity_flock", "verity/commitments/windows",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py", "verity/protocols/accounting/pouw/verifier/salt.py",

@@ -637,14 +637,14 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     assert "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), this number its δ" in M.ERROR
     rate, span = "ledger.{}.capacity_bytes_per_s", "ledger.inputs.span_ns"
     assert {n: m["inputs"] for n, m in got.items()} == {
-        "metric": [RUN, "ledger.spec.gamma"], "verified": [RUN, "ledger.spec.certified_bytes"],
-        "capacity at spec": [RUN, rate.format("spec"), span],
-        "free at spec": [RUN, "ledger.spec.gamma", rate.format("spec"), span],
-        "capacity at measured": [RUN, rate.format("measured"), span],
-        "free at measured": [RUN, "ledger.measured.gamma", rate.format("measured"), span],
-        "error": [RUN, "ledger.declared.gamma.spec.error.windows"]}
+        "metric": ["measured", RUN, "ledger.spec.gamma"], "verified": ["measured", RUN, "ledger.spec.certified_bytes"],
+        "capacity at spec": ["measured", RUN, rate.format("spec"), span],
+        "free at spec": ["measured", RUN, "ledger.spec.gamma", rate.format("spec"), span],
+        "capacity at measured": ["measured", RUN, rate.format("measured"), span],
+        "free at measured": ["measured", RUN, "ledger.measured.gamma", rate.format("measured"), span],
+        "error": ["measured", RUN, "ledger.declared.gamma.spec.error.windows"]}
     for m in got.values():
-        assert (m["run"], m["commit"], m["host"]) == (BENCH, STAMP["commit"], STAMP)
+        assert (m["mark"], m["run"], m["commit"], m["host"]) == ("measured", BENCH, STAMP["commit"], STAMP)
         assert (m["target"], m["verdict"], m["ci95"]) == (None, None, None)
 
 
@@ -698,7 +698,7 @@ def test_the_node_runs_session_writes_its_amounts_from_the_fire_run(store, capsy
     got = written(held)
     assert list(got) == SHARED and got["metric"]["value"] == doc["value"] == 0.5
     assert (got["verified"]["value"], got["free at spec"]["value"]) == (4e12, 4e12)
-    assert all(m["inputs"][0] == FIRE for m in got.values())
+    assert all(m["inputs"][:2] == ["measured", FIRE] for m in got.values())
 
 
 def test_a_loopback_writes_no_result(store, capsys, monkeypatch, tmp_path):
@@ -746,7 +746,7 @@ def test_a_second_session_printed_in_one_run_keeps_the_first_ones_result_and_say
     assert doc["value"] == 0.5 and json.loads((held / "out" / "memory.json").read_text()) == doc
     assert f"memory: the result ({', '.join(SHARED)}) is not written: " in err
     assert "already holds a measurement named metric" in err
-    assert (held / "result.json").read_bytes() == kept and written(held)["metric"]["inputs"][0] == RUN
+    assert (held / "result.json").read_bytes() == kept and written(held)["metric"]["inputs"][1] == RUN
 
 
 class Local:
