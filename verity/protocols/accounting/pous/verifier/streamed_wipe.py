@@ -136,7 +136,7 @@ def labels(key: bytes, start: int, count: int) -> bytes:
     return bytes(out)
 
 
-def draw_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: int) -> tuple[int, ...]:
+def sample_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: int) -> tuple[int, ...]:
     """The session's `k` challenges, each uniform in `[0, n)` and independent (with replacement)."""
     key = derive(coin_secret, COIN_DOMAIN, {"server": server, "session": session, "n": n})
     return tuple(key.uniform(n, j) for j in range(k))
@@ -402,5 +402,5 @@ __all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_
            "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
            "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord",
            "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest",
-           "challenges_for", "draw_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of",
+           "challenges_for", "sample_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of",
            "message", "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]

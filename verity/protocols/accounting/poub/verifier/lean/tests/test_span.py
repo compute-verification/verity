@@ -146,7 +146,7 @@ def test_the_verifiers_rows_are_the_ones_the_prover_commits(server, world) -> No
     assert kind == "output" and len(json.loads(out)["draws"]) == 12
 
 
-def test_a_window_with_no_draws_awaiting_has_no_rows(server) -> None:
+def test_a_window_with_no_samples_awaiting_has_no_rows(server) -> None:
     r = M.Run(WORLD, windows=1)
     r.start()
     r.run()
@@ -189,7 +189,7 @@ def test_units_not_the_populations_in_order_are_malformed(server) -> None:
     assert held(server, s.case(s.held(cut=(6,), indices=[*range(6), *range(len(s.ds) - 6)]))) == rejected(None)
 
 
-def test_a_missing_unit_or_statement_is_malformed_at_no_draw(server) -> None:
+def test_a_missing_unit_or_statement_is_malformed_at_no_sample(server) -> None:
     s = Span(drawn(WORLD))
     statements = s.held(cut=(6,))
     assert held(server, s.case(statements[:1])) == rejected(None)

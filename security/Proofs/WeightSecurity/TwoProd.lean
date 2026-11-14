@@ -5,7 +5,7 @@ public import Proofs.WeightSecurity.TwoReg
 /-!
 # A period of two-stage verification phases: one failure probability for the whole period
 
-`PeriodTwoReg` weighs every incorrect replay block alike, at the least rate of any cell, and `two_undetected` pays a
+`MonitoringPeriodTwoReg` weighs every incorrect replay block alike, at the least rate of any cell, and `two_undetected` pays a
 failure probability in each verification phase and bounds the replay blocks each phase marks. Here the period pays one
 failure probability `δ`: each verification phase's record carries the probability that its sample misses, as the
 two-stage design gives it at the boundary trace the phase's strategy fixes, and those probabilities multiply across the
@@ -29,11 +29,11 @@ committed interiors) as a hypothesis, and no knowledge soundness of the argument
 * `ServedEsc.leadMissProb`, `ServedEsc.UndetectedBelow`: the escapes of the verification phases before the first whose
   sample holds an incorrect proof block, multiplied, and the event that an accepted phase's sample holds one or that
   product is below `δ`.
-* `PeriodTwoProd`: every verification phase is accepted and the escapes multiply below `δ` with probability at most
+* `MonitoringPeriodTwoProd`: every verification phase is accepted and the escapes multiply below `δ` with probability at most
   `δ + Σ_t ε_t`, each `ε_t` bounding verification phase `t`'s event at every strategy the run plays it with.
-* `PeriodTwoLead`: the same bound on `ServedEsc.UndetectedBelow`, which a run with a rejected verification phase can
-  be in. It gives `PeriodTwoProd`.
-* `CompilerPeriodTwoProd`: both at every run of verifiers that meet the two-stage compiler's contract.
+* `MonitoringPeriodTwoLead`: the same bound on `ServedEsc.UndetectedBelow`, which a run with a rejected verification phase can
+  be in. It gives `MonitoringPeriodTwoProd`.
+* `CompilerMonitoringPeriodTwoProd`: both at every run of verifiers that meet the two-stage compiler's contract.
 
 Statements only: definitions, no proofs.
 -/
@@ -176,7 +176,7 @@ phases' escapes (`escAt`: `P̄_a` at `val`'s footprint at best interiors) multip
 $$\delta + \sum_t \varepsilon_t.$$
 Outside it, when every verification phase is accepted, the escapes multiply to at least `δ`. The sampling term is `δ`
 however many verification phases the period has. -/
-def PeriodTwoProd (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+def MonitoringPeriodTwoProd (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
   ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
     (∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
@@ -187,16 +187,16 @@ def PeriodTwoProd (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
         (twoAtRun H Lv val T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)
 
-/-- **The period's one failure probability, through the first sampled incorrect proof block.** `PeriodTwoProd` with
+/-- **The period's one failure probability, through the first sampled incorrect proof block.** `MonitoringPeriodTwoProd` with
 the run's later verification phases free to be rejected: under the same hypothesis, for every `δ` the probability that
 some accepted verification phase's sample holds a proof block incorrect at `val` and the committed interiors, or that
 the escapes of the verification phases before the first whose sample holds one multiply below `δ`
 (`ServedEsc.UndetectedBelow`), is at most
 $$\delta + \sum_t \varepsilon_t.$$
-It is `PeriodTwoReg` with the phases' escapes multiplied in place of one rate to the count of incorrect replay blocks,
-and it gives `PeriodTwoProd`: a run whose verification phases are all accepted either has one whose sample holds an
+It is `MonitoringPeriodTwoReg` with the phases' escapes multiplied in place of one rate to the count of incorrect replay blocks,
+and it gives `MonitoringPeriodTwoProd`: a run whose verification phases are all accepted either has one whose sample holds an
 incorrect proof block or multiplies every phase's missProb. -/
-def PeriodTwoLead (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
+def MonitoringPeriodTwoLead (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) : Prop :=
   ∀ (T : ℕ) (ε : ℕ → ℝ) (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T)),
     (∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ → (Lv t).Scope τ.2.1.1 →
@@ -206,14 +206,14 @@ def PeriodTwoLead (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
 
 /-- **The period's one failure probability from the verification phases' verifiers**: when every verification phase's
 verifier meets the two-stage compiler's contract (`CompiledTwo.Sessions`: the two stages sample by the design, and what
-is out of scope is refused), `PeriodTwoLead` and `PeriodTwoProd` hold at every boundary traces. It takes no knowledge
+is out of scope is refused), `MonitoringPeriodTwoLead` and `MonitoringPeriodTwoProd` hold at every boundary traces. It takes no knowledge
 soundness of the argument: a caller meets their hypothesis with its own bound on the event at the trace it reads. -/
-def CompilerPeriodTwoProd : Prop :=
+def CompilerMonitoringPeriodTwoProd : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (O V Tick Adv : Type)
     (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
     (val : (t : ℕ) → (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool),
     (∀ t, (Lv t).Sessions H) →
-    PeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val ∧
-      PeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val
+    MonitoringPeriodTwoLead (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val ∧
+      MonitoringPeriodTwoProd (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv val
 
 end WeightSecurity.SecurityProofs

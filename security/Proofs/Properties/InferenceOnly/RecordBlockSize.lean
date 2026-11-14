@@ -26,7 +26,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Row Grid outerOf)
+open Spot.RecordText (Row Grid outerOf)
 open InferenceOnlyCheck.Record (inSlot)
 open InferenceOnlyCheck.Record.SecurityProofs (slotOf OneGrid)
 open Spot.Bits (bitsOf)
