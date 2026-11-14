@@ -2817,6 +2817,12 @@
     },
     {
       "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/harness/native/": "benchmarks/pouw/harness/native/",
+        "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/": "benchmarks/pouw/nvfp4_sm120/"
+      }
+    },
+    {
+      "paths": {
         "security/Proofs/Flock/Bridge/DrawnLaw.lean": "security/Proofs/Flock/Bridge/SampledLaw.lean",
         "security/Proofs/Flock/Claims/Complete/Json/UnitDraw.lean": "security/Proofs/Flock/Claims/Complete/Json/UnitSample.lean",
         "security/Proofs/Flock/Claims/KS/PlainDraw.lean": "security/Proofs/Flock/Claims/KS/PlainSample.lean",
