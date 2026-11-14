@@ -274,6 +274,9 @@ def test_a_window_is_named_by_its_record_less_its_run_fields():
     a = WR.replay(circuit, record)
     assert WR.window_digest(record) == h and a.id == f"WindowReplay_v1{{window='{h}'}}"
     assert WR.replay(circuit, {**record, "run": "another run", "context": "other coins"}).id == a.id
+    packed = {**record, "cap": 2}
+    assert WR.replay(circuit, packed).id == a.id
+    assert hashlib.sha512(IF.circuit_bytes(packed)).digest() != hashlib.sha512(IF.circuit_bytes(record)).digest()
     assert WR.replay(circuit, {**record, "name": "another name"}).id != a.id
     assert a.id != WR.replay(_whole(), _record(_whole())).id
     again = _window()
