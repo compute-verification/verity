@@ -9,10 +9,10 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | --- | --- | --- |
 | `census` | one `block-census/v1` art | its `census.json` (`prove.Census.of`) |
 | `cut` | one `partition` card (`spot-card/v1`) | the block types it recuts (`prove.Census.recut`) |
-| `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
-| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
+| `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove_flock.Session`) |
+| `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove_flock.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
-| `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds, its proof's bytes and its `label`, what the accept holds, which the Lean line prints word for word (`prove.LeanVerify`, `lean_verify`) |
+| `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds, its proof's bytes and its `label`, what the accept holds, which the Lean line prints word for word (`prove_flock.LeanVerify`, `lean_verify`) |
 
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
 says which and how to label it. A steady-state run or art that is superseded, a run that holds neither `RATES` nor a
@@ -87,6 +87,7 @@ from verity_bench import jobs, kit, overhead_records, settings, steady
 from verity_bench import lean_verify as L
 from verity_bench import overhead as O
 from verity_bench import prove as P
+from verity_bench import prove_flock as PF
 from verity_bench.boolean import boolean_version
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
@@ -302,7 +303,7 @@ def row_cores(row: Mapping[str, Any], unstated: int = P.UNSTATED_CORES) -> int |
     return stated if _count(stated) else None
 
 
-def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> P.Steady | str:
+def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> PF.Steady | str:
     """A `RATES` row as a staged type's measurement at its prover count and its cores: a statement's GPU-seconds are
     the GPUs its provers held over its statements a second, and its cores the CPU cores they held for its card
     (`row_cores`; `unstated` on a row that states none). Its block type is the census type it was staged for
@@ -328,13 +329,13 @@ def steady_row(row: Mapping[str, Any], run: str, art: str | None = None, unstate
     held = RATES if art is None else ART_RATES
     cores = row_cores(row, unstated) or unstated
     if why:
-        return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, refused=why, provers=provers,
+        return PF.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, refused=why, provers=provers,
                         art=art, cores=cores, form=form)
-    return P.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
+    return PF.Steady(str(row.get("type")), definition, k_log, blocks, full, run, held, row["gpus"] / row["statements_per_s"],
                     row.get("verify_s"), provers=provers, art=art, cores=cores, form=form)
 
 
-def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
+def rates(store: Any, run: str) -> tuple[list[PF.Steady], list[str]]:
     """Every row of a run's `RATES` that names a staged Definition, or, in a run that holds none, every staged type of
     its proof server reports; and why the rest (or the run) can't be read. A `RATES` row that states no `cores` is
     read at the run's own (`HOST`'s `HOST_CORES_FIELD`), where the run's files state them; any other row that states
@@ -366,7 +367,7 @@ def rates(store: Any, run: str) -> tuple[list[P.Steady], list[str]]:
         why, provers = report_why(report), int(where.rsplit("/server-k", 1)[1])
         for name, staged in report["types"].items():
             gpu, verify = ((report.get(k) or {}).get(name) for k in ("gpu_s_by_type", "verify_s"))
-            found.append(P.Steady(
+            found.append(PF.Steady(
                 name, types[name]["definition"], staged["k_log"], staged["c"], staged["full"], run, where,
                 gpu and gpu["mean"], verify and verify["mean"],
                 why or (None if gpu else "no statement of it finished in the steady span"), provers=provers))
@@ -390,17 +391,17 @@ def report_why(report: Mapping[str, Any]) -> str | None:
     return None
 
 
-def _rows(doc: Any, run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> tuple[list[P.Steady], list[str]]:
+def _rows(doc: Any, run: str, art: str | None = None, unstated: int = P.UNSTATED_CORES) -> tuple[list[PF.Steady], list[str]]:
     """A rate file's rows as `run`'s: those that name a staged Definition, and why the rest (or the file) can't be read.
     A row that states no `cores` is read at `unstated`."""
 
     if not isinstance(doc, list) or not all(isinstance(row, Mapping) for row in doc):
         return [], [f"its `{RATES if art is None else ART_RATES}` isn't a list of rows"]
     read = [steady_row(row, run, art, unstated) for row in doc]
-    return [x for x in read if isinstance(x, P.Steady)], [x for x in read if isinstance(x, str)]
+    return [x for x in read if isinstance(x, PF.Steady)], [x for x in read if isinstance(x, str)]
 
 
-def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, tuple[list[P.Steady], list[str]]]:
+def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, tuple[list[PF.Steady], list[str]]]:
     """What a target of the steady-state record gives, by the run or art read: its rows that name a staged Definition,
     and why the rest (or the target) can't be read. A run gives its own `RATES`. An art that holds `ART_RATES` gives
     those rows in place of its run's own: they are that run's, completed or corrected after it, so its meta names the
@@ -424,7 +425,7 @@ def steady_rows(store: Any, target: str, superseded: bool = False) -> dict[str, 
 
 
 def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
-          cores: int = P.HOST_CORES) -> tuple[P.Flock, list[dict], list[dict]]:
+          cores: int = P.HOST_CORES) -> tuple[PF.Flock, list[dict], list[dict]]:
     """Flock's prover at `provers` provers on a host of `cores` CPU cores a card from the workload's records: the
     steady-state runs' and arts' rows (`steady_rows`), the single-session card's; the inputs, and the steady-state
     runs, arts and rows left out with why. The steady-state input counts what the rows measure of `census`: its block
@@ -432,10 +433,10 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
 
     art = of_record(store, workload.record(SINGLE), "single-session card")
     value = card(store, art, "proof_overhead", workload)
-    sessions = tuple(P.Session(b["block"], b["k_log"], b["seconds_per_block"], b["fixed_seconds"], b["statement_blocks"])
+    sessions = tuple(PF.Session(b["block"], b["k_log"], b["seconds_per_block"], b["fixed_seconds"], b["statement_blocks"])
                      for b in value["blocks"])
     steady, runs, refused = [], [], []
-    read: dict[str, tuple[list[P.Steady], list[str]]] = {}
+    read: dict[str, tuple[list[PF.Steady], list[str]]] = {}
     for target in records(store).get(workload.record(STEADY), []):
         read |= steady_rows(store, target)
     for target in sorted(read, reverse=True):
@@ -446,7 +447,7 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
             runs.append(target)
     aliases = sorted({(s.definition, s.type) for target in records(store).get(workload.record(STEADY), [])
                       if _superseded(store, target) for found, _ in steady_rows(store, target, True).values() for s in found})
-    prover = P.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases),
+    prover = PF.Flock(tuple(steady), sessions, art, provers=provers, cores=cores, aliases=tuple(aliases),
                      boolean=boolean_version)
     table = prover.table(census)
     measured = sum(r.cost.source == P.STEADY for r in table.rows)
@@ -458,7 +459,7 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
         _input(SINGLE, workload, [art], f"{len(sessions)} block types on the {value.get('device')}")], refused
 
 
-def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
+def lean_verify(doc: Any, run: str) -> PF.LeanVerify | str:
     """A `lean-verify` record as the statement it measured, or why it measures nothing: another schema, a field it
     lacks (its `label` among them: an accept the record doesn't qualify is printed by no line), a run the Lean verifier refused (the refusal is the record's result, and prices nothing), or figures that
     aren't a statement's."""
@@ -486,12 +487,12 @@ def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
         return (f"its `block` ({ {k: block[k] for k in ('k_log', 'blocks', 'full')} }), `proof.bytes` "
                 f"({doc['proof']['bytes']}) and runs' `wall_s` ({seconds}) aren't a statement's blocks, bytes and seconds")
     host = doc["host"]
-    return P.LeanVerify(P.definition_id(word) if isinstance(word, str) else definition, block["k_log"], block["blocks"],
+    return PF.LeanVerify(P.definition_id(word) if isinstance(word, str) else definition, block["k_log"], block["blocks"],
                         block["full"], tuple(seconds), doc["proof"]["bytes"], run,
                         f"{host['node']} ({host['cores']} cores, {host['cpu_model']})", doc["label"])
 
 
-def lean_run(store: Any, run: str) -> P.LeanVerify | str:
+def lean_run(store: Any, run: str) -> PF.LeanVerify | str:
     """A run of record's `LEAN_RECORD` as the statement it measured, or why the run measures nothing."""
 
     if superseded := _superseded(store, run):
@@ -510,7 +511,7 @@ def lean_run(store: Any, run: str) -> P.LeanVerify | str:
     return lean_verify(json.loads((Path(store.fetch(files, paths=[LEAN_RECORD])) / LEAN_RECORD).read_text()), run)
 
 
-def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanVerify], list[dict], list[dict]]:
+def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[PF.LeanVerify], list[dict], list[dict]]:
     """The statements of `census`'s block types the Lean verifier accepted, from the workload's `lean-verify` runs of
     record; their input, where a run carries the label; and the runs that measure nothing, with why."""
 
@@ -518,7 +519,7 @@ def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanV
     found, refused = [], []
     for run in sorted(records(store).get(workload.record(LEAN), []), reverse=True):
         got = lean_run(store, run)
-        if isinstance(got, P.LeanVerify) and got.definition not in held:
+        if isinstance(got, PF.LeanVerify) and got.definition not in held:
             got = f"its block type, `{got.definition}`, is no block type of the census under its cut"
         if isinstance(got, str):
             refused.append({"target": run, "record": workload.record(LEAN), "why": got})
