@@ -41,9 +41,9 @@ untraced = ["tests/test_lean_deployed.py", "tests/test_lean_try.py", "tests/test
 inputs = ["verity", "tools/difftest/python/verity_difftest", "tools/verity/lean/axiom_probe.py", "tools/verity/lean/siblings.py",
           "tools/verity/lean/headers.py", "tools/verity/lean/check.py", "security/lean-audit.json",
           "security/Properties/lean-audit.json", "security/Proofs/lean-audit.json",
-          "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py", "benchmarks/pous/served_piece.sh",
-          "benchmarks/pous/streamed_wipe/served_wipe.sh", "benchmarks/network_traces/certifier_piece.py",
-          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions"]
+          "benchmarks/one_stage/served_verdicts.sh", "benchmarks/one_stage/served_verdicts.py",
+          "benchmarks/network_traces/certifier_piece.py", "adapters/vllm/verity_vllm/__init__.py",
+          "adapters/vllm/verity_vllm/definitions"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

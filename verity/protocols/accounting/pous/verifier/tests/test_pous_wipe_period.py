@@ -308,7 +308,7 @@ def test_the_auditor_hosts_name_under_another_key_is_a_rehearsal() -> None:
 
 
 def test_a_configuration_nobody_committed_bounds_nothing() -> None:
-    """Under a configuration whose hash is not one `tests/configurations.toml` commits, or under none, the pinned key
+    """Under a configuration whose hash is not one `tools/verity/cli/verity_cli/configurations.toml` commits, or under none, the pinned key
     reads rehearsal, no bound, whatever key the session carries."""
     for configuration in (hashlib.sha512(b"a run's own file").hexdigest(), None):
         where = WP.placement("vy-dc-h200", AUDITOR, PINNED, **UNDER | {"configuration": configuration})

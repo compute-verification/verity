@@ -3162,6 +3162,20 @@
         "verity/definitions/pyproject.toml": "adapters/vllm/verity_vllm/definitions/pyproject.toml",
         "verity/definitions/__init__.py": "adapters/vllm/verity_vllm/definitions/__init__.py"
       }
+    },
+    {
+      "paths": {
+        "tests/configurations.toml": "tools/verity/cli/verity_cli/configurations.toml"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py": "verity/protocols/accounting/poub/prover/node_store/interface.py",
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/plan.py": "verity/protocols/accounting/poub/prover/node_store/plan.py",
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py": "verity/protocols/accounting/poub/prover/node_store/memory_map.py",
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/registry.py": "verity/protocols/accounting/poub/prover/node_store/registry.py",
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/verify.py": "verity/protocols/accounting/poub/prover/node_store/verify.py"
+      }
     }
   ]
 }

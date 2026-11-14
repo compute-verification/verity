@@ -11,8 +11,10 @@ order, into a 32-bit state y (uint32 arithmetic, wrapping):
     y = (y ^ d2 ^ k1) * a1 + d3
 
 Keys: a0, a1 must pass key_ok_r9 (pfill's key_ok, plus no int8 ratio within 2^30 of ±a); k0, k1 are free words.
-Run: uv run --no-project --with numpy python -B receipt_folds_r9.py   (checks the twins against fullfloor_r9.chain)
+Run: uv run --no-project --with numpy python -B receipt_folds_r9.py FULLFLOOR_R9_PY   (checks the twins against that
+file's fullfloor_r9.chain)
 """
+import importlib.util
 import sys
 
 import numpy as np
@@ -54,8 +56,9 @@ def lop3imad_step(y, d0, d1, d2, d3, a0, a1, k0, k1):
 
 
 if __name__ == "__main__":
-    sys.path.insert(0, "/tmp/p2ff")
-    import fullfloor_r9 as ff
+    spec = importlib.util.spec_from_file_location("fullfloor_r9", sys.argv[1])
+    ff = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ff)
 
     rng = np.random.default_rng(13)
     while True:

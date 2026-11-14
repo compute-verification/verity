@@ -534,7 +534,7 @@ written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
 
 **Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-device` for the memory challenger, as `holds`
-only under a committed configuration (`tests/configurations.toml`) when the session was signed under a key its
+only under a committed configuration (`tools/verity/cli/verity_cli/configurations.toml`) when the session was signed under a key its
 `[[pin]]` entries give the memory challenger for the wipe (`memory_challenger.trusted_device`). Under any other
 configuration it reads `rehearsal, no bound: the configuration is not a committed one`, and under any other key, a key
 the run pinned for itself included, `rehearsal: key not the auditor's pinned key, no bound`; either way

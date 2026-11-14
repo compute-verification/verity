@@ -1,5 +1,5 @@
 """No key a committed configuration pins is a literal in code: each `[[pin]]` of each configuration
-`tests/configurations.toml` commits is stated in that configuration alone, and the code that reads `trusted-device`
+`tools/verity/cli/verity_cli/configurations.toml` commits is stated in that configuration alone, and the code that reads `trusted-device`
 (`memory_challenger.trusted_device`) takes it from there. A literal split across lines (each 64-digit half) counts."""
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-COMMITTED = ROOT / "tests" / "configurations.toml"
+COMMITTED = ROOT / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
 #: the places whose code reads or passes a device's pin
 SCANNED = ("verity/protocols/accounting", "benchmarks/pous", "benchmarks/one_stage", "demos",
            "adapters/vllm/verity_vllm/protocols", "tools/verity/cli/verity_cli")
