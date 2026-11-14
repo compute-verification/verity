@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Compose.Remote.Sample
+public import Definitions.Poub.Remote.Sample
 public import Definitions.Poub.Remote.Draw
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

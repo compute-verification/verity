@@ -60,7 +60,7 @@ public import Proofs.Pouw.PerRunJoint
 public import Proofs.Pouw.PerRunNecessity
 public import Proofs.Pouw.PerRunPriced
 public import Proofs.Pouw.PerRunStop
-public import Proofs.Compose.RemoteHeld.Sample
+public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld
 public import Proofs.Poub.RemoteHeld.Meets
 public import Proofs.Poub.RemoteHeld.OverTime

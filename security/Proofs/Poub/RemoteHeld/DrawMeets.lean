@@ -42,7 +42,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Poub.Bandwidth.Chip
 import Proofs.Poub.RateAudit.Pooled
-import Proofs.Compose.RemoteHeld.Sample
+import Proofs.Poub.RemoteHeld.Sample
 import Proofs.Poub.RemoteHeld.Draw
 import Proofs.Pouw.Prob
 

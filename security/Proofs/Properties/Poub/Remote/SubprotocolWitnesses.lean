@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Compose.RemoteHeld.Sample
+public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld.Subprotocol
 public import Proofs.Poub.RemoteHeld.Draw
 public import Proofs.Pouw.Prob
