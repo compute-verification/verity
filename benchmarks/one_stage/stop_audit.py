@@ -93,9 +93,9 @@ from verity.circuits.defs import SpecializedDefinition  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
 from verity.commitments.rowleaf import row_leaf  # noqa: E402
 from verity.commitments.windows import rows as CS, tables as TB  # noqa: E402
-from verity.protocols.spot.verifier import service as S  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import audit as A, partition as P, registered as REG, registration as R  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, partition as P, registered as REG, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS  # noqa: E402
 
 FORMAT = "verity/one-stage/stop-audit/v0"

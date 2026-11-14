@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 from verity.commitments.windows import rows as CS
-from verity.protocols.certifier.verifier import advice as A
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.accounting.certifier.verifier import advice as A
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -354,7 +354,7 @@ class _Coins:
 
 def _draw(rec: dict, law: dict) -> dict:
     """A challenger's sample under the registration's expanded `law` (`service.select_draw` past its rule)."""
-    from verity.protocols.spot.device import coins as T
+    from verity.protocols.proofs.spot.device import coins as T
 
     n = rec["population"]
     return {**law, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), law, n)["units"])}
@@ -363,7 +363,7 @@ def _draw(rec: dict, law: dict) -> dict:
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
     """The window's work sampling design proves every RoPE head (work 0, its floor all 32: an All stratum) and samples 2 of the 8 SiluMul rows, as
     the registration's law states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
-    from verity.protocols.spot.verifier.one_stage import draw as D
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     c = gated_tp
     mine, held = _gated_mine(c)
@@ -384,7 +384,7 @@ def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest
 def test_a_transfer_gate_unit_left_out_of_the_proved_set_is_refused(gated_tp):
     """Each way of leaving a RoPE head unproved: the proved set less one (`check_proved`), a sample trading one for an unsampled SiluMul
     row (`check_draw`, the stratum's count), and a registration whose sampling design samples the RoPE heads as the rest is (R1)."""
-    from verity.protocols.spot.verifier.one_stage import draw as D
+    from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     c = gated_tp
     mine, _held = _gated_mine(c)
