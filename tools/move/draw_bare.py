@@ -47,6 +47,8 @@ import rename  # noqa: E402
 MAP = HERE / "draw_bare_map.toml"
 SCOPE = [f"security/{t}/{a}{s}" for t in ("Definitions", "Proofs", "Properties", "Proofs/Properties")
          for a in ("Accounting", "Pous", "Poub") for s in ("/*.lean", ".lean")]
+SCOPE += [f"security/{t}/Compose/{f}" for t in ("Definitions", "Proofs", "Properties", "Proofs/Properties")
+          for f in ("Remote*", "Assumptions/Remote*", "Guarantees/Remote*", "Stacking*", "Guarantees/Stacking*")]
 SCOPE += [f"verity/protocols/accounting/{p}/*.{e}" for p in ("pous", "poub") for e in ("lean", "py")]
 #: PoUW's files in the accounting area, its lane's own
 POUW = re.compile(r"^security/(?:Definitions|Properties|Proofs|Proofs/Properties)/Accounting/"
