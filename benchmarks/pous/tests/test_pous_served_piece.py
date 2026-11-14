@@ -2,7 +2,7 @@
 
 The checkpoint is a safetensors file of two decoder layers in the int8 pin's form (each linear int8 [N, K] beside its f32
 [N, 1] scale, a bf16 embedding and norms) in an HF cache, held to a manifest the test writes; P2 runs at the small point's
-1,024-bit blocks, 8 a segment (`pous._base`), so the adapter encodes it in milliseconds. The memory challenger's side is
+1,024-bit blocks, 8 a segment (`weight_store.geometry`), so the adapter encodes it in milliseconds. The memory challenger's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
 over a socket pair, as `challenger_prover.session` would across hosts. The answer is read back as the composed run reads it
 (`served_verdicts.piece_row`, `block_record.leg`).
@@ -30,6 +30,7 @@ from pathlib import Path
 import pytest
 
 from verity.runtime.stream import Side
+from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -110,7 +111,7 @@ class Served:
 
 @pytest.fixture
 def served(tmp_path, monkeypatch) -> Served:
-    monkeypatch.setattr(pous, "_base", lambda scheme: SMALL)
+    monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
     tensors = _tensors()
     snap = tmp_path / "hf" / "hub" / f"models--{REPO.replace('/', '--')}" / "snapshots" / REV
     snap.mkdir(parents=True)
@@ -507,8 +508,8 @@ def registered(served, monkeypatch) -> Served:
     """`served` at PoUS's registered point, the one a P2 registration names (2,056-byte blocks, 4 a segment: the two
     layers' 8 linears in 2 segments, 2 units), with each segment's encode kept across the module's tests, so ``C*``,
     whose salt `_bandwidth`'s challenger samples from a fixed source, is encoded once."""
-    monkeypatch.setattr(pous, "_base", lambda scheme: REGISTERED)
-    S = pous._p2("store")
+    monkeypatch.setattr(ws, "geometry", lambda scheme: REGISTERED)
+    S = ws.p2_module("store")
     encode = S.CpuEncoder.encode
 
     def kept(self, s, w_seg):

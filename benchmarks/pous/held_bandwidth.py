@@ -67,7 +67,7 @@ SCOPE = ("beside the served window: the session ran on the card after window {k}
 
 
 class Held:
-    """`p2_party.Prover` over the adapter's store ``store`` (`verity_vllm.protocols.pous._Store`): ``C*``'s rows on
+    """`p2_party.Prover` over the adapter's store ``store`` (`weight_store.Store`): ``C*``'s rows on
     their device, the challenger's table of their digests, setup's salt, commitment and root, under the node ``node``."""
 
     def __init__(self, store: Any, node: bytes, *, chunk: int = 1 << 16, spot: int = 16,
