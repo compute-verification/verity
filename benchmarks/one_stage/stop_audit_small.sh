@@ -55,7 +55,7 @@ CHECK=$(field check); STOP=$(field stop); CLASS=$(field class); WRONG=$(field wr
 NAME=$(basename "$CLASS")
 
 first() {  # NAME CLASSDIR: the class's boundary and stop dockets and their samples
-  "${PY[@]}" verity/protocols/proofs/spot/device/two_stage.py first --boundary "$2" --check "$CHECK" --replay "$DESIGN" --k 1 --stop "$STOP" \
+  "${PY[@]}" verity/protocols/proofs/spot/prover/audit/two_stage.py first --boundary "$2" --check "$CHECK" --replay "$DESIGN" --k 1 --stop "$STOP" \
     --challenger local --main "$O/main.txt" --out "$W/$1" > "$O/$1.log" 2>&1 || { tail -20 "$O/$1.log"; exit 3; }
   tail -2 "$O/$1.log"
 }
