@@ -33,7 +33,7 @@ KNOWN = {"verity/inference-only/v0": "a stated exception for one run of record; 
 
 def v0_names() -> set[str]:
     """v0's Lean names: `InferenceOnlyCheck.Protocol.protocol` while its `protocolId` is v0."""
-    text = (ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Protocol.lean").read_text()
+    text = (ROOT / "verity/protocols/policy/inference_only/verifier/lean/InferenceOnlyCheck/Protocol.lean").read_text()
     m = re.search(r'^def protocolId : String := "([^"]*)"', text, re.M)
     assert m, "InferenceOnlyCheck/Protocol.lean no longer defines `protocolId` as a string literal: read v0's id where it now is"
     return {"InferenceOnlyCheck.Protocol.protocol"} if m[1] == V0 else set()

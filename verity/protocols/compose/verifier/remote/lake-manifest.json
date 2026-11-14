@@ -20,7 +20,7 @@
    "name": "inference_only_check",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../../policy/inference_only/verifier/inference_only/lean",
+   "dir": "../../../policy/inference_only/verifier/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

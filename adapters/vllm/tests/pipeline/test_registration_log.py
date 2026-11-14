@@ -18,7 +18,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity_vllm.pipeline import registration_log as RL
 
 _spec = importlib.util.spec_from_file_location(
-    "inference_only_reference", Path(__file__).resolve().parents[4] / "verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/inference_only_reference.py")
+    "inference_only_reference", Path(__file__).resolve().parents[4] / "verity/protocols/policy/inference_only/verifier/lean/scripts/inference_only_reference.py")
 assert _spec is not None and _spec.loader is not None
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)

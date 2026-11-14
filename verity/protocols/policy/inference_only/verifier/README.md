@@ -7,7 +7,7 @@ and no console script. The policy's only Python is beside it: its manifest on th
 (`verity.protocols.policy.inference_only.verifier.parties`: one party, the verifier, no channel and no message), which a
 deployment configuration's table declares the policy's party from, with its test in `verity/protocols/policy/inference_only/verifier/tests`.
 
-- **Lean**: `lean/` is the Lake package `inference_only_check`, whose library `InferenceOnlyCheck` the packages at `../../../../accounting/certifier/verifier/lean`,
+- **Lean**: `lean/` is the Lake package `inference_only_check`, whose library `InferenceOnlyCheck` the packages at `../../../accounting/certifier/verifier/lean`,
   `verity/protocols/compose/verifier/onsite`, `verity/protocols/compose/verifier/remote` and `security/Properties` require by path.
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
@@ -38,7 +38,7 @@ deployment configuration's table declares the policy's party from, with its test
 - **Loads from**: the packages at `verity/protocols/proofs/flock/verifier` and `verity/protocols/interface`, and nothing of
   the certifier.
 - **Not here**: its tests, `test_inference_only_*.py` and `test_inference_only_protocol.py`. They are in
-  `../../../../accounting/certifier/verifier/network/tests`, in the suite `verity/protocols/accounting/certifier/verifier/network`, with the
+  `../../../accounting/certifier/verifier/network/tests`, in the suite `verity/protocols/accounting/certifier/verifier/network`, with the
   tests of the certifier's Lean check. The tests of `verity/protocols/compose/verifier/lean` load the second by
   path.
 
@@ -69,7 +69,7 @@ rollout) reads an enormous amount, say 1 TB of new parameters, so training that 
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
 necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
 and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
-the slowdown lower bound"). Its numbers come from [`benchmarks/slowdown`](../../../../../../benchmarks/slowdown/README.md), whose
+the slowdown lower bound"). Its numbers come from [`benchmarks/slowdown`](../../../../../benchmarks/slowdown/README.md), whose
 scenarios register a policy as if it were a subprotocol.
 
 ## The Lean
@@ -118,15 +118,15 @@ of Flock's verifier.
   `InferenceOnlyCheck.Properties.DescCountsCK` (`security/Properties/InferenceOnly/Count.lean`) states that a published `complies` means
   `InferenceOnly.CompliesAtMost c k n`; it is not yet proved, and the lock lists it as an open piece. The count's difftest holds
   both forms to the Python reference's `check_count` and `check_count_detail` (`lean/scripts/inference_only_reference.py`), run by
-  `../../../../accounting/certifier/verifier/network/tests/test_inference_only_count_difftest.py`.
+  `../../../accounting/certifier/verifier/network/tests/test_inference_only_count_difftest.py`.
 - `nci-check --unrolled` runs the same with `InferenceOnlyCheck.check`, the check gate by gate, kept as the reference; its input
   format is in `InferenceOnlyCheck.Check`'s docstring. `--policy` runs the policy's check alone, without θ's provenance, which
   is what `benchmarks/verifier_cost` measures.
 - `inference-only id | check | serve` runs `InferenceOnlyCheck.Theta.check` as the core protocol `verity/inference-only/v0`,
   the subprotocol of onsite and remote.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
-  each other and to the Python reference `lean/scripts/inference_only_reference.py`, run by the `test_inference_only_*.py` of `../../../../accounting/certifier/verifier/network/tests/`;
-  `../../../../accounting/certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
+  each other and to the Python reference `lean/scripts/inference_only_reference.py`, run by the `test_inference_only_*.py` of `../../../accounting/certifier/verifier/network/tests/`;
+  `../../../accounting/certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
   decoders.
 
 The check's agreement with `InferenceOnly.CompliesRate` is proved: its verdict is the definition's (`DescReports`), and a

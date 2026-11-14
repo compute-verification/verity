@@ -8,7 +8,7 @@ Writes `DIR/desc_fuzz/programs.jsonl`, one `{"id", "family", "program", "agree"}
 The Lean audit runs `InferenceOnlyCheck/DescFuzzMain.lean` on it (`runs` in `lean-audit.json`, which pins its SHA-256), which
 decides the statements behind `DescAgrees` on each Program (`InferenceOnlyCheck.DescFuzz`'s docstring) and fails if one fails;
 `verity/protocols/accounting/certifier/verifier/network/tests/test_inference_only_desc_fuzz.py` checks that this script still writes it. The search itself,
-at millions of Programs, is the lane's (`verity/protocols/policy/inference_only/verifier/inference_only/fuzz/`); this is a seeded sample of it at a size
+at millions of Programs, is the lane's (`verity/protocols/policy/inference_only/verifier/fuzz/`); this is a seeded sample of it at a size
 the audit runs on every change to the package.
 
 `random` writes descriptor v1 JSON directly, not through `verity.circuits`' Builder, so that every reference form the
