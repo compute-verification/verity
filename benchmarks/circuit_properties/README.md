@@ -72,8 +72,12 @@ second point in the same pass, every input's words drawn on their own (an input 
 found by that use, as a permutation of its least table's rows, and every other as θ's are but positive), its rows
 compared across every activation whose other operand is the same there, and refused (`work.RepeatedRows`) where two
 rows are equal at enough points to hold 64 sampled bits a row, compared by their words with a row's two zeros one word
-at every width, so two rows that are one inf are equal and so are two rows of zeros whatever their signs, or where a row holds a NaN, which no comparison shows distinct. So a weight combined with its own words whose rows are equal whatever the weight is refused: cancelled
-against itself (M plus -1 times M; W times v plus -1 times v; and so times a stated ±1), or times its own rows in another order (M times
+at every width, so two rows that are one inf are equal, or where a row holds a NaN, which no comparison shows
+distinct. A row whose words are all zero at its point, whatever their signs, is left out of the comparison, and none
+of the MACs that read it is charged (`Tally.share`): a product by a zero row is zero, so it is no work (W plus -1
+times W, times a stated ±1, is charged nothing). So a weight combined with its own words whose rows are equal and not
+zero whatever the weight is refused: cancelled against itself (M plus -1 times M; W times v plus -1 times v), or
+times its own rows in another order (M times
 swap(M)), and so is a weight times a difference of an input's words. The pass is about one evaluation of the step,
 where the reading is in the description's size. One more premise holds the reading below the work, its parts each
 held as a fact by a test: θ's rows differ at every width a rounding reads them, and a word no input reaches is

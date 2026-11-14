@@ -79,12 +79,10 @@ def _resident_gib() -> float:
 
 
 def _peak_gib() -> float | None:
-    """The resident peak since the last reset (`_reset_peak`), or None where the system doesn't say."""
-    try:
-        with open("/proc/self/status") as f:
-            return next(int(x.split()[1]) for x in f if x.startswith("VmHWM:")) / 2**20
-    except (OSError, StopIteration):
-        return None
+    """The resident peak since the last reset (`_reset_peak`), or None where the status has no `VmHWM` line."""
+    with open("/proc/self/status") as f:
+        hwm = next((int(x.split()[1]) for x in f if x.startswith("VmHWM:")), None)
+    return None if hwm is None else hwm / 2**20
 
 
 def _reset_peak() -> bool:

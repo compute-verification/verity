@@ -719,13 +719,15 @@ def _zero_signs(signs: bool, width: int = 32) -> Program:
 
 
 @pytest.mark.parametrize("signs,width", [(True, 32), (False, 32), (True, 16)], ids=["signs", "ones", "bf16"])
-def test_rows_of_zeros_whose_signs_differ_are_refused_as_equal(signs, width):
+def test_rows_of_zeros_whose_signs_differ_are_not_charged(signs, width, monkeypatch):
     """W plus -1 times W times a stated ±1 is 0 in every word, whatever W, which the reading's rules take as distinct
-    rows: compared as words with the two zeros one word at every width, rows 0 and 1 are equal, the signs as S states
-    them or not, at f32 and rounded to bf16, and the Program is refused. Without the point u W′′^T is charged."""
-    with pytest.raises(WK.RepeatedRows) as e:
-        WK.read(_zero_signs(signs, width), KB)
-    assert (e.value.operand, e.value.rows) == ("w", (0, 1))
+    rows: read with the two zeros one word at every width, every row is zero at the point, the signs as S states them
+    or not, at f32 and rounded to bf16. A product by a zero row is zero, so u W′′^T is read and none of its MACs is
+    charged. Without the point it is charged whole."""
+    w = WK.read(_zero_signs(signs, width), KB)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    full = WK.read(_zero_signs(signs, width), KB)
+    assert full.N == (T - 1) * K * N and w.N == 0
 
 
 def _swap(order: str, carried: bool) -> Program:
@@ -785,7 +787,7 @@ def test_a_weight_cancelled_through_a_call_is_refused(monkeypatch):
         "operand 'x', whose rows the reading shows distinct, holds rows 0 and 1 equal at the point; fix: compute it "
         "from a weight one to one (a shift, a rounding, a multiply by a word no input reaches) or let it read the "
         "inputs, which leaves its product out as gathered")
-    monkeypatch.setattr(PT, "check", lambda *a: None)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
     w = WK.read(_cross_call(), KB)
     assert w.N == (T - 1) * PN * K * N and {g.weight for g in w.groups} == {(True, True)}
 
@@ -885,7 +887,7 @@ def test_a_row_with_a_nan_is_refused(monkeypatch):
         "leaves them uncompared; fix: keep its values finite at the point, whose weights and registered values take "
         "every sign and whose inputs are positive: square a weight or a registered value before a square root or a "
         "logarithm reads it, or carry it in as an input")
-    monkeypatch.setattr(PT, "check", lambda *a: None)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
     assert WK.read(p, KB).N == (T - 1) * K * N
 
 
@@ -1184,7 +1186,7 @@ def test_a_specific_operand_is_tested_at_the_point_too(monkeypatch):
     with pytest.raises(WK.RepeatedRows) as e:
         WK.read(_specific_overflow(), KB)
     assert (e.value.definition, e.value.operand, e.value.rows) == ("SpecificOverflowStep_v1", "w", (0, 1))
-    monkeypatch.setattr(PT, "check", lambda *a: None)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
     w = WK.read(_specific_overflow(), KB)
     (g,) = w.groups
     assert g.weight == (True, False) and w.N == (T - 1) * K * PN
@@ -1192,7 +1194,8 @@ def test_a_specific_operand_is_tested_at_the_point_too(monkeypatch):
 
 def _specific_alone(how: str) -> Program:
     """`_attention_loop`'s O1 = P V1^T cancelled against itself, Q = O1 plus -1 times O1, whose rows the reading
-    shows specific and not distinct and which are 0 for every input; with ``how`` "nan" a NaN in every word (O1
+    shows specific and not distinct and which are 0 for every input; with ``how`` "equal" Q plus a stated 1, rows
+    equal for every input and not 0; with "first" Q's first row and O1's others; with "nan" a NaN in every word (O1
     squared and times 2^127 twice, an inf, before the cancel), and with "scan" Q's rows plus a stated 1 by a scan over
     them, whose contexts repeat before its last iteration; and u Q^T, u carried."""
     one, big, neg = const(32, 0x3F800000), const(32, 0x7F000000), const(32, 0xBF800000)
@@ -1210,6 +1213,10 @@ def _specific_alone(how: str) -> Program:
         if how == "nan":
             o1 = _mul(B, _mul(B, _mul(B, o1, o1), B.call(big)), B.call(big))
         q = _add(B, o1, _mul(B, o1, B.call(neg)))
+        if how == "equal":
+            q = _add(B, q, B.call(one))
+        if how == "first":
+            q = Coll(ROWS_T, concat([q[0].refs, *(o1[p].refs for p in range(1, PN))]))
         if how == "scan":
             q = Coll(ROWS_T, B.scan(bind(inner), B.call(const(32, 0)), xs=[q], shared=[])[1].refs)
         return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, u, z)), B.call(LIN_A, u, q)
@@ -1219,32 +1226,46 @@ def _specific_alone(how: str) -> Program:
     return _loop(name, carry, (("tok", Array(PN, I32)), ("z", X_T), ("zn", S_T)), Array(PN, F32), step)
 
 
-def test_specific_rows_cancelled_against_themselves_are_refused_at_the_word_by_word_point(monkeypatch):
-    """Q's rows are specific alone by the reading's rules and 0 for every input. The one-word point holds one token at
-    every position, which breaks `P_BATCH`, so it can't show a specific operand's rows distinct; the word-by-word
-    point, whose tokens are distinct rows of the table, meets it, and refuses Q, rows 0 and 1, as rows equal by an
-    identity of the circuit. Without the point u Q^T is charged."""
+def test_specific_rows_equal_for_every_input_are_refused_at_the_word_by_word_point(monkeypatch):
+    """Q's rows are specific alone by the reading's rules, and Q plus a stated 1 is 1 for every input. The one-word
+    point holds one token at every position, which breaks `P_BATCH`, so it can't show a specific operand's rows
+    distinct; the word-by-word point, whose tokens are distinct rows of the table, meets it, and refuses Q, rows 0 and
+    1, as rows equal by an identity of the circuit and not 0. Without the point u Q^T is charged."""
     with pytest.raises(WK.RepeatedRows) as e:
-        WK.read(_specific_alone("cancel"), KB)
-    assert (e.value.definition, e.value.operand, e.value.rows) == ("SpecificCancelStep_v1", "w", (0, 1))
-    monkeypatch.setattr(PT, "check", lambda *a: None)
-    w = WK.read(_specific_alone("cancel"), KB)
+        WK.read(_specific_alone("equal"), KB)
+    assert (e.value.definition, e.value.operand, e.value.rows) == ("SpecificEqualStep_v1", "w", (0, 1))
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    w = WK.read(_specific_alone("equal"), KB)
     (g,) = w.groups
     assert g.weight == (True, False) and w.N == (T - 1) * K * PN
+
+
+@pytest.mark.parametrize("how,zero", [("cancel", PN), ("first", 1)])
+def test_specific_rows_zero_at_the_word_by_word_point_are_not_charged(how, zero, monkeypatch):
+    """Q's rows, specific alone, are 0 at the word-by-word point: all of them (O1 cancelled against itself) or the
+    first (that row cancelled, O1's others). A product by a zero row is zero, so the zero rows are left out of the
+    comparison and their MACs out of N; the other rows are compared and pass. Without the point u Q^T is charged
+    whole."""
+    w = WK.read(_specific_alone(how), KB)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    full = WK.read(_specific_alone(how), KB)
+    assert full.N == (T - 1) * K * PN and w.N == full.N - full.N * zero // PN
 
 
 def test_the_word_by_word_points_refusal_says_specific_and_names_that_point():
     """A specific-alone operand's refusal says the reading shows its rows specific, names the word-by-word point and
     gives a fix about its positions, not a weight's."""
     with pytest.raises(WK.RepeatedRows) as e:
-        WK.read(_specific_alone("cancel"), KB)
+        WK.read(_specific_alone("equal"), KB)
     assert e.value.by_words and "shows specific" in str(e.value) and "at the word-by-word point" in str(e.value)
     assert "from a weight one to one" not in str(e.value)
 
 
 def _specific_members() -> Program:
-    """`_attention_loop`'s O1 cancelled against itself, Q = O1 plus -1 times O1, 0 for every input and specific alone,
-    one row a member of a composite batched over the positions, each Q's row times a carried W the members share."""
+    """`_attention_loop`'s O1 cancelled against itself plus a stated 1, Q = O1 plus -1 times O1 plus 1, 1 for every
+    input and specific alone, one row a member of a composite batched over the positions, each Q's row times a carried
+    W the members share."""
+    one = const(32, 0x3F800000)
     neg = const(32, 0xBF800000)
     per = _def("PerRow", ((("q", X_T), ("w", W_T)), Y_T), lambda B, S, q, w: B.call(LIN, q, w))
 
@@ -1256,7 +1277,7 @@ def _specific_members() -> Program:
         flat = Array(PN * D, F32)
         h = B.batch(P.F32Add, Coll(flat, s.refs), Coll(flat, mask), axes=(0, 0)).reshape(Array(PN, S_T))
         o1 = B.batch(LIN_P, B.batch(SOFTMAX, h, axes=(0,)), v1, axes=(0, None))
-        q = _add(B, o1, _mul(B, o1, B.call(neg)))
+        q = _add(B, _add(B, o1, _mul(B, o1, B.call(neg))), B.call(one))
         y = Coll(Array(PN * N, F32), B.batch(bind(per), q, w, axes=(0, None)).refs)
         return (_add(B, table, z), _add(B, w1, z), _add(B, v1, zn), _add(B, w, z)), y
 
@@ -1266,14 +1287,14 @@ def _specific_members() -> Program:
 
 
 def test_a_specific_row_repeated_across_members_is_refused_at_the_word_by_word_point(monkeypatch):
-    """Q's rows are 0 for every input, one a member, each times the W the members share: one activation holds one row,
+    """Q's rows are 1 for every input, one a member, each times the W the members share: one activation holds one row,
     so rows are compared across the members whose other operand is the same at the word-by-word point, and Q is refused,
     row 0 of two members. Without the point Q W^T is charged, the work repeated a member."""
     with pytest.raises(WK.RepeatedRows) as e:
         WK.read(_specific_members(), KB)
     assert (e.value.operand, e.value.rows, e.value.by_words) == ("x", (0, 0), True)
     assert isinstance(e.value.member, tuple) and e.value.member[0] != e.value.member[1]
-    monkeypatch.setattr(PT, "check", lambda *a: None)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
     assert WK.read(_specific_members(), KB).N == (T - 1) * PN * N * K
 
 
@@ -1290,7 +1311,7 @@ def test_the_word_by_word_points_token_input_is_a_permutation_of_the_least_table
     monkeypatch.setattr(PT.Walk, "inputs", spy)
     PT._MEMO.clear()
     with pytest.raises(WK.RepeatedRows):
-        WK.read(_specific_alone("cancel"), KB)
+        WK.read(_specific_alone("equal"), KB)
     walk, env = seen["walk"], seen["env"]
     (k,) = walk.token_inputs()
     assert PT._leaf_width(walk.program.root.body.nodes[k]) == 32

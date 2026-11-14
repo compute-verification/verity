@@ -38,8 +38,12 @@ b the bits its words hold at the point (`held`), at most those of the narrowest 
 narrowest rounding the Program holds, so a narrow row (an e2m1 word after a rounding, a one-word row) is not refused
 by chance. Rows are compared by their words, never by a difference (inf - inf is a NaN), with a row's two zeros one
 word at every width (-0 read as +0), so a row holding an inf is a row (two words of one value hold the same inf there)
-and a row of zeros is one row whatever their signs. A row holding an f32 NaN is refused: no comparison shows it
-distinct, and whoever submits the circuit can make a NaN at the point. `CENTRE` is where the point makes no inf or NaN
+and a row of zeros is one row whatever their signs. A row whose words are all zero there is left out of the
+comparison, at either point, and the reading charges none of the MACs that read it (`Tally.share`, the most of any
+activation the pass evaluates): a product by a zero row is zero, so it is no work, and N only falls. So a claimed
+operand's rows that a causal softmax's gradient leaves 0 at each sequence's first position are charged nothing. A row holding
+an f32 NaN is refused: no comparison shows it distinct, and whoever submits the circuit can make a NaN at the
+point. `CENTRE` is where the point makes no inf or NaN
 from finite operands in training_slowdown's step, nor a binade either side; a -inf the Program states as a value (a
 causal mask's) is not the point's doing, and stays at every centre through the mask's add and the softmax's subtraction
 to the exponential that makes it 0.
@@ -73,6 +77,7 @@ from __future__ import annotations
 import hashlib
 import math
 from collections import Counter
+from fractions import Fraction
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -245,8 +250,9 @@ class Unrun:
 @dataclass
 class Tally:
     """What a pass evaluated: primitive words at one point, the points, the word-by-word points (`Walk.lanes`; 0
-    where no claim is specific alone), each primitive's words the reference computed, the claims tested, and the claims
-    that read values a scan left unevaluated."""
+    where no claim is specific alone), each primitive's words the reference computed, the claims tested, the claims
+    that read values a scan left unevaluated, and by (summary, node, argument) the share of a claim's rows that are
+    zero at its point (`zero`), the most of any activation the pass evaluated."""
 
     words: int = 0
     points: int = 1
@@ -254,6 +260,15 @@ class Tally:
     reference: Counter = field(default_factory=Counter)
     claims: int = 0
     unrun: list = field(default_factory=list)
+    zero: dict = field(default_factory=dict)
+
+    def share(self, sid: int, node: int) -> Fraction:
+        """The share of product ``node``'s MACs that read a row zero at its point, by either operand: no work."""
+        kept = Fraction(1)
+        for (s, k, _i), z in self.zero.items():
+            if (s, k) == (sid, node):
+                kept *= 1 - z
+        return 1 - kept
 
 
 def claimed(st) -> bool:
@@ -613,7 +628,9 @@ class Walk:
     def rows(self, S, k: int, nd, i: int, name: str, K: int, value, L: int, by_words: bool = False,
              other=None) -> None:
         """Refuse where two rows of ``K`` words of argument ``i`` of product node ``k`` are equal at every point or
-        where a row holds an f32 NaN, which no comparison can show distinct. At the one-word point's lanes rows are
+        where a row holds an f32 NaN, which no comparison can show distinct. A row whose words are all zero there is
+        left out of the comparison, and its share of the rows is recorded (`Tally.zero`), which the reading doesn't
+        charge: a product by it is zero. At the one-word point's lanes rows are
         compared within one activation, whose members are equal there; where ``by_words``, at the word-by-word point's
         lanes, across every activation whose ``other`` operand's words are the same there, so a row repeated a
         member against one shared operand is refused."""
@@ -638,15 +655,20 @@ class Walk:
                 a = int(np.flatnonzero(bad.any(axis=1))[0])
                 raise WK.RepeatedRows(self.fns[S.sid].id, k, name, None, member=a if A > 1 else None,
                                       nan=(int(bad[a].sum()), R), by_words=by_words)
+        zero = ~v.any(axis=1)
+        if zero.any():
+            at = (S.sid, k, i)
+            self.tally.zero[at] = max(self.tally.zero.get(at, Fraction(0)), Fraction(int(zero.sum()), A * R))
         member = np.arange(A, dtype=np.uint64)
         if by_words and A > 1:
             o = other.reshape(self.lanes, A, -1)[P:].transpose(1, 0, 2).reshape(A, -1)
             member = np.unique(o, axis=0, return_inverse=True)[1].reshape(-1).astype(np.uint64)
-        keys = np.concatenate([np.repeat(member, R)[:, None], v], axis=1)
+        live = np.flatnonzero(~zero)
+        keys = np.concatenate([np.repeat(member, R)[:, None], v], axis=1)[live]
         _keys, inv, cnt = np.unique(keys, axis=0, return_inverse=True, return_counts=True)
         dup = np.flatnonzero(cnt > 1)
         if dup.size:
-            r1, r2 = np.flatnonzero(inv.reshape(-1) == dup[0])[:2]
+            r1, r2 = live[np.flatnonzero(inv.reshape(-1) == dup[0])[:2]]
             (a1, a2), (q1, q2) = (int(r1 // R), int(r2 // R)), (int(r1 % R), int(r2 % R))
             raise WK.RepeatedRows(self.fns[S.sid].id, k, name, (q1, q2), by_words=by_words,
                                   member=None if A == 1 else a1 if a1 == a2 else (a1, a2))

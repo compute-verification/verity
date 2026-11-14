@@ -51,7 +51,8 @@ For `min_cut.bound`'s inputs it reads:
 * `N` and `O`: the charged products' MACs and their returned leaves times their width. A token-indexed product keeps
   1 − `SHARED_PREFIX`/s of its MACs, s the least sequence a Program's products of two activations allow (the second
   smallest of each one's dims above 1, at least two of which a token indexes where it is attention's); a Program
-  with none keeps all of them.
+  with none keeps all of them. A charged product's MACs leave out the share that reads a row zero at its point
+  (`points.Tally.share`): a product by a zero row is zero.
 * `F`: `share(ω)`, ω the largest set of arrays the work multiplies pairwise (at least 2).
 
 Each status is per array, never per word: a node's output has one status unless it is a call's or a scan's, whose
@@ -1725,7 +1726,7 @@ def _read(program, k: float, products, lookups, structure: bool = True, clock=No
             reason = ""
         reasons[s.sid, i] = reason
     from .points import check
-    check(program, R, root, reasons)
+    zero = check(program, R, root, reasons).share
     for s, i, site, x, w in ops:
         n, reason = count[s.sid] * site.n, reasons[s.sid, i]
         weight = (not site.x.data, not site.w.data)
@@ -1734,7 +1735,7 @@ def _read(program, k: float, products, lookups, structure: bool = True, clock=No
         key = (site.product.op, site.widths, weight, site.out_width, site.k_dim, site.dims,
                tuple(round(r, 6) for r in site.rates), tuple(round(b, 6) for b in site.bits), beta, reason)
         g = groups.setdefault(key, [0, 0, set()])
-        g[0] += n * site.macs
+        g[0] += n * site.macs - math.ceil(n * site.macs * zero(s.sid, site.node))
         g[1] += n * site.outputs * site.out_width
         if x is not None and w is not None:
             g[2].add(frozenset((cls.find(x), cls.find(w))))
