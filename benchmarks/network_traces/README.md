@@ -18,9 +18,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 
 ## Entry points
 
-- **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving; `replay.py` runs
-  honest traces through the reference protocol at calibrated parameters, and `stall_probe.py` finds what makes a tick
-  late.
+- **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and `stall_probe.py`
+  finds what makes a tick late.
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.accounting.certifier.verifier.warden`, the network certifier
