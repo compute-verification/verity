@@ -117,7 +117,7 @@ params, `Spot.OneStageZk.Params.base`); in the recursive form, the program of th
 (`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
 soundness the recursive audit (`RecursiveAuditC3`) states. In either form the record keeps the caller's facts against
 that verifier (`Properties.Spot.CallerHeld`): it names its day's declared program, its window names the stream, the
-prover, the seed salt and the pool's reset the verifier holds, and it opens the pool the previous window of record
+prover, the seed salt, the registered compiler and the pool's reset the verifier holds, and it opens the pool the previous window of record
 left. SPOT's own statement (`Properties.Spot.AcceptMeans`) holds none of them: they are what SPOT's caller hands the
 verifier, so they are stated here, of the case the caller's check accepted. -/
 def StageHeld (k : Case) : Prop :=
