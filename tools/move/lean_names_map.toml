@@ -375,15 +375,6 @@ files = ["security/Proofs/Flock/Soundness/Audit/Pooled.lean"]
 words = { "Escapes" = "MissProb" }
 
 [[words_in]]
-files = [
-    "security/Proofs/Properties/Challenger/Window.lean",
-    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean",
-    "verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerSession.lean",
-    "verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean",
-]
-words = { "MonitoringPeriod" = "PeriodRecord" }
-
-[[words_in]]
 files = ["verity/protocols/proofs/spot/verifier/lean/Spot/MonitoringPeriod.lean"]
 words = { "Window" = "Run" }
 
@@ -1134,7 +1125,7 @@ words = { "window" = "period" }
 
 [rewrite]
 # Never rewritten: records of what was, files a digest pins, locks, and what isn't Lean or its prose.
-exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/*.py", "benchmarks/**", "adapters/**", "tools/**"]
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/*.py", "benchmarks/**", "adapters/**", "tools/**", "tests/lint/allowlists/**"]
 
 [keep]
 # Format ids, notes, art ids, branches and lanes; record keys and tag strings that keep the word until a format
@@ -1230,6 +1221,7 @@ strings = [
     "\"window.devices\"",
     "\"window.marked\"",
     "\"window: verity/inference-only/v0 committed \"",
+    "\"window: verity/inference-only/v0 and verity/pouw/pearl-plus/v1 named different values\"",
     "\"would not be K's: the proof system commits a K at most every window's units ({",
     "\"{\\\"pins\\\":[],\\\"windows\\\":[\"",
     "} and the window's circuit (the SHA-512 of its \"",
