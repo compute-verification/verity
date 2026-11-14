@@ -9,7 +9,7 @@ public import Proofs.Properties.Verity.SampledTwo.CoinMapAgree
 `joinedForm`: the projection's bound at the form's acceptance, `JoinGood` with no collision of the play's blobs with
 the registered files, and the run's locator, at the cut's terms at the deployed two-session history plus the blob
 finder's collision probability, from the join's one premise (`JoinsAt`, `JoinsAt.lean`) and nothing else. It is
-`joinedOfLaw` at COINMAP's proof of the coin map's law (`CoinMap.coinMapHolds`, `CoinMapAgree.lean`).
+`joinedOfLaw` at COINMAP's proof of the coin map's distribution (`CoinMap.coinMapHolds`, `CoinMapAgree.lean`).
 
 `joinedCoupling`: the two-stage leg's coupling (`CouplingTargetTwo`) with the join's projection bound, its blob term
 under `ecr/sha-512` (`joinCRBound`), and MAJORITY's majority bound as its terms, from one `CouplesAt`

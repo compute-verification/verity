@@ -55,7 +55,7 @@ theorem getD_get! {top : ByteArray} {k : ℕ} : top.get! k = top.data.toList.get
   cases top.data[k]? <;> rfl
 
 /-- **Bit `b` of a 64-byte node's row is the node's bit `b`**: word `b / 16` is bytes `b / 8` (low) and `b / 8 + 1`
-(high) of the node, little-endian (`Firewall.topRows`). -/
+(high) of the node, little-endian (`ZkServer.topRows`). -/
 theorem capRow_bit {top : ByteArray} (htop : top.size = 64) {b : ℕ} (hb : b < 512) :
     ((capRow top)[b / 16]!).testBit (b % 16) = bitL top.data.toList b := by
   rw [capRow, topRows_of_size htop, List.headD_cons, getElem!_pos _ (b / 16)

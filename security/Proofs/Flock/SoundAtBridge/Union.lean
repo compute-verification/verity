@@ -45,7 +45,7 @@ session's audit game played by its prover (`FlockSoundness.Game.prob`). This fil
 sessions, with no Flock definition:
 
 * `game_prob_exists_le`: the union bound for a fixed strategy over a finite family of events;
-* `SessionLaw`: read through the session a path runs and its outcome there, the window's coins have the sessions' law;
+* `SessionLaw`: read through the session a path runs and its outcome there, the window's coins have the sessions' sampling design;
 * `soundAt_of_sessions`: `SoundAt` at `δo + δ` when each unsound proof is off (probability at most `δo`) or its
   session's outcome is in a bad event of probability at most `δ` in every session it runs.
 -/
@@ -109,7 +109,7 @@ theorem avg_le {β : Type*} [Fintype β] (f : β → ℝ) {δ : ℝ} (hδ : 0 �
     calc ∑ b, f b ≤ ∑ _b : β, δ := Finset.sum_le_sum fun b _ => h b
       _ = δ * Fintype.card β := by rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, mul_comm]
 
-/-- **Read through its sessions, the window has the sessions' law**: for every event `E` of a session's outcome, its
+/-- **Read through its sessions, the window has the sessions' sampling design**: for every event `E` of a session's outcome, its
 probability over the window's paths, at the session `sess x` the path `x` runs and its outcome `out x` there, is at
 most the paths' average of its probability in that session's game `G (sess x)` played by its prover `τ (sess x)`. It
 holds with equality when, given what the path fixes before the session (its setting and its prover), the session's

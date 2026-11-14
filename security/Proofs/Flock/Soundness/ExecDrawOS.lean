@@ -34,7 +34,7 @@ what `runOS` does on those bytes, and these runs exhaust every run as `L` grows,
 bounded here, each at most the model's. A3 is what makes those bytes uniform. The limit itself is measure theory the
 theorems don't state.
 
-The Bernoulli law's live sample is `Proofs.Flock.Claims.Sampling.ExecBernoulli`'s `drawOS_bernoulli_escape_le`.
+The Bernoulli sampling design's live sample is `Proofs.Flock.Claims.Sampling.ExecBernoulli`'s `drawOS_bernoulli_escape_le`.
 -/
 
 @[expose] public section

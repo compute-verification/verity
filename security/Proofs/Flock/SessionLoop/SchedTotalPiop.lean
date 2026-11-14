@@ -28,9 +28,9 @@ alone.
 namespace Claims.ZKServer.Count
 
 open _root_.Flock (V F128 Transcript TMW liftTM)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
-open _root_.Flock.Firewall.Finish (squeezeP sampleP sampleVecP zerocheckFw lincheckFw repPiop)
-open _root_.Flock.Firewall.Skeleton (RecM recAsks)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Finish (squeezeP sampleP sampleVecP zerocheckFw lincheckFw repPiop)
+open _root_.Flock.ZkServer.Skeleton (RecM recAsks)
 
 variable {wideLeaf : Bool}
 
@@ -432,11 +432,11 @@ theorem repPiop_fold (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout)
 
 /-- **The skeleton's run went through the fold**, at a zerocheck point of `m - 6` coins. -/
 theorem rounds_fold {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {alg : Array (ByteArray × ℕ)}
-    (hm : st.m < 2 ^ 64) (h : _root_.Flock.Firewall.Skeleton.rounds st k0 cap dom = .ok alg) : FoldAt st := by
+    (hm : st.m < 2 ^ 64) (h : _root_.Flock.ZkServer.Skeleton.rounds st k0 cap dom = .ok alg) : FoldAt st := by
   have hT := tally_bind (repPiop_fold st (_root_.Flock.Zk.PadLayout.new st.m st.kLog k0) cap
     (ByteArray.mk (Array.replicate 64 0)) #[] (fun _ => 0) hm) fun _ hq =>
     tally_pure (Q := fun _ => FoldAt st) (a := ()) hq
-  unfold _root_.Flock.Firewall.Skeleton.rounds at h
+  unfold _root_.Flock.ZkServer.Skeleton.rounds at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h

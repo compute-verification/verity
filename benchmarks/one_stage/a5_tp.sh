@@ -12,7 +12,7 @@
 #     A5_CHECKPOINT=DIR opens the registered tensors the bundles don't carry (a MoE partition's expert stacks) from the checkpoint
 #     of record, without its shard sha256 (each tensor read is held to the committed weights root).
 #   The stand-in (no A5_TP): the CPU TP Commit tests/pipeline/served_tp, world 2, once per STANDIN entry I:LAW (its SiluMul_v2{I}
-#     rows, its partition's law); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
+#     rows, its partition's sampling design); with A5_WINDOWS=bundles it is served_tp --deferred and its windows come from its bundles.
 #     The STANDIN entry sparse-mla is a5_sparse_mla.py: test_serving_rows_splits' window (one SparseMlaSplit row's key blocks,
 #     column ends and combines, each read row wired to the unit that wrote it), run as the entry row-tables is; the entry
 #     sparse-mla:units is its --units, each key block served as its scores unit and its values units, which read the block's

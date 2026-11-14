@@ -9,7 +9,7 @@ import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 
 /-!
-# The second stage's law is computed from the first stage's accepted sample
+# The second stage's sampling design is computed from the first stage's accepted sample
 
 The two-stage form's last step holds the interior audit's sample to a sampling design it computes (`secondDesignOf`), from the `draw`
 the run of record returned. That `draw` is the first stage's sample of record:
@@ -149,7 +149,7 @@ theorem run_draw {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.r
       · exact getD_mkObj (by simp [FlockComplete.JsonRT.Distinct, List.pairwise_cons, Std.compare_eq_iff_eq])
           (by simp)
 
-/-- **The second stage's law is computed from the first stage's accepted sample.** Where the two-stage check accepts,
+/-- **The second stage's sampling design is computed from the first stage's accepted sample.** Where the two-stage check accepts,
 the run of record's first stage drew `draw` on the first stage's bytes `ξ` (`Select.select`, under the rule
 `Select.resolve` gives the parameters' rule at the boundary's program and query, with no closure), held it to the
 boundary registration's record `j₁` as the check read it (`readBack`; `Draw.checkDraw`, under the sampling design the
