@@ -139,7 +139,7 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
     `scan_zk.v3c_state` finds it at the registered entry's root and domain and holds its rows to the scan's; another
     link-window's rows are refused by name."""
     from verity_vllm.program.predict import window_circuit as WC, window_rows as WRS
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
     monkeypatch.setattr(H1R, "MODE", "numpy")
     with PP.network_traces():

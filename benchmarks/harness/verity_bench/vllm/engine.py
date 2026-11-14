@@ -25,7 +25,7 @@ from verity_vllm.engine import handle, int8_ranks
 from verity_vllm.engine.arrivals import run_requests_arrivals
 from verity_vllm.engine.hooks import Hooks, live
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
 from verity_bench import settings
 from verity_bench.vllm.arms import (
