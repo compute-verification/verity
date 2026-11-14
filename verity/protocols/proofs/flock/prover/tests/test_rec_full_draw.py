@@ -63,7 +63,7 @@ def test_the_full_sample_is_every_unit_and_each_stratum_whole():
         n = d["population"]
         assert d["units"] == list(range(n)) and d["k"] == n and D.proved(d) == list(range(n))
         assert all(s["k"] == sum(hi - lo for lo, hi in s["units"]) for s in d["strata"])
-        assert D.strata_problem(D.law_of(d), n) is None
+        assert D.strata_problem(D.sampling_design_of(d), n) is None
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

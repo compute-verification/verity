@@ -739,7 +739,7 @@ def record(pub: Mapping[str, Any], check: SpecializedDefinition, design: Mapping
            window: Mapping[str, Any] | None = None, stop: Any = None) -> dict[str, Any]:
     """The class's boundary registration (one-stage's record) from its ``commit.json``, laid out under ``check`` and the
     stop rule ``stop`` (`layout_of`): `Layout.program` under `Layout.grain` at sampling design ``design`` (the first stage's,
-    `service.selection_law`), each of its values' root (`Layout.values`), and its window: served, the run, the window's
+    `service.selection_sampling_design`), each of its values' root (`Layout.values`), and its window: served, the run, the window's
     index as its row, the class, the check and the index's leaf, with ``window``'s items (the advice's binding)."""
     L, c = layout_of(pub, check, stop), BoundaryCommit.of(pub, COMMIT)
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.ports().items()]

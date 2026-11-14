@@ -99,7 +99,7 @@ H1 = hashlib.sha512(b"the H1 window Program's descriptor").hexdigest()
 OPEN = hashlib.sha512(b"the H1 window's open root").hexdigest()
 #: the V3c window's run root
 RUN = "ab" * 64
-LAW = D.parse_design("stratified:1")
+SAMPLING_DESIGN = D.parse_design("stratified:1")
 PROMPT = [(7 * i + 3) % 500 for i in range(CLASS.prompt)]
 #: the flipped row: round 1's o-projection's (call 1 of the round) first slot
 FLIP = ("row-table/1/k2048", M * 1)
@@ -272,7 +272,7 @@ def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_sa
     (tid, port, u), = [k for k, v in _reads(toy.low.circuit).items() if v == FLIP]
     units = toy.low.circuit.units
     assert units[tid] == 1 and "ROUND=1" in tid and port == "o2" and u == 0
-    assert D.stratum_k(LAW["k"], units[tid], sum(units.values())) == 1
+    assert D.stratum_k(SAMPLING_DESIGN["k"], units[tid], sum(units.values())) == 1
     j = next(j for j, r in toy.low.programs[0].packed.items() if (r.tid, r.unit) == (tid, u))
     x = toy.slots[0].operand(toy.low.fn.body.nodes[j].args[0])
     got = np.asarray(evaluate_batch(toy.rows.fns[tid], x[None])).reshape(-1)[K + 1:].astype("<u4").view("<u2")
@@ -284,14 +284,14 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     """The toy's window recorded, committed and written as window-commit writes it after W (R in its
     ``registration.json``), and the verifier's own window from its records."""
     c, out = toy.low.circuit, tmp_path_factory.mktemp("window")
-    win = IF.Window(c, RUN, LAW, 64, registered={**toy.values, **_reuse(toy, toy.h1.W)}, forms=WRS.FORMS)
+    win = IF.Window(c, RUN, SAMPLING_DESIGN, 64, registered={**toy.values, **_reuse(toy, toy.h1.W)}, forms=WRS.FORMS)
     win.supply(G)
     toy.rows.record(win)
     committed = win.close()
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.h1.W))
-    mine, _doc = IF.of_records(out, LAW, RA.catalog_resolve)
+    mine, _doc = IF.of_records(out, SAMPLING_DESIGN, RA.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine,
                            leaf_layer=CS.leaf_layer(publics))
@@ -318,7 +318,7 @@ def _words(c) -> dict[str, int]:
 def _check(written, toy, W: dict, R: dict):
     """R1-R7 on ``R`` against the verifier's own window, with the log [W] and each table an output value reusing W's."""
     mine, dW, words = written.mine, REG.digest(W), _words(toy.low.circuit)
-    return REG.check(R, mine.program, mine.query, LAW, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (), [W],
+    return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (), [W],
                      registered=words, outputs={p: {"record": dW, "value": _names()[p]} for p in words}, window_root=OPEN)
 
 
@@ -387,7 +387,7 @@ def _v1_case(one, toy, written, W: dict, R: dict) -> dict:
     roots as the ones its readers opened against, standing in for their proofs."""
     mine, words = written.mine, _words(toy.low.circuit)
     program, query = mine.program, mine.query
-    drawn = D.derive(program, query, LAW)
+    drawn = D.derive(program, query, SAMPLING_DESIGN)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": P.units(program, query), "units": units}
     proved = D.proved(draw)
@@ -396,7 +396,7 @@ def _v1_case(one, toy, written, W: dict, R: dict) -> dict:
                 "receipt": REG.receipt(R, "v", received="2000-01-01T00:00:00Z"), "served": None, "session_roots": None,
                 "sessions": [], "statement": {},
                 "verdicts": {"lean": {"accepted": True, "of_record": True, "registered": opened}}}
-    params = one.RP.params(program, query, LAW, CS.expected_ports(mine), written.leaf_layer, "1/20", log=[W],
+    params = one.RP.params(program, query, SAMPLING_DESIGN, CS.expected_ports(mine), written.leaf_layer, "1/20", log=[W],
                            registered=words, scheme=CS.SCHEME)
     params |= {"outputs": {p: {"record": REG.digest(W), "value": _names()[p]} for p in words}, "window_root": OPEN,
                "parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]}

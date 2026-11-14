@@ -309,9 +309,9 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
-                law = D.derive(program, query, D.parse_design(f"stratified:{k}"))
+                sampling_design = D.derive(program, query, D.parse_design(f"stratified:{k}"))
                 p = a0.challenger_sample(a.lean, ["--program", str(sd / "program.json"), "--partition",
-                                                str(sd / "partition.json"), "--stratified", str(k)], law, c, statement,
+                                                str(sd / "partition.json"), "--stratified", str(k)], sampling_design, c, statement,
                                        sd / f"draw-k{k}.log")
                 line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
                 if line is None:

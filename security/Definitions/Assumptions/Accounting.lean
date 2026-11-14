@@ -153,7 +153,7 @@ are fresh queries, uniform and independent, chosen adaptively or not: 512-bit ke
 (`derive_wide(seed_i, SIGN_DOMAIN_WIDE, …)`, all of SHA-512's output) and 256-bit keys at 16 (`derive(seed_i,
 SIGN_DOMAIN, …)`). The signs are `K.stream` rows, `k_s × 4096` bits expanded from `K`'s `b` bits, so two candidates
 whose `K` collide share their signs, and exact uniformity (`ε = 0`) is false at two or more candidates. Off a collision
-the signs are fresh too, so the keys' law is within the collision's probability of uniform: over at most `Q + P`
+the signs are fresh too, so the keys' samplingDesign is within the collision's probability of uniform: over at most `Q + P`
 candidate seeds, at most `(Q + P)²/2^(b+1)`, `timing.sketch_failure`'s last term: `(Q + P)²/2^513` at 64 rows, the `ε`
 `SketchBoundDeployed` reads, and `(Q + P)²/2^257` at 16. The premise fails for a run that tries one seed
 under two candidates (their keys are equal, not independent): the model gives each candidate its own key, and

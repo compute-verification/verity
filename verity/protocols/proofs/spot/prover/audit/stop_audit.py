@@ -323,7 +323,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     if stream.spec.digest() != s["spec"]:
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
     held = BS.stop_registration(handoff["commit"], check, stop, boundary)
-    want = BS.stop_record(handoff["commit"], check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary)
+    want = BS.stop_record(handoff["commit"], check, stop, S.selection_sampling_design(stream.spec.selection, layout.spans), boundary)
     if R.digest(want) != R.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
     reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,
