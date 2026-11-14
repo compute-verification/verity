@@ -130,7 +130,8 @@ V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
 SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock/verifier/lean", "vstar-recursive")
-#: `vstar-recursive`'s command for SPOT (`VStar.Recursive.Sampled.main`), ahead of ``check``
+#: `vstar-recursive`'s command for SPOT (`VStarRecursiveMain.main` sends ``sampled`` to
+#: `VStar.Recursive.Sampled.protocol`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
 #: The form remote's SPOT case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
 ONE_STAGE = "one-stage"
