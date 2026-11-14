@@ -33,7 +33,7 @@ from tests.program.predict.test_steps import _mixed, _registered
 from tests.program.test_tp_binding import ROWS, N, batch_body, rank_body
 from verity_vllm.pipeline.tp import grain as TG
 from verity_vllm.pipeline.tp import wires as TW
-from verity_vllm.program import prune as P
+from verity_torch import prune as P
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.tp_steps import compile_tp

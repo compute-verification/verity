@@ -37,7 +37,7 @@ from typing import Any
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 
-from verity_vllm.program.prune import COLUMNS, dead_free_versions
+from verity_torch.prune import COLUMNS, dead_free_versions
 
 from .common import (
     Unexpressible,
