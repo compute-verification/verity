@@ -2,9 +2,6 @@
   "rule": "Recorded outcomes (in check/ and commit/, a caught exception is recorded, never dropped)",
   "entries": [
     {"file": "verity_vllm/check/verdict.py", "kind": "silent-except", "symbol": "execution_of_record", "detail": "except ValueError: es[k] = v"},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._end_step", "detail": "except OSError: pass"},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._expand_step_rows", "detail": "except TypeError: per_row = None"},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._record_step_rows", "detail": "except TypeError: per_row = None"},
     {"file": "verity_vllm/commit/committer/optional_torch.py", "kind": "silent-except", "symbol": "<module>", "detail": "except ImportError: torch = None"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: continue"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: pass"},

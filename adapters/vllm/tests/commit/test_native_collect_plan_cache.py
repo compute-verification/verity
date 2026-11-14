@@ -646,3 +646,30 @@ def test_a_footprint_takes_each_step_the_worker_absorbs_with_its_bytes_by_value_
         assert (absorbed["used"], absorbed["padded"]) == (used, -(-used // R.ROW_BYTES) * R.ROW_BYTES)
         kept = (absorbed["retain"], absorbed["keep_bytes"], absorbed["keep_device"], absorbed["arena_block_bytes"])
         assert kept == ("none", 0, None, None)
+
+
+def test_a_footprints_step_end_holds_the_resident_set_or_says_why_it_has_none(monkeypatch, tmp_path):
+    """Each `end_step` event carries the process's resident set beside the pinned pool's bytes, read from `/proc/self/statm`.
+    Where that file cannot be opened the event has no resident set and says what the read met, under `rss_unreadable`, and the
+    step commits what it committed."""
+    com = committer(monkeypatch)
+    path = tmp_path / "footprint.jsonl"
+    com.footprint = nh._Footprint(str(path))
+    sched = schedule(40, 1)
+
+    def step_ends() -> list[dict[str, Any]]:
+        return [e for line in path.read_text().splitlines() if (e := json.loads(line))["event"] == "end_step"]
+
+    def no_proc(file: str, *a: Any, **kw: Any) -> None:
+        raise FileNotFoundError(2, "No such file or directory", file)
+
+    rc, keys = run(com, sched)
+    monkeypatch.setattr(NC, "open", no_proc, raising=False)
+    com.replay_row_keys = keys
+    again, _ = run(com, sched)
+    read, unread = step_ends()
+    assert read["rss_bytes"] > 0 and read["rss_bytes"] % 4096 == 0 and "rss_unreadable" not in read
+    assert unread["rss_bytes"] is None
+    assert unread["rss_unreadable"] == "FileNotFoundError: [Errno 2] No such file or directory: '/proc/self/statm'"
+    assert list(unread) == [*(k for k in read if k != "cuda"), "rss_unreadable", "cuda"]
+    assert [s.root for s in again.steps] == [s.root for s in rc.steps] == reference(sched, keys)

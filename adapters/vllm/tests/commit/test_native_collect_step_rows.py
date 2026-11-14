@@ -2,11 +2,14 @@
 batch's order, each with the rows of the flattened token order it owns, on the CPU as in `test_native_collect_plan_cache`.
 
 A request's rows are counted by the batch's own per-row token counts where it has a list of them, and by the scheduler's
-`num_scheduled_tokens`, by request, where it has none, or has counts that are no list of numbers. The serving thread expands
-the rows itself or leaves a snapshot for the worker (`defer`): both give the same rows.
+`num_scheduled_tokens`, by request, where it has none. A batch whose counts are there and are no list of numbers is counted by
+the scheduler's too, and the committer then says so in `step_rows_why`, the reason the binding's population records beside the
+rows. The serving thread expands the rows itself or leaves a snapshot for the worker (`defer`): both give the same rows and the
+same reason.
 """
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 from typing import Any
 
@@ -60,10 +63,17 @@ def test_a_batch_with_no_list_of_counts_is_counted_by_the_schedulers_by_request(
 
 
 @DEFER
-@pytest.mark.parametrize("per_row", [7, torch.tensor(7), [2, None, 4]], ids=["a-number", "a-tensor-of-no-dimension", "a-row-with-no-count"])
-def test_counts_that_are_no_list_of_numbers_are_counted_by_the_schedulers(monkeypatch, per_row, defer):
-    _com, got = rows(monkeypatch, per_row, defer=defer)
+@pytest.mark.parametrize("per_row, caught", [
+    (7, "'int' object is not iterable"),
+    (torch.tensor(7), "'int' object is not iterable|iteration over a 0-d tensor"),      # read as a number first by the snapshot, or as it is
+    ([2, None, 4], r"int\(\) argument must be .*'NoneType'"),
+], ids=["a-number", "a-tensor-of-no-dimension", "a-row-with-no-count"])
+def test_counts_that_are_no_list_of_numbers_are_counted_by_the_schedulers_and_the_committer_says_so(monkeypatch, per_row, caught, defer):
+    """The rows are the scheduler's, as they were; what is new is the reason, which names the step and what was caught."""
+    com, got = rows(monkeypatch, per_row, defer=defer)
     assert got == BY_SCHEDULER
+    assert re.fullmatch(rf"step {STEP}: its rows are counted by the scheduler's num_scheduled_tokens, by request: the batch's "
+                        rf"is no list of numbers \(TypeError: ({caught})\)", com.step_rows_why), com.step_rows_why
 
 
 @DEFER

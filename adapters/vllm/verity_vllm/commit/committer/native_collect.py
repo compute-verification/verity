@@ -619,17 +619,25 @@ class NativeCollectCommitter(NativeHostCommitter):
             if per_row is not None and not isinstance(per_row, dict):
                 try:
                     per_row = per_row.tolist() if hasattr(per_row, "tolist") else list(per_row)
-                except TypeError:
+                except TypeError as e:
                     per_row = None
+                    self._rows_by_request(int(job.step), e)
             job.rows_snapshot = (req_ids, n, per_row, nst)
             return
         self._expand_step_rows(int(job.step), req_ids, n, per_row, nst)
 
+    def _rows_by_request(self, step: int, e: TypeError) -> None:
+        """The batch's per-row token counts of ``step`` are no list of numbers (``e``), so its rows are counted by the scheduler's
+        `num_scheduled_tokens`, by request: `step_rows_why`, which the binding's population records, says so."""
+        self.step_rows_why = (f"step {step}: its rows are counted by the scheduler's num_scheduled_tokens, by request: the batch's "
+                              f"is no list of numbers ({type(e).__name__}: {e})")[:300]
+
     def _expand_step_rows(self, step: int, req_ids: list, n: int, per_row: Any, nst: dict) -> None:
         try:
             per_row = [int(x) for x in per_row] if per_row is not None and not isinstance(per_row, dict) else None
-        except TypeError:
+        except TypeError as e:
             per_row = None
+            self._rows_by_request(step, e)
         rows, lo = [], 0
         for i, rid in enumerate(req_ids[:n]):
             if rid is None:
@@ -739,14 +747,15 @@ class NativeCollectCommitter(NativeHostCommitter):
             # at every step end -- a component that accumulates the whole prefill shows up here as a pool that never stops growing
             _pool = getattr(self, "pool", None)
             _rss = None
+            _rss_why: dict[str, str] = {}
             try:
                 with open("/proc/self/statm") as _f:
                     _rss = int(_f.read().split()[1]) * 4096
-            except OSError:
-                pass
+            except OSError as e:
+                _rss_why = {"rss_unreadable": f"{type(e).__name__}: {e}"}     # the event says why it has no resident set
             self.footprint.event("end_step", step=job.step, used=int(job.cursor), staged_bytes=job.acq_bytes, backlog=job.backlog, tensors=int(n),
                                  pinned_pool_bytes=(int(_pool.bytes_total) if _pool is not None else None),
-                                 pinned_pool_in_use=(int(_pool.bytes_in_use) if _pool is not None else None), rss_bytes=_rss)
+                                 pinned_pool_in_use=(int(_pool.bytes_in_use) if _pool is not None else None), rss_bytes=_rss, **_rss_why)
         job.done_evt.set()                                                      # (queued at step begin)
 
     # ------------------------------------------------------------------ worker side: metas from the plan (cached per plan version)
