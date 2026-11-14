@@ -1,11 +1,11 @@
 module
 
-public import Spot.PeriodAudit
+public import Spot.MonitoringPeriodAudit
 
 /-!
-# SPOT's period: what its check's accept means (`Spot.Period.checkWith`)
+# SPOT's period: what its check's accept means (`Spot.MonitoringPeriod.checkWith`)
 
-The properties of the period's check (`Spot.Period`, `Spot.PeriodAudit`), stated against its functions as they run,
+The properties of the period's check (`Spot.MonitoringPeriod`, `Spot.MonitoringPeriodAudit`), stated against its functions as they run,
 for every input of the types its decoders produce. They take no premise: each is about the ledger the check was
 presented, and says nothing of whose it is.
 
@@ -13,20 +13,20 @@ presented, and says nothing of whose it is.
 from the first entry stamped at or after `start` (the run's end, where none is) up to the first stamped at or after
 `stop` (`Run`). The lane commits a root in the monitoring period when a v2 open of the lane in that run opens a
 session on it (`Committed`); the session can be sampled when its open's layout holds the sample's family
-(`Spot.Period.holds`).
+(`Spot.MonitoringPeriod.holds`).
 
 **Whose a root is.** The ledger ties a session to one digest: the circuit that the period listing it committed when
-the ledger opened that period (`Spot.Period.registrationOf`). A root is committed under this registration when that
+the ledger opened that period (`Spot.MonitoringPeriod.registrationOf`). A root is committed under this registration when that
 digest is the verifier's own parameter `registration`, and under another registration when it is another digest.
 
-* `LedgerMeans`: what the ledger's half returns (`Spot.Period.windowsOf`). The ledger verifies under the verifier's
+* `LedgerMeans`: what the ledger's half returns (`Spot.MonitoringPeriod.windowsOf`). The ledger verifies under the verifier's
   key and reaches the monitoring period's end. Every root the lane committed in the monitoring period is one of the
   returned windows, when its session can be sampled, and one of the other sessions returned, when it cannot; nothing
   else is returned; and no root and no session is returned twice. Each window's session has ended, in a closed
   period all of whose sessions are windows.
-* `AcceptMeans`: what the check accepts (`Spot.Period.checkWith`, at any audit of one registration; the check itself
+* `AcceptMeans`: what the check accepts (`Spot.MonitoringPeriod.checkWith`, at any audit of one registration; the check itself
   is `checkBlobs`, at one-stage v2's). It publishes the lane, the monitoring period, this registration's circuit,
-  the ledger's half's windows in order, and of its other sessions what `Spot.Period.registeredIn` returns. Each
+  the ledger's half's windows in order, and of its other sessions what `Spot.MonitoringPeriod.registeredIn` returns. Each
   window has exactly one audit (`AuditedAt`): its session is the one the ledger
   sealed, run from a commit the pins log records on main's first-parent line, with its coin commitment withheld;
   its log shows exactly one registration, over every family it reserved; and the audit accepted that
@@ -49,7 +49,7 @@ digest is the verifier's own parameter `registration`, and under another registr
 **What these do not say.**
 
 * Whose ledger it is. That the ledger presented is the auditor's device's own and whole is
-  `Properties.Spot.PeriodLedger`'s.
+  `Properties.Spot.MonitoringPeriodLedger`'s.
 * That every root the lane committed was audited. An accept holds the audit of each root committed under this
   registration. A root committed under another circuit is published among the others by that circuit, and nothing
   is held of it: not that the circuit is a registration, and not that any check audited it. A lane names the
@@ -80,10 +80,10 @@ digest is the verifier's own parameter `registration`, and under another registr
 
 @[expose] public section
 
-namespace Properties.Spot.Period
+namespace Properties.Spot.MonitoringPeriod
 
 open Lean (Json)
-open _root_.Spot _root_.Spot.Challenger _root_.Spot.Period
+open _root_.Spot _root_.Spot.Challenger _root_.Spot.MonitoringPeriod
 
 /-- The ledger reaches the monitoring period's end: one of its entries is stamped at or after `stop`. -/
 def Reaches (p : Params) (ledger : Json) : Prop :=
@@ -248,4 +248,4 @@ def AuditedSession : Prop :=
       auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]) = .ok (au, opened) →
         au.session = w.session
 
-end Properties.Spot.Period
+end Properties.Spot.MonitoringPeriod

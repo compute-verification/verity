@@ -1,12 +1,12 @@
 module
 
-public import Properties.Spot.Period
+public import Properties.Spot.MonitoringPeriod
 public import Proofs.Properties.Challenger.ChallengePhase
 import Proofs.Flock.Soundness.Discharge.Exec.Setup
 import all Init.Data.Array.Basic
 
 /-!
-# Proofs of the properties of SPOT's period (`Properties.Spot.Period`)
+# Proofs of the properties of SPOT's period (`Properties.Spot.MonitoringPeriod`)
 
 The period's check is monadic. What each of its functions read where it returns is a Hoare triple proved by `mvcgen`
 and read back at an `.ok` result (`read_ok`, `windowsIn_ok`, `caseAt_ok`, `executionPhaseAt_raw`, `run_ok`); the properties
@@ -45,11 +45,11 @@ set_option mvcgen.warning false
 
 open private strOf from Spot.ChallengerSession
 
-namespace Properties.Spot.Period
+namespace Properties.Spot.MonitoringPeriod
 
 open Lean (Json)
 open Std.Do
-open _root_.Spot _root_.Spot.Challenger _root_.Spot.Period
+open _root_.Spot _root_.Spot.Challenger _root_.Spot.MonitoringPeriod
 open Properties.Pouw.LiveSalt.Ledger (bind_ok of_triple throw_spec ok_spec checked_ok verifyLedger_inv getD_root)
 open Properties.Challenger.ChallengePhase (none_of_forall)
 open FlockSoundness.Discharge.Exec (array_mapM_ok_getElem)
@@ -258,7 +258,7 @@ theorem read_ok {p : Params} {ledger : Json} {r : Read} (h : read p ledger = .ok
         r.sessions = r.wins.filterMap (sessionAt p r.periods (reservesOf (entriesOf ledger) p.lane)
           ((reaches (entriesOf ledger) p.start).getD stop) stop)) ?_ h
   clear h
-  mvcgen [_root_.Spot.Period.read, -Spec.throw_Except, throw_spec]
+  mvcgen [_root_.Spot.MonitoringPeriod.read, -Spec.throw_Except, throw_spec]
   refine ⟨by assumption, _, by assumption, ?_⟩
   rfl
 
@@ -463,7 +463,7 @@ theorem sessions_pairwise (hR : Returned p ledger r ws stop sampled) :
 
 end Returned
 
-/-- **What the ledger's half returns** (`Properties.Spot.Period.LedgerMeans`). -/
+/-- **What the ledger's half returns** (`Properties.Spot.MonitoringPeriod.LedgerMeans`). -/
 theorem ledgerMeans : LedgerMeans := by
   intro p ledger ws h
   obtain ⟨r, stop, sampled, -, -, hR⟩ := returned_of h
@@ -719,7 +719,7 @@ set_option maxHeartbeats 4000000 in
 /-- What `run` read where it returns: the ledger's half's sessions and windows, whose each session is, as many
 windows' evidence, and the fold of `executionPhaseAt` over the windows with their evidence, from the empty state. -/
 theorem run_ok {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs}
-    {x : Array Other × Progress} (h : _root_.Spot.Period.run inner p c e bs = .ok x) :
+    {x : Array Other × Progress} (h : _root_.Spot.MonitoringPeriod.run inner p c e bs = .ok x) :
     ∃ r ws, read p.ledger c.ledger = .ok r ∧ windowsIn p.ledger r = .ok ws ∧ registeredIn p r ws = .ok x.1 ∧
       e.windows.size = ws.windows.size ∧
       ∃ f : Progress → Window × WindowEvidence → Except (Code × String) Progress,
@@ -731,7 +731,7 @@ theorem run_ok {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence}
         (ws.windows.zip e.windows).foldlM f ({} : Progress) = .ok x.2 ∧
         ∀ st w ev, f st (w, ev) = executionPhaseAt inner p r c.ledger e.pins bs st w ev) ?_ h
   clear h
-  mvcgen [_root_.Spot.Period.run, -Spec.throw_Except, throw_spec, -Spec.foldlM_array, foldlM_spec, read_spec,
+  mvcgen [_root_.Spot.MonitoringPeriod.run, -Spec.throw_Except, throw_spec, -Spec.foldlM_array, foldlM_spec, read_spec,
     windowsIn_spec, registeredIn_spec]
   all_goals exact ⟨_, _, by assumption, by assumption, by assumption, beq_iff_eq.1 (by assumption), _,
     by assumption, fun _ _ _ => rfl⟩
@@ -740,7 +740,7 @@ theorem run_ok {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence}
 registration's circuit and the windows it passed, with the lane's sessions that are other registrations'. -/
 theorem checkWith_accept {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evidence} {bs : Core.Blobs}
     {pub : Public} {prof : Array Core.Integrity} (h : checkWith inner p c e bs = .accept pub prof) :
-    ∃ others st, _root_.Spot.Period.run inner p c e bs = .ok (others, st) ∧ st.undecided = none ∧
+    ∃ others st, _root_.Spot.MonitoringPeriod.run inner p c e bs = .ok (others, st) ∧ st.undecided = none ∧
       pub = { lane := p.ledger.lane, start := p.ledger.start, stop := p.ledger.stop,
               registration := p.registration, windows := st.passed, others := others } ∧
       prof = st.passed.flatMap fun x => x.audits.map (·.profile) := by
@@ -810,7 +810,7 @@ theorem foldInv_step {inner : Inner} {p : AuditParams} {c : Commitment} {e : Evi
   · rw [hn] at hsome
     cases hsome
 
-/-- **What the period's check accepts** (`Properties.Spot.Period.AcceptMeans`). -/
+/-- **What the period's check accepts** (`Properties.Spot.MonitoringPeriod.AcceptMeans`). -/
 theorem acceptMeans : AcceptMeans := by
   intro inner p c e bs pub prof h
   obtain ⟨others, st, hrun, hund, hpub, hprof⟩ := checkWith_accept h
@@ -864,7 +864,7 @@ theorem acceptMeans : AcceptMeans := by
     exact h3
 
 /-- **Every root committed under this registration is one published window, with one audit entry**
-(`Properties.Spot.Period.CommittedOnce`). -/
+(`Properties.Spot.MonitoringPeriod.CommittedOnce`). -/
 theorem committedOnce : CommittedOnce := by
   intro inner p c e bs pub prof h
   obtain ⟨-, -, -, -, r, ws, hr, hw, hreg, hmap, -, -, records, -, haud⟩ := acceptMeans inner p c e bs pub prof h
@@ -913,7 +913,7 @@ theorem committedOnce : CommittedOnce := by
       by rw [hget j hj hj']; exact hxs⟩
 
 /-- **The published others are exactly the roots the lane committed under another circuit**
-(`Properties.Spot.Period.OthersElsewhere`). -/
+(`Properties.Spot.MonitoringPeriod.OthersElsewhere`). -/
 theorem othersElsewhere : OthersElsewhere := by
   intro inner p c e bs pub prof h
   obtain ⟨-, -, -, -, r, ws, hr, hw, hreg, -⟩ := acceptMeans inner p c e bs pub prof h
@@ -975,7 +975,7 @@ theorem none_of_keys {audit : Json}
     hk _ (by simp [WINDOW_KEYS, UNDERIVED_KEYS]), hk _ (by simp [WINDOW_KEYS, UNDERIVED_KEYS]),
     hk _ (by simp [WINDOW_KEYS, UNDERIVED_KEYS])⟩
 
-/-- **What the decoder gives the check** (`Properties.Spot.Period.DecodedMeans`). -/
+/-- **What the decoder gives the check** (`Properties.Spot.MonitoringPeriod.DecodedMeans`). -/
 theorem decodedMeans : DecodedMeans := by
   intro j p h
   refine of_triple (Q := fun p => ChallengerKey.ofJson p.keyJ = .ok p.ledger.key ∧
@@ -1011,7 +1011,7 @@ theorem auditedIn_root {wins : Array Win} {periods : Array MonitoringPeriod} {ro
   have hbeq := Array.find?_some hfind
   exact ⟨win, Array.mem_of_find?_eq_some hfind, beq_iff_eq.1 hbeq, hses⟩
 
-/-- **The session audited at a window is the window's** (`Properties.Spot.Period.AuditedSession`). -/
+/-- **The session audited at a window is the window's** (`Properties.Spot.MonitoringPeriod.AuditedSession`). -/
 theorem auditedChallengePhase : AuditedSession := by
   intro p ledger r ws w au opened hr hw hmem ha
   have hwo : windowsOf p ledger = .ok ws := by
@@ -1026,4 +1026,4 @@ theorem auditedChallengePhase : AuditedSession := by
   have hxw : win = x := wins_inj hR.dist hwin hx (Or.inl (hroot.trans (hwr.trans hxr.symm)))
   exact hses.trans ((congrArg (fun y : Win => y.opened.session) hxw).trans (hxs.trans hws.symm))
 
-end Properties.Spot.Period
+end Properties.Spot.MonitoringPeriod

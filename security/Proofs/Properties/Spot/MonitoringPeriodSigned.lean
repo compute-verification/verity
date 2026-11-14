@@ -1,12 +1,12 @@
 module
 
-public import Proofs.Properties.Spot.PeriodLedger
+public import Proofs.Properties.Spot.MonitoringPeriodLedger
 import Proofs.Flock.Bytes
 
 /-!
 # Proof that every line of the ledger a period's check reads but the last is the device's own, signature included
 
-`Properties.Spot.Period.LedgerOfDeviceSigned`, from the reader's chain.
+`Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned`, from the reader's chain.
 
 * **The reader chains the lines.** `verifyLedger` holds each entry's `prev` to the SHA-512 of the whole text of the
   entry before it, in hex (`PrevInv`, `verifyLedger_prev`).
@@ -24,7 +24,7 @@ import Proofs.Flock.Bytes
 
 set_option mvcgen.warning false
 
-namespace Properties.Spot.Period
+namespace Properties.Spot.MonitoringPeriod
 
 open Lean (Json)
 open Std.Do
@@ -173,7 +173,7 @@ theorem lineBreak_of_collision {dev : History} {key : ChallengerKey} {label : St
 /-! ## The statement -/
 
 /-- **Every line of the ledger a period's check reads but the last is the device's own line, signature included**
-(`Properties.Spot.Period.LedgerOfDeviceSigned`). -/
+(`Properties.Spot.MonitoringPeriod.LedgerOfDeviceSigned`). -/
 theorem ledgerOfDeviceSigned : LedgerOfDeviceSigned := by
   intro dev p ledger r h hnum hch
   obtain ⟨hck, -⟩ := read_ok h
@@ -214,4 +214,4 @@ theorem ledgerOfDeviceSigned : LedgerOfDeviceSigned := by
       exact congrArg some ((ledgerEntry_text hle).trans ((congrArg Json.str hstr).trans (ledgerEntry_text he').symm))
     · rw [List.getElem?_take_eq_none (by omega), List.getElem?_take_eq_none (by omega)]
 
-end Properties.Spot.Period
+end Properties.Spot.MonitoringPeriod

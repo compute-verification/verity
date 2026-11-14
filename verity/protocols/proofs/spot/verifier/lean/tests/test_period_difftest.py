@@ -1,4 +1,4 @@
-"""Sampled proofs' period, the ledger's half (`Spot.Period`: `sessionsOf`, `windowsOf`), held to the reference below
+"""SPOT's monitoring period, the ledger's half (`Spot.MonitoringPeriod`: `sessionsOf`, `windowsOf`), held to the reference below
 through the difftest's `period_windows` piece. The reference lives here alone: there is no Python verifier of the
 period, and it reads the ledger through the challenger's mirror (`challenger._checked`) as the Lean reads it through
 `Challenger.checked`.
@@ -45,7 +45,7 @@ LEAVES = 2 ** H
 
 LANE, OTHER = "dev", "other-lane"
 LABEL = "draw"
-DRAW = [[LABEL, 17]]
+SAMPLE = [[LABEL, 17]]
 SALT = [["pouw/salt", 1]]
 #: the circuit a period of a `Book` commits unless told another, and another registration's
 CIRCUIT, ELSEWHERE = "ab" * 64, "cd" * 64
@@ -86,7 +86,7 @@ def _refused(code: str, why: str, **more: Any) -> dict:
 
 
 def reference(j: Any) -> Any:
-    """`Spot.Period.windowsPiece`: the lane's sessions of the monitoring period, then its windows and the others, or
+    """`Spot.MonitoringPeriod.windowsPiece`: the lane's sessions of the monitoring period, then its windows and the others, or
     the refusal's code and text."""
     if not isinstance(j, dict) or sorted(j) != KEYS:
         raise D.Reject(f"a request's keys are {', '.join(KEYS)}")
@@ -186,7 +186,7 @@ class Book:
         if lane in self.current:
             self.periods[self.current[lane]]["sessions"].append(sid)
 
-    def reserve(self, lane: str, t: int, families: Any = DRAW, withheld: bool = True, minutes: int = 600) -> str:
+    def reserve(self, lane: str, t: int, families: Any = SAMPLE, withheld: bool = True, minutes: int = 600) -> str:
         sid = f"s20260302T{next(self._ids):06d}Z-{self.rng.randbytes(2).hex()}"
         body = self.rng.choice([{"by": lane}, {"by": "operator", "for": lane}])
         body.update(peer="10.0.0.7", scheme="verity/test/coins/v1", epoch=0, families=families, minutes=minutes,
@@ -205,7 +205,7 @@ class Book:
         s["open"] = self._add("open", sid, body)
         return s["root"]
 
-    def open_one_step(self, lane: str, t: int | None, families: Any = DRAW, withheld: bool = True) -> str:
+    def open_one_step(self, lane: str, t: int | None, families: Any = SAMPLE, withheld: bool = True) -> str:
         """A v2 open that binds no reserve, as a ledger with no reserve yet holds them: counted in its lane's period at
         the open."""
         sid = f"one-{next(self._ids)}"
@@ -224,7 +224,7 @@ class Book:
         s["end"] = self._add("end", sid, {"closed": True, "complete": complete, "files": {}, "rc": 0,
                                           "record_leaf": None, "ended_utc": at(t), **sealed})
 
-    def window(self, lane: str, t: int, families: Any = DRAW, withheld: bool = True) -> str:
+    def window(self, lane: str, t: int, families: Any = SAMPLE, withheld: bool = True) -> str:
         """A session of `lane` reserved at `t`, opened a minute later and ended a minute after that."""
         sid = self.reserve(lane, t, families, withheld)
         self.open(sid, t + 60)
@@ -275,7 +275,7 @@ def case(rng: random.Random, name: str) -> Any:
     b = Book(rng)
     one_step = name == "one-step"
 
-    def session(lane: str, t: int, families: Any = DRAW, ended: bool = True) -> str:
+    def session(lane: str, t: int, families: Any = SAMPLE, ended: bool = True) -> str:
         if one_step:
             sid = b.open_one_step(lane, rng.choice([t, None]), families)
         else:
@@ -304,7 +304,7 @@ def case(rng: random.Random, name: str) -> Any:
         for w in range(rng.randint(1, 2)):
             t += 3600
             if rng.random() < 0.5:
-                session(OTHER, t - 1800, rng.choice([DRAW, SALT]))
+                session(OTHER, t - 1800, rng.choice([SAMPLE, SALT]))
             if name == "set-back" and last and w == 0:
                 session(LANE, -DAY + t)
             else:
@@ -318,7 +318,7 @@ def case(rng: random.Random, name: str) -> Any:
             b.period_close(f"p-{k}", t)
         if not one_step and (name == "outside" and last or name != "open-period" and rng.random() < 0.5):
             t += 3600
-            session(LANE, t, DRAW if name == "outside" else rng.choice([SALT, [["pouw/draw", 1]], [], None]))
+            session(LANE, t, SAMPLE if name == "outside" else rng.choice([SALT, [["pouw/draw", 1]], [], None]))
     if one_step and rng.random() < 0.5:
         b.period_open("after", OTHER, 7 * DAY + 5)
     else:
@@ -400,7 +400,7 @@ def test_a_small_ledger_reads_as_written(pieces):
                 "withheld": withheld}
 
     want = {"others": [session(third, [["pouw/draw", 1]], 3, None, True), session(fourth, None, 5, None, False)],
-            "sessions": [session(first, DRAW, 1, "p", True), session(second, DRAW, 2, "p", False),
+            "sessions": [session(first, SAMPLE, 1, "p", True), session(second, SAMPLE, 2, "p", False),
                          session(third, [["pouw/draw", 1]], 3, None, True), session(fourth, None, 5, None, False)],
             "windows": [{"period": "p", "phase": 0, "root": root(first), "session": first},
                         {"period": "p", "phase": 1, "root": root(second), "session": second}]}
@@ -421,7 +421,7 @@ def test_monitoring_periods_one_after_another_split_the_sessions(pieces):
         b = Book(rng)
         for _ in range(rng.randint(8, 14)):
             lane = rng.choice([LANE, LANE, OTHER])
-            sid = b.reserve(lane, rng.randint(-DAY, 3 * DAY), rng.choice([DRAW, SALT]))
+            sid = b.reserve(lane, rng.randint(-DAY, 3 * DAY), rng.choice([SAMPLE, SALT]))
             if rng.random() < 0.85:
                 b.open(sid, b.sessions[sid]["t"] + rng.randint(0, 3600))
                 if rng.random() < 0.7:

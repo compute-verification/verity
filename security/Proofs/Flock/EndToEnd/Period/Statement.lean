@@ -202,9 +202,9 @@ bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) an
 **Every committed window is presented.** The statement, like the two below it, is of every sampling block of the
 period's run, so a record is held to it only where the record presents every one. That each root a lane committed
 in a monitoring period under this registration is presented, once, with its one accepted audit, is stated of the
-accept of SPOT's period check, over the auditor's ledger (`Properties.Spot.Period.CommittedOnce`, with
-`Properties.Spot.Period.AcceptMeans` for the audit); a root the lane committed under another circuit is published
-by that circuit and not audited (`Properties.Spot.Period.OthersElsewhere`). No statement here reads them, and a
+accept of SPOT's period check, over the auditor's ledger (`Properties.Spot.MonitoringPeriod.CommittedOnce`, with
+`Properties.Spot.MonitoringPeriod.AcceptMeans` for the audit); a root the lane committed under another circuit is published
+by that circuit and not audited (`Properties.Spot.MonitoringPeriod.OthersElsewhere`). No statement here reads them, and a
 reader who holds a record to this one takes them beside it. -/
 def IntegrityPeriod : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ),

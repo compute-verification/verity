@@ -1,4 +1,4 @@
-"""Sampled proofs' period, the audits' half (`Spot.PeriodAudit`), held to the references below through three pieces of
+"""SPOT's monitoring period, the audits' half (`Spot.MonitoringPeriodAudit`), held to the references below through three pieces of
 the difftest. The references live here alone: there is no Python verifier of the period.
 
 - `period_asked`: what one-stage v2 is asked at a case (`paramsAt`, `evidenceAt`), against `asked`.
@@ -9,7 +9,7 @@ the difftest. The references live here alone: there is no Python verifier of the
   as the stand-in answers it. No proof here is one that one-stage v2 accepts, so an accepted period, an undecided one
   and the records each audit is handed are run through the stand-in alone.
 - `period_check`: the period's check on one-stage v2 itself, against one-stage v2's own answer
-  (`sampled-proofs-one-stage-zk`) on what `asked` composes. The check's own executable (`sampled-proofs-period`) is
+  (its zero-knowledge executable's) on what `asked` composes. The check's own executable (`spot-monitoring-period`) is
   asked the same cases and answers them as the piece does, as the protocol's outcome.
 
 The cases are a week of one lane under the deployed key, written as the auditor's gate writes it (`Week`): each window
@@ -47,7 +47,7 @@ from hypothesis import strategies as st
 from test_challenger_difftest import DEPLOYED, LEAVES as SIGNABLE, PACKAGE, PIECES, _key, _pairs, lms_verify
 from test_difftest import (LEAF, ONE_STAGE_V2, RECEIVED, ROOTS, SCHEME, SETUPS, STAND_IN_CIRCUIT, _hex, _json,
                            _public_of, _sha)
-from test_period_difftest import (CIRCUIT, DAY, DRAW, ELSEWHERE, LABEL, LANE, OTHER, SALT, START, STOP, Book, at,
+from test_period_difftest import (CIRCUIT, DAY, ELSEWHERE, LABEL, LANE, OTHER, SALT, SAMPLE, START, STOP, Book, at,
                                   reference as ledger_half)
 
 import verity_difftest as D
@@ -64,10 +64,10 @@ PUBLIC = lms.public_key(KEY)
 KEY_JSON = Ch.ChallengerKey(*DEPLOYED, PUBLIC).to_json()
 
 S = SETUPS[3]
-LAW = {"k": 2, "law": "subset"}
+DESIGN = {"k": 2, "law": "subset"}
 DELTA = "1/20"
-#: one-stage v2's parameters less what a window sets (`Spot.Period.AUDIT_FORM`)
-AUDIT = _json({"anchors": [], "delta": DELTA, "law": LAW, "leaf_layer": LEAF, "log": [],
+#: one-stage v2's parameters less what a window sets (`Spot.MonitoringPeriod.AUDIT_FORM`)
+AUDIT = _json({"anchors": [], "delta": DELTA, "law": DESIGN, "leaf_layer": LEAF, "log": [],
                "partition": P.partition(S.program, S.query), "ports": S.ports,
                "proofs": {"circuit": _sha(STAND_IN_CIRCUIT), "registered": None}, "program": S.desc, "query": S.query,
                "registered": None, "scheme": SCHEME, "work_table": None})
@@ -162,7 +162,7 @@ ASKED_KEYS = ["before", "case", "ledger", "params", "pins", "root", "session"]
 
 
 def asked(j: Any) -> Any:
-    """`Spot.Period.askedPiece`."""
+    """`Spot.MonitoringPeriod.askedPiece`."""
     if not isinstance(j, dict) or sorted(j) != ASKED_KEYS:
         raise D.Reject(f"a request's keys are {', '.join(ASKED_KEYS)}")
     k = j["case"]
@@ -223,7 +223,7 @@ def registered_in(p: dict, periods: dict, half: dict) -> tuple[str, str] | None:
 
 
 def check(j: Any, inner=stand_in) -> Any:
-    """`Spot.Period.checkPieceWith` at the audit `inner` (`inner(params, record, evidence, blobs)`: its verdict, then
+    """`Spot.MonitoringPeriod.checkPieceWith` at the audit `inner` (`inner(params, record, evidence, blobs)`: its verdict, then
     what it published and its profile, or its reason)."""
     if not isinstance(j, dict) or sorted(j) != ["blobs", "evidence", "ledger", "params"]:
         raise D.Reject("a request's keys are blobs, evidence, ledger, params")
@@ -323,7 +323,7 @@ def check(j: Any, inner=stand_in) -> Any:
 @functools.cache
 def _record(row: int) -> dict:
     """A registration's record of the test's program at window row `row`: one digest a row."""
-    return _json(R.record(S.program, S.query, LAW, SCHEME, [{"port": p, "root": ROOTS[p], **S.ports[p]} for p in S.ports],
+    return _json(R.record(S.program, S.query, DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **S.ports[p]} for p in S.ports],
                           {"kind": "served", "row": row, "run": "r-test"}, leaf_layer=LEAF))
 
 
@@ -405,7 +405,7 @@ class Week:
                 segment.start = 1
             if real:
                 d = logged(family, lambda: T.draw_first(T.OwnRandomness(coins),
-                                                        DR.derive(S.program, S.query, LAW, None), S.population))
+                                                        DR.derive(S.program, S.query, DESIGN, None), S.population))
                 proved = DR.proved(d)
                 e = {"draw": d, "instances": len(proved), "proved_units": proved,
                      "receipt": R.receipt(rec, "v", received=RECEIVED), "statement": {}}
@@ -502,7 +502,7 @@ def case(rng: random.Random, name: str) -> Any:
     for i in range(n):
         t += 3600
         if rng.random() < 0.3:
-            b.window(OTHER, t - 1800, rng.choice([DRAW, SALT]))
+            b.window(OTHER, t - 1800, rng.choice([SAMPLE, SALT]))
         if name == "unsealed" and i == pick:
             b.window(LANE, t)
             w.windows.append({"audits": [], "session": None})
@@ -518,7 +518,7 @@ def case(rng: random.Random, name: str) -> Any:
         b.period_close("p-0", t)
     elsewhere = rng.choice([SALT, [], None])
     if name == "outside":
-        b.window(LANE, t + 3600, DRAW)
+        b.window(LANE, t + 3600, SAMPLE)
     elif name in AFTER:
         listed, cap, circuit = AFTER[name]
         if listed:
@@ -612,7 +612,7 @@ pieces = D.server_fixture(CHECK)
 one_stage_v2 = D.server_fixture(ONE_STAGE_V2)
 
 #: the period's check as its own executable (`Core.BlobProtocol.main`), and its protocol's id
-EXE = "sampled-proofs-period"
+EXE = "spot-monitoring-period"
 PROTOCOL = "verity/sampled-proofs/period/v1"
 
 
