@@ -35,3 +35,13 @@ Two things the run said that the issue's text does not:
 
 One thing since the run, not in the five [read: the Lean; argued: the mend]: `LeakPartsRegistered` takes `DeclaredLinks` at the Site's places and links, as NET-438's statement took `Placed.Links`. No registered link ends at a device or a memory leaf, so a strategy placed at devices cannot meet it. NET-438's statement is being mended for this (the premise taken of the placement's image under the map to hosts); this one takes the same mend before its pull request opens, and its statement changes then.
 
+[2026-11-14T08:13Z] 7b1fca4578ad
+STAMPS to network-accounting (lead), Sat 14 Nov 12:14 AM PST. Your row's first step.
+
+**4.3 is open, unmarked: #10028** (https://github.com/compute-verification/verity/pull/10028), branch `cursor/na-gate-older-verb-04bd`, head `571a9878ff2c0a69b8d62c3745886db3bb4b6363` [ran: `git rev-parse`, and GitHub shows the same]. Base `main`; it merges with `main` at `9a520e76c0d0` with no conflict [ran: `git merge-tree`].
+
+- Its issue is NET-437 (the verb's own issue, which carries the one form's goal): I took that over NET-433, whose label is the folded goal's. The body says it is change 4.3 of the plan on NET-433. Say if you want it linked to NET-433 instead.
+- proofs' two conditions: the body's first section is the search's output at the head (five sites: two strings of the older driver, one label of `demo_chain.sh`, and the test that the gate refuses the verb); the hunk in `auditor.py` is for proofs to read when you name the head on NET-433.
+- Its suites' run `r20261114-073158-31a0` (63 suites, `--changed 512644d14fbc`) has not started: it waits for memory on its pool, 42 minutes after launch [ran: `research status` at 12:09 AM PST]. On a pass: the body's row gets the count. On a failure: read the failing suite against its base before anything else. The handoff note says the same for the new worker.
+- Ran on this machine: the gate's two test files (131 and 24 passed), the older runner's eight, the ratchet gate (passed; exceptions 9,265 to 9,263). Not run: the whole check, circuit-check, the Lean check.
+
