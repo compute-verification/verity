@@ -63,7 +63,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   `Properties.Pouw.Credit.DrawWithheld`): its challenger released its coin root only after the prover's sample root, so
   the sample rests on no hiding of that root. So a credit bit changed after the sampling coin
   changes the sample root and is refused, and the credited set is the rows whose bit is true.
-* **The sampled proof blocks are the sampling coin's** (`drawn`): `core_check.draw`'s rule under the sampling design ``work:k``
+* **The sampled proof blocks are the sampling coin's** (`drawn`): `core_check.draw_twin`'s rule under the sampling design ``work:k``
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
   ``h1window.program(linears, calls, m, tile)``, and its units are in that Program's order: call by call, each call's
   tiles row block major. There is one stratum per template, that is per K (`strata`), each unit's work its tile's
@@ -2478,7 +2478,7 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
     got, why = _credited(key, ledger, pins, main, salt, calls, served, commit, rounds, draw, verify)
     if why is not None:
         return None, why
-    why = CC.rounds(key, ledger, pins, main, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds],
+    why = CC.rounds_twin(key, ledger, pins, main, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds],
                     verify)
     if why is not None:
         return None, why
@@ -3061,7 +3061,7 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
     3a. **Fresh pins** (``pin``). Each pass's session is pinned within the period's freshness floor of the commit its
        open recorded, H1's period-level pin hygiene (`committed_pin`, `committed_floor`, `_pin_hygiene`): a session
        pinned more than the floor of first-parent commits behind the period's open pin refuses it.
-    4. **Accepted passes** (``pass``). Each pass's ``context`` is a string, and the pass passes `core_check.pass_epoch`
+    4. **Accepted passes** (``pass``). Each pass's ``context`` is a string, and the pass passes `core_check.pass_epoch_twin`
        under the verifier's live inputs (``{key, ledger, main, pins, session}``), salted by its live coin, its
        ``context`` naming its manifest.
     5. **Consecutive epochs** (``index``). For each W, the period's epochs on W, in the close's order, are numbered
@@ -3096,7 +3096,7 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
         return None, why
     ck, audited = Ch.ChallengerKey.from_json(key), []
     for i, (p, m) in enumerate(zip(passes, manifests)):
-        _, why = CC.live_salt(key, ledger, pins, main, p["session"], m, verify)
+        _, why = CC.live_salt_twin(key, ledger, pins, main, p["session"], m, verify)
         if why is not None and why[0] == "salt":
             return None, (SALT_ONLY, f"pass {i} of period {name} is not of a Pearl-C salt session, so the period earns "
                                      f"nothing: {why[1]}")
@@ -3120,7 +3120,7 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
             return None, (PASS_REFUSED, f"pass {i} of period {name} is refused, so the period earns nothing: its "
                                         "context is not a string, the window context naming its manifest by SHA-512")
         live = {"key": key, "ledger": ledger, "main": main, "pins": pins, "session": p["session"]}
-        _, why = CC.pass_epoch(None, bytes.fromhex(p["manifest"]), p["context"], live=live, verify=verify)
+        _, why = CC.pass_epoch_twin(None, bytes.fromhex(p["manifest"]), p["context"], live=live, verify=verify)
         if why is not None:
             return None, (PASS_REFUSED, f"pass {i} of period {name} is refused, so the period earns nothing: {why[0]}: "
                                         f"{why[1]}")
@@ -3532,7 +3532,7 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     leaves of `weights.leaf_words` (K) words, x·Σn leaves),
     under `registered.domain` of its name and the circuit whose descriptor's SHA-512 is `program`, binding no window
     (`other_weights_entry`); and `weights_root` of their roots, the window's round-0 request table's root `requests`
-    (hex) and `session` (the id of the session the auditor's ledger opened for `window`, as `core_check.salt` reads it)
+    (hex) and `session` (the id of the session the auditor's ledger opened for `window`, as `core_check.salt_of_record` reads it)
     must be the window's open root (``window.root``, `salt.window_open_root`). The salt coin opens only after that root,
     so every code and s_w of a B row a sampled proof block opens at its ``…/b/<K>`` root was fixed before the window's salt, and
     a window whose B rows differ from the ones it opened on is refused. A step of `window` (`_period_weights`), which
