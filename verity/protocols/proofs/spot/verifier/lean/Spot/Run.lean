@@ -5,9 +5,9 @@ check the stream ran on it, in the stream's order.
 
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
-  more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate law
+  more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate sampling design
   whose strata or table don't apply), then R1–R8 (`Registration.check`) against the challenger's copies under the sampling design the rule names over
-  that population (`Select.Rule.lawOver`, whatever law the copies carry) and that work table, a `bernoulli` sampling
+  that population (`Select.Rule.lawOver`, whatever sampling design the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
@@ -23,7 +23,7 @@ check the stream ran on it, in the stream's order.
   (`coinsCode`, code `coins`), missing evidence, no key, no window or no family refused, and a family whose log shows a
   root other than the registration's digest refused by its own code (`family`: a family's coins follow one registration, so a
   second registration's coins are another family's, and an interior registration's too); then the sample is held to the
-  registration and the expanded law (`Draw.checkDraw`);
+  registration and the expanded sampling design (`Draw.checkDraw`);
 * under a two-stage rule (`Select.Rule.twoStage grain replay k`), the registration is the boundary commitment over the
   replay blocks, the population of the challenger's program under its query, which is the rule's `grain` (else `grain`),
   and `select` is the first stage, its replay sample. Then `interiors`: the interior registration (`Interior`) over the
@@ -273,7 +273,7 @@ def cellParts (q : Nat) (ids : Array String) (ns : Array Nat) : Array SecondStag
   ((List.range ids.size).map fun t => ⟨ids.toList.getD t "", q * (ns.toList.take t).sum, ns.getD t 0⟩).toArray
 
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
-in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
+in each cell: the interior, its receipt, the second stage's sample and sampling design, and the bytes it read; or the refusal's step
 and codes. -/
 def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
     V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do

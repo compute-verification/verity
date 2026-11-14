@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 
 /-!
-# The live `--zk` runs with the sample at accepted outcomes, and the challenger's live-coin part's samples at V*'s law
+# The live `--zk` runs with the sample at accepted outcomes, and the challenger's live-coin part's samples at V*'s sampling design
 
 `ZkExec.runsZC_live` and `ZkHidden.runsZCJH_live` take their sample hypothesis (`DrawOkZK`, `DrawOkZKHJ`) at every sample of
 the sampling design, and read it only at the sample of an outcome verity-verify-proof `--zk` accepts. `runsZC_liveA` and `runsZCJH_liveA` take
@@ -36,16 +36,16 @@ The samples come from the record's custody (`DrawFileZK`):
 * `drawOkZK_execOS`, `drawOkZKH_execOS`: `DrawOkZK` (`DrawOkZKH`) at a sample of `Law.execOS` whose run succeeds, at link
   points `mPts = mPtsOf c.g (∑ s, k s)` (`Exec.setupH_mPts_execOS`, `ZkHidden.setupHidden_mPts_of_proved`), from custody
   under any sampling design. `ZkLink.drawOkZK_of_exec` and `ZkHidden.drawOkZKH_of_exec` give the same at every sample, the failed
-  run's (every unit) included, from custody under the live law's own stratified sampling design;
+  run's (every unit) included, from custody under the live sampling design's own stratified sampling design;
 * `drawOkZKHJ_one`, `drawOkZKHJ_of_exec_one`: at one table, `DrawOkZKHJ` is `DrawOkZKH`, so `runsZCJH_live`'s `hDraw`
-  holds at every sample of the live law;
+  holds at every sample of the live sampling design;
 * `DrawFileZK.size_execOS`, `Composed.drawOkZKJ_of_exec`, `drawOkZKHJ_of_exec`: at every sample of the live stratified
   sampling design, custody's sample file has `Σ_s k_s` units, so where the session's `J` tables divide it, `DrawOkZKJ` (`DrawOkZKHJ`)
   holds at `(Σ_s k_s) / J` units a table: verity-verify-proof splits one stratified sample over several tables as it splits a
   subset sample (`Draw.tablesWhy`);
 * `drawOkZKHJ_of_accepts`, at any count: several tables split the sample's units evenly (`setupTables_units`), so at an
   accepted outcome the tables divide `Σ_s k_s` and `drawOkZKHJ_of_exec` holds. `runsZCJH_live_execOS` is
-  `runsZCJH_liveA` at the live law with that sample hypothesis discharged. `drawOkZKHJ_of_custodyJS` is the same from
+  `runsZCJH_liveA` at the live sampling design with that sample hypothesis discharged. `drawOkZKHJ_of_custodyJS` is the same from
   `Assumptions.Zk.RecordCustodyZKJS`, the custody `JointStratifiedMT` takes;
 * `drawOkZKHJ_of_accepts_subset`, at a subset sampling design and any count: several tables split the sample's units evenly
   (`setupTables_units`), so `drawOkZKHJ_of_file` holds at `kd / nTab I` units a table. `runsZCJH_live_subset` is
@@ -72,7 +72,7 @@ def RunsZCLiveA : Prop :=
       (opnAtZ (ZkLink.tablesAtZK dj y₀) I dj) (decAtZ (ZkLink.tablesAtZK dj y₀)) (fun _ _ _ _ => [])
       (fun _ _ b _ => capOfRoot b) L
 
-/-- **`RunsZC` at the live `--zk` tables, with the sample at accepted outcomes**: `runsZC_live` at the one-coin law of
+/-- **`RunsZC` at the live `--zk` tables, with the sample at accepted outcomes**: `runsZC_live` at the one-coin distribution of
 the accepted outcome's sample. -/
 theorem runsZC_liveA : RunsZCLiveA := by
   intro n mPts Reg I ht dj S₀ y₀ wr L hTab hT hRec hDraw ω R o hacc
@@ -99,7 +99,7 @@ theorem DrawFileZK.card {dj : Finset (Fin n) → Lean.Json} {law : Draw.Law} {po
   intro B D hD
   rw [h B D hD, drawOf_proved, drawOf_size]
 
-/-- **`DrawOkZK` at a sample of the live law whose run succeeds**, at `mPtsOf c.g (∑ s, k s)` link points. -/
+/-- **`DrawOkZK` at a sample of the live sampling design whose run succeeds**, at `mPtsOf c.g (∑ s, k s)` link points. -/
 theorem drawOkZK_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) {mPts m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ}
     {St : Fin m → Draw.Stratum} (hS : Audit.Law.ExecStrata σ k St) {law : Draw.Law} {pop' : ℕ}
@@ -143,7 +143,7 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`DrawOkZKH` at a sample of the live law whose run succeeds**, at `mPtsOf c.g (∑ s, k s)` link points. -/
+/-- **`DrawOkZKH` at a sample of the live sampling design whose run succeeds**, at `mPtsOf c.g (∑ s, k s)` link points. -/
 theorem drawOkZKH_execOS (I : Inputs) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ}
     {St : Fin m → Draw.Stratum} (hS : Law.ExecStrata σ k St) {law : Draw.Law} {pop' : ℕ}
@@ -166,7 +166,7 @@ theorem drawOkZKHJ_one {I : Inputs} (h1 : I.count ≤ 1) {dj : Finset (Fin n) �
   rw [hd, ht]
   exact ⟨fun D hD u hu => h.1 D hD u (Finset.mem_filter.1 hu).1, h.2⟩
 
-/-- **At one table, `runsZCJH_live`'s samples hold at every sample of the live law**: `drawOkZKH_of_exec` at one table. -/
+/-- **At one table, `runsZCJH_live`'s samples hold at every sample of the live sampling design**: `drawOkZKH_of_exec` at one table. -/
 theorem drawOkZKHJ_of_exec_one (I : Inputs) (h1 : I.count ≤ 1) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
@@ -177,7 +177,7 @@ theorem drawOkZKHJ_of_exec_one (I : Inputs) (h1 : I.count ≤ 1) {c : Flock.Circ
   drawOkZKHJ_one h1 (drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hdj ω)
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables of `J` tables, with the sample at accepted outcomes**:
-`runsZCJH_live` at the one-coin law of the accepted outcome's sample. -/
+`runsZCJH_live` at the one-coin distribution of the accepted outcome's sample. -/
 theorem runsZCJH_liveA (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -209,7 +209,7 @@ theorem setupTables_units {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock
     exact ⟨u, hu, by rw [hun]; exact hdiv⟩
 
 /-- **The challenger's live-coin part's samples at `J` tables under the live stratified sampling design, from custody**: when the record's sample file
-is the verifier's sample under the live law's own stratified sampling design (`DrawFileZK`) and the session's tables divide
+is the verifier's sample under the live sampling design's own stratified sampling design (`DrawFileZK`) and the session's tables divide
 `Σ_s k_s`, every sample of `Law.execOS` is `DrawOkZKJ` at `mPtsOf c.g ((Σ_s k_s) / nTab I)` link points, the failed run's
 (every unit) included: custody's file has `Σ_s k_s` units (`DrawFileZK.size_execOS`), which `partDraw` splits into the
 tables' equal parts (`drawOkZKJ_of_size`). -/
@@ -235,7 +235,7 @@ theorem drawOkZKHJ_of_exec (I : Inputs) (ht : I.tags.typed = false) {c : Flock.C
       ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
   drawOkZKHJ_of_size I ht hc _ _ pop hdiv dj hdj _ (DrawFileZK.size_execOS σs ks hks St hS Kd pop Lb src hdj ω)
 
-/-- **`DrawOkZKHJ` at an accepted outcome of the live law, at any count**: `drawOkZKHJ_of_exec` at `(Σ_s k_s) / nTab I`
+/-- **`DrawOkZKHJ` at an accepted outcome of the live sampling design, at any count**: `drawOkZKHJ_of_exec` at `(Σ_s k_s) / nTab I`
 units a table. At one table `nTab I = 1`; at several, verity-verify-proof `--zk` accepts the record's sample (the challenger's live-coin part's,
 `RecordsLiveZKJ`) only when its units are a multiple of the count (`setupTables_units`), and custody's sample has
 `Σ_s k_s` units (`DrawFileZK.size_execOS`), so the tables divide `Σ_s k_s`. -/
@@ -283,7 +283,7 @@ theorem drawOkZKHJ_of_custodyJS (I : Inputs) (ht : I.tags.typed = false) {c : Fl
   drawOkZKHJ_of_accepts I ht hc σs ks hks St hS Kd pop Lb src dj hCust.2 hCust.1 ω R o hacc
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables, at any count, with the sample from custody**: `runsZCJH_liveA`
-at the live law, whose sample hypothesis `drawOkZKHJ_of_accepts` discharges at `mPtsOf c.g ((Σ_s k_s) / nTab I)` link
+at the live sampling design, whose sample hypothesis `drawOkZKHJ_of_accepts` discharges at `mPtsOf c.g ((Σ_s k_s) / nTab I)` link
 points. -/
 theorem runsZCJH_live_execOS (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)

@@ -27,7 +27,7 @@ the member's part of it (`Member.part`), and the window's projection hands each 
   `WindowStartWithin`, `WindowFirstStopFresh`, `WindowCouplesWithin`, `windowCouples_of_close`): `CoinMap`'s
   (`couples_of_close`), over the members' sessions in order. Wherever each member's coin map writes its link points
   in within `γL` of the tape's own and each round's coins within `γ`, the start leaves the tape from the first stop
-  fresh and is within `ε₀` of the uniform tape, the joint law's tape off the held-off events is within `ε₀` and the
+  fresh and is within `ε₀` of the uniform tape, the joint distribution's tape off the held-off events is within `ε₀` and the
   stops' term, every member's session's summed along the walk, of the uniform tape at every event; so the coin map's
   premise holds wherever that is at most the hiding term (`windowCouples_of_within`). The induction is one session's
   with what follows it (`avg_roundsOffK_le`, `avg_sessionOffK_le`), then over the members (`avg_seqOff_le`,
@@ -648,7 +648,7 @@ noncomputable def windowErr (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ :
       ((W.extend M.widening).joint t).ms (Pos.root (roundCuts V θ F c rd) (M.start ω))
 
 open Classical in
-/-- **The window's coin map's premise within a term, off its local ones** (`couples_of_close`): the joint law's tape
+/-- **The window's coin map's premise within a term, off its local ones** (`couples_of_close`): the joint distribution's tape
 off the held-off events is within the start's term and the stops' of the uniform tape at every event, wherever each
 member's coin map writes its link points in within `γL` of the tape's own and each round's coins within `γ`, the start
 leaves the tape from the first stop fresh, and the start is within `ε₀` of the uniform tape. The stops' term carries,

@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.Held
 # `MovesReach` at the session's layout
 
 At the readings and the decoders at the session's layout (`Live.layout`, `Live.tables`) and the sample-coupled coin map
-under `fieldEnc`, every clause of `MovesOf` holds at one witness of the joint law's support off the link's and the
+under `fieldEnc`, every clause of `MovesOf` holds at one witness of the joint distribution's support off the link's and the
 rounds' empty classes (`ReachesOff`): one widened sample, one set of link points and one set of rep rounds, since the
 three sit together inside the writer's output.
 
@@ -178,7 +178,7 @@ theorem SetsUp.popTied {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
 
 -- `decodersAt`'s roots search `List.finRange A.rounds`, which unification would otherwise unfold at `A.rounds`'s value
 attribute [local irreducible] Live.rounds Live.N in
-/-- **`MovesOf` at a witness of the joint law's support, at the session's layout**: at the readings and the decoders at
+/-- **`MovesOf` at a witness of the joint distribution's support, at the session's layout**: at the readings and the decoders at
 `Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the link's and the
 rounds' empty classes, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's check read
 is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves are those

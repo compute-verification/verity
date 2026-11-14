@@ -6,7 +6,7 @@ run recorded.
 * **Index.** `one-stage-run/v0` rows (the store's selection of every run that holds one-stage registration or audit
   records): each run's art, the registration formats it holds and the Python verdicts it recorded.
 * **Case.** For each recorded audit, the case `sampled-proofs-one-stage serve` reads: the verifier's parameters as
-  `OneStage.paramsOfJson` reads them (its own program descriptor, query, law, scheme, ports, leaf layer, log, partition,
+  `OneStage.paramsOfJson` reads them (its own program descriptor, query, sampling design, scheme, ports, leaf layer, log, partition,
   delta), the registration record as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the sample, the
   proved units, the instance count, the receipt, the statement, the verdicts, the sessions and their roots, the served
   sample), each from the run's own files or the verifier's own copies (the program rebuilt from the input set the run
@@ -1293,8 +1293,8 @@ def a4_copies(run: Run, base: str, summary: dict, rec: dict) -> tuple[Any, dict,
 def a4(run: Run) -> Iterator[Case]:
     """A4 (`a4.py`): the Llama-3.2-1B row's layer 0 on serving's own roots: the layout of record's members as one population (the
     canonical `Q_template_instances` partition), serving's registration (or, with `--reaudit`, a new record naming it under
-    the agreement's law, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
-    SHA-512 of the map from template to its public file's SHA-512, one sample by the verifier's law with each member served
+    the agreement's sampling design, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
+    SHA-512 of the map from template to its public file's SHA-512, one sample by the verifier's sampling design with each member served
     its share. Before 9515b4d4f the audit took neither the served sample nor the sessions' roots (and the run recorded no
     `audit_negatives`)."""
     base = "out/a4"
@@ -1767,7 +1767,7 @@ def served_window(run: Run) -> Iterator[Case]:
         run.outside.append({"run": run.id, "driver": "served-window", "name": name, "why": why})
 
 
-#: served_zk's first window's registered scheme, law and δ (`served_commit.SCHEME`, `LAW`, `DELTA` before `params.json`)
+#: served_zk's first window's registered scheme, sampling design and δ (`served_commit.SCHEME`, `LAW`, `DELTA` before `params.json`)
 SERVED_ZK_V0_SCHEME = "verity/pouw/served-zk/hm96-sha512+frame-v3-sha512/v0"
 SERVED_ZK_V0_LAW = {"k": 1, "law": "subset"}
 SERVED_ZK_V0_DELTA = 0.05

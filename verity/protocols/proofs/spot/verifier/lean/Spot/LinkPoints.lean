@@ -104,7 +104,7 @@ def refused (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat ×
     | none => false
 
 /-- The sampling design the sample runs on (`OneStage.drawnFrom`): the verifier's own expanded over its program and query
-(`Draw.deriveLaw`), else its subset or Bernoulli law as Flock reads it (`Draw.flockLaw`); with the population. -/
+(`Draw.deriveLaw`), else its subset or Bernoulli sampling design as Flock reads it (`Draw.flockLaw`); with the population. -/
 def lawOf (p : Program) (query law : Json) (table : Option Json) : V (Flock.Draw.Law × Nat) := do
   let population ← Partition.units p query
   match ← Draw.deriveLaw p query law table with

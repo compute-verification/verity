@@ -58,7 +58,7 @@
 #     and PP_SERVE_STANDIN), each the rate that samples its window as its text reads at the proof blocks its scope has under
 #     the declared run's advice; a window of more is sampled in proportion. A PP_PARTITION or PP_FORGED_PARTITION that still
 #     states a fixed design (subset:K, stratified:K or work:K) is refused at the rule check, before any session opens, by
-#     either audit, by name. benchmarks/prove_path/tests/test_run_rules.py holds the stand-in's rules to what a stream takes
+#     either audit, by name. verity/protocols/proofs/spot/prover/tests/test_prove_path_sh_rules.py holds the stand-in's rules to what a stream takes
 #     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design: among them
 #     the transfer-gate example's forged partition below.
 #   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so

@@ -37,7 +37,7 @@ abbreviates, unchanged.
   conclusion. That lemma is proved, and discharges this premise at a class whose schedule is `fast100`'s and whose
   layout holds (`Recursion.compiledForkSound_of_fast100`).
 * `UniformRandomBytes` (A3, `uniform/os-random`): the bytes the verifier's operating system returns are uniform, at
-  each of V*'s laws (one premise over `Vs`, so the shape check reads its head).
+  each of V*'s sampling designs (one premise over `Vs`, so the shape check reads its head).
 * `HashDerivedKeyHm96` (`hash-derived-key`): hm96's salt hash keys its hiding at `2^-193`.
 * `RecordCustody` (`live-verifier`, `Assumptions.Zk.RecordCustodyZKJ`): the record and the sample file each of V*'s
   sessions reads are the challenger's of the live session of its statement's `J` tables and the verifier's own sample, at every history (one premise
@@ -106,7 +106,7 @@ def CompiledForkSound {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [
     (clashPickCL T CT execArith Refine.H512 Refine.enc512 Refine.leafPlain cls regs sch)
     (ENNReal.ofReal (Accounting.tableError sch ⟨cls.kLog, regs.length, cls.mPts⟩))
 
-/-- **A3** at every one of V*'s laws: `Assumptions.UniformRandomBytes` at each sampling design's lengths and source. -/
+/-- **A3** at every one of V*'s sampling designs: `Assumptions.UniformRandomBytes` at each sampling design's lengths and source. -/
 abbrev UniformRandomBytes {S : ℕ} (Vs : Fin S → VStmt) : Prop :=
   ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src
 
