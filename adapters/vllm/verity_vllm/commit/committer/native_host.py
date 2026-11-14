@@ -909,10 +909,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         if t.device.type != "cuda":
             return
         self.x03_expected += 1                       # attempted acquisition; committed counted only after the copy was issued
-        self._acquire_impl(name, t, job)
+        self._copy_into_step(name, t, job)
         self.x03_committed += 1
 
-    def _acquire_impl(self, name: str, t: Any, job: _StepJob) -> None:
+    def _copy_into_step(self, name: str, t: Any, job: _StepJob) -> None:
         t0 = time.perf_counter()
         if self._rt is not None and self.arena is not None and t.is_contiguous():
             return self._acquire_by_cudart(name, t, job, t0, self.arena)
