@@ -350,3 +350,13 @@ def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
     assert r.stderr.strip() == ("demo.sh: this host has no `ip` (iproute2), which names the node's links: apt-get "
                                 "install iproute2")
     assert not any((tmp_path / "out").iterdir())
+
+
+def test_the_start_file_demo_sh_runs_starts() -> None:
+    """`wipe_on_node.py`, which demo.sh runs on the card and no CPU test runs whole, imports what it starts and answers
+    `--help` with `wipe_period.main`'s options."""
+    start = WRAPPER.parent / "wipe_on_node.py"
+    assert f"python {start.relative_to(ROOT)} --period" in DEMO.read_text()
+    r = subprocess.run([sys.executable, str(start), "--help"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert all(f"--{o}" in r.stdout for o in ("period", "out", "node", "expect")), r.stdout

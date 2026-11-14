@@ -111,16 +111,37 @@ def test_the_registration_round_trips() -> None:
 
 
 def test_the_party_follows_period_json() -> None:
-    local = verifier_party.side_of({}, "n0")
+    local = Side.of({}, "n0", "bandwidth", verifier_party.command())
     assert local.host == "n0" and local.address is None
     assert local.command == (sys.executable, "-m", verifier_party.MODULE, "--listen", "127.0.0.1:0")
-    assert verifier_party.side_of({"challenger_host": "n0"}, "n0") == local
+    assert Side.of({"challenger_host": "n0"}, "n0", "bandwidth", verifier_party.command()) == local
     with pytest.raises(RuntimeError, match="auditor-host isn't wired for bandwidth"):
-        verifier_party.side_of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"]}}}, "n0")
-    wired = verifier_party.side_of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {
-        "command": ["ssh", "auditor-host", "verifier"], "address": "192.0.2.7:7961"}}}, "n0")
+        Side.of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"]}}}, "n0", "bandwidth",
+                verifier_party.command())
+    wired = Side.of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {
+        "command": ["ssh", "auditor-host", "verifier"], "address": "192.0.2.7:7961"}}}, "n0", "bandwidth",
+        verifier_party.command())
     assert wired == Side("auditor-host", ("ssh", "auditor-host", "verifier"), ("192.0.2.7", 7961))
     assert verifier_party.placement("n0", "n0")["trusted-host"].startswith("unmet: ")
     held = verifier_party.placement("n0", "auditor-host")
     assert held["parties"] == {"challenger": "auditor-host", "prover": "n0", "verifier": "auditor-host"}
     assert held["trusted-host"].startswith("holds: ")
+
+
+class Handed(Exception):
+    """What a stand-in for the runtime's `Side.of` raises once it has seen what it is handed."""
+
+
+def test_a_period_asks_its_caller_for_the_bandwidth_side(tmp_path) -> None:
+    """A period's PoUB takes the side from the program that starts the run: `period.json`'s challenger under
+    bandwidth's key, started on this node by `verifier_party.command`."""
+    (tmp_path / "period.json").write_text("{}")
+    handed = []
+
+    def side_of(doc, node, key, local, what=None):
+        handed.append((doc, node, key, local, what))
+        raise Handed
+
+    with pytest.raises(Handed):
+        P.leg(tmp_path, "n0", tmp_path / "out", side_of=side_of)
+    assert handed == [({}, "n0", "bandwidth", verifier_party.command(), None)]

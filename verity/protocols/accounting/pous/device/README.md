@@ -27,8 +27,9 @@ From Python there are four modules, each imported by its path.
 `records_root`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
 signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREFIX`) and a block's digest
 (`block_digest`), with the formats' names and constants. `challenger_session` is a run of timed rounds between a node and
-the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`,
-`side_of`), the node's calls (`salt`, `session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
+the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`),
+the side it is handed (`Side`, `command`), the loop that steps its parties (`run`), the node's calls (`salt`,
+`session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
 `challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`,
 `PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict`

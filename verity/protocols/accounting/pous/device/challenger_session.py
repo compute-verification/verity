@@ -1,5 +1,5 @@
 """The memory challenger's session as PoUS runs it: the wire both sides speak, the prover's side, the request and the id
-a session runs under, and how PoUS starts the challenger's side and talks to it. The challenger's side is the
+a session runs under, and one session with the challenger's side as PoUS is handed it. The challenger's side is the
 auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-host`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
@@ -12,9 +12,18 @@ prover -> memory-challenger   per frame Block, the whole block (private)
 ~~~
 
 `Frames` is their codec over the session's stream, `u64be index` for `Warmup` and `Index`, `u64be 2^64 − 1` for `End`
-and the whole block for a `Block`, which the deployment layer's byte-stream adapter (`verity.runtime.stream`) drives
-them on: `answer` is the prover's party run there. Each side reads its connection through `Polled`, which polls for up
-to `SPIN_NS` before it blocks, so neither host's CPU sleeps through a round.
+and the whole block for a `Block`, which `run` steps them on: `answer` is the prover's party run there. Each side reads
+its connection through `Polled`, which polls for up to `SPIN_NS` before it blocks, so neither host's CPU sleeps through
+a round.
+
+The loop. `run(party, params, identity, f, codec, peer=...)` drives one party (`party.Party`) against its one peer over
+the stream `f`. Each message it sends `peer` is written by `codec.write`, and each that reaches it is read by
+`codec.read`. Its sources are answered here once the step that asked is done, in the order it asked: a read of its clock
+with a reading of `clock`, a request for `n` bytes of coins with `coins(n)`, and a `Timer` with `ClockTimer` once
+`wait(clock, at)` returns. Nothing is framed, signed or kept on the way, so the stream carries the codec's bytes alone
+and no handshake. A frame reaches the party unstamped (`Received.at` is None), so a party that times a frame asks its
+clock, and reads nothing it didn't ask for. An exception out of the party, the codec or the stream is the caller's:
+nothing is retried, and nothing becomes a refusal. `run` returns the party's `Finish` and what it recorded, in order.
 
 A request that names no audit runs under the id the auditor designates from its coins, the node and the setup's root
 (`coin_session_id`, under `period.SESSION_DOMAIN`). One that names its audit (`request_of` with `audit`) runs under
@@ -24,29 +33,26 @@ outputs and P2's parameters (`PARAMS`), which `setup_of` reads back. The challen
 its own host under `SETUPS`, from which PoUB's verifier on the same host builds its registration
 (`verity.protocols.accounting.poub.verifier.p2_party --pous-record`).
 
-`side_of(period, node, device)` is where `period.json` puts the challenger's side (`stream.Side`, started by `command`),
-`salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is PoUS's: it starts the
-side, connects to it and answers each index with `respond(index)` (`answer`). `placement` says which host ran each
-party and whether `trusted-host`'s premise holds.
+`Side` is the challenger's side as what starts a run hands it over, wherever `period.json` puts it, and
+`command(device)` the argv that starts it on this machine. `salt(side, audit, commitment)` asks it for a salt, and
+`session(side, request, respond)` is PoUS's: one session with the side, each index answered with `respond(index)`
+(`answer`). `placement` says which host ran each party and whether `trusted-host`'s premise holds.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 import socket
-import subprocess
 import sys
 import time
+from collections import deque
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, Protocol, TypeVar
 
 from verity.commitments.randomness import derive
-from verity.runtime import stream
 from verity.protocol import Channel, Manifest, Role
-from verity.party import Finish, Identity, Received, Send
-from verity.runtime.stream import Side
+from verity.party import Finish, Identity, LogEntry, Params, Party, Received, Send, Timer
 from verity.channel import Body, Int, Message, Schema
 from verity.protocols.accounting.pous.verifier import run as R
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -111,6 +117,80 @@ class Polled:
 
     def flush(self) -> None:
         pass
+
+
+T = TypeVar("T")
+
+
+class Side(Protocol):
+    """The challenger's side as what starts a run hands it to PoUS (the runtime's `Side` is one): the machine it runs
+    on; `ask(request)`, one request it answers with no session: the line it printed as JSON, the line and its exit
+    code; and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the
+    side's report back with what `drive` returned."""
+
+    host: str
+
+    def ask(self, request: Mapping[str, Any]) -> tuple[dict[str, Any], str, int]: ...
+
+    def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
+
+
+class Codec(Protocol):
+    def write(self, f: BinaryIO, message: Message) -> None:
+        """`message` on the stream, as its protocol's bytes, flushed."""
+
+    def read(self, f: BinaryIO) -> Message:
+        """The next message off the stream; ConnectionError when it ends first."""
+
+
+def sleep_until(clock: Callable[[], int], at: int) -> None:
+    """Return once `clock` reads `at` or later, sleeping on the machine's clock meanwhile."""
+    while (now := clock()) < at:
+        time.sleep((at - now) / 1e9)
+
+
+def run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Codec, *, peer: str,
+        clock: Callable[[], int] | None = None, coins: Callable[[int], bytes] | None = None,
+        wait: Callable[[Callable[[], int], int], None] = sleep_until) -> tuple[Finish, list[LogEntry]]:
+    """`party` against `peer` over `f` until it finishes (module docstring): its finish, and what it recorded."""
+    records: list[LogEntry] = []
+    asked: deque[tuple[str, int]] = deque()
+
+    def act(actions: list[Any]) -> Finish | None:
+        for a in actions:
+            if isinstance(a, Finish):
+                return a
+            if isinstance(a, LogEntry):
+                records.append(a)
+            elif isinstance(a, Timer):
+                asked.append(("ClockAlarm", a.at))
+            elif isinstance(a, Send) and a.channel == peer:
+                codec.write(f, a.message)
+            elif isinstance(a, Send) and a.channel == "clock" and a.message.type in ("ClockRead", "ClockAlarm"):
+                asked.append((a.message.type, a.message.fields.get("at", 0)))
+            elif isinstance(a, Send) and a.channel == "coins" and a.message.type == "CoinsDraw":
+                asked.append(("CoinsDraw", a.message.fields["n"]))
+            else:
+                raise ValueError(f"{identity.party} took {a!r}, which a stream to {peer} doesn't carry")
+        return None
+
+    def answer(ask: str, arg: int) -> Received:
+        if ask == "CoinsDraw":
+            if coins is None:
+                raise ValueError(f"{identity.party} draws coins, and its stream has none")
+            return Received("coins", Message("Coins", body=coins(arg)))
+        if clock is None:
+            raise ValueError(f"{identity.party} reads its clock, and its stream has none")
+        if ask == "ClockRead":
+            return Received("clock", Message("ClockReading", {"ns": clock()}))
+        wait(clock, arg)
+        return Received("clock", Message("ClockTimer", {"at": arg, "ns": clock()}))
+
+    done = act(party.start(params, identity))
+    while done is None:
+        r = answer(*asked.popleft()) if asked else Received(peer, codec.read(f))
+        done = act(party.on(r))
+    return done, records
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -186,21 +266,13 @@ def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> in
     challenger ends the session, the collector paused as on the challenger's side; the frames answered, the warm-ups
     among them."""
     with mc.collector_paused():
-        done, _ = stream.run(Prover(respond), {"block_bytes": block_bytes}, Identity(PROVER), f, Frames(),
-                             peer=CHALLENGER)
+        done, _ = run(Prover(respond), {"block_bytes": block_bytes}, Identity(PROVER), f, Frames(), peer=CHALLENGER)
     return done.outcome
 
 
 def command(device: str | Path) -> tuple[str, ...]:
     """The argv that starts the challenger's side as a process on this machine, its key and logs in `device`."""
     return (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0")
-
-
-def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
-    """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-    node, else `challenger.pous`'s `command` and `address`, which infra writes once the host serves the challenger's
-    side (the bandwidth gate's path, `verity/protocols/accounting/poub/device/live_verifier`)."""
-    return Side.of(period, node, "pous", command(device))
 
 
 def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
@@ -227,18 +299,7 @@ def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], byt
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
     """The salt's source for the audit `audit`, which the challenger's side `side` samples after `commitment` and logs
     (`give_salt`); RuntimeError with the side's refusal, or when it answers anything else or exits nonzero."""
-    p = subprocess.Popen(list(side.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
-    try:
-        p.stdin.write(json.dumps({"salt": {"audit": audit.hex(), "commitment": commitment.hex()}}, sort_keys=True) + "\n")
-        p.stdin.close()
-        line = p.stdout.readline()
-        doc = json.loads(line) if line.strip() else {}
-        if "listening" in doc:
-            # a side older than the salt request waits for a session's prover, holding the host's gate: end it now
-            with socket.create_connection(side.address or ("127.0.0.1", doc["listening"])):
-                pass
-    finally:
-        rc = p.wait()
+    doc, line, rc = side.ask({"salt": {"audit": audit.hex(), "commitment": commitment.hex()}})
     if rc == 0 and isinstance(doc.get("source"), str):
         return bytes.fromhex(doc["source"])
     why = doc.get("refused") or (f"it answered {line.strip()[:200]!r}" if "listening" in doc else f"it exited {rc}")
@@ -282,5 +343,6 @@ def setup_of(request: Mapping[str, Any]) -> dict[str, Any] | None:
 
 
 __all__ = ["CHALLENGER", "END", "ID", "MANIFEST", "MODULE", "PARAMS", "PREMISE", "PROVER",
-           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Frames", "Polled", "Prover", "answer",
-           "coin_session_id", "command", "placement", "request_of", "salt", "session", "session_id", "setup_of", "side_of"]
+           "SESSION_ID_TAG", "SETUPS", "WARMUPS", "WARMUP_INDEX", "Codec", "Frames", "Polled", "Prover", "answer",
+           "coin_session_id", "command", "placement", "request_of", "run", "salt", "session", "session_id", "setup_of",
+           "sleep_until"]

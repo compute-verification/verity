@@ -35,7 +35,7 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.commitments.identity import canonical_json_bytes
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import (
     Finish,
     Identity,
@@ -44,7 +44,6 @@ from verity.party import (
     Send,
     Timer,
 )
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Int, Json, Message, Phase, Refused, Schema
 
 from . import audit, receipts
