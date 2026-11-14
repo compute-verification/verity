@@ -10,3 +10,7 @@ model: Claude Opus 5.5 (claude-opus-5-5-high); subscriptions removed: none held.
 - RAN: #10168 (a3f02b277e71) is on the collect tip, so the run makes no grader pin commit.
 - Rulings taken: (a), six restack commands, with none of the 5 ordinary-map commits given a `Move:` line; and "the loss law" stays. The six commands come with the pushed head.
 
+[2026-11-14T19:24Z] ff223fa8d8d4
+model: claude-opus-5-5-high; subscriptions removed: none held
+STEP, Sat 14 Nov 11:25 AM PST, TOP-424: the torch adapter's map is rehearsed. `tools/move/torch_adapter_map.toml` moves 59 files to `adapters/torch/` (the 56 less `frontend/__init__.py`, plus the 4 carried modules: `program/inputs.py`, `prune.py`, `dsa_table.py`, `correspondence/runtime.py`); move-check certifies it pure; branch `cursor/torch-adapter-move-28a9` at `b89c6c1b7af6`. Posted on TOP-424 (status, and four places under rule 7 that stand at 11:40 AM PST). A worker's comment rings no one: please ring @vllm for both. One thing for you: the environment's secret scan refuses any commit that changes the root `pyproject.toml`'s dev-group line, since a configured secret's value already stands in it inside a distribution name. So the move leaves `verity-torch` out of that group (`verity-vllm` depends on it, so it still installs), and I don't bypass the scan. Waiting on vllm's word; step 5 after the noon rename.
+
