@@ -214,6 +214,35 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     assert WC.verdict(worded)["failed"] == ["cut", "error"] == G.failed_words(worded["summary"]["failed"])
 
 
+def test_the_certificates_step_releases_its_declared_keys_and_keeps_the_traffics_in_the_witness(tmp_path,
+                                                                                               monkeypatch):
+    """``chain_record.py certs`` writes ``certs.json`` with only the keys the list of released_keys.json names, on an
+    accepted run and on one the network certifier's own check refuses, and every count of `verdict` the list names;
+    what the step found of the traffic (`warden_chain.WITNESS_KEYS`: which execution phases the signer refused, how
+    many it certified, each one's certified, how many problems) goes to ``--witness`` only, and a ``certs.json`` that
+    held any of it would fail the record."""
+    import released_keys as RK
+
+    listing = RK.load().listing("certs.json")
+    assert listing is not None and not RK.load().waits("certs.json")
+    accepted, refused = gate_run(tmp_path / "ok"), gate_run(tmp_path / "cut")
+    check = WC.RC.check
+    monkeypatch.setattr(WC.RC, "check", lambda wit: check(wit) | (
+        {"accepted": False, "problems": ["its words"]} if refused in Path(wit).parents else {}))
+    for run in (accepted, refused):
+        out, witness = run.parent / "certs.json", run.parent / "witness" / "certs" / "certs.json"
+        rc = cr.main(["certs", "--warden-run", str(run), "--out", str(out), "--witness", str(witness)])
+        doc, private = json.loads(out.read_text()), json.loads(witness.read_text())
+        assert (rc, doc["verdict"]) == ((0, "accepted") if run is accepted else (1, "refused"))
+        assert listing.undeclared(out.read_bytes()) == {} and set(private) == set(WC.WITNESS_KEYS)
+        assert not set(doc) & set(private) and private["issuer_refused"] == []
+        assert set(listing.undeclared(json.dumps(doc | private).encode())) == set(WC.WITNESS_KEYS)
+    full = {"accepted": True, "summary": {"failed": ["cut"], "windows": 2, "certified_windows": 2, "certificates": 6,
+                                          "cell_rows": {"registered": 4, "of": 4},
+                                          "load": {"values": 3, "registered": 3, "relayed": True}}}
+    assert listing.undeclared(json.dumps({"warden_check": WC.verdict(full)}).encode()) == {}
+
+
 def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and_field(tmp_path):
     """`deployment_of`: a run whose every deployment.json (its witness/'s and out/'s, the gate's layout) is the
     auditor's record's deployment, in the bytes the record hashes, gives the record's deployment and schedule. A run
