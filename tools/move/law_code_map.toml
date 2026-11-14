@@ -158,6 +158,10 @@ strings = [
 ]
 
 [[words_in]]
+files = ["benchmarks/one_stage/served_verdicts.sh"]
+words = { "step 3's law" = "step 3's sampling design" }
+
+[[words_in]]
 files = ["adapters/vllm/tests/pipeline/test_row_tables_stream.py"]
 words = { "Law" = "SamplingDesign", "selection_law" = "selection_sampling_design" }
 
