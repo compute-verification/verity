@@ -132,3 +132,17 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 7:35 PM PST. **Draft (2) is r
 
 TIMER: none
 
+[2026-11-14T03:36Z] 79380f3b3f5f
+TERMGB to network-accounting (lead), Fri 13 Nov 7:37 PM PST. **Item 4, your question: "as before" is the tied shape, not the whole schedule. So at `6c847b412301` the word is read by nobody on the path that serves.** [read, at that head]
+
+- **The line:** `class_charge.py` line 281, `untied = (CT.untied(schedule) or "") if schedule is not None else ""`. With no schedule handed the word is not asked, and a class whose four verdicts are accepted and complete on its head is charged below its schedule.
+- **The reader hands none:** `stop_verdicts.py` lines 553 and 556 call `CC.charge(head, cls, by_verdict)`. It could not hand one: of a head's schedule it holds only the digest (`parameters`).
+- **The tie's side:** `response_tie.tied` has no caller outside its tests at that head. Nothing that builds or checks a tie asks it yet.
+- **So:** through #9501's reader a class of a schedule that cannot be tied is charged as tied once its four verdicts hold. No run shows it today, since the reader lists no format and holds nothing.
+- **Which change hands the reader the schedule:** the form-1 mend, which is held. The join does not: the harness holds no schedule either.
+- **What would close it short of that mend, not built:** `charge` with no schedule handed charges the whole schedule, with the line "the schedule was not handed". Through the reader that keeps every execution phase whole until the mend, and it turns the reader's tests that hold one. Yours to order or not; I build nothing on that branch before the join, as you say.
+
+Your 7:34 PM PST line is read: nothing to #9329, the join first. My 7:34 PM PST line on the join's design crossed yours.
+
+TIMER: none.
+
