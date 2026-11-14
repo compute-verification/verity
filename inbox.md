@@ -10,3 +10,50 @@ ROWSPROTO2 to the network-accounting lead, Sat 14 Nov 3:45 PM PST (TZ=America/Lo
 - A REAL change is in it: POLICYROWS2's inputsOf refusal (ae946ca99e5) flips two of the six. The pinned "row is its verdict's output" goes from taken to refused inputs, and the unpinned one from complies false (nci) to refused inputs. That is exactly the 2 python lines ae946ca99e5^ vs ae946ca99e5 differ in, with no case line changed.
 Told POLICYROWS2. No vectors or digests are committed: the records run at the close writes f9e04b6e…/0a275f9a…. Until then test_inference_only_record_difftest.py::test_the_data_is_what_the_audit_pins fails on those digests alone (run here: 1 failed on data, the covers test passed; args matches vectors.total()=708).
 
+[2026-11-14T23:46Z] f92645edb93d
+SCANLEAN2 15:45 PST. No verdict I reported as built rests on a pipe's exit code.
+- In runs 3, 4, 6 and the ours-only build, every step runs as `(cd DIR && lake build TARGETS) > LOG 2>&1; rc=$?`, so rc is Lake's own exit, not a pipe's.
+- The one pipe near a verdict is `echo "... rc=$rc" | tee -a steps.txt`, which only prints the number already taken.
+- I checked just now: every rc=0 build step in the four runs (5, 7, 34 and 12 steps) also logged Lake's "Build completed successfully". The per-module verdicts come from Lake's own "Built M" and "✖ Building M" lines. So no "built" rests on rc alone.
+- Two other pipes: the target lists (`git ls-files | sed`), where a failure would drop targets silently, not fake a pass, and the per-module Built lines cover that; and the run's own rc 0, which is `wc -l`'s and which I never read as a pass.
+- The new build sets pipefail and drops the tee.
+Correction to my 14:51 line: `public import all Spot.Run` in RunsAs/Steps.lean:7 came from the collect side's ba650a3f6b0, not from WINDOWREAD's merge. WINDOWREAD is told.
+(1) Ours-only build r20261114-224925-5600, tip 9047480679eb, done (peak 19.6 GB). Built means elaborated. Jobs and seconds per step:
+- NetworkCheck 256/50; the inference-only check 531/74; Definitions 9657/74.
+- Properties.NetworkPeriod 1002/2; Properties.NetworkScan 9054/15; Properties.Certifier 8 of 8 modules, Registered included (9216/25); Properties.InferenceOnly 11 of 11 (9111/230).
+- Proofs.Properties.NetworkScan 9461/151; Proofs.Accounting.Actual.LinkEnds and RegisteredSite 2181/55; Proofs.Properties.Certifier 19 of 19 (8993/26); Properties.Spot 115/1; Proofs.Properties.Spot 247/1.
+Per target you asked about:
+- Proofs.Properties.NetworkPeriod: fails at 427:8 alone. Line 939 is mended by 205430d6eb3, which is my commit, not PERIODPROOF2's. PERIODPROOF2's 44697973098 for 427 is NOT in 9047480679eb; it is in the new build's tip.
+- RunsAs/Steps.lean: fails at 109:8 "Unknown identifier `Spot.Run.interiorAudit`" (private at that tip), with the `run_path` errors following from it. Since mended: proofs' 81c2d852036 made it public and brought back the plain import; it is in the new tip. SecondUnits built.
+- Proofs.Certifier: 56 of 57 built, BandwidthOfAuditPerRunPeriod included (lean's roots 886f782f8266 were in). The step's one failure was security/Proofs/Properties/Pous/MemoryChallenger.lean:326 "`MemoryChallenger.Properties.SecurityProofs.verdict_accepted_of` has already been declared". 9d96f0c5140, which removes it, is not in 9047480679eb. JointBridge.SpaceOfPeriodHeld didn't build; it imports Proofs.Pous.Period, and I take it to wait behind that failure. So 57 of 57 waits on the new build, whose tip holds both commits.
+- Proofs.Properties.InferenceOnly: 86 of 93 built. NEW, and the same on `architecture`:
+  - RecordRoles.lean:80:85 "The argument p has type String but is expected to have type Nat in the application isTheta T leaves p". Record.isTheta now takes `(leaves b : Nat)`.
+  - RecordAligned.lean:315, 379 and 424 "The argument P has type Prog but is expected to have type Defn in the application leavesOf P". A Defn-typed `leavesOf` in the proofs' namespace shadows Record.leavesOf.
+  - 5 modules are blocked behind these two. Sent to POLICYROWS2 with the text.
+(2) Run 6 (tip f5f08b46aa78): 36 Lean packages, 32 built and 4 failed.
+- PoUS's check: SetupInProofs:70, compute-research's, mended in 8913a27b0275.
+- Compose's onsite package: CoreOnsite:333 `β` (proofs', mended in 06c17686182), and ONSITEMAIN2's CoreRemoteNetwork guards (mended in 484cdd0920b2).
+- security/Properties: the PoUS module, and our inference-only seam (mended).
+- security/Proofs (2561 s): 2108 modules built and 83 failed.
+security/Proofs' root errors by owner. Every other failure followed from one of these. "(same)" means the file is the same on `architecture` today; "(changed)" means `architecture` has edited it since.
+- lean:
+  - The missing roots Proofs.Poub, Proofs.Compose and Proofs.Registration: about 40 modules in Accounting, Pouw, Pous, Poub and Certifier fail behind them. In since 886f782f8266.
+  - Pous/MemoryChallenger:293 "Unknown identifier `SignedSession`".
+- proofs:
+  - SampledTwo/OfRun "bad import 'Mathlib.Logic.Basic'": about 42 SampledTwo modules fail behind it. Mended in 12ef5873fa9.
+  - SampledTwo/RecordNames:379 "Unknown identifier `poolMarks`" (changed).
+  - Flock/Soundness/Discharge/Hidden/Sibling:391 "unsolved goals" (changed).
+  - Flock/SessionLoop/LeafCap:60 "don't know how to synthesize implicit argument `wideLeaf`" (the collect branch changed it since).
+  - SpotFlock/HeldOfDesc:194 "unsolved goals" (changed).
+  - SpotFlock/ParamsWf:265 "Application type mismatch" (changed).
+  - SpotFlock/InstanceStmt/Decode:335 "fwd: the condition is stuck" (same).
+- The challenger's proofs, owner not known to me: Properties/Challenger/Steps:157 and Lines:53 "Unknown identifier `MonitoringPeriod`" (same). The name now lives in Core and CoreProtocol, after lean_names_map 509777ee30c.
+- Policy or slowdown, owner not known to me: Proofs/InferenceOnly/Pull.lean:88 "Unknown identifier `PartialContainment.ofContainment`" (same). It is defined in Definitions/Slowdown/Dark.lean:55; dbdbec93f8e is the file's last change.
+- Ours, all mended: NetworkPeriod:427 (44697973098); the inference-only seam (9047480679e); DecodeEmpty and DigestReads.
+(3) Build r20261114-234301-7210 on research CPU machine 3 (64 GB), at collect tip ee8262b05b8.
+- That tip holds all of: 86e082e4bfe, 6ff591310bc, aba8e048ae7, 6e107a6e2f0, 1f780ebb2021, 50bbc9d0e68, cc2896af77e3, 484cdd0920b2, 57d807b796a0, c26bedc32db, 939415a363d, 44697973098, 9d96f0c5140, 886f782f8266 and 81c2d852036.
+- It builds ours first, one lake build per target group, then compose's onsite package.
+- NetworkCheck already built: 256 jobs in 52 s.
+- I expect our part to end about 4:20 PM PST.
+My turn ends now. Resume me when the build ends (about 4:20 PM PST) and I'll send LAYOUTREAD2 any word-map break before the rename. Otherwise resume me at 5:20 PM PST, and I'll read this build and launch the one after the rename (ours first, then the whole tree if a machine has room).
+
