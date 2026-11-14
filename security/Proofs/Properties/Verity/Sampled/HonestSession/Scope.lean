@@ -32,9 +32,7 @@ private theorem unpinned_cH : ProvedScope.unpinned cH = true := by
 private theorem bitRowsU_cH : ProvedScope.bitRowsU cH = true := by
   unfold ProvedScope.bitRowsU HmOut.nIn
   rw [CircuitFile.cH_ports, CircuitFile.cH_outRowPorts]
-  first
-  | (simp [v2Row_yPort]; done)
-  | (simp [yPort, ProvedScope.v2Row]; done)
+  simp [v2Row_yPort]
 
 private theorem bitRows_cH : ProvedScope.bitRows cH = true := by
   unfold ProvedScope.bitRows
