@@ -176,6 +176,9 @@ class NodeWindow:
         self.outs: dict[int, _Out | str] = {}
         self.free: list[Free] = []
         self.ingress: list[IF.Ingress] = []
+        #: each registered entry a lowering lays out from the weights record (`node_window_sparse.entry`), by parameter: the
+        #: record's leaves it holds, in turn
+        self.entries: dict[str, Refs] = {}
         self.unlowered: dict[str, list[int]] = {}
         self.peers: dict[str, list[tuple[int, str]]] = {}
         #: each template's allocations, ``(first unit, units, family)`` (a gather's family `GATHER`)

@@ -7,7 +7,7 @@ reference on a small binding before it is used). A unit's inputs come from the c
 words), its registered reads (the parameter's words at the read's source), its table reads (the committed table's root and
 domain id, `interface.digest_words`), its openings (the committed table's row, salt and path at the unit's key) and, for a
 port the circuit leaves free, the Program's own words where the frame's ``stand_ins`` window (`NodeWindow.stood`) says it
-reads them (a peer's row, an unlowered node's row), or the free port's Definition read (`FREE`). A row no source names is
+reads them (a peer's row, an unlowered node's row, the prompt the request's ingress reads). A row no source names is
 undeclared: zeros, counted, and the unit's mismatch counted apart. A unit's expected words are the Program's at the frame's
 pieces (`NodeWindow.outs`), a gather's the concatenation of the rows it holds (`NodeWindow.wholes`, ``chunks``), an
 opening's verdict 1; a writer row with none is recomputed from its own inputs. Tables are committed by
@@ -319,25 +319,6 @@ def _be_words(b: bytes) -> np.ndarray:
     return np.frombuffer(bytes(b), ">u8").astype("<u8").view("<u2")
 
 
-#: a free port's Definition read the frame leaves free with no stand-in (an explicit `_Free`), by family: the Program's words of
-#: each unit's row, from the unit's node (`NodeWindow.node_of`), its first unit and its offset
-FREE: dict[tuple[str, str], Callable[["Check", Any, int, int, int], np.ndarray]] = {}
-
-
-def _batched_gemm_w(ck: "Check", node: Any, a: int, u: int, words: int) -> np.ndarray:
-    """`BatchedGemm` (`node_window_sparse`): unit (b, n) of member t, at a + (b N + n) M + t, reads w[b, n, :] of K words."""
-    K = int(node.fn.bindings["K"])
-    M = node.n if node.form == "batch" else 1
-    i = u - a
-    t, bn = i % M, i // M
-    w = ck.values.leaves(ck.values.arg(node, 1, t).slice(bn * K, (bn + 1) * K))
-    if words != K:
-        raise ValueError(f"BatchedGemm w: a row of {words} words, not K = {K}")
-    return w.astype(np.uint16)
-
-
-FREE[("BatchedGemm", "w")] = _batched_gemm_w
-
 
 class Check:
     """The value check of ``circuit`` (the frame ``w`` built it with ``stand_ins``) against ``values``."""
@@ -382,7 +363,8 @@ class Check:
         self.unknown: dict[tuple[str, int], list[str]] = {}
 
     def _params(self) -> dict[str, np.ndarray]:
-        """Each registered parameter a read names, as its u16 words: a weight's (`window_builder.weight_param`) or an input's."""
+        """Each registered parameter a read names, as its u16 words: an entry's (`NodeWindow.entries`), a weight's
+        (`window_builder.weight_param`) or an input's."""
         from .window_builder import weight_param
 
         out: dict[str, np.ndarray] = {}
@@ -391,7 +373,9 @@ class Check:
             if x.param in out:
                 continue
             base = x.param.rsplit("@", 1)[0]
-            if base in by:
+            if x.param in self.w.entries:
+                out[x.param] = self.values.leaves(self.w.entries[x.param]).astype(np.uint16)
+            elif base in by:
                 first, words = by[base]
                 out[x.param] = self.values.inputs[WEIGHTS][first:first + words]
             elif x.param in self.values.inputs:
@@ -551,15 +535,6 @@ class Check:
                     got[idx[free], first + r] = True
                 fams = sorted({s[1] for g in grid for s in self.w._sources(g)})
                 fed[f"{port} rows {first}..{first + rows - 1} of {k}: {', '.join(fams)}"] += int(sel.sum())
-            fam = _family_of(self.fns[tid])
-            if (fam, port) in FREE and not got.all():
-                for i in np.nonzero(~got.all(axis=1))[0]:
-                    u = int(units[i])
-                    a = self._alloc(tid, u)
-                    node = self.values.fn.body.nodes[self.w.node_of[(tid, a)]]
-                    arr[i] = FREE[(fam, port)](self, node, a, u, words)
-                    got[i] = True
-                fed[f"{port}: its Definition's read ({fam})"] += len(units)
             if not got.all():
                 src[f"{port}: undeclared rows"] += int((~got).sum())
                 for i in np.nonzero(~got.all(axis=1))[0]:
@@ -567,10 +542,6 @@ class Check:
             ports[port] = arr
             done[port] = arr
         return [ports[p] for p, _w in lay.rows]
-
-    def _alloc(self, tid: str, u: int) -> int:
-        allocs = self.w.allocs[tid]
-        return allocs[bisect.bisect_right([a[0] for a in allocs], u) - 1][0]
 
     def evaluate(self, tid: str, rows: Sequence[np.ndarray]) -> dict[str, np.ndarray]:
         fn, lay = self.fns[tid], self.lay[tid]
@@ -731,5 +702,5 @@ def plant_read_shift(c: IF.Circuit, family: str, port: str | None = None) -> tup
     raise ValueError(f"no registered read into {family} {port}")
 
 
-__all__ = ["Check", "FREE", "NATIVE", "SAMPLE", "Tables", "Values", "made_up", "native_selftest", "plant_read_shift",
+__all__ = ["Check", "NATIVE", "SAMPLE", "Tables", "Values", "made_up", "native_selftest", "plant_read_shift",
            "plant_wire_row", "run", "sample", "sample_key"]

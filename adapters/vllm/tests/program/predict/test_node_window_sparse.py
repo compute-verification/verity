@@ -13,6 +13,7 @@ from verity.commitments.windows import interface as IF
 
 from tests.program.predict.test_node_window import LP, glm_request
 from verity_vllm.program.predict import node_window as NW
+from verity_vllm.program.predict import node_window_embed as NE
 from verity_vllm.program.predict import node_window_sparse as NS
 
 FAMILIES = {**NW.FAMILIES, **NS.FAMILIES}
@@ -54,7 +55,7 @@ def test_batched_gemm_slices(window):
     """Each absorption is its slices, a head's output word a unit: q_nope's 8 x 512 at each step reading the head's 192
     coordinates of q_b whole (two chunks of 96), and the value up-projection's 8 x 256 reading the head's attention output,
     its end's one row; o_proj's quantiser reads the 2,048 slices through 32 chunks of 64. Each unit's weights, a strided
-    column of the record, are a free input under the weights record."""
+    column of the record, are a row of the rank's entry of kv_b_proj at its K (``/bnk``), the Program's leaves in turn."""
     circuit, w = window
     absorb = _tid(circuit, r"BatchedGemm_v1\{B=1,K=192,N=1,.*\}")
     up = _tid(circuit, r"BatchedGemm_v1\{B=1,K=512,N=1,.*\}")
@@ -67,10 +68,13 @@ def test_batched_gemm_slices(window):
     o1, o2 = _tid(circuit, r"AllGather_v1\{WORLD=64,N=1\}"), _tid(circuit, r"AllGather_v1\{WORLD=32,N=64\}")
     assert {(q_b, chunk, "parts"), (chunk, head, "parts"), (head, absorb, "x"), (end, up, "x"), (up, o1, "parts"),
             (o1, o2, "parts"), (o2, quant, "x"), (o2, quant_fi, "x")} <= pairs
-    free = [f for f in w.free if f.tid in (absorb, up)]
-    assert {(f.port, f.kind, f.family) for f in free} == {("w", "param", "weights")}
-    assert sum(f.count for f in free) == circuit.units[absorb] + circuit.units[up]
-    assert not any(r.reader in (absorb, up) for r in circuit.registered.reads)
+    assert not [f for f in w.free if f.tid in (absorb, up)]
+    reads = [r for r in circuit.registered.reads if r.reader in (absorb, up)]
+    assert {r.port for r in reads} == {"w"} and sum(r.reader_units for r in reads) == circuit.units[absorb] + circuit.units[up]
+    bnk = {r.param for r in reads}
+    assert sorted(p.rsplit("@", 1)[1] for p in bnk) == ["192/bnk", "512/bnk"] and bnk == set(w.entries)
+    assert all(circuit.registered.params[p] == len(w.entries[p]) for p in bnk)
+    assert bnk <= set(NE.split(circuit.registered.params)[1])
 
 
 def test_chain(window):
@@ -124,7 +128,7 @@ def test_census(window):
     census = w.census(circuit)
     assert not {"DsaLatentRow", "BatchedGemm", "SparseMlaSplit"} & set(census["unlowered"])
     assert not {"DsaLatentRow", "BatchedGemm", "SparseMlaSplit"} & set(census["free"])
-    assert {"RoPEHeadGptJ", "weights"} <= set(census["free"])
+    assert "RoPEHeadGptJ" in census["free"] and "weights" not in census["free"]
     assert census["units"]["SparseMlaSplit"] == 4 * HEADS and census["units"]["DsaLatentRow"] == LP + 1
     for tid, fn in w.b.fns.items():
         IF.check_proof_block(fn, circuit.cuts.get(tid))
