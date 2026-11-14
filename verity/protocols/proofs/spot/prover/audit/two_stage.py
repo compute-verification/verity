@@ -121,7 +121,7 @@ Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second
 files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
 FILE.json the interior values, ``[[name, schema], ...]``; VALUES.json the replay block's parameters the interior
 docket registers as values, ``[[name, rows a sampled span, leaf type], ...]`` (`interior_rows.span_values`);
-REGISTRATION.json the window's advice docket, whose ``binding`` the records' windows name; CAPTURE the replay's
+REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows name; CAPTURE the replay's
 capture of the sampled spans; PARAMS.json the auditor's params; IDS.json the capture's request id for a span's engine
 id, where they differ; REPLAY.json the record the replay wrote beside CAPTURE; RULE the stop rule as JSON,
 ``{"ids": [...], "max_model_len": n, "outputs": T}`` (`boundary_stop.Stop.of`); PRIVATE the directory the serve kept
