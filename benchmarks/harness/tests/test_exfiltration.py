@@ -1436,11 +1436,12 @@ def listed(monkeypatch) -> dict[str, str]:
 
 def held_phase(formats: Mapping[str, str]) -> dict[str, list[dict]]:
     """A run's files, in the stop verdicts' reader's own format and by the names it reads, that hold one execution
-    phase of a link: the registration of a head whose one class holds 4 rows; the four verdicts on that class and
-    head, each accepted and complete, the stop record's and the response tie's at the registered rate; each
-    verifier's negative control, refused for its word; and the serve's registration with those two verdicts'
-    streams, each registering every block of 4. ``formats`` is each verdict's format (`listed`). Nothing here is
-    read by the command: the reader reads it and answers."""
+    phase of a link: the registrations' file, whose first line says what its offline check was handed, with the
+    registration of a head whose one class holds 4 rows; the four verdicts on that class and head, each accepted
+    and complete, the stop record's and the response tie's at the registered rate; each verifier's negative
+    control, refused for its word; and the serve's registration with those two verdicts' streams, each registering
+    every block of 4. ``formats`` is each verdict's format (`listed`). Nothing here is read by the command: the
+    reader reads it and answers."""
 
     sv = reader()
     CC, C = sv.CC, sv.C
@@ -1466,7 +1467,8 @@ def held_phase(formats: Mapping[str, str]) -> dict[str, list[dict]]:
     controls = [{CC.RUN: f"control run of the {kind}", CC.VERIFIER: by[kind], sv.CONTROL: sv.CONTROLS[kind][0],
                  CC.VERDICT: {sv.FORMAT: formats[kind], CC.ACCEPTED: False, "withheld": None, "codes": ["a refusal"]},
                  sv.REASON: sv.REASONS[kind]} for kind in CC.VERDICTS]
-    return {sv.REGISTRATIONS_FILE: [registration], "out/the-verdicts.jsonl": verdicts,
+    under = {"format": sv.CHECKED, sv.CHECKED_UNDER: {sv.KEY_SHA512: "5a" * 64, sv.SESSION: "c3" * 32}}
+    return {sv.REGISTRATIONS_FILE: [under, registration], "out/the-verdicts.jsonl": verdicts,
             "out/the-controls.jsonl": controls, sv.SERVES_FILE: [serve, *streams.values()]}
 
 
