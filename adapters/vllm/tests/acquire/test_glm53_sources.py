@@ -6,7 +6,9 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3",)
 
+import importlib.util
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -19,6 +21,7 @@ from tests import fake_vllm as stand_in
 from tests.acquire.test_vocab_range_source import exactness_in_tree
 from verity_vllm.acquire.sources import moe_source as MS
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.records import property_record as PR
 
 ROOT = Path(__file__).parents[2]
 CMAP = CM.load(ROOT / "manifests" / "capture-maps" / "glm-moe-dsa-eager-hopper-tp8-v0.json")
@@ -301,6 +304,58 @@ def test_the_fused_silu_quant_binds_nine_planes_without_act(monkeypatch):
     planes = tuple(p for p in MOE_FP8_PLANES if p != "act")
     assert names == [f"moe/L3/{p}" for p in planes] + ["model.layers.3.mlp.experts/out"]
     assert src.planes == planes and src.stats["tensors_per_layer"] == 9 and c.errors == []
+
+
+#: the module the MoE source's evidence names as the check of a kernel's value correspondence, and the kernels it names it for
+MOE_CHECKS = {
+    "tests.properties.router_tap_exactness": ("topk_softmax",),
+    "tests.properties.sigmoid_router_capture_gpu": ("grouped_topk",),
+    "tests.properties.dsv4_moe_capture_gpu": ("dsv4_topk", "topk_hash_softplus_sqrt", "silu_and_mul_with_clamp"),
+    "tests.properties.dsv4_marlin_capture_gpu": ("moe_wna16_marlin_gemm",),
+    "tests.properties.glm53_block_fp8_capture_gpu": ("per_token_group_quant_fp8", "fused_moe_kernel", "silu_and_mul", "moe_sum"),
+    "verity_vllm.program.moe_difftest": ("fused_moe_kernel", "silu_and_mul", "moe_sum"),
+}
+#: the check the evidence names by its registered property, and its kernels: its module's name holds a GPU architecture's, which a
+#: string of the library does not (lint P8)
+MOE_PROPERTY = ("blackwell_fp8_capture", ("per_token_group_quant_fp8", "fused_moe_kernel"))
+#: the kernel the evidence says no check of the tree launches
+MOE_UNCHECKED = "silu_and_mul_per_block_quant"
+
+
+def _module_text(module: str) -> str:
+    spec = importlib.util.find_spec(module)
+    assert spec is not None and spec.origin is not None, f"the tree has no module {module}"
+    return Path(spec.origin).read_text()
+
+
+def _property_text(name: str) -> str:
+    """The text of the one file under tests/properties that writes the registered property's schema."""
+    assert name in PR.REGISTRY, f"no property {name} is registered"
+    writers = [p for p in (ROOT / "tests" / "properties").glob("*.py") if f'"{PR.REGISTRY[name].schema}"' in p.read_text()]
+    assert len(writers) == 1, f"{len(writers)} file(s) under tests/properties write the schema of the property {name}"
+    return writers[0].read_text()
+
+
+def test_the_evidence_names_a_check_the_tree_has_for_each_kernel_and_says_which_kernel_has_none(monkeypatch):
+    """The declaration gives each kernel's value correspondence as a check, by its module or its registered property: the tree has
+    each one, the check's own text names every kernel the declaration gives it, and the fused activation quant, which no check names,
+    is said to have none."""
+    _c, src, _names = run_source(monkeypatch, [3], path="fused")
+    text = src.declaration_classes()[0]["evidence"].partition("value correspondence")[2]
+    assert sorted(set(re.findall(r"\b(?:tests|verity_vllm)(?:\.\w+)+", text))) == sorted([*MOE_CHECKS, PR.__name__])
+    named = {module: (_module_text(module), kernels) for module, kernels in MOE_CHECKS.items()}
+    named[f"the property {MOE_PROPERTY[0]}, which {PR.__name__} registers"] = (_property_text(MOE_PROPERTY[0]), MOE_PROPERTY[1])
+    clauses = text.split("; ")
+    for words, (check, kernels) in named.items():
+        clause = next((c for c in clauses if words in c), "")
+        for kernel in kernels:
+            word = re.compile(rf"\b{kernel}\b")
+            assert word.search(clause), f"the evidence does not give {kernel} to {words}"
+            assert word.search(check), f"{words} does not name {kernel}, which the evidence gives it"
+    assert f"nothing in the tree checks {MOE_UNCHECKED}" in clauses[0]
+    checks = [*(ROOT / "tests" / "properties").glob("*.py"), ROOT / "verity_vllm" / "program" / "moe_difftest.py"]
+    naming = sorted(p.name for p in checks if re.search(rf"\b{MOE_UNCHECKED}\b", p.read_text()))
+    assert len(checks) > len(named) and not naming, f"{naming} name {MOE_UNCHECKED}: the evidence is to name its check"
 
 
 def test_a_w2_input_that_no_group_quant_of_the_layer_wrote_is_an_error(monkeypatch):
