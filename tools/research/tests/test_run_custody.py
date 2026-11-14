@@ -877,16 +877,16 @@ def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capp
     assert "pass --custody-ttl" in capsys.readouterr().err
 
 
-def test_a_run_longer_than_the_custody_cap_takes_a_key_at_the_cap_and_is_told_the_repair(capsys):
-    """network-accounting's 30 h run of record: the refusal told it to pass a ttl past the cap (`--custody-ttl 31h`), which the cap
-    refuses too. A key at the cap is accepted with the repair named, and every refusal names it."""
+def test_a_run_longer_than_the_custody_limit_takes_a_key_at_the_limit_and_is_told_the_repair(capsys):
+    """network-accounting's 30 h run of record: the refusal told it to pass a ttl past the limit (`--custody-ttl 31h`), which the limit
+    refuses too. A key at the limit is accepted with the repair named, and every refusal names it."""
     assert cli._custody_ttl_problem("24h", ["--timeout", "108000"]) is None
     assert "research data custody RUN --publish" in cli._custody_ttl_warning("24h", ["--timeout", "108000"])
     assert cli._custody_ttl_warning("24h", ["--timeout", "3600"]) is None
     for ttl in (None, "12h", "34h"):
         why = cli._custody_ttl_problem(ttl, ["--timeout", "108000"])
         assert "--custody-ttl 24h" in why and "research data custody RUN --publish" in why and "31h" not in why, why
-    assert "--custody-ttl 24h" in cli._custody_ttl_problem(None, ["--timeout", "84600"]), "never a suggestion past the cap"
+    assert "--custody-ttl 24h" in cli._custody_ttl_problem(None, ["--timeout", "84600"]), "never a suggestion past the limit"
     assert cli.main(["run", "--on", "vy-nowhere", "--timeout", "108000", "--", "true"]) == 2
     assert "--custody-ttl 24h" in capsys.readouterr().err
 
@@ -917,7 +917,7 @@ def _declare(d: Path, globs: list[str]) -> None:
     (d / "job.json").write_text(json.dumps(job))
 
 
-def test_select_keeps_run_files_and_declared_outputs_and_trims_undeclared_past_the_cap(tmp_path):
+def test_select_keeps_run_files_and_declared_outputs_and_trims_undeclared_past_the_limit(tmp_path):
     d = _fixture_run(tmp_path / "runs")
     shutil.rmtree(d / "out")
     (d / "res").mkdir()
@@ -930,7 +930,7 @@ def test_select_keeps_run_files_and_declared_outputs_and_trims_undeclared_past_t
     kept, trimmed = CU.select(d, cap=50)
     assert {"stdout.log", "job.json", "res/result.json", "res/deep/big.bin", "a-small.txt"} <= set(kept)
     assert [t["path"] for t in trimmed] == ["z-junk.bin"] and trimmed[0]["bytes"] == 100 and len(trimmed[0]["sha256"]) == 64
-    assert [t["path"] for t in CU.select(d, cap=0)[1]] == ["a-small.txt", "z-junk.bin"], "cap 0: never upload undeclared"
+    assert [t["path"] for t in CU.select(d, cap=0)[1]] == ["a-small.txt", "z-junk.bin"], "a limit of 0: never upload undeclared"
     _declare(d, ["*"])
     assert CU.select(d, cap=0)[1] == [], "`*` keeps everything"
     w = CU.trim_warning(trimmed)
@@ -979,7 +979,7 @@ def test_trimmed_files_are_listed_not_uploaded_and_custody_still_verifies(tmp_pa
 
 
 def test_a_trimmed_listing_too_big_for_the_manifest_goes_in_the_record_and_custody_still_verifies(tmp_path, monkeypatch, capsys):
-    """A check run lists thousands of undeclared files; inline in meta that broke the 256 KiB manifest cap and the attempt never
+    """A check run lists thousands of undeclared files; inline in meta that broke the 256 KiB manifest limit and the attempt never
     published (r20261001-091202-7aa6)."""
     vault = tmp_path / "vault"
     cfg = tmp_path / "store.toml"
