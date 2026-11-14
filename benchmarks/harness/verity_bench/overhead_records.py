@@ -404,7 +404,7 @@ def render(table: Mapping) -> str:
                    f"{c['world_flop_per_year']:.3g} FLOP a year of useful work ({c['world']}), to which proving adds γ times it. "
                    "γ is measured on one card at one operating point; every total is scaled from it, not proved. Gates at "
                    f"{c['gates_per_flop']:g} a FLOP ({c['gates_basis']}); the datacenter's FLOP at its card's datasheet rate."), "",
-              "| Scheme | Card | Point | Share | Period | DC GPU-hours | DC gates | World FLOP | World gates | Note |",
+              "| Scheme | Card | Point | Share | Time period | DC GPU-hours | DC gates | World FLOP | World gates | Note |",
               "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for r in table["rows"]:
         if p := r.get("periods"):

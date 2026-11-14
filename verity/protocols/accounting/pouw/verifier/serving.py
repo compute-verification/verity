@@ -15,8 +15,6 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
   reads and writes, the shapes it takes, and the device gate that admits it to serving (`variant_refusals`).  Loading a
   kernel directory is the runtime's; naming, gating and selecting one is here, so a bench or a ledger names a variant
   without importing a runtime.
-* The lead (`POUW_V2`): its kernel's variant (`lead_variant`), the run-time choices that select its layout
-  (`LEAD_CONFIG`), the linears it takes (`LEAD_SHAPES`) and its fold's bound (`LEAD_FOLD_BOUND`), which its gate holds.
 
 Stdlib and `verity` only (``tests/test_boundaries.py``).
 """
@@ -239,7 +237,8 @@ class KernelVariant:
     published γ reads), ``loader`` how the runtime loads it.  ``fold_bound``, when set, is the largest |p| whose output
     the epilogue serves bit for bit, p the integer its fold reads back: past it the output is wrong and nothing on the
     device flags it.  The gate holds outputs within it, and `variant_refusals` refuses a gate held to any other bound;
-    refusing a served word past it is the scheme's Definition's, and `POUW_V2` has none yet, so nothing refuses one."""
+    refusing a served word past it is the scheme's Definition's, so under a Definition that states no bound nothing refuses
+    one."""
 
     family: str
     device: str
@@ -318,30 +317,8 @@ def variant_refusals(v: KernelVariant, scheme: str, schedule: str, shapes: Seque
     return out
 
 
-#: PoUW's lead, the scheme its kernel computes
-POUW_V2 = "verity/pouw/v2"
-#: the lead's IADD3 fold (the word plus its row and column sources, less a1 . C and T . G by two IDP4A, is
-#: 0x4B400000 + p, p = A_i . B_j, read as fp32; then FADD -1.5 2^23, FMUL s_i and FMUL s_j) serves verity_int8's epilogue
-#: on p bit for bit while |p| <= 2^22, whatever the scales; 2^22 + 1 reads back as 2^22 + 2. The lead's v2 Definition
-#: (`verity.protocols.accounting.pouw.prover.circuit.lead`) states the same bound; once it is in the tree this reads its constant
-LEAD_FOLD_BOUND = 1 << 22
-#: the run-time choices that select the lead's layout (blc4a-t64-e7-s1 under ROT and FOLD) from its kernel directory's
-#: binary, which builds the other layouts too: they enter the source digest, so the id is the lead's, and serving runs
-#: under exactly these
-LEAD_CONFIG: Mapping[str, str] = {"BLC": "2", "ROT": "1", "FOLD": "1"}
-#: rows commit in 16s (pad_rows); n whole 256-column tiles, so a served linear has no padding columns at either tile width
-LEAD_SHAPES = ShapeRule(n_multiple=256, m_align=16)
-
-
-def lead_variant(source_sha256: str, binary_sha256: str, loader: str) -> KernelVariant:
-    """The lead's kernel on the H200 built from sources whose digest, `LEAD_CONFIG` included, is `source_sha256`: serial
-    only (a schedule that moves its hashing comes with a gate that holds it to serial's bytes)."""
-    return KernelVariant("pouw-lead", "h200", frozenset({POUW_V2}), frozenset({SERIAL.name}), LEAD_SHAPES, source_sha256,
-                         binary_sha256, loader, fold_bound=LEAD_FOLD_BOUND)
-
-
 __all__ = ["DEFERRED", "DEFERRED_A", "DEFERRED_CALLER", "FP4_PRECISIONS", "FP8_DEVICES", "FP8_FORMINGS", "GROUPS", "HASH_FORMATS",
-           "LEAD_CONFIG", "LEAD_FOLD_BOUND", "LEAD_SHAPES", "MAIN_PRIORITIES", "MANIFEST_SCHEMA",
-           "MOVABLE", "POUW_V2", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "GateRecord", "HashFormat", "KernelVariant",
-           "PassCommitment", "Schedule", "SchemeId", "ShapeRule", "StepIO", "hash_format", "lead_variant",
+           "MAIN_PRIORITIES", "MANIFEST_SCHEMA",
+           "MOVABLE", "SCHEDULES", "SERIAL", "SIDE_PRIORITIES", "GateRecord", "HashFormat", "KernelVariant",
+           "PassCommitment", "Schedule", "SchemeId", "ShapeRule", "StepIO", "hash_format",
            "schedule_refusals", "variant_refusals"]

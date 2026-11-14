@@ -93,9 +93,18 @@ def test_each_row_is_read_from_its_own_line():
     d = CO.dfill_rows(PI, [slow, dfill("co")])
     assert [r["mhz"] for r in d] == [1800.0, 2092.0] and d[0]["sigma"] == pytest.approx(d[1]["sigma"])
     assert d[0]["sigma_run_clock"] > d[1]["sigma_run_clock"]  # the same MACs a second are more of a slower clock's peak
+    lines = [slow, dfill("split", fill_ms=70.0), dfill("co")]  # the split line's cell is another, at either clock
+    assert CO.dfill_rows(PI, lines) == [row for r in lines for row in CO.dfill_rows(PI, [r])]
     f = CO.fstep_rows(PI, [dict(fstep(), mhz=1800.0), fstep()])
     assert [r["mhz"] for r in f] == [1800.0, 2092.0] and f[0]["sigma"] < f[1]["sigma"]
     assert f[0]["sigma_run_clock"] == pytest.approx(f[1]["sigma_run_clock"])  # its shares are of the peak at its clock
+
+
+def test_the_callers_folds_reach_a_lines_cells():
+    for rows_of, line in ((CO.dfill_rows, dfill("co")), (CO.fstep_rows, fstep())):
+        (duo,), (li,), (served,) = (rows_of(PI, [line], **kw) for kw in ({}, {"fold": "li"}, {"served_fold": "duo"}))
+        for k in ("sigma", "sigma_run_clock"):  # li folds a word in fewer lane instructions; a served fold adds some
+            assert li[k] < duo[k] < served[k]
 
 
 def test_cli_reads_lfill_lines(tmp_path, capsys):
