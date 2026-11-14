@@ -14,12 +14,13 @@
 #   WIPE_ADDRESS     where the prover connects to it (10.96.0.36:47611)
 #   WIPE_COMMAND     what starts its side (ssh -i ~/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36)
 #   WIPE_KEY_SHA512  the SHA-512 of its public key (the gate's `party_key wipe`), in 128 lowercase hex digits: the one
-#                    key the verifier trusts, a session signed under another rejected. By default vy-auditor-2's wipe
-#                    party's (TRUSTED_SHA512 below, wipe_party.AUDITOR_KEYS's), so another challenger needs its own.
-#                    The pin is the deployment's, never read from the session it judges: set empty, or in a tree that
-#                    pins none, no key is pinned and the piece refuses. It decides only which session is accepted: the
-#                    record says trusted-device holds only under the key AUDITOR_KEYS pins for the challenger's host,
-#                    and under any other pin reads a rehearsal with no bound
+#                    key the verifier trusts, a session signed under another rejected. By default the key the run's
+#                    configuration pins for the memory challenger's wipe sessions (VERITY_PINS, its [[pin]] entries as
+#                    JSON, which the runner passes beside VERITY_CONFIGURATION, its hash), so another challenger needs
+#                    its own. The pin is the deployment's, never read from the session it judges: set empty, or with
+#                    no such pin, no key is pinned and the piece refuses. It decides only which session is accepted:
+#                    the record says trusted-device holds only under a committed configuration, for a key its pins
+#                    give the wipe (period.json's deployment), and otherwise reads a rehearsal with no bound
 #   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
 # Further arguments go to demo.sh. The Lean judge (wipe-protocol) is built before the card is checked, in a
@@ -44,9 +45,10 @@ DIR=$(cd "$DIR" && pwd)
 CH=${WIPE_CHALLENGER:-vy-auditor-2} ADDR=${WIPE_ADDRESS:-10.96.0.36:47611} READS=${WIPE_READS:-5500}
 CMD=${WIPE_COMMAND:-ssh -i $HOME/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36}
 NODE=${WIPE_NODE:-$(hostname)} IDLE_MIB=${WIPE_IDLE_MIB:-1024} DEMO=${WIPE_DEMO:-$HERE/demo.sh}
-# the SHA-512 of the public key of vy-auditor-2's wipe party as its host made it (the gate's `party_key wipe`)
-TRUSTED_SHA512=c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb4198fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252
-PIN=${WIPE_KEY_SHA512-$TRUSTED_SHA512}
+PINNED=$(python3 -c 'import json, os
+print(next((p["key-sha512"] for p in json.loads(os.environ.get("VERITY_PINS") or "[]")
+            if (p["party"], p["protocol"]) == ("memory-challenger", "wipe")), ""))')
+PIN=${WIPE_KEY_SHA512-$PINNED}
 refuse() { echo "WIPE REFUSED: $*" | tee "$DIR/refused.txt"; exit 3; }
 
 if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key, the gate's key, the Lean judge

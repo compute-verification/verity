@@ -12,8 +12,7 @@ and the device's bytes must equal: P~ = M (P + c + U), X = V + b, P_A = [-U | U 
 block's mask), DG's [A_0 | A_1 | X_diag | 0] and Sb for every b_l, the served O (pv_l7qs_i), f = float32(2 served)
 s_q s_ch (pv_l7qs) and the warp row's receipts (derive.py's tile_receipts over T_0 .. T_{b_l}, O', D_1 where b_l >= 2).
 One JSON line a gate directory; exit 1 on any difference, on a device mismatch or on a control the device didn't reject.
-    uv run --no-project --with numpy --with python-sat --with-editable benchmarks/pouw/exact_kit \
-      python3 verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cpv_ref.py GATE_DIR...
+    PYTHONPATH=. uv run --no-project --with numpy python3 verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cpv_ref.py GATE_DIR...
 """
 from __future__ import annotations
 
@@ -23,7 +22,15 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from cgemm_ref import C_TAG, DITHER_TAG, NCT, block, cs, tile_receipts
+
+from verity.protocols.accounting.pouw.prover.kernels.edited_gemm.cgemm_ref import (
+    C_TAG,
+    DITHER_TAG,
+    NCT,
+    block,
+    cs,
+    tile_receipts,
+)
 
 __all__ = ["patch_cols"]
 
