@@ -45,7 +45,7 @@ its `$OUT`: `ship.sha256`, `check.jsonl` and `check.txt`, `run.jsonl` and `run.t
 The vLLM adapter loads `run.py` by path as the served kernel, takes a unit's keys from the scheme (`pearl_c.keys_of`,
 which `fixture.py` re-exports), and names the variant by `run.py`'s sha256, which every pass records, so a change to it
 is a new variant, which serves only once it has passed its own gate.
-`../pearl_c_sm90/` includes `hash_fast.cuh` and `hash_decode.cuh`; `../pearl_c_vllm/` and `../served_zk/` build and load
+`../pearl_c_sm90/` includes `hash_fast.cuh` and `hash_decode.cuh`; `../pearl_c_vllm/` and `../../../verity/protocols/accounting/pouw/prover/kernels/served_zk/` build and load
 this tree; the tests in `../tests/` run `run.py` on the stand-in driver and the hashing on its host builds. `run.py`
 reads the environment itself, because it runs outside the tree; `../settings.py` declares each variable. Nothing here
 is a verifier, and nothing but `run.py` touches a GPU.

@@ -1,7 +1,7 @@
 """PoUW's verifier. Lean is the definition and the verifier (AGENTS.md "Design
 rules"), and PoUW has switched to it: the served execution phase's checks
 are its Lean's, `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
-verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
+verdicts `verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
 as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
 execution phase's statements are judged here too: `credit.window` and `credit.period_credit` take each sampled proof block's outcome from
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live

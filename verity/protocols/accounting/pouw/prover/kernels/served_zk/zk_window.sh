@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # served_zk's served hm96 path on an RTX PRO 6000 node: GPU 1's ship (build.sh) and hm96_rows.cubin built on the node's
 # CPUs, then window.sh with the served row's switches (-h2, rows form s, whole step, deferred tile hashing, both
-# arms graphed) and STATEMENT, which adds e2e.py's pearlc-zk mode (served_zk/statement.py) and its gate.
+# arms graphed) and STATEMENT, which adds e2e.py's pearlc-zk mode (../../verity/protocols/accounting/pouw/prover/kernels/served_zk/statement.py) and its gate.
 #   research run --on MACHINE --project verity --source <tree> --cwd source --declared-output 'out/*' \
-#     --env GPU_LEASE_WHO=LANE [--env MODE=window] -- bash benchmarks/pouw/served_zk/zk_window.sh
+#     --env GPU_LEASE_WHO=LANE [--env MODE=window] -- bash verity/protocols/accounting/pouw/prover/kernels/served_zk/zk_window.sh
 # MODE: smoke (the default; untimed, both engines resident, the gates, each mode's first sampling calls) or window (the gates,
 # the interleaved reps with pearlc-zk after each pearlc, and the retained verify passes, recorded at priority low for a day:
 # their -h2 commitments are pouw-e2e's, not this run's, so `research retention gc` may take them after that).  LEASE: gpu-lease's arguments (default one preemptible GPU, untimed), e.g. "8 --wait
@@ -27,7 +27,7 @@ if [ "$MODE" = build ] || [ -z "${PREBUILT:-}" ]; then
     || { stamp "BUILD_FAIL rc=$?"; tail -20 "$OUT/build.log"; exit 11; }
   tar -cf "$B/ship.tar" -C "$B" "ship-${HEAD:0:8}"
   "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -cubin -o "$B/hm96_rows.cubin" \
-    benchmarks/pouw/served_zk/hm96_rows.cu 2> "$OUT/nvcc-rows.txt" || { stamp "ROWS_BUILD_FAIL"; tail -20 "$OUT/nvcc-rows.txt"; exit 12; }
+    verity/protocols/accounting/pouw/prover/kernels/served_zk/hm96_rows.cu 2> "$OUT/nvcc-rows.txt" || { stamp "ROWS_BUILD_FAIL"; tail -20 "$OUT/nvcc-rows.txt"; exit 12; }
   (cd "$B" && sha256sum ship.tar hm96_rows.cubin "ship-${HEAD:0:8}/pearl_c_sm120.cubin" > SHA256SUMS && echo "$HEAD" > HEAD)
   [ "$MODE" = build ] && { cat "$B/SHA256SUMS" | tee "$OUT/prebuilt.sha256"; stamp "built"; exit 0; }
 fi

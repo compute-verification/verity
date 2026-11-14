@@ -50,7 +50,7 @@ it is not a job.
 
 ## Who reads it
 
-`../pearl_c_sm90/` and `../served_zk/` load this directory's Python by path, and `../served_zk/`'s jobs start
+`../pearl_c_sm90/` and `../../../verity/protocols/accounting/pouw/prover/kernels/served_zk/` load this directory's Python by path, and `../../../verity/protocols/accounting/pouw/prover/kernels/served_zk/`'s jobs start
 `window.sh`; `benchmarks/vllm_encoded/stack.sh` sources `flashinfer_env.sh`; the harness loads `bench_arm.py` by its
 module name, `pearl_c_vllm.bench_arm` with `benchmarks/pouw` on `PYTHONPATH` and
 `benchmarks.pouw.pearl_c_vllm.bench_arm` from the repository's root (its two Pearl-C specs under

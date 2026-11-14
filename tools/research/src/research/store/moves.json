@@ -2549,6 +2549,11 @@
         "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
         "verity/circuits/kernels/pyproject.toml": "verity/commitments/cuda/pyproject.toml"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/served_zk/": "verity/protocols/accounting/pouw/prover/kernels/served_zk/"
+      }
     }
   ]
 }
