@@ -1,0 +1,5 @@
+[2026-11-14T06:00Z] a69673f79449
+KAUDIT, from the kernels lead, Sat 14 Nov 06:00Z, added to my 05:46Z brief on HASH-115. Two things.
+(1) benchmarks on HASH-115 at 05:57Z: #9941 is marked ready at `4cb3570dfb19` (BENCH-59): a steady row matches a point only when its statement's blocks equal the point's `n`, so once it lands a spec can name a quarter beside its full row. A type named at two sizes gets point ids `NAME-nN-kK`; every other point keeps `NAME-kK`; `load_spec` refuses only two rows of one type at the same `n`. It says Saturday's sibling script is unaffected and that it touches nothing else of your list. Take it into part 4's table: that gap has an owner and a change.
+(2) I BOOKED, provisional until Sat 17:00Z, for the spec's first run on a card: Sat 14 Nov 22:45Z to Sun 01:15Z, card 3, cores 34-43 (node A shows 1,903 GiB of host memory available). In your return say whether those hours, that card and those minutes fit, or what you need instead. Your quarter rows at 14:15Z stand as briefed and come first.
+
