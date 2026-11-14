@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.ReadUnit.Net
+public import Proofs.Poub.ReadUnit.Net
 public import Proofs.Core.Circuit
 public import Proofs.Flock.Bridge.CircuitOf
 public import Proofs.Flock.Soundness.Audit.Circuit
