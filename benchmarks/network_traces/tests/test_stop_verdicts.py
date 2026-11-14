@@ -7,10 +7,13 @@ a registration that doesn't read, or no record at all, holds none, with a line t
 rule charges below is held only where each verifier that accepted refused its negative control at the same commit
 and the serve's registration registers every block of both sampled populations, as each of their verdicts says it
 ran; each verdict read is handed on under the mark of a run that is no proof; and the run files are read from the
-store as the harness reads it."""
+store as the harness reads it. As it stands the reader lists no format and asks the rule without a schedule, so it
+holds nothing, and a test pins each; the others ask what it would hold with a format listed and the rule handed a
+schedule, neither of which the reader does (`listed`, `schedule_the_reader_does_not_hand`)."""
 
 from __future__ import annotations
 
+import dataclasses
 import fnmatch
 import json
 import sys
@@ -49,8 +52,38 @@ def schedule() -> WardenParams:
     return CR.costed(CR.parser().parse_args(["cost", "--out", "x"]))
 
 
-def head(window: int, *counts: int, parameters: bytes = ZEROS, domain: bytes = ZEROS) -> C.Head:
-    """A head of an execution phase with a class of each count; ``domain`` is each table's, which is a session's."""
+def tied() -> WardenParams:
+    """The cost runner's schedule made one that can be tied (`content_rows.can_be_tied`): its largest O for every
+    class, and that O its response limit."""
+    own = schedule()
+    width = max(O for _, O, _ in own.content)
+    return dataclasses.replace(own, content=tuple((P, width, rows) for P, _, rows in own.content),
+                               max_tokens_cap=width)
+
+
+#: the schedule the tests' heads name, by its digest
+TIED = tied()
+
+
+@pytest.fixture(autouse=True)
+def schedule_the_reader_does_not_hand():
+    """Hands the rule a schedule the reader itself does not hand. The reader is handed no schedule and asks the
+    rule without one, so as it stands it holds nothing
+    (`test_the_reader_asks_the_rule_without_a_schedule_and_holds_nothing`, which undoes this). The other tests are
+    of what the reader holds of a class the rule charges below, so under this fixture the rule is handed the
+    schedule a head names wherever its caller hands none and the head names `TIED`. It is a stand-in for a reader
+    that is handed the schedule, as `listed` is for a format being listed, and nothing a test holds under it is
+    what the reader says of a run's files as it stands."""
+    rule = CC.charge
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(CC, "charge", lambda of, cls, records, schedule=None: rule(
+            of, cls, records, TIED if schedule is None and of.parameters == TIED.digest else schedule))
+        yield patch
+
+
+def head(window: int, *counts: int, parameters: bytes = TIED.digest, domain: bytes = ZEROS) -> C.Head:
+    """A head of an execution phase with a class of each count, under `TIED`; ``domain`` is each table's, which is
+    a session's."""
     listed = [("lengths", 4, 8), ("fails", 4, 8)] + [(name, n, 16) for i, n in enumerate(counts) for name in CT.names(i)]
     return C.Head(LINK, window, parameters, tuple(C.Entry(name, rows, size, domain, ZEROS) for name, rows, size in listed))
 
@@ -89,29 +122,59 @@ OTHERS = SERVED | {"window": "another serve's"}
 REGISTERED, OTHER = SV.digest_of(SERVED), SV.digest_of(OTHERS)
 
 
-def streams(after: dict = SERVED, **over: object) -> dict[str, dict]:
+#: the counts a class of the tests' heads holds, and the one `streams` registers the stop record's stream over
+#: unless it is told another
+COUNTS, ROWS = range(1, 9), 5
+
+
+def streams(after: dict = SERVED, rows: int = ROWS, **over: object) -> dict[str, dict]:
     """The registration record of the stop record's stream and of the response tie's, by verdict: each follows
-    ``after`` and registers every block of a population of 4, but for ``over``, the record's fields."""
-    return {kind: {"format": "a stream's registration", "window": f"the {kind}'s stream", SV.POPULATION: 4,
-                   SV.DESIGN: {SV.DESIGN: SV.SUBSET, "k": 4}, SV.PREVIOUS: SV.digest_of(after)} | over
-            for kind in SV.RATED}
+    ``after`` and registers every block of its population, the stop record's the ``rows`` its class holds and the
+    response tie's 4, but for ``over``, the record's fields."""
+    return {kind: {"format": "a stream's registration", "window": f"the {kind}'s stream", SV.POPULATION: n,
+                   SV.DESIGN: {SV.DESIGN: SV.SUBSET, "k": n}, SV.PREVIOUS: SV.digest_of(after)} | over
+            for kind, n in zip(SV.RATED, (rows, 4))}
 
 
-def with_streams(*docs: dict) -> list[dict]:
-    """Each of the serves' registrations ``docs`` with the two streams' that follow it (`streams`)."""
-    return [x for doc in docs for x in (doc, *streams(doc).values())]
+def with_streams(*docs: dict, rows: tuple[int, ...] = (ROWS,)) -> list[dict]:
+    """Each of the serves' registrations ``docs`` with the streams' that follow it (`streams`): the stop record's
+    over each count of ``rows``, then the response tie's."""
+    return [x for doc in docs
+            for x in (doc, *(streams(doc, n)[CC.STOP_RECORD] for n in rows), streams(doc)[CC.RESPONSE_TIE])]
+
+
+def rows_of(record: dict) -> int:
+    """The count the stop record's stream a record of `four` names is registered over: its class's."""
+    named = {SV.digest_of(streams(rows=rows)[CC.STOP_RECORD]): rows for rows in COUNTS}
+    return named.get(record.get(SV.STREAM), ROWS)
+
+
+def held_rows(of: C.Head, cls: int = 0) -> int:
+    """The head's count of the class, or `ROWS` where it holds none or states no one count of it."""
+    listed = {e.name: e.rows for e in of.tables}
+    stated = {listed.get(name) for name in CT.names(cls)}
+    return stated.pop() or ROWS if len(stated) == 1 else ROWS
+
+
+def counts_of(registrations: list) -> tuple[int, ...]:
+    """`ROWS` and each count a class of the registrations' heads holds, for the stop record's streams handed."""
+    tables = [t for doc in registrations if isinstance(doc, dict) and isinstance(doc.get("tables"), list)
+              for t in doc["tables"] if isinstance(t, dict)]
+    return tuple(sorted({ROWS} | {t["rows"] for t in tables if t.get("rows") in COUNTS}))
 
 
 def four(of: C.Head, cls: int = 0, proved_by: object = None, **over: object) -> list[dict]:
     """The four verdicts' records on a class of a head, as their verifiers write them: each accepted, complete and
     naming the head, but for `over`, the verdict's fields; of one serve under `SERVED`, the stop record and the
-    response tie each naming its stream's registration (`streams`) and the rate it registers."""
+    response tie each naming its stream's registration (`streams`, the stop record's over the head's count of the
+    class) and the rate it registers."""
+    rows = held_rows(of, cls)
     return [{CC.RUN: f"run of the {kind}", CC.SERVE: "the serve", CC.REGISTRATION: REGISTERED,
              CC.VERIFIER: {"module": f"the {kind}'s verifier", "commit": "a commit"},
              CC.VERDICT: {SV.FORMAT: FORMATS[kind], CC.LINK: of.link, CC.WINDOW: of.window, CC.CLASS: cls,
                           CC.HEAD: of.digest().hex(), "registration": "a digest", CC.ACCEPTED: True,
                           CC.COMPLETE: True, "withheld": None, "codes": []} | over,
-             CC.PROVED_BY: proved_by} | ({SV.RATE: "1/1", SV.STREAM: SV.digest_of(streams()[kind])}
+             CC.PROVED_BY: proved_by} | ({SV.RATE: "1/1", SV.STREAM: SV.digest_of(streams(rows=rows)[kind])}
                                          if kind in SV.RATED else {}) for kind in CC.VERDICTS]
 
 
@@ -136,9 +199,9 @@ def refused(*kinds: str) -> str:
 def stop(registrations: list, records: list, left: list[str] | tuple = (), controls: list | None = None,
          served: list | None = None, spent: list | tuple = ()) -> LB.Stop:
     """`SV.stop` with, unless they are given, the four verifiers' controls and the two serves' registrations,
-    each with its streams'."""
+    each with its streams', the stop record's over each count a class of ``registrations`` holds."""
     return SV.stop(registrations, records, left, the_controls() if controls is None else controls,
-                   with_streams(SERVED, OTHERS) if served is None else served, spent)
+                   with_streams(SERVED, OTHERS, rows=counts_of(registrations)) if served is None else served, spent)
 
 
 def by_verdict(records: list[dict]) -> dict[str, list[dict]]:
@@ -510,10 +573,11 @@ def test_an_execution_phase_is_held_only_where_each_verifier_that_accepted_refus
 
 def under(doc: dict, records: list[dict]) -> list[dict]:
     """The records, naming ``doc`` as the registration their serve registered, and the stop record and the
-    response tie the registration of its stream that follows ``doc`` (`streams`)."""
-    after = streams(doc)
+    response tie the registration of its stream that follows ``doc`` (`streams`), the stop record's over the
+    count its own names."""
     return [r | {CC.REGISTRATION: SV.digest_of(doc)} | (
-        {SV.STREAM: SV.digest_of(after[kind])} if (kind := SV.FORMATS.get(r[CC.VERDICT][SV.FORMAT])) in after else {})
+        {SV.STREAM: SV.digest_of(streams(doc, rows_of(r))[kind])}
+        if (kind := SV.FORMATS.get(r[CC.VERDICT][SV.FORMAT])) in SV.RATED else {})
         for r in records]
 
 
@@ -617,10 +681,12 @@ def test_a_class_is_held_only_at_the_rate_its_streams_registrations_register_for
             assert got.held == 0 and got.why[4] == at + (
                 f"{who} {says} under a registration that registers `1/1`"), (kind, rate)
         # a rate is K of the population in lowest terms: every block of a population of any size is `1/1`, and
-        # anything less is another rate, whatever its verdict states
-        for n in (1, 2, 1000):
+        # anything less is another rate, whatever its verdict states. The response tie's is held at any size; the
+        # stop record's only over the head's count of the class
+        for n in (1, 2, 5, 1000):
             doc = streams(**subset(n, n))[kind]
-            assert stop(one, on_stream(kind, doc, four(first)), served=[*with_streams(SERVED), doc]).held == 1, (kind, n)
+            got = stop(one, on_stream(kind, doc, four(first)), served=[*with_streams(SERVED), doc])
+            assert got.held == (kind != CC.STOP_RECORD or n == 5), (kind, n)
         for k, n, text in ((2, 4, "1/2"), (3, 4, "3/4"), (6, 8, "3/4"), (1, 1000, "1/1000"), (999, 1000, "999/1000")):
             doc = streams(**subset(k, n))[kind]
             for records in (on_stream(kind, doc, four(first)), at_rate(kind, text, on_stream(kind, doc, four(first)))):
@@ -637,7 +703,8 @@ def test_a_class_is_held_only_at_the_rate_its_streams_registrations_register_for
     theirs = at_rate(CC.RESPONSE_TIE, "1/8", on_stream(CC.RESPONSE_TIE, eighth, under(OTHERS, four(second))))
     assert all(r[CC.VERDICT][CC.COMPLETE] is True for r in theirs)
     # two execution phases under two registrations: the one whose streams registered every block is held
-    got = stop(one + [registration(second)], four(first) + theirs, served=[*with_streams(SERVED, OTHERS), eighth])
+    both = [*with_streams(SERVED, OTHERS, rows=(5, 2)), eighth]
+    got = stop(one + [registration(second)], four(first) + theirs, served=both)
     assert got.held == 1 and got.why[0].startswith("1 of the 2 execution phase(s) read are charged below")
     assert got.why[6] == (f"the link {LINK}, execution phase 4, class 0: held to its whole schedule by the rate: the "
                           "response tie of run of the response tie is registered at `1/8`, not `1/1`")
@@ -645,7 +712,7 @@ def test_a_class_is_held_only_at_the_rate_its_streams_registrations_register_for
     # each class that holds a row is held to the rate of its own streams' registrations
     wide = head(3, 5, 2)
     wider = four(wide) + at_rate(CC.RESPONSE_TIE, "1/8", on_stream(CC.RESPONSE_TIE, eighth, under(OTHERS, four(wide, 1))))
-    got = stop([registration(wide)], wider, served=[*with_streams(SERVED, OTHERS), eighth])
+    got = stop([registration(wide)], wider, served=both)
     assert got.held == 0 and got.why[4] == (
         f"the link {LINK}, execution phase 3, class 1: held to its whole schedule by the rate: the response tie of "
         "run of the response tie is registered at `1/8`, not `1/1`")
@@ -658,6 +725,46 @@ def test_a_class_is_held_only_at_the_rate_its_streams_registrations_register_for
     assert (got.held, got.verdicts, got.why) == (0, (), (
         "each connection is charged its whole schedule: a serve's registration doesn't read: it is no object: "
         "'a registration'",))
+
+
+def test_a_stop_records_population_is_the_heads_count_of_its_class():
+    """The stop record is of every row of its class and of no other: the reader holds the population its stream's
+    registration registers to the head's count of the class, and a class whose stop record is registered over
+    another number is at its whole schedule, by name, whatever rate its verdict states. Every block of a
+    population of another size is still `1/1`, so the rate alone doesn't say it. Each class is held to its own
+    count. The response tie's population is not held to the count."""
+    first, wide = head(3, 5, 0), head(3, 5, 2)
+    one, stop_record, tie = [registration(first)], CC.STOP_RECORD, CC.RESPONSE_TIE
+    who = f"the {stop_record} of run of the {stop_record}"
+    at = f"the link {LINK}, execution phase 3, class 0: held to its whole schedule by the rate: "
+    assert SV.digest_of(streams(rows=5)[stop_record]) == four(first)[0][SV.STREAM]
+    assert stop(one, four(first)).held == 1
+    for n in (1, 4, 6, 1000):
+        doc = streams(rows=n)[stop_record]
+        assert SV._registered(doc) == SV.EVERY_BLOCK
+        got = stop(one, on_stream(stop_record, doc, four(first)), served=[*with_streams(SERVED), doc])
+        assert got.held == 0 and got.why[0] == held_back(1, 1, rate=1) and len(got.why) == 5, n
+        assert got.why[4] == at + (f"{who} is registered over a population of {n}, and the head counts 5 row(s) of "
+                                   "the class: `1/1` of it is not every row of the class and no other"), n
+        assert len(got.verdicts) == 4 and LB.table(LB.inputs(), got) == LB.table(LB.inputs())
+        # the response tie's population is its own: at any size its class is held
+        other = streams(**{SV.POPULATION: n, SV.DESIGN: {SV.DESIGN: SV.SUBSET, "k": n}})[tie]
+        assert stop(one, on_stream(tie, other, four(first)), served=[*with_streams(SERVED), other]).held == 1, n
+    # each class's stop record is held to that class's count: the stream registered over one class's rows is not
+    # the other's
+    served = with_streams(SERVED, rows=(5, 2))
+    assert stop([registration(wide)], four(wide) + four(wide, 1), served=served).held == 1
+    swapped = on_stream(stop_record, streams(rows=5)[stop_record], four(wide, 1))
+    got = stop([registration(wide)], four(wide) + swapped, served=served)
+    assert got.held == 0 and got.why[4] == (
+        f"the link {LINK}, execution phase 3, class 1: held to its whole schedule by the rate: {who} is registered "
+        "over a population of 5, and the head counts 2 row(s) of the class: `1/1` of it is not every row of the "
+        "class and no other")
+    # a rate below every block is named as that, and the population beside it is not
+    eighth = streams(**{SV.POPULATION: 40, SV.DESIGN: {SV.DESIGN: SV.SUBSET, "k": 5}})[stop_record]
+    got = stop(one, at_rate(stop_record, "1/8", on_stream(stop_record, eighth, four(first))),
+               served=[*with_streams(SERVED), eighth])
+    assert got.held == 0 and got.why[4] == at + f"{who} is registered at `1/8`, not `1/1`"
 
 
 def of_serve(serve: str, records: list[dict]) -> list[dict]:
@@ -735,16 +842,17 @@ def test_an_execution_phase_is_one_serves_and_a_heads_serve_is_the_one_its_recor
     assert (got.held, got.verdicts, got.why) == (0, (), (TWO_HEADS + one_domain("end.0"),))
     # one such table is enough: the others' domains are another session's
     for table in ("lengths", "request.0", "end.1"):
-        mixed = C.Head(LINK, 3, ZEROS, tuple(C.Entry(e.name, e.rows, e.row_bytes, ZEROS if e.name == table else e.domain,
-                                                     e.root) for e in theirs.tables))
+        mixed = C.Head(LINK, 3, theirs.parameters, tuple(C.Entry(
+            e.name, e.rows, e.row_bytes, ZEROS if e.name == table else e.domain, e.root) for e in theirs.tables))
         for registrations in ([registration(ours), registration(mixed)], [registration(mixed), registration(ours)]):
             got = stop(registrations, four(ours) + of_serve("another serve", four(mixed)))
             assert (got.held, got.why) == (0, (TWO_HEADS + one_domain(table),)), table
     # and a domain shared by tables of two names is no table's in both
-    crossed = C.Head(LINK, 3, ZEROS, tuple(C.Entry(e.name, e.rows, e.row_bytes, bytes([i + 1]) * 64, e.root)
-                                           for i, e in enumerate(ours.tables)))
-    turned = C.Head(LINK, 3, ZEROS, tuple(C.Entry(e.name, e.rows, e.row_bytes, bytes([len(ours.tables) - i]) * 64, e.root)
-                                          for i, e in enumerate(ours.tables)))
+    crossed = C.Head(LINK, 3, ours.parameters, tuple(
+        C.Entry(e.name, e.rows, e.row_bytes, bytes([i + 1]) * 64, e.root) for i, e in enumerate(ours.tables)))
+    turned = C.Head(LINK, 3, ours.parameters, tuple(
+        C.Entry(e.name, e.rows, e.row_bytes, bytes([len(ours.tables) - i]) * 64, e.root)
+        for i, e in enumerate(ours.tables)))
     assert {e.domain for e in crossed.tables} == {e.domain for e in turned.tables} and len(ours.tables) % 2 == 0
     assert stop([registration(crossed), registration(turned)],
                 four(crossed) + of_serve("another serve", four(turned))).held == 2
@@ -834,6 +942,66 @@ def test_a_verdict_whose_format_is_not_listed_reads_as_missing(monkeypatch):
         assert stop([registration(first)], [tie]).verdicts == ()
 
 
+def test_the_reader_asks_the_rule_without_a_schedule_and_holds_nothing(schedule_the_reader_does_not_hand,
+                                                                      monkeypatch, tmp_path):
+    """The reader is handed no schedule, so it asks the rule without one, and the rule charges no class below a
+    schedule it was not handed. With the four verdicts' records of every class that holds a row, their controls
+    and their serves' registrations, each as its verifier would write it and in a format that is listed, no
+    execution phase is held: each class that holds a row is at its whole schedule, its line and the answer's first
+    line say the schedule was not handed, and the verdicts read are handed on as they are. The same records hold
+    both execution phases where the rule is handed the schedule their heads name, which the reader does not do and
+    this file's other tests ask (`schedule_the_reader_does_not_hand`). A class short of a verdict is counted in
+    the first line and its line names the verdict beside the schedule. From a store's run files it is the same
+    answer. As the reader stands it lists no format either, and then each verdict is missing too."""
+    first, second = head(3, 5, 0), head(4, 5, 2)
+    registrations, records = [registration(first), registration(second)], four(first) + four(second) + four(second, 1)
+    files = {SV.REGISTRATIONS_FILE: checked(*registrations), "out/the-verdicts.jsonl": jsonl(records),
+             "out/the-controls.jsonl": jsonl(the_controls()),
+             SV.SERVES_FILE: jsonl(with_streams(SERVED, rows=counts_of(registrations)))}
+    store = Store(tmp_path, {"r1": files})
+    asked = stop(registrations, records)
+    assert asked.held == 2 == SV.of_runs(store, ["r1"]).held and asked.why[0].startswith(
+        "2 of the 2 execution phase(s) read are charged below their schedule")
+    schedule_the_reader_does_not_hand.undo()
+    got = stop(registrations, records)
+    assert (got.held, got.verdicts) == (0, asked.verdicts) and len(got.verdicts) == 12
+    assert CC.NOT_HANDED == "the schedule was not handed"
+    assert SV.NO_SCHEDULE == "this reader is handed no schedule and asks the rule without one"
+    whole = "charged its whole schedule on each of its"
+    assert got.why == (
+        "each connection is charged its whole schedule: the schedule was not handed for 3 of the 3 class(es) that "
+        "hold a row in the 2 execution phase(s) read, so the rule charges none of those below it, and 0 of the 3 "
+        "lack a verdict: this reader is handed no schedule and asks the rule without one",
+        SV.SERVE_NAMED,
+        f"the link {LINK}, execution phase 3, class 0: {whole} 5 rows: the schedule was not handed",
+        f"the link {LINK}, execution phase 3, class 1: a count of 0, so no connection is charged and no verdict is "
+        "owed",
+        f"the link {LINK}, execution phase 4, class 0: {whole} 5 rows: the schedule was not handed",
+        f"the link {LINK}, execution phase 4, class 1: {whole} 2 rows: the schedule was not handed")
+    # from the run's files the answer adds, last, what their registrations' file says it was checked under
+    stored = SV.of_runs(store, ["r1"])
+    assert stored == got._replace(why=got.why + (names_under("r1"),)), stored.why
+    less = stop(registrations, four(first) + four(second))
+    assert less.held == 0 and less.why[0] == got.why[0].replace("0 of the 3 lack", "1 of the 3 lack")
+    assert less.why[5] == (
+        f"the link {LINK}, execution phase 4, class 1: {whole} 2 rows: the stop record is missing; the response tie "
+        "is missing; the certified read is missing; the compute audit is missing; the schedule was not handed")
+    # the calculator's rows follow: no row of the stop class is below its schedule
+    doc = LB.document(LB.inputs(), stop=got, only=["node"], periods=["week"])
+    at = {r["row"]: r for r in doc["rows"]}
+    assert (doc["stop"]["held_phases"], doc["stop"]["below"]) == (0, False)
+    assert at["design"]["term"] == at["design, no stop block"]["term"]
+    # as the reader stands: no format is listed either
+    monkeypatch.undo()
+    assert SV.FORMATS == {}
+    bare = stop(registrations, records)
+    assert (bare.held, bare.verdicts) == (0, ()) and SV.of_runs(store, ["r1"]) == bare._replace(why=bare.why + (names_under("r1"),))
+    assert bare.why[0] == got.why[0].replace("0 of the 3 lack", "3 of the 3 lack")
+    assert bare.why[2] == (
+        f"the link {LINK}, execution phase 3, class 0: {whole} 5 rows: the stop record is missing; the response tie "
+        "is missing; the certified read is missing; the compute audit is missing; the schedule was not handed")
+
+
 NO_RECORD = ("a verdict record is an object with the fields run, serve, registration, verifier, verdict, proved_by, "
              "its verdict an object, its run, serve, registration named, its verifier by its module and commit, and "
              "its proved_by a name or null; of one read, ")
@@ -881,8 +1049,8 @@ def test_anything_less_is_the_whole_schedule_with_a_line_that_says_why():
     tampered["tables"][2]["rows"] = 0
     got = stop([tampered], four(first))
     assert got.held == 0 and got.why[0] == whole + "the registration's certificate doesn't name its head's digest"
-    uneven = C.Head(LINK, 3, ZEROS, tuple(C.Entry(e.name, 6 if e.name == "request.0" else e.rows, e.row_bytes, e.domain,
-                                                  e.root) for e in first.tables))
+    uneven = C.Head(LINK, 3, first.parameters, tuple(C.Entry(
+        e.name, 6 if e.name == "request.0" else e.rows, e.row_bytes, e.domain, e.root) for e in first.tables))
     got = stop([registration(uneven)], four(uneven))
     assert got.held == 0 and got.why[0].startswith(whole + "the head states [5, 6] rows for class 0's three tables")
     # the same head given twice is one head, and one execution phase
@@ -1498,7 +1666,8 @@ def test_a_superseded_runs_record_that_doesnt_read_keeps_whole_each_serve_not_la
     second = head(4, 2, 0)
     both = {SV.REGISTRATIONS_FILE: checked(registration(first), registration(second)),
             "out/the-verdicts.jsonl": jsonl(of_serve(EARLY, four(first)) + of_serve(LATE, four(second))),
-            "out/the-controls.jsonl": jsonl(the_controls()), SV.SERVES_FILE: jsonl(with_streams(SERVED))}
+            "out/the-controls.jsonl": jsonl(the_controls()),
+            SV.SERVES_FILE: jsonl(with_streams(SERVED, rows=(5, 2)))}
     store = Store(tmp_path / "serves", {RUN: bad, LAST: both})
     assert SV.of_runs(store, [LAST]).held == 2 and SV.of_runs(store, [RUN, LAST]).held == 0
     got = SV.of_runs(store, [RUN, LAST], [RUN])

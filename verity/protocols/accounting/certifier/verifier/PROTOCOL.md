@@ -2061,8 +2061,9 @@ the cut gives one event a `DATA` cell and the `END` holds the trailer; any other
 
 **The response cap** (`WardenParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
 network certifier reads each request's `max_tokens` from its first request cell (`active.id_request_max_tokens`) before
-cutting it. A request whose field isn't a u32 at its place, or exceeds the cap, is refused (`cap`): none of its bytes is
-cut into a cell or reaches the server, and it fails at once. It is never clamped. Every other response is held to its
+cutting it. A request whose field isn't a u32 at its place, is 0 or exceeds the cap is refused (`cap`): none of its
+bytes is cut into a cell or reaches the server, and it fails at once. It is never clamped, and a request that asks for
+no token is refused because the stop rule ends no response of it. Every other response is held to its
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
 certified response holds at most its request's `max_tokens` tokens, hence at most the cap
 (`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
@@ -2158,7 +2159,8 @@ prompt ids and a size of ids released, each a power of two.
   `max_tokens` to): the longest request it admits is one that only a class of that P holds.
 - **A row's place.** Row r of class i's tables is the execution phase's r-th release, in release order, among those
   filed in class i. A release has its three rows at one r.
-- **The filing** is one function with one caller (`content_rows.file`, which `connection_rows.tables` calls): the
+- **The filing** is one function called in one place (`content_rows.file`, in `connection_rows`, which lays the
+  tables by it and hands the prover each class's releases by it, `connection_rows`' "The filed releases"): the
   first listed class that holds the request's bytes and the ids released. It reads the release's own sizes and
   nothing the server says, and `content_rows.tables`, which lays the tables, takes each release's class as an
   argument. A release that fits no class, or under form 1 one whose class's rows are all held, has no content row,
@@ -2166,11 +2168,21 @@ prompt ids and a size of ids released, each a power of two.
   length: the network certifier admits a request of at most the bytes the schedule's largest class holds (the
   schedule's `request_bound`), and a longer one is ingress past its bounds, whose connection fails closed
   (`ingress`) with nothing released. None is unfiled for its ids, which a class of the largest P holds ("The
-  classes"). So every release of a schedule's own network certifier fits a class, and one has no content row only
-  under form 1, where its class's rows are all held. Under form 2 a class's rows are all held at R of them ("The
+  classes"). So every release of a schedule's own network certifier fits a class. Under form 1 one has no content
+  row only where its class's rows are all held. Under form 2 one has no content row only where it ended in a `FAIL`
+  before any `DATA` cell: the rule files such a release in no class, since the network certifier released no id of
+  it, and its lengths and fails slots say how it ended. It reads the end as the network certifier cut it, which no
+  server can compute. Under form 2 a class's rows are all held at R of them ("The
   bound", below), and a release filed in it past them is refused, naming the release, the class and R
   (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none of their
   tables is laid and no head is signed over them.
+- **A schedule that can be tied** (`content_rows.can_be_tied`) lists each P once, has one O for every class and
+  has a response limit (`max_tokens_cap`), which is then at most that O. It is a word about a schedule and no
+  refusal of one: a schedule that fails it is built and served as any other, and none of its classes is tied. The
+  response tie takes a shape from a schedule only by it (`response_tie.tied`), and the rule that charges a class
+  (`class_charge.charge`) charges one below its schedule only where it is handed the head's schedule and that
+  schedule can be tied: a class of a schedule that can't be is at its whole schedule, and so is every class where
+  no schedule is handed, since the word was then not asked.
 - **A row of zero bytes** is what every row past the held ones is under form 1 (`content_rows.empty_rows`). As a
   request row it reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a
   response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held
@@ -2210,10 +2222,10 @@ prompt ids and a size of ids released, each a power of two.
   - **The count of prompt ids is at most the class's P.** A canonical id request's length grows with its prompt's
     count alone, and a release is filed only in a class that holds its request's bytes.
   - **A hand the rule doesn't read** is no execution phase's of the schedule: `content_rows.tables` refuses it,
-    naming the release, and no head is signed over it. So is one with a `max_tokens` past `max_tokens_cap` or with
-    more ids released than its `max_tokens`. These are `tables`' own checks of what the device already holds:
-    under every signed head a words row's `max_tokens` is at most the schedule's and at least its response row's
-    count.
+    naming the release, and no head is signed over it. So is one with a `max_tokens` of 0 or past `max_tokens_cap`,
+    or with more ids released than its `max_tokens`. These are `tables`' own checks of what the device already
+    holds: under every signed head a words row's `max_tokens` is from 1 to the schedule's and at least its response
+    row's count.
   - **Nothing more is public** than without them: the table's rows are the class's count and its row size is the
     schedule's.
 - **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`
