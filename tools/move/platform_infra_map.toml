@@ -33,10 +33,11 @@ paths = []
 # Never rewritten: records of what was (the earlier moves and their maps, the move tool itself, changelogs, research's
 # recorded moves), files whose bytes a digest pins, every Lean file, every kernel source, and the layout of record.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
-           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "infra/move/**",
            "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
            "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
            "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "infra/research/src/research/store/moves.json",
            "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
            "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
