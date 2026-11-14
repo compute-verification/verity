@@ -1742,8 +1742,8 @@ them.
       to the Commit's sampled ids, a client's abort only where the Commit says so
       ([protocol/compact-finish.md](protocol/compact-finish.md)).
     - **What covers it.** The head model takes a frame as B opaque bytes, which a compact cell is. No Lean models
-      ordinal headers or compact records. The gate's rehearsal runs compact framing on the auditor's host
-      (`certifier-rehearse --traffic varied --compact B`).
+      ordinal headers or compact records. The proxy's rehearsal runs compact framing
+      (`certifier_serve.py rehearse --traffic varied --compact B`), off the gate's machine.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
