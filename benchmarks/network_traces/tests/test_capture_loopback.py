@@ -36,6 +36,8 @@ import json, os, sys
 args = sys.argv[1:]
 if args[0] == "-c":
     os.execv({python!r}, [{python!r}, *args])
+if args[0] == "-m":
+    args = args[1:]
 with open(os.environ["STUB_LOG"], "a") as f:
     f.write(json.dumps([os.path.basename(args[0]), *args[1:]]) + "\\n")
 if args[1:2] == ["rehearse"]:

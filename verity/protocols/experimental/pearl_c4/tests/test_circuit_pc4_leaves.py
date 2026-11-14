@@ -8,7 +8,7 @@ import pytest
 import test_circuit_leaves as T
 from verity.commitments.rowleaf import ROLE_W, ROLE_X
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-from verity.protocols.accounting.pouw.prover.circuit import cap, pc8, rowk
+from verity.protocols.accounting.pouw.prover.circuit import inert_bound, pc8, rowk
 from verity.protocols.experimental.pearl_c4.prover import pc4, pc4_rowk
 
 #: each unit's statement rows: its input rows' (row, role) by read, then each output row's (row, role) and run of outputs
@@ -22,7 +22,7 @@ STATEMENTS = {
 def test_the_units_rows_are_exactly_the_rows_with_a_schema():
     """`pc4.PORTS` and the row_k cut's `pc4_rowk.PORTS4`, with PoUW's other units' rows, are exactly the rows with a
     schema."""
-    used = T.rows_used(pc4.PORTS, pc8.PORTS, {"side": pc8.SIDE_PORTS}, cap.PORTS, pc4_rowk.PORTS4, rowk.PORTS8)
+    used = T.rows_used(pc4.PORTS, pc8.PORTS, {"side": pc8.SIDE_PORTS}, inert_bound.PORTS, pc4_rowk.PORTS4, rowk.PORTS8)
     assert used == set(L.ROW_SCHEMA)
 
 

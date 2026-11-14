@@ -14,6 +14,7 @@ module
 
 public import Spot.Bits
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 
 @[expose] public section
 

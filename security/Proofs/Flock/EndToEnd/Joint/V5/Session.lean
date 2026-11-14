@@ -13,7 +13,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.SampledJ
 
 * `execRefinesZK_tables_sampledA`: `execRefinesZK_tables_sampled` at any acceptance `acc` (`simZJA`);
 * `ZkLink.zk_flock_sampledC_regC`: `Audit.extraction_audit_sampled` at `analysisZCRegC`, so in the compiled batched audit
-  `Pr[accepts ∧ some drawn proof block is in incorrectRegZc] ≤ ε_ks + δ_link`;
+  `Pr[accepts ∧ some drawn proof block is in incorrectRegZc] ≤ ε_ks + ε_bind`;
 * `MemberV5.accepted_drawnIncorrect_le`: a member's session accepts at its `own` with a sampled proof block incorrect, at V5's
   canonical openings, with probability at most `ε_ks + ε_bind` at its sampling design. Custody at `own` and one table
   (`decodesZCJH_custodyAt`) holds at any sampling design whose samples have the session's link points, so the bound does
@@ -88,7 +88,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (vb : ValueBindingZ A P planZ tab decode Hc) (canon : Fin C.N → vb.Opening → Prop) {L : SamplingDesign n}
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration with canonical openings**: it
-accepts with a sampled proof block in `incorrectRegZc` with probability at most `ε_ks + δ_link`, `zk_flock_countC_regC`'s
+accepts with a sampled proof block in `incorrectRegZc` with probability at most `ε_ks + ε_bind`, `zk_flock_countC_regC`'s
 terms without the miss term. -/
 theorem zk_flock_sampledC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
