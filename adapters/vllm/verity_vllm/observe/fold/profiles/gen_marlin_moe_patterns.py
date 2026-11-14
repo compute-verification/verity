@@ -143,7 +143,7 @@ class MoEMarlinSharedExperts:
         sc = self._census(node)
         if isinstance(sc, Unsupported):
             return sc
-        hint = node.enter.module
+        hint: Any = node.enter.module   # a str: LAYER matched it
         hashed = int(layer[1]) < C["HASH_LAYERS"]
         if hashed != (not sc.router.is_triton):
             return unsupported(node, f"layer {layer[1]}'s router is not its kind: {K_HASH_ROUTER} below HASH_LAYERS={C['HASH_LAYERS']}, "
@@ -192,7 +192,7 @@ class MoEMarlinSharedExperts:
         """`topk_softplus_sqrt` with a token table: its parts and (scores, the table's name, weights, ids)."""
         C = self.config
         E, TOPK, V, M = C["NUM_EXPERTS"], C["TOPK"], C["VOCAB"], hidden.shape[0]
-        ra = bound_args(sc.router)
+        ra: Any = bound_args(sc.router)   # what the log recorded, each read checked below
         w, ids, tei, logits, toks, table = (ra.get(k) for k in ("topk_weights", "topk_indices", "token_expert_indices", "gating_output",
                                                                 "input_ids", "tid2eid"))
         if not all(isinstance(v, ViewDesc) for v in (w, ids, tei, logits, toks, table)):
@@ -249,12 +249,12 @@ class MoEMarlinSharedExperts:
         """`_dsv4_topk_kernel[(M,)]` at its pins: its part and (scores, the bias's name, weights, ids)."""
         C = self.config
         E, TOPK, M = C["NUM_EXPERTS"], C["TOPK"], hidden.shape[0]
-        e = sc.router.enter
-        got = {"kernel": e.fn, "src_sha256": e.src_sha, "constexprs": {k: e.constexprs.get(k) for k in DSV4_TOPK_PINS["constexprs"]},
-               "num_warps": e.num_warps}
+        e: Any = sc.router.enter   # a TritonLaunch: `match` sends a scored layer here only when its router is one
+        pinned: Any = DSV4_TOPK_PINS["constexprs"]
+        got = {"kernel": e.fn, "src_sha256": e.src_sha, "constexprs": {k: e.constexprs.get(k) for k in pinned}, "num_warps": e.num_warps}
         if got != DSV4_TOPK_PINS:
             return unsupported(node, f"{K_TOPK} differs from its pins (DSV4_TOPK_PINS)", observed=got, pinned=DSV4_TOPK_PINS)
-        ra = bound_args(sc.router)
+        ra: Any = bound_args(sc.router)   # what the log recorded, each read checked below
         x, b, w, ids = (ra.get(k) for k in ("gating_output_ptr", "correction_bias_ptr", "topk_weights_ptr", "topk_ids_ptr"))
         if not all(isinstance(v, ViewDesc) for v in (x, b, w, ids)):
             return unsupported(node, f"{K_TOPK} arguments not bound as expected", args={k: repr(v) for k, v in ra.items()})
@@ -291,7 +291,7 @@ class MoEMarlinSharedExperts:
                 or not all(isinstance(v, ViewDesc) for v in bufs):
             return unsupported(node, "moe_align_block_size does not sort the router's ids over E experts without an expert map",
                                args={k: repr(v) for k, v in aa.items()})
-        if BM != MR.moe_block(M, TOPK, E):
+        if MR.moe_block(M, TOPK, E) != BM:
             return unsupported(node, f"moe_align_block_size's block {BM!r} is not fused_marlin_moe's at {M} tokens ({MR.moe_block(M, TOPK, E)})")
         ids_flat = _flat(ids, P)
         rank, start, blk, par = (scratch_view(ids_flat, sc.align.id, k, n) for k, n in enumerate((P, P, P, 1)))
@@ -313,12 +313,13 @@ class MoEMarlinSharedExperts:
                 if not isinstance(act, Compute) or act.rows != P or any(act.spec.bindings.get(k) != v for k, v in want.items()):
                     return unsupported(node, f"the routed {K_CLAMP} did not resolve as SiluMulClamp{want} on the pair rows", child_id=sc.rsilu.id,
                                        child_reason=getattr(act, "reason", None))
-                x = act.operands[0].view
+                clamp: Any = act   # SiluAndMulWithClamp's Compute: one PerRow in, one out
+                x = clamp.operands[0].view
                 if (x.alloc, x.offset) != (prev.alloc, prev.offset):
                     return unsupported(node, f"the routed {K_CLAMP} does not read the w13 output as [P, 2I]", input=repr(x), w13=repr(prev))
                 out.append((sc.rsilu.id, Compute(act.spec, P, act.operands, act.outputs, act.consumed, hint=f"{hint}/{K_CLAMP}",
                                                  kernels=act.kernels, pattern=self.name)))
-                prev = act.outputs[0].view
+                prev = clamp.outputs[0].view
             c = self._gemm(node, ctx, launch, prev, K, N, routed, bufs, BM, weights, P, tp)
             if isinstance(c, Unsupported):
                 return c
@@ -328,7 +329,7 @@ class MoEMarlinSharedExperts:
             out.append((launch.id, Compute(spec, P, ops, (PerRow(y),), (launch.id,), hint=f"{hint}/{wq}", kernels=("Marlin",), pattern=self.name,
                                            roots=(None,) * (len(ops) - 2) + (wq, ws))))
             prev = y
-        ma = bound_args(sc.msum)
+        ma: Any = bound_args(sc.msum)   # what the log recorded, each read checked below
         y, o = ma.get("input"), ma.get("output")
         if not isinstance(y, ViewDesc) or not isinstance(o, ViewDesc) or ma.get("topk_ids") is not None or ma.get("expert_map") is not None:
             return unsupported(node, "moe_sum is not the modelled (input, output) kernel", args={k: repr(v) for k, v in ma.items()})
@@ -350,6 +351,7 @@ class MoEMarlinSharedExperts:
         """One `moe_wna16_marlin_gemm` launch over the align's schedule: its Definition, A, C [P, N] and the weight and scale fields."""
         C = self.config
         E, TOPK, M = C["NUM_EXPERTS"], C["TOPK"], P // C["TOPK"]
+        a: Any   # what the log recorded, each read checked below
         what, a = ("w2" if routed else "w13"), bound_args(launch)
         top_k = 1 if routed else TOPK
         flags = {k: a.get(k) for k in MARLIN_FLAGS} | {"top_k": a.get("top_k"), "mul_topk_weights": a.get("mul_topk_weights"),
@@ -361,7 +363,8 @@ class MoEMarlinSharedExperts:
                                expected=want, none={k: repr(a.get(k)) for k in MARLIN_NONE if a.get(k) is not None})
         if tuple(a.get(k) for k in ("sorted_token_ids", "expert_ids", "num_tokens_past_padded")) != bufs:
             return unsupported(node, f"the {what} launch does not read moe_align_block_size's schedule", align=[repr(v) for v in bufs])
-        A, y, wv, sv, g = a.get("a"), (launch.output_views() or [None])[0], a.get("b_q_weight"), a.get("b_scales"), a.get("topk_weights")
+        outs: Any = launch.output_views()
+        A, y, wv, sv, g = a.get("a"), (outs or [None])[0], a.get("b_q_weight"), a.get("b_scales"), a.get("topk_weights")
         if not all(isinstance(v, ViewDesc) for v in (A, y, wv, sv, g)) or not _same(A, x) or not _same(g, weights):
             return unsupported(node, f"the {what} launch does not read its input and the router's weights", a=repr(A), expected=repr(x),
                                topk_weights=repr(g))

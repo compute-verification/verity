@@ -19,7 +19,7 @@ from __future__ import annotations
 import ast
 import re
 from collections import Counter
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -60,7 +60,7 @@ def file_violations(src: str, rel: str, tags: bool = False) -> list[R.Violation]
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan(tags: bool = False) -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():
