@@ -685,7 +685,8 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     from verity_vllm.commit import challenge as CH
     from verity.definitions.registry import bf16_gemm_check as BC
 
-    to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
+    def to(a: np.ndarray) -> torch.Tensor:
+        return torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
 
     def mm(M: int, K: int, N: int, x: np.ndarray, rows: np.ndarray) -> np.ndarray:
         w = torch.zeros((N, K), dtype=torch.bfloat16, device="cuda")
