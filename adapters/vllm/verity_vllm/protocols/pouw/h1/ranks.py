@@ -168,6 +168,8 @@ class RankExtension:
     #: the installed rank's state (`h1rank_install`: its ``run``, its ``hooks``, the calls ``sent`` so far and, with the
     #: Commit, its ``commit``); None before the install and after the release
     _h1rank: dict[str, Any] | None = None
+    #: the worker's model runner, which vLLM's worker has when these methods are mixed into it
+    model_runner: Any
 
     def _h1rank_state(self) -> dict[str, Any]:
         if self._h1rank is None:
@@ -176,7 +178,7 @@ class RankExtension:
 
     def _h1rank_layers(self) -> tuple[Any, list[Any]]:
         from verity_vllm.protocols import pouw
-        model = self.model_runner.get_model()  # type: ignore[attr-defined]
+        model = self.model_runner.get_model()
         return model, PHK.layers(model, pouw.linear_types())
 
     def _h1rank_rank(self) -> tuple[int, int]:
@@ -190,7 +192,7 @@ class RankExtension:
         pp, tp = self._h1rank_rank()
         return {"pp": pp, "tp": tp, "shapes": [[int(d) for d in m.weight.shape] for m in layers],
                 "names": pouw._named(model, layers),
-                "decode_query_len": int(self.model_runner.decode_query_len)}  # type: ignore[attr-defined]
+                "decode_query_len": int(self.model_runner.decode_query_len)}
 
     def h1rank_install(self, entry: str, los: Mapping[tuple[int, int], int], shapes: Sequence[Sequence[int]],
                        modules: Mapping[int, str], rows: int, steps: int, key: bytes, ship: bool = False) -> dict[str, Any]:
