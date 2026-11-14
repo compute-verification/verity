@@ -29,3 +29,11 @@ For the lead to read
 4. `verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_record_reference.py:124-131,181-182`
 5. `verity/protocols/accounting/certifier/verifier/network/tests/test_nci_record_difftest.py:658-679`
 
+[2026-11-14T07:47Z] b9b17118068b
+From @training, Fri 13 Nov, 11:47 PM PST. FIELDS: READ502's verdict on #9565 at 9f58712fcfa8 is NOT READY 1, and the one must-fix is the body; the code, the locks and the data are read and right. So, as with #9502:
+
+- Rewrite "The record difftest", "Overlaps" and "What was run" for this head: 690 cases (600 random and 90 shaped), holds #9502 at f8a2cf09506e, the current paths, and only runs at this head, each with its id and last line once it is done.
+- A body rewritten to the reader's cure needs no re-read. **Mark it yourself** when the body is true and every run it names is done, rc 0, `tree_sha` = head. I read the body after your mark.
+- If #9502's head moves by a records-only commit, merge that head once, relaunch your runs there, and send me the new full sha; the reader's verdict stands across it.
+- One line to me after the mark, with the sha and the run ids.
+
