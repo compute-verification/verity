@@ -35,8 +35,9 @@ It accepts two kinds of run the reference refuses, because it holds two things l
   `END` cell that `io_tie.parse_cell` doesn't read (one id's event, or the response's trailer); this audit accepts a
   run whose egress cells carry any bytes. The id form of each egress cell is the io tie's to hold, `IoTieCell` on
   every cell; a caller that runs no io tie holds it itself.
-* **No response cap.** It holds no response to its request's `max_tokens`, as the reference does under a schedule with
-  a response cap, so it doesn't cover such a schedule; its caller refuses one (`NetworkCheck.RowsAudit.paramsOf`).
+* **No response limit.** It holds no response to its request's `max_tokens`, as the reference does under a schedule
+  with a `max_tokens_cap`, so it doesn't cover such a schedule; its caller refuses one
+  (`NetworkCheck.RowsAudit.paramsOf`).
 -/
 
 @[expose] public section
@@ -128,7 +129,7 @@ def readReason (B : Nat) (f : ByteArray) : Option (Nat × String) :=
 /-- The schedule's terms the audit reads (the reference's `WardenParams`): the cell's bytes `B` (`cellBytes`), a
 connection's cells a bucket each way `r` (`slots`), the buckets `D` from its admission to its first egress cell's
 (`delay`), the connections served at once (`lanes`), the buckets a record covers `T` (`window`), and the most cells a
-connection's egress lane holds (`egressCells`). It reads neither the schedule's egress form nor its response cap. -/
+connection's egress lane holds (`egressCells`). It reads neither the schedule's egress form nor its `max_tokens_cap`. -/
 structure Params where
   cellBytes : Nat
   slots : Nat
@@ -267,7 +268,7 @@ structure Summary where
   egressCells : Nat
 
 /-- **The audit of a run's records** (the reference's `audit`, from which it differs in both directions as the module
-docstring says: it holds no egress cell to the id egress form and no response to a response cap): its `W ≥ 1` windows'
+docstring says: it holds no egress cell to the id egress form and no response to `max_tokens_cap`): its `W ≥ 1` windows'
 ingress, egress and fails records, window `w`'s at index `w` of each. Accepted when every record is complete with `T`
 left-packed rows of `lanes·r` slots (the fails record's of `lanes`), every frame of the two directions a cell and the
 fails record empty, no cell a `REFUSED` or `FAIL`, each row whole groups of `r` cells of a connection in ordinal order,
@@ -306,7 +307,7 @@ def audit (p : Params) (ingress egress fails : Array BlockGrid) : Except String 
   for i in [0:N] do
     let n := (data.getD i #[]).size
     if p.egressCells < n then
-      throw s!"connection {i + 1}: {n} egress data and END cells, past the cap {p.egressCells}"
+      throw s!"connection {i + 1}: {n} egress data and END cells, past egress_cells = {p.egressCells}"
     if n == 0 && adm.getD i 0 + p.delay < H then
       throw s!"connection {i + 1}: no egress cell past its delay, and the run didn't end in it"
   let want := expectedRows p s data H
