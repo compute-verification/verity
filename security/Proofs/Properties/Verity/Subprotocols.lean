@@ -180,6 +180,6 @@ theorem soundness_at_of_componentBounds_honest :
 /-- **`SoundnessOfComponents`' nontrivial lemma**: its conclusion fails at remote for a verifier that accepts
 everything, at the idle deployment whose errors are all `0`. -/
 theorem soundness_at_of_componentBounds_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
-  Idle.nontrivial_at .remote (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  Idle.nontrivial_at .remote (Verity.mem_subprotocols.2 (by decide))
 
 end Verity
