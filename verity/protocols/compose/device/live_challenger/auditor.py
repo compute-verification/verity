@@ -2803,11 +2803,16 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
                 tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
                                                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
         stop.armed = True
-        if not up(tunnels[0], local):
-            why = f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
-        elif not all(up(t, s) for t, s in zip(tunnels[1:], sinks)):
-            why = f"a tunnel to {req['peer']}'s sink at 127.0.0.1:{load['sink_port']} didn't come up (tunnel.log)"
-        else:
+        try:
+            if not up(tunnels[0], local):
+                why = f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
+            elif not all(up(t, s) for t, s in zip(tunnels[1:], sinks)):
+                why = f"a tunnel to {req['peer']}'s sink at 127.0.0.1:{load['sink_port']} didn't come up (tunnel.log)"
+        finally:
+            # inside the outer try: a stop up to this disarm is a `Stopped` its except takes, never one raised in its
+            # finally, which would leave the tunnels open and write no end
+            stop.armed = False
+        if why is None:
             to = {"sinks": [("127.0.0.1", s) for s in sinks], "store": host.store} if load else {}
             with open(out / "rehearse.log", "wb") as log:
                 proc = stop.start(lambda: subprocess.Popen(
@@ -2827,7 +2832,6 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     except Stopped:
         why = f"{STOPPED} before its runner started"
     finally:
-        stop.armed = False
         for tunnel in tunnels:
             tunnel.terminate()
             tunnel.wait()

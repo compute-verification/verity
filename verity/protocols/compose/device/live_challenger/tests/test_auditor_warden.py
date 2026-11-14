@@ -737,6 +737,29 @@ def test_a_relay_session_whose_unit_is_stopped_before_its_tunnel_is_up_runs_noth
     assert set(end["files"]) == {"tunnel.log"}
 
 
+def test_a_relay_session_whose_unit_is_stopped_once_its_tunnel_didnt_come_up_still_writes_its_end(host, stop_held):
+    """A stop at the step after the tunnel's check failed, the run holding why it ends, still closes the tunnel and
+    writes the end. The stop is raised there through a line tracer on `certifier_run`'s frame, since a SIGTERM's
+    handler runs only where the interpreter checks for one, which no signal sent from outside could aim at."""
+    rc, out = gate(host, SESSION, started=[])
+    run = json.loads(out)["run"]
+    code, previous = A.certifier_run.__wrapped__.__code__, sys.gettrace()
+
+    def line(frame, event, arg):
+        if event == "line" and frame.f_locals.get("why") is not None:
+            signal.raise_signal(signal.SIGTERM)
+        return line
+
+    sys.settrace(lambda frame, event, arg: line if frame.f_code is code else None)
+    try:
+        end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l, back: TUNNEL,
+                              up=lambda tunnel, port: False, command=lambda *a, **k: pytest.fail("ran with no tunnel"))
+    finally:
+        sys.settrace(previous)
+    assert end["rc"] == 2 and end["ended"] == f"{A.STOPPED} before its runner started" and end["verdict"] is None
+    assert set(end["files"]) == {"tunnel.log"}
+
+
 PROMPTS = [[70001, 3], [5], [7]]
 SCAN = REQUEST + ["--scan", "--prompts", "--height", "10"]
 
