@@ -13,7 +13,7 @@ from verity.protocols.accounting.pous.prover import workload as pous
 from verity.protocols.accounting.pouw.prover import workload as pouw
 from verity.protocols.proofs.spot.prover import workload as spot
 
-__all__ = ["TYPES", "body", "read", "write"]
+__all__ = ["TYPES", "append", "body", "lines", "read", "write"]
 
 TYPES = MessageTypes((*spot.MESSAGES, *pouw.MESSAGES, *pous.MESSAGES, *certifier.MESSAGES))
 
@@ -32,3 +32,14 @@ def write(path: Path, type_: str, data: bytes) -> None:
 def read(path: Path, type_: str) -> bytes:
     """``path``'s bytes, a ``type_`` message's body."""
     return body(type_, path.read_bytes())
+
+
+def append(path: Path, type_: str, data: bytes) -> None:
+    """Append ``data`` to ``path`` as one line, a ``type_`` message's body."""
+    with open(path, "ab") as fh:
+        fh.write(body(type_, data) + b"\n")
+
+
+def lines(path: Path, type_: str) -> list[bytes]:
+    """``path``'s lines but blank ones, each a ``type_`` message's body."""
+    return [body(type_, line) for line in path.read_bytes().splitlines() if line.strip()]

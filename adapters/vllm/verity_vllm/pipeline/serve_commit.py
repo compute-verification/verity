@@ -597,8 +597,7 @@ class CommitWindows:
             if self.pool is not None:
                 rec["pool_row"] = self._pool_out.pop(rec["window"], None)
             self.records.append(rec)
-            with open(self.out / "windows.jsonl", "a") as fh:
-                fh.write(json.dumps(rec) + "\n")
+            M.append(self.out / "windows.jsonl", "Run", json.dumps(rec).encode())
 
     def _served_rows(self, rec: dict[str, Any], com: Any) -> dict[str, Any]:
         """The closed window's served rows committed under its run root (`commit_served`): the record's public part, with the
@@ -708,8 +707,7 @@ class CommitWindows:
                     line["release"] = released
                 with self._lock:
                     self.seals.append(line)
-                with open(self.out / "seals.jsonl", "a") as fh:
-                    fh.write(json.dumps(line) + "\n")
+                M.append(self.out / "seals.jsonl", "Run", json.dumps(line).encode())
                 self._sealed(line)
                 if self.mirror is not None:
                     self.mirror()

@@ -52,3 +52,18 @@ def test_committed_rows_bytes_unchanged(tmp_path):
     before.write_text(json.dumps(doc))
     M.write(after, "CommittedRows", json.dumps(doc).encode())
     assert after.read_bytes() == before.read_bytes()
+
+
+@pytest.mark.parametrize("name", ["windows.jsonl", "seals.jsonl"])
+def test_run_lines_bytes_unchanged(tmp_path, name):
+    recs = [{"window": 0, "run_id": "r/w0", "run_root": "cd" * 64, "steps": 3, "requests": [{"engine_id": "a"}],
+             "passed": True}, {"window": 1, "run_id": "r/w1", "steps": 0, "empty": True, "note": "é"}]
+    (tmp_path / "before").mkdir()
+    (tmp_path / "after").mkdir()
+    for rec in recs:
+        with open(tmp_path / "before" / name, "a") as fh:
+            fh.write(json.dumps(rec) + "\n")
+        M.append(tmp_path / "after" / name, "Run", json.dumps(rec).encode())
+    assert (tmp_path / "after" / name).read_bytes() == (tmp_path / "before" / name).read_bytes()
+    old = [json.loads(line) for line in (tmp_path / "before" / name).read_text().splitlines() if line.strip()]
+    assert [json.loads(line) for line in M.lines(tmp_path / "after" / name, "Run")] == old == recs

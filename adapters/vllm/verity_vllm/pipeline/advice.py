@@ -516,7 +516,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
     final = stopped(run)
     commits: dict[int, dict[str, Any]] = {}
     for name in ("seals.jsonl", "windows.jsonl"):       # a window's line waits for its H1 release; its seal's comes first
-        lines = (run / name).read_text().splitlines() if (run / name).exists() else []
+        lines = M.lines(run / name, "Run") if (run / name).exists() else []
         commits.update({int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
                         for d in (json.loads(line) for line in lines if line.strip())})
     per, still_open = windows_of(recs)
