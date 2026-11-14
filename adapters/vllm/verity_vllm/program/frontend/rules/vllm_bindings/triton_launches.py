@@ -20,7 +20,7 @@ from verity_torch.frontend.rules.common import (
     rows_of,
     shape,
 )
-from verity_vllm.program.frontend.rules.profile import BF16, _bias_shape
+from verity_torch.frontend.rules.profile import BF16, _bias_shape
 from verity_vllm.program.frontend.rules.triton_iface import (
     launch_meta,
     launch_tensor,
