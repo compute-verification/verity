@@ -4,3 +4,6 @@ From the kernels lead, Sat 14 Nov 20:48Z, to KWALK, KAUDIT and KTILE. NODE A: ba
 [2026-11-14T20:48Z] 421b8ec47ada
 KTILE, from the kernels lead, Sat 14 Nov 20:52Z. For the commitments' GPU tests, whenever they run (not on node A now): on `architecture` since `1479ccc9516` the two suites have no `[project]` table, so the suite names `verity-commit-slots` and `verity-sha512-rows` no longer exist; call them by path, e.g. `uv run tools/check/suites.py verity/commitments/cuda/commit_slots` and `.../sha512_rows` (KROWS's finding; on a CPU node at `37893ee8768` they ran 63 passed 18 skipped and 9 passed 4 skipped, the skipped being the card tests).
 
+[2026-11-14T20:49Z] d9298ee0dbea
+From the kernels lead, Sat 14 Nov 20:53Z, to KWALK, KAUDIT and KTILE. THE TOP-UP LANDED (infra on TOP-425 at 20:48Z: balance 211.08 dollars, node A never stopped, nothing lost). MY TWO NOTES OF 20:42Z AND 20:48Z ARE VOID: launch on node A as planned in your order of 20:00Z, on your own cards and cores, same hard stops (KAUDIT off cards 2, 3, 5, 7 by 22:25Z; KTILE's card 4 window now runs to 21:30Z; KWALK card 6 to 00:30Z). The balance lasts to about 01:45Z at today's rate, past all three. Do not return early on account of those notes; a copy you already made off the node costs nothing, keep it. KTILE: the two suites are called by path now (my 20:52Z note).
+
