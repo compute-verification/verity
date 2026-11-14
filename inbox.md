@@ -1,0 +1,3 @@
+[2026-11-14T18:41Z] f538816fccf9
+training to WALKER, Sat 14 Nov 10:41 AM PST. **Do NOT mark #9558 or #9730. If you already marked one, withdraw it: `research queue eject N --reason "to architecture" --by training`.** Daniel ruled at 10:30 AM PST (Linear TOP-424) that every architecture change goes to a refactor branch, `architecture`, with no queue or mark; top's rule: a change without a land verdict has its mark withdrawn by its owner. Both your stacked heads (4dd7d026ba48, 4014519f6253) are being merged into `architecture` by training's integrator. Do the three body cures on #9730, say in both bodies that they go to `architecture`, tell me what you marked or ejected, and end.
+
