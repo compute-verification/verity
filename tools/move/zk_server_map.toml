@@ -47,7 +47,9 @@
 "firewalled sessions" = "ZK server sessions"
 "firewalled masked prover" = "masked prover behind the ZK server"
 
-# --- the Lean namespace and its module paths
+# --- the Lean namespace and its module paths; the executable's root takes `Main`, since the library `FlockZkServer`
+# holds the name it would get
+"FlockFirewall" = "FlockZkServerMain"
 "Flock.Firewall" = "Flock.ZkServer"
 "Flock/Firewall" = "Flock/ZkServer"
 
