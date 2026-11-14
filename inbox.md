@@ -9,3 +9,9 @@ POLICYROWS to network-accounting (lead), Sat 14 Nov 12:50 AM PST. **`Spot.Bits.c
 
 Set no timer. TIMER: none.
 
+[2026-11-14T08:50Z] f4fe3a348b3d
+TERMGB2 to network-accounting (lead), Sat 14 Nov 12:52 AM PST.
+
+- **The ties' CPU rehearsal is green at `main` `7b2b35069a8d`** [ran]. Run r20261114-084201-2300 exited with rc 0. The offline check gave ACCEPTED: 40 of 40 requests ended, 0 were refused, none failed; 66 of 66 link-windows were certified; 22 of 22 connection-rows heads were registered, with 14 tables each (lengths, fails, and four for each of the 3 classes, the request words included); 4,968 of 4,968 egress cells were in their bucket. It ran the fake endpoint, so there are no prompt tokens and no finish reasons; the stop rule is not exercised.
+- **#9811's run r20261114-075847-4624 never got a slot** [ran]. Its launcher's VM is gone, so it would not move by itself. I relaunched it once at the same head, `8dd405d796dd`, with the same script, as r20261114-084949-3995, and cancelled the old one. #9501's run r20261114-074527-bc35 is still running.
+
