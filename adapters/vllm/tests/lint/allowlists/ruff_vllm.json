@@ -312,7 +312,6 @@
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "I001", "symbol": "retention_refusal", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/serve_tie.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/served_match.py", "kind": "T201", "symbol": "ServedCommit.rebuild", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/pipeline/served_match.py", "kind": "T201", "symbol": "main.log", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "T201", "symbol": "after_commit", "detail": "`print` found"},
     {"file": "verity_vllm/pipeline/serving_rows.py", "kind": "T201", "symbol": "readers", "detail": "`print` found"},
@@ -472,6 +471,7 @@
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "warmup_instrumented", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "weights_of_record_digests", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "weights_pin", "detail": "`print` found"},
-    {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "write_verdict", "detail": "`print` found", "count": 8}
+    {"file": "verity_vllm/pipeline/commit.py", "kind": "T201", "symbol": "write_verdict", "detail": "`print` found", "count": 8},
+    {"file": "verity_vllm/pipeline/served_match.py", "kind": "T201", "symbol": "main.log", "detail": "`print` found"}
   ]
 }

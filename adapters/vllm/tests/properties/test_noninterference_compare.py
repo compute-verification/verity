@@ -8,6 +8,7 @@ from __future__ import annotations
 import gzip
 import itertools
 import json
+import logging
 from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -32,6 +33,14 @@ from verity_vllm.properties import noninterference as NI
 LAYERS = 2
 TOKENS = [7, 9]
 NORM = "_C.fused_add_rms_norm.default"
+
+
+def _said(caplog: pytest.LogCaptureFixture) -> list[str]:
+    """The module's records so far, each of which must be at debug; the capture is emptied."""
+    records = [r for r in caplog.records if r.name == "verity_vllm.properties.noninterference"]
+    caplog.clear()
+    assert {r.levelno for r in records} <= {logging.DEBUG}
+    return [r.getMessage() for r in records]
 
 
 def _start(step: int, reqs: tuple[str, ...] = ("r0",), named: bool = True) -> StepStart:
@@ -281,7 +290,8 @@ def test_the_authored_record_is_compared_with_each_arm_and_is_none_for_an_arm_it
     assert rep["problems"] == ["missing tokens for b_hooks"] and rep["PASS"] is False
 
 
-def test_the_expected_step_count_is_the_bare_arm_s_then_its_largest_max_tokens_then_16(tmp_path):
+def test_the_expected_step_count_is_the_bare_arm_s_then_its_largest_max_tokens_then_16_and_why_16_at_debug(tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger="verity_vllm")
     bare = _run(tmp_path) / "c_bare" / "tokens.json"
     _edit(bare, lambda doc: doc.pop("timing"))
     rep = NI.compare(str(tmp_path), None, LAYERS)
@@ -289,9 +299,16 @@ def test_the_expected_step_count_is_the_bare_arm_s_then_its_largest_max_tokens_t
     _edit(bare, lambda doc: doc.update(timing={"engine_steps": 3}))
     rep = NI.compare(str(tmp_path), None, LAYERS)
     assert rep["PASS"] is False and rep["problems"] == [] and rep["expected_steps"] == 3, "two steps compared where the bare arm ran three"
+    assert _said(caplog) == [], "a bare arm that gives the count says nothing"
+    _edit(bare, lambda doc: [r.pop("max_tokens") for r in doc["requests"]] and doc.pop("timing"))
+    rep = NI.compare(str(tmp_path), None, LAYERS)
+    assert (rep["expected_steps"], rep["expected_steps_source"]) == (16, "default"), "a bare arm whose requests state no max_tokens"
+    assert _said(caplog) == [f"{bare} gives no step count, so 16: KeyError('max_tokens')"]
     bare.unlink()
     rep = NI.compare(str(tmp_path), None, LAYERS)
     assert (rep["expected_steps"], rep["expected_steps_source"]) == (16, "default") and rep["PASS"] is False
+    (said,) = _said(caplog)
+    assert said == f"{bare} gives no step count, so 16: FileNotFoundError(2, 'No such file or directory')"
     assert rep["problems"] == ["missing tokens for c_bare",
                                "no clean reference tokens: neither --accepted-ctl (control run) nor c_bare/tokens.json has generated_token_ids"]
     assert rep["tokens_equal_accepted"] == {"a_observer": False, "b_hooks": False, "c_bare": False}
@@ -548,17 +565,31 @@ def test_the_reference_and_the_authored_record_are_read_from_the_first_file_that
     assert NI._workload_accepted(None, run) == NI._workload_accepted(str(ctl), run) == {"r0": [4]}, "the bare arm's, where no control file states one"
 
 
-def test_the_case_is_the_flag_s_else_the_workload_file_s_else_b0(tmp_path):
+def test_the_case_is_the_flag_s_else_the_workload_file_s_else_b0_and_why_b0_at_debug(tmp_path, caplog):
+    caplog.set_level(logging.DEBUG, logger="verity_vllm")
     stated = _write(tmp_path, "stated.json", {"case": "B7"})
     silent = _write(tmp_path, "silent.json", {"requests": []})
     tmp_path.joinpath("list.json").write_text("[]")
     tmp_path.joinpath("text.json").write_text("not JSON")
     assert NI.case_of_args(SimpleNamespace(case="B1", workload=str(stated))) == "B1"
     assert NI.case_of_args(SimpleNamespace(case=None, workload=str(stated))) == NI.case_of_args(SimpleNamespace(workload=str(stated))) == "B7"
-    for name in (silent.name, "list.json", "text.json", "absent.json"):
+    assert NI.case_of_args(SimpleNamespace(case="", workload=str(silent))) == "B0"
+    assert _said(caplog) == [], "a flag, a file that states a case and one that is silent say nothing"
+    why = {"list.json": "AttributeError(", "text.json": "JSONDecodeError(", "absent.json": "FileNotFoundError("}
+    for name, error in why.items():
         assert NI.case_of_args(SimpleNamespace(case="", workload=str(tmp_path / name))) == "B0", name
+        (said,) = _said(caplog)
+        assert said.startswith(f"the workload file {tmp_path / name} gives no case, so B0: {error}") and said.endswith(")"), name
+    assert NI.case_of_args(SimpleNamespace(case=None)) == "B0", "arguments that name no workload file"
+    missing = "AttributeError(\"'types.SimpleNamespace' object has no attribute 'workload'\")"
+    assert _said(caplog) == ["the workload file None gives no case, so B0: " + missing]
 
 
-def test_the_expected_layers_are_the_case_s_profile_s_and_none_for_no_case_or_an_unknown_one():
+def test_the_expected_layers_are_the_case_s_profile_s_and_none_for_no_case_or_an_unknown_one_and_why_none_at_debug(caplog):
+    caplog.set_level(logging.DEBUG, logger="verity_vllm")
     assert (NI.expected_layers_for("B0"), NI.expected_layers_for("B1")) == (30, 28)
-    assert NI.expected_layers_for(None) is None and NI.expected_layers_for("") is None and NI.expected_layers_for("no such case") is None
+    assert NI.expected_layers_for(None) is None and NI.expected_layers_for("") is None
+    assert _said(caplog) == [], "a case with a profile and no case say nothing"
+    assert NI.expected_layers_for("no such case") is None
+    (said,) = _said(caplog)
+    assert said.startswith("no layer count for case 'no such case': KeyError(") and said.endswith(")")

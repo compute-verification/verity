@@ -135,16 +135,15 @@ def _served(settings, n=40, arm=Int8Arm):
     model, runner = Model(Linear(32, 1), Linear(n, 2)), settings["pouw"]["runner"]
     for layer in model.layers:
         layer.quant_method = arm()
-    comp = PO.install(model, PO.Context(stage="serve", enabled=(_entry(),), settings=settings))
-    g = torch.Generator().manual_seed(9)
-    for so, rows in ((_so(("a", [5], 4)), (1, 5)), (_so(("b", [7], 2), ("c", list(range(8, 39)), 3), running={"a": 1}),
-                                                    (33, 2))):
-        runner.execute_model(so)
-        for m, layer in zip(rows, model.layers):
-            layer.quant_method.apply(layer, (torch.randn(m, K, generator=g) * 3).bfloat16())
-    run = pouw.h1_run(_entry())
-    comp.installed[0].release = None
-    comp.close()
+    with PO.install(model, PO.Context(stage="serve", enabled=(_entry(),), settings=settings)) as comp:
+        g = torch.Generator().manual_seed(9)
+        for so, rows in ((_so(("a", [5], 4)), (1, 5)), (_so(("b", [7], 2), ("c", list(range(8, 39)), 3), running={"a": 1}),
+                                                        (33, 2))):
+            runner.execute_model(so)
+            for m, layer in zip(rows, model.layers):
+                layer.quant_method.apply(layer, (torch.randn(m, K, generator=g) * 3).bfloat16())
+        run = pouw.h1_run(_entry())
+        comp.installed[0].release = None
     return run
 
 
