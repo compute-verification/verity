@@ -3854,7 +3854,7 @@ def test_the_rehearsals_settings_state_the_tied_windows_rule_a_stratified_rate(t
                 "DAY_PARAMS": tmp_path / "day-params.json", **({} if law is None else {"V3C_LAW": law})}
     (tmp_path / "record.env").write_text("".join(f"{k}={shlex.quote(str(v))}\n" for k, v in settings.items()))
     run = subprocess.run(["bash", str(HERE.parent / "rehearsal.sh"), "settings", str(tmp_path / "record.env")],
-                         env={"PATH": os.environ["PATH"]}, capture_output=True, text=True, check=False)
+                         env={"PATH": os.defpath}, capture_output=True, text=True, check=False)
     said = run.stdout.splitlines()
     if held:
         assert run.returncode == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (run.returncode, said, run.stderr)
