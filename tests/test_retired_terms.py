@@ -492,6 +492,14 @@ CERTIFIER_LEFT_OUT = {
     "tools/research/tests/test_store_vocab.py": "a test of the store's label values spells the ones that hold it",
     LINTS[0]: "this test spells the name to find it",
 }
+#: The public items' reasons that hold it, which a spec's digest takes in (`warden_map.toml`'s [keep]).
+CERTIFIER_SPEC_REASONS = (
+    "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads ",
+    "the warden's domain (`warden_rows.domain`), which binds the session, the ",
+    "the warden's salted root over the window's bucket rows, its signed head's",
+    "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
+    "the round's provenance: the group's link-windows of the warden's run",
+)
 #: What keeps it, as the Glossary's row says: each kind's spellings and what ends it. A site is the first kind's that
 #: spells it: the row's own line first, and the quoted word alone after every spelling that holds it but the trace
 #: corpus's `ingress="warden"`.
@@ -499,9 +507,10 @@ CERTIFIER_KEPT = {
     "said": (r"(?m)^\| \"warden\", \"network warden\".*$|\bsay \"warden\"|\ban \*?active warden\b|\ba passive warden\b",
              "the Glossary's row of older names, the domain table's sentence on what its tags say, and network "
              "steganography's terms"),
-    "domain tag": (r"verity-network-warden/[a-z-]+/v\d+|\ba5[/-]warden(?:-stand-in/v1\b|/rest/)",
-                   "a domain tag of the network certifier's records or of a stand-in for them, which a digest takes in, "
-                   "until the network certifier's next format version"),
+    "domain tag": (r"verity-network-warden/[a-z-]+/v\d+|\ba5[/-]warden(?:-stand-in/v1\b|/rest/)|"
+                   + "|".join(map(re.escape, CERTIFIER_SPEC_REASONS)),
+                   "a domain tag of the network certifier's records or of a stand-in for them, or a public item's "
+                   "reason in a spec, which a digest takes in, until the network certifier's next format version"),
     "circuit": (r"\bWardenRowIdentity\b|\bunit/(?:warden-row|a5-warden)\b",
                 "a circuit's name and the name its units are staged under, which the circuit's pin takes in, until the "
                 "network certifier's next format version"),
