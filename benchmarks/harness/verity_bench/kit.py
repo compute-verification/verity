@@ -272,8 +272,25 @@ class Writer:
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
                     why: str | None = None, *, mark: str | None = None, period: str | None = None,
                     over: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
-        """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has
-        no finite value to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high),
+        """Appends one measurement to `out/result.json` and returns it: the one `entry` makes of the same arguments. It
+        also refuses a name, period and `over` the result already holds, and a result of another run."""
+
+        entry = self.entry(name, value, unit, interval, target, verdict, inputs, why, mark=mark, period=period, over=over,
+                           extra=extra)
+        with self._open() as (path, doc):
+            if any((m.get("name"), m.get("period"), m.get("over")) == (name, period, over) for m in doc["measurements"]):
+                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r} and over={over!r}: a "
+                                 "result holds one a name, period and over (a rerun writes a fresh directory)")
+            doc["measurements"].append(entry)
+        return entry
+
+    def entry(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
+              target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
+              why: str | None = None, *, mark: str | None = None, period: str | None = None,
+              over: str | None = None, extra: Mapping[str, Any] | None = None) -> dict:
+        """One measurement as `measurement` appends it, written nowhere, for a benchmark that writes its result whole:
+        `value` in `unit` (None where the benchmark has no finite value to give, and then `why`, in words, where
+        given), its `mark`, its 95% `interval` (low, high),
         which the result holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
         against that target, and the `inputs` it was computed from, with this run, its commit and the host stamp, and
         beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
@@ -283,8 +300,7 @@ class Writer:
         say what span of time and of compute the value is over, each its own field where given. It refuses what isn't a
         measurement (a value that isn't a number, a verdict with no target or in a verdict of record's or a seal's words,
         a `why` beside a value), a missing or unknown mark and a first input that opens with another one, a period or an
-        `over` it doesn't know, an `extra` key the entry already has a meaning for or a value that isn't JSON, a name,
-        period and `over` the result already holds, and a result of another run."""
+        `over` it doesn't know, and an `extra` key the entry already has a meaning for or a value that isn't JSON."""
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"a measurement has a name, not {name!r}")
@@ -334,11 +350,6 @@ class Writer:
             except (TypeError, ValueError):
                 raise ValueError(f"{name}'s extra {key} is a JSON value, not {held!r}") from None
             entry[key] = held
-        with self._open() as (path, doc):
-            if any((m.get("name"), m.get("period"), m.get("over")) == (name, period, over) for m in doc["measurements"]):
-                raise ValueError(f"{path} already holds a measurement named {name} at period={period!r} and over={over!r}: a "
-                                 "result holds one a name, period and over (a rerun writes a fresh directory)")
-            doc["measurements"].append(entry)
         return entry
 
     def validation(self, status: str, checker: str, detail: str, evidence: Sequence[str] = ()) -> dict:

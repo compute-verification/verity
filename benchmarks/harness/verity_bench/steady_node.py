@@ -426,24 +426,24 @@ def kept(run_dir: Path) -> list[str]:
 
 def write_result(run_dir: Path, identity: str, item: steady_spec.SteadyPoint, why: str | None,
                  row: Mapping[str, Any] | None, host: Mapping[str, Any] | None = None) -> None:
-    """The run's result (`kit.RESULT_SCHEMA`): its validation, which is the point's verdict, written here, and, for a
-    passed point, its rate, the one measurement, appended by the kit's writer under `host`, the stamp the timed step
-    ran under."""
+    """The run's result (`kit.RESULT_SCHEMA`), written once and whole: its validation, which is the point's verdict,
+    and, for a passed point, its rate, the one measurement, as the kit's writer makes it under `host`, the stamp the
+    timed step ran under."""
 
     rate = row.get("statements_per_s") if row is not None and why is None else None
+    if rate is not None and host is None:
+        raise ValueError(f"{item.id} passed and {TIMED_FILE} holds no host stamp of its timed step, which its "
+                         "measurement is written under")
+    measurements = [] if rate is None else [
+        kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host).entry("statements_per_s", rate, "1/s", mark="measured")]
     evidence = [path for path in (steady.RATES, VERDICT_FILE, POINT_FILE) if (run_dir / path).is_file()]
     _write(run_dir / kit.RESULT, {
         "schema": kit.RESULT_SCHEMA, "kind": KIND, "run_id": settings.RESEARCH_RUN_ID,
         "workload_fingerprint": {"identity": identity, "point": item.to_json()},
         "validation": {"status": "passed" if why is None else "failed", "checker": "verity_bench.steady_spec.point_why",
                        "detail": why or f"{item.id}: the ten checks pass", "evidence": evidence},
-        "measurements": [],
+        "measurements": measurements,
         "measurement_files": [steady.RATES] if (run_dir / steady.RATES).is_file() else [], "artifacts": kept(run_dir)})
-    if rate is not None:
-        if host is None:
-            raise ValueError(f"{item.id} passed and {TIMED_FILE} holds no host stamp of its timed step, which its "
-                             "measurement is written under")
-        kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host).measurement("statements_per_s", rate, "1/s", mark="measured")
 
 
 def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: Callable[[], float] = time.time,

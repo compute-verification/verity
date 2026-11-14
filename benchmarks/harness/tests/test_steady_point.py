@@ -1069,7 +1069,11 @@ def sha256_of(doc) -> str:
 
 def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_after_it(tmp_path, monkeypatch):
     node = Node(tmp_path, monkeypatch)
+    written, write, append = [], N._write, kit.Writer._open
+    monkeypatch.setattr(N, "_write", lambda path, doc: (written.append(path.name), write(path, doc))[1])
+    monkeypatch.setattr(kit.Writer, "_open", lambda self: (written.append("appended"), append(self))[1])
     assert node.point() == 0
+    assert written.count("result.json") == 1 and "appended" not in written, "the result is written once and whole"
 
     stager, lease_argv, timer = node.ran
     scratch = Path(lease_argv[-1])
