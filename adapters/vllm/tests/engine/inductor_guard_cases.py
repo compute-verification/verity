@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from types import SimpleNamespace
+from typing import Any
 
 from verity_vllm.engine import env
 
@@ -17,7 +18,8 @@ def test_a_stand_in_module_set_with_monkeypatch_is_not_left(monkeypatch):
 
 
 def test_a_switch_left_changed_is_failed_by_name():
-    sys.modules["torch._inductor.config"].dynamic_scale_rblock = True
+    config: Any = sys.modules["torch._inductor.config"]
+    config.dynamic_scale_rblock = True
 
 
 def test_the_test_after_it_reads_the_pin():

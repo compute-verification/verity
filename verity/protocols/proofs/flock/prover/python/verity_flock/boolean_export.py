@@ -1460,6 +1460,7 @@ def _commitment(g: dict, cm: "Commitments", checks: dict | None) -> dict:
 
     if g["template"].startswith(("Const32", "Const64")):
         return {}
+    prims()  # every registry module imported: `specialization` reads the registry as registered
     q = g.get("q_word_v1") or {}
     try:
         if g["definition"] in OPENED and GATHERS == "opening":

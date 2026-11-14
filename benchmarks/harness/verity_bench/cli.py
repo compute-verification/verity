@@ -28,7 +28,8 @@ from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
 from verity_bench.vllm.presets import local_checkpoint, served
 from verity_bench.vllm.result import write
-from verity_bench.vllm.runner import ProcessEngineFactory, run_benchmark
+from verity_bench.vllm.engine import ProcessEngineFactory
+from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
 
 

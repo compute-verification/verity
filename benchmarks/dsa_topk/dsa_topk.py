@@ -24,8 +24,9 @@ over the keys. Every way the output is the row's canonical one. Rows of
 ``n > k`` keys are a prefill's (``top_k_per_row_prefill``: keys ``[start, end)`` of the gathered row) or a decode's (the
 three decode selectors: keys ``[0, length)``).
 
-``VERITY_DSA_TOPK_LOG=DIR`` writes, per process, ``dsa_topk.PID.json``: each op's calls and canonicalizing launches, and
-the rows rewritten, those with a tie across the k-th key, and those bisected.
+``VERITY_DSA_TOPK_LOG=DIR`` keeps, per process, ``DIR/dsa_topk.PID.json`` (`log_to`), from the plugin's load on and
+whatever ends the process: each op's calls and canonicalizing launches as of its last call, and the rows rewritten,
+those with a tie across the k-th key, and those bisected, as its devices counted them when they were last read.
 """
 from __future__ import annotations
 
@@ -54,8 +55,8 @@ BLOCK = 1024
 NUM_WARPS = 8
 #: programs a multiprocessor should get before a row is split
 FILL = 2
-#: `log_to` rewrites its record every this many calls (a device sync), since vLLM's workers may never reach atexit
-FLUSH_EVERY = 4096
+#: under `log_to`, the devices' counters are read (a device sync) once this many calls have passed since their last read
+ROWS_EVERY = 4096
 
 INT32_MIN = -(1 << 31)
 
@@ -129,16 +130,25 @@ class Canon:
         self.seg_min_keys, self.block, self.num_warps, self.fill = seg_min_keys, block, num_warps, fill
         self.calls = {op: 0 for op in OPS}
         self.launches: dict[str, int] = {op: 0 for op in OPS}
+        #: each device's counters as last read (`read_rows`), and the calls made by then
+        self.rows: dict[str, dict[str, int]] = {}
+        self.rows_at = 0
         self._stats: dict[Any, Any] = {}
         self._sms: dict[Any, int] = {}
         self._ws: dict[Any, Any] = {}
-        #: called every `FLUSH_EVERY` calls outside a CUDA graph's capture (`log_to`)
-        self.on_flush: Callable[[], None] | None = None
+        #: called at the end of every call, inside a CUDA graph's capture too, so it reads no device (`log_to`)
+        self.on_call: Callable[[], None] | None = None
 
     def note(self, op: str) -> None:
+        """Count a call of ``op``, at its end: its launch, if it made one, is counted by now. Under `on_call` the
+        devices' counters are read first when `ROWS_EVERY` calls have passed since their last read, outside a CUDA
+        graph's capture: a read that falls due inside one is made at the first call after it."""
         self.calls[op] += 1
-        if self.on_flush is not None and sum(self.calls.values()) % FLUSH_EVERY == 0 and not _capturing():
-            self.on_flush()
+        if self.on_call is None:
+            return
+        if sum(self.calls.values()) - self.rows_at >= ROWS_EVERY and not _capturing():
+            self.read_rows()
+        self.on_call()
 
     def stats(self, device: Any) -> Any:
         import torch
@@ -190,10 +200,19 @@ class Canon:
             ws = self._ws[key] = torch.empty(max(words, 1 << 16), dtype=torch.int32, device=device)
         return ws
 
-    def record(self) -> dict[str, Any]:
-        """The counters so far (synchronizes each device it read)."""
-        dev = {str(d): dict(zip(STATS, s.tolist())) for d, s in self._stats.items()}
-        return {"pid": os.getpid(), "calls": dict(self.calls), "launches": dict(self.launches), "rows": dev}
+    def read_rows(self) -> None:
+        """Read each device's counters (synchronizes it)."""
+        self.rows = {str(d): dict(zip(STATS, s.tolist())) for d, s in self._stats.items()}
+        self.rows_at = sum(self.calls.values())
+
+    def record(self, read: bool = True) -> dict[str, Any]:
+        """The counters: each op's calls (the times its wrapper ran on the host: a call a CUDA graph replays adds
+        rows and no call) and launches, and each device's rows as it had counted them when the process had made
+        ``rows_at`` calls. With ``read`` the devices are read first (`read_rows`)."""
+        if read:
+            self.read_rows()
+        return {"pid": os.getpid(), "calls": dict(self.calls), "launches": dict(self.launches), "rows": self.rows,
+                "rows_at": self.rows_at}
 
 
 def next_pow2(x: int) -> int:
@@ -208,24 +227,25 @@ def _capturing() -> bool:
 
 def wrappers(canon: Canon) -> dict[str, Callable[[Callable[..., Any]], Callable[..., Any]]]:
     """Each op's wrapper around its real op: the op, then `Canon.run` on its output when a row of the call can be
-    longer than its ``k``. The ops' signatures are the pin's (csrc/libtorch_stable/torch_bindings.cpp)."""
+    longer than its ``k``, then `Canon.note`. The ops' signatures are the pin's
+    (csrc/libtorch_stable/torch_bindings.cpp)."""
 
     def prefill(real: Callable[..., Any]) -> Callable[..., Any]:
         def top_k_per_row_prefill(logits, row_starts, row_ends, indices, num_rows, stride0, stride1, top_k):
             real(logits, row_starts, row_ends, indices, num_rows, stride0, stride1, top_k)
-            canon.note("top_k_per_row_prefill")
             if num_rows > 0 and logits.shape[1] > top_k:
                 canon.run("top_k_per_row_prefill", logits, indices, top_k, 0, row_starts, row_ends, rows=num_rows,
                           ncols=logits.shape[1], ls0=stride0, ls1=stride1)
+            canon.note("top_k_per_row_prefill")
         return top_k_per_row_prefill
 
     def decode(real: Callable[..., Any]) -> Callable[..., Any]:
         def top_k_per_row_decode(logits, next_n, seq_lens, indices, num_rows, stride0, stride1, top_k):
             real(logits, next_n, seq_lens, indices, num_rows, stride0, stride1, top_k)
-            canon.note("top_k_per_row_decode")
             if num_rows > 0 and logits.shape[1] > top_k:
                 canon.run("top_k_per_row_decode", logits, indices, top_k, 1 if seq_lens.dim() == 2 else 2, seq_lens,
                           rows=num_rows, ncols=logits.shape[1], ls0=stride0, ls1=stride1, next_n=next_n)
+            canon.note("top_k_per_row_decode")
         return top_k_per_row_decode
 
     def lengths(name: str, bound: Callable[[Any, int], int], hint: bool) -> Callable[..., Any]:
@@ -234,12 +254,11 @@ def wrappers(canon: Canon) -> dict[str, Callable[[Callable[..., Any]], Callable[
         def wrap(real: Callable[..., Any]) -> Callable[..., Any]:
             def op(logits, lengths, output, workspace, k, max_seq_len):
                 real(logits, lengths, output, workspace, k, max_seq_len)
-                canon.note(name)
                 ncols = bound(logits, max_seq_len)
-                if logits.shape[0] == 0 or ncols <= k or (hint and max_seq_len <= k and not _capturing()):
-                    return
-                canon.run(name, logits, output, k, 1, lengths, rows=logits.shape[0], ncols=ncols,
-                          ls0=logits.stride(0), ls1=logits.stride(1))
+                if logits.shape[0] > 0 and ncols > k and not (hint and max_seq_len <= k and not _capturing()):
+                    canon.run(name, logits, output, k, 1, lengths, rows=logits.shape[0], ncols=ncols,
+                              ls0=logits.stride(0), ls1=logits.stride(1))
+                canon.note(name)
             op.__name__ = name
             return op
         return wrap
@@ -284,17 +303,36 @@ def install(ns: Any = None, canon: Canon | None = None) -> Canon:
 
 
 def log_to(canon: Canon, d: str) -> None:
-    """Keep ``canon``'s record in ``d/dsa_topk.PID.json``: every `FLUSH_EVERY` calls and at exit."""
+    """Keep ``canon``'s record in ``d/dsa_topk.PID.json`` from now on, whatever ends the process: vLLM kills its
+    workers, which then run no exit handler. The file is written here and again, in place, at the end of every call,
+    by one ``os.pwrite`` of the whole record. Nothing syncs it to the disk: what a process wrote stays once the
+    process is gone. So a process killed between two calls leaves its calls and launches as they were and its rows
+    as last read (`Canon.note`), and one that exits in order reads the rows once more."""
     path = Path(d) / f"dsa_topk.{os.getpid()}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)
+    fmt, rows, slots, width = b"", None, 0, 0
 
-    def write() -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(canon.record(), indent=1) + "\n")
-        tmp.replace(path)
+    def write(read: bool = False) -> None:
+        # the record's text but for its counts changes only with the rows and with an op's first launch: it is made
+        # once for each (`fmt`), so that a call encodes its counts alone
+        nonlocal fmt, rows, slots, width
+        if read:
+            canon.read_rows()
+        counts = (*canon.calls.values(), *canon.launches.values())
+        if rows is not canon.rows or slots != len(counts):
+            rows, slots, rec = canon.rows, len(counts), canon.record(False)
+            marks = {k: dict.fromkeys(rec[k], "<count>") for k in ("calls", "launches")}
+            fmt = json.dumps({**rec, **marks}).replace("%", "%%").replace('"<count>"', "%d").encode()
+        text = fmt % counts
+        width = max(width, len(text))  # a shorter text must leave nothing of a longer one behind it
+        os.pwrite(fd, text.ljust(width) + b"\n", 0)
 
-    canon.on_flush = write
-    atexit.register(write)
+    write()
+    tmp.replace(path)  # the file is there only once it holds a record
+    canon.on_call = write
+    atexit.register(write, True)
 
 
 def settings() -> tuple[str, str]:
