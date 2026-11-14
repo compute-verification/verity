@@ -17,9 +17,9 @@ A session's coins are `coins[0 … W − 1]`, window `t`'s challenge at `t` (`re
 * `OpeningsUnreadUntilSampled` (`Live`, the coin order): a run, on the same events, gives the same results and the same
   state, whatever the coins at `W + t` and above, as long as window `t` is not sampled by its end. Every challenge and
   the earlier windows' openings coins may be read; window `t`'s openings coin and the later ones are not.
-* `RecordKeptAfterSample` (`Live`, the receipts fixed at the sample): once window `t` is sampled, the rest of the session
-  keeps its samples, its record (what `verify` checks the openings against: its challenge, the previous window's last
-  root and its passes' roots, plans and heads, so its size `U_t`) and which of its receipts are openable, whatever
+* `RecordKeptAfterSample` (`Live`, the receipts fixed at the sample): once window `t` is sampled, the rest of the
+  session keeps its samples, its record (what `verify` checks the openings against: its challenge, the previous window's
+  last root and its passes' roots, plans and heads, so its size `U_t`) and which of its receipts are openable, whatever
   events follow. A later append doesn't move the append a sampled receipt's block is in.
 
 So the code gives `Live` once the events up to window `t`'s sample are fixed by the coins below `W + t`, and that is

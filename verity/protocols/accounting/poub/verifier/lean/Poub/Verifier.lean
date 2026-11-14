@@ -149,7 +149,8 @@ private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
 
 /-- Session `s`, sampled `g` windows a coin, with the coin `c` the challenger released for event `e` (module docstring),
-or why not: a close's is its sample's openings coin, `W + t / g`, and only the sample's last window's close releases it. -/
+or why not: a close's is its sample's openings coin, `W + t / g`, and only the sample's last window's close releases it.
+-/
 def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
   if c.size ≠ Codec.COIN_BYTES then throw "a coin is 32 bytes"
   let set (i : Nat) : Except String Session.State :=

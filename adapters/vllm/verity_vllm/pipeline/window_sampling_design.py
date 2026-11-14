@@ -1,4 +1,4 @@
-"""The serving rows' window law: the partition file's law as one-stage's law object (`sampling_design_of`), a rate resolved over the
+"""The serving rows' window sampling design: the partition file's sampling design as one-stage's sampling design object (`sampling_design_of`), a rate resolved over the
 window's population by `serving_rows.population` (`service.params_sampling_design`), and the verifier's work table for a window under
 the work sampling design (`work_table_of`), from the registered compiler's transfer-gate templates (`pipeline.advice_windows`)."""
 
@@ -11,7 +11,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 
 
 def sampling_design_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
-    """The partition file's law as one-stage's law object; a rate's is its kind and ``rate`` until `population` resolves it."""
+    """The partition file's sampling design as one-stage's sampling design object; a rate's is its kind and ``rate`` until `population` resolves it."""
     kind = (s := DR.parse_strata_rate(law)) and ("work" if s[0] else "stratified") or DR.parse_rate(law) and "subset"
     return {"law": kind, "rate": law} if kind else DR.parse_design(law) if isinstance(law, str) else dict(law)
 
@@ -20,8 +20,8 @@ def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_ga
     """The verifier's work table (`draw.work_table`) for a window of ``counts`` (template -> its units, in the partition's order)
     under ``law``: under ``work:K``, each transfer-gate template (the units holding transfer gates, which the registered compiler
     lists) works 0 with its floor all its units, so every one of them is in the sample (`draw.work_k`: selection All, never
-    sampled), and every other template works 1 with floor 1, its sample the stratified sampling design's share of K; None for any other law.
-    Refused when the compiler lists transfer gates under another law, when one of its transfer-gate templates is not among the
+    sampled), and every other template works 1 with floor 1, its sample the stratified sampling design's share of K; None for any other sampling design.
+    Refused when the compiler lists transfer gates under another sampling design, when one of its transfer-gate templates is not among the
     window's (its units would be left out of the proved set), or when every template is one (nothing is sampled: that window's
     selection is all)."""
     tg = list(dict.fromkeys(transfer_gates))

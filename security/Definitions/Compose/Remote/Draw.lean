@@ -106,8 +106,8 @@ at least 4 for `N < 2^64`.
   have, and on uniform blocks each lands with probability at most its bound given the windows before.
 * `cont t ω ζ`: **window `t`'s continuation** of coins `ω` on `ζ`, the run that shares `ω`'s cut (its other coins,
   the prover's, the world's and every salt, and its openings coins before window `t`'s) and continues on `ζ`'s openings
-  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two identities, so the sampled window's forking lemma reads
-  it.
+  coins from window `t`'s on. It has `Accounting.TS.spliceAt`'s two identities, so the sampled window's forking lemma
+  reads it.
 * `Receipts`: **the receipts as the window's roots hold them.** Window `t` registers its receipts as
   `hm96-sha512/row/v2` leaves, 16 receipts a leaf, in frame-v3-sha512 trees, and sends their roots before its coin is
   released (`Poub.verifyWindow`). `opened t ω p` is the opening the prover presents for receipt `p` when the
@@ -184,7 +184,8 @@ def test {m : ℕ} (U k : ℕ) (C : Finset ℕ) (b : Blocks m) : Prop :=
 def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u < ⌊δ * 2 ^ 512 / P⌋₊
 
 /-- A session's coins: the other coins and window `t`'s openings coin. Not the live coins (`Verity.Coins`): each
-openings coin seeds a sample without replacement over its window's own receipts, and the other coins hold the prover's. -/
+openings coin seeds a sample without replacement over its window's own receipts, and the other coins hold the prover's.
+-/
 abbrev DrawCoins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
 
 /-- A session of `n` windows of at most `m` receipts, window `t` sampling `min(s_t, U_t)` of its `U_t`. -/
@@ -210,8 +211,8 @@ variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Run n m s κ
 /-- Window `t`'s sample count, `min(s_t, U_t)`. -/
 def samples (t : Fin n) (ω : DrawCoins n κ X) : ℕ := min (s t) (D.size t ω)
 
-/-- The receipts window `t` opens at coins `ω`: its sample on the first blocks `prf t` gives its coin, with the fallbacks
-`rest ω t` where the sampler rejects every word of a first block. -/
+/-- The receipts window `t` opens at coins `ω`: its sample on the first blocks `prf t` gives its coin, with the
+fallbacks `rest ω t` where the sampler rejects every word of a first block. -/
 def opened (prf : Fin n → Pous.Bits κ → Blocks m) (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n)
     (ω : DrawCoins n κ X) : Finset ℕ :=
   openings (D.size t ω) (D.samples t ω) (prf t (ω.2 t)) (rest ω t)

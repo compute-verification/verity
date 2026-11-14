@@ -39,8 +39,8 @@ import Mathlib.Topology.Sheaves.Init
 
 `Poub.Pooled.pooled` (`verity/protocols/accounting/poub/verifier/lean/Poub/Pooled.lean`, which `pooled.py`
 is held to by the difftest, and whose W the memory line reads: `Poub.Line.line`) computes a session's pooled
-bound from its windows' receipts `U_t` and samples `s_t` at `δ`, in exact rationals: the budget from above by a certified
-rational root, and W by the fractional knapsack's greedy. The sample's model reads the bound as a supremum
+bound from its windows' receipts `U_t` and samples `s_t` at `δ`, in exact rationals: the budget from above by a
+certified rational root, and W by the fractional knapsack's greedy. The sample's model reads the bound as a supremum
 (`Accounting.Remote.Draw.pooled`, which `Accounting.Guarantees.Remote.PooledSample` reads).
 
 * `PooledCovers`: whenever the code computes a bound, its W is at least `Draw.pooled` of the same windows at the same
