@@ -736,7 +736,7 @@ def _session_key(tmp_path: Path, run: dict) -> str:
     """`session_key` of the synthetic run, read from its kept fetch as the piece reads it."""
     with tarfile.open(run["fetch"], "r:gz") as tar:
         tar.extractall(tmp_path / "unpacked", filter="data")
-    return CP.session_key(CP.warden_run(tmp_path / "unpacked"))
+    return CP.session_key(CP.certifier_run(tmp_path / "unpacked"))
 
 
 def test_the_tree_pins_no_key_and_the_two_premises_are_these_words():

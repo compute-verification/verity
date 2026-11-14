@@ -396,7 +396,7 @@ def window_requests(serve_dir: Path, window: int) -> list[dict]:
     return reqs
 
 
-def warden_run(d: Path) -> Path | None:
+def certifier_run(d: Path) -> Path | None:
     """The network certifier run in the unpacked fetch ``d``, None where it holds none."""
     return next((p.parent.parent if p.parent.name == SS.A.WITNESS else p.parent for p in d.rglob("certified.jsonl")),
                 None)
@@ -411,7 +411,7 @@ def unpack(fetch: Path) -> tuple[Path, Path]:
     except (OSError, tarfile.TarError) as e:
         rm(d)
         raise NotRun(f"{fetch}: {type(e).__name__}: {e}") from None
-    run = warden_run(d)
+    run = certifier_run(d)
     if run is None:
         rm(d)
         raise NotRun(f"{fetch}: no warden run (a certified.jsonl) in the fetch")
@@ -841,7 +841,7 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
         got, unpacked = step(hold)
         if got is not None:
             if isinstance(got.get("profile"), dict):
-                signed = warden_run(unpacked) if unpacked is not None else None
+                signed = certifier_run(unpacked) if unpacked is not None else None
                 where = placement(serve_dir, kept_run(serve_dir), None if signed is None else session_key(signed),
                                   ran_on(chained))
                 got = got | {"profile": got["profile"] | {"placement": where}}
