@@ -27,6 +27,16 @@
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
 #     say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
+#     With LOAD=session the load is the caller's own, through a relay session of the network certifier's, and the run
+#     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `certifier_piece.py front`, opens the session and
+#     returns once its relay listens; LOAD_CMD, the caller's command, run as `bash -c LOAD_CMD _ RELAY D` in TREE within
+#     LOAD_TIMEOUT (default 170m, the gate's longest session), sends the load to the client address RELAY names (the
+#     session's relay.json, in the serve dir's private/), its output the serve dir's load.log; and CERTIFIER_CLOSE
+#     (`certifier_piece.py close "$1" "$2"`, given D and the front's directory), within CERTIFIER_CLOSE_TIMEOUT
+#     (default 180m), waits for the session's end and keeps and publishes its fetch as a rehearsal's front does. The
+#     CERTIFIER-FRONT line is then the close's, and the step's exit the load's; a front that opened no session runs no
+#     load, and the close says why. LOAD=session without all three, and LOAD_CMD, CERTIFIER_CLOSE or a front passing
+#     `--session` under any other LOAD, are refused before the lease.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
@@ -35,7 +45,7 @@
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
 #     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) less the load's counts and span, and verdict lines that name no window and count none of a
+#     control compares to, and LOAD=session, whose relay-paced one none does either) less the load's counts and span, and verdict lines that name no window and count none of a
 #     window's own: no window's number, no count of the windows closed, sealed or refused, no engine step, request count or
 #     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
 #     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
@@ -108,9 +118,10 @@
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
-#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on V3C_CHALLENGER's coins (below,
-#     Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's) and
-#     proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`); then
+#     registration's members by its rule V3C_LAW, a rate (records_audit.py refuses a fixed count): by default the rate that
+#     samples one proof block of class 4,32,4's window, under H1_TIE one of each template's, on V3C_CHALLENGER's coins
+#     (below, Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's)
+#     and proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -168,8 +179,9 @@
 # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`, with D and OUT, on the node that holds the serve dir, writes
 # the hand-off from PIECES and the inference-only VERDICT (on a deferral's serve dir, at its settings, HOST as
 # `handoff`'s) and sends it to the compose gate on COMPOSE_NODE
-# (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@ on
-# vy-auditor-2's public address, where the gate admits senders (set it for any other COMPOSE_NODE), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
+# (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@
+# the address VY_AUDITOR_2_HOST holds, vy-auditor-2's public one, where the gate admits senders (set it for any other COMPOSE_NODE;
+# with neither, the preflight refuses), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
 # pinned tree (COMPOSE_BUILT: built at its pin; SAMPLED_EXE its prebuilt sampled proofs Lean; COMPOSE_TREE_ON the branch
 # infra pinned it on, which the record's composed_on names beside the commit) and answers its $OUT, written to
 # $OUT/compose with the gate's pin in gate.json, one GATE-COMPOSE line saying what it composed.
@@ -187,7 +199,8 @@
 # 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. A record
 # composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
 # else step 3's (`sampled_of_record`). With H1_GATE (the lane's gate command, by default LANE_GATE below: ssh as
-# research on the gate's host under the lane's own key $HOME/.ssh/vllm_lane_ed25519, which the gate registers
+# research on the gate's host, the address VY_CHALLENGER_1_HOST holds, without which the preflight refuses a serve on
+# that default, under the lane's own key $HOME/.ssh/vllm_lane_ed25519, which the gate registers
 # under lane vllm, so each reserve reads by vllm; COMPOSE_GATE keeps vllm_gate_ed25519; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
@@ -290,7 +303,8 @@
 # BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION bfloat16, the arm's), the BF16 B4 row's traced Build under
 # /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=fixed at V3C_CLASS's load (SLOTS its slots, PROMPTS P:P at its
 # prompt P, WINDOW_STEPS its outputs: round s of W is the window's s-th step, the class's s-th output, and the cut circuit
-# reads Pearl+'s tables at those rows; the preflight refuses another), PEARLC_BF16_ROWS=0 and V3C_LAW stratified:1, and
+# reads Pearl+'s tables at those rows; the preflight refuses another) and PEARLC_BF16_ROWS=0; V3C_LAW has none (the launch
+# states it, a stratified rate over the cut window's templates, and the preflight refuses a launch without one), and
 # step 3's partition layer 0's RoPE heads, the BF16 1B's transfer gates of record, every one proved, beside its
 # SiluMul_v2 under work:2 at step 1 (llama32_1b_tg_l0_step1.json, PP_SETS rope-head/d64/bf16). The preflight refuses
 # another PRECISION or row (its id names __bf16__), a V3C_CLASS CLASSES doesn't count, vLLM's prefix cache (SERVE_ARGS'
@@ -432,7 +446,7 @@ PEARLPLUS_INODES=${PEARLPLUS_INODES:-772388}  # two commits of the tied window a
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 POUW=${POUW:-h1}
 H1_PEER=${H1_PEER:-vy-dc-h200}
-LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84"
+LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@${VY_CHALLENGER_1_HOST:-}"
 if [ "$POUW" = pearlplus ]; then
   H1_GATE=${H1_GATE-}
   PEARLC_CHALLENGER_GATE=${PEARLC_CHALLENGER_GATE-$LANE_GATE}
@@ -453,7 +467,7 @@ else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
 MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 PRODUCT=${PRODUCT:-onsite}
 COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-1} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
-COMPOSE_GATE=${COMPOSE_GATE:-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@204.12.191.199}
+COMPOSE_GATE=${COMPOSE_GATE:-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@${VY_AUDITOR_2_HOST:-}}
 export COMPOSE_OFF_NODE
 if [ -n "${ONSITE_PIECES:-}" ]; then
   case $ONSITE_PIECES in /*) ;; *) ONSITE_PIECES=$TREE/$ONSITE_PIECES ;; esac
@@ -476,10 +490,24 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 SV=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/served_verdicts.py SAY_PY=$(command -v python3 || echo "$PY")
 publish_lines() { "$SAY_PY" "$SV" public-lines --private "$D/private/verdicts.txt" | tee -a "$OUT/verdicts.txt"; }
 say() { printf '%s\n' "$*" | publish_lines; }
+# No file holds a host's address: a gate left to its default reaches the host whose address the environment holds, the
+# challenger host's in VY_CHALLENGER_1_HOST (LANE_GATE) and the compose node's in VY_AUDITOR_2_HOST (COMPOSE_GATE), and
+# with that unset its command ends at research@. host_set VAR GATE...: the preflight's refusal of such a GATE, by VAR's
+# name, for the verbs that ask a gate something; the others never reach one and run without the address
+host_set() {
+  local var=$1 gate
+  shift
+  for gate; do
+    case $gate in
+      *@) say "PREFLIGHT: $var is unset, the address of the host the default gate command reaches ($gate): set it, or give the gate's whole command"
+        return 3 ;;
+    esac
+  done
+}
 keep() { [ -d "$D" ] && (umask 077; mkdir -p "$D/private" && printf '%s\n' "$*" >> "$D/private/verdicts.txt"); }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
-case ${LOAD:=varied} in varied | fixed | front) ;; *) say "PREFLIGHT: LOAD is varied, fixed or front, not $LOAD"; exit 3 ;; esac
+case ${LOAD:=varied} in varied | fixed | front | session) ;; *) say "PREFLIGHT: LOAD is varied, fixed, front or session, not $LOAD"; exit 3 ;; esac
 case $POUW in h1 | pearlplus) ;; *) say "PREFLIGHT: POUW is h1 or pearlplus, not $POUW"; exit 3 ;; esac
 [ "$POUW" = h1 ] || [ -z "$H1_GATE" ] \
   || { say "PREFLIGHT: POUW=pearlplus is PoUW's piece, so the endpoint serves no H1, and H1_GATE is set: set it empty"; exit 3; }
@@ -525,7 +553,13 @@ EOF
 }
 V3C=${V3C_CLASS-4,32,4} v3c_ok=0
 [ "${1:-}" = v3c ] && V3C=${V3C:-4,32,4}
-[ -z "${H1_TIE:-}$PEARLPLUS_TIE" ] || V3C_LAW=${V3C_LAW:-stratified:1}
+# V3c's rule, a rate: window-commit commits the window under the sampling design it names over the class circuit, and the
+# audit states it to its stream. The defaults sample one proof block of class 4,32,4's window and, under H1_TIE, one of
+# each of its templates'; a window of more proof blocks is sampled in proportion. Under PEARLPLUS_TIE the window is
+# another, cut at Pearl+'s linears, and the rule has no default: the launch states V3C_LAW, a stratified rate (the preflight)
+if [ -n "${H1_TIE:-}" ]; then V3C_LAW=${V3C_LAW:-stratified-rate:1/3481648}
+elif [ -z "$PEARLPLUS_TIE" ]; then V3C_LAW=${V3C_LAW:-rate:1/3481648}
+else V3C_LAW=${V3C_LAW:-}; fi
 vtag=${V3C//,/-}
 PEARLPLUS_CIRCUIT=$D/pearlplus/circuit-record.json
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
@@ -583,7 +617,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
   # path, the reference
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
-    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --out "$VW/window" "$@") > "$json" 2> "$err"
+    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --law "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
   rc=$?
   if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then echo "timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
   elif [ "$rc" != 0 ]; then echo "refused (exit $rc): $(grep -v '^ ' "$err" | tail -2 | cut -c1-800)"; fi
@@ -694,8 +728,7 @@ v3c_commit() {  # window K of $D committed as V3C's class circuit's units, its c
     why=$(pearl_tied) || { say "WINDOW-COMMIT class $V3C: $why"; return 1; }
     at=" in Pearl+'s piece, its registration chained right after Pearl+'s window record W before Pearl+'s coin ($why)"
   else
-    why=$(window_commit "$json" "$OUT/window-commit-$vtag.err" --law "${V3C_LAW:-subset:1}") \
-      || { say "WINDOW-COMMIT class $V3C $why"; return 1; }
+    why=$(window_commit "$json" "$OUT/window-commit-$vtag.err") || { say "WINDOW-COMMIT class $V3C $why"; return 1; }
   fi
   # the commit's population and sources count the window's own values: they stay in the serve dir
   say "WINDOW-COMMIT class $V3C$at: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); print(json.dumps({k: c[k] for k in ("run", "circuit", "registration") if k in c}, sort_keys=True))' \
@@ -712,13 +745,13 @@ EOF
   [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
 }
 # The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS), a sample needing more refused before any
-# listens: a subset:K sample opens one for each of at most K members, and records_audit's own default, a port for every
+# listens: a sample of K proof blocks opens one for each of at most K members, and records_audit's own default, a port for every
 # member, finds no free span in `records_audit.PORTS` at a class window. Under H1_TIE the audit is tied to H1's W
 # (records_audit's --tie W --tie-prefix h1/, `tie_of`): the tables the circuit reads are W's, R registers them as its
-# outputs, and each sampled reader proves its rows at W's roots. Its sampling design is then stratified:K (V3C_LAW,
-# default stratified:1), a stratum of each table's readers, so every table W registers has a sampled reader
+# outputs, and each sampled reader proves its rows at W's roots. Its rule is then a stratified rate (V3C_LAW), which
+# samples a stratum of each table's readers, so every table W registers has a sampled reader
 # (Record.checks), and V3C_PORTS defaults to the size of R's sample, its strata's k summed: at most a session for each
-# sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another design.
+# sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another rule.
 # With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
 # $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT): the
 # templates and their binding are public, so this precedes the audit's coins, and the audit, taking the cache, composes
@@ -738,7 +771,7 @@ EOF
 # circuit is held to that line before its prover reads it (`a5.held`), and nothing else says what a template's circuit is.
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
-    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --law "$V3C_LAW" \
     --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
   local rc=$? why
   if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)
@@ -782,7 +815,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   fi
   V3C_AUDITED=$(hostname -s)
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
-    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "$V3C_LAW" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
     --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
@@ -861,7 +894,7 @@ tie() {  # serve-openai's --h1-window-commit (`serve_tie`) at window $2's close,
   fi
   [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
   why=$(window_commit "$D/h1/w$K/window-commit.json" "$D/h1/w$K/window-commit.err" --window-registration "$3" \
-    --h1-key "$5/key" --law "${V3C_LAW:-subset:1}") || { echo "TIE: window-commit class $V3C $why"; return 16; }
+    --h1-key "$5/key") || { echo "TIE: window-commit class $V3C $why"; return 16; }
   cp "$VW/window/registration.json" "$4" || { echo "TIE: window-commit class $V3C wrote no registration"; return 16; }
   echo "TIE: window-commit class $V3C: its registration is the window's record R"
 }
@@ -873,13 +906,14 @@ pearl_tie() {  # served_pearlplus.sh's PEARLPLUS_TIE_CMD once Pearl+'s W is writ
   dir=$(pearl_dir)
   [ "$1" -ef "$D" ] || { echo "PEARL-TIE: the piece's serve dir $1 isn't D, $D"; return 3; }
   [ -n "$PEARLPLUS_TIE" ] && [ -n "$V3C" ] || { echo "PEARL-TIE: PEARLPLUS_TIE or V3C_CLASS is empty"; return 3; }
+  [ -n "$V3C_LAW" ] || { echo "PEARL-TIE: V3C_LAW is empty: the tied window's rule is the launch's, a stratified rate"; return 3; }
   [ -f "$WREG" ] || { echo "PEARL-TIE: $NO_WEIGHTS"; return 13; }
   ca=$(compiler_args) && [ -n "$ca" ] || { echo "PEARL-TIE: no registered compiler (prove_path.py compiler)"; return 13; }
   advice_of "$K" "$ca"; rc=$?
   [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "PEARL-TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
   mkdir -p "$dir" && cp "$3" "$dir/registration.json" || { echo "PEARL-TIE: W $3 can't be kept in $dir"; return 3; }
   why=$(window_commit "$dir/window-commit.json" "$dir/window-commit.err" --window-registration "$dir/registration.json" \
-    --pearl-passes "$4" --law "${V3C_LAW:-subset:1}") || { echo "PEARL-TIE: window-commit class $V3C $why"; return 16; }
+    --pearl-passes "$4") || { echo "PEARL-TIE: window-commit class $V3C $why"; return 16; }
   why=$(pearl_tied) || { echo "PEARL-TIE: $why"; return 16; }
   echo "PEARL-TIE: window-commit class $V3C, its circuit cut at Pearl+'s linears: $why"
 }
@@ -984,9 +1018,28 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$D/private/certifier-front") \
       > "$D/private/certifier-front.log" 2>&1
     rc=$?
-    say "CERTIFIER-FRONT (exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
+    [ "$LOAD" = session ] \
+      || say "CERTIFIER-FRONT (exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
   fi
-  if [ "$LOAD" != front ]; then
+  if [ "$LOAD" = session ]; then  # the caller's load through the relay session the front opened, then the session's close
+    local relay= f sent_rc closed
+    for f in "$D"/private/certifier/*/relay.json; do  # the open session's: no fetch kept beside it yet
+      [ -f "$f" ] && [ ! -e "${f%/*}/fetch.tar.gz" ] && { relay=$f; break; }
+    done
+    if [ "$rc" = 0 ] && [ -n "$relay" ]; then
+      (cd "$TREE" && timeout -k 1m "${LOAD_TIMEOUT:-170m}" bash -c "$LOAD_CMD" _ "$relay" "$D") > "$D/load.log" 2>&1
+      sent_rc=$?
+      say "REQUESTS (exit $sent_rc): the caller's load, sent through the network certifier's relay session (the serve dir's load.log, on the node)"
+    else
+      sent_rc=$((rc ? rc : 1))
+      say "REQUESTS: none sent: the front opened no relay session (exit $rc)"
+    fi
+    (cd "$TREE" && timeout -k 1m "${CERTIFIER_CLOSE_TIMEOUT:-180m}" bash -c "$CERTIFIER_CLOSE" _ "$D" "$D/private/certifier-front") \
+      >> "$D/private/certifier-front.log" 2>&1
+    closed=$?
+    say "CERTIFIER-FRONT (exit $closed): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
+    rc=$sent_rc  # the step's exit is the load's, as under the run's own loads: the close's is the certifier's verdict
+  elif [ "$LOAD" != front ]; then
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
     [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
@@ -1001,8 +1054,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     [ -f "$D/load.timings.json" ] || say "TIMINGS: no $D/load.timings.json"
   fi
   c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
-  # a front that failed before a window closed sent the run's only requests, so none will
-  if [ "$LOAD" != front ] || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
+  # a front that failed before a window closed sent the run's only requests, so none will; a session's load likewise
+  if { [ "$LOAD" != front ] && [ "$LOAD" != session ]; } || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
     for _ in $(seq 1 "$polls"); do     # every closed window's seal line
       c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
       [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
@@ -1124,9 +1177,26 @@ pous_pins_ok() {  # preflight: this tree's PoUS piece pins the checkpoint the ru
   esac
   return 3
 }
-front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT passes to the tree's front, it takes
+front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three commands and no other LOAD any of a session's,
+  # and each flag CERTIFIER_FRONT passes to the tree's front, it takes
   [ "$LOAD" != front ] || [ -n "${CERTIFIER_FRONT:-}" ] \
     || { say "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"; return 3; }
+  local v session=
+  case " ${CERTIFIER_FRONT:-} " in *" --session "*) session=1 ;; esac
+  if [ "$LOAD" = session ]; then
+    for v in CERTIFIER_FRONT LOAD_CMD CERTIFIER_CLOSE; do
+      [ -n "${!v:-}" ] \
+        || { say "PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens (certifier_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes (certifier_piece.py close), and $v is unset"; return 3; }
+    done
+    [ -n "$session" ] \
+      || { say "PREFLIGHT: LOAD=session sends the caller's load through a relay session, and CERTIFIER_FRONT passes no --session, so its front would send a group of its own"; return 3; }
+  else
+    for v in LOAD_CMD CERTIFIER_CLOSE; do
+      [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is LOAD=session's, and LOAD is $LOAD: unset it"; return 3; }
+    done
+    [ -z "$session" ] \
+      || { say "PREFLIGHT: CERTIFIER_FRONT passes --session, which opens a relay session for a caller's load, and LOAD is $LOAD, which sends none through it: LOAD=session, or a front without --session"; return 3; }
+  fi
   case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
     say "PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under" \
@@ -1191,7 +1261,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
     cp "$DAY_LOG" "$DEFER_DIR/day-log.json" || return 1
     [ -z "${DAY_PARAMS:-}" ] || cp "$DAY_PARAMS" "$DEFER_DIR/day-params.json" || return 1
   fi
-  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" V3C_CHALLENGER "$V3C_CHALLENGER" \
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" V3C_CHALLENGER "$V3C_CHALLENGER" \
     DEVELOPMENT "$DEVELOPMENT" H1_TIE "${H1_TIE:-}" PEARLPLUS_TIE "$PEARLPLUS_TIE" COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" \
     SERVED_NODE "$(hostname)" SERVED_PEER "$V3C_PEER" DEFERRED_TREE "$(tree_sha)" COMPOSE_OFF_NODE "$COMPOSE_OFF_NODE" \
     COMPOSE_NODE "$COMPOSE_NODE" DAY "${DAY:-}" > "$DEFER_DIR/deferred.env" || return 1
@@ -1214,7 +1284,7 @@ day_held() {  # a follow-on under DAY: the deferral's copy of the day's log, whi
   local got
   got=$("$TREE/.venv/bin/python" -c 'import json, sys
 from verity import device as S
-from verity.hardware import registration as G
+from verity.protocols.accounting.registration.verifier import registration as G
 decl, day = json.load(open(sys.argv[1])), int(sys.argv[3])
 composite, log = G.log_of(json.load(open(sys.argv[2])))
 p = G.params_of(json.load(open(sys.argv[4]))) if len(sys.argv) > 4 else (composite, S.Auditor())
@@ -1462,9 +1532,9 @@ follow_handoff() {  # whether $1 (handoff, gate-compose) may write a deferral's 
     || { say "${1^^} refused: the serve dir holds V3c's audit, so the hand-off names the host it ran on: $2"; return 3; }
 }
 
-if [ "${1:-}" = serve ]; then serve; exit $?; fi
+if [ "${1:-}" = serve ]; then host_set VY_CHALLENGER_1_HOST "$H1_GATE" "${PEARLC_CHALLENGER_GATE:-}" || exit 3; serve; exit $?; fi
 if [ "${1:-}" = tie ]; then shift; tie "$@"; exit $?; fi
-if [ "${1:-}" = pearl-tie ]; then shift; pearl_tie "$@"; exit $?; fi
+if [ "${1:-}" = pearl-tie ]; then host_set VY_CHALLENGER_1_HOST "${PEARLC_CHALLENGER_GATE:-}" || exit 3; shift; pearl_tie "$@"; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; exit $?; fi
 if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && inference_policy; exit $?; fi
 if [ "${1:-}" = weights ]; then weights; [ -f "$WREG" ]; exit $?; fi  # D a serve dir with its serve.json: the registration alone
@@ -1491,6 +1561,7 @@ if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose
 if [ "${1:-}" = gate-compose ]; then  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: on a deferral's
   # serve dir at its settings, HOST where V3c's audit ran, as `handoff`'s
   V3C_AUDITED=${4:-${V3C_AUDITED:-}}
+  host_set VY_AUDITOR_2_HOST "$COMPOSE_GATE" || exit 3
   [ -z "$FOLLOW" ] || follow_handoff gate-compose "served_verdicts.sh gate-compose PIECES VERDICT HOST" || exit 3
   gate_compose "${2:?served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]}" "${3:-}"; exit $?
 fi
@@ -1525,6 +1596,7 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
 elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothing: no row dir, taps or gpu-lease
   [ -e "$PY" ] || { say "PREFLIGHT: no $PY (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
 else
+  host_set VY_CHALLENGER_1_HOST "$H1_GATE" "${PEARLC_CHALLENGER_GATE:-}" || exit 3
   for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
   if [ -n "$PEARLPLUS_TIE" ] && [ "$PEARLPLUS_INODES" != 0 ]; then  # the tied window's commit goes to the serve dir's filesystem
@@ -1629,9 +1701,14 @@ if [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ] && [ -z "$COMPOSE" ]; then  # V3c's audit 
   if [ -n "${H1_TIE:-}" ]; then TIED=H1_TIE WHOSE="H1's"; else TIED=PEARLPLUS_TIE WHOSE="Pearl+'s"; fi
   grep -q -- '"--tie"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: under $TIED V3c's audit is tied to $WHOSE W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
-  [[ ${V3C_LAW:-} == stratified:* ]] \
-    || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, which only stratified:K, a stratum of each table's readers, gives: V3C_LAW is ${V3C_LAW:-unset}"; exit 3; }
+  [ -n "$V3C_LAW" ] \
+    || { say "PREFLIGHT: under PEARLPLUS_TIE V3C_LAW has no default: the window is cut at Pearl+'s linears, and how many proof blocks each of its templates holds is not known here. The launch states V3C_LAW, a stratified rate: stratified-rate:1/DEN samples one proof block of each template while none holds more than DEN"; exit 3; }
+  [[ $V3C_LAW == stratified-rate:* ]] \
+    || { say "PREFLIGHT: under $TIED every table $WHOSE W registers needs a sampled reader, which only a stratified rate (stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is $V3C_LAW"; exit 3; }
 fi
+# V3c's rule is a rate: window-commit and the audit's stream take no fixed count, and the class circuit has no work table
+[ -z "$V3C" ] || [ -n "$COMPOSE" ] || [[ $V3C_LAW == rate:* || $V3C_LAW == stratified-rate:* ]] \
+  || { say "PREFLIGHT: V3C_LAW is the rate V3c's window is committed under and its audit states to its stream, rate:NUM/DEN or stratified-rate:NUM/DEN, not $V3C_LAW: in place of a fixed count K, state K over the proof blocks the class's window registers (rate:K/N or stratified-rate:K/N)"; exit 3; }
 if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ] && [ -z "$COMPOSE" ]; then  # V3c's window commit at each H1 window's close, before its sample coin
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] \
     || { say "PREFLIGHT: H1_TIE ties H1's windows, and H1_GATE or H1_CIRCUITS (whose prover state window-commit reads) is unset"; exit 3; }
@@ -1889,6 +1966,8 @@ cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 # A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
 if [ "$LOAD" = front ]; then
   say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
+elif [ "$LOAD" = session ]; then
+  say "OVERHEAD: none with LOAD=session (the relay paces the caller's requests, so no stock control compares)"
 else
   "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
     || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
