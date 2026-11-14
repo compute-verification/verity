@@ -10,7 +10,7 @@ public import Definitions.InferenceOnly.Assumptions
 
 In the actual-circuit model, the developer runs at `n` locations `X 0, …, X (n − 1)`, pairwise disjoint, and its region
 over `[0, t)`, as a circuit whose inputs are what it reads with the baseline `θ_A` (`Placed.declaration`), is the
-declaration NCI's statements are about.
+declaration the inference-only policy's statements are about.
 
 * `ServerBlocksAt` (the capacity form at any cuts): for any cuts `τ` of `[0, t)` and any set `G` of gates, the windows
   `A[X i, [τ j, τ (j + 1))]` divide that declaration's computed gates into `n J` IUs, each of at most
