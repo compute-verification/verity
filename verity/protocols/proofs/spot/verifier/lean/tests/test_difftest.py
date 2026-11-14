@@ -523,7 +523,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -614,6 +614,7 @@ def decode_params(j) -> dict:
         raise D.Reject(str(e)) from None
     try:
         R._seed_salt(j.get("seed_salt"), window)
+        R._registered_compiler(j.get("compiler", R.UNREAD))
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "challenger" in j:
@@ -674,7 +675,8 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
+                   compiler=p.get("compiler", R.UNREAD))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -4208,7 +4210,7 @@ def _second_statement(rec: dict, part: SS.Part, q: int, drawn, named: bool, regi
 
 
 def _checked_names(s) -> dict:
-    """What `flock-verify verify`'s verdict names of the session of statement `s` it checked (`second_stage.verified_of`):
+    """What `verity-verify-proof verify`'s verdict names of the session of statement `s` it checked (`second_stage.verified_of`):
     its public file's header and its registered reads by the SHA-512 of their canonical JSON, its sample, and one table,
     as the verifier runs it."""
     if not isinstance(s, dict):
@@ -6696,6 +6698,45 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
     for bad in (SEED_SALT.upper(), SEED_SALT[:-2], SEED_SALT + "\n", "", 5):
         assert codes(rec["window"], {**params, "seed_salt": bad}) == "reject", bad
     assert codes(rec["window"], {**params, "window_root": None}) == "reject"
+
+
+def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
+    """Lean and Python agreeing on the registered compiler (`compiler`, the registration log's item, with the public
+    length ℓ of the advice it reads): a window naming it by its digest with advice of at most ℓ bits is accepted, one
+    naming another compiler or none is refused by name (`R6-compiler`), and advice over ℓ, in another form or none too
+    (`R6-advice-length`). Where the log registers none (`compiler` null), a window naming a compiler or advice is refused
+    (`R6-compiler`); a verifier that reads no log's compiler holds the window to nothing. A compiler in another form
+    refuses the verifier's inputs."""
+    s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
+    design = {"k": 1, "law": "subset"}
+    digest, other = "c1" * 64, "c2" * 64
+    item = {"advice": "verity/advice/v1", "cap": 32, "digest": digest, "kind": "builder"}
+
+    def named(d, bits):
+        return {**WINDOW, "compiler": {"digest": d, "name": "c"}, "advice": {"bits": bits, "root": "ad" * 64}}
+
+    rec = _record_of(s, values, design, named(digest, 8), leaf_layer=LEAF, window_root=WROOT)
+    params = {"anchors": [], "compiler": item, "delta": "1/10", "law": design, "leaf_layer": LEAF, "log": [],
+              "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
+              "registered": values, "scheme": SCHEME, "window_root": WROOT, "work_table": None}
+    unread = {k: v for k, v in params.items() if k != "compiler"}
+    none = {**params, "compiler": None}
+
+    def codes(window, p=params):
+        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    cases = [(named(digest, b), params, []) for b in (0, 32)]
+    cases += [(named(digest, b), params, ["R6-advice-length"]) for b in (33, -1, "8", None, True)]
+    cases += [(named(other, 8), params, ["R6-compiler"]), (WINDOW, params, ["R6-compiler", "R6-advice-length"]),
+              (named(digest, 8), none, ["R6-compiler"]),
+              ({**WINDOW, "advice": {"bits": 0, "root": "ad" * 64}}, none, ["R6-compiler"]), (WINDOW, none, []),
+              (named(other, 99), unread, []), (WINDOW, unread, [])]
+    for window, p, want in cases:
+        assert codes(window, p) == want, (window, p.get("compiler"))
+    for bad in ({**item, "kind": "theta"}, {**item, "digest": 5}, {**item, "digest": digest.upper()},
+                {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
+        assert codes(rec["window"], {**params, "compiler": bad}) == "reject", bad
 
 
 def test_a_window_opens_the_pool_its_chain_left(pieces):

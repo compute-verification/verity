@@ -130,7 +130,7 @@ def _interior(m: int, previous: str, sample, row=0, **change) -> tuple[dict, dic
 
 def _lean(accepted=True, reads=None, checked=None, tables=1) -> dict:
     """The verdict of record, accepted or not, reporting the sessions' registered reads `reads`, and naming what
-    `flock-verify verify` names of the session of statement `checked` it checked: its header's and registered reads'
+    `verity-verify-proof verify` names of the session of statement `checked` it checked: its header's and registered reads'
     digests, its sample and the `tables` it set it up as (None: no statement's). For a list of statements, one such
     verdict of record for each."""
     v = {"of_record": True, "accepted": accepted, "digest": "dd" * 64, "sessions": [SESSION]}

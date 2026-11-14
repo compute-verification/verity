@@ -6,13 +6,13 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# flock-verify's acceptance sets up each table with `Stmt.setupH`
+# verity-verify-proof's acceptance sets up each table with `Stmt.setupH`
 
 `Accepts I t` sets up the session with `Stmt.setupTables`. Under a tag without hidden outputs
 (`tags.hiddenOutputs = false`; with them it calls `Stmt.setupHidden`), each of its tables is `Stmt.setupH`'s statement
 (`setupTables_ok`): for one table, at the inputs and the record's sample; for `count > 1`, under
 `Tags.tableIdentity` and at a subset sample of the table's part. So every fact proved of `setupH`'s statements
-(`setupH_wf`, `setupH_layout`, `placement_of_setupH`) holds of each table flock-verify accepts with
+(`setupH_wf`, `setupH_layout`, `placement_of_setupH`) holds of each table verity-verify-proof accepts with
 (`accepts_setupH`).
 
 `setupH_public` records the two checks `setupH` makes on the public file that the layout's registered values read:
@@ -185,7 +185,7 @@ theorem setupTables_points (hh : tags.hiddenOutputs = false)
       rfl⟩
   · exact ⟨hp, hm⟩
 
-/-- **flock-verify's acceptance sets up each table with `setupH`**: when `Accepts I t`, every table's statement is
+/-- **verity-verify-proof's acceptance sets up each table with `setupH`**: when `Accepts I t`, every table's statement is
 `setupH`'s, under the table's tags and at some sample, the record's for a one-table session. -/
 theorem accepts_setupH {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false) (h : Accepts I t) :
     ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧

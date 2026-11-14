@@ -1,6 +1,6 @@
 name = "flock_verifier"
 version = "0.1.0"
-defaultTargets = ["flock-verify", "flock-rows", "flock-firewall", "flock-witness", "flock-rec-opening",
+defaultTargets = ["verity-verify-proof", "flock-rows", "flock-firewall", "flock-witness", "flock-rec-opening",
   "flock-rec-sparse", "flock-frame-tape", "flock-rec-links", "flock-read-tmpl"]
 
 [leanOptions]
@@ -34,7 +34,7 @@ name = "FlockRec"
 name = "VStar"
 
 [[lean_exe]]
-name = "flock-verify"
+name = "verity-verify-proof"
 root = "FlockVerify"
 
 [[lean_exe]]

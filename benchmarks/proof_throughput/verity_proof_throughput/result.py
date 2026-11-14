@@ -2,7 +2,7 @@
 
 One point is sessions of one workload that each prove the B coordinates a loopback ``flock-circuit serve`` samples from the
 workload's population by the stratified sampling design (``instances``), proved by Flock's native prover with live coins, warm
-``warm`` times and timed ``runs`` times, then each timed session verified by the compiled Lean verifier (``flock-verify
+``warm`` times and timed ``runs`` times, then each timed session verified by the compiled Lean verifier (``verity-verify-proof
 verify --stratified B``, its own sampling design). The VU is one coordinate (K MACs, 2K FLOP), ``vu.count`` = B. The fingerprint's
 ``instances`` is null (the contract's names the B ids a statement proves, which a sample doesn't fix); ``population`` names the
 frozen population and ``draw`` the sampling design.
@@ -43,7 +43,7 @@ COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coi
 PREPROCESSING = ("the population is lowered and staged once for every B (fixed.setup_seconds); every timed session builds "
                  "its drawn statement and witness and proves both reps afresh")
 CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins and the stratified draw of B units "
-                    "from a loopback flock-circuit serve --draw-law; then the compiled Lean verifier (flock-verify verify "
+                    "from a loopback flock-circuit serve --draw-law; then the compiled Lean verifier (verity-verify-proof verify "
                     "--coins tree --stratified B) on each timed session"}
 
 
@@ -148,7 +148,7 @@ def fingerprint(w: Workload, B: int, rec: Mapping[str, Any], *, hardware: Mappin
         authentication="included-hash", zk_mode=contract.ZK_NONE, hardware=hardware, software=software,
         security=SECURITY | {"coins": COINS.get(lv.get("coins"), lv.get("coins"))},
         preprocessing=PREPROCESSING, retention="retained", instances=None, population=I.population_ref(w),
-        draw={"law": "stratified", "k": B, "population": w.n_max, "verifier": "flock-verify --stratified B, its own law"},
+        draw={"law": "stratified", "k": B, "population": w.n_max, "verifier": "verity-verify-proof --stratified B, its own law"},
         workload=w.name, vu=w.vu, sites=w.sites, config=config, configuration=CONFIGS[config],
         statement_digest=lv.get("statement_digest"), k_log=lv.get("k_log"), dense_m=lv.get("dense_m"),
         coins=lv.get("coins"), **extra)
@@ -160,7 +160,7 @@ def software(rec: Mapping[str, Any], *, commit: str | None, dirty: bool | None, 
     return {"backend": {"name": "flock-circuit", "commit": commit, "dirty": dirty, "binary_sha256": binary_sha256,
                         "prover": lv.get("prover"),
                         "env": {k: os.environ.get(k) for k in ("FC_PIPELINE_DEPTH", "FC_HOST_PREPIN", "FC_COINS", "FLOCK_OWN_ROWS")}},
-            "verifier": {"name": "flock-verify", "language": "Lean (compiled)", "sha256": None, "build_key": None},
+            "verifier": {"name": "verity-verify-proof", "language": "Lean (compiled)", "sha256": None, "build_key": None},
             "toolchain": {"python": sys.version.split()[0], "cuda": os.environ.get("PT_CUDA")}}
 
 
@@ -187,7 +187,7 @@ def point(w: Workload, B: int, rec: Mapping[str, Any], *, run_id: str, hardware:
             why.append(f"Lean verifier: {accepted} of {len(lean)} sessions accepted; {drawless} {D12_LABEL}: no headline")
         why += [f"Lean {v.get('session')}: {v.get('why')}" for v in lean if not lean_passed(v) and v.get("why") != DRAWLESS][:4]
     status = "passed" if live_ok and (lean_ok or not lean) else "failed"
-    checker = ("flock-verify (compiled Lean verifier) on every timed session; flock-circuit serve (live, loopback) on every session"
+    checker = ("verity-verify-proof (compiled Lean verifier) on every timed session; flock-circuit serve (live, loopback) on every session"
                if lean else "flock-circuit serve (live, loopback) on every session; the Lean verifier not run yet")
     lean_said = f"Lean verifier: {accepted} of {len(lean)} sessions accepted; " if lean else ""
     detail = "; ".join(why) or (lean_said + f"{lv.get('timed_runs')} timed and the warm sessions accepted live")

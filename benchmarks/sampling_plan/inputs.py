@@ -231,7 +231,7 @@ OPENING_ANDS = 29_617_630
 #: and (staged units, sampled proof blocks): the GPU-seconds its cold prover process held the lease (its wall less the lease's
 #: wait; the mean of two where it ran two). Their device phase is 79 ms an opening at a full statement, 16 ms without the
 #: send check, the GPU's own algebra about 1 ms of it. They
-#: give no `verify`: a8.py times Lean's by wall (478-488 s, flock-verify lean-4e521bba8e1bc519), not CPU. Nor `stage`:
+#: give no `verify`: a8.py times Lean's by wall (478-488 s, verity-verify-proof lean-4e521bba8e1bc519), not CPU. Nor `stage`:
 #: A8's staging is about 130 s at 64 staged units and at 512, a fixed cost a statement of this template pays that the stage
 #: fit's terms, shared with the s8 coordinates, don't carry.
 OPENING_SESSIONS: dict[str, dict[tuple[int, int], float]] = {
@@ -338,14 +338,14 @@ def observations(card: str = "rtx-pro-6000") -> list[Observation]:
 KEY = {"prover": "flock-circuit bin-dec484d021e461a0-g1-sm120 (binary 21944fa201b5, CUDA 13.3.1), --zk --gpu, "
                   "FC_HOST_WITNESS=1, the firewall's send check on; the opening unit's sessions "
                   "bin-b4e798e6b2590a24-g1-sm120, the same flags",
-       "verifier": "flock-verify lean-3a9d4dc43048fdae (binary b3b257d5ac0e), verify --zk, one CPU",
+       "verifier": "verity-verify-proof lean-3a9d4dc43048fdae (binary b3b257d5ac0e), verify --zk, one CPU",
        "hardware": "RTX PRO 6000 Blackwell Server Edition (driver 580.173.02), Xeon 6776P, vy-nebius-2; the opening "
                    "unit's, the same card on vy-nebius-1",
        "templates": f"ScaledMmS8Coordinate_v1{{K=4096|14336}}, {OPENING}"}
 
 KEY_H200 = {"prover": "flock-circuit bin-32a698fff862d3db-g1-sm90 (binary 09fbd3d8c1d3, CUDA 13.3), --zk --gpu, "
                        "FC_HOST_WITNESS and FC_FIREWALL unset",
-            "verifier": "flock-verify lean-3e804125132e928c (binary f399b8425bd6), verify --zk, one CPU",
+            "verifier": "verity-verify-proof lean-3e804125132e928c (binary f399b8425bd6), verify --zk, one CPU",
             "hardware": "H200 SXM 141 GB (driver 595.91.07), Xeon Platinum 8568Y+, vy-spot-h1",
             "templates": "GLM-5.3's served proof-block types at TP8 (benchmarks/served_units/stage.py)"}
 

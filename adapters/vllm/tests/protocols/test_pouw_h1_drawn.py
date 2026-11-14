@@ -3,7 +3,7 @@ setting ``unit`` j10r, over a stand-in tile with J10-R's signature, `StandInJ10R
 gate session whose period opened its sample K: ``stage`` rebuilds every value a sampled call's statement reads from the
 prover's state and the served weights at the roots the window registered, stages the call on the circuit file
 `pouw_h1_circuits` built for K, and ``statements`` and ``check`` hand core's credit statements its ``proved`` accepts (`credit._verified`, then
-`credit._proved`), here with a stand-in ``flock-verify`` that accepts a session only when its proof binds every file
+`credit._proved`), here with a stand-in ``verity-verify-proof`` that accepts a session only when its proof binds every file
 credit hands it (`test_pouw_credit_statements.FAKE`'s). A prover state that is not what was served, and b/<K> under
 another key, are refused before anything is staged. A window served over v1's tile unit at a K committed in the lanes
 form (`pouw_h1_circuits --lanes`) has each sampled proof block staged as its lanes and combine, which credit's lanes form
@@ -239,13 +239,13 @@ def served(tmp_path, monkeypatch):
 
 
 def _inputs(arm, tmp_path: Path) -> None:
-    """sampled's inputs beside the serve dir: the served weights (``--weights``), `WKEY` and the stand-in ``flock-verify``."""
+    """sampled's inputs beside the serve dir: the served weights (``--weights``), `WKEY` and the stand-in ``verity-verify-proof``."""
     w = {}
     for i, layer in enumerate(arm.layers):
         w[f"w{i}"], w[f"s{i}"] = layer.weight.numpy(), layer.weight_scale.reshape(-1).numpy()
     np.savez(tmp_path / "weights.npz", **w)
     (tmp_path / "wkey").write_bytes(WKEY)
-    exe = tmp_path / "flock-verify"
+    exe = tmp_path / "verity-verify-proof"
     exe.write_text(FAKE)
     exe.chmod(0o755)
 
@@ -283,7 +283,7 @@ def _stage(DR, d, tmp, weights_key=None, recompose=False):
 
 def _check(DR, d, tmp, st, monkeypatch):
     return DR.run("check", SimpleNamespace(serve_dir=d, window=0, circuits=tmp / "circuits", statements=st,
-                                           lean=tmp / "flock-verify", k=_PeriodAuditor.K, verified=_verified(monkeypatch)))
+                                           lean=tmp / "verity-verify-proof", k=_PeriodAuditor.K, verified=_verified(monkeypatch)))
 
 
 def _session(x: dict, program: bytes, part: dict, reg: bytes, openings: dict | None = None) -> None:

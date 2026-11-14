@@ -6,7 +6,7 @@ public import Properties.Spot.MonitoringPeriod
 /-!
 # SPOT's period: the ledger its check reads is the auditor's device's own (`Spot.MonitoringPeriod.read`)
 
-`Properties.Spot.MonitoringPeriod`'s statements are about the ledger the check was presented. These two say whose it is,
+`Properties.Spot.MonitoringPeriod`'s statements are about the ledger the check was presented. These three say whose it is,
 against the device model of `Properties.Challenger` (`History`: the device's runs and its ledger's lines under a
 key; `Break`: the fixed finder's forgery or SHA-512 collision).
 
@@ -15,6 +15,9 @@ key; `Break`: the fixed finder's forgery or SHA-512 collision).
 * `LedgerOfDevice` takes that the device numbers its ledger's lines (`Numbered`). Then the ledger the check reads is
   the device's own from its first line, none dropped and none added, up to a line stamped at or after the monitoring
   period's end; or a break.
+* `LedgerOfDeviceSigned` takes also that the device chains its ledger's lines (`Chained`). Then every presented line
+  but the last is the device's own line whole, its signature included; or a break of the finder that also hashes the
+  lines' whole texts (`LineBreak`).
 
 **Why the second takes `Numbered`.** The first form is every presented line's own: a device that wrote two lines
 under one number satisfies it while the presented ledger holds only one of them. That the device writes one ledger
@@ -23,9 +26,17 @@ under a key, each line numbered by the lines before it, is the device's behaviou
 alone. `Numbered` asks it only of the lines that are entries the reader takes, each at the place its number names:
 a line of the device's that the reader refuses, wherever it is, leaves the premise as it is.
 
-**What neither says.** A line's signature is not held to the device's: the device's own line and the presented one
-say the same and may be signed apart. The order is the ledger's, and a line's stamp is the device's clock, of which
-nothing is taken.
+**Why the third takes `Chained`, and where it stops.** The reader chains the presented lines: each names as its
+`prev` the SHA-512 of the whole text of the line before it, signature included, and a line's `prev` is in what the
+device signs. So the device's own line that says what a presented line says names the digest of the presented line
+before it. That this is the digest of the device's own line before is again the device's behaviour, which `History`
+does not hold: the second fact of the device taken, a hypothesis of the third statement alone. No line names the
+digest of the last presented line, so its signature stays free.
+
+**What they leave open.** The first two hold no line's signature to the device's: the device's own line and the
+presented one say the same and may be signed apart. The third holds every line's but the last's, and so leaves free
+the LMS leaf the reader reads from the last line's signature. The order is the ledger's, and a line's stamp is the
+device's clock, of which nothing is taken.
 
 **The history is any.** `dev` may hold every run and every ledger line the device made under the key, those of
 earlier audits among them: at such a history an earlier line the check reads is the device's own, and no forgery.
@@ -87,5 +98,50 @@ def LedgerOfDevice : Prop :=
           (∀ line ∈ lines.toList, (unsignedText line).isSome) ∧
           lines.toList.map unsignedText = ((dev.ledger p.key.pub).take lines.size).map unsignedText) ∨
         Break dev p.key p.label (Json.mkObj [("ledger", ledger)])
+
+/-- **The device chains its ledger's lines**: under the key `pk`, where a line of its ledger and its next line are
+both entries, the next names as its `prev` the SHA-512 of the earlier line's whole text, its signature included, in
+hex. It asks nothing of a line that is no entry the reader takes. Like `Numbered` it is taken as a hypothesis, not
+proved: it is a lemma of the modelled device once the model builds that device's whole ledger line by line, and no
+statement takes it then. -/
+def Chained (dev : History) (pk : ByteArray) : Prop :=
+  ∀ (i : Nat) (line next : Json) (e e' : LedgerEntry), (dev.ledger pk)[i]? = some line →
+    (dev.ledger pk)[i + 1]? = some next → ledgerEntry? line = some e → ledgerEntry? next = some e' →
+      e'.prev = Flock.hexOf (Flock.Sha512.hash e.text.toUTF8)
+
+/-- The whole texts of the lines of `lines` that are entries, signatures included: what the reader hashes to chain a
+line to the line after it (`verifyLedger`'s `prev`). -/
+def lineTexts (lines : List Json) : List ByteArray :=
+  lines.filterMap fun line => (ledgerEntry? line).map (·.text.toUTF8)
+
+/-- **The finder at the lines' whole texts**, one fixed computable function of the presented lines and the device
+for every prover: what `Properties.Challenger.findBreak` outputs from the ledger alone, else the first collision
+among the whole texts of the presented lines and of the device's own under the key. `findBreak` hashes each line
+without its signature and is left as it is; this finder calls it and then hashes what it does not. A break of
+`findBreak` on the ledger is a break of this one. -/
+def findLineBreak (dev : History) (key : ChallengerKey) (label : String) (lines : Array Json) : Option Finding :=
+  match findBreak dev key label (Json.mkObj [("ledger", Json.arr lines)]) with
+  | some w => some w
+  | none => (collisionIn (lineTexts lines.toList ++ lineTexts (dev.ledger key.pub))).map fun (x, y) => .collision x y
+
+/-- **The break at the lines' whole texts**: `findLineBreak`, run on the presented lines and the device, outputs a
+valid witness. -/
+def LineBreak (dev : History) (key : ChallengerKey) (label : String) (lines : Array Json) : Prop :=
+  ∃ w, findLineBreak dev key label lines = some w ∧ w.Valid dev key
+
+/-- **Every line of the ledger a period's check reads but the last is the device's own line, signature included.**
+For every challenger device that numbers and chains its ledger's lines under the verifier's key (`Numbered`,
+`Chained`), and every ledger the ledger's half of the period's check reads under that key (`Spot.MonitoringPeriod.read`): the
+presented lines but the last are the first lines of the device's own ledger, each whole, in order; or the finder at
+the lines' whole texts outputs a break (`LineBreak`). So the LMS leaf the reader reads from each of those lines'
+signatures (`leafOf`) is the one the device's own line carries. The last presented line is not held: no line after
+it names its digest, so its signature, and the leaf read from it, stay free. -/
+def LedgerOfDeviceSigned : Prop :=
+  ∀ (dev : History) (p : _root_.Spot.MonitoringPeriod.Params) (ledger : Json) (r : _root_.Spot.MonitoringPeriod.Read),
+    _root_.Spot.MonitoringPeriod.read p ledger = .ok r →
+    Numbered dev p.key.pub → Chained dev p.key.pub →
+      ∃ lines : Array Json, ledger = .arr lines ∧
+        (lines.toList.take (lines.size - 1) = (dev.ledger p.key.pub).take (lines.size - 1) ∨
+          LineBreak dev p.key p.label lines)
 
 end Properties.Spot.MonitoringPeriod

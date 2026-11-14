@@ -10,7 +10,7 @@ set_option Elab.async false
 /-!
 # The message half at the live hidden-output tables at the verifier's public inputs
 
-`runsZCJH_liveI` at `own`: `RunsOnZCJA` at flock-verify `--zk --public-inputs`'s acceptance (`AcceptsZKP I own`), at the
+`runsZCJH_liveI` at `own`: `RunsOnZCJA` at verity-verify-proof `--zk --public-inputs`'s acceptance (`AcceptsZKP I own`), at the
 tables `planZHJP`, from the record's custody at that acceptance (`RecordsLiveZKJA` at `setupOfP (zkInputs I) own`) and
 the challenger's live-coin part's samples (`DrawOkZKHJP`). `decodesOnZKJA_of_runsOnZCJA` turns it into the decoder `simZJA` reads.
 -/

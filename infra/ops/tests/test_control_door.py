@@ -33,7 +33,7 @@ RUNPOD_REQUEST = runpod._request  # a lane's VM's, while the pod's is its fake
 
 
 def guard_state() -> dict:
-    line = {"prefix": "vy-a-", budgets.CAP_KEYS[0]: 3.0, "expires": "2026-10-24T21:00:00Z", "max_pod_hours": 4.0}
+    line = {"prefix": "vy-a-", budgets.LIMIT_KEYS[0]: 3.0, "expires": "2026-10-24T21:00:00Z", "max_pod_hours": 4.0}
     return {"last_ok_poll": NOW - 30, "lines": {}, "budgets": {"source": "budgets.toml", "lines": {"vy-a-": line}}}
 
 
