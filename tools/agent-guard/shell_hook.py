@@ -125,6 +125,13 @@ the turn's commands pass, and `AGENT_GUARD_MODEL_OK=1` in that first command pas
 the agent's first turn in this machine's event log names, so a machine a wake or a resume booted, whose log holds no
 launch turn, takes its first turn there for the launch.
 
+It refuses every command of a cloud worker's turn on Fable 5.2, each time (`fable_reason`): no worker runs Fable 5.2. A
+lead is an agent that holds a handle in the Slack registry, or has the id `infra/cursor/launch_coordinator.py` gives a
+registered handle at a generation from 1 to 50 (`task_hook.leads`); every other agent is a worker. The refusal says to
+end the turn and say what started it, to be resumed or launched again on `claude-opus-5-5-high`. A lead's turn, a turn
+whose payload names no model, and every turn while the registry can't be read pass; a worker launched on Fable is not
+told its other turns run on another model.
+
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
 every run clone do; without origin/main, from the checkout's own when lean-audit's is unset. A VM that never ran boot.sh (a
@@ -148,6 +155,7 @@ from pathlib import Path
 
 from settings import (EVENT_LOG, EVENT_VALUE_MAX, INBOX, INBOX_POLL_S, MODEL_OK, MODEL_PASS, MODEL_REFUSAL,
                       agent_events, launch_model, model_family, record_event)
+from task_hook import REGISTRY, leads
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -1383,6 +1391,34 @@ MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py):
               "wrong with this command: it and the rest of this turn's commands now pass, so you can read your notes, "
               "start the child and push. If your brief names another launch model than `{launch}`, this machine's log "
               "began after your launch (a wake or a resume put you on a new machine): go by your brief.")
+#: Fable 5.2's family (`settings.model_family`), at any effort
+FABLE = "claude-fable-5-2"
+FABLE_REFUSED = ("Refused by tools/agent-guard/shell_hook.py: this turn runs on `{model}`, and no worker runs Fable 5.2: a "
+                 "worker runs `claude-opus-5-5-high`, or `claude-sonnet-5-5-high` for a fully specified task, and only a lead "
+                 "(an agent that holds a handle in the Slack registry) runs Fable 5.2. Every command of this turn is refused. "
+                 "End this turn now, and say in your last message what started it (a timer, a subscription, another "
+                 "agent's completion, a resume); your lead resumes you, or launches you again naming "
+                 "`claude-opus-5-5-high`.")
+
+
+def worker(agent: str) -> bool | None:
+    """Whether the cloud agent `agent` is a worker, any agent but a lead (`task_hook.leads`); None when the registry can't
+    be read."""
+    known = leads()
+    return None if known is None else agent not in known
+
+
+def fable_reason(event: dict) -> str | None:
+    """The Fable rule: the refusal's text for every command of a cloud worker's turn on Fable 5.2, each time; else None.
+    Never refused: a lead's turn, a turn whose payload names no model, and every turn while the registry can't be read,
+    which says so on stderr, since a lead the guard can't tell from a worker must not be locked out."""
+    agent, model = event.get("conversation_id"), event.get("model")
+    if not (isinstance(agent, str) and CLOUD_AGENT.fullmatch(agent) and isinstance(model, str)
+            and model_family(model) == FABLE):
+        return None
+    if (refused := worker(agent)) is None:
+        print(f"shell_hook: the Fable rule refuses nothing, since it can't read the registry {REGISTRY}", file=sys.stderr)
+    return FABLE_REFUSED.format(model="".join(c for c in model[:EVENT_VALUE_MAX] if c.isprintable())) if refused else None
 
 
 def model_reason(event: dict, command: str) -> str | None:
@@ -1391,7 +1427,8 @@ def model_reason(event: dict, command: str) -> str | None:
     turn; else None. The refusal settles the turn, and so does MODEL_OK in that command, which passes it: either adds a
     line to EVENT_LOG for the turn, and every later command of a settled turn passes. Never refused: an agent whose turns
     all name one family, whatever their effort, one with no launch
-    model on record, and a payload that names no model, no turn or no cloud agent. The lock on EVENT_LOG makes the check
+    model on record, a payload that names no model, no turn or no cloud agent, and a worker launched on Fable 5.2,
+    whose other turns run on the model it should have had (`fable_reason`). The lock on EVENT_LOG makes the check
     and the line one step, so of two commands a turn starts at once exactly one is refused; a log that can't be opened,
     locked or written refuses nothing, and says so on stderr, since a turn the rule can't record as told it can't keep to
     once. Every other refusal comes first (`main`): a command refused for another reason leaves the turn unsettled."""
@@ -1404,7 +1441,8 @@ def model_reason(event: dict, command: str) -> str | None:
             fcntl.flock(log, fcntl.LOCK_EX)
             events = agent_events(agent)
             launch = launch_model(events)
-            if launch is None or model_family(launch) == model_family(model):
+            if launch is None or model_family(launch) == model_family(model) or (
+                    model_family(launch) == FABLE and worker(agent)):
                 return None
             if any(e.get("generation_id") == turn and e.get("event") in (MODEL_REFUSAL, MODEL_PASS) for e in events):
                 return None
@@ -1528,9 +1566,9 @@ def main() -> int:
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         try:
-            told = model_reason(event, command)
+            told = fable_reason(event) or model_reason(event, command)
         except (OSError, LookupError, TypeError, ValueError,
-                AttributeError) as e:                   # a bug in the model rule must not stop every command
+                AttributeError) as e:                   # a bug in the model rules must not stop every command
             print(f"shell_hook: model rule failed: {type(e).__name__}: {e}", file=sys.stderr)
             told = None
         if told:
