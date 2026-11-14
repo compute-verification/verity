@@ -13,9 +13,9 @@ stated at these instances.
 * `burst`: two passes of `D` ticks, every receipt correct, on a node whose first `Br + Bd + Bl` registered blocks are
   absent until tick `t₁` and all come back at `t₁`, by rebuilds, disk reads and links. `burstPace` gives its groups.
 * `honest`: a sample whose window `t` registers `U t` receipts, every one correct, whatever the coins.
-* W2's session, `w2Session` over `w2Sample`: one window of `130,023,424` receipts, sampled `33,273` times on 256-bit keys,
-  its node at W2's numbers. Its coin stream (`zeroStream`) and receipts (`w2Receipts`) are fixed arbitrarily: the honest
-  sample meets its premises at every stream and every receipts structure.
+* W2's session, `w2Session` over `w2Sample`: one window of `130,023,424` receipts, sampled `33,273` times on 256-bit
+  keys, its node at W2's numbers. Its coin stream (`zeroStream`) and receipts (`w2Receipts`) are fixed arbitrarily: the
+  honest sample meets its premises at every stream and every receipts structure.
 * The toy, `toy`: one window of one receipt, none correct, sampled once. It is checked by an audit that accepts every
   outcome (`acceptAll`), with receipts no opening verifies (`unsalted`), over the span `[0, 1)` (`toyPace`).
 -/
