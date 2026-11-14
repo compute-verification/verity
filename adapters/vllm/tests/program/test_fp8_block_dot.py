@@ -154,11 +154,11 @@ def test_a_target_without_a_blockwise_step_is_refused(cc) -> None:
 
 def test_blackwell_consumer_records_its_blockwise_step_with_its_own_measurement() -> None:
     """cc 12.0's blockwise step is its `_C.cutlass_scaled_mm` blockwise kernel's own measurement, not the per-tensor FP8 linear's
-    (`fp8_dot`): its evidence names the capture run and record and the cutlass cases it rests on."""
+    (`fp8_dot`): its evidence names the capture's property and record and the cutlass cases it rests on."""
     gt = GT.REGISTERED["blackwell_consumer"]
     assert gt.fp8_block_dot == "BlackwellE4m3QmmaDot32"
     [ev] = [e for e in gt.evidence if e.startswith("the blockwise FP8 linear")]
-    for needle in ("blackwell_fp8_capture", "r20261003-220018-3f6a", "0d346c79c642a0a1", "cutlass/*", "qkv_proj (K 4096, N 1280)",
+    for needle in ("blackwell_fp8_capture", "record 0d346c79c642a0a1", "cutlass/*", "qkv_proj (K 4096, N 1280)",
                    "o_proj (K 1024, N 4096)", "M in {1, 2, 64, 65, 256, 257, 300}", "5,080,320 words",
                    "ScaledMmFp8Block_v3{DOT=BlackwellE4m3QmmaDot32_v1}"):
         assert needle in ev, needle

@@ -222,11 +222,11 @@ def _tp(cc):
 
 def test_blackwell_consumer_records_the_moe_step_with_its_own_measurement() -> None:
     """The step is the fused-MoE kernel's own measurement, not cc 12.0's per-tensor FP8 step (`fp8_dot`): its evidence names the
-    capture run and record and the moe cases it rests on."""
+    capture's property and record and the moe cases it rests on."""
     gt = GT.REGISTERED["blackwell_consumer"]
     assert gt.fp8_moe_dot == "BlackwellE4m3QmmaDot32"
     [ev] = [e for e in gt.evidence if e.startswith("the block-FP8 fused-MoE experts")]
-    for needle in ("blackwell_fp8_capture", "r20261003-220018-3f6a", "0d346c79c642a0a1", "moe/decode", "moe/small", "moe/block",
+    for needle in ("blackwell_fp8_capture", "record 0d346c79c642a0a1", "moe/decode", "moe/small", "moe/block",
                    "moe/prefill", "11,791,360 words", "MoeExpertFp8BlockGemm(W)_v3{G=64,KB=32,SWAP=False,DOT=BlackwellE4m3QmmaDot32_v1}"):
         assert needle in ev, needle
     assert GT.REGISTERED["hopper"].fp8_moe_dot == GT.REGISTERED["hopper"].fp8_block_dot == "HopperE4m3QgmmaDot32"
