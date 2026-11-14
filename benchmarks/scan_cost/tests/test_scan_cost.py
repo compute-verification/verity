@@ -231,9 +231,10 @@ def test_write_is_the_document_and_the_runs_result(run_dir, capsys):
         "the repetitions": 18, "the tail": 4, "Lean verifier CPU": 18, "Lean verifier wall": 22,
         "Lean verifier wall: inputs": 4.0, "Lean verifier wall: setup": 8.0, "Lean verifier wall: checks": 2.6}
     by = {m["name"]: m["inputs"] for m in result["measurements"]}
-    assert by[R.VERIFIER] == ["Lean verifier CPU", "execution phases"]
+    assert by[R.VERIFIER] == ["measured", "Lean verifier CPU", "execution phases"]
     names = {m["name"] for m in result["measurements"]}
-    assert all(set(m["inputs"]) <= names for m in result["measurements"])
+    assert all(m["mark"] == m["inputs"][0] == "measured" for m in result["measurements"])
+    assert all(set(m["inputs"][1:]) <= names for m in result["measurements"])
     text = capsys.readouterr().out
     assert "guard: holds" in text and "proving seconds a second of execution phase: 35.0 (3.5 s a tick)" in text
     assert "the round      32     54.0      2.0" in text

@@ -51,3 +51,7 @@ paths = ["verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
 [[tool.verity.tests.reads]]
 tests = ["tests/bench/test_lowerings.py"]
 paths = ["verity/commitments", "verity/commitments/crypto", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/bench/test_bench_judge.py"]
+paths = ["benchmarks/numerical/python/verity_numerical/bench/judge.py"]

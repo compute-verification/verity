@@ -147,7 +147,8 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     lines = out.splitlines()
     assert json.loads(lines[-1]) == doc == json.loads((tmp_path / "inference_only.json").read_text())
     result = json.loads((tmp_path / "result.json").read_text())
-    assert [(m["name"], m["value"], m["unit"]) for m in result["measurements"]] == [(report.METRIC, doc["value"], doc["unit"])]
+    assert [(m["name"], m["value"], m["unit"], m["mark"]) for m in result["measurements"]] == [
+        (report.METRIC, doc["value"], doc["unit"], "modeled")]
     assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
