@@ -3381,7 +3381,6 @@
     {"file": "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "count": 16},
     {"file": "verity/protocols/proofs/spot/verifier/lean/pyproject.toml", "count": 2},
     {"file": "verity/protocols/proofs/spot/verifier/lean/tests/test_challenger_difftest.py", "count": 69},
-    {"file": "verity/protocols/proofs/spot/verifier/lean/tests/test_challenger_inner_trees.py", "count": 6},
     {"file": "verity/protocols/proofs/spot/verifier/lean/tests/test_difftest.py", "count": 925},
     {"file": "verity/protocols/proofs/spot/verifier/lean/tests/test_harm_bound.py", "count": 8},
     {"file": "verity/protocols/proofs/spot/verifier/lean/tests/test_wires_difftest.py", "count": 43},
