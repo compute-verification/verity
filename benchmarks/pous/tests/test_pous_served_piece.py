@@ -41,6 +41,7 @@ from verity.commitments.identity import canonical_json_bytes
 
 torch = pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]
+HERE = Path(__file__).resolve().parent
 REPO, REV = "verity-test/Tiny-INT8", "a1" * 20
 NODE, AUDITOR = "gpu-node", "auditor-host"
 COINS = bytes(range(64))
@@ -521,11 +522,16 @@ def registered(served, monkeypatch) -> Served:
 
 def _bandwidth(tmp_path, record=lambda request: request, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_party --listen` from the tree with no
-    site packages), its registration the challenger's record in ``parties/pous``, which the in-process challenger keeps
-    as ``record`` has it, and a short session, which a toy party's flags hold it to."""
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_party "
+    site packages, its close signed by `p2_party_at_leaf`'s key on a session log in ``parties/p2-challenger``), its
+    registration the challenger's record in ``parties/pous``, which the in-process challenger keeps as ``record`` has
+    it, and a short session, which a toy party's flags hold it to."""
+    challenger = tmp_path / "parties" / "p2-challenger"
+    challenger.mkdir(parents=True, exist_ok=True)
+    if not (challenger / "sessions").exists():
+        mc.SessionLog.create(challenger / "sessions")
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E {HERE / 'p2_party_at_leaf.py'} "
              f"--device {tmp_path / 'parties' / 'bw'} --listen 127.0.0.1:0 --pous-record {tmp_path / 'parties' / 'pous'} "
-             f"--windows 2 --passes 2 --samples 4 --window-ns 1000000 --deadline-ns 1000000")
+             f"--challenger {challenger} --windows 2 --passes 2 --samples 4 --window-ns 1000000 --deadline-ns 1000000")
     auditor = Auditor(tmp_path, keep=tmp_path / "parties" / "pous", record=record, draw=lambda n: SOURCE[:n])
     return {"auditor": auditor, "bw_party": party, "bw_host": "127.0.0.1",
             "bw_request": SP.HB.request(NODE.encode(), windows=2, passes=2, samples=4, window_s=0.001,

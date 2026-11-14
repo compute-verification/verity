@@ -52,6 +52,34 @@ def TestSigner(secret: bytes, height: int = 3, directory: str | Path | None = No
     return mc.LmsSigner(key, path, scheme=scheme(height))
 
 
+class _SparseTree:
+    """A deployed key's tree for leaf 0 alone: its path's siblings arbitrary, its root the one they give."""
+
+    def __init__(self, I: bytes, seed: bytes) -> None:
+        self.root = b""
+        probe = lms.sign_at(lms.PrivateKey(lms.DEPLOYED, I, seed, self), 0, b"probe")  # type: ignore[arg-type]
+        self.root = lms.root_of(lms.DEPLOYED, I, b"probe", probe)
+
+    def __getitem__(self, r: int) -> bytes:
+        return self.root if r == 1 else hashlib.sha512(b"sibling%d" % r).digest()
+
+
+class AtLeaf:
+    """`memory_challenger.LmsSigner` at S1's deployed parameters (`mc.LMS`), so a check that verifies only at those
+    accepts what it signs, without a deployed key's 2^20-leaf keygen: it signs at leaf 0 every time and keeps no leaf
+    state, which a deployed signer refuses."""
+
+    scheme = mc.LMS
+
+    def __init__(self, label: bytes) -> None:
+        I, seed = hashlib.sha512(label + b"/I").digest()[:16], hashlib.sha512(label + b"/seed").digest()
+        self.key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))  # type: ignore[arg-type]
+        self.public_key = lms.public_key(self.key)
+
+    def sign(self, session: bytes, record: bytes) -> bytes:
+        return lms.sign_at(self.key, 0, lms.memory_challenger_message(self.key.I, session, record)).encode()
+
+
 def session_log(directory: str | Path | None = None) -> mc.SessionLog:
     """A new memory challenger session log in a fresh directory, so a test's sessions may reuse its ids."""
     path = _fresh("pous-session-log-", directory) / "sessions"

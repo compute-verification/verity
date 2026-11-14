@@ -5,15 +5,19 @@ to PoUS's.
 A case (`case_of`) is ``{"params", "commitment", "evidence", "store_root"}``, the commitment and evidence canonical JSON
 in hex:
 
-* ``params``: ``{"not_before_ns": n, "request": R}``, the verifier's clock floor and the prover's request R, which the
-  replay refuses unless it restates `p2_party.SESSION` (`P2Session.SESSION`, pinned there, since no digest binds R),
-  naming each value that doesn't: a toy party's case is refused;
+* ``params``: ``{"not_before_ns": n, "request": R, "session": hex, "trusted": [hex, …]}``, the verifier's clock floor,
+  the prover's request R, which the replay refuses unless it restates `p2_party.SESSION` (`P2Session.SESSION`, pinned
+  there, since no digest binds R), naming each value that doesn't, so a toy party's case is refused; the session id
+  the auditor gave the memory challenger that ran the party; and the memory challengers' keys the check trusts;
 * ``commitment``: the auditor's registration file, its fields and its plan (`p2_party.registration_json`), whose digest
   (`digest`) is SHA-512 of `DIGEST_DOMAIN` and those bytes, so it binds the plan with the registration;
-* ``evidence``: ``{"log": [...]}``, every request the verifier's Lean process answered of the session after it opened,
-  in order (`p2_party.Twin` records them), each line's bytes as the prover sent them in hex:
-  ``{"op": "p2_event", "event", "coin"}``, ``{"op": "p2_root", "t", "i", "now", "line"}``, ``{"op": "p2_openings", "t",
-  "line"}`` and ``{"op": "p2_fail"}``;
+* ``evidence``: ``{"close": {"chain", "lines", "public_key", "signature"}, "log": [...]}``. The log is every request the
+  verifier's Lean process answered of the session after it opened, in order (`p2_party.Twin` records them), each
+  line's bytes as the prover sent them in hex: ``{"op": "p2_event", "event", "coin"}`` (the challenger's whole coin,
+  `COIN_BYTES`, of which the process read the first `coins.COIN_BYTES`), ``{"op": "p2_root", "t", "i", "now",
+  "line"}``, ``{"op": "p2_openings", "t", "line"}`` and ``{"op": "p2_fail"}``. The close (`close_of`) is the memory
+  challenger's signature over the whole log: its key, the log's length, its chain (`chain`) and the signature on the
+  role's message (`lms.memory_challenger_message`) of the session and `close_record`, `RemoteAudit.P2Close`'s bytes;
 * ``store_root``: the store the session audits, its registration's root, 128 lowercase hex characters. That root is the
   root of `C*` PoUS's setup published (`pous.run.Setup.root`), so `same_store` holds it to PoUS's run case. No digest
   binds the field itself: it counts only as the root the commitment registers (`store_root`).
@@ -21,7 +25,8 @@ in hex:
 The evidence holds `C*`'s opened blocks and the verifier's coins and clock: it is witness, and `write` puts a case only
 in a private directory (0700, its files 0600). The case's answer (`answer`) is the core form of the session's own
 answer (`P2Session.answer`), which the Lean's replay of the case is held to; `judged` is the Lean's, given its
-executable. A session the Python's books vetoed, or one refused before its first coin, has no case.
+executable. A session the Python's books vetoed, one refused before its first coin, or one with no memory challenger to
+sign its close (`p2_party.Closer`), has no case.
 """
 
 from __future__ import annotations
@@ -36,6 +41,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.commitments import domains
 from verity.commitments.identity import canonical_json_bytes
 from verity.protocols.accounting.pous.verifier.run import Setup
 
@@ -48,15 +54,51 @@ STORE_ROOT = re.compile(r"[0-9a-f]{128}")
 CASE, ANSWER = "case.json", "answer.json"
 #: what an accepted case's `eps` sums, as `RemoteAudit.P2Protocol.certify` does
 EPS_TERMS = p2_party.EPS_TERMS
+#: P2's tag, NUL-ended (`RemoteAudit.P2Close.CLOSE_TAG`): the log's chain starts from it and the close's record opens
+#: with it
+CLOSE_TAG = domains.REMOTE_BANDWIDTH_P2_CLOSE.encode() + b"\0"
+#: a coin as the log carries it, the challenger's whole coin (`RemoteAudit.P2Protocol.COIN_BYTES`)
+COIN_BYTES = 64
+
+
+def _field(b: bytes) -> bytes:
+    return len(b).to_bytes(8, "big") + b
+
+
+def chain(log: Sequence[Mapping[str, Any]]) -> bytes:
+    """`P2Close.chainOf`: SPOT's release-log chain (`challenger.log_chain`) under `CLOSE_TAG` over each entry's
+    canonical JSON, `c_0 = SHA-512([CLOSE_TAG])`, `c_(k+1) = SHA-512(c_k ‖ [entry_k])`, `[x]` a u64 big-endian length
+    then the bytes."""
+    h = hashlib.sha512(_field(CLOSE_TAG)).digest()
+    for entry in log:
+        h = hashlib.sha512(h + _field(canonical_json_bytes(dict(entry)))).digest()
+    return h
+
+
+def close_record(lines: int, chain_: bytes) -> bytes:
+    """`P2Close.closeRecord`, the record the close signs, raw bytes: `CLOSE_TAG ‖ u64be(lines) ‖ chain`."""
+    return CLOSE_TAG + lines.to_bytes(8, "big") + chain_
+
+
+def close_of(signer: Any, session: bytes, log: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """The close of `log` that `signer` (a `memory_challenger.Signer`) signs on `session`."""
+    c = chain(log)
+    return {"chain": c.hex(), "lines": len(log), "public_key": signer.public_key.hex(),
+            "signature": signer.sign(session, close_record(len(log), c)).hex()}
 
 
 def case_of(registration: Mapping[str, Any], request: Mapping[str, Any], not_before_ns: int,
-            log: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+            log: Sequence[Mapping[str, Any]], *, session: bytes, trusted: Sequence[bytes],
+            close: Mapping[str, Any]) -> dict[str, Any]:
     """The case of a session over the store `registration` (`p2_party.registration_json`, with its plan): the
-    prover's `request`, the verifier's clock floor and its process's `log` (module docstring)."""
+    prover's `request`, the verifier's clock floor, the memory challenger's `session` id, the keys the check
+    `trusted`, its process's `log` and the memory challenger's `close` of it (`close_of`; module docstring)."""
     commitment = canonical_json_bytes(dict(registration))
-    return {"commitment": commitment.hex(), "evidence": canonical_json_bytes({"log": [dict(x) for x in log]}).hex(),
-            "params": {"not_before_ns": not_before_ns, "request": dict(request)}, "store_root": registration["root"]}
+    evidence = canonical_json_bytes({"close": dict(close), "log": [dict(x) for x in log]})
+    params = {"not_before_ns": not_before_ns, "request": dict(request), "session": bytes(session).hex(),
+              "trusted": [bytes(k).hex() for k in trusted]}
+    return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params,
+            "store_root": registration["root"]}
 
 
 def digest(case: Mapping[str, Any]) -> bytes:
@@ -149,5 +191,6 @@ def write(private: Path, case: Mapping[str, Any], answer_: Mapping[str, Any]) ->
     return private
 
 
-__all__ = ["ANSWER", "CASE", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "PROTOCOL", "STORE_ROOT", "answer", "case_of",
-           "digest", "judged", "same_store", "serve", "store_root", "write"]
+__all__ = ["ANSWER", "CASE", "CLOSE_TAG", "COIN_BYTES", "DIGEST_DOMAIN", "EPS_TERMS", "EXE", "PROTOCOL", "STORE_ROOT",
+           "answer", "case_of", "chain", "close_of", "close_record", "digest", "judged", "same_store", "serve",
+           "store_root", "write"]
