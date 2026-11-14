@@ -584,7 +584,7 @@ def test_a_live_statement_proved_at_another_m_is_rejected(seed, tmp_path, verifi
     d = {**d, "live": prove_live(d, tmp_path / "other-m", {s: m + 1 if m < d["rows"] else m - 1})}
     got, refused = credit(d, statements)
     assert got is None and refused[0] == "live" and refused[1].startswith(f"round {s}'s live@{s} session "), refused
-    assert "was rejected by the verifier of record" in refused[1]
+    assert "was rejected by the verifier" in refused[1]
 
 
 @pytest.mark.parametrize("seed", SEEDS)
@@ -671,7 +671,7 @@ def test_a_window_the_lean_and_its_python_twin_disagree_on_is_refused(tmp_path, 
 
     asked.say["window"] = gone
     got, refused = credit(d, statements)
-    assert got is None and refused == (V.DISAGREE, "the Lean verifier of record gave no answer to window, so it stands "
+    assert got is None and refused == (V.DISAGREE, "the Lean verifier gave no answer to window, so it stands "
                                                    "refused: pouw-check-difftest ended on window")
     del asked.say["window"]
     python = Cr._window

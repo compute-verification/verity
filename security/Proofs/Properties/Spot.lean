@@ -1390,7 +1390,7 @@ theorem acceptMeans : AcceptMeans := fun p c e pub prof h => by
   exact ⟨l, d, n, hr, hd, hu, rest⟩
 
 /-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R8, with a sample of
-the agreed law over the registered population, its units proved and served as sampled with each certified value read
+the agreed sampling design over the registered population, its units proved and served as sampled with each certified value read
 (`UnitsRead`), and verdicts that accept, is accepted, publishing `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
     (hr : Registered p.verifier c.record law)

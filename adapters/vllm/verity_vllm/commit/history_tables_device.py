@@ -1,5 +1,5 @@
 """`history.HistoryTable` on the GPU (`Table` with a ``device``) and its CPU twin (`Table` without one): a history table's tree
-built, appended to and opened by `row_table.cuh`'s history functions (in `row_tables_device.CUDA_DIR`), the device's through
+built, appended to and opened by `row_table.cuh`'s history functions (in `row_table_kernels.CUDA_DIR`), the device's through
 `row_table.cu`'s ``rt_hist_*`` kernels and the twin's through `row_table_host.cpp`, the same build `row_tables_device` loads.
 
 A `Table` reads as `history.HistoryTable` does where `commit.history_tables.Histories` reads one (its ``make``): ``rows``,
@@ -20,7 +20,7 @@ import numpy as np
 from verity.commitments import history as HT
 from verity.commitments import hm96
 
-from verity_vllm.commit import row_tables_device as D
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as D
 
 __all__ = ["Hist", "Table"]
 

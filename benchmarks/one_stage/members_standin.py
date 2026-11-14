@@ -34,7 +34,7 @@ from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.commitments.windows import interface as IF  # noqa: E402
 from verity.circuits.ops import gemm as G  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R  # noqa: E402
 
 KS = (128, 256)
 TEMPLATES = tuple(bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in KS)

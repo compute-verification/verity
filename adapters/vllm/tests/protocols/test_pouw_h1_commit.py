@@ -32,7 +32,7 @@ from verity.protocols.accounting.pouw.verifier import weights as Wt
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.proofs.spot.device import remote as R
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from tests.check import opened as O
 from tests.protocols import challenger_host as CH

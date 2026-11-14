@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Finish
+public import Flock.ZkServer.Finish
 public import Proofs.Flock.Claims.Complete.ZkTables.Round0
 public import Proofs.Flock.Claims.ZK.FinishCommit
 import Mathlib.Algebra.Order.Floor.Extended
@@ -40,7 +40,7 @@ import Proofs.Flock.Claims.ZK.LinkRecheck
 # Level 0 as the session loop keeps it is `commit0`'s
 
 The finish on the session loop's frames port reads table `i`'s level-0 commitment off the loop's `Level0`
-(`Finish.commitOf`) instead of committing it again (`Finish.commit0`, `flock-firewall finish`'s `table` path). Here the
+(`Finish.commitOf`) instead of committing it again (`Finish.commit0`, `flock-zk-server finish`'s `table` path). Here the
 two are one, wherever the loop drew that `Level0` (`Level0.ofDraws`):
 
 * `commitRowsP_tree`: through `Hashes` whose node and leaf are functions, `FlockComplete.commitRowsP` returns, its
@@ -54,7 +54,7 @@ two are one, wherever the loop drew that `Level0` (`Level0.ofDraws`):
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 variable {wideLeaf : Bool}
 
@@ -134,4 +134,4 @@ theorem commitOf_eq {m : ℕ} {g : Array F128} {d : ByteArray} {l : Level0.Level
   rw [hlayers, Array.range_succ (n := l.lv.d - l.lv.cap), Array.append_singleton, Array.map_push, Array.back?_push, Option.getD_some, hrows]
   rfl
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

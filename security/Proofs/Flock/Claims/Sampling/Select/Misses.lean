@@ -150,7 +150,7 @@ theorem pa_slots (first : OneStage) (pop ic : Array (Array Slots.ProofBlock)) (B
   congr 2
   simp [Function.comp_def]
 
-/-- `slotDesign`'s steps: the population, the rule's law and its expansion, and the design they give. -/
+/-- `slotDesign`'s steps: the population, the rule's sampling design and its expansion, and the design they give. -/
 theorem slotDesign_ok (rule : Select.Rule) (d : Program) (query : Lean.Json) (table : Option Lean.Json)
     (D : Design) (h : slotDesign rule d query table = .ok D) :
     ∃ n named derived, Partition.units d query = .ok n ∧ rule.lawOver n = .ok named ∧

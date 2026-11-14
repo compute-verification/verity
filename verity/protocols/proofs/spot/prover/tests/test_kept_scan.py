@@ -40,7 +40,7 @@ from verity_vllm.program.predict.window_circuit import WindowClass
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE.parent))
-import prove_path as PP  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import prove_path as PP  # noqa: E402
 
 with PP.network_traces():
     import certifier_piece as CP
