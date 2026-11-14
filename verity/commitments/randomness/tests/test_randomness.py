@@ -66,21 +66,44 @@ def test_the_vectors_follow_the_documented_construction():
     assert next(w % n for w in words if w < limit) == want
 
 
+@pytest.mark.parametrize("case", VECTORS["wide"], ids=lambda c: c["domain"])
+def test_wide_known_answer_vectors(case):
+    key = derive_wide(bytes.fromhex(case["source"]), case["domain"], _context(case["context"]))
+    assert isinstance(key, WideKey) and key.value.hex() == case["key"]
+    s = case["stream"]
+    assert key.stream(_index(s["index"]), len(s["bytes"]) // 2).hex() == s["bytes"]
+
+
+def test_the_wide_forms_follow_the_documented_construction():
+    """The wide derive and stream restated from the module docstring, each under its own tag."""
+    case = VECTORS["wide"][1]
+    ctx = _context(case["context"])
+    body = b"".join(frame(k) + frame(ctx[k]) for k in sorted(ctx))
+    key = hashlib.sha512(b"verity/randomness/derive-wide/v1\0" + frame(bytes.fromhex(case["source"])) + frame(case["domain"])
+                         + frame(body)).digest()
+    assert key.hex() == case["key"]
+    head = b"verity/randomness/stream-wide/v1\0" + key + frame(frame("s") + frame(3))
+    stream = b"".join(hashlib.sha512(head + c.to_bytes(8, "big")).digest() for c in range(2))
+    assert stream[:80].hex() == case["stream"]["bytes"]
+
+
 @pytest.mark.parametrize("case", VECTORS["cases"], ids=lambda c: c["domain"])
-def test_derive_wide_keeps_the_whole_sha512(case):
-    """`derive_wide` is `derive`'s SHA-512 uncut, so its first half is the pinned key, and a `WideKey` streams as the
-    module docstring says with its 64 bytes in the key's place."""
-    wide = derive_wide(bytes.fromhex(case["source"]), case["domain"], _context(case["context"]))
-    assert isinstance(wide, WideKey) and len(wide.value) == 64 and wide.value[:32].hex() == case["key"]
-    index = frame(frame("s") + frame(3))
-    stream = b"".join(hashlib.sha512(b"verity/randomness/stream/v2\0" + wide.value + index + c.to_bytes(8, "big")).digest()
-                      for c in range(2))
-    assert wide.stream(("s", 3), 80) == stream[:80] and wide.stream(("s", 3), 80) != Key(wide.value[:32]).stream(("s", 3), 80)
+def test_a_wide_key_is_no_key(case):
+    """The wide key's first half is not `derive`'s key at the same source, domain and context, and its stream is not a
+    `Key`'s under either half; a `WideKey` is 64 bytes, streams, and offers nothing else."""
+    source, domain, ctx = bytes.fromhex(case["source"]), case["domain"], _context(case["context"])
+    wide, key = derive_wide(source, domain, ctx), derive(source, domain, ctx)
+    assert wide.value[:32] != key.value
+    index, n = _index(case["stream"]["index"]), len(case["stream"]["bytes"]) // 2
+    assert all(wide.stream(index, n) != Key(half).stream(index, n) for half in (wide.value[:32], wide.value[32:]))
     assert wide.value.hex() not in repr(wide)
+    assert not any(hasattr(wide, a) for a in ("blocks", "shard", "uniform", "bernoulli", "subset"))
     with pytest.raises(ValueError):
         WideKey(wide.value[:32])
+    with pytest.raises(ValueError):
+        Key(wide.value)
     with pytest.raises(TypeError):
-        derive_wide(b"", case["domain"], {})
+        derive_wide(b"", domain, {})
 
 
 def test_the_vectors_are_the_generators():
