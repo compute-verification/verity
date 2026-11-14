@@ -6573,16 +6573,18 @@ def test_a_v2_audit_reads_the_sessions_registered_roots(server):
     """A v2 audit of each program accepts when the verifier reports the sessions' registered reads opened against
     the registered roots (and a value the registration doesn't name is not its to read, and a root port's read at that
     port's own root is its own), and rejects them opened against another root, a value's reads missing, a root port's
-    read at another root, or none reported."""
+    read at another root, or none reported. Where the registration also registers a value under a root port's name, a
+    read at the port's root in place of one of that value's is rejected: the value's reads no longer agree."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
         opened = a["evidence"]["verdicts"]["lean"]["registered"]
         p = sorted(opened)[0]
         v = opened[p]["value"]
+        own = "reject" if "x" in s.values[1] else "accept"
         for got, want in ((opened, "accept"), ({**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}}, "accept"),
                           ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"),
                           ({k: e for k, e in opened.items() if e["value"] != v}, "reject"),
-                          ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, "accept"),
+                          ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, own),
                           ({**opened, "x.0": {"root": "12" * 64, "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
             lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}
             case = _json(_case({**a, "evidence": {**a["evidence"], "verdicts": {"lean": lean}}}))
