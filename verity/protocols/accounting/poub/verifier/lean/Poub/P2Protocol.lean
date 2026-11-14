@@ -248,8 +248,8 @@ def Public.toJson (p : Public) : Json :=
 /-- What an accepted session certifies (module docstring), with its profile. -/
 def certify (held : P2Session.Held) (sm : Session.Summary) : Public × Json :=
   let c := P2Session.credit sm
-  let draws := c.draws.toList.sum
-  (⟨(Core.Ratio.mk' (2 ^ 24 + draws) (2 ^ 64)).getD ⟨1, 1⟩, c.qBytes, c.spanNs⟩,
+  let samples := c.draws.toList.sum
+  (⟨(Core.Ratio.mk' (2 ^ 24 + samples) (2 ^ 64)).getD ⟨1, 1⟩, c.qBytes, c.spanNs⟩,
    Json.mkObj [("bound", c.bound), ("delta", .str (toString P2Session.DELTA)), ("draws", toJson c.draws),
      ("plan_units", natJ held.plan.length), ("receipts", natJ c.receipts),
      ("registration", .str (hexOf held.reg.digest)), ("unit_bytes", natJ P2.UNIT_BYTES),
@@ -265,10 +265,10 @@ def checkAt (lp : Lms.Params) (p : Params) (c : Commitment) (e : Evidence) : Cor
     | .ok s =>
       match s.failed, s.summary with
       | some f, _ =>
-        let draw := match f.at? with
+        let sample := match f.at? with
           | some (i, q) => s!", draw [{i}, {q}]"
           | none => ""
-        .reject s!"the session was rejected: {f.failure.name} at window {f.window}{draw}"
+        .reject s!"the session was rejected: {f.failure.name} at window {f.window}{sample}"
       | none, none => .undecided "the session has a window not yet verified"
       | none, some sm => let (pub, prof) := certify c.held sm; .accept pub prof
 

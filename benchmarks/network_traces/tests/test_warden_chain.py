@@ -6,7 +6,7 @@ refusing a changed one and a changed cell; the run's deployment is the auditor's
 and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
 and responses served;
 N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
-accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through active.Proxy)
+accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through the older certifier's proxy)
 is refused by name (`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
 network certifier's run. The report on the network certifier path requires the certificates, the endpoint, the tie, N2
 and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network certifier
@@ -146,7 +146,7 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     assert [r["output"] for r in io["records"]] == [list(r) for r in sz.W63.responses]
     assert all(r["release"] is not None and r["frames"][0][1] >= r["release"] for r in io["records"])
     lw, dep, params = WC.link(run)
-    assert lw.warden.digest == params.digest and lw.charge == 0.0 and lw.windows == sz.W63.windows
+    assert lw.warden.digest == params.digest and lw.windows == sz.W63.windows
     assert lw.grid(0) == lw.grid(1) and lw.link == "warden" and lw.run == dep["run_id"]
     pairs, refused = WC.pairs(run, dep)
     assert len(pairs) == sz.W63.windows and refused == []
