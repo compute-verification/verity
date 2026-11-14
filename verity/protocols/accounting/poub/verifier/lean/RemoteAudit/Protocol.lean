@@ -31,12 +31,12 @@ the difftest's `session` reads (`Difftest.sessionFn`):
   session's parameters and g.
 
 On acceptance it publishes the receipts not shown wrong and the error that holds at, `{"eps", "q_bytes"}` (`certify`):
-the session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each sample's
-receipts and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
-openings coins at its `samples` s each (the per-sample term of `Accounting.Guarantees.Remote.PooledSample`; its PRF
-advantages and binding term are left out of ε, not numbers, and so are its hiding terms, each 0 where the records read
-no commitment): the sample term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol` proves at
-`Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
+the session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each sample's receipts
+and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉` openings
+coins at its `samples` s each (at least the per-sample term of `Accounting.Guarantees.Remote.PooledSample`, s/2^256; its
+PRF advantages and binding term are left out of ε, not numbers, and so are its hiding terms, each 0 where the records
+read no commitment): at least the sample term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`
+proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
 not taken off: `q_bytes` is the receipts the session's openings don't show wrong, in bytes, which
 `Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocol` states is at most the right ones' except with its bound. When
@@ -127,8 +127,8 @@ a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.samples`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 
-/-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and the
-draw's rejection at the session's `samples` s a draw. -/
+/-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and at least the
+draws' rejection at the session's `samples` s a draw. -/
 def eps (params : Session.Params) (g : Nat) : Rat :=
   DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
 
