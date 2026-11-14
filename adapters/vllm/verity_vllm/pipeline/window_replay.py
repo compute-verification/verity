@@ -22,22 +22,28 @@ digit costs a part for each of its values. A part ends where the writer's units 
 member of a batch reads at one writer row is a shared argument; any other is mapped over the batch's members, and a
 member whose port's rows come from more than one source reads a concat of them, a part a source a member.
 
+**The id** names the window by its record: ``window`` is the SHA-512 of its ``circuit.json`` less the fields its run
+fixes (`interface.RUN_FIELDS`: ``run`` and ``context``), so every run of one circuit gives one Definition. The
+Definition is a reference a test evaluates; no verifier reads it.
+
 Refused (ValueError): a wire whose reader row isn't its writer's output field leaf for leaf (the same words at another
-leaf width, as a Boolean template's bits read as words: a body's argument names each leaf at its own width), and a
-circuit whose order runs a template's later units before its earlier ones."""
+leaf width, as a Boolean template's bits read as words: a body's argument names each leaf at its own width); a
+circuit whose order runs a template's later units before its earlier ones; a record that lists its members or isn't
+the circuit's; and a return of more than 262,144 bits, the widest proof block's (`layout.UNIT_MAX_BITS`)."""
 from __future__ import annotations
 
 import bisect
 import hashlib
 import math
 from dataclasses import dataclass, field
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
-from verity.circuits.codec import canonical_json
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, Refs, concat, strided_view
 from verity.circuits.types import Array, Tuple, Type
+from verity.commitments.layout import UNIT_MAX_BITS
 from verity.commitments.windows import interface as IF
 
 NAME, VERSION = "WindowReplay", 1
@@ -257,15 +263,27 @@ def _plan(circuit: IF.Circuit) -> _Plan:
     return _Plan(tuple(params), ret, tuple((fns[t], at, n) for t, at, n in ranges), tuple(args), tuple(out))
 
 
-def replay(circuit: IF.Circuit) -> SpecializedDefinition:
-    """``circuit`` as one replay Definition (the module docstring), `WindowReplay_v1{window}`: ``window`` the SHA-512 of
-    what its body restates (the circuit's templates and units, cuts, wires, order and external ports), so the id names
-    one body. The plan is made once, in work proportional to the circuit's ranges and its arguments' parts, and the body
-    built from it wherever the Definition is."""
+def window_digest(record: Mapping[str, Any]) -> str:
+    """The SHA-512 of a window's ``circuit.json`` less its run fields (`interface.circuit_of`), in its bytes
+    (`interface.circuit_bytes`): the same for every run of one circuit."""
+    return hashlib.sha512(IF.circuit_bytes(IF.circuit_of(record))).hexdigest()
+
+
+def replay(circuit: IF.Circuit, record: Mapping[str, Any]) -> SpecializedDefinition:
+    """``circuit`` as one replay Definition (the module docstring), `WindowReplay_v1{window}`: ``window`` the
+    `window_digest` of ``record``, the circuit's record, which states its members by a cap and whose templates, wires,
+    declarations and external ports are the circuit's. The plan is made once, in work proportional to the circuit's ranges
+    and its arguments' parts, and the body built from it wherever the Definition is."""
     plan = _plan(circuit)
-    doc = {"templates": [[t, n] for t, n in circuit.units.items()], "cuts": circuit.cuts, "external": list(circuit.external),
-           "wires": [w.doc() for w in circuit.wires],
-           "order": None if circuit.order is None else [list(b) for b in circuit.order]}
+    if "cap" not in record:
+        raise ValueError(f"{circuit.name}: its record lists its members; a replay Definition's window states its members "
+                         "by a cap and its wires")
+    want = {**circuit.description(), "external": list(circuit.external)}
+    if got := [k for k in sorted({*want, "external", *IF.DECLARED}) if record.get(k) != want.get(k)]:
+        raise ValueError(f"{circuit.name}: the record is not its record: its {', '.join(got)} differ")
+    if (bits := sum(plan.ret.leaf_widths())) > UNIT_MAX_BITS:
+        raise ValueError(f"{circuit.name}: its external ports return {bits:,} bits; a proof block returns at most "
+                         f"{UNIT_MAX_BITS:,}")
 
     def body(B: Any, S: Any, *params: Coll) -> Coll:
         outs: list[Coll] = []
@@ -281,4 +299,4 @@ def replay(circuit: IF.Circuit) -> SpecializedDefinition:
     defn = CompositeDefinition(NAME, VERSION, ("window",), lambda S: (plan.params, plan.ret), body, register=False,
                                conformance="derived: its templates' calls, wired as the window's circuit wires them",
                                doc=f"{circuit.name}: {sum(n for _f, _a, n in plan.nodes)} units in {len(plan.nodes)} nodes")
-    return bind(defn, window=hashlib.sha512(canonical_json(doc)).hexdigest())
+    return bind(defn, window=window_digest(record))
