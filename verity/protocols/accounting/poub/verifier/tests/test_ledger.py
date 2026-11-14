@@ -25,6 +25,7 @@ from test_remote_bandwidth import (  # noqa: F401
 )
 
 from verity import claims
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, ledger, line, receipts, timing
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Pace
 
@@ -50,7 +51,7 @@ def paced(store, p: audit.Params, plan=None):
     root's arrival."""
     clock = Clock()
     s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenges, coin_at, closed_at = {0: s.start()}, {0: DOWN_NS}, None
     passes, arrivals, previous = {}, {}, store.registration.digest
     t = i = ready = step = 0
@@ -115,7 +116,7 @@ def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(stor
     s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(coin, 0, store.registration.digest, None)
     assert s.receive(0, 0, ps.root, step=0) is None

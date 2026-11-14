@@ -30,7 +30,7 @@ byte 8j mod 32 of the store, so a receipt of one block would leave a sector half
 guessed receipt (`SketchBoundRun`, over sectors) would lose a factor 2^32 a receipt.
 
 An opening (`Opening`) is the unit's four blocks, each with its path to the registration's root, and the receipt
-leaf with its salt and path to the pass's root.  The verifier, the audit's session over a P2 codec
+leaf with its salt and path to the pass's root; the honest prover's is `poub/prover/p2_prover.py`.  The verifier, the audit's session over a P2 codec
 (`audit.AuditRun.verify`, by `check`), checks the leaf on the pass's root, each block on the vk root under PoUS's leaf
 (`pous.verifier.leaf_hash`; `payload-path` if one fails), and the receipt recomputed from the four blocks.  It decodes
 nothing: vk's leaves are of the C* the verifier decoded to the committed W at PoUS's setup, so a block on its path is
@@ -45,24 +45,19 @@ per unit σ and y.  `Sketcher` is its CPU reference.
 from __future__ import annotations
 
 import hashlib
-import os
 import struct
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from verity.commitments.randomness import frame
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.params import SALT_BITS
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.accounting.pous.verifier.verifier import (
-    MerkleTree,
-    VerifierKey,
-    leaf_hash,
-)
+from verity.protocols.accounting.pous.verifier.verifier import VerifierKey
 
 from . import audit, receipts
 from .codec import P2_LAYOUT, P2Codec
-from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES, Plan
+from .receipts import DIGEST_BYTES, SALT_BYTES, Plan
 
 REGISTRATION_DOMAIN = b"verity/remote-bandwidth/p2-registration/v0\0"
 BLOCK_BYTES = 2056
@@ -183,23 +178,6 @@ class Sketcher(receipts.SketchReceipter):
         return receipts.sign_bits(self.seed, self.rows, UNIT_BYTES)
 
 
-class Store:
-    """The prover's C* under a P2 registration: its N blocks and PoUS's vk tree over them, whose root must be the
-    registration's."""
-
-    def __init__(self, registration: Registration, blocks: Sequence[bytes]) -> None:
-        params = registration.params
-        if len(blocks) != params.blocks or any(type(b) is not bytes or len(b) != BLOCK_BYTES for b in blocks):
-            raise ValueError(f"the registration's C* is {params.blocks} blocks of {BLOCK_BYTES} bytes")
-        self.registration, self.blocks = registration, tuple(blocks)
-        self.tree = MerkleTree([leaf_hash(params, registration.salt, j, b) for j, b in enumerate(self.blocks)])
-        if self.tree.root != registration.root:
-            raise ValueError("these blocks are not the registered C*: their vk root is not the registration's")
-
-    def unit(self, g: int) -> bytes:
-        return b"".join(self.blocks[UNIT_BLOCKS * g:UNIT_BLOCKS * (g + 1)])
-
-
 @dataclass(frozen=True, slots=True)
 class Opening:
     """Receipt (i, p) of a window opened, position p of pass i, unit g = plan_i[p]: its four blocks, each block's path
@@ -218,30 +196,6 @@ class Opening:
         """Its bytes on the wire, with u32 and u64 headers for the indices and a u32 for each path's length."""
         return (4 + 8 + UNIT_BYTES + len(self.leaf) + len(self.leaf_salt)
                 + DIGEST_BYTES * (len(self.receipt_path) + sum(len(x) for x in self.paths)) + 4 * (2 + UNIT_BLOCKS))
-
-
-class Prover(audit.Prover):
-    """The honest prover over a P2 store: each pass's receipts from its plan's units (`pass_under`), or from receipts
-    the decode computed (`commit`), committed in the audit's tree."""
-
-    def __init__(self, store: Store, *, entropy: Callable[[int], bytes] = os.urandom) -> None:
-        super().__init__(store, None, entropy=entropy)
-
-    def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> audit.Pass:
-        plan = plan or Plan.whole(self.store.registration.blocks)
-        sketcher = Sketcher(seed, self.store.registration.rows)
-        return self.commit(window, i, seed, plan, [sketcher(g, self.store.unit(g)) for g in plan])
-
-    def commit(self, window: int, i: int, seed: bytes, plan: Plan, ys: Sequence[bytes]) -> audit.Pass:
-        """Pass i of `window` under `seed` from its receipts `ys` in plan order, however they were computed."""
-        salts = tuple(self.entropy(SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
-        return audit.Pass(window, i, seed, plan, tuple(ys), salts, receipts.tree(seed, plan, ys, salts))
-
-    def open(self, ps: audit.Pass, p: int) -> Opening:
-        g, c = ps.plan.block(p), p // PER_LEAF
-        js = range(UNIT_BLOCKS * g, UNIT_BLOCKS * (g + 1))
-        return Opening(ps.index, p, tuple(self.store.blocks[j] for j in js), tuple(self.store.tree.path(j) for j in js),
-                       b"".join(ps.receipts[PER_LEAF * c:PER_LEAF * (c + 1)]), ps.salts[c], ps.tree.open(c).path)
 
 
 def _paths(paths: object) -> bool:
@@ -276,5 +230,5 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     return None
 
 
-__all__ = ["BLOCK_BYTES", "Opening", "Prover", "Registration", "Sketcher", "Store", "UNIT_BLOCKS", "UNIT_BYTES",
+__all__ = ["BLOCK_BYTES", "Opening", "Registration", "Sketcher", "UNIT_BLOCKS", "UNIT_BYTES",
            "codec_of", "register"]

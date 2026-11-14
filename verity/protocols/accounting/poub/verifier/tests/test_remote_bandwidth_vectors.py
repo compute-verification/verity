@@ -12,9 +12,10 @@ import pytest
 import remote_bandwidth_vectors as rv
 from remote_bandwidth_fakes import Clock
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
 
-# `benchmarks/codec_tensor/sketch_receipt.py` (at 5b8decfc5), numpy, run on these
+# `verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py` (at 5b8decfc5), numpy, run on these
 # inputs: seed k is SHA512(SKETCH_PINS ‖ u8 k), "counter" n bytes of SHA512(SKETCH_PINS ‖ label ‖ u32be c) for
 # c = 0, 1, …; each case (seed, block, z, j, σ_j, y) with σ_j its `sketch` and y its `SketchReceipter`'s, a receipt
 # that binds z; each unbound case (seed, block, j, σ_j, y), of the block alone, with σ_j its `sketches` of the block
@@ -89,7 +90,7 @@ SKETCH64_UNBOUND_CASES = [
      "a391d7324adcc28de3d7d5b780c433a2cdceb8755b795dd7d818401aa814074279c1e00b21e08307d961a433026089aadcb2f0e49f0ff966903906ad4cef9b95"),
 ]
 
-# `benchmarks/word_codec/tests/kv_vectors.json` ("p512/k2", at 56818bb77): the kv/v0 codec
+# `verity/protocols/accounting/poub/prover/word_codec/kv_vectors.json` ("p512/k2", at 56818bb77): the kv/v0 codec
 # the KV kernel (`kv.cu`) implements, under its vector seed SHA256("verity/word-codec/kv/vectors").
 KV_SEED = "9a2a3bccf24b46d0788b084ea6ab8a259f06781facbe053a212734936d48be4a"
 KV_P512_K2 = {
@@ -290,7 +291,7 @@ def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kin
     tiles = audit.NoiseTiles(96) if bind else None
     s = audit.AuditRun(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind, rows=rows), reg, tiles, challenger,
                        not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, tiles, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
+    prover = audit_prover.Prover(store, tiles, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
     pinned = pinned if (kind, bind, rows) == rv.DEFAULT else pinned["variants"][rv.name(kind, bind, rows)]
     challenge, previous, passes = s.start(), reg.digest, []

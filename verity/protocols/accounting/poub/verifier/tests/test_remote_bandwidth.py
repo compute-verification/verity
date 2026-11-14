@@ -15,6 +15,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import (
     audit,
     codec,
@@ -46,17 +47,17 @@ def payload(j: int) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def store() -> audit.Store:
+def store() -> audit_prover.Store:
     """The store under the fallback codec, p1024 masked at k = 2: about 4 s to encode where the default's k = 3 takes 6.
     Nothing here depends on k; the vectors' session runs at the default."""
     payloads = [payload(j) for j in range(N)]
     salts = [Entropy(b"payload salts")(receipts.SALT_BYTES * N)[receipts.SALT_BYTES * j:receipts.SALT_BYTES * (j + 1)]
              for j in range(N)]
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
+    return audit_prover.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
 
 
-def registered(store: audit.Store, receipt: str, bind: bool, rows: int | None = None) -> audit.Store:
+def registered(store: audit_prover.Store, receipt: str, bind: bool, rows: int | None = None) -> audit_prover.Store:
     """`store` registered under `receipt`, `bind` and `rows` with the same nonce: none is in the codec seed's context,
     so its blocks are `store`'s, and only the registration and its digest differ."""
     reg = audit.register(SOURCE, NODE, N, store.registration.payload_root, codec.FALLBACK, receipt, bind=bind,
@@ -68,7 +69,7 @@ def registered(store: audit.Store, receipt: str, bind: bool, rows: int | None = 
 
 
 @pytest.fixture(scope="module")
-def stores(store) -> dict[tuple[str, bool], audit.Store]:
+def stores(store) -> dict[tuple[str, bool], audit_prover.Store]:
     """`store` under each receipt kind, with its receipts of the block alone and binding z: four registrations, four
     digests, one set of blocks."""
     out = {(kind, bind): registered(store, kind, bind) for kind in receipts.KINDS for bind in (False, True)}
@@ -77,19 +78,19 @@ def stores(store) -> dict[tuple[str, bool], audit.Store]:
 
 
 @pytest.fixture(scope="module")
-def sketch_store(stores) -> audit.Store:
+def sketch_store(stores) -> audit_prover.Store:
     """The default registration's store, named by its kind for the tests that are about it."""
     return stores[receipts.SKETCH_SHA512, False]
 
 
 @pytest.fixture(scope="module")
-def block_store(stores) -> audit.Store:
+def block_store(stores) -> audit_prover.Store:
     """block-sha512, the kind kept for comparison."""
     return stores[receipts.BLOCK_SHA512, False]
 
 
 @pytest.fixture(scope="module")
-def rows64_store(store) -> audit.Store:
+def rows64_store(store) -> audit_prover.Store:
     """sketch-sha512 at 64 rows, of the block alone."""
     return registered(store, receipts.SKETCH_SHA512, False, 64)
 
@@ -104,7 +105,7 @@ def no_rebuild(r: audit.Record) -> audit.Rebuild:
     return audit.Rebuild(r.codec, 0.0)
 
 
-def params_of(st: audit.Store, **kw) -> Params:
+def params_of(st: audit_prover.Store, **kw) -> Params:
     """`params` under `st`'s receipt kind, `bind` and rows."""
     return params(receipt=st.registration.receipt, bind=st.registration.bind, rows=st.registration.rows, **kw)
 
@@ -128,7 +129,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     clock = Clock()
     s = AuditRun(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
                  clock=clock)
-    prover = audit.Prover(store, tiles, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, tiles, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
@@ -147,7 +148,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     return s, prover, passes, clock
 
 
-def finish(s: AuditRun, prover: audit.Prover, passes, clock: Clock, open_=None):
+def finish(s: AuditRun, prover: audit_prover.Prover, passes, clock: Clock, open_=None):
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []
     for t in range(s.params.windows):
@@ -265,7 +266,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
     """The plan's order is only the tree's: the same blocks listed in another order give each block the same receipt
     (z, when the receipts bind it, is the tile before the block's read), and a different root."""
     store = stores[receipts.DEFAULT, bind]
-    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, entropy=Entropy(b"s"))
+    prover = audit_prover.Prover(store, audit.NoiseTiles(96) if bind else None, entropy=Entropy(b"s"))
     seed = receipts.seed(bytes(range(32)), 0, store.registration.digest)
     a = prover.pass_under(0, 0, seed, receipts.Plan(((0, 10),), N))
     b = prover.pass_under(0, 0, seed, receipts.Plan.of(list(reversed(range(10))), N))
@@ -563,7 +564,7 @@ def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> N
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
             AuditRun(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
-            audit.Prover(st, tiles)
+            audit_prover.Prover(st, tiles)
 
 
 def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:
@@ -694,7 +695,7 @@ def committed_with(receipter):
         r, tiles = receipter(seed, prover), prover.tiles
         ys = tuple(r(j, prover.store.blocks[j], None if tiles is None else tiles.output(seed, j)) for j in plan)
         salts = tuple(prover.entropy(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
-        return audit.Pass(t, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
+        return audit_prover.Pass(t, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
     return run
 
 
@@ -737,7 +738,7 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
             == "coin does not open against the epoch's coin commitment")
     with pytest.raises(ValueError, match="sent again, another coin"):
         prover.run(forged, 0, store.registration.digest)
-    fresh = audit.Prover(store, None, entropy=Entropy(b"fresh"))
+    fresh = audit_prover.Prover(store, None, entropy=Entropy(b"fresh"))
     fresh.run(forged, 0, store.registration.digest)
     with pytest.raises(ValueError, match="does not open"):
         fresh.end(c.commitment, (forged,))

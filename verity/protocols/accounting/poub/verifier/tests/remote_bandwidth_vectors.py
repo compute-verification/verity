@@ -38,6 +38,7 @@ from remote_bandwidth_fakes import Entropy
 
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_v2_digest
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.proofs.spot.device.challenger import live_domain, live_leaf
 
@@ -83,15 +84,15 @@ def _sha(b: bytes) -> str:
 
 
 @functools.cache
-def store() -> audit.Store:
+def store() -> audit_prover.Store:
     """The vectors' store, encoded once a process: its 21 blocks take about 6 s under the default codec."""
     payloads, salts = [payload(j) for j in range(BLOCKS)], payload_salts()
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, BLOCKS, root, nonce=NONCE), payloads, salts)
+    return audit_prover.Store(audit.register(SOURCE, NODE, BLOCKS, root, nonce=NONCE), payloads, salts)
 
 
 @functools.cache
-def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
+def registered(receipt: str, bind: bool, rows: int) -> audit_prover.Store:
     """`store()` registered under `receipt`, `bind` and `rows` with the same nonce: its codec seed, so its blocks, are
     `store()`'s."""
     st = store()
@@ -103,7 +104,7 @@ def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
     return out
 
 
-def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.SessionCoins]:
+def chain(st: audit_prover.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.SessionCoins]:
     """Window 0's challenge, opened after R, its three passes under the registration's receipt kind and `bind` (the
     stub tiles' z when it binds them), its openings coin, opened after the last pass's root, and the session's coins."""
     reg, blocks = st.registration, st.blocks
@@ -140,7 +141,7 @@ def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpe
     return challenge, passes, challenger.openings(0, previous), challenger
 
 
-def _passes(st: audit.Store, challenge: coins.LiveOpening, passes: list[dict]) -> dict:
+def _passes(st: audit_prover.Store, challenge: coins.LiveOpening, passes: list[dict]) -> dict:
     out = {"window": 0, "challenge": coins.coin(challenge).hex(), "passes": passes}
     return out | {"z_bytes": TILES.z_bytes} if st.registration.bind else out
 
