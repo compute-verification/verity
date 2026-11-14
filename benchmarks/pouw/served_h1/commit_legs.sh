@@ -23,7 +23,7 @@ set -u
 . "$(dirname "$0")/arch.sh"
 S=$(mktemp -d); trap 'rm -rf "$S" || true' EXIT
 /usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
-  -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-hbc.log" 2>&1 || exit 1
+  -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" verity/protocols/experimental/dither/prover/kernels/h1u.cu > "$OUT/build-hbc.log" 2>&1 || exit 1
 sha256sum "$S/h1u_hbc.so" | tee "$OUT/builds.txt"
 [ -n "${GATE:-}" ] && $GATE pubkey > "$OUT/gate-pubkey.json"
 if [ -n "${GATE:-}" ]; then
