@@ -3,7 +3,7 @@ an instances document without supplied inputs (`verity_vllm.check.replay.index`,
 and `driver`), a binding map without entries and an entry without an identity or an encoding (`verity_vllm.check.replay.opening`),
 a manifest without a query, aliases or a cross-check's counts, an engine schedule without observed arrive steps and a workload
 request without steps or prompt ids (`verity_vllm.check.replay.linkage`), a population without reasons
-(`verity_vllm.check.replay.replay_codes`), a row's description without statics, a stop rule's block without problems and an
+(`verity_vllm.records.replay_codes`), a row's description without statics, a stop rule's block without problems and an
 executed prefix without its lag (`verity_vllm.check.replay.population`), a step's geometry without a plane row's module.  Each
 field is given absent, null and empty, and the answer is the same for the three; where a document can state the field, the stated
 answer stands beside them."""
@@ -25,8 +25,8 @@ from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import linkage as LK
 from verity_vllm.check.replay import opening as OP
 from verity_vllm.check.replay import population as POP
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.query.required import Q_MODULE_BODY_ID
+from verity_vllm.records import replay_codes as RC
 from verity_vllm.records.required_manifest import SCHEMA
 from verity_vllm.records.schema_ids import MOE_PLANE_ALIAS_CHECK_SCHEMA
 

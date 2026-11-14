@@ -99,16 +99,16 @@ from verity_vllm.check.replay.population import (
     population,
     split_not_executed,
 )
-from verity_vllm.check.replay.replay_codes import (
-    NOT_YET,
-    WHY_CLASSES_BY_NAME,
-    WHY_CLASSES_FAULT,
-)
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
 from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.query.required import QUERIES
+from verity_vllm.records.replay_codes import (
+    NOT_YET,
+    WHY_CLASSES_BY_NAME,
+    WHY_CLASSES_FAULT,
+)
 from verity_vllm.records.schema_ids import SAMPLED_REPLAY_SCHEMA
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "default_workers", "engine_facts_of_record",

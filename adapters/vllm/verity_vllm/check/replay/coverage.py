@@ -17,10 +17,10 @@ from verity_vllm.check.replay.population import (
     EXECUTED_PREFIX_RULE,
     NOT_EXECUTED_SCOPE,
 )
-from verity_vllm.check.replay.replay_codes import NOT_YET
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.replay_codes import NOT_YET
 from verity_vllm.records.required_manifest import RequiredManifest
 
 __all__ = ["form_b_families"]
