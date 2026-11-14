@@ -3,13 +3,15 @@ phase in their order, the weights' files a `--checkpoint-dir` names and the path
 each stage's line and writes nothing.  A GPU phase takes its lease before its first stage, runs every stage though one fails and
 writes their statuses beside the run; a stage name without a command leaves no record, and a gates stage that raises is a failed
 stage.  The gates stage writes the gates, the card, its copy under `--cards-dir` and its summary, and prints the card's head and
-the gates' table."""
+the gates' table.  The driver gives other code what its `__all__` lists and hands on no other module's name."""
 from __future__ import annotations
 
+import ast
 import json
 import re
 import shlex
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -298,3 +300,13 @@ def test_the_gates_stage_writes_the_gates_the_card_twice_and_its_summary_and_pri
 def test_the_driver_hands_a_fold_worker_s_options_to_the_worker_before_it_asks_for_its_own():
     with pytest.raises(SystemExit, match="^--worker fold needs --log$"):
         RC.main(cli.parse("match", ["--worker", "fold"], {}))
+
+
+def test_the_driver_binds_no_name_of_another_module_that_its_own_text_does_not_read():
+    """What the driver gives other code is its `__all__`.  Every other name it imports from a module is one its own text reads, so
+    a reader of such a name takes it from the module that defines it and not through the driver."""
+    tree = ast.parse(Path(RC.__file__).read_text())
+    bound = {a.asname or a.name for n in tree.body if isinstance(n, ast.ImportFrom) and n.module != "__future__" for a in n.names}
+    read = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name)}
+    assert RC.__all__ == ["Options", "fold_construction_args", "main"]
+    assert sorted(bound - read - set(RC.__all__)) == []
