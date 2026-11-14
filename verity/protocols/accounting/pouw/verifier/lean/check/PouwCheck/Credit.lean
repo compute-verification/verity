@@ -12,7 +12,7 @@ public import PouwCheck.Json
 public import PouwCheck.Opening
 public import PouwCheck.Pass
 public import PouwCheck.Rounds
-public import PouwWindow.Draw
+public import PouwWindow.Sample
 public import PouwWindow.Rounds
 public import Spot.ChallengerCoins
 public import Spot.ChallengerSession
