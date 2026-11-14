@@ -14,7 +14,14 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, p2, receipts, timing
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    p2,
+    receipts,
+    timing,
+)
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes import p2 as pous_p2
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -217,7 +224,7 @@ def test_the_tail_past_the_last_unit_is_in_no_plan(store) -> None:
 
 def test_a_p2_store_takes_no_append_no_tiles_and_no_sloth_session(store) -> None:
     """One session type over either codec: over a P2 store its blocks are units, an append is refused, check 3's unit
-    (which decodes) has no draws to take, no tiles bind, and the registration and codec are P2's together."""
+    (which decodes) has no samples to take, no tiles bind, and the registration and codec are P2's together."""
     reg = store.registration
     s = audit.AuditRun(params(reg), reg, None, coins.local(reg.digest, 0, 2, Entropy(b"c")), not_before_ns=0,
                        clock=Clock())

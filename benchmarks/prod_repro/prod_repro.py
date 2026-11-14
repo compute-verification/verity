@@ -99,11 +99,12 @@ TODAY = ("compiled", "compiled-again", "record")
 #: the most serving with our changes may cost over stock, in percent of stock's serving time
 TARGET = 1.0
 #: by model, as the benchmark names it: the id its cost at vLLM's published settings (`PROD`'s ours over its stock) is
-#: recorded under in a run's result.json (`measurement`; benchmarks/metrics.toml), and that measurement's unit
+#: recorded under in a run's result.json (`measurement`; benchmarks/prod_repro/metrics.toml), and that measurement's
+#: unit
 METRICS = {"glm53": "vllm/prod-serving-cost-glm53"}
 UNIT = "percent of stock's serving time"
 #: by model: the ids the replay's match and the advice of the pass it re-ran are recorded under, of ours at vLLM's
-#: published settings (`PROD`'s ours), and their units (`measurements`; benchmarks/metrics.toml)
+#: published settings (`PROD`'s ours), and their units (`measurements`; benchmarks/prod_repro/metrics.toml)
 MATCH = {"glm53": "vllm/prod-replay-match-glm53"}
 ADVICE = {"glm53": "vllm/prod-advice-bits-glm53"}
 MATCH_UNIT, ADVICE_UNIT = "percent of served tokens", "bits a request"
@@ -116,7 +117,7 @@ WINDOW = "every request of the load's rep, a window the command names: no audit'
 #: pass (``span``), as a trace (``load_step_trace``), and the bits its two classes of advice cost (``draft_table``)
 ENCODINGS = ROOT / "benchmarks/network_e2e/encodings/replay.py"
 #: what the kept count costs where it is not sent, and what that rests on
-DERIVED = "the kept count is 0 where the audited block derives it, and no Definition holds the accept test yet"
+DERIVED = "the kept count is 0 where the audited block derives it, and no served Program calls the accept test yet"
 NO_CIRCUIT = "no: nothing in this job compiles the settings' circuit"
 ON, OFF, UNCONFIRMED = "on", "off", "not confirmed"
 #: why a cost is not shown under its target where stock and ours did not serve at the same settings: the figure is
@@ -270,15 +271,19 @@ def replay_state(replay_dir: Path, expected: bool) -> dict:
 
 def topk_counters(dirs: list[Path]) -> dict | None:
     """The canonical top-k's counters over the processes that kept theirs in ``dirs`` (`dsa_topk.log_to`: a file a
-    process, written every few thousand calls and at its exit, so each figure is a lower bound): the processes, the
-    calls of the indexer's top-k, the rows of more than its keys that were rewritten, and those of them with a tie
-    across the k-th key, the rows where vLLM's own kernels may select another set from run to run. None where no
+    process, written over at the end of each of its calls, so a killed process's calls are in it; its rows are its
+    device's as last read, every few thousand calls and at an exit in order): the processes, the calls of the
+    indexer's top-k, the rows of more than its keys that were rewritten, those of them with a tie across the k-th
+    key, the rows where vLLM's own kernels may select another set from run to run, and the calls the processes had
+    made when those rows were read (``rows_at``: where it is below the calls, the rows are a lower bound). None where no
     process kept any."""
     recs = [json.loads(f.read_text()) for d in dirs if d.is_dir() for f in sorted(d.glob("dsa_topk.*.json"))]
     if not recs:
         return None
-    return {"processes": len(recs), "calls": sum(sum(r["calls"].values()) for r in recs),
-            **{k: sum(dev.get(k, 0) for r in recs for dev in r["rows"].values()) for k in ("rows_long", "rows_tied")}}
+    calls = [sum(r["calls"].values()) for r in recs]
+    return {"processes": len(recs), "calls": sum(calls),
+            **{k: sum(dev.get(k, 0) for r in recs for dev in r["rows"].values()) for k in ("rows_long", "rows_tied")},
+            "rows_at": sum(r.get("rows_at", n) for r, n in zip(recs, calls))}
 
 
 def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
@@ -1217,19 +1222,36 @@ def _engine(e: dict) -> list[str]:
 
 
 def _topk(c: dict) -> str:
-    """What the canonical top-k's processes counted (`topk_counters`); counters kept before the ties were hold none."""
+    """What the canonical top-k's processes counted (`topk_counters`), with the calls their rows were read after where
+    that is below the calls; counters kept before the ties were hold none, and ones kept before ``rows_at`` was are
+    read as rows read at the last call."""
+    at = c.get("rows_at", c["calls"])
     return (f"{c['processes']} process{'' if c['processes'] == 1 else 'es'} kept counters: at least {c['calls']:,} "
             f"calls of the indexer's top-k, {c['rows_long']:,} rows of more than its keys rewritten"
-            + (f", {c['rows_tied']:,} of them with a tie across the k-th key" if "rows_tied" in c else ""))
+            + (f", {c['rows_tied']:,} of them with a tie across the k-th key" if "rows_tied" in c else "")
+            + ("" if at == c["calls"] else f", the rows as read after {at:,} of the calls"))
 
 
 def _names(xs: Sequence[str]) -> str:
     return xs[0] if len(xs) == 1 else f"{', '.join(xs[:-1])} and {xs[-1]}"
 
 
+def _served(tokens: float | None, seconds: float | None) -> str:
+    """A pass's output tokens and its seconds, or which of the two its record does not hold: a pass none of whose
+    requests was served has neither (`serve_tax.load_metrics`), and its line is still written."""
+    if tokens is None and seconds is None:
+        return "its record holds no output tokens and no seconds"
+    if tokens is None:
+        return f"its record holds no output tokens, {seconds:.1f} s"
+    if seconds is None:
+        return f"{tokens:,.0f} output tokens, its record holds no seconds"
+    return f"{tokens:,.0f} output tokens in {seconds:.1f} s"
+
+
 def _passes(v: dict) -> list[str]:
-    """Each pass's counters, a line a pass; then how each arm's requests were sampled, and for each directory whether
-    its server was on the canonical top-k and what its processes counted there."""
+    """Each pass's counters, a line a pass, with its output tokens and its seconds where its record holds them
+    (`_served`); then how each arm's requests were sampled, and for each directory whether its server was on the
+    canonical top-k and what its processes counted there."""
     if not v["measured"]:
         return [f"each pass: {v['why']}"]
     if not v["passes"]:
@@ -1245,7 +1267,7 @@ def _passes(v: dict) -> list[str]:
                 f", {x['drafts']:,.0f} drafts, {x['accepted_tokens']:,.0f} of their {x['draft_tokens']:,.0f} tokens accepted "
                 f"({x['accepted_tokens'] / x['draft_tokens']:.2%})" if x["drafts"] and x["draft_tokens"] else ", no drafts")
         lines.append(f"  {x['dir']} {x['pass']} rep {x['rep']}{', left out' if x['left_out'] else ''}: {counted}; "
-                     f"{x['output_tokens']:,.0f} output tokens in {x['seconds']:.1f} s")
+                     f"{_served(x['output_tokens'], x['seconds'])}")
     how = {"greedy": [a for a, x in v["sampling"].items() if not x["sampled"]],
            "sampled with no seed sent": [a for a, x in v["sampling"].items() if x["sampled"] and not x["seeded"]],
            "sampled, each under a seed its client sent": [a for a, x in v["sampling"].items() if x["seeded"]]}

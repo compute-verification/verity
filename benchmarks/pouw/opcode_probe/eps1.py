@@ -337,7 +337,7 @@ def cmd_uniform(a: argparse.Namespace) -> int:
     return 0
 
 
-#: qstar's fastest table kernel (fr16_c32, benchmarks/pouw/qstar) sustains this
+#: QSTAR's fastest table kernel (fr16_c32) sustains this, in TB/s
 QSTAR_TBS = 3.3
 
 

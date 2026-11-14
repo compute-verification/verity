@@ -30,6 +30,7 @@ untraced = [
     "tests/test_control_door.py",
     "tests/test_deploy.py",
     "tests/test_drive_sh.py",
+    "tests/test_gh_read_token.py",
     "tests/test_keeper.py",
     "tests/test_vqueue_unit.py", "tests/test_nightly_check.py",
     "tests/test_watchers.py",
@@ -44,6 +45,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/agent_watch.sh",
           "tools/research/src/research/slack.py", "tools/research/src/research/linear.py",
           "tools/research/src/research/goals.py",
+          # whose code a node's tick of the queue's loop runs (test_vqueue_unit)
+          "tools/research/src/research/at_main.py", "tools/research/src/research/guard_notice.py",
           "tools/research/src/research/vocabulary.py", "tests/test_retired_terms.py",
           "tools/research/src/research/notes_sync.py",
           "tools/research/src/research/telemetry/cancel.py", "tools/research/src/research/telemetry/classify.py",
@@ -62,6 +65,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "tools/research/src/research/__init__.py", "tools/research/src/research/telemetry/__init__.py",
           # the App's token helper, which the verified queue's token oneshot runs on its node
           "infra/control/gh_app_token.sh",
+          # the read-only token every watcher reads GitHub with, held apart from the write tokens' caches, and the watchers' gh
+          "infra/control/gh_read_token.sh", "infra/control/gh_notes_token.sh", "infra/control/bin/gh",
           # the nightly check's loop, tested here: it reads a run as the dispatcher reads a check's, writes the state the
           # monitors' nightly-check reads, and pushes its label as the queue pushes a ready mark
           "infra/control/nightly_check.py", "tools/research/src/research/jobs", "tools/research/src/research/monitors.py",

@@ -278,7 +278,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - **Noise period** L′: the period of Dither's noise along K, a length, not a time (Period); a segment is t = L/L′
   noise periods.
 - **Prefix sums** T_s: Dither's committed running sums along a segment, stored as 16-bit elements.
-- **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md` while
+- **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/protocols/experimental/dither/PROTOCOL.md` while
   experimental). Its Lean covers the no-fold round (`Pouw.Dither`), not v3.2's proof block. Its receipt: each segment's
   noised prefix sums are committed in 16 KiB SHA-512 hiding commitments before the check coin, and the sampled cells
   opened after it. The served PoUW moves to it; `SharedNoiseLucks` (the H1 and J10-R folds') has no place in it.
@@ -304,6 +304,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
     and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one R1CS block can't be proved as one.
 
   An R1CS block is never a proof block; `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
+- Flock's **Merkle cap** (`cap`, `caps`, `recursiveCaps`) is the row of a commitment tree's nodes that stands in for its root, the 2^c nodes at depth c (`Flock.Level.cap`), which a proof's rows open to (`Flock.merkleCheck`); it is not Pearl's "cap" (Older names).
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`).

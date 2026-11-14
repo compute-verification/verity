@@ -32,8 +32,8 @@ from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v2"
 WORD = 128
-#: the netlist's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past 100 KB),
-#: and the characters a digest encodes at a time
+#: the circuit description's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past
+#: 100 KB), and the characters a digest encodes at a time
 NETLIST_ROWS = 1 << 10
 HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
@@ -121,25 +121,41 @@ def _boolean_ops() -> None:
         importlib.import_module(f"{OB.__name__}.{m.name}")
 
 
+class AmbiguousWord(Exception):
+    """A word primitive that registered Boolean Definitions build with more than one builder (`_boolean_build`)."""
+
+
 def _boolean_build(key):
-    """The ``build`` of a registered Boolean Definition (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
+    """The ``build`` of the registered Boolean Definitions (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
-    lowers an activation of the Definition itself (`lower_gates`), commits included. Every module of
-    `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps, `ops.s8`'s
-    limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has no build."""
+    lowers an activation of the Definition itself (`lower_gates`), commits included. One marked ``opt_in`` is left out, as
+    `verity.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
+    `AmbiguousWord` when those left hold more than one builder (by identity, unwrapped), so no import order picks one. Every
+    module of `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps,
+    `ops.s8`'s limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has
+    no build."""
+    import inspect
+
     from verity.circuits.defs import REGISTRY
 
     _boolean_ops()
+    found = []
     for d in list(REGISTRY.defs.values()):
         w, build = getattr(d, "word", None), getattr(d, "build", None)
-        if callable(build) and getattr(w, "id", None) == key:
-            return build
-    return None
+        if callable(build) and getattr(w, "id", None) == key and not getattr(d, "opt_in", False):
+            found.append(d)
+    found.sort(key=lambda d: d.id)
+    if len({id(inspect.unwrap(d.build)) for d in found}) > 1:
+        raise AmbiguousWord(f"{key} is built by more than one builder, of {', '.join(d.id for d in found)}: give it one "
+                            "Boolean Definition, or a piece of its own in `ir_lower.PIECES`")
+    return found[0].build if found else None
 
 
 class _Pieces(dict):
     """:data:`PIECES`, which also resolves a primitive whose id carries a width (``tail_pieces.FAMILIES``: ``BitAtx{W}_v1``)
-    or an arity (:data:`GATE_FAMILIES`), or that a registered Boolean Definition computes (`_boolean_build`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest."""
+    or an arity (:data:`GATE_FAMILIES`), or that a registered Boolean Definition computes (`_boolean_build`); ``wrap`` (the Boolean export's tracer) wraps a piece resolved later like the rest.
+    A word `_boolean_build` refuses raises its `AmbiguousWord` from every question, ``key in PIECES`` and `get` included: a
+    False would read as no piece (`NoPiece`) and hide the cure."""
 
     wrap = None
 
@@ -426,7 +442,7 @@ class Units:
     output leaf p, ``("cut", k)`` the k-th cut gate (``cut[k]``, a gate index). Cut gates are the words where the instance is
     split: a unit that computes one outputs it, a unit that reads one takes it as an input. ``tail`` lists the gates of the
     components that read no input leaf (they compute cut words from cut words); the verifier evaluates them itself with the
-    IR evaluator. ``gates`` is unit 0's gate list and ``signature`` the shape every unit shares."""
+    circuits' reference evaluator. ``gates`` is unit 0's gate list and ``signature`` the shape every unit shares."""
 
     target: object
     in_widths: list[int]
@@ -670,7 +686,7 @@ def _leaf_width(target, pos: int) -> int:
     return widths[pos]
 
 
-# --- the unit netlist ------------------------------------------------------------------------------------------------------
+# --- the unit's circuit description ---------------------------------------------------------------------------------------------
 
 @dataclass
 class LoweredUnit:
@@ -1000,8 +1016,8 @@ def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves:
 
     The text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
     n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
-    (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
-    pins the units' leaf maps and the cut structure."""
+    (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the circuit description's
+    sha256 pins the units' leaf maps and the cut structure."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -1162,7 +1178,8 @@ class Lowering:
 
     def sha256_of(self, expanded: str) -> str:
         """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
-        lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the netlist is rendered once."""
+        lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the circuit description is rendered
+        once."""
         return self.sha256_after(_sha256(expanded))
 
     def sha256_after(self, h: hashlib._Hash) -> str:
@@ -1321,10 +1338,10 @@ def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int, 
 
 
 def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, path, meta: dict, cuts: np.ndarray | None = None) -> dict:
-    """``flock-ir-instances/v1``: one JSON header line, then every unit's input words (``in_words`` x 16 bytes, the netlist's
-    input columns), then every unit's output words (``out_words`` x 16 bytes, the netlist's output columns); units are
-    instance-major. Cut words (``cut_words``) are public words of the units that read or compute them; which ports hold them
-    and the tail that relates them are the netlist's (:attr:`Lowering.cut`), never the header's."""
+    """``flock-ir-instances/v1``: one JSON header line, then every unit's input words (``in_words`` x 16 bytes, the circuit
+    description's input columns), then every unit's output words (``out_words`` x 16 bytes, the circuit description's output
+    columns); units are instance-major. Cut words (``cut_words``) are public words of the units that read or compute them; which
+    ports hold them and the tail that relates them are the circuit description's (:attr:`Lowering.cut`), never the header's."""
     n = flat_in.shape[0]
     lay, U = low.layout, low.units
     if U.cut and cuts is None:
