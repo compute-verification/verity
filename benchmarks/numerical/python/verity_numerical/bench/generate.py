@@ -15,8 +15,9 @@ import json
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
 
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
