@@ -22,8 +22,9 @@ FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "t
 OTHER_FAMILIES = {"dense", "dsa_topk", "dsa_topk_mask", "fa2_softcap", "fa3_check_inf", "fp8_moe_experts", "marlin_moe", "sampling", "topp_geometry",
                   "topp_word_gates"}
 THIRD_PARTY = {"numpy"}
-#: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
+#: the catalog, where the layout move put core's Definitions, silicon models and targets: not all of `verity.circuits`,
+#: which holds the kernels and the private circuits too
+CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 #: (module, what it imports outside the rule) -> why it stays
@@ -79,6 +80,11 @@ def test_definition_module_imports_only_definitions(name):
     bad = [f"{name}.py:{line}: {mod}" for line, mod in _imports(name) if not _allowed(mod) and (name, mod) not in EXCEPTIONS]
     assert not bad, ("a Definition module imports what is not a Definition module (move the code that needs it out of the "
                      "registry, into the integration package):\n  " + "\n  ".join(bad))
+
+
+@pytest.mark.parametrize("mod", ["verity.circuits.kernels", "verity.circuits.kernels.tc", "verity.circuits.private_circuits.universal"])
+def test_the_kernels_and_the_private_circuits_are_not_the_catalog(mod):
+    assert not _allowed(mod)
 
 
 def test_every_exception_is_still_needed():

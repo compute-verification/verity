@@ -44,8 +44,9 @@ OTHER_FAMILIES = {
                      "the chains with the softmax scale or the softcap's words an input, which the Boolean versions lower"),
 }
 THIRD_PARTY = {"numpy"}
-#: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
+#: the catalog, where the layout move put core's Definitions, silicon models and targets: not all of `verity.circuits`,
+#: which holds the kernels and the private circuits too
+CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 
@@ -140,8 +141,11 @@ def test_the_checker_catches_a_frontend_import(monkeypatch, tmp_path):
         "from verity.circuits.defs import composite\n"
         "from verity.definitions.registry import prims as P, targets\n"
         "from verity.definitions.registry.b1 import ZERO16, fa2_kblock_n\n"
+        "from verity.circuits.kernels import tc\n"
+        "from verity.circuits.private_circuits import universal\n"
         "from verity_vllm.config import X\n\n\n"
         "def f():\n    from verity.definitions.registry import hopper as H\n    return P.F32, H.SERVE_HOPPER, H.Fa3InvSum\n")
     monkeypatch.setattr(sys.modules[__name__], "REGISTRY", tmp_path)
     assert sorted(v.split(": ", 1)[1] for v in _violations("fa2_check_inf")) == sorted([
-        "imports verity_vllm.config", "imports verity.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER"])
+        "imports verity_vllm.config", "imports verity.definitions.registry.targets", "takes b1.fa2_kblock_n", "takes hopper.SERVE_HOPPER",
+        "imports verity.circuits.kernels", "imports verity.circuits.private_circuits"])

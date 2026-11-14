@@ -32,8 +32,9 @@ OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES} | {EVIDENCE}
-#: the catalog, where the layout move put core's Definitions and silicon models
-CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.circuits.ops", "verity.circuits.silicon")
+#: the catalog, where the layout move put core's Definitions, silicon models and targets: not all of `verity.circuits`,
+#: which holds the kernels and the private circuits too
+CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 
 
 def _imports(name: str) -> list[tuple[str, int]]:
@@ -80,7 +81,10 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(name):
 
 def test_the_rule_sees_what_it_forbids(tmp_path, monkeypatch):
     (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from verity.definitions.numerics import fp8_twins\n"
-                                   "    from . import fp8, targets\n")
+                                   "    from . import fp8, targets\n"
+                                   "    from verity.circuits.kernels import tc\n"
+                                   "    from verity.circuits.private_circuits import universal\n")
     monkeypatch.setattr(sys.modules[__name__], "DIR", tmp_path)
     assert [(m, _allowed(m)) for m, _ in _imports("x")] == [
-        ("numpy", False), ("verity.definitions.numerics", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False)]
+        ("numpy", False), ("verity.definitions.numerics", False), (f"{REGISTRY}.fp8", True), (f"{REGISTRY}.targets", False),
+        ("verity.circuits.kernels", False), ("verity.circuits.private_circuits", False)]
