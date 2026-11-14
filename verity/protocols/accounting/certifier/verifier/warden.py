@@ -34,7 +34,8 @@ which it ends inside the run ("The lengths rows").
 a bucket each way from s on:
 - ingress: the client's bytes as `DATA` cells, as soon as a whole cell's bytes have arrived, then `END` once the
   client's `END` cell (or its end of stream) has arrived, `PAD` in a slot with neither; the bucket of the `END` is a,
-  and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells. Its
+  and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells, and
+  in a schedule with content rows within the bytes its largest class holds (the schedule's `request_bound`). Its
   release never waits on the server: the server gets a connection's ingress whole once its `END` is released, as
   `release.with_release` puts it, N the count of `END`s the network certifier released before (so the order of the `END`
   cells in the ingress records), the run the network certifier's `run_id` and the bucket a; what it releases before
@@ -127,6 +128,10 @@ rows under form 2 and a response cap only) has a fourth table a class, of two wo
 `max_tokens` and the count of its prompt's ids, read from the request's bytes in the hand
 (`content_rows.request_words`) by the form every cell of a released request was held to at ingress, and from nothing
 more of the device or of a server.
+It releases no request that no class holds: a request longer than the schedule's largest class holds (the
+schedule's `request_bound`) is ingress past its bounds, so its connection fails closed (ingress) and none of it is
+released. A released request that no class held would be filed in none (`content_rows.file`), with no content row
+for any verdict on a class to be of.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
 and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a
@@ -379,6 +384,16 @@ class WardenParams:
     def payload(self) -> int:
         """P: the bytes a `DATA` cell carries."""
         return self.cell_bytes - HEADER.size
+
+    @property
+    def request_bound(self) -> int:
+        """The bytes of the longest request ingress admits: `ingress_cells` cells' payloads and, in a schedule with
+        content rows, no more than its largest class holds (`content_rows.request_room`), so that every request
+        the network certifier releases is one a class of the schedule holds."""
+        most = self.ingress_cells * self.payload
+        if self.content is None:
+            return most
+        return min(most, max(_content_rows().request_room(self.cell_bytes, c[0]) for c in self.content))
 
     @property
     def grid(self) -> GridParams:
@@ -669,6 +684,7 @@ class Warden:
         self._ended = 0  # under form 2, the windows whose lengths rows are ended: 0 … _ended − 1
         #: the first bucket that admits nothing: under form 2, the first from which a connection may end past the run
         self._admits = windows * params.window - (params.span if params.closes else 0)
+        self._request_bound = params.request_bound
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -881,8 +897,9 @@ class Warden:
         c.tasks = [asyncio.create_task(self._client(c)), asyncio.create_task(self._server(c))]
 
     async def _client(self, c: _Connection) -> None:
-        """Read the client's cells into `c.ingress` until its `END` (or its end of stream), at most `ingress_cells`
-        cells' bytes. Only the payload of each passes: the network certifier makes every cell it sends."""
+        """Read the client's cells into `c.ingress` until its `END` (or its end of stream), at most the ingress
+        bound's bytes (the schedule's `request_bound`). Only the payload of each passes: the network certifier makes
+        every cell it sends."""
         B, p = self.params.cell_bytes, self.params.payload
         try:
             while not c.ingress_ended:
@@ -900,7 +917,7 @@ class Warden:
                 c.ingress += raw[HEADER.size:HEADER.size + n]
                 c.bytes_in += n
                 c.ingress_ended = kind == END
-                if c.bytes_in > self.params.ingress_cells * p:
+                if c.bytes_in > self._request_bound:
                     c.problem = c.problem or "ingress"
                     return
                 self._changed.set()

@@ -63,14 +63,18 @@ rule, and never by requests what a check counts by capacity:
 * the scan under each of `CHANGES`, the three changes to its check, and under all three: a response's length held to
   its Program's output count, and that count to its ids by a stop block, a proof block that checks where a response's
   ids stop, sampled on a served audit, so that the schedules are 0 and the connections that fail are charged pooled
-  over the period (`failed`); the release times taken once, by the compute side's tick, so that the jitter is 0 at
+  over the period (`failed`), where a served run's verdict records say the stop class is charged below its schedule
+  and each connection's schedule where they don't (The stop class's verdicts, below); the release times taken once, by the compute side's tick, so that the jitter is 0 at
   either D_j, which rests on the simulated set-time card, so a row under this change carries the label at either
   D_j, in the document and in its printed name; and the entries charged through the compute audit, whose own bound
   then stands in their place and is not counted here;
 * the design, which no run has behind it: head checks, a lengths unit on the network certifier's records, and a stop
-  block sampled on a served audit. The lengths unit holds a response's length to its Program's output count and the
-  stop block holds that count to the ids, so the lengths are held; the entries are the compute audit's; and its term
-  is the jitter, the pooled failures and the count (below);
+  block sampled on a served audit. How its stop class is charged is read from a served run's verdict records and
+  from nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths unit holds a
+  response's length to its Program's output count and the stop block holds that count to the ids, so the lengths
+  are held and its term is the jitter, the pooled failures and the count (below). With no record read, or one
+  verdict lacking, each connection is charged its schedule and the row is the one before it. The entries are the
+  compute audit's either way;
 * the design with no stop block, the same before a stop block has been sampled on a served audit: nothing holds the
   output count to the ids, so the server picks it and each connection is still charged its schedule, as the scan
   charges it. Its failed connections, jitter, count and entries are the design's.
@@ -84,7 +88,23 @@ The schedule's classes, delay and ingress buckets are inputs, by default those o
 (`COST_RUNNER`). Its lanes are the input the entries read: with none given the count is at the least lanes whose
 schedule releases what a link serves in an execution phase, the least the rule can charge at this load, and given
 lanes whose schedule releases fewer are refused. The rows that hold the lengths by a stop block and are not the
-design's (`lengths`, `all three`) are charged none, and say why in their own lines (`NO_COUNT`).
+design's (`lengths`, `all three`) are charged none, and say why in their own lines (`NO_COUNT`). The count's line is
+the count alone: no tick holds when a head leaves, so the line says the head's time is not held to one
+(`HEAD_TIME`) and prints no charge for a head that leaves late.
+
+**The stop class's verdicts.** Every row that holds the lengths by a stop block (`Kind.verdicts`: `lengths`,
+`all three` and the design's) is charged below its schedules only on the execution phases a `Stop` holds: the
+answer of the network certifier's own rule (`class_charge.charge`) on a served run's signed heads and verdict
+records, which `stop_verdicts` reads from the evidence store's runs of record and a caller passes to `table` and
+`document`. A row's execution phases are its scope's over its monitoring period, never the ones a run kept a
+registration for: the answer says how many of a link's execution phases are held (`Stop.held`), that share of the
+row's connections is charged below its schedule (`Stop.share`), and every other execution phase is charged each
+connection's whole schedule, one no registration was read for among them. So leaving an execution phase out of a
+run's files lowers no figure. With no answer passed it is `NO_RECORDS`, each connection its whole schedule. No input
+holds the answer and `main` has no option for it. The lines print how the rows are charged and why, and each verdict
+read under the mark `RUN_NOT_PROVED`. Where an execution phase of some row is charged its whole schedule, the
+document holds apart what each row would be with every one held (its ``stop``'s ``with_verdicts``): figures no
+record read supports, which no row and no sum holds.
 
 **The scans' δ.** A row's ε is its execution phases' scans' δ summed, a union bound, so a δ that suits one execution
 phase bounds nothing over the world's year. Where a caller gives none, each execution phase's scan is at the δ at
@@ -117,6 +137,7 @@ from typing import Any, NamedTuple
 
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import calibration
+from verity.protocols.accounting.certifier.verifier import class_charge as CC
 from verity.protocols.accounting.certifier.verifier import warden as W
 from verity import protocol
 
@@ -513,9 +534,10 @@ OF_RECORD = JITTER_BOUND
 SET_TIME = "with a simulated set-time card"
 #: the mark of the set-time card and of the figure printed under its label, one of `MARKS`
 SIMULATED = "simulated"
-#: the mark of a row whose accept a run gives and no proof covers. It is a row's mark and no input's, so not one of
-#: `MARKS`: it is the harness's mark of that name (`verity_bench.exfiltration`'s `MARKS`), whose tests hold this string
-#: to it
+#: the mark of what a run gives and no proof covers: a row whose accept a run gives carries it, and a verdict a run
+#: produced is printed under it, since a verifier judged it and no proof of that verifier is read. It is no input's
+#: mark, so not one of `MARKS`: it is the harness's mark of that name (`verity_bench.exfiltration`'s `MARKS`), whose
+#: tests hold this string to it
 RUN_NOT_PROVED = "run, not proved"
 #: what a figure under `SET_TIME` rests on, the source of the card's input and of that figure
 SET_TIME_CLAUSE = ("`trusted-host`, set-time card clause: the network certifier's card releases each bucket at the "
@@ -551,13 +573,53 @@ class Kind(NamedTuple):
     makes to the scan's check (`CHANGES`; None for the clock form, which is another check), what it counts and by
     which rule, whether a stop block holds a response's output count to its ids (`terms`' ``stop``), whether its
     check reads the head that states each content class's held rows, so that it is charged the count (`counted`),
+    whether its stop block holds that count only as a served run's verdict records say (`Stop`), so that with
+    no such records each connection is charged its schedule: every row that holds the lengths by a stop block,
     and the mark its accept carries (`RUN_NOT_PROVED`; None where it carries none)."""
     standing: str
     changes: tuple[str, ...] | None
     counts: str
     stop: bool = True
     count: bool = False
+    verdicts: bool = False
     mark: str | None = None
+
+
+class Stop(NamedTuple):
+    """How the stop class is charged, as the verdict records of a served run say (`stop_verdicts.stop`, which reads
+    them through the network certifier's own rule, `class_charge.charge`). ``held``: how many execution phases of a
+    link are charged below their schedule, those whose signed head was read and in which every class that holds a
+    row has its verdicts. Every other execution phase of a scope's monitoring period is charged its whole schedule,
+    one no registration was read for among them. ``why``: one line a class and execution phase read, and what was
+    read. ``verdicts``: each verdict read that is on a signed head read, with the mark it is printed under
+    (`RUN_NOT_PROVED`), its ``withheld`` word or null, its ``codes`` and its ``stopped`` word or null; one that is
+    not accepted is printed stopped with its word or withheld for its word, or refused where it states neither."""
+    held: int
+    why: tuple[str, ...]
+    verdicts: tuple[Mapping[str, Any], ...] = ()
+
+    def share(self, phases: Any) -> Fraction:
+        """The share of a scope's ``phases`` execution phases over a monitoring period that is charged below its
+        schedule: the ``held`` ones, and at most all of them. The phases counted are the monitoring period's, so
+        one that no record covers is in the rest."""
+        if type(self.held) is not int or self.held < 0:
+            raise ValueError(f"a stop class's held execution phases are a count, an integer from 0, not "
+                             f"{self.held!r}: `stop_verdicts.stop` counts them from a run's records")
+        return Fraction(1) if self.held >= phases else Fraction(self.held) / Fraction(phases)
+
+
+#: the four verdicts a stop class owes, as the network certifier's rule names them
+VERDICTS = CC.VERDICTS
+#: what a row that holds the lengths by a stop block, and is not the design's, says of how that block is read
+BY_VERDICTS = ("its stop class is charged as the row `design`'s is, by a served run's verdict records: with one "
+               "verdict lacking or no record read, each connection is charged its schedule, as is each connection "
+               "of an execution phase no registration was read for")
+#: what the count's line says of when a head leaves: no tick holds it, so the line prices no late head
+HEAD_TIME = ("the head's time is not held to a tick: nothing holds when the head of a link's execution phase "
+             "leaves, and what a head that leaves late carries is not counted here, at 0 or at any figure")
+#: how the stop class is charged where no verdict record is read: its whole schedule
+NO_RECORDS = Stop(0, (f"no verdict record was read, so each connection is charged its whole schedule: the "
+                      f"{', the '.join(VERDICTS)} are each missing",))
 
 
 #: why a row that holds the lengths by a stop block, and is not the design's, is charged no count
@@ -578,11 +640,13 @@ ROWS = {
                "the clock form: the schedules, ⌈log2 #Σ_sync^m⌉ over a link's m execution phases, counted by link "
                "whatever it serves; no fail cell, its parameters listing no connection; and the jitter of each "
                "link's execution phase"),
-    **{name: Kind("a change to the scan", (name,), what + (f"; {NO_COUNT}" if name == "lengths" else ""))
+    **{name: Kind("a change to the scan", (name,),
+                  what + (f"; {BY_VERDICTS}; {NO_COUNT}" if name == "lengths" else ""), verdicts=name == "lengths")
        for name, what in CHANGES.items()},
     "all three": Kind("a change to the scan", tuple(CHANGES),
                       "the three changes together, with the stop block the lengths' change rests on and the "
-                      f"simulated set-time card the timing's change rests on; {NO_COUNT}"),
+                      f"simulated set-time card the timing's change rests on; {BY_VERDICTS}; {NO_COUNT}",
+                      verdicts=True),
     "design, no stop block": Kind(
         "a design with no run behind it", ("lengths", "entries"),
         "the design before a stop block, a proof block that checks where a response's ids stop, has been sampled on "
@@ -593,11 +657,16 @@ ROWS = {
         stop=False, count=True),
     "design": Kind("a design with no run behind it", ("lengths", "entries"),
                    "head checks, a lengths unit on the network certifier's records, and a stop block sampled on a "
-                   "served audit: the lengths are held, the stop block holding a response's output count to its "
-                   "ids, and the entries are the compute audit's, so its term is the jitter, the failed "
-                   "connections' pooled charge and the count, what the head of each link's execution phase states "
-                   "of the rows each content class holds, counted by link",
-                   count=True),
+                   "served audit. Its stop class is charged as a served run's verdict records say, by the network "
+                   "certifier's rule: below its schedule only with a count above 0 and its four verdicts, each "
+                   "accepted, complete and on the signed head of its execution phase. Then the lengths are held, the stop block holding a "
+                   "response's output count to its ids, and its term is the jitter, the failed connections' "
+                   "pooled charge and the count, what the head of each link's execution phase states of the rows "
+                   "each content class holds, counted by link. With one verdict missing, refused or not complete, "
+                   "or no record read, each connection is charged its schedule, as in the row before it, as is "
+                   "each connection of an execution phase no registration was read for. Its entries are the "
+                   "compute audit's either way",
+                   count=True, verdicts=True),
 }
 
 
@@ -879,14 +948,17 @@ def period_delta(inp: Mapping[str, Input]) -> Scan:
     return Scan(PERIOD_ERROR / phases, False, PERIOD_ERROR, most.name, period, phases)
 
 
-def table(inp: Mapping[str, Input]) -> list[Row]:
+def table(inp: Mapping[str, Input], stop: Stop = NO_RECORDS) -> list[Row]:
     """Each check's terms (`ROWS`) at each scope's load (`scopes`) over each monitoring period (`PERIODS`), from
     ``inp`` (`inputs`), in exact arithmetic but for the failed connections' charge and the count. A scope serves the
     world's requests a year in proportion to its GPU-seconds, so every row counts all its scope serves: the scan's
     connections by request, the links' execution phases by link, and the entries by capacity where the lanes are
     given, never by requests what a check counts by capacity. The count (`counted`) is by link, for each of its
-    execution phases, on the rows whose check reads the head that states it (`Kind.count`). A row's ε is its
-    execution phases' scans' δ summed, each scan at `period_delta`'s."""
+    execution phases, on the rows whose check reads the head that states it (`Kind.count`). A row whose stop block
+    is read from verdict records (`Kind.verdicts`) is charged below its schedules only on the share of its
+    execution phases that ``stop`` holds (`Stop.share`), its connections being spread evenly over them, and its
+    whole schedules on the rest: with no record, on all of them. A row's ε is its execution phases' scans' δ
+    summed, each scan at `period_delta`'s."""
     cls, lanes, syncs = _class(inp), inp["lanes"].value, inp["syncs"].value
     failing, scan_delta = Fraction(inp["failure_rate"].value), period_delta(inp).delta
     if not (0 <= failing <= 1 and 0 < scan_delta < 1 and inp["world_requests"].value >= 0):
@@ -909,9 +981,14 @@ def table(inp: Mapping[str, Input]) -> list[Row]:
                 if kind.changes is None:
                     at = {dj: clock_terms(links, each, syncs=syncs, steps=cls.T, dj=dj) for dj in JITTERS}
                 else:
-                    at = {dj: terms(connections, phases, cells=cls.cells, steps=cls.T, dj=dj, entries=entries,
-                                    changes=kind.changes, failures=failing * connections, stop=kind.stop)
-                          for dj in JITTERS}
+                    given = {"cells": cls.cells, "steps": cls.T, "entries": entries, "changes": kind.changes,
+                             "failures": failing * connections}
+                    at = {dj: terms(connections, phases, dj=dj, stop=kind.stop, **given) for dj in JITTERS}
+                    if kind.verdicts:
+                        # only the schedules read the stop block: held on a share of the phases, whole on the rest
+                        share = stop.share(phases)
+                        at = {dj: t._replace(schedules=share * t.schedules + (1 - share) * terms(
+                            connections, phases, dj=dj, stop=False, **given).schedules) for dj, t in at.items()}
                 if kind.count:
                     at = {dj: t._replace(count=float(phases) * a_phase) for dj, t in at.items()}
                 rows.append(Row(scope, period, name, requests, phases, at, phases * scan_delta))
@@ -936,7 +1013,8 @@ def _size(bits: Any) -> dict | None:
 
 
 def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_GB, commit: str | None = None,
-             run: str | None = None, only: Iterable[str] = (), periods: Iterable[str] = ()) -> dict:
+             run: str | None = None, only: Iterable[str] = (), periods: Iterable[str] = (),
+             stop: Stop = NO_RECORDS) -> dict:
     """`table`'s rows as a document: each row's terms in bits and GB, the network certifier's term at each jitter
     bound beside ``target_gb`` and the weights, an execution phase of one link and a request; what each row counts
     and where it stands (`ROWS`); the inputs; and at the top the term of record, the term over the world's year as
@@ -948,10 +1026,18 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     other row. A row's ``count`` is its count's charge, 0 where its check reads no head that states one, and the
     document's ``count`` says how it is counted (`Count`): the schedule, R as ``releases``, the bits a class and a
     link's execution phase, the rows it is on, its charge over the world's year beside the target, and the same rule
-    at the cost runner's own schedule (``cost_runner``), which is that runner's and no row's.
+    at the cost runner's own schedule (``cost_runner``), which is that runner's and no row's; its ``head_time`` is
+    `HEAD_TIME`, since no tick holds when a head leaves, and the document holds no charge for a late head.
+    ``stop`` (`Stop`; with none given, `NO_RECORDS`) is how the stop class of the rows read from verdict records
+    (`Kind.verdicts`) is charged, and the document's ``stop`` holds it: the rows, ``held_phases``, how many of a
+    link's execution phases are charged below their schedule, ``below``, whether that is every execution phase
+    of every scope and monitoring period, the lines that say why, each verdict read under its mark, and, where
+    some execution phase is charged its whole schedule, ``with_verdicts``: those rows as they would be with every
+    one held, in a row's own fields, which no record read supports and nothing else of the document holds.
     ``failure_rate_at_target`` is the largest failure rate at which the design's term over the
-    world's year, with its release times taken once, is at most the target: the failed connections' charge and the
-    count; it is None where the count alone is over the target. ``only`` and ``periods`` keep the rows of those
+    world's year, with its release times taken once, is at most the target: the failed connections' charge, the
+    count and, where the stop class is charged its whole schedule, the schedules; it is None where the count and
+    those schedules alone are over the target. ``only`` and ``periods`` keep the rows of those
     scopes and monitoring periods; ``covers`` is the share of its scope's compute a row counts, and
     ``request_count`` which of `COUNTS` its requests are, the document's one.
 
@@ -981,21 +1067,30 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
         return {**_size(t), "of_target": float(t / target), "of_weights": float(t / WEIGHTS.bits),
                 "bits_a_phase": float(t / r.phases), "bits_a_request": float(t / r.requests) if r.requests else None}
 
-    rows = [{"scope": r.scope.name, "period": r.period, "row": r.name, "standing": ROWS[r.name].standing,
-             "mark": ROWS[r.name].mark,
-             "with_set_time_card": SET_TIME if "timing" in (ROWS[r.name].changes or ()) else None,
-             "machines": r.scope.machines, "gpu_seconds": r.scope.gpus * PERIODS[r.period],
-             "request_count": request_count, "requests": float(r.requests), "phases": float(r.phases), "covers": 1.0,
-             "scan_delta": float(scan.delta), "eps_target": eps_target, "eps": float(r.eps),
-             "schedules": _size(r.terms[1].schedules), "cells": _size(r.terms[1].cells),
-             "count": _size(r.terms[1].count),
-             "jitter": {str(dj): _size(r.terms[dj].jitter) for dj in JITTERS},
-             "term": {str(dj): term(r, dj) for dj in JITTERS}, "entries": _size(r.terms[1].entries)}
-            for r in table(inp)]
+    def row(r: Row) -> dict:
+        return {"scope": r.scope.name, "period": r.period, "row": r.name, "standing": ROWS[r.name].standing,
+                "mark": ROWS[r.name].mark,
+                "with_set_time_card": SET_TIME if "timing" in (ROWS[r.name].changes or ()) else None,
+                "machines": r.scope.machines, "gpu_seconds": r.scope.gpus * PERIODS[r.period],
+                "request_count": request_count, "requests": float(r.requests), "phases": float(r.phases),
+                "covers": 1.0, "scan_delta": float(scan.delta), "eps_target": eps_target, "eps": float(r.eps),
+                "schedules": _size(r.terms[1].schedules),
+                "cells": _size(r.terms[1].cells), "count": _size(r.terms[1].count),
+                "jitter": {str(dj): _size(r.terms[dj].jitter) for dj in JITTERS},
+                "term": {str(dj): term(r, dj) for dj in JITTERS}, "entries": _size(r.terms[1].entries)}
+
+    charged = table(inp, stop)
+    rows = [row(r) for r in charged]
+    # what the rows read from verdict records would be with every execution phase held, where the records hold fewer
+    most = math.ceil(max(r.phases for r in charged))
+    below = stop.held >= most
+    apart = [] if below else [row(r) for r in table(inp, Stop(most, ())) if ROWS[r.name].verdicts]
     head = next(r for r in rows if (r["scope"], r["period"], r["row"]) == ("world", "year", "scan"))
+    design = next(r for r in rows if (r["scope"], r["period"], r["row"]) == ("world", "year", "design"))
     connections = head["requests"] * inp["connections"].value
     count, delay, ingress = counted(inp), inp["delay"].value, inp["ingress_buckets"].value
     held = count.bits * head["phases"]
+    floor = held + design["schedules"]["bits"]
     at_cost = phase_releases(COST_LANES, COST_BUCKETS, DELAY, DELAY)
     return {"schema": "certifier-term/v2",
             "name": f"the network certifier's term for {MODEL} over the world's year, as the scan's check charges "
@@ -1016,11 +1111,15 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
                       "releases": count.releases,
                       "bits_a_class": math.log2(count.releases + 1), "bits_a_phase": count.bits,
                       "world_year": {**_size(held), "of_target": held / float(target)},
+                      "head_time": HEAD_TIME,
                       "cost_runner": {"classes": CLASSES, "lanes": COST_LANES, "buckets": COST_BUCKETS,
                                       "delay": DELAY, "ingress_buckets": DELAY, "releases": at_cost,
                                       "bits_a_phase": CLASSES * math.log2(at_cost + 1)}},
-            "failure_rate_at_target": (afforded(float(target) - held, connections, cls.cells)
-                                       if held <= target else None),
+            "stop": {"rows": [name for name, kind in ROWS.items() if kind.verdicts], "held_phases": stop.held,
+                     "below": below, "why": list(stop.why), "verdicts": [dict(v) for v in stop.verdicts],
+                     "with_verdicts": [r for r in apart if r["scope"] in only and r["period"] in periods]},
+            "failure_rate_at_target": (afforded(float(target) - floor, connections, cls.cells)
+                                       if floor <= target else None),
             "entries_rule": "one entry a request, the least the check can charge: it charges every slot's entry, a "
                             "count by capacity that needs the class's lanes" if lanes is None else
                             f"every slot's entry, by capacity: {lanes} lanes x {cls.T // EVERY} strides a link's "
@@ -1063,10 +1162,12 @@ def render(doc: dict) -> str:
     ph, tg, theirs = doc["phase"], doc["target"], "the compute side's"
     at = [str(dj) for dj in sorted(JITTERS, key=lambda dj: dj != OF_RECORD)]
     counted, seen = doc["request_count"], {(r["scope"], r["period"]): r for r in doc["rows"]}
-    card, ct, sc = doc["with_set_time_card"], doc["count"], doc["scan"]
+    card, ct, st, sc = doc["with_set_time_card"], doc["count"], doc["stop"], doc["scan"]
     cost, rate = ct["cost_runner"], doc["failure_rate_at_target"]
     # whether the count's classes, delay and ingress buckets are the cost runner's own
     as_costed = all(ct[k] == cost[k] for k in ("classes", "delay", "ingress_buckets"))
+    # the rows read from verdict records as they would be below their schedules, over the world's year
+    apart = [w for w in st["with_verdicts"] if (w["scope"], w["period"]) == ("world", "year")]
     # the scan's schedules and fail cells are the same at each jitter bound and its jitter is 0 at D_j = 1, so what
     # the term of record holds past the labelled term is the jitter alone
     jitter = doc["value"] - card["value"]
@@ -1086,6 +1187,10 @@ def render(doc: dict) -> str:
         """A row's name in the tables: a row that rests on the set-time card at either D_j carries the label's short
         form, as a header does."""
         return r["row"] + short(r["with_set_time_card"])
+
+    def verifier(by: Any) -> str:
+        """A verdict's verifier as its record names it: its module at its commit, or the record's own word."""
+        return f"{by.get('module')} at commit {by.get('commit')}" if isinstance(by, Mapping) else str(by)
 
     lines = [
         f"# {doc['name'][0].upper()}{doc['name'][1:].split(' over ')[0]}, at a scope's load", "",
@@ -1124,17 +1229,45 @@ def render(doc: dict) -> str:
            "as given. The lengths rows' cost runner's")
         + f" own schedule is not these rows': at its {_n(cost['lanes'])} lanes and its execution phase of "
           f"{_n(cost['buckets'])} buckets, R = {_n(cost['releases'])} and the count is {_n(cost['bits_a_phase'])} "
-          "bits a link's execution phase.",
+          f"bits a link's execution phase. This line is the count alone: {ct['head_time']}.",
+        f"The stop class of the rows {', '.join(f'`{name}`' for name in st['rows'])} is charged "
+        + ("below its schedule" if st["below"] else "its whole schedule" if not st["held_phases"] else
+           f"below its schedule on {_n(st['held_phases'])} execution phase(s) of a link and its whole schedule on "
+           "every other execution phase of a monitoring period")
+        + ", as the verdict records say"
+        + ("" if st["verdicts"] else ", of which none on a signed head was read")
+        + ". An execution phase no registration was read for is charged its whole schedule: a row's execution "
+          "phases are its monitoring period's, not the ones a run kept. No option of this command changes that "
+          "charge.",
+        *(f"- {line}" for line in st["why"]),
+        *(f"- {v['verdict']}, {v['mark']}: {'accepted' if v['accepted'] is True else CC.not_accepted(v)}, "
+          f"{'complete' if v['complete'] is True else 'not complete'}, on class {v['class']} in execution phase "
+          f"{v['window']} of the link {v['link']}, by run {v['run']} under the verifier {verifier(v['verifier'])}, "
+          f"proved by {_n(v['proved_by'], 'nothing')}" for v in st["verdicts"]),
+        *([f"Below its schedule on every execution phase, which the records read do not support, the stop class "
+           f"would leave over the world's year, at D_j = {OF_RECORD} and at D_j = 1 {card['label']}: "
+           + "; ".join(f"`{w['row']}` at {_n(w['term'][str(OF_RECORD)]['GB'])} and {_n(w['term']['1']['GB'])} "
+                       f"{doc['unit']}" for w in apart)
+           + ". No row and no sum of this document holds these figures."] if apart else []),
         f"The target is {_n(tg['value'])} GB: over the world's year, {_n(tg['bits_a_phase'])} bit a link's execution "
         f"phase and {_n(tg['bits_a_request'])} bit a request. The weights are one copy of {doc['weights']['label']}, "
         f"{_n(doc['weights']['value'])} GB.",
-        "With the lengths held by a stop block and the release times taken once by a network certifier whose network "
+        ("With the lengths held by a stop block" if st["below"] else
+         "With its stop class charged its whole schedule"
+         + (f" on all but {_n(st['held_phases'])} execution phase(s) of a link" if st["held_phases"] else "")
+         + ", for want of the verdicts that hold the lengths by a stop block,")
+        + " and the release times taken once by a network certifier whose network "
         f"card releases at a set time ({card['mark']}), the design's term over the world's year is the failed "
-        "connections' charge and the count. "
-        + (f"The count alone is {_n(ct['world_year']['GB'])} {doc['unit']}, {_n(ct['world_year']['of_target'])} "
-           "times the target, so the world's year meets the target at no failure rate." if rate is None else
-           f"The count is {_n(ct['world_year']['GB'])} {doc['unit']}, and with it the world's year meets the target "
-           f"at a failure rate of at most {_n(rate)}.")
+        "connections' charge"
+        + (" and the count. " if st["below"] else ", the count and each connection's schedule. ")
+        + ((f"The count alone is {_n(ct['world_year']['GB'])} {doc['unit']}, {_n(ct['world_year']['of_target'])} "
+            "times the target, so" if st["below"] else
+            f"The count is {_n(ct['world_year']['GB'])} {doc['unit']}, {_n(ct['world_year']['of_target'])} times "
+            "the target, and with the schedules beside it")
+           + " the world's year meets the target at no failure rate." if rate is None else
+           f"The count is {_n(ct['world_year']['GB'])} {doc['unit']}, and with it"
+           + ("" if st["below"] else " and the schedules")
+           + f" the world's year meets the target at a failure rate of at most {_n(rate)}.")
         + f" Without that card the jitter alone, at D_j = {OF_RECORD}, is {_n(jitter)} {doc['unit']} over the "
           f"world's year, {_n(jitter / tg['value'])} times the target.",
         "ε is the scan's execution phases' δ summed, a union bound: at 1 or more it bounds nothing. "
