@@ -96,7 +96,7 @@ window twice more with an honest Commit, H1 handed all-zero A codes or one A row
 (`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 Without ``--challenger`` its windows' coins are this process's, so every call's credit gate verdict is
 `pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window samples its salt, round and flip coins from a
-challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, challenge phase and credit gate,
+challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coins' origin, challenge phase and credit gate,
 ``ok`` only when every window's coins are the challenger's and the honest Commit window's gate refuses none of its calls.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
@@ -1251,7 +1251,7 @@ def negative_verdict(out: dict[str, Any]) -> dict[str, Any]:
 
 
 def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
-    """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coin source,
+    """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coins' origin,
     its challenge phase and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
     with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
     when every window's coins are the auditor device's from a challenge phase of its own that ended closed and complete,
