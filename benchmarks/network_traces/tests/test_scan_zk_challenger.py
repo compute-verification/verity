@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[3]
 STUB = ROOT / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 

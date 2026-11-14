@@ -29,7 +29,7 @@ from verity.protocols.accounting.certifier.verifier.warden import END
 from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
 from verity.protocols.accounting.certifier.prover import warden_zk as wz
 
-ROOT = Path(__file__).resolve().parents[6]
+ROOT = Path(__file__).resolve().parents[3]
 UNITS = 8
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 #: the Lean verifier, which check builds before this suite (`AFTER_LEAN`)
