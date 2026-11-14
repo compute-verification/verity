@@ -16,6 +16,7 @@ build made of the reads are what the toolchain and the audit take, and that the 
 import."""
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
@@ -25,7 +26,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import git, toy_tree
+from conftest import git, once, toy_tree
 
 from verity_graph import ROOT, graph, local, runners
 from verity_graph.families import lean_env as env_family
@@ -105,17 +106,30 @@ def lean_env(tmp_path_factory) -> Path:
 
 
 class Envs:
-    """The lean-env tasks this file's tests ran, each once, by key, with its result and its record, which each test's
-    executor takes as a cache would: the toolchain's env replays every module of the toolchain."""
+    """The lean-env tasks this file's tests ran, each once a run (`once`, for every xdist worker: the key digests what the
+    task reads, and the worker's env is the toolchain's, which each worker of the machine shares), by key, with its result
+    and its record, which each test's executor takes as a cache would: the toolchain's env replays every module of the
+    toolchain."""
 
-    def __init__(self, store: Path) -> None:
-        self.store, self.got = store, {}
+    def __init__(self, factory: pytest.TempPathFactory) -> None:
+        self.factory, self.got = factory, {}
 
     def run(self, task: dict, doc: dict) -> tuple[dict, Path]:
-        if task["key"] not in self.got:
-            work = self.store / f"{len(self.got)}"
-            self.got[task["key"]] = (runners.execute(task, doc, work), work / env_family.record(task["vars"]["package"]))
-        return self.got[task["key"]]
+        key = task["key"]
+        if key not in self.got:
+            record = env_family.record(task["vars"]["package"])
+            if not isinstance(key, str):
+                work = self.factory.mktemp("env") / "work"
+                self.got[key] = (runners.execute(task, doc, work), work / record)
+                return self.got[key]
+
+            def make(d: Path) -> None:
+                res = runners.execute(task, doc, d / "work")
+                (d / "result.json").write_text(json.dumps(res))
+                assert json.loads((d / "result.json").read_text()) == res, "a result its JSON doesn't give back"
+            d = once(self.factory, "lean-env-" + hashlib.sha256(key.encode()).hexdigest()[:32], make)
+            self.got[key] = (json.loads((d / "result.json").read_text()), d / "work" / record)
+        return self.got[key]
 
     def launch(self, doc: dict):
         def go(t: dict, w: Path) -> dict:
@@ -143,7 +157,7 @@ def stage(record: Path, work: Path, at: str) -> Path:
 
 @pytest.fixture(scope="module")
 def envs(tmp_path_factory) -> Envs:
-    return Envs(tmp_path_factory.mktemp("envs"))
+    return Envs(tmp_path_factory)
 
 
 @pytest.fixture
