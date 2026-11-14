@@ -29,7 +29,8 @@ import struct
 from collections import defaultdict
 from dataclasses import dataclass
 
-from verity.protocols.accounting.certifier.verifier.active import HEADER, data_frames, request_placement
+from verity.protocols.accounting.certifier.verifier.active import data_frames, request_placement
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 
 from .hardware import DeviceGraph
 from .placement import Edge

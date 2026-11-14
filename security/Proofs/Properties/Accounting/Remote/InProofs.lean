@@ -29,11 +29,11 @@ sampling term is `0` under `All`; `ε` is then the statements' `ε_ks + ε_bind`
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit.InProofs
+namespace Properties.Poub.InProofs
 
-open Properties.RemoteAudit Verity.InProofs Verity.Game
+open Properties.Poub Verity.InProofs Verity.Game
 open scoped ENNReal
 
 /-- **Today's check of sampled position `k`'s opening**: `checkOpening` passes it at the sampled pass and position, under the
@@ -80,7 +80,7 @@ def SpanGivesNontrivial : Prop :=
     ¬ prPMF (PMF.pure ()) (fun ω => (oneSample o).accepts ω ∧
         checkWindow reg reg.digest #[] w #[(0, 0)] (Array.ofFn fun k => (oneSample o).ports k ω) ≠ Verdict.accept) ≤ 0
 
-end Properties.RemoteAudit.InProofs
+end Properties.Poub.InProofs
 
 /-!
 ## Proof
@@ -90,11 +90,11 @@ sampled position whose opening `checkOpening` passes rejects nothing. So an acce
 `OpeningOk ∘ decode` (`Gives.mono`).
 -/
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit.InProofs.SecurityProofs
+namespace Properties.Poub.InProofs.SecurityProofs
 
-open Properties.RemoteAudit Properties.RemoteAudit.InProofs
+open Properties.Poub Properties.Poub.InProofs
 open Verity.InProofs Properties.Accounting.InProofs Verity.Game
 
 /-- Openings every one of which `checkOpening` passes at its sampled position make `checkWindow` accept. -/
@@ -160,4 +160,4 @@ theorem spanGives_nontrivial : SpanGivesNontrivial := by
   simp [prPMF, oneSample] at h
   exact hrej h
 
-end Properties.RemoteAudit.InProofs.SecurityProofs
+end Properties.Poub.InProofs.SecurityProofs

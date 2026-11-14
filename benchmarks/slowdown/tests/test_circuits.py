@@ -48,7 +48,7 @@ def test_the_census_products_are_the_step_s_gemms_and_its_whole_dots_are_as_many
     assert C.products == 3 * MODEL.active() * tokens + attention + C.padded
     assert C.products - C.products_steps == layered(MODEL, 2)[0] * tokens
     assert C.definition == f"TrainStep_v1{{L={MODEL.layers},B={C.batch},S={C.seq_len}}}"
-    assert C.a_out == MODEL.vocab > MODEL.fanout and C.a_in < MODEL.legs
+    assert C.a_out == MODEL.vocab > MODEL.fanout and C.a_in < MODEL.fanin
     assert C.s_x < C.s_x_unsplit == REG.param(f"circuit.{STEP}.s_x_unsplit").low
 
 

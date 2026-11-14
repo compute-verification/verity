@@ -15,17 +15,17 @@ it returned a bad value. The receipters' map only ever holds a pass's own receip
 opening under the receipter of its pass's seed. `checkOpening_none` reads checks 1–5 off `checkOpening`'s early returns.
 
 `forIn_findSome` reads such a loop exactly: its result is the first value over the list. So `checkWindow` is its first
-rejection in draw order (`checkWindow_eq`, `rejectAt`), a chunk `[a, b)` checked alone is the first rejection among the
-window's draws there (`checkWindow_extract`), and `checkWindowChunked`'s chunks, in order, cover the draws
+rejection in sample order (`checkWindow_eq`, `rejectAt`), a chunk `[a, b)` checked alone is the first rejection among the
+window's samples there (`checkWindow_extract`), and `checkWindowChunked`'s chunks, in order, cover the samples
 (`chunks_cover`): its first chunk that rejects holds the window's first rejection (`chunkedIsWhole`). A spawned task's
 value is its function's (`Task.spawn`'s definition), so the threads change nothing.
 -/
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 instance lawfulBEqByteArray : LawfulBEq ByteArray where
@@ -239,7 +239,7 @@ theorem findSome?_flatMap {α β γ : Type} (F : α → List β) (g : β → Opt
     rw [List.flatMap_cons, List.findSome?_append, List.findSome?_cons, findSome?_flatMap F g as]
     cases (F a).findSome? g <;> rfl
 
-/-- Draw `k`'s rejection as `checkWindow` writes it, or none when its opening checks. -/
+/-- Sample `k`'s rejection as `checkWindow` writes it, or none when its opening checks. -/
 def rejectAt (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (drawn : Array (Nat × Nat)) (openings : Array Opening) (k : Nat) : Option Verdict :=
   (checkOpening reg digest appends w (receipterOf reg w drawn[k]!.1) drawn[k]!.1 drawn[k]!.2 openings[k]!).map
@@ -253,7 +253,7 @@ theorem rejectAt_reject {reg : Registration} {digest : ByteArray} {appends : Arr
     simp [hc] at h
   exact ⟨_, _, h.symm⟩
 
-/-- `checkWindow` is its first rejection in draw order (`rejectAt`), or accept. -/
+/-- `checkWindow` is its first rejection in sample order (`rejectAt`), or accept. -/
 theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (drawn : Array (Nat × Nat)) (openings : Array Opening) :
     checkWindow reg digest appends w drawn openings =
@@ -296,7 +296,7 @@ theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Arra
     subst key
     cases List.findSome? (rejectAt reg digest appends w drawn openings) (List.range drawn.size) <;> rfl
 
-/-- A window's draws `[a, b)` and their openings, checked alone, give the first rejection among those draws in the
+/-- A window's samples `[a, b)` and their openings, checked alone, give the first rejection among those samples in the
 whole window's order. -/
 theorem checkWindow_extract (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (drawn : Array (Nat × Nat)) (openings : Array Opening) (hsize : openings.size = drawn.size) (a b : Nat) :
@@ -314,7 +314,7 @@ theorem checkWindow_extract (reg : Registration) (digest : ByteArray) (appends :
     rw [getElem!_pos _ _ (by rw [Array.size_extract]; omega), getElem!_pos _ _ (by omega), Array.getElem_extract]
   simp only [rejectAt, Function.comp, hd, ho]
 
-/-- The first `m` chunks of `s` draws each, of `n`, cover draws `[0, min (m·s) n)` in order. -/
+/-- The first `m` chunks of `s` samples each, of `n`, cover samples `[0, min (m·s) n)` in order. -/
 theorem chunks_cover (n s : Nat) :
     ∀ m, (List.range m).flatMap (fun c => List.range' (c * s) (min ((c + 1) * s) n - c * s)) =
       List.range (min (m * s) n)
@@ -381,4 +381,4 @@ theorem chunkedIsWhole : ChunkedIsWhole := by
     subst key
     cases List.findSome? (rejectAt reg digest appends w drawn openings) (List.range drawn.size) <;> rfl
 
-end Properties.RemoteAudit
+end Properties.Poub

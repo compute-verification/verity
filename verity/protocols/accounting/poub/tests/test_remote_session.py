@@ -97,7 +97,7 @@ class PassClock:
 def verifying(sock: socket.socket, clock: PassClock, **kw) -> Iterator[verifier.Verifier]:
     """`verifier.Verifier` over the accepted ``sock`` on ``clock``, torn down however the body ends: the socket shut,
     so a prover waiting on it sees the audit run end (the verifier's reader thread would hold it open), and the Lean
-    verifier's process (`remote-audit-verifier`) terminated, killed and reaped, so a failing test leaves none waiting
+    verifier's process (`poub-verifier`) terminated, killed and reaped, so a failing test leaves none waiting
     on its stdin."""
     v = None
     try:

@@ -8,7 +8,7 @@ public import Definitions.Accounting.Assumptions.RemoteHeld
 What an accepted PoUB session certifies about the node's memory, over its registered store of `N` blocks, at
 each outcome of the audit's coins (a per-run reading): the probability that the session is accepted and the bound
 fails is at most the premises' errors summed. These are the protocol's declared memory line (`PROTOCOL.md` §7,
-"Declared outputs"; `remote_bandwidth/ledger.py`), at `X = s/E + β` blocks a tick brought back by rebuilds and the
+"Declared outputs"; `poub/ledger.py`), at `X = s/E + β` blocks a tick brought back by rebuilds and the
 node's disks, and `B = B_r + B_d` blocks at once beyond that rate, one maximal rebuild batch and one maximal disk read:
 
 * **Held**, the snapshot: the registered blocks in node memory at the start of each of the `P` credited passes,
@@ -32,7 +32,7 @@ Known limits, each a premise a real node may fail rather than a gap in the bound
 * A fixed `W`. `LiveCoins` takes `W` fixed before the coins, while the openings' pooled bound (`audit.pooled`) is a
   function of the record: the prover sizes each window after the earlier windows' coins. `HeldSampled` and its
   time-held forms (`Definitions.Accounting.Guarantees.RemoteDraw`) state these lines at the record's own pooled bound, with
-  `LiveCoins` derived from the deployed opening draw.
+  `LiveCoins` derived from the deployed opening sample.
 -/
 
 @[expose] public section

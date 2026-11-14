@@ -1,12 +1,12 @@
 """The red team's exploits against PoUB as implemented: each test asserts the property the
 audit's claim needs, and was marked xfail with its finding id while the reference broke it; RB-1, RB-2 and RB-3 are
-fixed and pass.  The exploits run on `test_remote_bandwidth`'s store and drivers."""
+fixed and pass.  The exploits run on `test_poub`'s store and drivers."""
 
 from __future__ import annotations
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import SCHEDULE, N, drive, finish, params, store  # noqa: F401
+from poub_fakes import Clock, Entropy
+from test_poub import SCHEDULE, N, drive, finish, params, store  # noqa: F401
 
 from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import (

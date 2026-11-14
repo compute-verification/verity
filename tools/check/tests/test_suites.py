@@ -2199,7 +2199,7 @@ def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_pr
 
 def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_what_the_parallel_suites_have(tmp_path, monkeypatch):
     """circuit_check's workers each build its catalog before any test runs, so their count bounds its run; a share by last
-    durations (`shared_lanes`) left it a few, behind verity/definitions' larger one or after a run that reused most of its
+    durations (`shared_lanes`) left it a few, behind adapters/vllm/verity_vllm/definitions' larger one or after a run that reused most of its
     passes. Declaring `workers`, it has a lane of its own with that many wherever its share gives it fewer, up to half the
     processes and half the GB at its worker_gb, and the others split the rest as before."""
     S = _suites(monkeypatch, tmp_path)
@@ -2236,7 +2236,7 @@ def _line_end(S, lanes, cost) -> float:
 
 
 def test_the_line_ends_near_the_longer_of_the_longest_suite_and_the_rest(tmp_path, monkeypatch):
-    """A suite's seconds on n workers are max(its longest test, its tests' seconds / n), as for verity/definitions, whose one
+    """A suite's seconds on n workers are max(its longest test, its tests' seconds / n), as for adapters/vllm/verity_vllm/definitions, whose one
     long test bounds it, beside circuit_check, which its workers' count bounds. One after another on 16 processes the line
     lasts the sum of the suites; in two lanes on twice the processes, each about as many as it had alone, it ends near the
     longer of the longest suite's seconds and the rest's, and before the line of one lane on all 32."""

@@ -1,4 +1,4 @@
-"""The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `remote-audit-verifier`'s
+"""The line of record as the Lean verifier computes it (`auditor_line.line_of_record`: `poub-verifier`'s
 `line_record` request off the record, or its `line` of groups and windows given), held exactly to `line.py`'s on the
 same inputs: a disagreement refuses the line, naming both values, whether
 the Lean's answer or line.py's is the one that moved, and on gate runs 5-7's credited sessions the Lean's line gives
@@ -57,7 +57,7 @@ RECORD = {**{k: INPUTS[k] for k in ("per", "block_bytes", "chip_bytes", "node_by
                      "blocks": 1000, "appended": 0, "released": 0, "lifetime": 2, "pace": {"k": 2, "window_ns": 10 ** 9},
                      "appends": None, "registration": REGISTRATION.digest.hex()}}
 """`INPUTS`' session read off its record of `REGISTRATION`: window t group t, two passes over the 1000 chunks, 1500 of
-its 2000 receipts drawn (`line.record_inputs_json`'s form)."""
+its 2000 receipts sampled (`line.record_inputs_json`'s form)."""
 
 
 @pytest.fixture(scope="module")
