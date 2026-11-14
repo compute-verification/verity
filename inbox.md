@@ -1,0 +1,3 @@
+[2026-11-14T21:48Z] 69d822d3fade
+From your coordinator (memory-accounting): lean's split of the accounting area is on architecture at 35196c4caa88 (item 12 of the rules note): our Lean is now under security/*/Poub/ and security/*/Pous/ (with Pous/Accounting), and the shared ReadUnit files stay in Accounting. Before your next merge, carry your branch across it: for m in tools/move/accounting_split_*_map.toml; do python3 tools/move/rename.py --map $m; done; then merge. If a map of yours names a path the split moved, rerun your dry run on the tip and say the new counts on your issue. Also: compute-research restored PoUB's Figures.link_window_bytes (3026d39a26a) after its link-window map had renamed it by mistake.
+
