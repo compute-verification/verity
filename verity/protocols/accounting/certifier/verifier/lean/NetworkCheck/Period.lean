@@ -1540,6 +1540,27 @@ def startEmpty (reg : Json) : Bool :=
           (Flock.Registered.knownPayload (Array.replicate w 0) salt) = root)
     | _, _, _, _ => false
 
+/-- A registration whose start entries are at `roots`, each under the domain of 64 bytes `0d`, opened as `words` zero
+words under the salt of 192 bytes `07`. -/
+def startProbe (roots : List String) (words : Nat) : Json :=
+  let entry := fun (root : String) => Json.mkObj
+    [("domain", .str (String.join (List.replicate 64 "0d"))), ("root", .str root), ("value", .str startName)]
+  Json.mkObj [("registered", .arr (roots.map entry).toArray), ("window", Json.mkObj [("empty", Json.mkObj
+    [(startName, Json.mkObj [("salt", .str (String.join (List.replicate 192 "07"))), ("words", toJson words)])])])]
+
+-- the roots of one zero word and of two under that salt and domain (the mirror's `start_empty`), and of the word 1
+#guard
+  let one := "cc8a8f235c85967255dadcfea4db8f2534aa0a12d0c3e9c289462c14072a92cc\
+    3c65bfd17a3df01f6dcb91eec5ff7a6cb18294dc0ad07ab56a1e2fcd341161e0"
+  let two := "ea02849e4fcf22320c9818f4da9dcd116bd876c29c37e98672c7d5c65bd98c5c\
+    efd29d7568977d2d3396a404ca2e6c7582a7280a71c9acdfd0dd30b8822fd27b"
+  let chosen := "ef7087146312d7acc2a957d16a9375942589fb284a8b7d7f0b6f8b4544ef9a90\
+    3312d70b3b50a232f4ace84ee521f0601cd99008a52c1b98315ba10d15c81a51"
+  startEmpty (startProbe [one] 1) && startEmpty (startProbe [two] 2) && startEmpty (startProbe [one, one] 1) &&
+    !startEmpty (startProbe [one] 2) && !startEmpty (startProbe [two] 1) && !startEmpty (startProbe [chosen] 1) &&
+    !startEmpty (startProbe [] 1) && !startEmpty (startProbe [one, two] 1) && !startEmpty (startProbe [one] 0) &&
+    !startEmpty Json.null
+
 /-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
 def tiedIn (audits windows : Array Json) (i : Nat) : Bool :=
   windows.any fun reg => (tiedAudits audits reg).contains i
@@ -1666,6 +1687,12 @@ def startCheck (w : Nat) (reg : Json) : Option (Core.Verdict × String) :=
     entry among its registered values, or its window.empty of {startName} is no opening of one to zero u16 words \
     under its salt at that entry's root and domain (startEmpty), so the Programs anchored at bucket 0 can read a \
     state the prover chose: register the start unit's sin as the empty state's row and give its salt")
+
+#guard
+  let one := "cc8a8f235c85967255dadcfea4db8f2534aa0a12d0c3e9c289462c14072a92cc\
+    3c65bfd17a3df01f6dcb91eec5ff7a6cb18294dc0ad07ab56a1e2fcd341161e0"
+  (startCheck 0 (startProbe [one] 1)).isNone && (startCheck 0 (startProbe [one] 2)).isSome &&
+    (startCheck 1 (startProbe [one] 1)).map (·.2) == some s!"window 1: {startCarriedRefusal}"
 
 /-- The rows form's state findings, one a link-window, in order (`stateCheck`); none in the clock form. -/
 def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
