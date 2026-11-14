@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ctypes
 import glob
+import importlib
 import os
 import sys
 import types
@@ -113,7 +114,7 @@ def test_the_error_names_the_package_first_when_it_gave_no_place(monkeypatch, pa
     asked = places(monkeypatch, package_raises=package_raises)
     if said is None:
         with pytest.raises(ImportError) as absent:
-            import nvidia.cuda_runtime  # noqa: F401
+            importlib.import_module("nvidia.cuda_runtime")
         said = f"{type(absent.value).__name__}: {absent.value}"
     with pytest.raises(RuntimeError) as e:
         NH.NativeHostCommitter._load_cudart()
