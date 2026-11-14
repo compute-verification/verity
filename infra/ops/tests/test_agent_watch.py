@@ -3292,6 +3292,29 @@ def test_a_relaunched_worker_with_no_recorded_branch_is_told_the_branches_its_ne
     assert new["branch"] == "cursor/ca-salt-wire-ea24"
 
 
+def test_a_relaunched_worker_runs_opus_at_high_effort_and_its_children_never_run_fable(tmp_path):
+    """Only leads run Fable 5.2: a worker's replacement is launched on Opus 5.5 at high effort, and told to name
+    `claude-opus-5-5-high` (or `claude-sonnet-5-5-high`) for any child and to hold no timer or subscription."""
+    (tmp_path / "workers.d").mkdir()
+    (tmp_path / "workers.d" / "w1.json").write_text(json.dumps({"agent_id": W1_, "lane": "zk-port", "launched_by": NEW}))
+    launch_api = FakeLaunchApi()
+    api, clock, w, _, roots = nodes_setup(tmp_path, launch_api=launch_api)
+    api.workers[W1_] = worker("IDLE", W.iso(T0 - 600))
+    api.convs[W1_] = [("user_message", "brief"), ("assistant_message", "Rerunning the suites on cpu-3.")]
+    (tmp_path / "launch.env").write_text(f"CURSOR_API_KEY={KEY}\n")
+    ended = run_end_for(tmp_path, roots, clock, w, W1_)
+    while clock.t < ended + W.RESUME_S + W.BURST_QUIET_S + W.WORKER_RELAUNCH_S + 300:
+        clock.t += 60
+        w.sweep(lambda r: None)
+    ((_, body),) = launch_api.posts
+    assert body["model"] == {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}
+    assert "claude-fable" not in json.dumps(body), "a worker never runs Fable"
+    text = body["prompt"]["text"]
+    assert ("A child you start names `claude-opus-5-5-high` (or `claude-sonnet-5-5-high` for a fully specified task), "
+            "never Fable, `inherit` or none.") in text
+    assert "You hold no timer or subscription of your own." in text
+
+
 def vllm_workers(d, *agents):
     """workers.d entries for `agents`, launched by NEW (vllm's coordinator), as a coordinator registers its workers."""
     (d / "workers.d").mkdir(parents=True, exist_ok=True)
