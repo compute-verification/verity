@@ -19,18 +19,18 @@ from concurrent import futures
 
 import pytest
 import torch
-
-from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import challenger_party as CP
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import period, setup
 from verity.protocols.accounting.pous.prover import challenger_prover as CR
+from verity.protocols.accounting.pous.prover import weight_store as ws
+from verity.protocols.accounting.pous.verifier import period, setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
+from verity.runtime.stream import Side
+
 from verity_vllm import config
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
-from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity_vllm.protocols import pous
 
 P2 = "p2-16448/v4"
@@ -297,9 +297,8 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
                           protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
-            assert got["profile"]["placement"]["trusted-device"] == (   # the test signer's key is no auditor's pinned key
-                "rehearsal: key not the auditor's pinned key, no bound; "
-                f"the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
+            assert got["profile"]["placement"]["trusted-device"] == (   # period.json names no deployment
+                f"{mc.UNCOMMITTED} (no configuration); the memory challenger ran on {AUDITOR}, not the prover's {NODE}")
             doc = json.loads((out / "pous.json").read_text())
             assert doc["placement"]["kind"] == "own-host" and doc["placement"]["setup"] == CS.SETUP
             assert got["profile"]["placement"]["setup"] == "setup checked by the developer, not the auditor"
