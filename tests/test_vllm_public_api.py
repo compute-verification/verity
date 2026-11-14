@@ -99,7 +99,8 @@ PUBLIC = {
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
                                                 "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
                                                 "circuit cut at its linears (PearlTables)",
-    "verity_torch.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
+    "verity_torch.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step; steps_program "
+                                               "and export_steps for one of a run's consecutive steps), its "
                                                "layout and the primitives a census prices, which the grader "
                                                "(benchmarks/training_slowdown/grader) reads",
     "verity_vllm.program.frontend.kernel_readback": "I7: what a built model's layers execute, read back: the int8 scope "
