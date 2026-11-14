@@ -61,11 +61,13 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
 * `Actual/Parts.lean`: `LeakParts`, `B4`'s limit as a sum over the trusted devices: with each device's record within
   its limit the joint record is within the limits' sum (`records_encard_le`), and a memory challenger is a sealed
   sink, which adds nothing (`leak_le_sum_K_sealed`), or a trusted device, which adds its limit and a jitter share.
-* `Actual/RegisteredSite.lean`: `EgressRegistered`, at the Site's places and links: a subtree's egress is at most the
-  capacity of the registered links with exactly one end in it, a tick, and that limit is at most its root's alone plus
-  its root's children's subtrees'; limits add over parts, at most (`linkCapacity_union_le`,
-  `linkCapacity_biUnion_le`). `LeakPartsRegistered`: `LeakParts` at a subtree of a valid registration's Site, the
-  sinks' sealing concluded from the registration (`Site.leak_le_registered`).
+* `Actual/RegisteredSite.lean`: `EgressRegistered`, at the Site's places and links: the egress of a subtree that holds
+  each host whole is at most the capacity of the registered links with exactly one end in it, a tick, for a circuit
+  whose wires, each taken between the places a link may end at, run on the registered links (`Placed.egress_onto`);
+  a circuit with a gate at a device meets its premises with egress above 0 (`EgressRegistered_nonvacuous`); and a
+  subtree's limit is at most its root's alone plus its root's children's subtrees' (`egressLimit_le_children`,
+  from `linkCapacity_union_le`, `linkCapacity_biUnion_le`). `LeakPartsRegistered`: `LeakParts` at a subtree of a valid
+  registration's Site, the sinks' sealing concluded from the registration (`Site.leak_le_registered`).
 * `Actual/RegisteredWitness.lean`: `LeakPartsRegistered_honest`: the example onsite log is valid, and at its Site a
   one-gate strategy has each trusted device's record within one bit.
 * `Actual/Transducer.lean`: a location is a transducer over what reaches it: under causality from every tick, what `X`

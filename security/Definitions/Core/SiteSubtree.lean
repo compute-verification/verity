@@ -8,20 +8,29 @@ public import Mathlib.Logic.Relation
 /-!
 # A subtree of the Site, its places and its links as a table
 
-A **subtree** of the Site is a registered location with every location registered under it (`Site.under`); at the
-Site's root it is the datacenter. A **place** is a registered location or the outside (`Site.places`): a link ends at
-a place, and a gate of the actual circuit is placed at one.
+A **subtree** of the Site is a registered location with every location registered under it (`Site.under`). At a site
+location it is that site's registered hardware, the auditor's devices at it among them. It is the definitions' twin
+of the code's `Core.Site.within`, whose locations are those of `Core.Site.part`. A **place** is a registered location
+or the outside (`Site.places`).
 
 The hardware model (`Accounting.Placed`, `Accounting.linkCapacity`) takes its leaves as a type and its links as a
-table of ends and capacities. Here the Site is read as that: its places are the leaves (`Site.Place`, `Site.place`,
-`Site.placesIn`) and its links the table, each at its position in the Site (`Site.placeEnds`, `Site.linkβ`), so a
-bound of the model at these is a bound read off the registration.
+table of ends and capacities. Here the Site is read as that: its places are the model's leaves (`Site.Place`,
+`Site.place`, `Site.placesIn`), so a gate of the actual circuit is placed at one, a device or a memory leaf as much as
+a host; and its links are the table, each at its position in the Site (`Site.placeEnds`, `Site.linkβ`), so a bound of
+the model at these is a bound read off the registration.
+
+A registered link ends at a host, a certifier, a challenger or the outside, never at a device, a memory leaf or a site
+(`Site.Kind.links`). So a wire between two places is held to the links through the place a link may end at for each
+(`Site.linkEnd`): a host for itself and every location in it, and each other place for itself. A subtree that holds
+each host with all its locations or not at all (`Site.HostsWhole`) is one whose egress the links bound.
 
 * `Site.Child`: the tree's parent relation, which the Site holds as each location's `parent`.
 * `Site.places`, `Site.under`: the places, and the subtree at a place.
 * `Site.Place`, `Site.place`, `Site.placesIn`: the places as a type, the place an id names, and the places whose id
   is in a set.
 * `Site.placeEnds`, `Site.linkβ`: the registered links as the model's.
+* `Site.host`, `Site.linkEnd`, `Site.linkPlace`: the host a place is in, and the place a link may end at for a place.
+* `Site.HostsWhole`: a subtree holds each host whole.
 * `Site.proverUnder`, `Site.certifiersOf`, `Site.challengersOf`, `Site.auditorsOf`: a subtree's prover places, and the
   auditor's devices at it, read off the links' far ends (`Site.far`).
 * `Site.Within`, `Site.sharedOf`: a place linked only into a subtree, and the memory challengers of a subtree that are
@@ -43,13 +52,14 @@ def Child (i j : String) : Prop := ∃ x ∈ S.locs, x.id = j ∧ x.parent = som
 instance instDecidableChild (i j : String) : Decidable (S.Child i j) := by unfold Child; infer_instance
 
 /-- **The places** of the Site: every registered location and the outside, the ids the Site knows (`Known`) as a
-finite set. A link ends at a place, and a gate of the actual circuit is placed at one: a host is a place though
-locations are registered under it. -/
+finite set. A gate of the actual circuit is placed at one, whatever its kind. -/
 def places : Finset String := insert outside (S.locs.map (·.id)).toFinset
 
 open Classical in
-/-- **The subtree at `i`**: the places at or under `i` in the tree of locations. At the Site's root it is the
-datacenter. -/
+/-- **The subtree at `i`**: the places at or under `i` in the tree of locations. At a site location it is that site's
+registered hardware, the auditor's devices at it among them. The definitions' twin of the code's `Core.Site.within`,
+which follows parents upward from a location, a bounded number of them; this is the same relation from `i` downward,
+as a set. -/
 noncomputable def under (i : String) : Finset String :=
   S.places.filter fun j => Relation.ReflTransGen S.Child i j
 
@@ -69,6 +79,24 @@ def placeEnds (e : Fin S.links.length) : S.Place × S.Place :=
 
 /-- The registered links as the model's: link `e`'s capacity each way, in bits a tick. -/
 def linkβ (e : Fin S.links.length) : ℕ := (S.links.get e).β
+
+/-- **The host a location is in**: itself when it is a host, and `none` for a location in no host and for an id that
+names no location. The definitions' twin of the code's `Core.Site.host`. -/
+def host (i : String) : Option String :=
+  (S.loc? i).bind fun x => if x.kind = .host then some x.id else S.host? x
+
+/-- **The place a link may end at** for the place `i`: the host `i` is in, and `i` itself where it is in none. On a
+valid registration's Site that is a host for itself, its devices and the memory leaves in it, and each site,
+certifier and challenger and the outside for itself. -/
+def linkEnd (i : String) : String := (S.host i).getD i
+
+/-- The place a link may end at for a leaf of the model. -/
+def linkPlace (p : S.Place) : S.Place := S.place (S.linkEnd p.1)
+
+/-- **The subtree at `i` holds each host whole**: a place is in it exactly when the place a link may end at for it
+is. A subtree at a device or at a memory leaf does not: its host is outside it, and no registered link says what
+passes between the two. -/
+def HostsWhole (i : String) : Prop := ∀ p : S.Place, p.1 ∈ S.under i ↔ (S.linkPlace p).1 ∈ S.under i
 
 open Classical in
 /-- **The prover's places of the subtree at `i`**: the subtree less the auditor's devices (`Kind.auditor`). -/

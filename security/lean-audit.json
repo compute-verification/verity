@@ -478,6 +478,10 @@
    "owner": "@network-accounting",
    "why": "A scope: the registration log the auditor accepted, whose Site the subtree, its auditor's devices and its links are read off."
   },
+  "Verity.Site.HostsWhole": {
+   "owner": "@network-accounting",
+   "why": "A scope: the subtrees of the Site that hold each host with every location in it or not at all, so that what leaves one crosses a registered link; a subtree at a device or a memory leaf is outside it."
+  },
   "Verity.Sound": {
    "owner": "@proofs",
    "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7",
