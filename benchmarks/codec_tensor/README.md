@@ -1,10 +1,11 @@
 # benchmarks/codec_tensor
 
 The bandwidth audit's (PoUB, `verity/protocols/accounting/poub/verifier`) work on the GPU, and the tensor-core wide-word
-codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. `reader.cu`
-(with `reader.py`) is the device reader: the audit's receipts, leaves and receipt tree, gated byte for byte
-against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the audit's `sketch-sha512` receipt.
-`step.cu` (`step.py`) is one decode step at HBM exhaustion, and `sha512.cuh` is SHA-512 for the kernels.
+codec. `wt.cu` is the codec, a fused decode with its receipts, held to `wide.py`, its byte-exact reference. The device
+reader is PoUB's prover's, in `verity/protocols/accounting/poub/prover/codec_tensor/`: `reader.cu` with `reader.py` gives the
+audit's receipts, leaves and receipt tree, gated byte for byte against the audit's `receipts.py`; `sketch_receipt.py`
+and `sketching.py` are the reference for the audit's `sketch-sha512` receipt, and `sha512.cuh` is SHA-512 for the
+kernels. `step.cu` (`step.py`) is one decode step at HBM exhaustion.
 
 ## Interface
 
@@ -13,14 +14,13 @@ What code outside this directory may use. Everything else here is internal.
 | Entry point | What it is |
 |---|---|
 | `uv run tools/verity/check/suites.py benchmarks/codec_tensor` | The suite, on the CPU: `wide.py`, `sketch_receipt.py` and `sketching.py` against PoUB's code and `tests/vectors.json`, and the decode step's plan. It writes no result. |
-| `step.py`, with `--model`, `--batch` and a build of each of `wt.cu`, `step.cu` and `reader.cu` (`--wt-lib`, `--kv-lib`, `--reader-lib`) | One decode step at HBM exhaustion on one GPU. It writes `step.json` and `step.log` under `--out`. Nothing in the tree builds `step.cu`, whose build takes `-DKV_FIELD`, `-DKV_MASK` and `-DKV_FOLD6` at `wt.cu`'s field and codec, and `-DKV_QHEADS` at the model's query heads. |
+| `step.py`, with `--model`, `--batch` and a build of each of `wt.cu`, `step.cu` and the prover's `reader.cu` (`--wt-lib`, `--kv-lib`, `--reader-lib`) | One decode step at HBM exhaustion on one GPU. It writes `step.json` and `step.log` under `--out`. Nothing in the tree builds `step.cu`, whose build takes `-DKV_FIELD`, `-DKV_MASK` and `-DKV_FOLD6` at `wt.cu`'s field and codec, and `-DKV_QHEADS` at the model's query heads. |
 
-Nothing outside `benchmarks/` reads this directory by its path. `reader.cu` leaves it inside
-`benchmarks/remote_session/session.cu`'s build.
+Nothing outside `benchmarks/` reads this directory by its path.
 
-**Status: active.** `benchmarks/remote_session/session.cu` includes `reader.cu`; `benchmarks/kv_filler`,
-`benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/pouw/served_h1` includes
-`sha512.cuh`; and the audit's `PROTOCOL.md` and vectors test name `sketch_receipt.py`. Decided by `rg codec_tensor` over
+**Status: active.** `benchmarks/kv_filler`, `benchmarks/vllm_encoded` and `benchmarks/harness` build `wt.cu`;
+`benchmarks/vllm_encoded` reads `wide.py`; and this suite holds the prover's `sketch_receipt.py` and `sketching.py` to
+the audit's code. Decided by `rg codec_tensor` over
 `verity/`, `benchmarks/`, `demos/`, `tests/` and `adapters/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/codec_tensor` checks `wide.py`, `sketch_receipt.py`
