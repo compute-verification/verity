@@ -188,7 +188,7 @@ else until the call's words root registers; `G`'s model reads that as the coins 
 Rationale: `trusted-host`; the certifier is the auditor's hardware on a machine the prover doesn't control. -/
 def CertifierCoins {Device Ent : Type} (cert : Device) (coinsOf : Ent ≃ Coins L)
     (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins L) : Prop :=
-  Verity.Assumptions.TrustedHost cert runC (certCode coinsOf)
+  Verity.Assumptions.TrustedDevice cert runC (certCode coinsOf)
 
 /-- **The coins the certifier releases** to a strategy's call at the entropy `e`: what the device `cert`, run as
 `runC`, returns on the `A` root the strategy registered and `e`. -/

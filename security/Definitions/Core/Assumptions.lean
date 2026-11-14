@@ -54,7 +54,7 @@ the device's signatures proves its claim or finds, from the run, a forgery under
 
 This definition states only the part about one run. The state the device keeps on its host outlasts a run, which a
 statement of one run can't name; a property that relies on it names it in its docstring and takes no premise for it. -/
-def TrustedHost {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
+def TrustedDevice {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
   ∀ x, run device x = code x
 
 end Verity.Assumptions

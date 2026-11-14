@@ -9,7 +9,7 @@ Definitions only. The relay (`Definitions.NetworkCertifier.Warden`) and the netw
 on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
 connection) gives both what the client receives, the warden's cells (`certifierCode`), and the certifier's record of
 them, the observations the audits read (`recordingCode`). Its trust is one `trusted-host`
-(`Verity.Assumptions.TrustedHost`) over that code, with no second device and no second trust, so that what the
+(`Verity.Assumptions.TrustedDevice`) over that code, with no second device and no second trust, so that what the
 certifier saw is what the warden sent is a fact of the code, not a premise.
 
 **The record is the wire.** The deployed tap (`benchmarks/network_traces/warden_serve.py`, one relay on the auditor's
@@ -21,7 +21,7 @@ the schedule (`RecordFormat.read_record`). What else the record holds, each step
 anything the tap saw. The server's bytes after a connection's fail cell, or past its lane's end, reach the tap but
 neither the client nor the record: the record fixes what the client received, not everything the server sent.
 
-The tap is stated here, over `TrustedHost`'s shape (a device, its run and its code), so that core's device vocabulary
+The tap is stated here, over `TrustedDevice`'s shape (a device, its run and its code), so that core's device vocabulary
 can lift it as it is: `RecordFormat` and `recordingCode` read nothing of network accounting but the warden's code.
 -/
 

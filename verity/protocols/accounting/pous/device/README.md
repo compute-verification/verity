@@ -51,7 +51,7 @@ entry point of `verity/protocols/accounting/pous/verifier/README.md`.
 
 ## Top statements
 
-- `TrustedHost` (`security/Definitions/Core/Assumptions.lean`): the device runs its stated code on its host, which
+- `TrustedDevice` (`security/Definitions/Core/Assumptions.lean`): the device runs its stated code on its host, which
   changes none of what it emits or when, and gives it a monotonic clock.
 - `MemoryChallenger.Properties.VerdictAccepts` (`security/Properties/Pous/MemoryChallenger.lean`): an accepted timed-rounds
   verdict's run is signed under a trusted key and an accepted scheme, its header is the commitment, each round's
