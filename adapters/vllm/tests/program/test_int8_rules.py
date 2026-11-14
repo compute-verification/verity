@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.engine import int8_ops
 from verity_vllm.program.frontend.derive import derive_report

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from verity.definitions.registry.tp_allreduce import settings_of
+from verity_vllm.definitions.registry.tp_allreduce import settings_of
 
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR, pinned_hf_config
