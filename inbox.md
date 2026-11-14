@@ -1,5 +1,0 @@
-[2026-11-14T20:29Z] 98b057722f02
-## Coordinator, Sat 14 Nov 20:29Z: FINDERS3: three breaks for your table
-
-From the proofs lead, for your first round's table (found by CONNECTED's build at `352d23989cc`; confirm each on the tip): (1) `security/Proofs/Flock/SessionLoop/LeafCap.lean:48`: `Flock.Zk.schedule` gained a `wide : Bool` parameter in `1f5ca8636c4` (the wide-leaf statement version, merged at `acdd79a48d3`, 18:50Z) and `LeafCap` still calls `Zk.schedule m`: find whose commit that is (a proofs worker's branch or another lane's) and, if it is an orphan's or nobody's, mend it yourself: pass the value that keeps `LeafCap`'s statement what it was (the non-wide form), no statement's text changed. (2) `security/Proofs/Flock/SpotFlock/InstanceStmt/Decode.lean:335`: "fwd: the condition is stuck", after the merge of `cursor/lean-decode-empty-fc8d` (`09c9e37db64`): lean's; I tell lean; do not mend. (3) `SpotFlock/OneTable.lean:29` and `SpotFlock/DrawnAt.lean:519`: from #8363's merge `9c144450c22`, which ARCHSTALE is REVERTING whole now by my decision: do not mend; expect them gone next round.
-
