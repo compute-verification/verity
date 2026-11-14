@@ -77,7 +77,6 @@
     {"file": "tests/pipeline/test_serving_rows_experts.py", "kind": "var-annotated", "symbol": "build", "detail": "", "count": 2},
     {"file": "tests/program/_wout_prototype_20260917.py", "kind": "var-annotated", "symbol": "check", "detail": ""},
     {"file": "tests/program/_wout_prototype_20260917.py", "kind": "var-annotated", "symbol": "consumed_leaves", "detail": ""},
-    {"file": "tests/program/fixtures_query.py", "kind": "misc", "symbol": "<module>", "detail": ""},
     {"file": "tests/program/inductor_models.py", "kind": "arg-type", "symbol": "rms_norm_compiled", "detail": ""},
     {"file": "tests/program/test_derive_negative.py", "kind": "override", "symbol": "DataDependentSlice.forward", "detail": ""},
     {"file": "tests/program/test_derive_realhf.py", "kind": "assignment", "symbol": "<module>", "detail": "", "count": 2},
