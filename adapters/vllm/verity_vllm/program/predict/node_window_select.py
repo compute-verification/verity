@@ -38,6 +38,7 @@ from verity.commitments.windows import interface as IF
 from verity.definitions.registry import b1
 from verity.definitions.registry import greedy_stages as G
 from verity.definitions.registry import greedy_stop as GS
+from verity.definitions.registry import stop_check as SC
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base
 
@@ -48,7 +49,6 @@ from .window_builder import Row
 #: the select rows lowered as `TokenSelect_v1`'s stages: each one's function is `TokenSelect_v1{V}`'s
 ROWS = ("TokenSelect_v1", "TokenSelect_v4")
 GATHER_FAMILY = "AllGather_v1"
-STOP_ROW = "StopCheck_v1"
 
 
 def through(w: NodeWindow, refs: Refs) -> Refs:
@@ -152,8 +152,8 @@ def stop_check(w: NodeWindow, j: int, node: Any) -> None:
     docstring): the check and the last select's combine over the combine's own rows, its logits and its chunks' results,
     with the ids a row each, its select's token; its bit, one u16 word, is the check the Program returns."""
     spec, M = descriptor_id(node.fn), w.members(node)
-    if spec_base(spec) != STOP_ROW:
-        raise Unexpressible(f"{spec}: a length check the lowering doesn't take (not {STOP_ROW})")
+    if getattr(node.fn, "defn", None) is not SC.StopCheck:
+        raise Unexpressible(f"{spec}: a length check the lowering doesn't take (not {SC.StopCheck.id})")
     space, last, *_ = list(runs(w.arg(node, 0, 0)))[-1]
     if space != "n" or last not in w.combines:
         raise Unexpressible(f"{w.name}: node {j} ({spec}): its last id is no lowered select's token")
@@ -175,4 +175,4 @@ def stop_check(w: NodeWindow, j: int, node: Any) -> None:
 #: the select's and the length check's lowerings by family, beside `node_window.FAMILIES`
 FAMILIES: dict[str, Lowering] = {"TokenSelect": token_select, "StopCheck": stop_check}
 
-__all__ = ["FAMILIES", "ROWS", "STOP_ROW", "stages", "stop_check", "through", "token_select", "width"]
+__all__ = ["FAMILIES", "ROWS", "stages", "stop_check", "through", "token_select", "width"]
