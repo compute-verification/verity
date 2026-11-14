@@ -10,7 +10,7 @@ which leaves out ``uv.lock``, its dotted numbers being package versions, and thi
 """
 from __future__ import annotations
 
-from research.addresses import reader, scan
+from research.addresses import quads, reader, scan
 
 from test_repository import ROOT, _tracked
 
@@ -45,7 +45,7 @@ ALLOWED: dict[str, int] = {
     "tools/research/src/research/pods/nebius/monitoring/alert_sink.py": 1,
     "tools/research/src/research/pods/nebius/monitoring/grafana.yaml": 1,
     "tools/research/src/research/pods/nebius/monitoring/grafana_up.sh": 1,
-    "tools/research/src/research/pods/nebius/n1_replacement.sh": 6,
+    "tools/research/src/research/pods/nebius/n1_replacement.sh": 7,
     "tools/research/src/research/pods/nebius/peers": 3,
     "tools/research/src/research/pods/nebius/peers-challenger": 16,
     "tools/research/src/research/pods/nebius/verifier/verifier.json": 1,
@@ -119,6 +119,7 @@ def test_the_scan_reads_each_form():
         "e.txt": "C0FFEE; c0abcdefghi; XC0ABCDEFGHI; ep-x.neon.example; aaaa.r2.cloudflarestorage.com; api.notion.com/v1/x; "
                  "linear.app/x/issue/A-1; linear.app/oauth/token; api.slack.com; w.slack.com; fake-vm.vercel.app\n",
         "f.txt": "at 81.2.3.4.\n",
+        "g.sh": "pkg-81.2.3.4\nhost=${H:-81.2.3.4}\n",
         "uv.lock": 'version = "81.2.3.4"\n',
     }
     assert scan(list(docs), docs.__getitem__) == {
@@ -126,4 +127,11 @@ def test_the_scan_reads_each_form():
         "c.json": [("provider id", 1), ("endpoint", 1)],
         "d.py": [("slack id", 1), ("notion link", 2), ("linear link", 3)],
         "f.txt": [("ipv4", 1)],
+        "g.sh": [("ipv4", 2)],
     }
+
+
+def test_an_address_after_a_hyphen_is_read_unless_a_word_comes_before_the_hyphen():
+    """A shell default (`${H:-ADDRESS}`), a flag's value and a range's end are addresses; `pkg-13.0.3.0` is a version."""
+    text = "${H:-192.0.2.7} -192.0.2.8 =-192.0.2.9 x-192.0.2.10 pkg-192.0.2.11 v-192.0.2.12"
+    assert [q for _, q in quads(text)] == ["192.0.2.7", "192.0.2.8", "192.0.2.9"]

@@ -23,13 +23,13 @@ SKIP = frozenset({"uv.lock", "tests/test_literal_addresses.py"})
 
 _DIGITS = "0123456789"
 _WORD = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
-#: the middle of a dotted quad (`.0.2.4` of `192.0.2.4`), from which `_quads` widens to the whole
+#: the middle of a dotted quad (`.0.2.4` of `192.0.2.4`), from which `quads` widens to the whole
 _QUAD_MIDDLE = re.compile(r"\.\d{1,3}\.\d{1,3}\.\d")
 _QUAD = re.compile(r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}")
 #: A dotted quad that is a version or a section number, not an address: `PTX ISA 9.7.14.5`, `§2.1.3.2`, `section 1.4.1.1`,
-#: `==12.9.1.4`.
+#: `==12.9.1.4`, `pkg-13.0.3.0`. A hyphen marks one only after a word: `${H:-ADDRESS}` is an address.
 _VERSION_BEFORE = re.compile(
-    r"(?:§|-|[=<>~!]=\s*|\b(?:ISA|PTX|CUDA|cuBLAS|cuDNN|NCCL|version|v|section)\s*[=:]?\s*[\"']?)$", re.I)
+    r"(?:§|(?<=\w)-|[=<>~!]=\s*|\b(?:ISA|PTX|CUDA|cuBLAS|cuDNN|NCCL|version|v|section)\s*[=:]?\s*[\"']?)$", re.I)
 
 _NEBIUS = ("computeinstance", "computedisk", "computeimage", "computefilesystem", "computegpucluster", "project", "tenant",
            "serviceaccount", "vpcnetwork", "vpcsubnet", "vpcallocation", "vpcsecuritygroup", "publickey", "accesskey",
@@ -60,9 +60,9 @@ _KINDS = [(kind, hint, re.compile(rx), _ANCHORS[kind] if len(hint) == 1 else Non
 _FAKE = re.compile(r"example|fake|dummy|acme", re.I)
 
 
-def _quads(text: str):
-    """(start, the quad) of each dotted quad of ``text`` that reads as an address: not part of a longer dotted or hyphenated
-    token, and not a version or section number."""
+def quads(text: str):
+    """(start, the quad) of each dotted quad of ``text`` that reads as an address: not part of a longer dotted token or a
+    word's hyphenated one, and not a version or section number."""
     seen = set()
     for m in _QUAD_MIDDLE.finditer(text):
         s = m.start()
@@ -73,7 +73,7 @@ def _quads(text: str):
             continue
         seen.add(s)
         before, after = text[s - 1:s], text[q.end():q.end() + 2]
-        if (before and (before in _WORD or before in ".§-")) or (after[:1] and (after[0] in _WORD or after[0] == "-")) \
+        if (before and (before in _WORD or before in ".§")) or (after[:1] and (after[0] in _WORD or after[0] == "-")) \
                 or (after[:1] == "." and after[1:2] in set(_DIGITS)) or _VERSION_BEFORE.search(text[max(0, s - 16):s]):
             continue
         yield s, q.group()
@@ -88,7 +88,7 @@ def _public(quad: str) -> bool:
 
 def findings(text: str) -> list[tuple[str, int]]:
     """(kind, line) of each address or service id ``text`` names, in order; a public IPv4 address's kind is ``ipv4``."""
-    found = [("ipv4", s) for s, quad in _quads(text) if _public(quad)]
+    found = [("ipv4", s) for s, quad in quads(text) if _public(quad)]
     seen = set()
     for kind, hint, rx, anchor in _KINDS:
         if hint not in text:
