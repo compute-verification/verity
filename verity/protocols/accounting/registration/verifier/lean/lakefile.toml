@@ -1,5 +1,6 @@
-# The registration log's check (`Core.Registration`, `verity/registration/log/v1`) as a core protocol, the executable
-# its difftest drives, and the Site's port (`site-difftest`). It requires the interface every core protocol implements
+# The registration log's check (`Core.Registration`, `verity/registration/log/v1`) as a core protocol, registration's
+# check on the Site (`RegistrationLog.SiteCheck`), the executable its difftest drives, and the Site's port
+# (`site-difftest`). It requires the interface every core protocol implements
 # (`core_protocol`), whose Site it reads, the difftest harness, and through them the base packages.
 name = "core_registration"
 defaultTargets = ["RegistrationLog", "core-registration", "site-difftest"]
@@ -19,6 +20,8 @@ path = "../../../../../circuits/difftest"
 
 [[lean_lib]]
 name = "RegistrationLog"
+# The guards of the Site's checks (`RegistrationLog.SiteV2Guards`), which no module imports, build with the library.
+globs = ["RegistrationLog", "RegistrationLog.SiteV2Guards"]
 
 [[lean_exe]]
 name = "core-registration"
