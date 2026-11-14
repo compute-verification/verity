@@ -493,10 +493,10 @@ def test_an_ask_under_a_parent_lands_on_its_project_and_milestone_and_under_the_
         "title": "One auditor-only host", "parentId": "P1", "projectId": "PJ1", "projectMilestoneId": "MS3"}
     assert capsys.readouterr().err == ""
     fake.refuse_project = True
-    lin.file("infra", "top", "the brief", parent="CMP-92", title=" The auditor's host ")
+    lin.file("infra", "top", "the brief", parent="CMP-92", title=" The auditor's device ")
     refused, filed = (c[1]["i"] for c in fake.sent("issueCreate")[1:])
     assert refused["projectId"] == "PJ1" and filed["parentId"] == "P1" and "projectId" not in filed and "projectMilestoneId" not in filed
-    assert filed["title"] == "The auditor's host"
+    assert filed["title"] == "The auditor's device"
     assert "Linear refused CMP-92's project for this issue (Linear: Argument Validation Error" in capsys.readouterr().err
     fake.parent = {"id": "P2", "project": None, "projectMilestone": None}                       # a parent on no board
     lin.file("infra", "top", "the brief", parent="CMP-93")
@@ -1074,8 +1074,8 @@ def test_create_files_an_issue_into_your_own_team_with_its_brief_title_and_due_d
 def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_date_or_nothing_to_set(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(KEY, fake, cache=tmp_path / "t")
-    sent = lin.edit("INF-1", " The auditor's host ", "2026-10-30", "## Done when\n- one host", "CMP-92")
-    assert sent == {"title": "The auditor's host", "dueDate": "2026-10-30", "description": "## Done when\n- one host", "parentId": "P1"}
+    sent = lin.edit("INF-1", " The auditor's device ", "2026-10-30", "## Done when\n- one host", "CMP-92")
+    assert sent == {"title": "The auditor's device", "dueDate": "2026-10-30", "description": "## Done when\n- one host", "parentId": "P1"}
     assert fake.updated == [("I1", sent)]
     assert lin.edit("INF-1", due="none") == {"dueDate": None} and fake.updated[-1] == ("I1", {"dueDate": None})
     assert lin.edit("INF-1", parent="CMP-92", send=False) == {"parentId": "CMP-92"}                 # built, not sent
@@ -1090,10 +1090,10 @@ def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_d
 def test_edit_from_the_cli_replaces_the_description_with_the_file_and_a_dry_run_sends_nothing(fake, registry, capsys, lin, tmp_path):
     brief = tmp_path / "BRIEF.md"
     brief.write_text("# The host\n\n- [ ] one auditor-only host\n")
-    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--title", "The auditor's host", "--file", str(brief), "--due", "2026-10-30",
+    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--title", "The auditor's device", "--file", str(brief), "--due", "2026-10-30",
                      "--parent", "CMP-92")
-    assert rc == 0 and out.strip() == "INF-1 set title The auditor's host, dueDate 2026-10-30, description 40 characters, parentId P1"
-    assert lin.updated == [("I1", {"title": "The auditor's host", "dueDate": "2026-10-30",
+    assert rc == 0 and out.strip() == "INF-1 set title The auditor's device, dueDate 2026-10-30, description 40 characters, parentId P1"
+    assert lin.updated == [("I1", {"title": "The auditor's device", "dueDate": "2026-10-30",
                                    "description": "# The host\n\n- [ ] one auditor-only host\n", "parentId": "P1"})]
     rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--due", "none", "--dry-run")
     assert rc == 0 and out.strip() == "dry-run: would set dueDate None" and len(lin.updated) == 1

@@ -16,9 +16,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import random
 import re
-import statistics
 import time
 import zlib
 from dataclasses import asdict, dataclass, field
@@ -658,15 +656,6 @@ def summarize_md(card: ReportCard) -> str:
     return "\n".join(L) + "\n"
 
 
-def bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, float]:
-    """The 95% bootstrap interval of the mean of `xs` (`n` resamples), NaN for fewer than two."""
-    if len(xs) < 2:
-        return (float("nan"), float("nan"))
-    rng = random.Random(seed)
-    means = sorted(statistics.fmean(rng.choices(xs, k=len(xs))) for _ in range(n))
-    return means[int(0.025 * n)], means[int(0.975 * n) - 1]
-
-
 __all__ = ["CARD_SCHEMA", "C_FIELDS", "DERIVED_FIELDS", "ENGINE_ARG_KEYS", "ReportCard", "slug", "dtype_short",
            "engine_args_slug", "kappa_short", "config_id_of", "c_with_provenance", "log_header", "workload_summary", "engine_args_of",
-           "vu_partition_text", "counts_of", "build_card", "load_card", "write_card", "top_section", "summarize_md", "bootstrap_ci"]
+           "vu_partition_text", "counts_of", "build_card", "load_card", "write_card", "top_section", "summarize_md"]

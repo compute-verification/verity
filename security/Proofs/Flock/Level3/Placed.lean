@@ -1,4 +1,11 @@
-/-
+module
+
+public import Proofs.Flock.Level3.FoldStmt
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+
+/-!
 Level 3, L3-A: the statement's level-0 matrices `A_0`, `B_0` over GF(2), as the verifier's lincheck fold builds them
 (`Stmt.fold`: `Flock.Piop`, `Flock.Statement`). They are what `fold_get`, `baseOf_get`, `mask_term` and `lookupTerm` read:
 - the fold writes each slot's base at the slot's columns, later ranges over earlier, so column `j`'s entries come from the
@@ -9,12 +16,6 @@ Level 3, L3-A: the statement's level-0 matrices `A_0`, `B_0` over GF(2), as the 
 - Δ's pairs `(i, c)` add at row `i`, column `c`, counted mod 2.
 Where no range covers `j` the matrices are Δ alone. No layout hypothesis is used.
 -/
-module
-
-public import Proofs.Flock.Level3.FoldStmt
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Combinatorics.Matroid.Init
-import Mathlib.Data.Nat.Totient
 
 @[expose] public section
 
