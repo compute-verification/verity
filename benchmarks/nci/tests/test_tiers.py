@@ -82,7 +82,7 @@ def test_free_compute_charges_pouws_deficit_on_the_certified_work():
 
 
 def test_the_gpus_free_compute_leaves_pouws_deficit_to_eps_w():
-    """The C7 dossier's GPU residual 1 − (1 − ε)((1 − φ)/q_sched + φ)/q_clock (Notion, "Monitored compute residual")
+    """The C7 dossier's GPU free-compute share 1 − (1 − ε)((1 − φ)/q_sched + φ)/q_clock (Notion, "Monitored compute residual")
     takes PoUW's deficit off the credited time; `eps_w` charges it in `free_share`, so the default is that form at
     ε = 0 (0.323 at the locked clock, against C7's 0.326 at its ε = 0.54%), and the deficit is charged once."""
     q_sched, q_clock, phi = 1.482, 1.162, 0.345
@@ -253,8 +253,8 @@ def test_the_recipe_multiplier_scales_only_the_constrained_terms():
 def test_reference_layered_at_kimi_k2():
     """The falsification test of the conjecture `InferenceOnly.Assumptions.ReferenceLayered`: the parameters it states are Kimi
     K2's shapes' in the declared BF16 GEMM's steps, and tiers.py's (d, e) is what `InferenceOnly.SecurityProofs.ReferenceThreaded`
-    derives from them at S = K. A keyed reference circuit written as the declarations are computes each matrix-product
-    entry, forward and backward, as a chain of the step `GEMM_HOPPER` binds (`HopperBF16WgmmaDot16_v2`, the BF16 GEMM's
+    derives from them at S = K. A keyed circuit of the reference training algorithm, written as the declarations are,
+    computes each matrix-product entry, forward and backward, as a chain of the step `GEMM_HOPPER` binds (`HopperBF16WgmmaDot16_v2`, the BF16 GEMM's
     on sm_90 and sm_120), whose width is the activations it reads; its roots are each chain's steps after the first,
     whose terms are the previous accumulator and the step's activations, so every inner dimension is a whole number of
     steps, at least two. A value's reach is its forward or gradient fan-out in products, over kappa.MODELS' top-k and
@@ -262,7 +262,7 @@ def test_reference_layered_at_kimi_k2():
     and the most is an MoE input value's; a lookup's column is an embedding column, vocab x `EMBED_BITS`; and at S = K
     the theorem takes the fewest E with S below E + 1 columns, giving (d0 - E, e + E e_lk) with e_lk = 0, layer 0's
     attention-input projections uncounted. tiers.py counts products, a step's width to a step. It can't find a
-    reference circuit that isn't keyed: the class is checked against a transformer block on paper."""
+    circuit of the reference training algorithm that isn't keyed: the class is checked against a transformer block on paper."""
     gemm = (ROOT / "verity/circuits/ops/boolean/gemm.py").read_text()
     dot = re.search(r'^GEMM_HOPPER: dict = \{"DOT": (\w+)\}$', gemm, re.M).group(1)
     operand = re.search(rf'^{dot} = definition\(.*?\(\("acc", F32\), \("a", (\w+)\), \("b", \1\)\)', gemm, re.M | re.S)

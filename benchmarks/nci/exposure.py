@@ -1,10 +1,11 @@
-"""What compute efficiency counted_share (``tiers.py``) is most exposed to: a plausible range for every parameter, counted_share and 1/counted_share
-across it at each tier, elasticities d ln counted_share / d ln p in four scenarios, the values at which 1/counted_share falls below 100, 10
-and 2, and the closed forms of the memory cap mu, the inference-only policy's term nu and the cheating share chi checked against
-``tiers.evaluate``. 1/counted_share is not the slowdown D (``statement.slowdown``, the slowdown calculator's
-``slowdown.theorem.multiple_bound``): counted_share counts every term at peak, D the residual r at MFU_0 (reference efficiency), so at
-s = 0, g = 1 and no memory cap, D = 1 / (r + (counted_share - r) / MFU_0) wherever D > 1. ``statement.py`` gives the thresholds
-on D.
+"""What the counted share (``tiers.py``) is most exposed to: a plausible range for every parameter, the counted share
+and its inverse across it at each tier, elasticities d ln(counted share) / d ln p in four scenarios, the values at which
+1/(counted share) falls below 100, 10 and 2, and the closed forms of the memory cap mu, the inference-only policy's term
+nu and the cheating share chi checked against ``tiers.evaluate``. 1/(counted share) is not the slowdown
+(``statement.slowdown``, the slowdown calculator's ``slowdown.theorem.multiple_bound``): the counted share counts every
+term at peak, the slowdown counts free compute r at MFU_0 (reference efficiency), so at s = 0, g = 1 and no memory cap
+the slowdown is 1 / (r + (counted share - r) / MFU_0) wherever it is above 1. ``statement.py`` gives the thresholds on
+the slowdown.
 
     python benchmarks/nci/exposure.py           # terms, tornado, elasticities, thresholds and closed-form checks
     python benchmarks/nci/exposure.py --json    # the same, for renderers
@@ -71,15 +72,15 @@ RANGES = {
     "e": (12288.0, 1.65e5, "low a guess; Kimi K2 4e4; dense-405b"),
     "kappa": (0.5, 0.667, "kappa.py: adversarial 0.5 (DeepSeek-V3's or Qwen3's shape with a fifth of its tokens at "
                           "32k, 0.49); Kimi K2's schedule 0.60; 4 of 6, the ceiling with no attention"),
-    "thread_bits": (6.96e6, 2.94e9, "ThreadedOfLayered at 2.5-bit embedding columns for any reference circuit C1 "
-                                    "allows; the whole embedding table at 2.5 bits, under a refined layered theorem"),
+    "thread_bits": (6.96e6, 2.94e9, "ThreadedOfLayered at 2.5-bit embedding columns for any circuit of the "
+                                    "reference training algorithm that C1 allows; the whole embedding table at 2.5 bits, under a refined layered theorem"),
     "block_mults": (0.3, 1.0, "kappa / 2 if each block's counted share were the recipe's; 1, every gate countable"),
     "nodes": (1e4, 1e6, "guess, around 100,000 servers"),
     "node_flops": (4e15, 3.6e16, "low a guess; 8 RTX PRO 6000s; 8 B200s, FP8 dense"),
     "years": (0.25, 3.0, "guess"),
 }
 
-#: the modelled design, where the residual sits below the memory cap
+#: the modelled design, where free compute sits below the memory cap
 DESIGN = {"free": 0.01, "host_share": 0.05, "clock_share": 0.0}
 SCENARIOS = {
     "defaults": {},
@@ -88,7 +89,7 @@ SCENARIOS = {
     "served today": {"free": 0.9},
     "served today, R_wipe 4 GB": {"free": 0.9, "pous_rounds": 12000.0, "unfilled_gb": 3.05, "pous_floor": 0.0},
 }
-#: thresholds are found at the defaults and with the GPUs' residual as served today, at these tiers
+#: thresholds are found at the defaults and with the GPUs' free compute as served today, at these tiers
 THRESHOLD_SCENARIOS = ("defaults", "served today")
 THRESHOLD_TIERS = ("T1", "T4")
 LEVELS = (100.0, 10.0, 2.0)
@@ -107,18 +108,18 @@ KEYED = {"d": T.REFERENCE_THREADED[0]}
 #: batched proving's cost, at which the injecting blocks' pool is worth less than the fleet's capacity; at today's sparse
 #: samples it is worth more, and ``evaluate`` stops the cheating share at 1, which the closed form chi does not
 BATCHED = {"overhead": 1.6e8}
-#: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (counted_share against
-#: the bound, mu against the registered part when memory caps it, nu against the declared part, chi against the cheating
+#: points where a closed form is checked against evaluate(): the probe, its overrides, the tier, the term (the counted share
+#: against the bound, mu against the registered part when memory caps it, nu against the declared part, chi against the cheating
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
 CHECKS = [
-    ("defaults", {}, "T1", "counted_share", "the residual plus the thread bound"),
+    ("defaults", {}, "T1", "counted_share", "free compute plus the thread bound"),
     ("1 GB streamed-label wipes", WIPE_2GB | KEYED | {"unfilled_gb": 0.83}, "T4", "mu",
-     "the floor credit's residual is above the cap"),
+     "the floor credit's free compute is above the cap"),
     ("design", DESIGN, "T4", "counted_share", "memory caps nothing: mu > r"),
     ("host CPUs bounded, batched", DESIGN | BATCHED | {"host_share": 0.0}, "T5", "counted_share", "r = 1%, chi on top"),
     ("unregistered 0.1", DESIGN | {"unregistered": 0.1}, "T4", "counted_share", "s of spent FLOP, the rest scaled by 1 - s"),
     ("intake at line rate", {"free": 0.9, "intake_x": 1.3e6}, "T4", "counted_share", "no count check: mu >> 1 caps nothing"),
-    ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T3", "mu", "memory caps the residual"),
+    ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T3", "mu", "memory caps free compute"),
     ("served, R_wipe 4 GB", SERVED_4GB | KEYED, "T4", "mu", "hourly wipes inside a 3.6 h window"),
     ("side channels 3e5", WIPE_2GB | KEYED | {"free": 0.9, "sigma": 3e5, "unfilled_gb": 0.83}, "T4", "mu",
      "helpers refill R_wipe; sigma joins lambda_in"),
@@ -217,7 +218,7 @@ def check(p: dict, tier: str) -> dict:
 
 
 def elasticity(p: dict, key: str, tier: str, h: float = STEP) -> float | None:
-    """d ln counted_share / d ln p by a central difference in ln p; None at a parameter of zero."""
+    """d ln(counted share) / d ln p by a central difference in ln p; None at a parameter of zero."""
     v = p[key]
     if v == 0:
         return None
@@ -241,7 +242,7 @@ def inverse_counted_share(p: dict, tier: str) -> float:
 
 def thresholds(p: dict, key: str, tier: str, n: int = GRID, steps: int = BISECT, levels: tuple[float, ...] = LEVELS,
                size: Callable[[dict, str], float] = inverse_counted_share) -> dict[float, list[list[float]]]:
-    """For each level, the intervals of the parameter's slider range on which ``size`` (1/counted_share, or tiers' slowdown D) is
+    """For each level, the intervals of the parameter's slider range on which ``size`` (1/(counted share), or the slowdown) is
     below it, the others at ``p``."""
     xs = grid(key, n)
     ys = [size(p | {key: x}, tier) for x in xs]
@@ -312,7 +313,7 @@ def report(rows: list[dict], checks: list[dict], scenario_terms: dict) -> None:
               f"{t['R_wipe_gb']:9.4g} {t['window_s'] / 3600:8.3g} {t['counted_share_T1']:10.3g} {t['counted_share_T4']:10.3g} "
               f"{t['counted_share_T5']:10.3g} {1 / t['counted_share_T5']:12.3g}")
     for scenario in THRESHOLD_SCENARIOS:
-        print(f"\nTornado, {scenario}: counted_share at low / central / high, ranked by the larger log swing at T1 or T4; "
+        print(f"\nTornado, {scenario}: the counted share at low / central / high, ranked by the larger log swing at T1 or T4; "
               "elasticity at the default")
         print(f"{'parameter':12} {'low':>8} {'central':>8} {'high':>8}  {'T1 low':>7} {'central':>7} {'high':>7}  "
               f"{'T4 low':>7} {'central':>7} {'high':>7}  {'1/counted, T4':>13} {'el T1':>6} {'el T4':>6}")
@@ -329,7 +330,7 @@ def report(rows: list[dict], checks: list[dict], scenario_terms: dict) -> None:
     for r in rows:
         print(f"  {r['key']:12} {r['low']:9.3g} {r['central']:9.3g} {r['high']:9.3g}  {r['source']}")
     names = list(SCENARIOS)
-    print("\nElasticities d ln counted_share / d ln p (rows with any |e| >= 0.001; '-' at a parameter of zero)")
+    print("\nElasticities d ln(counted share) / d ln p (rows with any |e| >= 0.001; '-' at a parameter of zero)")
     print(f"{'parameter':12}" + "".join(f" {n[:16]:>20}" for n in names))
     print(f"{'':12}" + " ".join(f"{'T1':>6} {'T4':>6} {'T5':>6}" for _ in names))
     for r in rows:
@@ -338,7 +339,7 @@ def report(rows: list[dict], checks: list[dict], scenario_terms: dict) -> None:
             print(f"{r['key']:12} " + " ".join(f"{g(v):>6}" for v in vals))
     for scenario in THRESHOLD_SCENARIOS:
         for tier in THRESHOLD_TIERS:
-            print(f"\nThresholds, {scenario}, {tier}: where 1/counted_share < 100, 10, 2 over the slider range, the others as "
+            print(f"\nThresholds, {scenario}, {tier}: where 1/(counted share) < 100, 10, 2 over the slider range, the others as "
                   "in the scenario")
             flat = {}
             for r in rows:
@@ -349,7 +350,7 @@ def report(rows: list[dict], checks: list[dict], scenario_terms: dict) -> None:
                     print(f"  {r['key']:12} " + " | ".join(f"{c:>22}" for c in cells))
             for cells, keys in flat.items():
                 print(f"  no crossing ({cells}): {', '.join(keys)}")
-    print("\nClosed forms against evaluate(): counted_share = s + (1 - s)(min(r + nu, mu) + chi), "
+    print("\nClosed forms against evaluate(): counted share = s + (1 - s)(min(r + nu, mu) + chi), "
           "mu = 4 R lambda_in / (kappa d b_w b_a F),\nnu = 2 alpha Lambda(K) / (kappa b_a), "
           "chi = 2 m pool step_bits (block_mults Gamma - K e / b_a) / (kappa (S_1 - K) N F H)")
     print(f"{'probe':26} {'tier':4} {'term':13} {'evaluate':>9} {'closed':>9} {'ratio':>6}  regime")

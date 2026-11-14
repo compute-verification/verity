@@ -255,7 +255,7 @@ def test_it_renders_every_section_as_markdown_and_json(capsys, monkeypatch):
     md = capsys.readouterr().out
     assert md.startswith("# ") and "at commit `" in md
     for heading in ("## Slide forms", "## 0. Symbols", "## 4. The terms", "## The ladder", "## The fit bound",
-                    "## Years of growth", "## The unregistered share by regime", "## 6. Thresholds on D",
+                    "## Years of growth", "## The unregistered share by regime", "## 6. Thresholds on the slowdown",
                     "## Known holes"):
         assert heading in md
     assert S.main(["--json"]) == 0
