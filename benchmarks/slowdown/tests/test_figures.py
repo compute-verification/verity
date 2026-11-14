@@ -61,9 +61,9 @@ def test_the_server_block_panel_adds_the_boundary_term_to_a_bound_and_not_to_an_
         moved += [arg.name] if full / (q + per_bit * win.inputs) != full / q else []
     assert moved, "no bound's value at k_S shows the boundary term"
     for arg in attacks:
-        cap = per_block(arg.allowance(p), units)
+        block_yield = per_block(arg.allowance(p), units)
         for k, y in zip(data["k"], panel["attacks"][arg.name]["overhead"], strict=True):
-            q = cap(Budget(win.gates, k))
+            q = block_yield(Budget(win.gates, k))
             assert float(y) == (full / q if q > 0 else math.inf), (arg.name, k)
 
 

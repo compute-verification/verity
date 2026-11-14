@@ -9,16 +9,16 @@ public import Proofs.Properties.Accounting.Remote.Schedule
 
 `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement`, the theorem of
 `Properties.RegisteredCircuit.ScheduledRequirement`: `Accounting.SecurityProofs.RegisteredCircuitRequirement`'s argument on
-the coins the schedule check accepts. At each prefix, `Properties.RemoteAudit.steered_of_checked` over the coins the
+the coins the schedule check accepts. At each prefix, `Properties.Poub.steered_of_checked` over the coins the
 check accepts there makes the layout the slot of the schedule's `cap + 1` padded bits (`steered_on`). The session priced
 (`RateSketch.pr_run_le`) is `A` on summaries of `a + (cap + 1)` bits, the devices' `a` then the schedule's
 (`SketchSummaryRun.widen`), on the schedule's slot, which is the layout on the accepted coins, so there each pass's
 events are `G`'s (`RateSketch.pass_congr`). A window's reads counted against the samples are `G`'s on a session the check
 accepts at every pass, and its correct receipts on one it refuses, which no shortfall reaches.
 
-Its honest lemma is `Properties.RemoteAudit.scheduled_meets` (the check accepts the deployed session's shape at
+Its honest lemma is `Properties.Poub.scheduled_meets` (the check accepts the deployed session's shape at
 T = 1 s, at 792 bits; the rest of its premises are `G`'s, whose honest lemma is `G`'s), and its nontrivial one is
-`Properties.RemoteAudit.steered_of_checked_nontrivial`: without the check's acceptance, a layout that follows a
+`Properties.Poub.steered_of_checked_nontrivial`: without the check's acceptance, a layout that follows a
 three-way coin is the verifier's and is the slot of no one-bit summary.
 -/
 
@@ -72,20 +72,20 @@ open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **The layout steered on the accepted coins.** On coins `acc` at which the schedule check at the committed cap `cap`
-accepts, the verifier's layout (`sessionLayout`) is the slot of the schedule's `cap + 1` padded bits:
-`Properties.RemoteAudit.steered_of_checked` at each prefix, over the coins `acc` holds of there. -/
+accepts, the verifier's layout (`runLayout`) is the slot of the schedule's `cap + 1` padded bits:
+`Properties.Poub.steered_of_checked` at each prefix, over the coins `acc` holds of there. -/
 theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
     {dflt : Pfx → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     (acc : Pfx → Y → Prop)
-    (hacc : ∀ c y, acc c y → ∃ sc passes b, RemoteAudit.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
+    (hacc : ∀ c y, acc c y → ∃ sc passes b, Poub.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     ∃ (sched : Pfx → Y → Pous.Bits (cap + 1)) (slot : Pfx → Pous.Bits (cap + 1) → Fin N ↪ Fin T × Fin M),
-      ∀ c y, acc c y → Properties.RemoteAudit.sessionLayout blocks dflt appended sent c y = slot c (sched c y) := by
+      ∀ c y, acc c y → Properties.Poub.runLayout blocks dflt appended sent c y = slot c (sched c y) := by
   classical
   have h : ∀ c, ∃ (sched : {y // acc c y} → Pous.Bits (cap + 1)) (slot : Pous.Bits (cap + 1) → Fin N ↪ Fin T × Fin M),
-      ∀ y : {y // acc c y}, Properties.RemoteAudit.sessionLayout blocks dflt appended sent c y.1 = slot (sched y) := by
+      ∀ y : {y // acc c y}, Properties.Poub.runLayout blocks dflt appended sent c y.1 = slot (sched y) := by
     intro c
-    obtain ⟨sched, slot, hs⟩ := Properties.RemoteAudit.steered_of_checked (Pfx := Unit) (Y := {y // acc c y})
+    obtain ⟨sched, slot, hs⟩ := Properties.Poub.steered_of_checked (Pfx := Unit) (Y := {y // acc c y})
       (blocks := blocks) (a := cap) (idx := fun _ => idx c) (dflt := fun _ => dflt c)
       (appended := fun _ y => appended c y.1) (sent := fun _ y => sent c y.1)
       (fun (_ : Unit) (y : {y // acc c y}) => hacc c y.1 y.2)

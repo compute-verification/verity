@@ -123,7 +123,7 @@ mfu_unreg = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.referenc
 [fleet.tiers-reference]
 location = "rtx-pro-6000-server"
 count = { value = 1e5, unit = "location", source = "benchmarks/nci/tiers.py DEFAULTS nodes", status = "declared" }
-eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (tiers' unmonitored is 0); high: the earlier 1% point", status = "ruled" }
+eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (tiers' unregistered is 0); high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, source = "benchmarks/nci/tiers.py DEFAULTS mfu", status = "declared" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
 mfu_unreg = { value = 0.4, source = "as mfu_train", status = "assumed" }

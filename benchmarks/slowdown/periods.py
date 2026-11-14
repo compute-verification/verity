@@ -25,7 +25,7 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `sl
   (`PERIOD_PREMISES`), the escape's tail and the windows' knowledge errors (`pooled`);
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
-  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap). A proof
+  assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary yield). A proof
   block's output bits are ranked over the public size classes as the size class's limit (`LIMITS`), not as a premise.
 
 `--measured CIRCUIT` evaluates them with a measured step's design in place of the FLOP model (`circuits.in_place`: its

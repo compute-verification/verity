@@ -43,8 +43,8 @@ model's premises, under which `SketchBound` is derived (`Accounting.Guarantees.R
   gives `Present` where the model's passes are among the trace's credited ones (`present_of_covered`,
   `presentAt_of_present`).
 * `KeyBudget` states no location and needs none of this: it bounds pass `j`'s receipt-hash queries by `qtot j`, and
-  `Σ qtot` is within the compressions the prover makes on the node or off it (`Q = F·C`, `timing.sketch_failure`'s
-  `outside`), so it holds wherever the grinding ran.
+  `Σ qtot` is within the compressions the prover makes on the node or off it (`Q`, its budget,
+  `timing.sketch_failure`'s `queries`), so it holds wherever the grinding ran.
 -/
 
 @[expose] public section

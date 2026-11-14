@@ -125,7 +125,7 @@ horizon = "year"
 run = "v4-pretrain"
 families = ["full"]
 
-# The elementary cap: the uncertified and unregistered gates at one counted operation a gate, with no straddling premise.
+# The elementary yield: the uncertified and unregistered gates at one counted operation a gate, with no straddling premise.
 [scenario.reference-remote-h200-elementary]
 fleet = "world-h200"
 regime = "remote"

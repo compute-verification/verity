@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Basic
+public import Poub.Basic
 
 /-!
 # Running ends and `bisectRight`
@@ -14,9 +14,9 @@ iterations left). So a position `u` below the total falls in exactly one length,
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-- `bisectRight`'s loop body. -/
 def bisectStep (ends : Array Nat) (x : Nat) (_ : Nat) (s : Nat × Nat) : Id (ForInStep (Nat × Nat)) :=
@@ -189,4 +189,4 @@ theorem locate {ends : Array Nat} {l : List Nat} (h : PrefixSums ends l) (u : Na
     rw [getElem!_pos l r hlast]
     exact this
 
-end Properties.RemoteAudit
+end Properties.Poub

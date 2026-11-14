@@ -527,7 +527,7 @@ theorem strOf_eq {j : Json} {s : String} (h : strOf j = s) (hs : s ≠ "") : j =
 
 theorem getD_root (x : Json) : Spot.getD (Json.mkObj [("root", x)]) "root" = x := (rfl)
 
-theorem idx_session {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} (hI : LedgerInv pre wins v2)
+theorem idx_challengePhase {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} (hI : LedgerInv pre wins v2)
     {i j : Nat} (hi : i < wins.size) (hj : j < wins.size)
     (h : wins[i].opened.session = wins[j].opened.session) : i = j := by
   by_cases hij : i = j
@@ -541,10 +541,10 @@ theorem idx_root {pre : List LedgerEntry} {wins : Array Win} {v2 : Bool} (hI : L
   · exact absurd h (hI.distinct i j hi hj hij).1
 
 theorem find_mem {ledger : Json} {sid : String} {p : LedgerEntry → Bool} {x : LedgerEntry}
-    (h : List.find? p (PouwCheck.sessionEntries ledger sid) = some x) :
+    (h : List.find? p (PouwCheck.challengePhaseEntries ledger sid) = some x) :
     x ∈ entries ledger ∧ x.session = sid ∧ p x = true := by
   have hm := List.mem_of_find?_eq_some h
-  simp only [PouwCheck.sessionEntries, List.mem_filter, beq_iff_eq] at hm
+  simp only [PouwCheck.challengePhaseEntries, List.mem_filter, beq_iff_eq] at hm
   exact ⟨hm.1, hm.2, List.find?_some h⟩
 
 /-- The ledger of a session pinned on root `R` shows its reserve, its one open on `R` and its end, from the entries
@@ -552,9 +552,9 @@ theorem find_mem {ledger : Json} {sid : String} {p : LedgerEntry → Bool} {x : 
 theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {a : Audited} {R : ByteArray}
     {rv op en : LedgerEntry} (hR : Flock.hexOf R ≠ "")
     (hpin : pinnedChallengePhase ledger (Json.mkObj [("root", .str (Flock.hexOf R))]) ck pins main = .ok a)
-    (hfind : (List.find? (fun x => x.kind == "reserve") (PouwCheck.sessionEntries ledger a.session),
-      List.find? (fun x => x.kind == "open") (PouwCheck.sessionEntries ledger a.session),
-      List.find? (fun x => x.kind == "end") (PouwCheck.sessionEntries ledger a.session)) = (some rv, some op, some en))
+    (hfind : (List.find? (fun x => x.kind == "reserve") (PouwCheck.challengePhaseEntries ledger a.session),
+      List.find? (fun x => x.kind == "open") (PouwCheck.challengePhaseEntries ledger a.session),
+      List.find? (fun x => x.kind == "end") (PouwCheck.challengePhaseEntries ledger a.session)) = (some rv, some op, some en))
     (hfam : Spot.jeq (Spot.getD rv.body "families") (familiesJson PouwWindow.SALT_FAMILIES) = true)
     (hres : (Spot.int? (Spot.getD op.body "reserve") == some (rv.seq : Int)) = true)
     (hcomp : (PouwCheck.jsonTrue (Spot.getD en.body "complete") &&
@@ -581,12 +581,12 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
   have hwS : wp.1[iw].opened.session = a.session := by rw [hwin, hsid]
   have hop : op = win.opened := by
     obtain ⟨j, hj, hjo⟩ := hI.opens op (mem opE) opK
-    have : j = iw := idx_session hI hj hiw (by rw [hjo, opS, hwS])
+    have : j = iw := idx_challengePhase hI hj hiw (by rw [hjo, opS, hwS])
     subst this
     rw [← hjo, hwin]
   have hen : win.ended = some en := by
     obtain ⟨i, hi, his, hie⟩ := hI.ends en (mem enE) enK
-    have : i = iw := idx_session hI hi hiw (by rw [his, enS, hwS])
+    have : i = iw := idx_challengePhase hI hi hiw (by rw [his, enS, hwS])
     subst this
     rw [← hwin]; exact hie
   have heq : en' = en := Option.some.inj (hend.symm.trans hen)
@@ -613,7 +613,7 @@ theorem ledgerShows_of {ledger : Json} {ck : ChallengerKey} {pins main : Json} {
       rcases hor' with hr | hs
       · apply idx_root hI hj hiw
         rw [(hI.win j hj).2.2.1, hjo, hr, hwin, hroot]; rfl
-      · exact idx_session hI hj hiw (by rw [hjo, hs, hwS])
+      · exact idx_challengePhase hI hj hiw (by rw [hjo, hs, hwS])
     subst this
     rw [← hjo, hwin, hop]
   refine ⟨rv, op, en, rvE, opE, enE, ⟨rvK, rvS, rvSch, hfam⟩,

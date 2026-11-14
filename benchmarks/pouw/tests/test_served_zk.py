@@ -1348,7 +1348,7 @@ def test_shape_compares_what_the_prover_sends(tmp_path):
 
 @pytest.mark.slow
 def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
-    """stage_tile.py stages a call's tile and a filler tile of a committed execution phase as `Pc8TileSide` units, each in its own
+    """stage_tile.py, run by hidden_zk/served_stage.py, stages a call's tile and a filler tile of a committed execution phase as `Pc8TileSide` units, each in its own
     process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
     (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
@@ -1360,7 +1360,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     (tmp_path / "advice.json").write_text(json.dumps(advice))
     (tmp_path / "params.json").write_text(json.dumps(params))
     SC.save(tmp_path / "prover.npz", priv)
-    stage = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "served_zk" / "stage_tile.py"
+    stage = Path(__file__).resolve().parents[1] / "hidden_zk" / "served_stage.py"
     sample = {"law": "subset", "population": 26, "k": 2, "units": [7, 25]}
     runs = {t: subprocess.Popen([sys.executable, str(stage), str(tmp_path), str(tmp_path / "params.json"), str(t),
                                  str(tmp_path / f"u{t}")], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

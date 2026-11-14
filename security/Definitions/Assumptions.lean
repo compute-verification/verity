@@ -7,8 +7,8 @@ public import Definitions.Accounting
 public import Definitions.Assumptions.Accounting
 public import Definitions.Assumptions.Hash
 public import Definitions.Assumptions.Pous
-public import Definitions.InferenceOnly.Cut
-public import Definitions.InferenceOnly.Formalism
+public import Definitions.Slowdown.Cut
+public import Definitions.Slowdown.Formalism
 public import Definitions.Assumptions.Pouw
 public import Definitions.Assumptions.WeightSecurity
 
@@ -102,7 +102,7 @@ end InferenceOnly.Cut.Assumptions
 * **A2, efficiency floor** (`EfficiencyFloor`): no run of the methods considered whose update stays within `D` bits
   reaches `ℓ*` for less than `p · H(ℓ*)`. It is empirical. It is stated over a class of runs, not over every circuit: a
   circuit that outputs a run's `θ'` as constants reaches the same loss at about `|θ'|` gates, so over every circuit the
-  floor fails at any `p · H(ℓ*)` above that (`Definitions.InferenceOnly.Formalism.Runs`).
+  floor fails at any `p · H(ℓ*)` above that (`Definitions.Slowdown.Formalism.Runs`).
 -/
 
 namespace InferenceOnly.Formalism.Assumptions
