@@ -23,6 +23,7 @@ from types import SimpleNamespace
 
 import pous_test_signer as ts
 import pytest
+import wipe_judge
 import wipe_side
 from pous_fakes import Clock
 
@@ -246,6 +247,7 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out, side_of=_handed(side))
     record = json.loads((out / "wipe.json").read_text())
@@ -280,6 +282,7 @@ def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, 
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
@@ -309,6 +312,7 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device),
                             str(wipe_streamer.path)))
+    wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
@@ -320,7 +324,7 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     assert record["session"]["fill"]["bytes"] == 1 << 25
     assert record["report"]["fill"]["labels"] == W.SEGMENT_LABELS and record["report"]["streamer"]["gates"]
     s = W.summary(record)
-    assert s["verdict"] == "accept" and s["decided_by"]["program"] == "python" and s["segments"] == 1
+    assert s["verdict"] == "accept" and s["decided_by"]["program"] == "wipe-protocol" and s["segments"] == 1
     assert s["key_pinned"] and s["key_sha512"] == PINNED
     assert s["tier"] == "host-dram"
 
@@ -456,6 +460,7 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
@@ -484,6 +489,7 @@ def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
     device = tmp_path / "device"
     device.mkdir()
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer

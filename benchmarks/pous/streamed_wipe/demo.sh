@@ -61,7 +61,6 @@
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
 #   --node NAME          the developer's node, the wiped server's id (default: hostname)
 #   --limit-ns N         the deadline a read (default 20 ms)
-#   --no-lean            judge in Python alone; judge out/wipe.case.json with wipe-protocol later on a CPU node
 #   --wipe-protocol EXE  the Lean judge built elsewhere (served_wipe.sh builds it outside this tree's .lake, which
 #                        served_verdicts.sh's own Lean builds write meanwhile), in place of building it here
 #
@@ -82,7 +81,7 @@ mkdir -p "$O"
 if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
-  DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
+  DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000
   SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= DISKS=() DISK_GB= DISK_RESERVE=10 DISK_SPARE=0 LEASE_MIN=60
   DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL= TRUSTED=
   ARGS=("$@")
@@ -114,7 +113,6 @@ else
       --gpu) GPU=$2; shift ;;
       --node) NODE=$2; shift ;;
       --limit-ns) LIMIT=$2; shift ;;
-      --no-lean) LEAN=0 ;;
       --wipe-protocol) WIPE_PROTOCOL=$2; shift ;;
       *) echo "demo.sh: unknown option $1 (see the header)"; exit 2 ;;
     esac
@@ -182,11 +180,10 @@ EOF
   } > "$O/env.txt" 2>&1
   uv sync -q --all-packages --extra torch-cpu
   [ -n "$CH" ] || cc -O3 -pthread verity/protocols/accounting/pous/verifier/wipe_stream.c -o "$S/wipe_stream-check"
-  TOOLS={}
-  if [ "$LEAN" = 1 ] && [ -n "$WIPE_PROTOCOL" ]; then
+  if [ -n "$WIPE_PROTOCOL" ]; then
     [ -x "$WIPE_PROTOCOL" ] || { echo "REFUSED: --wipe-protocol $WIPE_PROTOCOL is not an executable"; exit 3; }
     TOOLS="{\"wipe-protocol\": \"$WIPE_PROTOCOL\"}"
-  elif [ "$LEAN" = 1 ]; then
+  else
     L=verity/protocols/accounting/pous/device/lean
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash tools/verity/lean/setup.sh "$L" > "$O/lake-setup.log" 2>&1
