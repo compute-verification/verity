@@ -643,7 +643,7 @@ LEAN: dict[str, tuple[str, ...]] = {
     "euf-cma/lms-sha512-n64": ("Hash.Assumptions.LmsUnforgeable",),
     "faithful": ("Accounting.Assumptions.Parties.Faithful",),
     "faulted-use-hard": ("WeightSecurity.Assumptions.FaultedUseHard",),
-    "flock-firewall-os-src": ("Claims.ZKServer.Loop.Src",),
+    "flock-zk-server-os-src": ("Claims.ZKServer.Loop.Src",),
     "hash-derived-key": ("Claims.Hm96Hiding", "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"),
     "honest-clock": ("Pouw.Assumptions.HonestClock",),
     "honest-verifier": (
@@ -664,7 +664,7 @@ LEAN: dict[str, tuple[str, ...]] = {
     "training-cut-hardness": ("Nci.Cut.Assumptions.Hardness",),
     "training-efficiency-floor": ("Nci.Formalism.Assumptions.EfficiencyFloor",),
     "training-token-work": ("Nci.Formalism.Assumptions.TokenWork",),
-    "trusted-host": ("Verity.Assumptions.TrustedHost",),
+    "trusted-host": ("Verity.Assumptions.TrustedDevice",),
     "uniform/io-getrandombytes": (
         "FlockSoundness.Assumptions.UniformRandomBytes",
         "FlockSoundness.Assumptions.UniformRandomBytesTest",

@@ -9,7 +9,7 @@ public import Base.JsonParse
 
 `Device.Deployment` is what fixes the device's history at a play (`Device.dev`). `Instance.Honest.deployment` is the
 idle one: no key, no coins, no ledger. This file builds the one the auditor runs (`deployment`), the SPOT live
-challenger on its auditor host, each field what the host's code does:
+challenger on its auditor device, each field what the host's code does:
 
 * **The host** (`Host`): what the auditor's machine holds when an audit starts. Its LMS key over SHA-512 at the
   deployed parameters (`Lms.deployed`, n = 64; `serve.py`'s and `auditor.py`'s `load_key` in
@@ -53,7 +53,7 @@ open Verity.Sampled.Device (RunSetup Deployment pubOf)
 
 /-! ## The host -/
 
-/-- **The auditor host the live challenger runs on**, as it stands when an audit starts at the parameters `θ`: its LMS
+/-- **The auditor device the live challenger runs on**, as it stands when an audit starts at the parameters `θ`: its LMS
 key at the deployed parameters (`deployed`), its name and pinned commit, and at each `θ` the session id the gate
 reserves, the key's next unused leaf, the ledger's next `seq` and its last line's SHA-512 (`prev`, `ZERO` on an empty
 ledger), its clock's UTC reading at the audit's `k`-th entry, and the body fields of its own the entry of each kind

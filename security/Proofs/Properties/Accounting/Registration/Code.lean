@@ -641,7 +641,7 @@ theorem hexOf_hash_ne (m : ByteArray) : Flock.hexOf (Flock.Sha512.hash m) ≠ ""
   rw [Properties.NetworkRecords.Bytes.hexOf_toList, String.toList_empty] at e
   have hl : (Flock.Sha512.hash m).data.toList.length = 64 := by
     rw [Array.length_toList]
-    exact Properties.NetworkCertifier.Bytes.hash_size m
+    exact Properties.Certifier.Bytes.hash_size m
   obtain ⟨x, hx⟩ := List.exists_mem_of_ne_nil (Flock.Sha512.hash m).data.toList (by intro hn; rw [hn] at hl; cases hl)
   have := Properties.NetworkRecords.Bytes.hexOf_length x
   rw [List.flatMap_eq_nil_iff.1 e x hx] at this
