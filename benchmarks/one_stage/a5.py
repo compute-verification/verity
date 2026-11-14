@@ -1640,7 +1640,8 @@ class LeanPool:
     """Member checks on ``workers`` threads beside the caller's sessions, which stay one at a time (`ONE_AT_A_TIME`). Checks
     start in the order submitted, each once its memory estimate ``need`` fits: with the running checks' estimates and the
     running session's (`session`) within ``budget`` bytes, and ``available()`` bytes free now. With no check and no session
-    running the next starts whatever its estimate, so one over the budget runs alone. `results` are the checks' in the
+    running the next starts whatever its estimate, so one over the budget runs alone. A reading of ``available()`` that
+    raises in a check's gate is that check's outcome, and the next check takes its turn. `results` are the checks' in the
     order submitted. It prints the memory it starts with (`say_memory`: the budget and ``available()``'s terms) and, the
     first time a check's or a session's start waits for memory, one line with the estimate and the term that held it."""
 
@@ -1707,7 +1708,12 @@ class LeanPool:
 
     def _run(self, turn: int, check: Callable[[Any], Any], arg: Any, need: float) -> Any:
         with self.cv:
-            self.cv.wait_for(lambda: self._fits(turn, need))
+            try:
+                self.cv.wait_for(lambda: self._fits(turn, need))
+            except BaseException:  # a reading of free memory that raised: the check fails, and the next takes its turn
+                self.next += 1
+                self.cv.notify_all()
+                raise
             self.next, self.running, self.used = self.next + 1, self.running + 1, self.used + need
             self.cv.notify_all()
         try:

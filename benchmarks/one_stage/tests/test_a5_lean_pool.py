@@ -128,6 +128,30 @@ def test_a_failed_check_frees_its_place_and_its_failure_comes_back():
         assert p.futures[1].result() == 1
 
 
+def test_a_reading_that_raises_in_a_checks_gate_is_its_outcome_and_the_next_check_takes_its_turn():
+    """Beside a running session, the reading of free memory raises the first time a check's gate asks it (a cgroup file
+    that does not read as the kernel writes it) and reads again after. That check's outcome is the error, the next
+    check runs in its turn, and leaving the pool returns. A gate that kept the failed check's turn would leave the next
+    check waiting for ever, and leaving the pool with it."""
+    reads: list[int] = []
+
+    def available() -> float:
+        reads.append(len(reads))
+        if len(reads) == 2:
+            raise ValueError("memory.max: 'garbage' is neither a number nor max")
+        return 100 * GB
+
+    with a5.LeanPool(2, 100 * GB, available) as p:
+        with p.session(GB):
+            p.submit(lambda i: i, 0, GB)
+            p.submit(lambda i: i, 1, GB)
+            assert p.futures[1].result() == 1
+            assert isinstance(p.futures[0].exception(), ValueError)
+        with pytest.raises(ValueError, match="garbage"):
+            p.results()
+    assert len(reads) == 3 and (p.next, p.running, p.used) == (2, 0, 0)
+
+
 def test_a_check_starts_beside_the_running_session_only_within_the_budget_and_else_once_it_ends():
     c = Checks(3)
     with pool(c, [], budget=10 * GB) as p:
