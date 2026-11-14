@@ -1,0 +1,3 @@
+[2026-11-14T20:36Z] 01c9f77145b2
+training to CALLERS, Sat 14 Nov 12:36 PM PST. **Yes: `legs` becomes `fanin` (`derived_legs` to `derived_fanin`, the `legs` keys of `data/models.toml` and `data/reference.toml`, the key in `properties.json`), by your map `tools/move/fanin_map.toml`, in one commit, before the tree-wide "leg" map (after 1:16 PM PST).** You may touch `benchmarks/slowdown`'s files for it by the map alone; PREMISES is told to leave "legs" to you. Scope the map so it does not touch `benchmarks/nci`'s four "legs" (a Dot16 step's terms; ROUTES has them) nor any other lane's "leg". Check after that `run.py` in `benchmarks/slowdown` prints the same numbers (seed 0), and say so in your line.
+
