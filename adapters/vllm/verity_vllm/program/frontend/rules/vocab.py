@@ -8,33 +8,54 @@ the vocabulary's name and version, so "which kernels does this program claim" is
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from verity.circuits.defs import bind as ir_bind
 from verity.definitions.registry import act as _act
-from verity.definitions.registry import b1, gemm_bias as _gemm_bias
-from verity.definitions.registry import dsa as _dsa, dsa_norm as _dsa_norm, dsa_topk_mask as _dsa_topk_mask
-from verity.definitions.registry import dsv4_indexer as _dsv4_indexer, dsv4_qnorm_insert as _dsv4_qnorm
-from verity.definitions.registry import dsv4_compressor as _dsv4_compressor, dsv4_moe as _dsv4_moe
-from verity.definitions.registry.dsv4_decode_indices import gather_i32
-from verity.definitions.registry import flashmla as _flashmla, flashmla_prefill as _flashmla_prefill
-from verity.definitions.registry import deepgemm as _deepgemm
+from verity.definitions.registry import b1
+from verity.definitions.registry import b1_tp2 as TP2
 from verity.definitions.registry import boolean_rope as _rope
-from verity.definitions.registry import cublas_bf16 as _cublas_bf16, ll_bf16 as _ll_bf16
+from verity.definitions.registry import cublas_bf16 as _cublas_bf16
 from verity.definitions.registry import cuda_rmsnorm as _cuda_rmsnorm
-from verity.definitions.registry import sparse_mla as _sparse_mla, sparse_mla_split as _sparse_mla_split
-from verity.definitions.registry import tp_allreduce as _tp_allreduce
+from verity.definitions.registry import deepgemm as _deepgemm
+from verity.definitions.registry import dsa as _dsa
+from verity.definitions.registry import dsa_norm as _dsa_norm
+from verity.definitions.registry import dsa_topk_mask as _dsa_topk_mask
+from verity.definitions.registry import dsv4_compressor as _dsv4_compressor
+from verity.definitions.registry import dsv4_indexer as _dsv4_indexer
+from verity.definitions.registry import dsv4_moe as _dsv4_moe
+from verity.definitions.registry import dsv4_qnorm_insert as _dsv4_qnorm
 from verity.definitions.registry import fa2_check_inf as _f2
+from verity.definitions.registry import fa2_softcap as _f2s
 from verity.definitions.registry import fa3_check_inf as _f3
+from verity.definitions.registry import flashmla as _flashmla
+from verity.definitions.registry import flashmla_prefill as _flashmla_prefill
 from verity.definitions.registry import fp8 as _fp8
+from verity.definitions.registry import fp8_moe as _fm
+from verity.definitions.registry import fp8_moe_experts as _x
 from verity.definitions.registry import fp8_vocab as _fp8_vocab
+from verity.definitions.registry import gemm_bias as _gemm_bias
+from verity.definitions.registry import layer_norm as _LN
+from verity.definitions.registry import ll_bf16 as _ll_bf16
 from verity.definitions.registry import marlin_moe as _marlin
 from verity.definitions.registry import mhc as _mhc
 from verity.definitions.registry import moe as _moe
+from verity.definitions.registry import pad_prims as PP
 from verity.definitions.registry import pouw_rows as _pouw_rows
-from verity_vllm.program.frontend import targets as _targets
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as RP
+from verity.definitions.registry import sparse_mla as _sparse_mla
+from verity.definitions.registry import sparse_mla_split as _sparse_mla_split
+from verity.definitions.registry import (
+    topp_words as _topp_words,  # the keep word as word gates at a constant S
+)
+from verity.definitions.registry import tp_allreduce as _tp_allreduce
 from verity.definitions.registry import value_inputs as _vi
+from verity.definitions.registry.dsv4_decode_indices import gather_i32
+
+from verity_vllm.program import dsa_table as _dsa_table
+from verity_vllm.program.frontend import targets as _targets
 from verity_vllm.program.frontend.rules import ref_kinds as R
 
 
@@ -68,8 +89,9 @@ class Vocabulary:
     def to_json(self) -> dict:
         d = {"name": self.name, "version": self.version, "mode": self.mode, "profile": self.profile,
              "roles": {r: self.notes.get(r, "") for r in sorted(self.kinds)}}
-        if "_pin" in self.notes:
-            d["pin"] = self.notes["_pin"]
+        pin = self.notes.get("_pin")
+        if pin is not None:
+            d["pin"] = pin
         return d
 
 
@@ -82,13 +104,12 @@ def _int8():
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
-    from verity.definitions.registry import fa2_check_inf as _f2v
-    return ir_bind(_f2v.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
+    return ir_bind(_f2.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
 # -- the kinds whose program values are inputs (`TargetProfile.registered_values`): the value is the kind's last operand, a field of
 # the registered `values` parameter (`Ctx.supplied`); the rules ask for them instead of the constant-holding kinds under the switch
-_VALUE_KINDS = {
+_VALUE_KINDS: dict[str, Callable[..., object]] = {
     "rmsnorm_value": lambda N, TARGET, M=1: _targets.rmsnorm_value_spec(TARGET, N),
     "rmsnorm_fused_value": lambda N, TARGET, M=1: _targets.rmsnorm_fused_spec(TARGET, N, eps_input=True, M=M),
     "attention_value": lambda T, NH, KVH, D: ir_bind(_vi.AttentionV10, T=T, NH=NH, KVH=KVH, D=D, BN=b1.fa2_kblock_n(D)),
@@ -162,7 +183,6 @@ PROFILE_B1_EAGER = Vocabulary(
 # The reference kinds define the arithmetic (sequential f32 chains, one DT rounding at stated points); agreement with torch
 # CPU is measured over a tested domain (docs/data/ref-prims/), never assumed. The vocabulary version pins NUMERIC's
 # `REF_VOCAB_VERSION` and `ref_vocab_digest()` (a hash over every reference kind's evaluator/body source).
-from verity.definitions.registry import ref_prims as RP
 
 
 def _ref_doc(d) -> str:
@@ -210,15 +230,6 @@ REFERENCE_CPU_F32 = Vocabulary(
 
 # -- profile "b1-eager-v2": the same Ampere eager profile over the v2 skeleton (`Serve_v2`/`Serve_v3`: `Gemm_v2{K,N,DOT}`,
 # `Attention_v2{..,BN,DOT,INV}`, the `NORM` bundle) + the `pad-serve@1` kinds of the padded circuit (`serve3.py`) ------------
-from verity.definitions.registry import b1_tp2 as TP2
-from verity.definitions.registry import pad_prims as PP
-from verity.definitions.registry import prims as P
-from verity.definitions.registry import sampling as _sampling
-from verity.definitions.registry import sampling_vocab
-from verity.definitions.registry import topp_words as _topp_words  # the keep word as word gates at a constant S
-from verity.definitions.registry import layer_norm as _LN
-
-
 PROFILE_B1_EAGER_V2 = Vocabulary(
     "b1-eager-v2", "profile", "b1-eager-v2",
     kinds={
@@ -329,7 +340,6 @@ def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
 
 
 def _silu_mul_fp8_block_quant(I: int, G: int):
-    from verity.definitions.registry import fp8_moe as _fm
     return ir_bind(_fm.SiluMulFp8BlockQuant, I=I, G=G)
 
 
@@ -338,14 +348,12 @@ def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
         return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
     if G is None or KB is None or SWAP is None:
         raise TypeError("the block-FP8 pair forms take G, KB and SWAP together")
-    from verity.definitions.registry import fp8_moe_experts as _x
     return ir_bind(_x.MoeExpertFp8GemmW if routed else _x.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=KB, SWAP=SWAP, DOT=DOT)
 
 
 def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     if FA2_MASKED_FROM is None:
         raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
-    from verity.definitions.registry import fa2_softcap as _f2s
     return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
@@ -445,14 +453,11 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                ir_bind(_tp_allreduce.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=SHOT, CLUSTER=CLUSTER, EPS=EPS, FMA=FMA),
            "all_gather": lambda WORLD, N: ir_bind(TP2.AllGather, WORLD=WORLD, N=N),
            "embedding_shard": lambda VS, H, START: ir_bind(TP2.EmbeddingShard, VS=VS, H=H, START=START),
-           # the seeded temperature + top-p token select (registry.sampling: TemperatureScale -> TopPMask{V} -> GumbelSelectF32,
-           # exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) -> `_gumbel_sample_kernel` + argmax; the seed, pos,
-           # temperature, top_p and the split count S (= SplitsFor_v1(|live|, num_SMs), a derived value of the workload the
-           # request Program reads from its `splits` Input) are OPERANDS).  `rules/vllm_sampling.py` asks for it.  Greedy rows keep `token_select`.
-           # `CONSTRUCTION` = the target's `sampler_construction` (`registry.sampling_vocab.select_for`; the role and its note stay as they were)
-           "token_select_stochastic": lambda V, CONSTRUCTION: ir_bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, CONSTRUCTION), V=V),
-           # the same select at a constant split count S (the registered S): its top-p keep word as word gates
-           # (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`, the same six operands), so a partition query cuts it
+           # the seeded temperature + top-p token select at the registered split count S (registry.sampling: TemperatureScale ->
+           # TopPMask -> GumbelSelectF32, exact to vLLM d9105ea80 `_temperature_kernel` -> `_apply_topp_split` (S splits) ->
+           # `_gumbel_sample_kernel` + argmax; the seed, pos, temperature, top_p and `Const32[S]` are OPERANDS), its top-p keep word as
+           # word gates (registry.topp_words, `GumbelTopPTokenSelect_v2{V,S}`), so a partition query cuts it.  `rules/vllm_sampling.py`
+           # asks for it.  Greedy rows keep `token_select`.
            "token_select_stochastic_split": lambda V, S: ir_bind(_topp_words.GumbelTopPTokenSelectV2, V=V, S=S),
            # the block-scaled FP8 linear of a pre-quantised checkpoint on Hopper (registry.fp8, pinned bit-exact on the H100 against
            # _C.per_token_group_fp8_quant and the blockwise _C.cutlass_scaled_mm): the dynamic per-128-group activation quant (both outputs
@@ -494,6 +499,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            # latent cache row [kv_c | k_pe] as one Definition
            "dsa_topk_mask_counted": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=TOPK),
            "dsa_latent_row": lambda KVL, R, EPS: ir_bind(_dsa_norm.DsaLatentRow, KVL=KVL, R=R, EPS=EPS),
+           # the table-read form's long rows (`Registered.dsa_table_reads`, `program.dsa_table`): a row's top-TOPK positions, and
+           # the TOPK history rows read at them
+           "dsa_topk_index": lambda N, TOPK: ir_bind(_dsa_table.DsaTopKIndex, N=N, TOPK=TOPK),
+           "dsa_history_reads": lambda V, TOPK, H: ir_bind(_dsa_table.DsaHistoryReads, V=V, TOPK=TOPK, H=H),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -569,10 +578,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                        "read from the registered table (Exp2Lut127_v2, TableRead8x2_v1)",
            "token_select_stochastic_split": "GumbelTopPTokenSelect_v2{V,S}: GumbelTopPTokenSelect_v1{V} at the constant split count S, "
                                             "its keep word TopPKeepWord_v1{V,S} as word gates (registry.topp_words); equal to v1 at splits = S",
-           "token_select_stochastic": "GumbelTopPTokenSelect_v1{V}(logits bf16[V], top_p f32, seed i64, pos i64, temp f32, splits i32) -> i32: f32 "
-                                      "widening, div.full.f32 temperature, the S-split top-p mask (_topp_sb_{stats,step,mask}; S = the splits operand "
-                                      "= SplitsFor_v1(|live|, num_SMs)), Gumbel-max with key tl.randint(seed, pos), first global maximum "
-                                      "(registry.sampling; difftest 72/72 bit-exact on L40S; R16 GPU fixture at S = 1..32)",
            "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",
            "silu_mul": "SiluMul_v2{I}: vLLM _C.silu_and_mul (act_and_mul_kernel<bf16, silu_kernel>) -- SiluMulBf16_v2 per element: "
                        "expf's overflow (gate <= -89 -> -0), up + 0.0f, gate -0 kept, NaN 0x7FFF (registry.act)",
@@ -581,7 +586,6 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                             "gemm_bias_dot (registry.targets.gemm_bias_spec)",
            "attention_dot": "Attention_v2{T,NH,KVH,D,BN,DOT,INV}: FA2/FA3 causal GQA with the target's step, block size and epilogue "
                             "(registry.targets.attention_spec)",
-           "attention": "Attention_v3{T,NH,KVH,D,BN=fa2_kblock_n(D)}: FA2 causal GQA, kBlockN as a declared static (b1.AttentionV3)",
            "moe_router_topk": "MoeRouterTopK_v1{E,TOPK,VPT}: _moe_C.topk_softmax(renormalize=False) per token row — f32 softmax (NvExpf, kernel "
                               "reduction geometry E/VPT threads x VPT), TOPK rounds of lowest-index argmax; -> (weights f32[TOPK], ids i32[TOPK])",
            "moe_router_topk_norm": "MoeRouterTopKNorm_v1{E,TOPK,VPT}: the same kernel with renormalize=True -- the TOPK probabilities summed in slot order, "
@@ -659,6 +663,10 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                     "argument, so the rows of a block of the batched form share one N",
            "dsa_latent_row": "DsaLatentRow_v1{KVL,R,EPS}: a token's latent cache row, DsaRMSNorm_v1{KVL,EPS} of kv_c then "
                              "RoPEHeadGptJ_v2{R} of k_pe (_fused_norm_rope_kernel), one Definition per row",
+           "dsa_topk_index": "DsaTopKIndex_v1{N,TOPK}: a counted mask's TOPK members' positions in ascending index order, the slots "
+                             "the concentrator gives their rows",
+           "dsa_history_reads": "DsaHistoryReads_v1{V,TOPK,H}: the TOPK history rows at those positions, one read each of the "
+                                "layer's history table",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",
@@ -745,4 +753,4 @@ def vocabulary_for(mode: str, profile: str | None) -> Vocabulary:
     return v
 
 
-__all__ = ["Vocabulary", "PROFILE_B1_EAGER", "REFERENCE_CPU_F32", "vocabulary_for", "PROFILES"]
+__all__ = ["Vocabulary", "PROFILE_B1_EAGER", "PROFILE_B1_EAGER_V3", "REFERENCE_CPU_F32", "vocabulary_for", "PROFILES"]

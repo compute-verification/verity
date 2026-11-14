@@ -10,25 +10,35 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
 * ``legs``: ``integrity``, ``pouw``, ``pous``, ``bandwidth``, ``certifier``, ``wipe``, each ``null`` when the block ran no
   such audit, else ``{protocol, owner, server, source: real|fixture, answer, quantity, error, error_from, at, runs}``:
   ``answer`` the core verifier's answer (verdict, reason, commitment, public); ``quantity`` the leg's certificate
-  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at its reads ``k``
-  and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
+  ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S0, Q_cert, K, the wipe's foreign_bits at its reads ``k``
+  and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it; S0 is PoUS's state bound
+  ``⌊ρ·|C|⌋``, which a record may carry as ``S_cert``, read and never written); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound sampled
-  proofs' Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
-  block's is carried but not composed.
+  proofs' Lean ``countBound`` gives), else not established. The sample is the answer's own sampling design: where its
+  profile samples each stratum on its own, the quantity carries the ``strata`` (``[{name, size, k}]``) and the bound is
+  the stratified design's, the most incorrect proof blocks that some placement over the strata hides with probability
+  at least δ, which a uniform sample of as many units understates. ``named_terms``, which a subprotocol of
+  `NAMES_TERMS` (bandwidth) always carries and another may, is the terms its ``error`` leaves out, as its answer's
+  profile names them: PoUB's ``ledger.NAMED_TERMS``, each term ``{claim, term, value: null, in_total: false, status}``.
+  They have no number, so ``error``, ``at`` and every sum of this record hold none of them and each reads with them
+  beside it (`error_form`): ``holds`` at δ says the claim holds except with δ and those terms. A leg whose ``server``
+  is not the block's is carried but not composed.
 * ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check`` or ``remote check``)'s
   answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
   (`Core.Verdict`: accept, reject or undecided), undecided when there is none; nothing here combines the legs' verdicts
   into another. The rest is what the product's legs say (`compose`): ``legs`` (each composed leg's own verdict), what is
   ``missing`` on the block's server and what ran ``elsewhere``; ``joint_horizon`` is `JOINT_HORIZON`'s error over this
-  block, the accepted legs' errors summed, and at each δ of `DELTAS` that δ times the legs established at it. The
-  statement names five audits; the wipe is ``outside_statement``. The product (`PRODUCTS`) is onsite's, every leg, unless
-  ``product`` names another: remote's composes sampled proofs and PoUW, and its other legs are ``dropped``, not run and
-  not composed, so they are never ``missing``.
+  block, the accepted legs' errors summed, and at each δ of `DELTAS` that δ times the legs established at it; its
+  ``named_terms`` gives, by subprotocol, the terms those errors leave out, which its sums and the monitoring period's
+  leave out too (``{}``: they leave none out). The statement names five audits; the wipe is ``outside_statement``.
+  The product (`PRODUCTS`) is onsite's, every leg, unless ``product`` names another: remote's composes sampled proofs
+  and PoUW, and its other legs are ``dropped``, not run and not composed, so they are never ``missing``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointPooledLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
+  Each reads with the block's ``joint_horizon.named_terms`` beside it, once a block.
 
 `check` recomputes every derived field from the legs and the answer. `from_period` builds a record from a runner report,
 the Lean answer and extra legs.
@@ -44,7 +54,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.reporting import DELTAS, PERIODS
-from verity.protocols.spot.verifier.profile import Stratified
+from verity.protocols.spot.verifier.profile import Stratified, Stratum
 
 FORMAT = "verity/block-record/v2"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
@@ -53,6 +63,12 @@ LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
 #: the legs each product composes: onsite every leg, remote those that need no hardware of the auditor's at the site
 PRODUCTS = {"onsite": LEGS, "remote": ("integrity", "pouw")}
+#: the subprotocols whose error leaves terms out: each one's row names them (``answer.profile.named_terms``), or is refused
+NAMES_TERMS = ("bandwidth",)
+#: what puts a refused one right: its piece's answer names the terms
+NAMES_TERMS_FIX = "its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)"
+#: what a named term says: its claim, how it is written, that it has no number and is in no total, and why
+NAMED_TERM = ("claim", "term", "value", "in_total", "status")
 #: the protocol each product's Lean check (`onsite check`, `remote check`) names in its answer, and `Core.Verdict`'s names
 CHECKS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
 VERDICTS = ("accept", "reject", "undecided")
@@ -65,16 +81,58 @@ def frac(x: Any) -> Fraction:
     return Fraction(str(x))
 
 
-def integrity_bound(n: int, kd: int, delta: Fraction) -> int:
-    """The most incorrect proof blocks of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
-    count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term ``C(n − K, kd)/C(n, kd)`` is at least
-    ``δ``."""
-    return Stratified.uniform(n, kd).count_bound(delta)
+def integrity_bound(n: int, kd: int, delta: Fraction, strata: Sequence[Mapping[str, Any]] | None = None) -> int:
+    """The most incorrect proof blocks of ``n`` an accepted sample of ``kd`` leaves except with ``δ``: the integrity
+    profile's count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term is at least ``δ``. With no
+    ``strata`` the sample is uniform over the ``n`` and the term is ``C(n − K, kd)/C(n, kd)``. With ``strata``
+    (``[{name, size, k}]``, which must hold the ``n`` units and sample ``kd`` of them) each stratum is sampled on its
+    own, and the term is the likeliest escape of ``K`` incorrect proof blocks over their placements,
+    ``∏ C(n_s − m_s, k_s)/C(n_s, k_s)``: a stratum sampled whole hides none, and one sampled thinly hides more than the
+    uniform sample of ``kd`` would."""
+    if strata is None:
+        return Stratified.uniform(n, kd).count_bound(delta)
+    design = Stratified(tuple(Stratum(str(s["name"]), int(s["size"]), int(s["k"])) for s in strata))
+    if (design.population, design.k) != (n, kd):
+        raise ValueError(f"the strata hold {design.population} units and sample {design.k} of them, not the {kd} of {n} "
+                         f"beside them")
+    return design.count_bound(delta)
 
 
-def _draw(answer: Mapping[str, Any]) -> tuple[int, int]:
+def _sample(answer: Mapping[str, Any]) -> dict[str, Any]:
+    """The sample of an integrity answer's checked level, as its quantity carries it: the level's size, the units
+    sampled, and the ``strata`` of a stratified sampling design (`Stratified.to_json`); another design has none, and
+    its sample is read as uniform."""
     level = answer["profile"]["levels"][-1]
-    return int(level["size"]), int(answer["profile"]["drawn"][level["name"]])
+    n, kd = int(level["size"]), int(answer["profile"]["drawn"][level["name"]])
+    design = level.get("draw")
+    if not isinstance(design, Mapping) or design.get("law") != "stratified":
+        return {"of": n, "drawn": kd}
+    strata = [{"name": str(s["name"]), "size": int(s["size"]), "k": int(s["k"])} for s in design["strata"]]
+    integrity_bound(n, kd, DELTAS[0], strata)
+    return {"of": n, "drawn": kd, "strata": strata}
+
+
+def named_terms_bad(named: Any) -> str | None:
+    """Why ``named`` is not an error's named terms, None when it is: at least one term by name, each ``{claim, term,
+    value, in_total, status}`` with ``value`` null and ``in_total`` false. A term with a number is no named term: it
+    belongs in the error."""
+    if not isinstance(named, Mapping) or not named:
+        return "not an object of at least one term"
+    for k, t in named.items():
+        if not isinstance(t, Mapping) or sorted(t) != sorted(NAMED_TERM):
+            return f"{k}: not {{{', '.join(NAMED_TERM)}}}"
+        if not all(isinstance(t[x], str) and t[x] for x in ("claim", "term", "status")):
+            return f"{k}: its claim, term and status are not each a nonempty string"
+        if t["value"] is not None or t["in_total"] is not False:
+            return f"{k}: it has a value or is in a total, so it is part of the error and not a term beside it"
+    return None
+
+
+def error_form(error: Any, named: Mapping[str, Mapping[str, Any]] | None) -> str:
+    """How ``error`` reads beside the terms it leaves out (``named``, a subprotocol's ``named_terms``): the error, then
+    each term with why it has no number, in the words of the terms themselves, so PoUB's reads as its ledger's
+    ``DELTA_FORM`` does with ``error`` for δ. With no term, the error alone."""
+    return " + ".join([str(error), *(f"{t['term']} ({t['status']})" for t in (named or {}).values())])
 
 
 def _quantity(leg: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fraction, str]:
@@ -82,15 +140,14 @@ def _quantity(leg: str, row: Mapping[str, Any]) -> tuple[dict[str, Any], Fractio
     q, a = row.get("quantity") or {}, row["answer"]
     pub = a.get("public") or {}
     if leg == "integrity":
-        n, kd = _draw(a)
-        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", "of": n, "drawn": kd},
+        return ({"symbol": "integrity bound", "value": int(q["bound"]), "unit": "wrong units", **_sample(a)},
                 frac(row["delta"]), "delta")
     if leg == "pouw":
         w = q["work"]
         return ({"symbol": "W_cert", "value": int(w["credited"]), "unit": "work", "tiles": int(w["credited_tiles"])},
                 frac(row["delta"]), "delta")
     if leg == "pous":
-        return ({"symbol": "S_cert", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
+        return ({"symbol": "S0", "value": int(q["s_bits"]), "unit": "bits", "certified": bool(q["certified"])},
                 frac(q["eps"]), "quantity.eps")
     if leg == "bandwidth":
         return ({"symbol": "Q_cert", "value": int(q["q_bytes"]), "unit": "bytes"}, frac(q["eps"]), "quantity.eps")
@@ -109,7 +166,7 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
     out: dict[str, Any] = {}
     for d in DELTAS:
         if leg == "integrity":
-            b = integrity_bound(quantity["of"], quantity["drawn"], d)
+            b = integrity_bound(quantity["of"], quantity["drawn"], d, quantity.get("strata"))
             out[str(d)] = {"holds": True, "value": b, "epsilon": str(Fraction(b, quantity["of"])), "by": "draw"}
         elif error <= d:
             out[str(d)] = {"holds": True, "value": quantity["value"], "epsilon": None, "by": "run"}
@@ -121,7 +178,8 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
 def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real") -> dict[str, Any] | None:
     """One leg of the record from its runner row (or, for the wipe, its leg document); None for a row the runner marks
     ``missing``. Its answer is the row's verdict, reason, commitment and public outputs, and its profile's ``placement``
-    where the answer has one (which host ran each party)."""
+    where the answer has one (which host ran each party). Its ``named_terms`` are the answer's profile's, copied; a row
+    of `NAMES_TERMS` whose profile names none, or any row whose profile names them in another shape, is a ValueError."""
     if row.get("verdict") == "missing":
         return None
     if source not in ("real", "fixture"):
@@ -129,13 +187,18 @@ def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], 
     a = row["answer"]
     quantity, error, error_from = _quantity(name, row)
     answer = {k: a.get(k) for k in ("verdict", "reason", "commitment", "public")}
-    placement = a["profile"].get("placement") if isinstance(a.get("profile"), Mapping) else None
+    profile = a["profile"] if isinstance(a.get("profile"), Mapping) else {}
+    placement, named = profile.get("placement"), profile.get("named_terms")
     if placement is not None:
         answer["profile"] = {"placement": placement}
+    if named is None and name in NAMES_TERMS:
+        raise ValueError(f"{name}: its answer's profile names no term its error leaves out; {NAMES_TERMS_FIX}")
+    if named is not None and (why := named_terms_bad(named)):
+        raise ValueError(f"{name}: its answer's profile's named_terms: {why}")
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
             "answer": answer,
             "quantity": quantity, "error": str(error), "error_from": error_from, "at": at_deltas(name, quantity, error),
-            "runs": list(runs)}
+            "runs": list(runs)} | ({} if named is None else {"named_terms": {k: dict(t) for k, t in named.items()}})
 
 
 def compose(server: str, legs: Mapping[str, Any], product: str = "onsite") -> dict[str, Any]:
@@ -152,6 +215,7 @@ def compose(server: str, legs: Mapping[str, Any], product: str = "onsite") -> di
     accepted = sorted(k for k, v in verdicts.items() if v == "accept")
     terms = {k: here[k]["error"] for k in accepted}
     jh = {"statement": JOINT_HORIZON, "terms": terms, "error_sum": str(sum((frac(e) for e in terms.values()), Fraction(0))),
+          "named_terms": {k: here[k]["named_terms"] for k in accepted if "named_terms" in here[k]},
           "outside_statement": sorted(k for k in terms if k not in JOINT_HORIZON["audits"]),
           "at": {str(d): {"error_sum": str(d * sum(1 for k in accepted if here[k]["at"][str(d)]["holds"])),
                           "not_established": sorted(k for k in accepted if not here[k]["at"][str(d)]["holds"])}
@@ -186,7 +250,9 @@ def dropped_ran(legs: Mapping[str, Any], product: str) -> list[str]:
 
 
 def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dict[str, Any]:
-    """The monitoring period over all compute (module docstring), a block being one of a machine's ``window_s`` windows."""
+    """The monitoring period over all compute (module docstring), a block being one of a machine's ``window_s`` windows.
+    Each period's sum is ``error_sum`` over its blocks and leaves out what ``error_sum`` does: it reads with the block's
+    ``joint_horizon.named_terms`` beside it, once a block."""
     periods = {}
     for name, seconds in PERIODS:
         per_machine = seconds // int(deployment["window_s"])
@@ -244,10 +310,16 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
     for name, lg in record["legs"].items():
         if lg is None:
             continue
+        key = f"leg:{name}"
         if lg["source"] not in ("real", "fixture"):
-            bad[f"leg:{name}"] = "its source is neither real nor fixture"
+            bad[key] = "its source is neither real nor fixture"
         if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
-            bad[f"leg:{name}"] = "its certificates at the deltas are not its quantity's at its error"
+            bad[key] = "its certificates at the deltas are not its quantity's at its error"
+        if "named_terms" not in lg:
+            if name in NAMES_TERMS:
+                bad[key] = f"it names no term its error leaves out; {NAMES_TERMS_FIX}, and the record is built from that"
+        elif why := named_terms_bad(lg["named_terms"]):
+            bad[key] = f"its named_terms: {why}"
     product = record["composed"].get("product", "onsite")
     if product not in PRODUCTS:
         bad["composed:product"] = f"not one of {sorted(PRODUCTS)}"

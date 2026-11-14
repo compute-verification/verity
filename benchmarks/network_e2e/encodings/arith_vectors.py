@@ -5,12 +5,12 @@ Every stream is `code_v1`'s: a list of windows, each one `code.py` `ArithEncoder
 tagged `[1, bit, f0, f1]` for a bit `code_v1.Encoder.bit` coded at its KT estimate and `[0, cum, freq, total]` for an
 integer's symbols, code.py's state after each (low, high, pending, used) and the segment. With it come each bit's (name,
 context, bit) from the book's priors (`kt`) and each window's charge (`charge`). Two sources:
-- `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions, the arrival order's
-  deviations and the hits sent past the pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a
-  skewed book: the difftest is the coder's, not the book's), with v1's charges (`v1.string_of`). It checks that they are
-  `v1.encode`'s string under the registration's default, which sends each request's length term
-  (`advice_code.lengths`): a fixed-width tail after the segment of the window its body lands in. The coder's circuits
-  check the segments, and `ChargeCount_v2` charges the tails too;
+- `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions and the arrival order's
+  deviations; v1 sends no hits) under a book fit to them at v1's table caps with room for the hits, resumes and lag bits
+  the whole windows' seeding adds (`CAPS`; a skewed book: the difftest is the coder's, not the book's), with v1's
+  charges (`v1.string_of`). It checks that they are `v1.encode`'s string under the registration's default, which sends
+  each request's length term (`advice_code.lengths`): a fixed-width tail after the segment of the window its body
+  lands in. The coder's circuits check the segments, and `ChargeCount_v2` charges the tails too;
 - `fields(trace)`: the derived rules' still-sent fields (`derived.residual`: the hits past the pool bound, the resumes,
   the order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
@@ -27,9 +27,10 @@ hits, order entries and length terms, to `code_v1` too (`check_windows`): its re
 their cut into `WHOLE` slots, and with `--circuit` `ChargeLink_v2` on the cut's committed rows. Each decisions stream's
 report has its length terms' bits as `ChargeCount_v2` charges them and as v1's string holds them. `--steps` takes the
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
-slice's P·A = 14 whatever `--cut` says) and the trace-corpus fixture's
-fields, and `--fixture PATH` writes them as the vectors the certifier's test reads
-(`verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are trace-corpus traces
+slice's P·A = 14 whatever `--cut` says) and the fields of the trace-corpus fixture and of sync-crush (`derived.load_trace`;
+its pool evicts, so the derived rules send hits past the bound), and `--fixture PATH` writes them as the vectors the
+certifier's test reads (`verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are
+trace-corpus traces
 (`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
 arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
 where they deviate and v1 sends order entries. The fixtures' arrivals never deviate. The report has each stream's
@@ -68,9 +69,11 @@ K = 18
 #: `ChargeCount_v1`'s slots a window in the corpus difftest (`--cut`), and in the fixture's streams, the compile slice's P·A
 CUT, SLICE_CUT = 64, 14
 #: `ChargeCount_v2`'s slots a window (decisions, hits, order entries, length terms) in the whole windows' cut, and the
-#: hits, order entries and length terms seeded into each decisions stream: the fixtures' traces send almost no hits or
-#: order entries, and their length terms' max_tokens are the traffic's few
+#: hits, order entries and length terms seeded into each decisions stream: v1 sends no hits, the fixtures' traces send
+#: almost no order entries, and their length terms' max_tokens are the traffic's few
 WHOLE, SEEDED = (4, 2, 2, 2), (12, 10, 8)
+#: the decisions streams' book caps: v1's table caps, which send no hit, resume or lag bit, with room for them
+CAPS = dataclasses.replace(V.TABLE_CAPS, hits=1 << 20, resumes=1 << 12, lag=1 << 12)
 EOS = 2
 FIXTURE = HERE.parents[2] / "verity" / "protocols" / "certifier" / "verifier" / "tests" / "fixtures" / "arith_encode_vectors.json"
 
@@ -148,7 +151,7 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
     adv = V.advice_of(trace, rec)
     reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order)
     wins = V.residual(adv, rec, reg)
-    reg = dataclasses.replace(reg, book=CV.fit_book([wins], V.TABLE_CAPS))
+    reg = dataclasses.replace(reg, book=CV.fit_book([wins], CAPS))
     tails = V.length_tails(rec, reg)
     bits, charge = V.string_of(wins, reg, tails)
     if CV.pack(bits)[0] != V.encode(adv, rec, reg, check=False):
@@ -168,11 +171,11 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
 
 def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random) -> dict[str, Any]:
     """What `ChargeCount_v1` is held to: the book (`Book.to_json()`); each window's decisions alone
-    (`window_charge.Window(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions
+    (`window_charge.Advice(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions
     (then that charge is v1's); and the run's decisions cut again into `code_v1` windows of at most N, each placed in
     N slots in order with disabled slots between (`en`, a disabled slot's bit random), with `code_v1`'s charge for
     each. The cut's sizes are 0, N and random, so its windows reach every bin."""
-    alone = [CV.Window(arrived=w.arrived) for w in wins]
+    alone = [CV.Advice(arrived=w.arrived) for w in wins]
     flat = [b for w in wins for b in w.arrived]
     sizes, at = [], 0
     while at < len(flat):
@@ -180,7 +183,7 @@ def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random)
         at += sizes[-1]
     cut, at = [], 0
     for n in sizes:
-        cut.append(CV.Window(arrived=tuple(flat[at:at + n])))
+        cut.append(CV.Advice(arrived=tuple(flat[at:at + n])))
         at += n
     rows = []
     for w, length in zip(cut, CV.encode(cut, book).lens, strict=True):
@@ -294,7 +297,7 @@ def window_charges(wins: Sequence[Any], book: Any, cut: tuple[int, int, int, int
     while any(a < len(f) for a, f in zip(at, flat)):
         n = [min(rng.choice([0, S, rng.randrange(S + 1), rng.randrange(S + 1)]), len(f) - a)
              for S, f, a in zip(cut, flat, at)]
-        cutwins.append(CV.Window(arrived=tuple(flat[0][at[0]:at[0] + n[0]]), hits=tuple(flat[1][at[1]:at[1] + n[1]]),
+        cutwins.append(CV.Advice(arrived=tuple(flat[0][at[0]:at[0] + n[0]]), hits=tuple(flat[1][at[1]:at[1] + n[1]]),
                                  order=tuple(flat[2][at[2]:at[2] + n[2]])))
         cutterms.append(flat[3][at[3]:at[3] + n[3]])
         at = [a + k for a, k in zip(at, n)]
@@ -372,7 +375,7 @@ def fields(trace: dict, per: int = 64) -> dict[str, Any] | None:
     n = max(-(-len(c) // per) for c in cols)
     if not n:
         return None
-    wins = [CV.Window(hits=cols[0][j * per:(j + 1) * per], resumes=cols[1][j * per:(j + 1) * per],
+    wins = [CV.Advice(hits=cols[0][j * per:(j + 1) * per], resumes=cols[1][j * per:(j + 1) * per],
                       order=cols[2][j * per:(j + 1) * per], lag=cols[3][j * per:(j + 1) * per]) for j in range(n)]
     return _stream(wins, CV.fit_book([wins]))
 
@@ -521,6 +524,7 @@ def sources(corpus: Sequence[str], steps: bool, stops: Sequence[int], T: int,
                 seeded=SEEDED)
         yield "corpus-smallkv (fields)", lambda: fields(D.load_corpus_trace(
             FIXTURES / "corpus-smallkv", eos_token_id=128009, stop_token_ids=(128001, 128008)))
+        yield "sync-crush (fields)", lambda: fields(D.load_trace(FIXTURES / "sync-crush.json.gz"))
     for spec in corpus:
         label, d = spec.split("=", 1)
         for ingress in ("warden", "client"):

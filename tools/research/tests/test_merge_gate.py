@@ -640,7 +640,8 @@ def test_a_run_of_the_declared_command_is_it_in_a_check_slot_or_not_with_check_p
                  [*slot, "--by", "ci", "--wait-max", "60", "--priority", "--run-max", "9", "--", *cmd]):
         assert unlike(argv, cmd) is None, argv
     for argv in ([*slot, "--by", "a", "--by", "b", "--", *cmd], [*slot, "--priority", "--priority", "--", *cmd],
-                 [*slot, "--cores", "8", "--", *cmd], [*slot, "--rank", "--", *cmd]):
+                 [*slot, "--cores", "8", "--", *cmd], [*slot, "--rank", "--", *cmd],
+                 [*slot, "--budget-gb", "64", "--", *cmd]):         # how many of its steps CMD starts at once: another run
         assert "isn't the target's declared" in (unlike(argv, cmd) or ""), argv
     other, extra = "isn't the target's declared", "which check.py doesn't take"
     for argv, why in (([], other), (None, "its record has no argv"), ([*cmd[:-1], "check.py"], other), (["env", "X=1", *cmd], other),
@@ -862,7 +863,7 @@ def test_the_push_guard_refuses_a_main_commit_no_check_passed_and_allows_a_check
 
 
 def test_the_push_guard_allows_a_train_fast_forward_and_its_hook_ignores_other_branches(tmp_path, monkeypatch):
-    """ci's case: a `--train` fast-forward lands the checked tip over prep merges nobody checked one by one; and infra's: an
+    """A `--train` fast-forward lands the checked tip over prep merges nobody checked one by one, and an
     older worktree's push to a lane branch must pass without the guard starting at all."""
     from research.merge import ZERO, install_push_guard, unchecked_pushes
     from research.store.local import LocalStore
@@ -975,8 +976,9 @@ def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_ad
             raise AssertionError(f"{argv} is a usage error")
 
 
-def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str) -> str:
-    """Drive's lock commit on ``tip``, naming its lock run ``checked``."""
+def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str, made_as: dict[str, str] | None = None) -> str:
+    """Drive's lock commit on ``tip``, naming its lock run ``checked``; its author and committer ``made_as``'s (as git's
+    environment names them) when given."""
     _git(feat, "reset", "-q", "--hard", tip)
     for rel, text in files.items():
         (feat / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -984,7 +986,10 @@ def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str) ->
         _git(feat, "add", rel)
     _git(feat, "commit", "-q", "-m", f"Lock records regenerated for #1\n\nChecked: {checked} (the lock run of `checked` {tip[:12]}, "
                                      f"passed by regenerating them)\nRegenerated: {', '.join(files)}")
-    return _git(feat, "rev-parse", "HEAD")
+    if made_as is None:
+        return _git(feat, "rev-parse", "HEAD")
+    return subprocess.run(["git", "commit-tree", "HEAD^{tree}", "-p", tip, "-m", _git(feat, "log", "-1", "--format=%B")], cwd=feat,
+                          check=True, capture_output=True, text=True, env={**os.environ, **made_as}).stdout.strip()
 
 
 def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_running_check_regenerated(tmp_path):
@@ -994,7 +999,7 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
     lean-audit alone with no passing attempt of the whole check, vouches for nothing."""
     from research.merge import regenerated_parent
     from research.store.local import LocalStore
-    from test_queue_drive import _live_run
+    from test_landing import _live_run
 
     main, feat, tip = _repos(tmp_path)
     base, store, lock = _git(main, "rev-parse", "HEAD"), LocalStore(), "pkg/lean-audit.json"
@@ -1017,6 +1022,38 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
     assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000003-0003"), "r20261020-000003-0003", elsewhere) is None  # it checked main
 
 
+def test_a_lock_commit_is_vouched_for_by_its_records_whoever_made_it(tmp_path):
+    """The queue makes a lock commit as its own identity (`queue.IDENTITY`) or, where its repository's rules name one, as that
+    author (`Rules.author`): the gate reads the commit's trailers, its parent and its records' bytes, so it vouches for
+    either against the run, and neither author vouches for records the run didn't regenerate."""
+    from research.merge import regenerated_parent
+    from research.queue import IDENTITY, Rules
+    from research.store.local import LocalStore
+    from test_landing import _live_run
+    from test_queue import AUTHORED, NAMED, OWN, _who
+
+    main, feat, tip = _repos(tmp_path)
+    store, lock, rid = LocalStore(), "pkg/lean-audit.json", "r20261020-000001-0001"
+    _, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    for made_as, who in ((IDENTITY, OWN), (Rules.parse(AUTHORED).identity, NAMED)):
+        ok, forged = (_deferred_lock(feat, tip, {lock: text}, rid, made_as) for text in ('{"records": 2}\n', '{"records": 1}\n'))
+        assert _who(feat, ok) == _who(feat, forged) == who
+        got = [regenerated_parent(feat, c, store, tool="check", kinds=frozenset({"check/v1"}), command=CHECKED, deferred=rid,
+                                  fetch=fetch) for c in (ok, forged)]
+        assert got == [rid, None], who
+
+
+def test_a_lean_report_naming_a_repaired_file_outside_repaired_is_unreadable():
+    import pytest
+
+    from research.merge import Unreadable, _regenerated_in
+
+    with pytest.raises(Unreadable, match="no lock run repairs"):
+        _regenerated_in("r1", {"regenerated": {}, "repaired": {"AGENTS.md": "/x/lean-audit/repaired/AGENTS.md"}})
+    assert _regenerated_in("r1", {"repaired": {"tests/test_lean_packages.py": "/r/lean-audit/repaired/t.py"}}) == {
+        "tests/test_lean_packages.py": "lean-audit/repaired/t.py"}
+
+
 def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(tmp_path):
     """The lock run's `--bookkeeping warn` repairs files beside the locks (`REPAIRED`, its report's `repaired`): a lock commit
     holding the repaired copy byte for byte is vouched for; one whose copy differs, one that leaves it out, and one changing
@@ -1025,7 +1062,7 @@ def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(
 
     from research.merge import REPAIRED, regenerated_parent
     from research.store.local import LocalStore
-    from test_queue_drive import _live_run
+    from test_landing import _live_run
 
     main, feat, tip = _repos(tmp_path)
     store, lock, caps, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"

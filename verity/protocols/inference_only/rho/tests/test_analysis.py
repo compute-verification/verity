@@ -1,6 +1,9 @@
 import json
 import math
+import os
+import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from rho import analysis, figures, params
@@ -149,7 +152,7 @@ def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_rho(name)
     assert rate == pytest.approx(math.fsum(fam.combined.overhead.rates().values()))
     assert r.lo == pytest.approx(max(1.0, 1 / rate))
     assert all(t.ceiling >= min(r.lo, 1 / rate) * (1 - 1e-9) for t in terms)
-    assert any(t.name == "dark" for t in terms) == (r.scenario.context.fleet.eps_unreg > 0)
+    assert any(t.name == "unregistered" for t in terms) == (r.scenario.context.fleet.eps_unreg > 0)
 
 
 def test_results_are_cached_per_registry_and_override():
@@ -177,6 +180,17 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     assert set(record["scenarios"]) == {NAMES[0]}
     assert {"corner", "slowdown_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
     assert drawn == [(tmp_path / "figures", [10.0])]
+
+
+def test_the_runner_runs_by_path_from_any_directory(tmp_path):
+    """The package's command is `run.py` by path (`verity bench` runs only what `benchmarks/` holds): started as a script,
+    from a directory that is not the package's, it prints the report, and it writes nothing it wasn't told where to."""
+    runner = Path(__file__).resolve().parents[1] / "run.py"
+    env = {k: v for k, v in os.environ.items() if k != "OUT"}
+    p = subprocess.run([sys.executable, str(runner), "--target", "10", "--scenario", NAMES[0]], cwd=tmp_path, env=env,
+                       capture_output=True, text=True, check=False)
+    assert p.returncode == 0, p.stderr
+    assert p.stdout.startswith("# The slowdown") and not list(tmp_path.iterdir())
 
 
 def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch,
@@ -242,7 +256,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
 
 
 def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices(tmp_path, monkeypatch, capsys):
-    """Remote: the serving block is one server over the period, one a server; each row's overhead is the scenario's
+    """Remote: the server block is one server over the period, one a server; each row's overhead is the scenario's
     with `fleet` and `horizon` set."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import periods

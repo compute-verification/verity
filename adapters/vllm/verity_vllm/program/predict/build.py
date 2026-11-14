@@ -6,6 +6,7 @@ wrapper shape and the sampling policy), with the same circuit-building calls the
 the weights record (vLLM's parameters in module order, then its buffers), one call per row of each launch, the vocabulary's kinds
 (`rules.vocab.PROFILE_B1_EAGER_V3.kind`) with the statics the rules select through `frontend.targets`, the flat body wrapped as
 `Derived[<wrapper>[<model class>]]_v1{SRC}` and inlined by `Program`.  Nothing here traces, loads vLLM or reads a Build output.
+The checkpoint's shape and its weights record are `model_shape`'s (`ModelShape`, `model_shape`, `rank_shape`, `weight_leaves`).
 
 Vocabulary (v1, Llama-family decoders, dense or fused-MoE, under the bi-eager profile): Embedding, RMSNormTriton (layer-0 input
 norm, and the q/k norm: per head, or over all heads), Gemm (target-keyed; the q/k/v projection's bias, when the family's rule gives
@@ -17,11 +18,8 @@ norm), SiluMul, the fused-MoE block in its indexed-read construction (router Gem
 MoeExpertGemmW per (token, slot) pair, MoeSum per row); for Gemma-2, the embedding's normalizer scale, GemmaRMSNorm's unfused (1 +
 w) chain (every norm, the two extra MLP norms included), AttentionSoftcap, GeluTanhMul and the final logits' tanh soft-cap; and the
 token select: greedy TokenSelect, or the seeded temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split
-count a `splits` Input entry, or the single request's constant S). Anything φ asks for outside it raises `Unexpressible` naming the
-fact (a result, never a silent approximation).
-
-Restored lineage: `verity_capture.experimental.aot.build` (`aot-build/eager/v8`, deleted in 528f9d21f) built the capture fold's
-`Captured_v1{PROFILE, WORKLOAD}` Program; the Build of record now derives `Derived[vLLM*]` Programs, so the emitter targets those.
+count among them, the registered S). Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a
+silent approximation).
 
 This module is NEVER on a record path: a predicted Program is not written into a Build row, not published as a Build Attempt and
 not read by the Build, Match or Commit (`program.frontend.inputs_trace` lists `verity_vllm/program/predict/` as a forbidden input).
@@ -31,21 +29,45 @@ from __future__ import annotations
 
 import hashlib
 import time
-from dataclasses import dataclass, field, replace
-from typing import Any, Callable
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
 
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
+from verity.definitions.replay import replayer
+
+from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, in_launch, kind,
-                     launch_batch, launch_rows, launch_seqlen_q, request_passes, select_token, served_class, with_checks, with_edge)
+from .common import (
+    Unexpressible,
+    _arr,
+    _arr_shape,
+    _Peers,
+    _ptypes,
+    _Stochastic,
+    drive,
+    edge_config,
+    in_launch,
+    kind,
+    launch_batch,
+    launch_rows,
+    launch_seqlen_q,
+    request_passes,
+    select_token,
+    with_checks,
+    with_edge,
+)
 from .domain import check_phi
+from .model_shape import _ACTS, ModelShape, model_shape, rank_shape, weight_leaves
 from .phi import Phi
+
+__all__ = ["Unexpressible", "build_program"]
 
 BUILDER_ID = "predict-build/derived/v1"
 I32 = Value(32)
@@ -58,221 +80,6 @@ WRAPPERS = {("step", "greedy"): ("verity-vllm/engine-step/v1", "vLLMStep"),
             ("request", "stochastic"): ("verity-vllm/stochastic-request/v1", "vLLMRequest")}
 CACHED_SRC = "verity-vllm/cached-greedy-request/v1"  # `vllm_meta.CachedGreedyRequest.DERIVE_SOURCE`, with a cached prefix
 I64 = Value(64)
-
-
-#: the family facts (`engine.profiles.family_facts`) `model_shape` reads; a family with any other refuses
-_FACTS_READ = ("QK_NORM", "QK_NORM_EPS", "RENORMALIZE", "CLIP_QKV", "SHARED_EXPERTS", "tie_word_embeddings", "attn_logit_softcapping",
-               "final_logit_softcapping", "query_pre_attn_scalar", "sliding_window", "hidden_act", "embed_normalizer", "rmsnorm_plus_one",
-               "layer_norms", "extra_layer_norms")
-#: the activations of the gated MLP: the `*Mul` kind's role per `hidden_act`
-_ACTS = {"silu": "silu_mul", "gelu_pytorch_tanh": "gelu_tanh_mul"}
-
-
-@dataclass(frozen=True)
-class ModelShape:
-    arch: str
-    model_class: str
-    H: int
-    V: int
-    NL: int
-    NH: int
-    KVH: int
-    D: int
-    I: int
-    EPS: float
-    tie: bool
-    max_pos: int
-    rot: int
-    qkv_bias: bool = False
-    window: int | None = None
-    qk_norm: str | None = None
-    E: int = 0
-    TOPK: int = 0
-    renorm: bool = False
-    act: str = "silu"
-    norm_chain: bool = False
-    extra_norms: bool = False
-    embed_scale: bool = False
-    attn_cap: float | None = None
-    final_cap: float | None = None
-    int8: bool = False
-
-    @property
-    def QKV(self) -> int:
-        return (self.NH + 2 * self.KVH) * self.D
-
-    @property
-    def nodes_per_row_layer(self) -> int:
-        """About how many root nodes one row adds per layer: 14, plus the q/k/v bias, the q/k RMSNorms, the MoE block's three per pair,
-        Gemma-2's four unfused norm chains' thirty and the int8 linears' four quantizers."""
-        return 14 + self.qkv_bias + {"head": self.NH + self.KVH, "all": 2}.get(self.qk_norm, 0) + (3 * self.TOPK + 2 if self.E else 0) + \
-            30 * self.norm_chain + 4 * self.int8
-
-
-def model_shape(hf: dict) -> ModelShape:
-    """The shape facts of an HF `config.json` the vocabulary reads, through the two declared homes of model facts: the family facts
-    table (`engine.profiles.family_facts`: vLLM's class and constructor kind per `model_type`) and `program.model.config_of` (the
-    static configuration, with the family's bias rule and the checkpoint's quantization).  The vocabulary is the dense and the
-    fused-MoE (indexed-read) blocks with no per-family facts beyond the q/k RMSNorm (per head, or over all heads as `qk_norm` "all"),
-    the router's renormalization and Gemma-2's (the embedding normalizer, the (1 + w) norm chain with the two extra MLP norms, the
-    attention and final logit soft-caps, the tanh-GELU MLP, `query_pre_attn_scalar` = head_dim): a family with any other (another norm
-    variant, LayerNorm, shared experts), a linear bias other than the q/k/v one a family's rule gives, an activation other than SiLU
-    or a family-declared one, a partial rotary width, a rotary scaling without an analytic table, a block-FP8 checkpoint or an
-    exact-int8 one with an int8 LM head or a biased linear raises `Unexpressible` (an exact-int8 checkpoint's linears are `int8`).  A
-    sliding window is kept as `window` (the keys FA2's `window_size_left` admits) for the families whose vLLM code hands it to FA2
-    (the `dense2` patterns); `build_program` refuses a history longer than it."""
-    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS, resolve_facts
-    from verity_vllm.observe.fold.profiles.generic import effective_sliding_window
-    from verity_vllm.program import model as analytic
-    family = str(hf.get("model_type", "")).lower()
-    ff = FAMILY_FACTS.get(family)
-    if ff is None:
-        raise Unexpressible(f"model_type {family!r}: not in the family facts table")
-    rules = dict(ff.get("rules") or {})
-    facts = []
-    arch = ff.get("arch")
-    if arch not in ("dense", "moe"):
-        facts.append(f"family {family!r} constructor {arch!r} (the dense and MoE blocks only)")
-    other = sorted(set(ff.get("facts") or {}) - set(_FACTS_READ))
-    if other or rules.get("qk_norm") not in (None, "head"):
-        facts.append(f"family {family!r} per-family facts {other}, q/k norm {rules.get('qk_norm')}")
-    try:
-        C, _ = analytic.config_of(hf, family_rules={family: rules})
-        fv = {} if other else resolve_facts(hf, C)[0]
-    except (KeyError, ValueError) as e:
-        raise Unexpressible(f"config.json: {e}") from None
-    qk_norm = "head" if rules.get("qk_norm") == "head" else "all" if fv.get("QK_NORM") else None
-    if fv.get("QK_NORM") and float(fv.get("QK_NORM_EPS", C["EPS"])) != float(C["EPS"]):
-        facts.append(f"a q/k norm epsilon {fv['QK_NORM_EPS']} other than the layer norms' {C['EPS']}")
-    if fv.get("CLIP_QKV") is not None:
-        facts.append(f"clip_qkv {fv['CLIP_QKV']}")
-    if int(fv.get("SHARED_EXPERTS") or 0):
-        facts.append(f"shared experts (shared_expert_intermediate_size {fv['SHARED_EXPERTS']})")
-    E = TOPK = 0
-    I = int(C["I"])
-    if arch == "moe":
-        from verity_vllm.program.frontend.rules.vllm_moe import TOPK_SOFTMAX_E_TESTED
-        E, TOPK = int(C.get("NUM_EXPERTS") or 0), int(C.get("TOPK") or 0)
-        if ff.get("moe_width_key"):
-            I = int(hf[ff["moe_width_key"]])
-        if E not in TOPK_SOFTMAX_E_TESTED or not 1 <= TOPK <= E:
-            facts.append(f"{E} experts, top-{TOPK} (the router is difftested for E in {sorted(TOPK_SOFTMAX_E_TESTED)})")
-        if hf.get("mlp_only_layers") or int(hf.get("decoder_sparse_step") or 1) != 1:
-            facts.append("dense MLP layers among the MoE ones (mlp_only_layers / decoder_sparse_step)")
-    qkv_bias = bool(C.get("BIAS"))
-    if qkv_bias and "qkv_bias" not in rules:
-        facts.append("attention_bias (q/k/v and o_proj biases)")
-    if hf.get("mlp_bias"):
-        facts.append("MLP biases")
-    window = effective_sliding_window(hf)
-    if window and "dense2" not in (ff.get("patterns") or ()):
-        facts.append(f"sliding window {window} (family {family!r} has no inert-window patterns)")
-    act = fv.get("hidden_act") or hf.get("hidden_act", hf.get("hidden_activation", "silu"))
-    if act not in _ACTS or (act != "silu" and "hidden_act" not in fv):
-        facts.append(f"hidden_act {act!r} (SiluMul, or GeluTanhMul where the family declares it)")
-    norm_chain = "unfused-norm-chains" in (ff.get("patterns") or ())
-    if norm_chain != bool(fv.get("rmsnorm_plus_one")):
-        facts.append("a norm other than the fused kernels or the unfused (1 + w) chain of the families that declare it")
-    extra = tuple(fv.get("extra_layer_norms") or ())
-    if extra not in ((), ("ln_pre_mlp", "ln_post_mlp")) or int(fv.get("layer_norms") or 2) != 2 + len(extra) or (extra and not norm_chain):
-        facts.append(f"layer norms {fv.get('layer_norms')} {list(extra)} (input + post-attention, or with the pre/post MLP pair of the unfused norm chain)")
-    qpas = fv.get("query_pre_attn_scalar")
-    if qpas is not None and float(qpas) != float(C["D"]):
-        facts.append(f"query_pre_attn_scalar {qpas} (the attention kinds fold the scale head_dim^-0.5, head_dim {C['D']})")
-    caps = [float(fv[k]) if fv.get(k) else None for k in ("attn_logit_softcapping", "final_logit_softcapping")]
-    if C.get("FP8_BLOCK"):
-        facts.append(f"block-scaled FP8 checkpoint (G={C['FP8_BLOCK']})")
-    int8 = bool(C.get("INT8_EXACT"))
-    if C.get("INT8_LM_HEAD"):
-        facts.append("an int8 LM head (verity-int8-channel127/v2; the token select reads a bf16 head's logits)")
-    if int8 and qkv_bias:
-        facts.append("an int8 linear with a bias (Int8PlainLinearMethod takes none)")
-    if analytic.rotary_dim(C) != C["D"]:
-        facts.append(f"partial rotary width {analytic.rotary_dim(C)} of head_dim {C['D']}")
-    try:
-        analytic._inv_freq(C)
-    except NotImplementedError as e:
-        facts.append(str(e))
-    if facts:
-        raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
-    return ModelShape(arch=family, model_class=served_class(ff["vllm_class"]), H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
-                      D=int(C["D"]), I=I, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
-                      max_pos=int(C["MAX_POS"]), rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None,
-                      qk_norm=qk_norm, E=E, TOPK=TOPK, renorm=bool(fv.get("RENORMALIZE")), act=act, norm_chain=norm_chain,
-                      extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_cap=caps[0], final_cap=caps[1], int8=int8)
-
-
-#: vLLM's `DEFAULT_VOCAB_PADDING_SIZE`: the vocabulary-parallel embedding and LM head pad the vocabulary to a multiple of it
-VOCAB_PADDING = 64
-
-
-def rank_shape(C: ModelShape, world: int) -> ModelShape:
-    """One rank's slice of C under vLLM's tensor parallelism: the query and key/value heads and the MLP width split `world` ways
-    (`QKVParallelLinear`, `MergedColumnParallelLinear` then `RowParallelLinear`; under the fused MoE each expert's width, the router
-    and the experts whole), the hidden size, the norms and the rotary table whole.  V stays the full vocabulary: the embedding and the LM head take V / world rows each (`VocabParallelEmbedding`,
-    `ParallelLMHead`) and the token select reads the gathered row.  A split vLLM pads or replicates is `Unexpressible`."""
-    if world == 1:
-        return C
-    facts = []
-    replicated_kv = C.KVH < world and world % C.KVH == 0          # QKVParallelLinear: a key/value head on world // KVH ranks
-    if C.NH % world or (C.KVH % world and not replicated_kv):
-        facts.append(f"{C.NH} query and {C.KVH} key/value heads over {world} ranks (an even split, or each key/value head on "
-                     f"world // KVH ranks)")
-    if C.I % world:
-        facts.append(f"an MLP width of {C.I} over {world} ranks")
-    if C.V % VOCAB_PADDING or C.V % world:
-        facts.append(f"a vocabulary of {C.V} over {world} ranks (padded to a multiple of {VOCAB_PADDING}: the padding rows' trim)")
-    if facts:
-        raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
-    return replace(C, NH=C.NH // world, KVH=1 if replicated_kv else C.KVH // world, I=C.I // world)
-
-
-def weight_leaves(C: ModelShape, world: int = 1) -> list[tuple[str, Type]]:
-    """The weights record of the model class on meta, as `derive._weights_of` lists it: the distinct parameters in module order
-    (the tied `lm_head.weight` is the embedding's leaf), then the distinct buffers (the embedding's 0-d bf16 `normalizer` where the
-    family scales it, the one shared rotary `cos_sin_cache` [max_pos, rot] bf16, each attention layer's four f32 scalar scales).  The
-    field names are informational (the descriptor carries types only) and, as every decoder's (`predict.dsa`, `predict.dsv4`), the
-    vLLM model's own (`model.layers.0.…`, `lm_head.weight`), never the prefix of the module a trace wraps it in.  Under `world`
-    ranks each is one rank's shard (`rank_shape`)."""
-    bf = lambda *s: _arr(s, 16)  # noqa: E731
-    V = C.V // world
-    C = rank_shape(C, world)
-
-    def linear(name: str, N: int, K: int) -> list[tuple[str, Type]]:
-        """A decoder linear's parameters: its bf16 weight, or the exact-int8 checkpoint's s8 weight and f32 row scales
-        (`engine.int8_vllm.Int8PlainLinearMethod`'s `weight` [N, K] and `weight_scale` [N, 1], in that order)."""
-        if not C.int8:
-            return [(name + ".weight", bf(N, K))]
-        return [(name + ".weight", _arr((N, K), 8)), (name + ".weight_scale", _arr((N, 1), 32))]
-
-    out: list[tuple[str, Type]] = [("model.embed_tokens.weight", bf(V, C.H))]
-    for L in range(C.NL):
-        p = f"model.layers.{L}."
-        out += linear(p + "self_attn.qkv_proj", C.QKV, C.H)
-        if C.qkv_bias:
-            out.append((p + "self_attn.qkv_proj.bias", bf(C.QKV)))
-        if C.qk_norm == "all":
-            out += [(p + "self_attn.q_norm.weight", bf(C.NH * C.D * world)), (p + "self_attn.k_norm.weight", bf(C.KVH * C.D * world))]
-        out += linear(p + "self_attn.o_proj", C.H, C.NH * C.D)
-        if C.qk_norm == "head":
-            out += [(p + "self_attn.q_norm.weight", bf(C.D)), (p + "self_attn.k_norm.weight", bf(C.D))]
-        if C.E:
-            out += [(p + "mlp.gate.weight", bf(C.E, C.H)), (p + "mlp.experts.w13_weight", bf(C.E, 2 * C.I, C.H)),
-                    (p + "mlp.experts.w2_weight", bf(C.E, C.H, C.I))]
-        else:
-            out += linear(p + "mlp.gate_up_proj", 2 * C.I, C.H) + linear(p + "mlp.down_proj", C.H, C.I)
-        out += [(p + "input_layernorm.weight", bf(C.H)), (p + "post_attention_layernorm.weight", bf(C.H))]
-        if C.extra_norms:
-            out += [(p + "pre_feedforward_layernorm.weight", bf(C.H)), (p + "post_feedforward_layernorm.weight", bf(C.H))]
-    out.append(("model.norm.weight", bf(C.H)))
-    if not C.tie:
-        out.append(("lm_head.weight", bf(V, C.H)))
-    if C.embed_scale:
-        out.append(("model.normalizer", bf(1)))
-    out.append(("model.layers.0.self_attn.rotary_emb.cos_sin_cache", bf(C.max_pos, C.rot)))
-    for L in range(C.NL):
-        out += [(f"model.layers.{L}.self_attn.attn.{s}", Value(32)) for s in ("_k_scale", "_v_scale", "_q_scale", "_prob_scale")]
-    return out
 
 
 class _Specs:
@@ -315,7 +122,7 @@ class _Specs:
             self.q_norm, self.k_norm = (
                 self.kind("rmsnorm", N=n * C.D * world, EPS=C.EPS, TARGET=target, M=M) for n in (C.NH, C.KVH)
             )
-            self.q_gather, self.k_gather = (self.kind("all_gather2", N=n * C.D) for n in (C.NH, C.KVH)) if world > 1 else (None, None)
+            self.q_gather, self.k_gather = [self.kind("all_gather2", N=n * C.D) if world > 1 else None for n in (C.NH, C.KVH)]
         self.gate_up, self.down, self.logits = self.linear(C.H, 2 * C.I), self.linear(C.I, C.H), self.gemm(C.H, VS)
         if C.E:
             self.moe()
@@ -329,17 +136,22 @@ class _Specs:
             self.weight_once = target.effective_weight_only_calls() == "once"
         if C.embed_scale:
             self.embed_scale = self.kind("scale_tensor", N=C.H)
-        if C.final_cap is not None:
-            self.cap = [self.kind("bf16_div_scalar", N=C.V, C=C.final_cap), self.kind("bf16_tanh", N=C.V),
-                        self.kind("bf16_mul_scalar", N=C.V, C=C.final_cap)]
+        if C.final_softcap is not None:
+            self.cap = [self.kind("bf16_div_scalar", N=C.V, C=C.final_softcap), self.kind("bf16_tanh", N=C.V),
+                        self.kind("bf16_mul_scalar", N=C.V, C=C.final_softcap)]
         self._attn: dict[tuple, Any] = {}
 
     def moe(self) -> None:
         """The fused-MoE block's kinds under the target's declared construction (`rules.vllm_moe`): the router GEMM, the top-k
         softmax (in selection order under `indexed-read-ordered`; the renormalizing form when the family renormalizes), the per-pair
         expert GEMMs (the target's k16 step as `DOT` where `frontend.targets.moe_expert_dot` names one) and the routed sum."""
-        from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, INDEXED_READ_ORDERED, TOPK_SOFTMAX_VPT
         import torch
+
+        from verity_vllm.program.frontend.rules.vllm_moe import (
+            INDEXED_READ,
+            INDEXED_READ_ORDERED,
+            TOPK_SOFTMAX_VPT,
+        )
         C = self.C
         c = self.tp.effective_moe_construction()
         if c not in (INDEXED_READ, INDEXED_READ_ORDERED):
@@ -386,7 +198,7 @@ class _Specs:
         fn = self._attn.get(key)
         if fn is not None:
             return fn
-        cap = {} if C.attn_cap is None else {"CAP": C.attn_cap}
+        cap = {} if C.attn_softcap is None else {"CAP": C.attn_softcap}
         if self.accepted:
             fn = self.kind("attention_softcap" if cap else "attention", T=P, NH=C.NH, KVH=C.KVH, D=C.D, **cap)
         else:
@@ -448,7 +260,8 @@ class _Model:
         n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
-        self.cached, self.ctx = 0, None
+        self.cached = 0
+        self.ctx: dict | None = None
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
 
@@ -503,10 +316,11 @@ class _Model:
         h = self.collective(S.all_reduce, [self.call(S.embedding, Coll(pe[0], t.refs), Coll(pe[1], self.embed.refs)) for t in toks])
         if C.embed_scale:
             pz = _ptypes(S.embed_scale)
+            assert self.normalizer is not None, "the weights record holds the normalizer of a family that scales its embedding"
             h = [self.call(S.embed_scale, Coll(pz[0], h[i].refs), Coll(pz[1], self.normalizer.refs)) for i in range(M)]
         x, _ = self.rms(h, self.layers[0]["ln1"])
-        res = [h[i].refs for i in range(M)]
-        d = None
+        res: list | None = [h[i].refs for i in range(M)]
+        d: list[Coll] = []
         for L in range(C.NL):
             lw = self.layers[L]
             if L > 0:
@@ -531,7 +345,7 @@ class _Model:
             k = [self.call(S.rope_k, Coll(prk[0], k_in[i]), Coll(prk[1], cs[i].refs)) for i in range(M)]
             kh, vh = self.hist[L]
             P0 = len(kh)
-            prefill = P0 == self.cached
+            prefill = self.cached == P0
             if prefill:
                 self.lp_of[L] = P0 + M
             own_rows = M if prefill else 1
@@ -624,10 +438,10 @@ class _Model:
         S = self.S
         pl = _ptypes(S.logits)
         lg = self.collective(S.all_gather, [self.call(S.logits, Coll(pl[0], hidden_row.refs), Coll(pl[1], self.lm_head.refs))])[0]
-        for fn in S.cap if self.C.final_cap is not None else ():
+        for fn in S.cap if self.C.final_softcap is not None else ():
             lg = self.call(fn, Coll(_ptypes(fn)[0], lg.refs))
         return select_token(lambda fn, *refs: self.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs))), kind, lg.refs, self.C.V,
-                            S.tp, event, pos, policy)
+                            pos, policy)
 
 
 def decoder(phi: Phi, M: int = 1, history: int = 0):
@@ -635,16 +449,28 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     DeepSeek sparse-attention MoE (`dsa.Net`), a hyper-connected compressed-attention MoE (`dsv4.Net`) or the dense / fused-MoE
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
     collective order, `model(B, W, peers)` the forward and the sampler."""
-    from verity_vllm.engine.profiles.family_facts import FAMILY_FACTS
-    ff = FAMILY_FACTS.get(str(phi.hf_config.get("model_type", "")).lower()) or {}
-    if ff.get("arch") == "dsa-moe":
+    family = str(phi.hf_config.get("model_type", "")).lower()
+    entry = FAMILY_FACTS.get(family)
+    arch = entry.get("arch") if entry else None    # a family the table lacks, or one with no constructor, is `model_shape`'s to refuse
+    Net: type[Any]
+    if arch == "dsa-moe":
         from .dsa import Net
-    elif ff.get("arch") == "mhc-moe":
+    elif arch == "mhc-moe":
         from .dsv4 import Net
     else:
         Net = _Decoder
     check_phi(phi, Net.DOMAIN)
     return Net(phi, M, history)
+
+
+def request_shape(wrapper: str, LP: int | None, T: int | None) -> tuple[int, int]:
+    """A wrapper's (LP, T): (0, 0) for a `step`, which reads neither; for any other the prompt rows and the decode steps its
+    Program is built for, `int`'s TypeError without them."""
+    if wrapper == "step":
+        return 0, 0
+    lp: Any = LP   # None where a request is asked for with no shape (`predict emit` without --LP): `int`'s TypeError, LP's first
+    t: Any = T
+    return int(lp), int(t)
 
 
 class _Decoder:
@@ -677,13 +503,13 @@ class _Decoder:
         """The Input a request's history of its first C positions opens with (`vllm_meta.prefix_input`): every layer's key and value rows."""
         return [("prefix", _arr((self.C.NL, 2, C, self.C.KVH * self.C.D), 16))]
 
-    def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
+    def model(self, B: Builder, W: Coll, peers: _Peers) -> _Model:
         return _Model(B, self.specs, W, self.specs.C, peers)
 
 
-def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
-                  with_desc: bool = True, C: int = 0, dead_free: bool = False, batched: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None) -> BuildResult:
+def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8, with_desc: bool = True,
+                  C: int = 0, dead_free: bool = False, batched: bool = False, table_reads: bool = False, finish: Callable | None = None,
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None, entries: tuple[int, ...] = ()) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -694,51 +520,52 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     before the prefill's last, which no sample reads. A stochastic request takes its seed rule's `seed_rule.PARAMS` after its
     seed, at its policy's ``rid``, and checks the rule (`seed_rule.check`); `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
-    `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs.
+    `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs. `table_reads`: in that
+    form, DSA's rows past INDEX_TOPK keys by table reads (`Registered.dsa_table_reads`, the Build's `--dsa-table-reads`).
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
     `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
     the Build's `--launch-context '{"batch": ...}'`) in place of the one φ's workload gives it (`launch_batch`). `chunks`: a
     request's prefill as the engine ran it, in launches of these rows in turn (the chunked request wrapper), where its kernels read
     the launch: per chunk one forward at its own step of `batch` (its chunks, then its T decodes), the sample after the last chunk,
     a chunk that leaves the prompt incomplete sampling nothing (vLLM discards that sample); the SRC config is `{"chunks": [...]}`
-    (its wrapper's class unchanged); one chunk is the request wrapper. `edge`: the history groups (`dsa.Net.edge_groups`) a request
-    a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples and checks,
-    every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`); its SRC config holds them."""
+    (its wrapper's class unchanged); one chunk is the request wrapper. `entries`: per chunk, its sequence's rows in that launch, of
+    which it computes the first (`steps`' ``recompute_hits``), in the SRC config. `edge`: the history groups (`dsa.Net.edge_groups`)
+    a request a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples
+    and checks, every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`), in its SRC config."""
     from verity_vllm.program.frontend import seed_rule as SEED
     t0 = time.time()
-    net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
+    prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    net = decoder(phi, M, pos0 + M if wrapper == "step" else prompt_rows + decode_steps)
     kind = (phi.sampling or {}).get("kind", "greedy")
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
-    if batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
-        raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish")
+    if (table_reads and not batched) or batched and (finish is not None or wrapper != "request" or not (world == 1 or dead_free)):
+        raise ValueError("batched is a request's registered compiler's form (dead_free at a tensor-parallel rank), without finish; "
+                         "table_reads is the batched form's (DSA's long rows by table reads)")
     dense = type(net) is _Decoder
     if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
                             f"(a request's, greedy on one rank of the dense or fused-MoE decoder, or on the sparse-attention decoder)")
     resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense, bool(edge))
     wrec = RecordType(*net.leaves())
-    n = M if wrapper == "step" else int(LP)
-    events = sum(sampled)
-    params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
+    n = M if wrapper == "step" else prompt_rows
+    listed: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
-        params += [("seed", Array(1, I64)), *(SEED.params(SEED.rid_in(phi.sampling)) if wrapper == "request" else ())]
-        if phi.sampling["splits"] == "derived":
-            params.append(("splits", Array(events, I32)))
-    history = len(params)
+        listed += [("seed", Array(1, I64)), *(SEED.params(SEED.rid_in(phi.sampling)) if wrapper == "request" else ())]
+    history = len(listed)
     if C:
-        params += net.prefix_params(C)   # `vllm_meta.prefix_input`
+        listed += net.prefix_params(C)   # `vllm_meta.prefix_input`
     if resumed:
-        params.append(("last_token", Array(1, I32)))
-    n_user = len(params)
+        listed.append(("last_token", Array(1, I32)))
+    n_user = len(listed)
     if world > 1:
         # `vllm_meta.WithPeers`: world - 1 peer Inputs per collective of each forward pass, in call order; a pass that samples
         # nothing gathers no logits, the last of `peer_shapes`
         shapes = [s for r, smp in zip(passes, sampled) for s in net.peer_shapes(r)[:None if smp else -1] for _ in range(world - 1)]
-        params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
-    n_peers = len(params) - n_user
-    params = check_params((*params, ("weights", wrec)))
+        listed += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
+    n_peers = len(listed) - n_user
+    params = check_params((*listed, ("weights", wrec)))
     B = Builder(params, Value(1))
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
     ids, W = inputs[0], inputs[-1]
@@ -746,16 +573,16 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     policy = None
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
-        s, at = phi.sampling, [p for p, _ in params].index("splits") if phi.sampling["splits"] == "derived" else None
-        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=None if at is None else Coll(params[at][1], Affine("p", at, 0, events)),
-                             S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
+        s = phi.sampling
+        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
+                             top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
-        model.batched = True
-    batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
-    in_launch(model, batch, net.model_class, chunks, T)
+        model.batched, model.table_reads = True, table_reads
+    batch = (launch_batch(phi, prompt_rows, decode_steps) if batch is None else batch) if wrapper == "request" else None
+    in_launch(model, batch, net.model_class, chunks, decode_steps, entries=tuple(entries))
     if wrapper == "request" and isinstance(model, _Model):
-        model.ctx = launch_rows(phi, LP, T, C)
+        model.ctx = launch_rows(phi, prompt_rows, decode_steps, C)
     if C:
         model.open_with(inputs[history:n_user - resumed], C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
@@ -779,9 +606,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
                   "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
-                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
+                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
+                                                                  **({"entries": list(entries)} if entries else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
-    from verity.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
                                register=False)

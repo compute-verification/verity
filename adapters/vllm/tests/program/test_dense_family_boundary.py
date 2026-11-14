@@ -1,7 +1,7 @@
 """The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity`, other Definition
 modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/circuits/` as they are. Their twins and vocabulary live in the integration package:
 `properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
-`program.kernels.rmsnorm_fused_sweep`, `program.frontend.gemm_targets`."""
+`program.frontend.gemm_targets`."""
 from __future__ import annotations
 
 import ast
@@ -13,7 +13,9 @@ from pathlib import Path
 import pytest
 
 REGISTRY = "verity.definitions.registry"
-REGISTRY_DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
+_SPEC = importlib.util.find_spec(REGISTRY)
+assert _SPEC is not None and _SPEC.origin is not None
+REGISTRY_DIR = Path(_SPEC.origin).parent
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
           "boolean_rope", "boolean_tanh", "cuda_rmsnorm", "gemm_bias", "layer_norm", "gelu_erf_table", "traced_parts")
 #: other families' Definition modules the family reads: the primitives, the b1 composites, `sampling.bit_at` (`UnpackF32_v1`),
@@ -25,12 +27,12 @@ CATALOG = ("verity.circuits", "verity.definitions.circuits", "verity.definitions
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.definitions.evidence"
 MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
-         "verity_vllm.program.rmsnorm_fused_sweep", "verity_vllm.program.frontend.gemm_targets")
+         "verity_vllm.program.frontend.gemm_targets")
 
 
 def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
     """(line, module, names) of every import in the file, at any depth, relative ones resolved against the registry."""
-    out = []
+    out: list[tuple[int, str, tuple[str, ...]]] = []
     for n in ast.walk(ast.parse(path.read_text())):
         if isinstance(n, ast.Import):
             out += [(n.lineno, a.name, ()) for a in n.names]

@@ -9,7 +9,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity_vllm.check.commit_rules import _binding_of, _d, _first, _is_row_procedure, _leak, _linkage_of, _mk, _oracle_of, _replay_of
+from verity_vllm.check.commit_rules import (
+    _binding_of,
+    _d,
+    _first,
+    _is_row_procedure,
+    _leak,
+    _linkage_of,
+    _mk,
+    _oracle_of,
+    _replay_of,
+)
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult
 from verity_vllm.query.manifest.format import is_token_select
@@ -126,10 +136,9 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     if isinstance(cc, dict) and cc.get("agree") is False:
         return None, ("required manifest engines DISAGREE (the cross-check: the traversal of record and the inventory beside it must agree "
                       f"row for row for one release) -- {str(cc.get('why') or cc)[:300]}")
-    try:
-        c = QueryChecks.of(chk, QUERY_CHECKS)
-    except RecordError as e:
-        return None, f"C2 population reconciliation refused, nothing graded ({e})"
+    c, refused = _query_checks_read(sr)
+    if c is None:
+        return None, f"C2 population reconciliation refused, nothing graded ({refused})"
     if c.ok is False:
         parts = []
         if c.manifest_refused is not None:
@@ -174,14 +183,21 @@ def _query_population_scope(sr: dict | None) -> tuple[str | None, str | None]:
     return f"C2 population scope (query of record {qid}): {scope}", None
 
 
+def _query_checks_read(sr: dict) -> tuple[QueryChecks | None, str | None]:
+    """The replay's `population.query_checks` as its record, or the record's refusal of it; neither when the replay carries none."""
+    chk = _d(sr.get("population")).get("query_checks")
+    if not isinstance(chk, dict):
+        return None, None
+    try:
+        return QueryChecks.of(chk, QUERY_CHECKS), None
+    except RecordError as e:
+        return None, str(e)
+
+
 def _query_checks(sr: dict) -> QueryChecks | None:
     """The replay's `population.query_checks` as its record; None when the record carries none, or one `_query_population_scope`
     refuses (that refusal is the FAIL)."""
-    chk = _d(sr.get("population")).get("query_checks")
-    try:
-        return QueryChecks.of(chk, QUERY_CHECKS) if isinstance(chk, dict) else None
-    except RecordError:
-        return None
+    return _query_checks_read(sr)[0]
 
 
 def _faulted_prefix_facts(sr: dict) -> list[dict]:
@@ -275,11 +291,12 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
 
 
 def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | None, str]:
-    """Is the sampled replay's SEED post-commitment?  The replay's adversarial meaning (C3: the picks are unknown
-    before the bytes are committed) rests on the seed's form (`sample.seed_form`, `replay_codes.seed_form`).  This reads it as a FACT: the
-    root form is recomputed from the record's run root (sample.seed == int.from_bytes(run_root[:8])); the verifier-challenge form is
-    post-commitment by construction (sha256(challenge|root)); a `--replay-seed` seed is PROVER-CHOSEN before the run -> a MECHANISM run,
-    not a C2 of record.  Returns (True, how) / (False, why) / (None, why) when the record carries no seed source (legacy: not graded here)."""
+    """Grade the sampled replay's SEED by its form (`sample.seed_form`, `replay_codes.seed_form`): (True, how) / (False, why) / (None, why).
+    The root form (the run root's first 8 bytes, no coin) is recomputed from the record's run root: a label whose seed is not the root's is
+    False, and one that recomputes is None, not graded -- a measurement, since the prover fixes the root and steers this sample by committing
+    again, in about the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults).  The challenge form is True when the seed
+    recomputes from the recorded challenge (sha256(challenge|root)[:8]); who issued that challenge is not checked.  A `--replay-seed` seed
+    is PROVER-CHOSEN before the run -> a MECHANISM run, not a C2 of record: False.  A record with no seed source is None (not graded here)."""
     smp = sr.get("sample") if isinstance(sr.get("sample"), dict) else {}
     src = str(sr.get("seed_source") if sr.get("seed_source") is not None else smp.get("seed_source"))
     seed = sr.get("seed") if sr.get("seed") is not None else smp.get("seed")
@@ -296,14 +313,14 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
         except ValueError:
             return False, f"sampled replay seed: run root {str(run_root_hex)[:16]}... is not hex"
         if int(seed) != expect:
-            return False, f"sampled replay seed {seed} != the run root's first 8 bytes {expect} although seed_source says post-commitment root form"
-        return True, "seed == run_root[:8] (recomputed)"
+            return False, f"sampled replay seed {seed} != the run root's first 8 bytes {expect} although seed_source says the root form"
+        return None, "seed == run_root[:8] (recomputed): the run root alone, no coin -- a measurement, not graded (a prover steers it by committing again)"
     if form == "challenge":
         # the challenge form is a FACT only with the challenge on the record: recompute sha256(challenge|run_root)[:8] and the
         # source text (sampled_replay.challenge_seed); a label without its challenge / another seed is the prover-chosen class (unverifiable)
         chal = smp.get("challenge")
         if chal is None:
-            return False, f"sampled replay seed source claims a verifier challenge but the challenge is not on the record (sample.challenge): unverifiable"
+            return False, "sampled replay seed source claims a verifier challenge but the challenge is not on the record (sample.challenge): unverifiable"
         if not run_root_hex or seed is None:
             return False, f"sampled replay seed source says '{src[:40]}...' but the record carries no run root / seed to recompute it from"
         import hashlib
@@ -318,7 +335,7 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
         if src != RC.challenge_seed_source(str(chal)):
             return False, f"sampled replay seed source text does not name the recorded challenge ({str(chal)[:16]!r})"
         return True, "seed == sha256(challenge|run_root)[:8] (recomputed from the recorded challenge)"
-    return False, f"sampled replay seed source {src!r} is not a post-commitment form (run root / verifier challenge)"
+    return False, f"sampled replay seed source {src!r} is not a known form (run root / verifier challenge)"
 
 
 def _partial_replay_named_gap(sr: dict | None, oc: dict | None) -> tuple[str | None, str | None]:
@@ -429,10 +446,10 @@ def _replay_inputs(sr: dict | None, ctx: dict) -> dict[str, Any]:
 
 
 C_SR = ("local_replay/sampled_replay", "C2 form (A)",
-        "A post-commitment stratified sample of required values replays exactly (bit-for-bit) from the committed bytes under the Program's registered relations.",
+        "A stratified sample of required values replays exactly (bit-for-bit) from the committed bytes under the Program's registered relations.",
         ["sampled_replay.result", "sampled_replay.grade", "sampled_replay.why", "sampled_replay.sample", "sampled_replay_p*.json", "replay_cache"])
 C_SEED = ("local_replay/seed_of_record", "C2 seed of record",
-          "The replay's seed is post-commitment as a FACT: recomputed from the run root (or the recorded verifier challenge), never prover-chosen.",
+          "The replay's seed recomputes from the recorded challenge (whose issuer is not checked) and is not a targeted --replay-seed; a seed from the run root alone is recomputed and not graded.",
           ["sampled_replay.sample.seed", "sampled_replay.sample.seed_source", "sampled_replay.sample.challenge"])
 C_GAP = ("local_replay/population_gaps", "C2 population gaps by name",
          "Every VU the replay left unevaluated is named under a class form (B) covers, and form (B) is complete over the values where it must stand in; plane-fed VUs never pass by name.",
@@ -460,7 +477,8 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     oc = _oracle_of(commit)
     out: dict[str, CheckResult] = {}
     sr_scope, sr_inputs = _replay_scope(sr), _replay_inputs(sr, ctx)
-    sr_notes = [_leak("sampled_replay.EVALUATORS / NOT_YET", "which families the replay can evaluate is a table by family name (the stated applicability domain)")]
+    sr_notes = [_leak("sampled_replay.EVALUATORS / NOT_YET", "which families the replay can evaluate is a table by family name (the stated applicability domain)"),
+                *_d(sr).get("premises", [])]          # what the replay says its equal rows leave unshown (a Boolean Build's)
     rc = ctx.get("replay_cache")
     if rc:
         sr_scope["replay_cache"] = {k: rc.get(k) for k in ("distinct_replays", "reused_pairs")}

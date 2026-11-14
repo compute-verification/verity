@@ -16,11 +16,10 @@ for the 32-bit filter; n = 10 is the smallest width that can.
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import fold_kernel_check as fk
 from exact_kit.checks import Checks
@@ -33,12 +32,13 @@ N10, R1_10, R2_10 = 10, 4, 6
 BIG10 = (321, 411), (827, 208, 250, 366)
 
 
-def fixes(word, other, key, rounds, n=N, r1=R1, r2=R2):
+def fixes(word: Sequence[int], other: Sequence[int], key: tuple[int, int], rounds: int, n: int = N, r1: int = R1,
+          r2: int = R2) -> bool:
     xs = np.arange(1 << n, dtype=np.uint64)
     return bool(np.array_equal(fk.fold(xs, word, *key, n, r1, r2, rounds), fk.fold(xs, other, *key, n, r1, r2, rounds)))
 
 
-def kj19_scaled(a, e=R1):
+def kj19_scaled(a: int, e: int = R1) -> bool:
     return a % (1 << e) in (1, (1 << e) - 1)
 
 
@@ -53,7 +53,7 @@ def main() -> int:
                  and all(k[0] % 32 == 1 or k[1] % 32 == 1 for k in keys), str(keys))
     (key, word) = BIG
     k1 = fk.mitm_k1(word, *key, N, R1, R2)
-    bad = sorted(w for w in k1 if not fk.g3_ok(word, w, N))
+    bad = sorted(w for w in k1 if not fk.g3_ok(word, w))
     checks.check("(97, 179), word (255, 48, 87, 75): K_1 has 64 elements by meet in the middle, every one fixing the "
                  "R-fold on every state for R = 1..5, and 48 break (G₃)", len(k1) + 1 == 64 and len(bad) == 48
                  and all(fixes(word, w, key, r) for w in k1 for r in range(1, 6)), f"e.g. {bad[:2]}")
@@ -63,14 +63,14 @@ def main() -> int:
                  "2-fold and the 4-fold on every state but not the 1- or 3-fold, keeping (G₃)",
                  len(k1) + 1 == 16 and EVEN_EXTRA not in k1 and fixes(word, EVEN_EXTRA, key, 2)
                  and fixes(word, EVEN_EXTRA, key, 4) and not fixes(word, EVEN_EXTRA, key, 1)
-                 and not fixes(word, EVEN_EXTRA, key, 3) and fk.g3_ok(word, EVEN_EXTRA, N))
+                 and not fixes(word, EVEN_EXTRA, key, 3) and fk.g3_ok(word, EVEN_EXTRA))
     (key, word) = BIG10
     k1 = fk.mitm_k1(word, *key, N10, R1_10, R2_10)
     checks.check("n = 10, rotations (4, 6): (321, 411) passes the reduced key_ok_r11, is ≡ 1 mod 2^(r1+2) = 64, and with "
                  "the word (827, 208, 250, 366) has a 32-element K_1, every element fixing the R-fold on every state for "
                  "R = 1..3", fold_ref.key_ok_r11(*key, N10) and key[0] % 64 == 1 and len(k1) + 1 == 32
                  and all(fixes(word, w, key, r, N10, R1_10, R2_10) for w in k1 for r in range(1, 4)),
-                 f"(G₃) breaks at {sum(not fk.g3_ok(word, w, N10) for w in k1)}")
+                 f"(G₃) breaks at {sum(not fk.g3_ok(word, w) for w in k1)}")
     rng = np.random.default_rng(1)
     near = [(s + (int(k) << 15)) & 0xFFFFFFFF for k in rng.integers(0, 1 << 17, 64) for s in (1, -1)]
     checks.check("KJ19 scaled as the 32-bit filter is (a ≢ ±1 mod 2^r1, as 13 at 32 bits) rejects all three keys, and "

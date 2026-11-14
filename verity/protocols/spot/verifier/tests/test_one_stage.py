@@ -14,11 +14,11 @@ import pytest
 import verity.definitions.ops.prims  # noqa: F401  (with verity.definitions.ops.scalar, the primitives partition_vectors.json's descriptor names)
 import verity.definitions.ops.scalar  # noqa: F401
 from verity.circuits import codec, partition_object as PO
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
-from verity.circuits.program import Program
-from verity.circuits.refs import tuple_of
+from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
+from verity.circuits.program import Program, is_input
+from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R
+from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registered as G, registration as R
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
@@ -143,8 +143,8 @@ V1_PAIR_3_XOR3_5 = ("dedeaac905807d8b5da6852a43f4295a99d2930029074edbf330484051a
                     "01af2b4de0207fb2cc295498f99064fe08c39cd46aae77bd532989cbc509f29a")
 
 
-def _xor8_registry() -> Registry:
-    reg = Registry()
+def _xor8_registry() -> DefinitionTable:
+    reg = DefinitionTable()
     reg.add(XOR8)
     return reg
 
@@ -646,7 +646,7 @@ QWORD = json.loads((CORE_VECTORS / "partition_vectors.json").read_text())
 TEMPLATE = json.loads((CORE_VECTORS / "template_instance_vectors.json").read_text())
 V32 = Value(32)
 #: the primitives template_instance_vectors.json's descriptors name (a partition reads their ids and types only)
-TEMPLATE_REG = Registry()
+TEMPLATE_REG = DefinitionTable()
 for _name in ("TAdd32", "TMul32"):
     TEMPLATE_REG.add(PrimitiveDefinition(_name, 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False))
 
@@ -728,6 +728,79 @@ def test_a_malformed_query_has_no_units_and_no_digest(n):
     assert e.value.detail["codes"] == codes
     with pytest.raises(ValueError):
         P.digest(P.partition(prog, q))
+
+
+def _two_programs(registered=()):
+    """Two calls of PAIR reading one table whole, and a batch of three broadcasting it: a run Input node two proof
+    blocks read, unless `registered` names it."""
+    t = Array(2, Value(8))
+    calls = CompositeDefinition("OneStageTestTwice", 0, (), lambda S: ((("t", t),), Tuple(Value(8), Value(8))),
+                                lambda B, S, x: tuple_of(B.call(PAIR, x), B.call(PAIR, x)), register=False)
+    batch = CompositeDefinition("OneStageTestBroadcast", 0, (), lambda S: ((("t", t),), Array(3, Value(8))),
+                                lambda B, S, x: B.batch(PAIR, x, axes=(None,), n=3), register=False)
+    return Program(bind(calls), registered=registered), Program(bind(batch), registered=registered)
+
+
+def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read():
+    """R8, under a template query: the verdict publishes the fan-out F of the verifier's own program (`partition.fanout`),
+    1 for a population program, whose instances each read their own share of the Input node; and it refuses a run
+    Input node whose leaves two proof blocks read (`R8-shared-input`, `partition.shared_inputs`), which F can't see:
+    two calls reading one table whole, or a batch broadcasting it.  The same table registered, as a registered input
+    or as a parameter the verifier expects registered (`registered.held_gates`), is a registered value, which R8
+    doesn't refuse; and a batch reading its own share of the Input, or a call reading a leaf twice, is no
+    sharing."""
+    prog, q, rec = _registration(6)
+    v = _check(rec, prog, q)
+    assert v.ok and v.fanout == 1 and v.to_json()["fanout"] == 1 and P.shared_inputs(prog, q) == []
+    for shared in _two_programs():
+        n = P.units(shared, q)
+        inputs = [k for k, node in enumerate(shared.root.body.nodes) if is_input(node.fn)]
+        assert P.fanout(shared, q) == 1 and P.shared_inputs(shared, q) == inputs
+        ports = _ports(shared, q, n)
+        rec = R.record(shared, q, LAW, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+                       leaf_layer="ee" * 64)
+        v = _check(rec, shared, q)
+        assert v.codes == ("R8-shared-input",) and v.detail["R8-shared-input"]["inputs"] == inputs and v.fanout == 1
+    assert all(P.shared_inputs(p, q) == [] for p in _two_programs(registered=("t",)))
+    assert all(P.shared_inputs(p, q, G.held_gates(p, ["t"])) == [] for p in _two_programs())
+    assert all(P.shared_inputs(p, q, G.held_gates(p, ["x"])) != [] for p in _two_programs())
+    t = Array(2, Value(8))
+    twice = CompositeDefinition("OneStageTestOneCallTwice", 0, (), lambda S: ((("t", t),), Value(8)),
+                                lambda B, S, x: B.call(PAIR, array_of([x[0], x[0]])), register=False)
+    assert P.shared_inputs(Program(bind(twice)), q) == []
+
+
+def test_r8_lets_a_tied_run_input_through_and_publishes_it():
+    """R8's tied values (`registration.check`'s `tied`): a run Input two proof blocks read, named tied, is let through,
+    and the verdict publishes it beside F (`Verdict.rests_on_period_check`), since its acceptance rests on the network
+    period check that ties its rows; not named tied, it is still refused. A tied name that isn't a parameter of the
+    program, one whose Input is a registered input, or one the verifier expects registered or holds is refused
+    (`R8-tied`) and lets nothing through; a tied value is never a registered value."""
+    q = P.template_instance_query(PAIR.id)
+    for shared in _two_programs():
+        n = P.units(shared, q)
+        ports = _ports(shared, q, n)
+        rec = R.record(shared, q, LAW, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+                       leaf_layer="ee" * 64)
+        v = _check(rec, shared, q, tied=["t"])
+        assert v.ok and v.rests_on_period_check == ("t",) and v.fanout == 1
+        assert v.to_json()["rests_on_period_check"] == ["t"]
+        v = _check(rec, shared, q)
+        assert v.codes == ("R8-shared-input",) and v.rests_on_period_check == ()
+        v = _check(rec, shared, q, tied=["nope"])
+        assert v.codes == ("R8-tied", "R8-shared-input") and v.detail["R8-tied"]["tied"] == ["nope"]
+        assert v.rests_on_period_check == ()
+        v = _check(rec, shared, q, tied=["t", "nope"])
+        assert v.codes == ("R8-tied",) and v.rests_on_period_check == ("t",)
+        assert R._readers(shared, q, {"t": 2}, (), ["t"]) == (1, [], (), ["t"])
+        assert R._readers(shared, q, {"t": 2}, ["t"], ["t"])[3] == ["t"]
+        assert R._readers(shared, {"name": "Q_all"}, {}, (), ["t", "nope"]) == (None, [], (), ["nope"])
+    for registered in _two_programs(registered=("t",)):
+        assert not P.run_inputs(registered, G.held_gates(registered, ["t"])[0])
+        assert R._readers(registered, q, {}, (), ["t"]) == (1, [], (), ["t"])
+    prog, q, rec = _registration(6)
+    v = _check(rec, prog, q, tied=["x"])
+    assert v.ok and v.rests_on_period_check == ()
 
 
 def test_registration_check_refuses_a_query_core_does_not_digest():

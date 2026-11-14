@@ -4,6 +4,7 @@ early or other-execution phase coin is refused, for the salt and for the sample;
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 import json
 import os
@@ -16,17 +17,17 @@ import pytest
 
 import epoch_coins as E
 import epoch_coins_vectors as V
+from verity.protocols.pouw.prover.schemes import ncp
 from verity.protocols.pouw.verifier import coins as EC
 from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.pouw.verifier.audit import Epoch, Workload, salt_of, weights_root
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import ncp
+from verity.protocols.spot.device import challenger as Ch
 
 # the clear audit is a reference tool (verity/protocols/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
-from clear_audit import Prover, Sampled, Verifier  # noqa: E402
+from clear_audit import Prover, Sampled, Verifier
 
 PINNED = json.loads(V.OUT.read_text())
 
@@ -55,7 +56,7 @@ def setup():
     return s, work, acts, prover, prover.weight_roots
 
 
-def test_the_lifecycle_takes_the_salt_and_the_draw_from_the_challenger():
+def test_the_lifecycle_takes_the_salt_and_the_sampling_coin_from_the_challenger():
     """The challenger commits before the execution phase, opens the salt coin after the weights' root and the sampling coin after the
     transcript's root; the execution phase's salt is `salt_of` that coin, and the audit samples from the sampling coin."""
     s, work, acts, prover, roots = setup()
@@ -67,8 +68,8 @@ def test_the_lifecycle_takes_the_salt_and_the_draw_from_the_challenger():
     tr = prover.prove(epoch, acts)
     audit = Verifier(s, epoch).audit(prover, tr, Sampled(4), ch)
     assert audit.accepted and len(audit.selected) == 4
-    draw = E.challenger().open("draw", tr.commitment.root)
-    assert audit.selected == Sampled(4).select(s, epoch, tr, draw.coin, Verifier(s, epoch).refs, prover.digest)
+    sampling = E.challenger().open("draw", tr.commitment.root)
+    assert audit.selected == Sampled(4).select(s, epoch, tr, sampling.coin, Verifier(s, epoch).refs, prover.digest)
 
 
 def test_the_salt_refuses_a_coin_that_does_not_open_against_the_epochs_commitment():
@@ -92,7 +93,7 @@ def test_the_salt_refuses_a_coin_that_does_not_open_against_the_epochs_commitmen
     assert Epoch.start(work, roots, E.COINS, honest).salt == salt_of(E.COINS, honest.coin, root)
 
 
-def test_the_draw_refuses_bare_bytes_and_a_foreign_coin_on_an_epoch_with_coins():
+def test_the_sample_refuses_bare_bytes_and_a_foreign_coin_on_an_epoch_with_coins():
     s, work, acts, prover, roots = setup()
     epoch = Epoch.start(work, roots, E.COINS, E.challenger().open("salt", weights_root(roots)))
     tr = prover.prove(epoch, acts)
@@ -144,7 +145,7 @@ def test_a_served_challengers_coins_are_named_by_a_claim_instance():
             Ch.served_claim(source)
 
 
-def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(monkeypatch):
+def test_a_served_window_flips_every_coin_from_its_entropy_and_none_from_the_os(monkeypatch):
     """The execution phase's salt and flip coins, a live execution phase's salt and round coins and its sampling session's flip coin, and
     every hm96 salt beside them, come from the challenger's named entropy alone: with the operating system's generators
     refusing, they are sampled,
@@ -158,8 +159,8 @@ def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(
     for label, after in (("salt", b"w" * 64), ("draw", b"t" * 64)):
         assert EC.coin_reason(epoch.commitment, epoch.open(label, after), label, after) is None
     live = Wd.live_challenger(0, 2, Ch.named(verifier.CLAIM, random.Random(4).randbytes))
-    drawn = Wd.draw_challenger(0, Ch.named(verifier.CLAIM, random.Random(5).randbytes))
-    for ch in (live, drawn):
+    sampling = Wd.draw_challenger(0, Ch.named(verifier.CLAIM, random.Random(5).randbytes))
+    for ch in (live, sampling):
         for label, count in ch.commitment.families:
             rec = Ch.LiveRecord(ch, label, clock=lambda: 0.0)
             roots = [bytes([i]) * 64 for i in range(count)]
@@ -182,7 +183,6 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     """No PoUW or proof-system module reads `os.urandom`, `os.getrandom`, `secrets` or `random.SystemRandom` but those
     `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier's `coins` on
     the served path."""
-    import ast
     verity = Path(EC.__file__).resolve().parents[3]
     found = set()
     for d in ("protocols/pouw/verifier", "protocols/spot", "protocols/pouw/prover"):

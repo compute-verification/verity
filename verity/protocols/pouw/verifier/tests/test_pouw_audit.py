@@ -4,21 +4,16 @@ work-weighted and reproducible, the lottery selecting by digest."""
 from __future__ import annotations
 
 import random
-import sys
 from fractions import Fraction
-from pathlib import Path
 
 import pytest
-from verity.errors import ProtocolError
 
+from verity.errors import ProtocolError
+from verity.protocols.pouw.clear.clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets
+from verity.protocols.pouw.prover.schemes import ncp
 from verity.protocols.pouw.verifier.audit import (HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, tile_refs,
                                               weight_binding)
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import ncp
-
-# the clear audit is a reference tool (verity/protocols/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
-from clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets  # noqa: E402
 
 BEACON, SOURCE = b"beacon round 1", b"verifier secret"
 
@@ -91,7 +86,7 @@ def test_workload_rules():
         Matmul(1 << 64, Shape(16, 64, 64), 0)
 
 
-def test_draws_are_work_weighted_and_reproducible():
+def test_the_sample_is_work_weighted_and_reproducible():
     s, work, weights, acts, prover, epoch = setup([(Shape(64, 64, 64), 1), (Shape(16, 64, 64), 2)])
     tr = prover.prove(epoch, acts)
     refs = tile_refs(s, work)

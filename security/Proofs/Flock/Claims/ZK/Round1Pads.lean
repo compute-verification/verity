@@ -35,9 +35,9 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
 import Proofs.Flock.Claims.ZK.Round0
 import Proofs.Flock.Soundness.Discharge.Composed.Setup
-public import Proofs.Flock.Claims.ZK.Sent
 public import Proofs.Flock.Claims.Complete.ZkTables.Round1
 public import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+public import Proofs.Flock.Claims.ZK.Sent
 
 /-!
 # Round `1` of the masked session: the pads trees by tree position

@@ -43,8 +43,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
     each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
     and `ρ` its units' rows, the port's `Rows`, `j` the slot's unit in its cell, the port's leaves the boundary
-    population's `r` each), or, where the interior registration registers a value of the link's name, that value,
-    never the boundary port, each slot of replay block `S[i]` reading only its unit's row there (`i·r + ρ(j)`, the
+    population's `r` each), or, where the interior registration registers a value of the link's name (one the boundary
+    registration's record has no port or value of: `second-interior-names`; and never the name of what the block
+    returns: `second-return`), that value, each slot of replay block
+    `S[i]` reading only its unit's row there (`i·r + ρ(j)`, the
     value's leaves the `Q` sampled blocks' `r` each); for a port a wire names, its writer's output port of the
     interior record, each slot of replay block `S[i]` reading only its writer unit's row there (`i·n_w + ρ(j)`, the
     port's leaves the writer's `Q·n_w` slots'); else its own port of the interior record, each slot `u` reading only
@@ -70,8 +72,9 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   supplied (`replayLinks`). A template is a composite every node calling which is one of the body's, its callers, its
   units in a replay block theirs in body order, a batch's members one each (`callersOf`). One whose callers each read
   one aligned row of one of the block's parameters, of the template's parameter's width, reads that boundary port
-  (`slice`), and one whose callers' whole outputs the block returns writes its output's, or, where it returns several
-  fields, the field they are in (`o<j>` for field `j`). Every caller reads a linked port alike, of one value.
+  (`slice`), and one whose callers' outputs the block returns, each one whole field `o<f>` of a caller of one instance or
+  a batch's whole output of a template of one output, writes the block's output at that port, or, where it returns
+  several fields, the field they are in (`o<j>` for field `j`). Every caller reads a linked port alike, of one value.
 * **The wires** (`Wire`) are the verifier's own too, from the same Definition (`replayWires`): a template whose
   parameter is, at each caller, one field of one instance of another template's caller reads that template's output
   port `o<f>` for field `f`, its writer's, and the interior commits that value once, at its writer's port (no copy
@@ -86,6 +89,16 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
   (`window.replay_sample`, which the proof server writes) is not the verifier's own, `S`, in its order
   (`interiorOrderOk`). The record then states that its blocks are `S`'s, block `S[i]`'s cell `off_t + i·n_t`, rather
   than leaving it to convention. It is checked before any statement is read, and fails the check whatever else does.
+* **The registrations' names**: `second-interior-names` when the interior registration registers a value of a name the
+  boundary registration's record has, a port or a registered value (`namesOk`). Each name is then one registration's,
+  so the interior's value of a name never stands in for one round 1 committed. It is checked with the interior record's
+  order.
+* **The block's return**: `second-return` when the interior registration registers a value of a name the replay
+  block's return has in the boundary registration's record, one of the block's output ports `o<j>` (`returnsOk`,
+  `replayReturns`). What a replay block returns is committed before the first stage's sample, so a port a link names
+  for the return is read only at the port the boundary registration's record has for it, at its unit's row of its
+  cell's replay block (`second-read`), and never at a value registered after that sample. It is checked with the
+  interior record's order.
 * **The schedule**: `second-schedule` when the boundary registration's record commits a schedule (`window.schedule`)
   that is no schedule of its replay blocks (`Schedule.failure`): runs of positions of its requests that cover the
   replay blocks in order, and each request's positions in order. A record that commits none passes. It is checked
@@ -93,7 +106,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
   replay block's Definition makes no links (`linksOf`) or one names a template of no part or one whose units its rows
   don't place (`placed`), `second-wires` when it makes no wires (`wiresOf`) or one names a template of no part, one
-  whose units its rows don't place, or a writer of other units a block than its rows, `second-statements` when no
+  whose units its rows don't place, a writer of other units a block than its rows, a writer's port a link names (an
+  output the replay block returns, which the boundary commits: the interior's port of it is another tree, and nothing
+  holds the two to each other), or a writer whose part is not before its reader's (`wiresOk`), `second-statements`
+  when no
   statements are given, `second-order` for each statement for a part other than the one at its position (round 2 reads
   the statements by position, the `i`-th the `i`-th part's, in the parts' order, the interior program's strata's),
   `second-cover` for each part no statement is for (every part has one, drawn by the second draw or not), and
@@ -153,10 +169,19 @@ def LINKS_WHY : String :=
 def WIRES_WHY : String :=
   "the replay block's Definition reads a node other than as a template's parameter that is one field of one " ++
   "instance of another template, alike at every caller, or a wire names a template of no part, or its rows don't " ++
-  "place its part's units or its writer's"
+  "place its part's units or its writer's, or it reads an output the replay block returns, or its writer's part " ++
+  "is not before its reader's"
 
 def INTERIOR_ORDER_WHY : String :=
   "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
+
+def NAMES_WHY : String :=
+  "the interior registration registers a value of a name the boundary registration's record has, a port or a " ++
+  "registered value"
+
+def RETURN_WHY : String :=
+  "the interior registration registers a value of a name the replay block's return has in the boundary " ++
+  "registration's record: what a replay block returns is read only at a port that record commits"
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -318,8 +343,8 @@ Definition makes none), the `{value: root}` the verifiers of record report the s
 (`Record.sessionRegistered`), what they name of each session they accepted (`verifiedOf`), the reference header of each
 template's statement and the registered reads it reads (`refReads`, null for none), as the auditor's params give them
 (`Run.templateCircuits`), taken as given: nothing here verifies the reference statement against them, the design's
-wires (`replayWires`, none when the Definition makes none), and the rows of the ports they and the links name
-(`replayRows`). -/
+wires (`replayWires`, none when the Definition makes none), the rows of the ports they and the links name
+(`replayRows`), and the names the replay block's return has in the boundary registration's record (`replayReturns`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
@@ -333,6 +358,7 @@ structure Own where
   refReads : Array (String × Json) := #[]
   wires : Option (Array Wire) := some #[]
   rows : Array Rows := #[]
+  returns : Array String := #[]
 
 /-- The record names its ports by template, `<template>/<port>`. -/
 def byTemplate (rec : Json) : Bool := (Record.byPort rec).any fun (q, _) => q.contains '/'
@@ -499,23 +525,30 @@ def fieldOf (t : Flock.Program.Ty) (s c : Nat) : Option (Nat × Nat) :=
     (0, none)).2
 
 /-- The links replay block `D`'s return makes, each its share (`Share`): each part of its return, which holds all of
-its leaves, node `k`'s whole output, `k` a template's of one output, within one field `j` of the return at a multiple
-of that output's leaves from the field's first, makes the template's `o0` `D`'s `o<j>`, the field's rows a block those
-of the output's width, and `k`'s units the field's rows from there on, one each. None when a part is anything else. -/
+its leaves, an output of node `k`, a template's: one whole field `f` of its output where `k` is one instance
+(`fieldAt`), the field's leaves its width, or else `k`'s whole output, the template's of one output (`f` = 0), its
+leaves its width. Within one field `j` of the return at a multiple of that width from the field's first, it makes the
+template's `o<f>` `D`'s `o<j>`, the field's rows a block those of that width, and `k`'s units the field's rows from
+there on, one each. None when a part is anything else. -/
 def returnLinks (cs : Callers) (D : Flock.Program.Defn) : Option (List (Share Link)) := do
   guard (D.body.ret.count == D.ret.leaves)
   (List.range D.body.ret.parts.size).mapM fun q => do
     let part ← D.body.ret.parts[q]?
     let s ← D.body.ret.starts[q]?
-    let .affine false k 0 c := part | none
+    let .affine false k o c := part | none
     let x ← D.body.nodes[k]?
     let t ← cs.of k
-    let w := t.ret.leaves
-    guard (outputs t.ret == 1 && 0 < w && c == x.out.leaves && c == x.members * w)
+    let (f, w) ← if x.members == 1 then do
+        guard (x.out.leaves == t.ret.leaves)
+        pure ((← fieldAt t.ret o c), c)
+      else do
+        guard (o == 0 && outputs t.ret == 1 && c == x.out.leaves)
+        pure (0, t.ret.leaves)
+    guard (0 < w && c == x.members * w)
     let (j, off) ← fieldOf D.ret s c
-    let f ← (fields D.ret)[j]?
-    guard ((s - off) % w == 0 && f.leaves % w == 0)
-    pure ⟨⟨t.key, "o0", "o" ++ toString j⟩, x.fn, f.leaves / w,
+    let g ← (fields D.ret)[j]?
+    guard ((s - off) % w == 0 && g.leaves % w == 0)
+    pure ⟨⟨t.key, "o" ++ toString f, "o" ++ toString j⟩, x.fn, g.leaves / w,
       ⟨cs.first.getD k 0, x.members, (s - off) / w, if x.members == 1 then 0 else 1⟩⟩
 
 /-- **The design's links** with their rows a block and runs, from replay block `defs[d]`'s registered Definition, its
@@ -539,6 +572,18 @@ def replayLinks (P : Flock.Program.Prog) (key : String) (rec : Json) : Option (A
   let d ← P.index[key]?
   let ls ← linksOf P.defs d
   pure (ls.map fun l => { l with value := portOf (byTemplate rec) key l.value })
+
+/-- The names the return of the replay block program `P` defines under descriptor id `key` has in the boundary
+registration, as record `rec` names its ports (`portOf` under `key`): its output ports `o<j>`, one per field of what it
+returns (`outputs`), among them the value of each link its return makes (`returnLinks`). Empty for a `key` it doesn't
+define. -/
+def replayReturns (P : Flock.Program.Prog) (key : String) (rec : Json) : Array String :=
+  match P.index[key]? with
+  | some d =>
+    match P.defs[d]? with
+    | some D => (Array.range (outputs D.ret)).map fun j => portOf (byTemplate rec) key ("o" ++ toString j)
+    | none => #[]
+  | none => #[]
 
 /-- The link that names template `t`'s session port `port`. -/
 def linkOf (own : Own) (t port : String) : Option Link :=
@@ -607,13 +652,22 @@ def linksOk (ps : Array Part) (own : Own) : Bool :=
   | some ls => ls.all fun l => ps.any fun p => p.template == l.template && placed own p l.port
   | none => false
 
+/-- Template `t`'s position among the parts `ps`, its first part's: the index of its member in the interior window,
+whose members are the parts in order (the interior program's strata's); `ps.size`, no member's, for none. -/
+def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
+
 /-- The wires are derived, each between templates parts `ps` are of, its reader's units placed by its rows (`placed`),
-whose rows a block are its writer's units a block. -/
+whose rows a block are its writer's units a block, whose writer's port no link names, and whose writer's part is before
+its reader's (`posOf`). Each wire names one writer port, so both hold of every writer a wired port reads. An output the
+replay block returns is committed at the boundary, and no unit inside it reads that output off the interior record.
+With each writer's part before its reader's, the members' circuits with every wired read sent to its writer's output
+read only earlier gates, and no unit reads its own output. -/
 def wiresOk (ps : Array Part) (own : Own) : Bool :=
   match own.wires with
   | some ws => ws.all fun w =>
     ps.any (fun p => p.template == w.template && placed own p w.port) &&
-      ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)
+      (ps.any fun p => p.template == w.writer && (rowsOf own w.template w.port).any (·.per == p.n)) &&
+      (linkOf own w.writer w.wport).isNone && decide (posOf ps w.writer < posOf ps w.template)
   | none => false
 
 /-- The wire that names template `t`'s session port `port`. -/
@@ -672,6 +726,18 @@ def runOf (rec : Json) : Option String :=
   match getD (getD rec "window") "run" with
   | .str r => some r
   | _ => none
+
+/-- The tag `interiorRoot` hashes under, a zero byte after it. -/
+def INTERIOR_ROOT : String := "verity-vllm/interior-run/v1"
+
+/-- **The interior window's open root**, for the boundary registration of digest `boundary` (lowercase hex) and the
+replay sample `sample`, in order: SHA-512 over `INTERIOR_ROOT`, a zero byte and the canonical JSON
+`{"boundary", "replay_sample"}`, in lowercase hex. The verifier computes it, so a second stage sampled on a session of
+its own is sampled on the one window its boundary registration and replay sample name (`Run.interiorWindowOk`). None
+where `Flock.canon` fails. -/
+def interiorRoot (boundary : String) (sample : Array Nat) : Option String := do
+  let m ← (Flock.canon (Json.mkObj [("boundary", .str boundary), ("replay_sample", Lean.toJson sample)])).toOption
+  pure (sha512Hex (INTERIOR_ROOT.toUTF8.push 0 ++ m.toUTF8))
 
 /-- The input set of the `k`-th part's session in run `run`, as the served path names it: `served/<run>/m<k>`, the
 interior's `k`-th member being the `k`-th part. -/
@@ -805,9 +871,10 @@ def wiredRow (p : Part) (r : Rows) (u : Nat) : Option Nat := do
 
 /-- Template `p.template`'s session port `port` may read registered-reads entry `e`: a port a link names, only the
 boundary port it names, of its rows' `per` a replay block, each slot only its unit's row of its cell's replay block's
-(`linkedRow`), or, where the interior registration registers a value of the link's name, only that value and never the
-boundary port, of its rows' `per` a sampled block, each slot only its unit's row of its cell's (`wiredRow`); a port a
-wire names, only its writer's output port of the interior record, of the writer's units a
+(`linkedRow`), or, where the interior registration registers a value of the link's name, one the boundary registration's
+record has no port or value of (`namesOk`) and no name of what the block returns (`returnsOk`), only that value, of its
+rows' `per` a sampled block, each slot only its
+unit's row of its cell's (`wiredRow`); a port a wire names, only its writer's output port of the interior record, of the writer's units a
 block, each slot only its unit's writer unit's row in its cell's replay block (`wiredRow`); any other, its own port of
 the interior record, each slot only its own first row, or a value either registration registers, never a boundary
 port. Each at its root, domain and leaves, at most `MAX_LEAVES` of them. -/
@@ -932,10 +999,6 @@ def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJso
 /-- The templates statements `ss` are for, those that are statements. -/
 def templates (ss : List Json) : List String := ss.filterMap fun j => (Stmt.ofJson? j).map (·.template)
 
-/-- Template `t`'s position among the parts `ps`, its first part's: the index of its member in the interior window,
-whose members are the parts in order (the interior program's strata's); `ps.size`, no member's, for none. -/
-def posOf (ps : Array Part) (t : String) : Nat := (ps.findIdx? (·.template == t)).getD ps.size
-
 /-- Statement `i` of `ss`'s failures, `(code, detail)` each: `second-statement` for one that is not a statement,
 `second-template` for one for no part's template or an earlier statement's, else its failing checks, its header placed
 at its template's position (`posOf`). -/
@@ -1014,11 +1077,34 @@ def interiorOrderOk (own : Own) : Bool :=
   | .arr bs => bs.toList.map nat? == own.sample.toList.map some
   | _ => false
 
+/-- **The registrations' names**: no value the interior registration registers (its `registered` entries' values) is
+of a name the boundary registration's record has, a port (`Record.byPort`) or a registered value (`registeredEntry`), so
+each name a session reads is one registration's. -/
+def namesOk (own : Own) : Bool :=
+  (match getD own.interior "registered" with | .arr es => es | _ => #[]).all fun e =>
+    match getD e "value" with
+    | .str v => !(Record.byPort own.boundary).any (·.1 == v) && (registeredEntry own.boundary v).isNone
+    | _ => true
+
+/-- **The block's return**: no value the interior registration registers (its `registered` entries' values) is of a
+name the replay block's return has in the boundary registration's record (`Own.returns`, `replayReturns`). A port a
+link names for the return then reads no value of the interior's (`readOk`): only the port the boundary registration's
+record has of that name, committed before the first stage's sample. -/
+def returnsOk (own : Own) : Bool :=
+  (match getD own.interior "registered" with | .arr es => es | _ => #[]).all fun e =>
+    match getD e "value" with
+    | .str v => !own.returns.any (· == v)
+    | _ => true
+
 /-- `second-interior-order` unless the interior record names the replay sample in its order (`interiorOrderOk`), then
-`second-schedule` where the schedule the boundary registration's record commits is not one of its replay blocks
-(`Schedule.failure`). -/
+`second-interior-names` unless no value the interior registration registers is of a name the boundary registration's
+record has (`namesOk`), then `second-return` unless none is of a name the replay block's return has there
+(`returnsOk`), then `second-schedule` where the schedule the boundary registration's record commits is not one of its
+replay blocks (`Schedule.failure`). -/
 def interiorFailures (own : Own) : List (String × Json) :=
   (if interiorOrderOk own then [] else [("second-interior-order", Json.str INTERIOR_ORDER_WHY)]) ++
+    (if namesOk own then [] else [("second-interior-names", Json.str NAMES_WHY)]) ++
+    (if returnsOk own then [] else [("second-return", Json.str RETURN_WHY)]) ++
     match Schedule.failure own.boundary with
     | some why => [("second-schedule", Json.str why)]
     | none => []
@@ -1156,7 +1242,25 @@ theorem orderFailures_nil {ps : Array Part} {ss : List Json} (h : orderFailures 
 /-- With no `second-interior-order`, the interior record names the replay sample in its order. -/
 theorem interiorFailures_nil {own : Own} (h : interiorFailures own = []) : interiorOrderOk own = true := by
   unfold interiorFailures at h
-  have h := (List.append_eq_nil_iff.1 h).1
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).1).1
+  split at h
+  · assumption
+  · simp at h
+
+/-- With no `second-interior-names`, no value the interior registration registers is of a name the boundary
+registration's record has. -/
+theorem interiorFailures_names {own : Own} (h : interiorFailures own = []) : namesOk own = true := by
+  unfold interiorFailures at h
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).1).2
+  split at h
+  · assumption
+  · simp at h
+
+/-- With no `second-return`, no value the interior registration registers is of a name the replay block's return has
+in the boundary registration's record. -/
+theorem interiorFailures_return {own : Own} (h : interiorFailures own = []) : returnsOk own = true := by
+  unfold interiorFailures at h
+  have h := (List.append_eq_nil_iff.1 (List.append_eq_nil_iff.1 h).1).2
   split at h
   · assumption
   · simp at h

@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 import numpy as np
 
-from verity_vllm.query.manifest import format as RM
 from verity_vllm.commit.opened import UnverifiedUnlinked
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.program.sampling_event import circuit_token_id
@@ -19,13 +18,13 @@ LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
 
 
 def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], workload_requests: list[dict[str, Any]],
-                     *, embed_op_path: str | None = None, splits_of_record: dict[str, Any] | None = None, store: Any = None,
+                     *, embed_op_path: str | None = None, store: Any = None,
                      eos_of_record: set[int] | list[int] | None = None, eos_lag_rows: int | None = None) -> dict[str, Any]:
     """Exhaustive ordered boundary linkage: for every declared request, committed `input_token_ids` at the arrival step == the declared
     prompt ids; at each later step == the request's committed `sampled_token_ids` of the previous step (i64 slot 0 of its block).
     `workload_requests`: [{"request_id": r<k>, "arrive_step", "prompt_token_ids", "steps": [engine steps], "seed": declared or None,
     "cached": C}]: a warm request's arrival step embeds prompt[C:] (its rows 0..C-1 are the producers', which the replay reads).
-    Plus `prescribed_input_linkage` (seed / splits); `splits_of_record` = {request_id: {"derived": num_SMs} | other}.
+    Plus `prescribed_input_linkage` (the seed).
     `store`: a CommittedStore-like reader (has/words) in place of (bmap, committed) -- tests.
     `eos_of_record`: the Program's declared stop rule (global_program.stop_rule eos_token_ids; None = undeclared): a request
     linked over FEWER steps than its declared cap must end on a declared EOS id, else unlinked by name.
@@ -83,13 +82,13 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
                 unlinked.append({"request_id": rid, "engine_step": s, "kind": "chain", "why": f"committed input id {tid} != committed sampled id {sid} of step {s - 1}"})
     # the PRESCRIBED sampler inputs are linked to their approved
     # source here, independently of whether a replay sample exposes a substitution: the committed seed word == the DECLARED workload seed
-    # of the request at every committed step; on a derived-S Program the committed splits word == SplitsFor_v1(committed live count, num_SMs
-    # of record).  Their unlinked entries join `unlinked` (the same FAIL-by-name path); the boundary `pairs`/`linked` counts stay the boundary's.
-    presc = prescribed_input_linkage(store, workload_requests, splits_of_record=splits_of_record)
+    # of the request at every committed step.  Its unlinked entries join `unlinked` (the same FAIL-by-name path); the boundary
+    # `pairs`/`linked` counts stay the boundary's.
+    presc = prescribed_input_linkage(store, workload_requests)
     unlinked.extend(presc.pop("unlinked"))
     method = "ordered boundary linkage (declared prompt -> input_token_ids; sampled_token_ids[s-1] -> input_token_ids[s])"
-    if presc["seed"].get("checked") or presc["splits"].get("checked"):
-        method += " + prescribed-input linkage (" + "; ".join(k for k in ("seed", "splits") if presc[k].get("checked")) + ")"
+    if presc["seed"].get("checked"):
+        method += " + prescribed-input linkage (seed)"
     # the horizon each request was linked over, beside its declared cap and its Program of record's steps;
     # a horizon SHORTER than the declared cap is an early stop: the committed sampled id at its EOS step must be one
     # of the Program's declared EOS ids (stop_rule) -- Commit-side, not leaning on the Match chain's G6; undeclared -> fail closed.
@@ -155,8 +154,8 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
 
 
 def arrivals_of_record(declared: dict[str, int], schedule: dict[str, Any] | None) -> tuple[dict[str, int], bool]:
-    """The arrivals every C2 consumer (population placement, sampled replay, boundary linkage,
-    CompiledKernelCheck) counts from: the ENGINE schedule of record's observed arrive steps when the population was placed on the observed
+    """The arrivals every C2 consumer (population placement, sampled replay, boundary linkage) counts from: the ENGINE
+    schedule of record's observed arrive steps when the population was placed on the observed
     committed-step axis (`schedule.use == "observed"`: every declared request observed, contiguous, exactly its cap), else the declaration.
     Returns (arrivals, moved) -- `moved` iff an arrival differs from the declaration.  A missing / failed schedule leaves the declaration."""
     out = {str(k): int(v) for k, v in (declared or {}).items()}
@@ -184,16 +183,6 @@ def linkage_horizon(arrive: int, declared_cap: int, program_steps: int | None, e
 
 
 SEED_RULE = "committed runner.sampler/seed word == the DECLARED workload seed of the request (i64 exact) at every step with a committed sampled id (constant per request)"
-SPLITS_RULE = "committed runner.sampler/splits word at step s == SplitsFor_v1(#requests with a committed sampled id at s, num_SMs of record) (REQ-03 derived S)"
-
-
-def splits_of_record(loaded: dict) -> dict[str, Any]:
-    """Each request Program's split count S of record (`{"derived": num_sms}` under derived S), from its Build result."""
-    out = {}
-    for k, v in loaded.items():
-        smp = (v.get("result") or {}).get("sampling") or {}
-        out[k] = {"derived": (smp.get("geometry") or {}).get("num_sms")} if smp.get("splits") == "derived" else smp.get("splits")
-    return out
 
 
 def _word_int(w: np.ndarray) -> int:
@@ -201,16 +190,13 @@ def _word_int(w: np.ndarray) -> int:
     return int(a.view(np.int64)[0]) if a.dtype.itemsize == 8 else int(a.astype(np.int64)[0])
 
 
-def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]], *, splits_of_record: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Commit-side linkage of the stochastic Program's PRESCRIBED inputs to their approved source.
-    `workload_requests[i]["seed"]` = the request's DECLARED seed (the SamplingParams.seed the run was asked for; None on a greedy row);
-    `splits_of_record` = {request_id: {"derived": num_SMs}} from the Build result's `sampling` (None / non-derived = no splits rule).
-    SEED: for every (step, request) that committed a `runner.sampler/sampled_token_ids` word, the committed `runner.sampler/seed` word
+def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]) -> dict[str, Any]:
+    """Commit-side linkage of the stochastic Program's PRESCRIBED input, its seed, to its approved source.
+    `workload_requests[i]["seed"]` = the request's DECLARED seed (the SamplingParams.seed the run was asked for; None on a greedy row).
+    For every (step, request) that committed a `runner.sampler/sampled_token_ids` word, the committed `runner.sampler/seed` word
     must exist and == the declared seed (i64 exact) -- the kernel reads seeds[req] + pos[req]; the seed is one word per request at every
-    step (no per-step derivation).  SPLITS (derived S only): at every step with >= 1 committed sampled id, S* = SplitsFor_v1(live, num_SMs)
-    with live = the number of requests with a committed sampled id at that step; every live request's committed splits word == S*.
-    Missing word / unequal word / an unresolvable S -> unlinked BY NAME (kind 'seed' / 'splits').  A greedy row (no declared seed, no
-    derived S) checks nothing and says so.  Returns {"seed": {...}, "splits": {...}, "unlinked": [...]}."""
+    step (no per-step derivation).  Missing word / unequal word -> unlinked BY NAME (kind 'seed').  A greedy row (no declared seed)
+    checks nothing and says so.  Returns {"seed": {...}, "unlinked": [...]}."""
     unlinked: list[dict[str, Any]] = []
     live_at: dict[int, list[str]] = {}
     seeded = 0
@@ -254,49 +240,4 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
                              "why": f"committed runner.sampler/seed word at {len(stray)} (step, request) pair(s) (first {rid0} step {s0}) with NO declared workload seed: a prescribed input without an approved source"})
         else:
             seed_rec["why"] = "no declared seed on any request (greedy workload; no committed seed word): not applicable"
-    # splits: derived S of record (one num_SMs across the requests' Programs; a disagreement is named, never averaged)
-    nsms = set()
-    derived_for: set[str] = set()
-    for r in workload_requests:
-        rid = str(r["request_id"])
-        sp = (splits_of_record or {}).get(rid)
-        if isinstance(sp, dict) and sp.get("derived") is not None:
-            nsms.add(int(sp["derived"]))
-            derived_for.add(rid)
-    splits_rec: dict[str, Any] = {"rule": SPLITS_RULE, "requests_derived": len(derived_for), "checked": 0, "linked": 0, "steps": 0}
-    if not derived_for:
-        splits_rec["why"] = "no request Program declares derived S (constant S / greedy): not applicable"
-    elif len(nsms) != 1:
-        splits_rec["why"] = f"num_SMs of record disagree across the request Programs: {sorted(nsms)}"
-        unlinked.append({"request_id": None, "engine_step": None, "kind": "splits", "why": "num_SMs of record disagree across the request Programs: " + str(sorted(nsms))})
-    else:
-        from verity.definitions.registry.topp_geometry import splits_for_v1
-        nsm = nsms.pop()
-        splits_rec["num_sms"] = nsm
-        sched: dict[int, int] = {}
-        for s in sorted(live_at):
-            rids = live_at[s]
-            try:
-                want = int(splits_for_v1(len(rids), nsm))
-            except ValueError as e:
-                unlinked.append({"request_id": None, "engine_step": s, "kind": "splits", "why": f"no S of record at step {s}: {e}"})
-                continue
-            sched[s] = want
-            splits_rec["steps"] += 1
-            for rid in rids:
-                if rid not in derived_for:
-                    unlinked.append({"request_id": rid, "engine_step": s, "kind": "splits", "why": f"{rid} is live at step {s} but its Program does not declare derived S"})
-                    continue
-                splits_rec["checked"] += 1
-                w, why = store.words(rid, s, SAMPLER_OP, RM.SPLITS_PARAM, 0, 1)
-                if w is None:
-                    unlinked.append({"request_id": rid, "engine_step": s, "kind": "splits", "why": f"prescribed splits of {rid} at step {s} not committed: {why}"})
-                    continue
-                got = _word_int(w)
-                if got == want:
-                    splits_rec["linked"] += 1
-                else:
-                    unlinked.append({"request_id": rid, "engine_step": s, "kind": "splits",
-                                     "why": f"committed runner.sampler/splits {got} != SplitsFor_v1(live {len(rids)}, num_SMs {nsm}) = {want} for {rid} at step {s} (prescribed input)"})
-        splits_rec["schedule"] = {str(s): v for s, v in list(sched.items())[:64]}
-    return {"seed": seed_rec, "splits": splits_rec, "unlinked": unlinked}
+    return {"seed": seed_rec, "unlinked": unlinked}

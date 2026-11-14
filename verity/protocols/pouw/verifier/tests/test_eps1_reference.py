@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import pytest
 
+from verity.circuits.defs import bind
+from verity.definitions.ops import s8 as OS8
 from verity.protocols.pouw.prover import circuit
 from verity.protocols.pouw.prover.circuit import eps1_reference as EPS
 from verity.protocols.pouw.verifier.protocol import DomainError
@@ -14,7 +16,7 @@ SHAPE = EPS.Shape(16, 128, 16)       # KS = 4
 
 
 def test_the_reference_is_not_registered():
-    """Decision 102 is one design across schemes, so `eps1-sm120-h1fx1` has one registration, `h1tile`'s compile-pass
+    """The design is one across schemes, so `eps1-sm120-h1fx1` has one registration, `h1tile`'s compile-pass
     scheme; this reference is not in `circuit.SCHEMES` and `circuit.traced_as` does not reach it."""
     assert EPS.SCHEME not in circuit.SCHEMES
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"}
@@ -48,8 +50,6 @@ def test_the_shape_domain_is_32_k_and_at_least_two_segments():
 
 
 def test_the_arm_is_the_s8_family_at_its_noised_layout():
-    from verity.definitions.ops import s8 as OS8
-    from verity.circuits.defs import bind
     # the arm at K = 64 is exactly s8's edited-arm smoke binding (NOISE weight, LIMBS byteclamp, COMMIT prefix), which the
     # s8 sidecar already circuit-checks; so the arm needs no new circuit-check target, only the fx1 + chains spot check does.
     assert EPS.arm(64) == bind(OS8.S8Dot, **OS8.SMOKE_EDITED)

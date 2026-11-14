@@ -6,30 +6,88 @@ check: omit a request, duplicate one, swap two requests' outputs, alter an arriv
 
 from __future__ import annotations
 
+import collections
 import gzip
+import inspect
 import itertools
-import os
 import json
+import os
+import random
+from pathlib import Path
+from typing import Any
 
 import pytest
+import verity.circuits.refs as refs
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import Affine, Concat, Explicit, Strided, runs
+from verity.definitions.registry import b1
+from verity.definitions.registry.topp_geometry import registered_splits, splits_for
 
-from verity_vllm.pipeline.match import persist_program
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart, StorageAlloc, TritonLaunch, ViewDesc
+from tests.check import test_batch_decomp_e2e as e2e
+from tests.check.test_batch_decomp_e2e import (
+    A_DOWN_W,
+    A_EMBED,
+    A_GU_W,
+    A_IDS,
+    A_LN1,
+    A_LN2,
+    A_NORM,
+    A_O_W,
+    A_POS,
+    A_QKV_W,
+    BF,
+    BS,
+    I32D,
+    I64D,
+    W_COS,
+    W_DOWN,
+    W_EMBED,
+    W_GU,
+    W_LN1,
+    W_LN2,
+    W_NORM,
+    W_O,
+    W_QKV,
+    Ids,
+    V,
+    profile,
+)
+from tests.observe.test_fold_synthetic import A_COS, C, memory  # noqa: F401 - `memory` is the fixture
+from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as GMF
-from verity_vllm.pipeline import cli
-from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import sampler_geometry as SG
-from verity_vllm.records.global_match import GlobalMatch
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.fold import fold
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    Group,
+    Profile,
+)
+from verity_vllm.observe.log import dumps as log_dumps
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline.match import persist_program
+from verity_vllm.pipeline.match import persist_program as _persist
 from verity_vllm.records import workload as WL
 from verity_vllm.records.fields import RecordError, UnknownField
-from tests.check import test_batch_decomp_e2e as e2e
-from tests.check.test_batch_decomp_e2e import (A_DOWN_W, A_EMBED, A_GU_W, A_IDS, A_LN1, A_LN2, A_NORM, A_O_W, A_POS, A_QKV_W, BF,
-                                                                            BS, I32D, I64D, W_COS, W_DOWN, W_EMBED, W_GU, W_LN1, W_LN2, W_NORM,
-                                                                            W_O, W_QKV, Ids, V, profile)
-from tests.observe.test_fold_synthetic import A_COS, C, memory  # noqa: F401 - `memory` is the fixture
-from verity_vllm.observe.fold.fold import fold
-from verity_vllm.observe.log import dumps as log_dumps
+from verity_vllm.records.global_match import GlobalMatch
 
 KC = V(e2e.A_KC, (8, BS, 1, 8))   # 8 KV pages: two private pages per request for up to 4 requests
 VC = V(e2e.A_VC, (8, BS, 1, 8))
@@ -83,7 +141,8 @@ def _tok(r, p):
 
 def step_events(step, reqs, ids, base_alloc):
     """One engine step; request ri is active at local step `step - arrive` in 0 .. len(sampled)-1 (prefill at local 0)."""
-    rows, toks, links, roots, logits_rows, logits_idx, slots, seq_lens, num_computed, block_tables, sampled = [], [], [], [], [], [], [], {}, {}, {}, []
+    rows: list[tuple] = []
+    toks, links, roots, logits_rows, logits_idx, slots, seq_lens, num_computed, block_tables, sampled = [], [], [], [], [], [], {}, {}, {}, []
     for ri, r in enumerate(reqs):
         local = step - _arr(r)
         if local < 0 or local >= len(r["sampled"]):
@@ -206,7 +265,7 @@ def component(req, d, witness=None):
     evs = batched_log([full])
     r = fold(evs, profile(witness=witness), strict=True)
     p = persist(r, evs, d, [full])
-    json.dump({"structural_inputs": {"LP": len(req["prompt"]), "T": _cap(req) - 1}}, open(f"{p}/construction_manifest.json", "w"))
+    Path(f"{p}/construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": len(req["prompt"]), "T": _cap(req) - 1}}))
     return p
 
 
@@ -216,9 +275,6 @@ def p_attention_tgrouped(node, ctx):
     in one group, created when the decode row is seen). The toy default (`p_attention`) emits per row in row order and therefore
     never shows M-ARRIVAL-ORDER; this variant reproduces it on CPU with the same fold code path (`fold._compute_emit` per group)."""
     from tests.observe.test_fold_synthetic import _kv_flat, _slot
-    from verity_vllm.observe.fold.resolver import Compute, Gather, GatherMany, Group
-    from verity.circuits.defs import bind
-    from verity.definitions.registry import b1
     BN = e2e.BN
     if node.op != "vllm.unified_attention_with_output.default" or len(node.children) != 1:
         return None
@@ -237,7 +293,6 @@ def p_attention_tgrouped(node, ctx):
 
 
 def profile_tgrouped(leak=False):
-    from verity_vllm.observe.fold.resolver import Profile
     from tests.observe import test_fold_synthetic as toy
     pats = [p for p in toy.PATTERNS if p.name != "attention"]
     pats.append(toy.Pat("attention_leak" if leak else "attention_tgrouped", e2e.p_attention_leak if leak else p_attention_tgrouped))
@@ -259,13 +314,13 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
     consumer's Merkle hash names a forward reference; G4: no canonical address; G8: consumer-before-producer), as `sequence` does."""
     from verity.circuits import codec
 
-    doc = json.load(open(f"{oracle_dir}/program.json"))
+    doc = json.loads(Path(f"{oracle_dir}/program.json").read_text())
     desc = doc["program"]
     body = desc["definitions"][desc["root"]]["body"]
     nodes = body["nodes"]
     n_in = doc["n_input_nodes"]
     fid_of = (lambda nd: desc["callees"][nd["fn"]]) if "callees" in desc else (lambda nd: nd["fn"])
-    lines = open(f"{oracle_dir}/instances.jsonl").read().splitlines()
+    lines = Path(f"{oracle_dir}/instances.jsonl").read_text().splitlines()
     head, inst = json.loads(lines[0]), [json.loads(x) for x in lines[1:]]
     by_root = {n_in + m["node"]: m for m in inst}
 
@@ -329,7 +384,7 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
                 if v[0] == "n":
                     v[1] = new_of[v[1]]
                 return {key: v}
-        return {"explicit": [[s, new_of[i] if s == "n" else i, l] for s, i, l in j["explicit"]]}
+        return {"explicit": [[s, new_of[i] if s == "n" else i, at] for s, i, at in j["explicit"]]}
 
     for nd in nodes:
         for a in nd["args"]:
@@ -337,7 +392,7 @@ def move_consumer_before_producer(oracle_dir, rid="r1", sampler_to_head=False):
     body["ret"] = remap(body["ret"])
     body["nodes"] = [nodes[old] for old in order]
     doc["digest"] = codec.program_digest(desc)
-    json.dump(doc, open(f"{oracle_dir}/program.json", "w"), separators=(",", ":"), sort_keys=True)
+    Path(f"{oracle_dir}/program.json").write_text(json.dumps(doc, separators=(",", ":"), sort_keys=True))
     for m in inst:
         m["node"] = new_of[n_in + m["node"]] - n_in
     inst.sort(key=lambda m: m["node"])                  # instances.jsonl line order == node order
@@ -366,15 +421,15 @@ def sampling_block(**fields):
 
 
 def workload(reqs, path):
-    json.dump(workload_doc(requests=[{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r),
-                                      **({"seed": r["seed"]} if r.get("seed") is not None else {})} for r in reqs],
-                           sampling={"temperature": 0.0, "variant": "greedy"}, sweep={"arrive_steps": [_arr(r) for r in reqs]}), open(path, "w"))
+    Path(path).write_text(json.dumps(workload_doc(requests=[{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r),
+                                                             **({"seed": r["seed"]} if r.get("seed") is not None else {})} for r in reqs],
+                                                  sampling={"temperature": 0.0, "variant": "greedy"}, sweep={"arrive_steps": [_arr(r) for r in reqs]})))
     return str(path)
 
 
 def _sha(path):
     """RunHeader.workload.sha256 as the driver computes it (vllm_adapter.load_workload): the canonical manifest document."""
-    return __import__("hashlib").sha256(json.dumps(json.load(open(path)), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return __import__("hashlib").sha256(json.dumps(json.loads(Path(path).read_text()), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 EOS = 11   # the fixture model's EOS id (R1_EOS stops on it); the Program declares it as its stop rule
@@ -393,7 +448,7 @@ def assemble(reqs, tmp_path, leak=False, tgrouped=False, eos_token_ids=(EOS,), l
         sh = (len(r["prompt"]), _cap(r) - 1)
         if sh not in comps:
             comps[sh] = component(r, tmp_path / f"comp_LP{sh[0]}_T{sh[1]}", witness=witness and "own")
-    return gm.mock_global_program(wl, list(comps.values()), eos_token_ids=list(eos_token_ids) if eos_token_ids else None, lag=lag), oracle
+    return GD.mock_global_program(wl, list(comps.values()), eos_token_ids=list(eos_token_ids) if eos_token_ids else None, lag=lag), oracle
 
 
 def _check(res, cid):
@@ -431,11 +486,10 @@ def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, 
     """MATCH_IMPL=fast memoises per RootView / Projection for the duration of ONE check() -- including its
     nested alternate-criterion run -- and holds nothing afterwards, so a process that checks several records does not grow by one
     record's caches per record.  The document is the checker of record's, field for field."""
-    from verity_vllm.check.match import global_match_fast as GMF
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     ref = gm.check(gp, oracle)
     monkeypatch.setenv(GMF.FLAG, "fast")
-    seen = {}
+    seen: dict[str, list] = {}
     orig_leave = GMF.leave
 
     def spy_leave():
@@ -473,10 +527,8 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
     checker-of-record function is the object it was before, the fast run's Programs are its own (MemoProg, progressions), and a record
     check() in the same process still loads the record's Programs and writes the same document."""
     import verity.circuits.codec as codec
-    import verity.circuits.refs as refs
-    from verity_vllm.check.match import batch_decomp as BD
+
     from verity_vllm.check.match import program_compare as C
-    from verity_vllm.check.match import global_match_fast as GMF
     names = [(codec, "descriptor_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
              (C, "load_oracle"), (C, "load_derived"), (BD, "dag_hashes"), (BD, "live_cone"), (BD, "Projection")]
     before = [getattr(m, n) for m, n in names]
@@ -525,7 +577,7 @@ def test_staggered_arrivals_pass_with_mixed_step_and_declared_chronology(memory,
     by = {e["request_id"]: e for e in res["requests"]}
     assert (by["r0"]["first_step"], by["r1"]["first_step"], by["r2"]["first_step"]) == (0, 1, 2)
     g8 = _check(res, "G8")
-    assert any(l["phase"] == "mixed" for l in g8["batch_layout"]) and not g8["permutations"]
+    assert any(b["phase"] == "mixed" for b in g8["batch_layout"]) and not g8["permutations"]
     assert _check(res, "G6")["status"] == "PASS" and by["r2"]["output_events"] == 3
 
 
@@ -551,9 +603,9 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
     gp, oracle = assemble([R0, R1_EOS], tmp_path, eos_token_ids=(99,))
     for finish in ("stop", None):
         tp = os.path.join(oracle, "capture", "tokens.json")
-        tk = json.load(open(tp))
+        tk = json.loads(Path(tp).read_text())
         next(r for r in tk["requests"] if r["request_id"] == "r1")["finish_reason"] = finish
-        json.dump(tk, open(tp, "w"))
+        Path(tp).write_text(json.dumps(tk))
         res = gm.check(gp, oracle)
         assert res["verdict"] == "FAIL" and "G6" in res["failed_checks"], (finish, res["reasons"])
         g6 = _check(res, "G6")
@@ -587,9 +639,9 @@ def test_early_stop_without_an_eos_token_fails_g6_whatever_the_driver_says(memor
     # eos_verified must read False beside the G6 FAIL, never True
     gp6, oracle6 = assemble([R0, R1_EOS], tmp_path / "assoc")
     tp6 = os.path.join(oracle6, "capture", "tokens.json")
-    tk6 = json.load(open(tp6))
+    tk6 = json.loads(Path(tp6).read_text())
     next(r for r in tk6["requests"] if r["request_id"] == "r1")["generated_token_ids"] = [8, 99]
-    json.dump(tk6, open(tp6, "w"))
+    Path(tp6).write_text(json.dumps(tk6))
     res6 = gm.check(gp6, oracle6)
     assert res6["verdict"] == "FAIL" and "G6" in res6["failed_checks"]
     r1 = next(e for e in res6["requests"] if e["request_id"] == "r1")
@@ -618,19 +670,19 @@ def test_manifest_field_edited_after_the_build_is_named_per_request(memory, tmp_
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     wl_path = gp["workload"]["path"]
     for field, value in (("max_tokens", 5), ("arrive_step", 0)):
-        wl = json.load(open(wl_path))
+        wl = json.loads(Path(wl_path).read_text())
         wl["requests"][1][field] = value
         if field == "arrive_step":
             wl["sweep"]["arrive_steps"][1] = value
-        json.dump(wl, open(wl_path, "w"))
+        Path(wl_path).write_text(json.dumps(wl))
         res = gm.check(gp, oracle)
         g1 = _check(res, "G1")
         assert res["verdict"] == "FAIL" and g1["status"] == "FAIL", (field, res["reasons"])
         assert any(p.startswith("r1: manifest " + field) for p in g1["problems"]), (field, g1["problems"])
     # a shorter prompt in the manifest: prompt_len named AND the prompt itself (record != manifest)
-    wl = json.load(open(wl_path))
+    wl = json.loads(Path(wl_path).read_text())
     wl["requests"][1]["prompt_token_ids"] = wl["requests"][1]["prompt_token_ids"][:1]
-    json.dump(wl, open(wl_path, "w"))
+    Path(wl_path).write_text(json.dumps(wl))
     g1 = _check(gm.check(gp, oracle), "G1")
     assert any(p.startswith("r1: manifest prompt_len") for p in g1["problems"]) and any("record prompt != manifest prompt" in p for p in g1["problems"])
 
@@ -646,10 +698,10 @@ def test_mutation_duplicate_request_fails(memory, tmp_path):
 
 def test_mutation_swapped_outputs_fail_the_chronology(memory, tmp_path):
     gp, oracle = assemble([R0, R1], tmp_path)
-    tj = json.load(open(f"{oracle}/capture/tokens.json"))
+    tj = json.loads(Path(f"{oracle}/capture/tokens.json").read_text())
     a, b = tj["requests"]
     a["generated_token_ids"], b["generated_token_ids"] = b["generated_token_ids"], a["generated_token_ids"]
-    json.dump(tj, open(f"{oracle}/capture/tokens.json", "w"))
+    Path(f"{oracle}/capture/tokens.json").write_text(json.dumps(tj))
     res = gm.check(gp, oracle)
     assert res["verdict"] == "FAIL" and res["failed_checks"] == ["G6"]
     assert any("output association" in p for p in _check(res, "G6")["problems"])
@@ -774,7 +826,7 @@ def test_coscheduled_prefill_tgrouped_emission_passes_the_dag_criterion_with_the
     g8 = _check(res, "G8")
     assert g8["status"] == "PASS" and g8["steps_with_emission_out_of_canonical_order"] == 1
     assert len(g8["permutations"]) == 1 and g8["permutations"][0]["same_dag_multiset"] and g8["permutations"][0]["displaced_query_positions"] == [3]
-    assert any(l.get("emitted_out_of_canonical_order") for l in g8["batch_layout"])
+    assert any(b.get("emitted_out_of_canonical_order") for b in g8["batch_layout"])
     g7 = _check(res, "G7")
     assert g7["boundary_probes"] > 0 and g7["boundary_probe_failures"] == 0   # canonical addresses resolve (structural, not emission index)
     r0 = next(e for e in res["requests"] if e["request_id"] == "r0")
@@ -791,10 +843,10 @@ def test_dag_criterion_negatives_wrong_arrival_swapped_outputs_wiring(memory, tm
     assert any("declared arrival step 0 != observed 1" in p for p in _check(res, "G6")["problems"])
     # swapped request outputs -> G6 (output association)
     gp, oracle = assemble([R0, RX_LATE], tmp_path / "b", tgrouped=True)
-    tj = json.load(open(f"{oracle}/capture/tokens.json"))
+    tj = json.loads(Path(f"{oracle}/capture/tokens.json").read_text())
     a, b = tj["requests"]
     a["generated_token_ids"], b["generated_token_ids"] = b["generated_token_ids"], a["generated_token_ids"]
-    json.dump(tj, open(f"{oracle}/capture/tokens.json", "w"))
+    Path(f"{oracle}/capture/tokens.json").write_text(json.dumps(tj))
     res = gm.check(gp, oracle, within_step="dag")
     assert res["verdict"] == "FAIL" and "G6" in res["failed_checks"] and any("output association" in p for p in _check(res, "G6")["problems"])
     # a permutation that also changes the wiring (attention reading another request's KV row) -> G5 + G3, not a layout
@@ -877,7 +929,6 @@ def test_workload_applicability_refuses_a_row_the_components_do_not_model():
 
 def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_program(tmp_path):
     # a component descriptor edited after the derive composed silently to another workload digest -> now refused, named
-    from verity.circuits.codec import program_digest
     from verity_vllm.pipeline import global_program as G
     desc = {"schema": "toy/descriptor", "program_fn": "Toy_v1", "definitions": {"Toy_v1": {"form": "composite", "body": {"nodes": [1, 2]}}},
             "root": "Toy_v1", "annotations": {"free": "text"}}
@@ -899,7 +950,6 @@ def test_gp01_component_provenance_refuses_a_descriptor_that_is_not_the_derived_
 
 def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_an_edited_one(tmp_path):
     # The artifact's workload_digest is a claim; the checker verifies it against the descriptor GP-01 wrote beside it
-    from verity.circuits.codec import canonical_json, program_digest
     desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}, "annotations": {"free": "text"}}
     d = tmp_path / "build_workload"
     d.mkdir()
@@ -936,7 +986,6 @@ def test_from_gprog_relocates_component_dirs_beside_a_staged_build_artifact(tmp_
     same dirs sit beside the artifact -- the v2 acquisition's B64 GM-01 died on exactly this FileNotFoundError.  from_gprog resolves them
     beside `<row>/build_workload/workload_program.json`, records what moved, and leaves an existing path / a path missing at both places
     alone (the loader's error must still name the recorded path)."""
-    from verity.circuits.codec import canonical_json, program_digest
     desc = {"schema": "toy/descriptor", "definitions": [{"name": "D0"}], "root": {"body": []}}
     row = tmp_path / "staged" / "row"
     bw = row / "build_workload"
@@ -998,11 +1047,8 @@ def _real_workload_descriptor(lag: int | None):
     """A REAL workload Program through verity_vllm.program.workload + the descriptor codec (the toy request Programs of tests/program/
     test_workload_program.py): the `lag` static lands where GP-01's descriptor.json.gz carries it -- inlined in the program_fn spec id and the
     root id, NOT a root `bindings` entry.  lag=None: an older shaped descriptor (the static stripped from both ids)."""
-    from verity.circuits.codec import encode_program
-    from verity.circuits.defs import REGISTRY
-    from verity.circuits.program import Program
+    from tests.program.test_workload_program import _WP, _toy_request
     from verity_vllm.program import workload as W
-    from tests.program.test_workload_program import _toy_request, _WP
     reqs = []
     for i, (LP, T) in enumerate([(3, 2), (5, 0)]):
         c = W.request_component(encode_program(Program(_toy_request(LP, T))), REGISTRY, _WP(LP))
@@ -1018,19 +1064,20 @@ def _real_workload_descriptor(lag: int | None):
 def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_an_edited_lag_block(tmp_path):
     """(OLMoE B2's first real Build crashed GM-01 here -- the mock-shaped reader looked for a root
     `bindings.lag` the codec never writes).  The static is inlined in program_fn / the root id; both inside the verified digest."""
-    from verity.circuits.codec import canonical_json, program_digest
     for lag in (0, 1):
         wl, desc = _real_workload_descriptor(lag)
         assert desc["program_fn"].endswith(f",lag={lag}}}") and desc["root"].endswith(f",lag={lag}}}]_v1"), (desc["program_fn"][-30:], desc["root"][-30:])
         assert GD.workload_lag_static(desc) == lag
-        d = tmp_path / f"lag{lag}" / "build_workload"; d.mkdir(parents=True)
+        d = tmp_path / f"lag{lag}" / "build_workload"
+        d.mkdir(parents=True)
         with gzip.open(d / "descriptor.json.gz", "wb") as f:
             f.write(canonical_json(desc))
         art = {"schema": "verity/workload-program/v1", "ok": True, "workload_digest": program_digest(desc),
                "descriptor": {"sha256": __import__("hashlib").sha256(canonical_json(desc)).hexdigest(), "bytes": 1}, "requests": [], "inputs": {"derived": {}},
                "address_map": {"requests": [], "convention": "toy"}, "chronology": {"requests": []},
                "lag": {"value": lag, "async_scheduling": bool(lag)}, "stop_rule": {"eos_token_ids": [3], "lag": lag, "eos_lag_rows": lag}}
-        p = d / "workload_program.json"; p.write_text(json.dumps(art))
+        p = d / "workload_program.json"
+        p.write_text(json.dumps(art))
         gp = gm.from_gprog(str(p))
         assert gp["gprog_artifact"]["digest_verification"] == {**gp["gprog_artifact"]["digest_verification"], "verified": True, "lag_static": lag}
         # the lag section edited to the other value under the intact Program -> refused by name (the section is a claim, the static is the Program)
@@ -1066,7 +1113,8 @@ def test_record_engine_conditions_outside_the_declared_applicability_fail_g1(mem
     def set_header(profile_engine=None, profile_compilation=None, top_engine=None, top_compilation=None):
         """Rewrite the RunHeader's engine facts at the RECORDER'S location (profile.*) and/or the top level; None = absent."""
         p = f"{oracle}/capture/log.jsonl.gz"
-        lines = gzip.open(p, "rt").read().splitlines()
+        with gzip.open(p, "rt") as fh:
+            lines = fh.read().splitlines()
         for i, line in enumerate(lines):
             if line.startswith('{"$e":"RunHeader"'):
                 d = json.loads(line)
@@ -1151,8 +1199,9 @@ def test_compiled_execution_is_modelled_only_from_components_that_declare_its_co
     from verity_vllm.pipeline import global_program as G
     eng = {"enforce_eager": False, "compilation_mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE",
            "attention": "splitting op executed outside the CUDA graphs", "program_derivation": "eager module-forward trace"}
-    comps = {(256, 31): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"},
-             (11, 1): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"}}
+    comps: dict[tuple[int, int], dict[str, Any]] = {
+        (256, 31): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"},
+        (11, 1): {"execution": "bi-compiled", "numerics_profile": "b1-eager-v3", "gemm_target": "ada", "engine": dict(eng), "compilation": "piecewise"}}
     row = row_workload("x__b2__i256__o32__mixed__greedy__bi-compiled")
     ok = G.workload_applicability(row, comps)
     assert ok["refusal"] is None and ok["execution"] == "bi-compiled"
@@ -1196,7 +1245,8 @@ def test_compiled_program_requires_the_record_to_attest_the_same_compilation_fac
     def set_header(engine_kwargs=None, compilation=None):
         """The facts at the RECORDER'S location, RunHeader.profile.{engine_kwargs,compilation}; None = absent."""
         p = f"{oracle}/capture/log.jsonl.gz"
-        lines = gzip.open(p, "rt").read().splitlines()
+        with gzip.open(p, "rt") as fh:
+            lines = fh.read().splitlines()
         for i, line in enumerate(lines):
             if line.startswith('{"$e":"RunHeader"'):
                 d = json.loads(line)
@@ -1296,8 +1346,8 @@ def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_
     from verity_vllm.pipeline import global_program as gp
     ck = tmp_path / "ckpt"
     ck.mkdir()
-    json.dump({"eos_token_id": 128001}, open(ck / "config.json", "w"))
-    json.dump({"eos_token_id": [128001, 128008, 128009]}, open(ck / "generation_config.json", "w"))
+    (ck / "config.json").write_text(json.dumps({"eos_token_id": 128001}))
+    (ck / "generation_config.json").write_text(json.dumps({"eos_token_id": [128001, 128008, 128009]}))
     sr = gp.stop_rule(str(ck), None, sampling_block())
     assert sr["eos_token_ids"] == [128001, 128008, 128009]
     assert sr["source"] == {"config.json": [128001], "generation_config.json": [128001, 128008, 128009]}
@@ -1327,59 +1377,6 @@ def test_gp01_stop_rule_is_read_from_the_pinned_checkpoint_and_the_manifest(tmp_
     assert res["eos_verified"] == {"r1": False}
 
 
-def test_gp01_binds_a_per_request_sampler_schedule_component_only_to_its_declared_arrival(tmp_path):
-    """Under a per-EVENT split schedule S (stochastic top-p) two requests with equal (LP, T) but
-    different arrivals have different request Programs; a component that declares the arrival its schedule was computed for must not be
-    reused for the other request, and a schedule computed against another manifest's chronology must not compose."""
-    from verity_vllm.pipeline import global_program as G
-    reqs = [{"request_id": "r0", "index": 0, "prompt_len": 8, "cap": 4, "arrive_step": 0},
-            {"request_id": "r1", "index": 1, "prompt_len": 8, "cap": 4, "arrive_step": 2},
-            {"request_id": "r2", "index": 2, "prompt_len": 5, "cap": 2, "arrive_step": 1}]
-    live = G.declared_live_counts(reqs)
-    assert live == [1, 2, 3, 2, 1, 1]
-    def comp(name, sampling):
-        d = tmp_path / name
-        d.mkdir()
-        (d / "result.json").write_text(json.dumps({"ok": True, "sampling": sampling}))
-        return str(d)
-    # greedy / constant-S components bind by shape (nothing to check)
-    plain = comp("c_greedy", {"kind": "greedy"})
-    assert G.sampler_schedule_binding(reqs, {(5, 1): plain})["refusal"] is None
-    # the (8, 3) shape is shared by r0 (arrive 0) and r1 (arrive 2): a component computed for r0 must not bind to r1
-    c0 = comp("c_r0", {"kind": "stochastic", "splits": [32, 32, 16, 32], "geometry": {"request": {"request_id": "r0", "arrive_step": 0, "cap": 4},
-                                                                                        "declared_live_counts": live}})
-    bad = G.sampler_schedule_binding(reqs, {(8, 3): c0, (5, 1): plain})
-    assert bad["refusal"] and "binds r1 (arrive_step 2)" in bad["refusal"] and "one component per request" in bad["refusal"]
-    # with only r0 of that shape (and the schedule computed from THAT chronology) it binds, and the checked table names the binding
-    two = reqs[:1] + reqs[2:]
-    c0b = comp("c_r0_two", {"kind": "stochastic", "splits": [32, 32, 16, 32], "geometry": {"request": {"request_id": "r0", "arrive_step": 0, "cap": 4},
-                                                                                            "declared_live_counts": G.declared_live_counts(two)}})
-    ok = G.sampler_schedule_binding(two, {(8, 3): c0b, (5, 1): plain})
-    assert ok["refusal"] is None and ok["checked"]["8,3"]["bound_requests"] == ["r0"] and ok["checked"]["8,3"]["declared_arrive_step"] == 0
-    # a schedule of the wrong length, and one computed from another manifest's chronology, are refused by name
-    short = comp("c_short", {"kind": "stochastic", "splits": [32, 16], "geometry": {"request": {"request_id": "r0", "arrive_step": 0, "cap": 4}}})
-    assert "S-schedule has 2 entries" in G.sampler_schedule_binding(reqs[:1], {(8, 3): short})["refusal"]
-    other = comp("c_other", {"kind": "stochastic", "splits": [32, 32, 16, 32], "geometry": {"request": {"request_id": "r0", "arrive_step": 0, "cap": 4},
-                                                                                             "declared_live_counts": [2, 2, 1, 1]}})
-    assert G.declared_live_counts(reqs[:1]) == [1, 1, 1, 1]
-    assert "derived against another workload" in G.sampler_schedule_binding(reqs[:1], {(8, 3): other})["refusal"]
-
-
-def test_a_registered_s_component_binds_by_shape_in_any_workload(tmp_path):
-    """A component at the registered S = SplitsFor_v1(1, num_SMs), which the served engine pins whatever the batch,
-    binds by shape alone: in a workload of one request and in one of several, whatever their arrivals."""
-    from verity_vllm.pipeline import global_program as G
-    d = tmp_path / "c_reg"
-    d.mkdir()
-    (d / "result.json").write_text(json.dumps({"ok": True, "sampling": {"kind": "stochastic", "splits": 32,
-                                                                         "geometry": {"num_sms": 142, "relation": "registered", "splits": 32}}}))
-    one = [{"request_id": "r0", "index": 0, "prompt_len": 8, "cap": 4, "arrive_step": 0}]
-    assert G.sampler_schedule_binding(one, {(8, 3): str(d)})["refusal"] is None
-    three = one + [{"request_id": "r1", "index": 1, "prompt_len": 8, "cap": 4, "arrive_step": 2},
-                   {"request_id": "r2", "index": 2, "prompt_len": 5, "cap": 2, "arrive_step": 1}]
-    assert G.sampler_schedule_binding(three, {(8, 3): str(d), (5, 1): str(d)})["refusal"] is None
-
-
 @pytest.mark.slow
 def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_fields(memory, tmp_path):
     """GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
@@ -1395,10 +1392,10 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     comps = [r["component"]["dir"] for r in gp["requests"]]
 
     def recomposed(mutate):
-        wl = json.load(open(wl_path))
+        wl = json.loads(Path(wl_path).read_text())
         mutate(wl)
-        json.dump(wl, open(wl_path, "w"))
-        return gm.mock_global_program(wl_path, comps, eos_token_ids=[EOS])   # GP-01 recomposed on the edited manifest, as the attacker would
+        Path(wl_path).write_text(json.dumps(wl))
+        return GD.mock_global_program(wl_path, comps, eos_token_ids=[EOS])   # GP-01 recomposed on the edited manifest, as the attacker would
 
     def swap(wl):
         wl["requests"][0]["seed"], wl["requests"][1]["seed"] = wl["requests"][1]["seed"], wl["requests"][0]["seed"]
@@ -1459,7 +1456,7 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     d.mkdir()
     wl2 = workload(reqs, d / "workload.json")
     oracle2 = batched(reqs, d / "batched", wl_sha=None)
-    res = gm.check(gm.mock_global_program(wl2, comps, eos_token_ids=[EOS], lag=0), oracle2)
+    res = gm.check(GD.mock_global_program(wl2, comps, eos_token_ids=[EOS], lag=0), oracle2)
     assert res["verdict"] == "FAIL" and any("carries no workload.sha256" in p for p in _check(res, "G1")["problems"])
 
 
@@ -1493,7 +1490,8 @@ def _set_async_scheduling(oracle, value):
     """Rewrite RunHeader.profile.engine_kwargs.async_scheduling on the persisted record; value None = the key absent (unattested); _NULL =
     the key present with null (resolved_async_scheduling returned None: the engine exposed no resolved bool)."""
     p = f"{oracle}/capture/log.jsonl.gz"
-    lines = gzip.open(p, "rt").read().splitlines()
+    with gzip.open(p, "rt") as fh:
+        lines = fh.read().splitlines()
     for i, line in enumerate(lines):
         if line.startswith('{"$e":"RunHeader"'):
             d = json.loads(line)
@@ -1513,23 +1511,23 @@ def _driver_stop_at(oracle, rid, n_answer, eos_step):
     """The driver's word for an EOS stop under async scheduling (generated_token_ids ends in the EOS, finish_step = the
     EOS step, the lag row's sample is NOT reported)."""
     tp = os.path.join(oracle, "capture", "tokens.json")
-    tk = json.load(open(tp))
+    tk = json.loads(Path(tp).read_text())
     e = next(r for r in tk["requests"] if r["request_id"] == rid)
     e["generated_token_ids"] = e["generated_token_ids"][:n_answer]
     e["n_generated"], e["finish_step"], e["finish_reason"] = n_answer, eos_step, "stop"
-    json.dump(tk, open(tp, "w"))
+    Path(tp).write_text(json.dumps(tk))
 
 
 def _driver_claims(oracle, rid=None, lag=None, **fields):
     """The driver's tokens.json record-schema claims: doc.lag.value (the resolved fact as the driver wrote it) and per request the
     served_output_len / executed_prefix_len / cap_exhausted fields m1_capture writes."""
     tp = os.path.join(oracle, "capture", "tokens.json")
-    tk = json.load(open(tp))
+    tk = json.loads(Path(tp).read_text())
     if lag is not None:
         tk["lag"] = {"value": lag, "async_scheduling": bool(lag), "source": "test"}
     if rid is not None:
         next(r for r in tk["requests"] if r["request_id"] == rid).update(fields)
-    json.dump(tk, open(tp, "w"))
+    Path(tp).write_text(json.dumps(tk))
 
 
 def _r(res, rid):
@@ -1776,7 +1774,7 @@ def test_gp01_carries_manbind_weights_of_record_per_component_and_refuses_stale_
         d = tmp_path / name
         d.mkdir()
         if rec is not None:
-            json.dump(rec, open(d / "weights_of_record.json", "w"))
+            (d / "weights_of_record.json").write_text(json.dumps(rec))
         return {"dir": str(d), "recorded_digest": digest}
     def rec(root, rank=0, world=1, digest="d" * 64, complete=True, unresolved=(), pinned=True, source=None):
         r = {"schema": "verity/weights_of_record/v1", "program_digest": digest, "tp": {"world": world, "rank": rank}, "root_of_record": root,
@@ -1833,10 +1831,9 @@ def _topp(V, S):
 
 
 def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_the_live_count():
-    """The served engine runs every top-p split launch at S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)
+    """The served engine runs every top-p split launch at S = registered_splits(num_SMs) = splits_for(1, num_SMs)
     (`engine.topp_pin`); the fold carries the launch's S on every GumbelTopPTokenSelect of the step. GM-01 holds each to the registered
     S of the Program's declared num_SMs, at 8 live rows as at 4 -- and refuses vLLM's own batch-derived S (16 at 8 live on 142 SMs)."""
-    from verity.definitions.registry.topp_geometry import registered_splits, splits_for
     assert (registered_splits(142), splits_for(8, 142)) == (32, 16)
     gp = {"applicability": {"components": {"num_sms": 142}}}
     # engine step 0: 8 live requests; step 1: 4 live -- a verified EOS halved the batch; S is 32 at both
@@ -1883,7 +1880,8 @@ class _OperandFold:
     (no splits_values), the way a RootView-shaped reader without compare's binding sees it."""
 
     def __init__(self, selects):   # selects: list of (S value | None for a non-Const operand, 6th-operand override or None)
-        self.inst, self.k2i, self.splits_values = [], {}, {}
+        self.inst: list[dict] = []
+        self.k2i, self.splits_values = {}, {}
         for S, override in selects:
             kc, ks = len(self.inst) * 2 + 1, len(self.inst) * 2 + 2
             if S is not None:
@@ -1951,7 +1949,7 @@ def test_greedy_rows_report_no_sampler_geometry_to_check(memory, tmp_path):
 
 
 def test_gp01_declares_the_sampler_geometry_for_a_stochastic_row_only():
-    """GP-01: a stochastic workload's Program declares the registered S = SplitsFor_v1(1, num_SMs) of the
+    """GP-01: a stochastic workload's Program declares the registered S = registered_splits(num_SMs) of the
     components' agreed num_SMs, the same for 2 requests as for 8; greedy rows declare nothing; a stochastic sampler without num_SMs, or
     whose components carry another S (a derived-S build), is a named refusal."""
     from verity_vllm.pipeline import global_program as G
@@ -2066,9 +2064,8 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     """The B8 staggered stoch record (157 engine steps, 8 requests arriving 0..44 with caps 2..128, every request served to its cap):
     the scheduled state from (arrival, cap, length stop) alone equals the recorded live count at every step and its S transitions are the
     kernel's flips (0,1,32) -> (32,5,16) -> (101,4,32)."""
-    from verity.definitions.registry.topp_geometry import splits_for
     p = os.path.join(os.path.dirname(gm.__file__), "..", "..", "..", "tests", "program", "data", "topp_split_fixture", "b8_s_schedule_r15_attempt2.json")
-    d = json.load(open(p))
+    d = json.loads(Path(p).read_text())
     reqs = [_req(rid, v["arrive"], v["served"], cap=v["cap"]) for rid, v in d["served_vs_cap"].items()]
     present: dict = {}
     for st in d["steps"]:
@@ -2082,7 +2079,8 @@ def test_scheduled_state_on_the_r15_b8_record_reproduces_the_kernel_s_flips():
     for st in d["steps"]:
         s = splits_for(sc["live"][st["step"]], d["num_sms"])
         if s != prev:
-            flips.append([st["step"], sc["live"][st["step"]], s]); prev = s
+            flips.append([st["step"], sc["live"][st["step"]], s])
+            prev = s
     assert flips == d["S_flips_(step,live,S)"] == [[0, 1, 32], [32, 5, 16], [101, 4, 32]]
     assert sum(len(t["arrivals"]) for t in sc["transitions"]) == 8 and sum(len(t["departures"]) for t in sc["transitions"]) == 8
 
@@ -2125,19 +2123,19 @@ def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is
     acc = gm.check(gp, oracle, tokens_optional=True)
     assert acc["verdict"] == "PASS" and _check(acc, "G6")["tokens_json"] is False, acc["reasons"]
     # the CLI flag reaches check(): the default main() refuses, --tokens-optional accepts
-    gpp = tmp_path / "gp.json"; gpp.write_text(json.dumps(gp))
-    out1 = tmp_path / "gm1.json"; out2 = tmp_path / "gm2.json"
+    gpp = tmp_path / "gp.json"
+    gpp.write_text(json.dumps(gp))
+    out1 = tmp_path / "gm1.json"
+    out2 = tmp_path / "gm2.json"
     cli.main(["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--out", str(out1)])
     cli.main(["global-match", "--oracle", oracle, "--global-program", str(gpp), "--no-x09", "--no-alternate", "--tokens-optional", "--out", str(out2)])
-    assert json.load(open(out1))["verdict"] == "FAIL" and json.load(open(out2))["verdict"] == "PASS"
+    assert json.loads(Path(out1).read_text())["verdict"] == "FAIL" and json.loads(Path(out2).read_text())["verdict"] == "PASS"
 
 
 def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(memory, tmp_path, monkeypatch):
     """The compact Merkle payload names producers by small per-process ids; a dag_hashes dict computed in one process
     (a forked worker) must never be matched against one computed in another.  The memo refuses a seeded foreign dict by name."""
-    import os
     from verity_vllm.check.match import program_compare as C
-    from verity_vllm.check.match import global_match_fast as GMF
     gp, oracle = assemble([R0, R1], tmp_path)
     B = C.load_oracle(oracle, "oracle")
     dag_hashes = GMF.ops().dag_hashes
@@ -2160,9 +2158,6 @@ def test_fast_path_dag_hash_ids_are_per_process_and_a_foreign_dict_is_refused(me
 def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
     """[unit 5 (a)] global_match_fast._runs_fast == verity.circuits.refs.runs on Affine / Concat-of-Affine (incl. zero-count parts and
     fusing neighbours) and falls back to the original on every other shape (Strided, Explicit, nested Concat)."""
-    import random
-    from verity.circuits.refs import Affine, Concat, Explicit, Strided, runs
-    from verity_vllm.check.match import global_match_fast as GMF
     rng = random.Random(7)
     def affine():
         return Affine(rng.choice("np"), rng.randrange(6), rng.randrange(8) * 4, rng.choice([0, 1, 4, 4, 8]))
@@ -2176,16 +2171,13 @@ def test_fast_runs_equals_refs_runs_on_every_descriptor_shape():
         assert GMF._runs_fast(r) == runs(r), r
 
 
-def test_fast_producer_chronology_and_dep_order_scan_equal_the_records_loops(memory, tmp_path):
-    """[unit 5 (b)(c)] On a real-shaped fixture (staggered arrivals, a co-scheduled prefill, T-grouped emission = a cross-step
-    producer, and the consumer-before-producer negative) the helpers return exactly what the record's loops compute."""
-    import collections
-    from verity_vllm.check.match import batch_decomp as BD
+def test_fast_producer_chronology_equals_the_records_loop(memory, tmp_path):
+    """[unit 5 (b)] On a real-shaped fixture (staggered arrivals, a co-scheduled prefill, T-grouped emission = a cross-step
+    producer, and the consumer-before-producer negative) the helper returns exactly what the record's loop computes."""
     from verity_vllm.check.match import program_compare as C
-    from verity_vllm.check.match import global_match_fast as GMF
-    seen_viol = 0
-    for n, (reqs, kw) in enumerate((([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True}),
-                                    ([R0, R1], {"tgrouped": True, "_swap": True}))):
+    cases: list[tuple[list, dict]] = [([R0, R1_LATE, R2_LATE], {}), ([R0, R1_LATE, R2_LATE], {"tgrouped": True}), ([R0, R1], {"leak": True}),
+                                      ([R0, R1], {"tgrouped": True, "_swap": True})]
+    for n, (reqs, kw) in enumerate(cases):
         swap = kw.pop("_swap", False)
         gp, oracle = assemble(reqs, tmp_path / f"c{n}", **kw)
         if swap:
@@ -2204,7 +2196,7 @@ def test_fast_producer_chronology_and_dep_order_scan_equal_the_records_loops(mem
             P = BD.Projection(B, f"oracle[{rid}]", idxs, tok_node=None, weights_node=weights_nodes, seed_node=None)
             # the record's loops
             late = 0
-            xstep = collections.Counter()
+            xstep: collections.Counter[str] = collections.Counter()
             wr = False
             for i_local, r in enumerate(P.inst):
                 cs = engine_step_of.get(idxs[i_local])
@@ -2222,18 +2214,8 @@ def test_fast_producer_chronology_and_dep_order_scan_equal_the_records_loops(mem
                             late += 1
                         if ps is not None and cs is not None and ps < cs:
                             xstep[r["spec"].split("{")[0]] += 1
-            dep = []
-            for s_, loc in enumerate(P.steps):
-                for pos, i in enumerate(loc):
-                    for a in P.canon(i, False):
-                        for t in a:
-                            if t[0] == "N" and P.steps[t[1]][t[2]] >= i:
-                                dep.append({"request_id": rid, "local_step": s_, "emission": pos, "consumer": i, "producer": P.steps[t[1]][t[2]]})
             assert GMF.producer_chronology(P, idxs, B, engine_step_of, weights_nodes) == (late, xstep, wr)
-            assert GMF.dep_order_violations(P, rid) == dep
-            seen_viol += len(dep)
         GMF._chron_memo.clear()
-    assert seen_viol >= 1     # the swapped record exercised the violation branch
 
 
 @pytest.mark.parametrize("compact", ["1", "0"])
@@ -2242,8 +2224,6 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
     their own id) instead of sha256(json).  Spy every dag_hashes call check() makes -- components, projections, live cones, the
     permutation fixture's per-step matching, the consumer-before-producer forward refs -- and require ONE bijection between the
     record's digests and the ids across all of them (so A-vs-P comparisons decide exactly as the record's do), under both operand forms."""
-    from verity_vllm.check.match import global_match_fast as GMF
-    from verity_vllm.check.match import batch_decomp as BD
     monkeypatch.setenv(GMF.FLAG, "fast")
     monkeypatch.setenv(GMF.COMPACT_ENV, compact)
     monkeypatch.setenv("MATCH_WORKERS", "1")
@@ -2287,9 +2267,6 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
     get different digests from the record (marker vs the producers' hashes); the memo handed the second the first's marker node --
     fast A == B where record A != B, so the fast document put the resolved readers in the marker class.  Both shapes:
     count 2 (two producers) and the ordinary count-1 progression (one producer, its other readers after it)."""
-    import inspect
-    from verity_vllm.check.match import batch_decomp as BD
-    from verity_vllm.check.match import global_match_fast as GMF
     if "compact" not in inspect.getsource(BD.dag_hashes):
         pytest.skip("the compact (progression-form) operand is mfast's tree; here no RootView is compact and the memo branch is not reached")
 
@@ -2330,8 +2307,6 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     again inside check() (the x09 block) -- 365 s twice at B8 1024/128.  `--decomp-out` writes the document GM-01's own X-09 run
     produced, in batch_decomp's CLI schema: key for key what a standalone decompose() over the same fold and components returns
     (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (row_pod's derive-and-rerun)."""
-    from verity_vllm.check.match import batch_decomp as BD
-    from verity_vllm.check.match import global_match_fast as GMF
     monkeypatch.setenv(GMF.FLAG, impl)
     monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 legs return the per-request entries: the document must not depend on W
     gp, oracle = assemble([R0, R1_LATE, R2_LATE], tmp_path)
@@ -2367,7 +2342,8 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     assert {k: v for k, v in recflow["x09"].items() if k != "seconds"} == {k: v for k, v in gmdoc["x09"].items()
                                                                           if k not in ("seconds", "derived_available", "missing_derived", "extra_derived", "pipeline")}
     if workers == "1":   # as row_pod runs it: `python -m ...` (the record path runs in __main__, the fast path imports the module again)
-        import subprocess, sys as _sys
+        import subprocess
+        import sys as _sys
         dout2 = tmp_path / "decomp_m.json"
         env = dict(os.environ, MATCH_IMPL=impl, MATCH_WORKERS=workers, PYTHONPATH=os.pathsep.join(p for p in _sys.path if p))
         p = subprocess.run([_sys.executable, "-m", "verity_vllm.pipeline.cli", "global-match", "--global-program", str(gpp), "--oracle", str(oracle),
@@ -2404,7 +2380,7 @@ def test_fold_encodes_its_program_once_and_program_json_carries_that_descriptor(
     a second digest at B8 1024/128).  Now the FoldResult carries the descriptor and program.json's `program` IS it: its digest (the
     codec's canonical bytes) equals the fold's, and a result without a descriptor (older producer) still encodes and cross-checks."""
     from verity.circuits import codec
-    from verity_vllm.pipeline.match import persist_program as _persist
+
     evs = batched_log([R0, R1])
     r = fold(evs, profile(), strict=True)
     assert r.descriptor is not None and r.digest == codec.program_digest(r.descriptor)

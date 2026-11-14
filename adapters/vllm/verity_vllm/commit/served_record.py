@@ -38,7 +38,11 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-SCHEMA = "verity-vllm/served-record/v1"
+from verity_vllm.commit.committer.plan_cache import PlanMetas
+
+__all__ = ["BlockValues", "PORT_NAMES", "SamplerInputsSource", "StepInputPort", "base_id", "committed_ints",
+           "committed_raw", "ints_of", "served_rows", "window_commit"]
+
 #: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
 PORT_NAMES = ("step.input/ids", "step.input/positions")
 #: The step's input ids, in the order they are read: the step-input port's, then the compiled path's name, then the eager
@@ -214,9 +218,11 @@ def ints_of(raw: bytes, dtype: str) -> list[int]:
 
 def committed_raw(committer: Any, step: int, name: str) -> tuple[bytes, str] | None:
     """`committed_ints`' bytes of ``name`` at ``step`` and its dtype. A plan's metas (`plan_cache.PlanMetas`) are read from its
-    columns, so no `TensorMeta` is built for the read."""
-    from verity_vllm.commit.committer.plan_cache import PlanMetas
-
+    columns, so no `TensorMeta` is built for the read. A window whose draw-gated release dropped the bytes answers from what was
+    read just before it (``read_before_release``, `serve_release.Draws.release`), which no bundle holds."""
+    before = getattr(committer, "read_before_release", None)
+    if before is not None and (step, name) in before:
+        return before[step, name]
     metas = committer._layouts.get(step, ())
     if isinstance(metas, PlanMetas):
         if name not in metas.names:
@@ -389,8 +395,6 @@ class BlockValues:
 
     def absorb(self, committer: Any, window: int) -> dict[str, Any]:
         """The window just finalized by ``committer`` into the requests' records; returns the window's readback record."""
-        from verity_vllm.commit.committer.plan_cache import PlanMetas
-
         layouts = getattr(committer, "_layouts", {}) or {}
         names = {n for metas in layouts.values() for n in (metas.names if isinstance(metas, PlanMetas) else (m.name for m in metas))}
         ids_name = next((n for n in IDS_NAMES if n in names), None)
@@ -411,8 +415,8 @@ class BlockValues:
             sampled = committed_ints(committer, s, SAMPLED)
             seeds = committed_ints(committer, s, SAMPLER_INPUTS[0])
             pos = committed_ints(committer, s, SAMPLER_INPUTS[1])
-            gone = [n for n, v in ((ids_name, ids), (SAMPLED, sampled), *zip(SAMPLER_INPUTS, (seeds, pos))) if v is None]
-            if gone:
+            if ids is None or sampled is None or seeds is None or pos is None:
+                gone = [n for n, v in ((ids_name, ids), (SAMPLED, sampled), *zip(SAMPLER_INPUTS, (seeds, pos))) if v is None]
                 errors.append(f"step {s}: nothing committed under {gone}")
                 continue
             if not (len(sampled) == len(seeds) == len(pos) == len(rows)) or rows[-1].hi > len(ids):
@@ -432,10 +436,10 @@ class BlockValues:
                 rec.add(window, s, row, ids[row.lo:row.hi], sampled[i], seeds[i])
                 if rid not in held:
                     held.append(rid)
-        rec = {"window": window, "ids_name": ids_name, "steps": len(steps), "requests": held, "readback_errors": errors[:10],
-               "readback_errors_n": len(errors), "passed": not errors}
-        self.windows.append(rec)
-        return rec
+        done = {"window": window, "ids_name": ids_name, "steps": len(steps), "requests": held, "readback_errors": errors[:10],
+                "readback_errors_n": len(errors), "passed": not errors}
+        self.windows.append(done)
+        return done
 
     def check(self, request: str, prompt_ids: Sequence[int], streamed_ids: Sequence[int], *, seed: int | None,
               finish: Mapping[str, Any] | None = None, decode: Callable[[Sequence[int]], str] | None = None) -> dict[str, Any]:
@@ -491,8 +495,10 @@ def window_commit(rc: Any) -> dict[str, Any]:
     """The Commit's own verdict on a finalized window (`RunCommitment`): a run root, no committer errors, and the identity
     check not failed."""
     extra = getattr(rc, "extra", None) or {}
-    ident = extra.get("identity_check") or {}
-    errors = list(extra.get("errors") or [])
+    ident, recorded = extra.get("identity_check"), extra.get("errors")
+    if not ident:
+        ident = {}   # the committer ran no identity check on the window: none failed, and there is nothing of it to report
+    errors = list(recorded) if recorded else []   # a committer that recorded no error leaves the list out
     root = bytes(getattr(rc, "run_root", b"") or b"")
     return {"passed": bool(root) and not errors and int(extra.get("errors_n") or 0) == 0 and ident.get("ok") is not False,
             "run_root": root.hex(), "steps": len(getattr(rc, "steps", ()) or ()), "errors": errors[:10],

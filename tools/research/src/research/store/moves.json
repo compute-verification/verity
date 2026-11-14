@@ -2183,6 +2183,46 @@
         "Security/": "security/",
         "tools/verity/lean/tests/fixtures/unread/Security/": "tools/verity/lean/tests/fixtures/unread/security/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/machine_model/": "benchmarks/machine_model/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/specs/": "benchmarks/harness/specs/"
+      }
+    },
+    {
+      "paths": {
+        "verity/configuration/config/": "tools/config/"
+      }
+    },
+    {
+      "paths": {
+        "verity/settings.py": "tools/config/verity_config/verity_settings.py"
+      }
+    },
+    {
+      "paths": {
+        "fixtures/bench-instances/": "benchmarks/numerical/bench-instances/"
+      }
+    },
+    {
+      "paths": {
+        "verity/configuration/deploy/party.py": "verity/party.py",
+        "verity/configuration/deploy/manifest.py": "verity/protocol.py",
+        "verity/configuration/deploy/config.py": "verity/config.py",
+        "verity/configuration/deploy/runtime.py": "verity/runtime/runner.py",
+        "verity/configuration/deploy/": "verity/runtime/",
+        "verity/configuration/wire/__init__.py": "verity/channel.py",
+        "verity/configuration/wire/handshake.py": "verity/runtime/handshake.py",
+        "verity/configuration/wire/tests/test_wire.py": "verity/tests/tests/test_channel.py",
+        "verity/hardware/site/__init__.py": "verity/device.py",
+        "verity/hardware/site/pyproject.toml": "verity/tests/pyproject.toml",
+        "verity/hardware/site/tests/test_site.py": "verity/tests/tests/test_device.py"
+      }
     }
   ]
 }

@@ -47,13 +47,13 @@ EXEMPT = {
         "probed",
     ("adapters/vllm/tests/program/test_artifact_applicability_independent.py", "verity_vllm.pipeline.build:check_applicability"):
         "probed",
-    # a conformance row's record of how a NaN scan was made; the module has since gone
-    ("adapters/vllm/verity_vllm/program/frontend/conformance.py", "verity_vllm.check.store_nan_scan"): "history",
     # the tool specs the preflight tests feed it, which name no tool on purpose
     ("tools/research/tests/test_remote_preflight.py", "tools.fake.tool:FAKE"): "a stand-in",
     ("tools/research/tests/test_remote_preflight.py", "tools.other.tool:X"): "a stand-in",
     # a tool declaration the move guards find in a synthetic tree, under its pre-move or post-move path
     ("tools/research/tests/test_store_prov.py", "tools.agree.tool:AGREE"): "a stand-in",
+    # a file of the small tree the import order's checks are held on, which names a module of that tree
+    ("tests/test_boundaries.py", "verity.definitions.ops:run"): "a stand-in",
     # the shell line the one-CLI lint must pass over: a `-m` in a comment
     ("adapters/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
     # the vLLM row tools research's registry names: research_tools computes them from `research` on first read (its

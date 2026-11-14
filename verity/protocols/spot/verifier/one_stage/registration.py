@@ -10,7 +10,7 @@
 
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
 * **Rule.** Everything a sampled proof block's statement can depend on is fixed by the record, or by objects the verifier already
-  holds, before the sample. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
+  holds, before the sample. The verifier checks R1-R8 (`check`) against its own copies, writes a `receipt` with its own
   clock, and only then samples.
 * **The checks** (`check`): the record has exactly these keys, and
   - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
@@ -26,7 +26,17 @@
     window, for a bound verifier the window names its stream and prover (Binding), the window names the seed salt
     the verifier read from its challenger, or none when it read none (Seed salt), and it names the reset serving
     chose for its pool, its week and whether the week's reset is spent, as the verifier holds them, at most one reset
-    a week, or none of them for a verifier with no pool (Pool chain).
+    a week, or none of them for a verifier with no pool (Pool chain);
+  - R8, under a template query: each run Input node's leaves, other than a parameter's the verifier expects registered,
+    are read by one proof block alone, never broadcast to a batch or read by two (`partition.shared_inputs`,
+    `R8-shared-input`), so a served port reaches a proof block only as
+    its own leaves and a value several read comes as a registered value; and the verdict publishes the query's fan-out F
+    on the verifier's program (`partition.fanout`, `Verdict.fanout`), the N at which the capped two-stage form charges a
+    replay block (`plancheck.two`'s `fanout`). A run Input a parameter the verifier names `tied` holds is let through:
+    the network period check ties its rows to the registrations that computed them, which this check doesn't, so the
+    verdict publishes each tied name it let through (`Verdict.rests_on_period_check`), and with any its acceptance is
+    none on its own; it refuses a tied name that isn't a run Input of the program's own, or that it expects registered
+    or holds (`R8-tied`).
 * **Receipt**: `{"format": "verity/registration-receipt/v1", "registration": <digest>, "verifier", "received": "<UTC,
   %Y-%m-%dT%H:%M:%SZ>"}`, and the sample names it.
 * **The public file** (`matches_public`): the verifier holds its own (scheme, roots, their domains, its instance count)
@@ -59,8 +69,10 @@
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
   registration log (`verity/registration/declaration/v1`, `verity.hardware.registration`). The verifier passes
-  the window's day, by its index among the monitoring period's days on its own clock, and the declarations of the log
-  it holds when it samples (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
+  the window's day and the declarations it holds when it samples (its view's `declarations`: `{"day", "program",
+  "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
+  before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a
+  window that opens before UTC midnight and closes after is a window of its open's day. R2 refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
   `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
   (`Spot.Registration.declaredCode`), which `verifier.check` runs beside it.
@@ -127,7 +139,7 @@ from verity.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import draw as D, partition as P, registered as G
+from . import draw as D, link_points as LP, partition as P, registered as G
 from .verdict import Verdict, _Collect
 
 FORMAT = "verity/registration/v1"
@@ -143,6 +155,10 @@ POOL_RESET = "pool_reset"
 POOL_WEEK = "pool_week"
 #: the window's field naming whether its week's one reset is spent at it (Pool chain)
 POOL_SPENT = "pool_spent"
+TIED_WHY = ("a tied value is a run Input of the program whose rows a later check ties to the registrations that computed "
+            "them: a parameter of the program, neither registered nor held, whose gates are one interval of run Input nodes")
+SHARED_WHY = ("a run Input node whose leaves two proof blocks read, or a batch broadcasts, could hold rows one of them "
+              "computed, which the fan-out can't see: give each proof block its own leaves, or register the value")
 _KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
          "anchors", "window", "previous"}
 _ROOT_KEYS = {"port", "root", "leaves", "domain"}
@@ -218,10 +234,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-          held: Sequence[str] | None = None, day: int | None = None,
+          held: Sequence[str] | None = None, members: Sequence[LP.Member] = (), day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
-          pool: Mapping[str, Any] | None = None, history: Mapping[str, Any] | None = None) -> Verdict:
-    """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
+          pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
+          history: Mapping[str, Any] | None = None) -> Verdict:
+    """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
@@ -258,7 +275,18 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     table ``H`` (`history.resolve`).  History tables it can't read or hold to their roots raise `HistoryRefused`, which
     the verifier reports as `HISTORY` where its Lean refuses them too.  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
-    reads them."""
+    reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
+    is a parameter's that `registered` names (`partition.shared_inputs`) or one of `tied`'s, and the verdict carries the
+    fan-out F of `query` on `program` (`partition.fanout`), which it publishes whatever its codes; under any other query it
+    carries none.  `tied`: parameters, run Inputs, whose rows a later check ties to the registrations that computed them
+    (the scan's slot entries, which the network period check ties to the blocks that registered them), which R8 lets
+    through though several proof blocks read them, on that later check alone: the verdict publishes the ones it let
+    through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
+    or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
+    form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
+    refuses the record when a member's fewest and most sampled units give different link points
+    (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
+    sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
@@ -285,10 +313,11 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     window, fixed = _window(window_root, held, registered or {}, sup, pins, outs)
     salt = _seed_salt(seed_salt, window)
     refuse_unwindowed(unwindowed(program, registered or {}, formats, window, fixed, log))
+    fan, shared, through, bad = _readers(program, query, registered or {}, held or (), tied or ())
     keys = _KEYS | {"registered"} if v2 else _KEYS
     if not isinstance(rec, Mapping) or set(rec) != keys:
         c.fail("keys", sorted(set(rec) ^ keys) if isinstance(rec, Mapping) else rec)
-        return c.verdict()
+        return c.verdict(fanout=fan, rests_on_period_check=through)
     # R1
     if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
@@ -380,7 +409,54 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         if pool is not None:
             _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
                                                 bound))
-    return c.verdict()
+    # R8
+    if bad:
+        c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
+    if shared:
+        c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
+    if members:
+        try:
+            refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
+        except (P.QueryRefused, ValueError) as e:
+            c.fail("link-points", str(e))
+        else:
+            if refused:
+                c.fail("link-points", {"members": refused})
+    return c.verdict(fanout=fan, rests_on_period_check=through)
+
+
+def _readers(program: Program, query: Mapping[str, Any], registered: Iterable[str], held: Iterable[str],
+             tied: Sequence[str]) -> tuple[int | None, list[int], tuple[str, ...], list[str]]:
+    """R8's reading of `program`: under a template query, its fan-out, the run Input nodes its proof blocks don't each
+    read alone (`partition.fanout`, `partition.shared_inputs`) outside the gates of the parameters the verifier expects
+    `registered` (registered values) and of the `tied` ones it may let through (`_tied`), and the tied names whose Input
+    holds such a node, which it let through; and, under any query, the tied names it can't let through. `(None, [], ())`
+    and those for any other query, or one that doesn't apply. A function of the program, query and verifier alone, so a
+    verdict publishes F and the tied names it let through whatever the record."""
+    registered = list(registered)
+    gates = _tied(program, tied, registered, held)
+    bad = [t for t, g in zip(tied, gates) if g is None]
+    if not P.is_template_query(query):
+        return None, [], (), bad
+    try:
+        fan, own = P.fanout(program, query), P.shared_inputs(program, query, G.held_gates(program, registered))
+    except P.QueryRefused:
+        return None, [], (), bad
+    through = tuple(t for t, g in zip(tied, gates) if g is not None and any(P.within(program, g, k) for k in own))
+    return fan, [k for k in own if not any(g is not None and P.within(program, g, k) for g in gates)], through, bad
+
+
+def _tied(program: Program, tied: Sequence[str], registered: Sequence[str], held: Iterable[str]) -> list[range | None]:
+    """Each of `tied`'s Input gates where R8 may let it through, else None: a parameter of the program that the verifier
+    neither expects registered nor holds, whose gates are one non-empty interval (`registered.held_gates`) of run Input
+    nodes (`partition.run_inputs`). A tied Input is never a registered value: R7 holds nothing of it. The Lean's
+    `Registration.tiedGate` is this."""
+    fixed = {*registered, *held}
+    out: list[range | None] = []
+    for t in tied:
+        g = None if t in fixed else next(iter(G.held_gates(program, [t])), None)
+        out.append(g if g is not None and P.run_inputs(program, g) else None)
+    return out
 
 
 def _window(window_root: str | None, held: Sequence[str] | None, registered: Mapping[str, int],

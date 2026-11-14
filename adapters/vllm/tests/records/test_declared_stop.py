@@ -19,14 +19,15 @@ import pytest
 from tests.check import test_global_match as T
 from tests.observe.test_fold_synthetic import memory  # noqa: F401 - fixture
 from verity_vllm.check.match import global_match as gm
+from verity_vllm.check.match.declaration import mock_global_program
 from verity_vllm.records.declared_stop import DeclaredStop, LagBlock, StopRule
 from verity_vllm.records.fields import MissingField, RecordError
 
 DATA = Path(__file__).parent / "data"
 REAL = DATA / "global_program.json"
 #: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
-#: with G6 on the parsed JSON before it read the record
-OUTCOMES_SHA256 = "1a920268eff23cacdd3b4b51bec598d9070633c029861bca65ebdbf202cfe75a"
+#: with G6 on the parsed JSON before it read the record; the sampler geometry's relation text is part of it
+OUTCOMES_SHA256 = "0e4e12fb1622c41795a1421aedfd247e88309ca574f890623f6a0031456fdd0f"
 REQUIRED = ("stop_rule.eos_token_ids", "lag.value")
 #: The global Program's two blocks as `pipeline.global_program` writes them (the real record's, with the toy's EOS id and the LAG to declare)
 GP01_SOURCE = {"generation_config.json": [T.EOS], "config.json": [T.EOS]}
@@ -54,9 +55,9 @@ def test_the_real_record_loads():
 
 def test_the_mock_programs_load(tmp_path):
     wl = T.workload([T.R0], tmp_path / "workload.json")
-    lagged = DeclaredStop.of(gm.mock_global_program(wl, [], eos_token_ids=[T.EOS], lag=1), "mock")
+    lagged = DeclaredStop.of(mock_global_program(wl, [], eos_token_ids=[T.EOS], lag=1), "mock")
     assert lagged.declared_lag == 1 and lagged.stop_rule.eos_token_ids == [T.EOS] and lagged.lag == LagBlock(1, "mock_global_program(lag=...)")
-    pre = DeclaredStop.of(gm.mock_global_program(wl, []), "mock")
+    pre = DeclaredStop.of(mock_global_program(wl, []), "mock")
     assert pre.lag is None and pre.declared_lag is None and pre.stop_rule == StopRule(None, None, None, None, None, None)
 
 

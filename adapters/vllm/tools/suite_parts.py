@@ -15,13 +15,13 @@ the suite's `testpaths` (`modules`) goes to exactly one part, longest first, eac
 (`parts`). A module's estimate is its seconds in `SECONDS` (measured; a module renamed since gets `DEFAULT_S`, which only
 unbalances the parts), so a stale table costs balance, never a test.
 
-`launch` starts each part as `research run --on auto` does for any suite run, with `--jobs` the CPUs the job holds:
-suites.py's default counts each process at its `TEST_PROCESS_GB` of 9 GB, which runs the suite in one process in a 16 GB job.
-Each part keeps its suites.py logs in its run's `out/logs`, whose `integrations_vllm.json` `--seconds` reads.
+`launch` starts each part as `research run --on auto` does for any suite run, with `--jobs` the CPUs the job holds.
+Each part keeps its suites.py logs in its run's `out/logs`, whose `adapters_vllm.json` `--seconds` reads.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -38,31 +38,31 @@ DEFAULT_PARTS = 8
 DEFAULT_S = 2.6
 #: each test module's seconds of test time, the modules over 20 s, from a run in 8 parts (each part's 4 workers on 4 CPUs);
 #: `--seconds REPORT...` prints the table from the suites.py reports of a full run or of every part of one (each part's
-#: `out/logs/integrations_vllm.json`)
+#: `out/logs/adapters_vllm.json`). One module over 20 s is left out and takes `DEFAULT_S`: the PoUB tests'
+#: `test_remote_session.py`, whose directory's name is a term the glossary retires, so this file does not spell its path
 SECONDS: dict[str, float] = {
-    "tests/protocol_options/test_pouw_h1_handoff.py": 481,
+    "tests/protocols/test_pouw_h1_handoff.py": 481,
     "tests/program/test_sparse_mla_split.py": 455,
-    "tests/predict/test_predict.py": 448,
+    "tests/program/predict/test_predict.py": 448,
     "tests/program/test_boolean_moe.py": 414,
     "tests/program/test_dsv4_qnorm_insert.py": 276,
-    "tests/predict/test_batch.py": 221,
+    "tests/program/predict/test_batch.py": 221,
     "tests/program/test_gumbel_boolean.py": 220,
-    "tests/predict/test_census.py": 197,
+    "tests/program/predict/test_census.py": 197,
     "tests/program/test_boolean_dsv4_moe.py": 179,
     "tests/properties/test_glm53_tp8_allreduce_capture.py": 178,
     "tests/program/test_boolean_attention.py": 169,
     "tests/program/test_topp_words.py": 160,
     "tests/program/test_deepgemm.py": 154,
-    "tests/protocol_options/test_pouw_h1.py": 153,
-    "tests/protocol_options/test_pouw_h1_credit.py": 150,
+    "tests/protocols/test_pouw_h1.py": 153,
+    "tests/protocols/test_pouw_h1_credit.py": 150,
     "tests/program/test_sampling_split.py": 148,
     "tests/check/test_pouw_ncp_v2_end_to_end.py": 146,
     "tests/pipeline/test_single_request_build_path.py": 138,
     "tests/program/test_bf16_gemm.py": 138,
-    "tests/predict/test_steps.py": 137,
+    "tests/program/predict/test_steps.py": 137,
     "tests/program/test_boolean_dense.py": 137,
     "tests/program/test_dead_free.py": 134,
-    "tests/store/test_remote_session.py": 111,
     "tests/program/test_sampling_shared_greedy.py": 108,
     "tests/program/test_fa2_split.py": 108,
     "tests/program/test_lifted_dense_b1.py": 108,
@@ -88,7 +88,7 @@ SECONDS: dict[str, float] = {
     "tests/program/test_sampling_boolean.py": 65,
     "tests/program/test_sampling_rows.py": 65,
     "tests/program/test_mla.py": 63,
-    "tests/predict/test_node.py": 63,
+    "tests/program/predict/test_node.py": 63,
     "tests/program/test_boolean_sigma.py": 61,
     "tests/program/test_derive.py": 59,
     "tests/program/test_dsv4_compressor.py": 57,
@@ -139,7 +139,7 @@ SECONDS: dict[str, float] = {
     "tests/regression/test_attempt_resolution.py": 21,
     "tests/program/test_fp8_block_dot.py": 21,
     "tests/check/test_capture_map_dsv4.py": 20,
-    "tests/protocol_options/test_pouw_native.py": 20,
+    "tests/protocols/test_pouw_native.py": 20,
 }
 #: what each part's job runs, from the repository's root; {k}/{n} names the part and {opts} the suites.py options. A part that
 #: lists nothing stops the job: suites.py with no modules would run the whole suite
@@ -234,7 +234,6 @@ def main(argv: list[str] | None = None) -> int:
                     help="SECONDS from suites.py reports of a full run, or of every part of one")
     a = ap.parse_args(argv)
     if a.seconds:
-        import json
         passed = {k: v for r in a.seconds for k, v in json.loads(r.read_text()).get("passed", {}).items()}
         for m, s in table({"passed": passed}).items():
             print(f'    "{m}": {s},')

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import copy
 
-from .checks import stoch_value as SV
 from . import resolver
+from .checks import stoch_value as SV
 
 
 def _doc(n: int = 3) -> dict:
@@ -16,7 +16,7 @@ def _doc(n: int = 3) -> dict:
     return {"summary": {"engine_steps_in_record": n, "sampled_steps_in_log": n, "steps_chain_absent": 0, "sampled_rows_total": n,
                         "rows_checked": n, "complete": True, "rows": {"exact-match": n, "mismatch": 0, "no-snapshot": 0, "skipped": 0},
                         "device_facts_all_match": True, "verdict": "PASS", "seconds": 66.0},
-            "reasons": [], "declared_facts": {"r0": {"seed": 7}}, "header_vs_manifest": [], "program_splits": {"r0": {"derived": 142}},
+            "reasons": [], "declared_facts": {"r0": {"seed": 7}}, "header_vs_manifest": [], "program_splits": {"r0": 32},
             "evaluator": {"name": "lane", "eval_seconds_total": 61.3}, "utc": "2026-09-23T20:39:27Z", "rows": rows}
 
 
@@ -43,7 +43,10 @@ def test_a_moved_token_or_step_changes_the_contract() -> None:
 
 
 def test_a_greedy_row_does_not_apply() -> None:
-    class Greedy:
+    class Greedy(resolver.Row):
+        def __init__(self) -> None:
+            """A row with no file."""
+
         def has(self, rel):
             return False
-    assert "greedy" in SV.applies(Greedy())
+    assert "greedy" in (SV.applies(Greedy()) or "")

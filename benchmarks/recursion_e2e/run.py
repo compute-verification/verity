@@ -34,6 +34,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import rec_profile as RP  # noqa: E402
+import rec_table as RT  # noqa: E402
 import settings as RS  # noqa: E402
 
 NODE = "vy-nebius-1"
@@ -169,7 +170,7 @@ def preset(a: argparse.Namespace) -> argparse.Namespace:
         a.env = ["WARM=0", "RUNS=1", *a.env]
     if a.release:
         a.repeat, a.oprove_runs, a.oprove_warm = 1, 1, 0
-        a.env = ["RELEASE=1", "WARM=0", "RUNS=1", *a.env]
+        a.env = ["RELEASE=1", "RELEASE_BUDGET=1", "WARM=0", "RUNS=1", *a.env]
     if forge_after(a) and "lean" in steps(a.steps) and not a.no_forge_after:
         a.steps = ",".join([*steps(a.steps), "forge-after"])
     return a
@@ -262,7 +263,7 @@ def cmd_result(a) -> int:
     text = json.dumps(doc, indent=1, sort_keys=True) + "\n"
     if a.out:
         Path(a.out).write_text(text)
-    md = RP.markdown(doc)
+    md = RT.markdown(doc)
     if a.md:
         Path(a.md).write_text(md)
     print(md)
@@ -298,8 +299,8 @@ def docs_of(refs: list[str]) -> list[dict]:
 
 def render(docs: list[dict], merge: bool) -> tuple[dict | None, str]:
     merged = RP.merge(docs) if merge else None
-    md = (f"## {', '.join(merged['runs'])}\n\n{RP.markdown(merged)}" if merged
-          else "\n".join(f"## {d['ref']}\n\n{RP.markdown(d)}" for d in docs))
+    md = (f"## {', '.join(merged['runs'])}\n\n{RT.markdown(merged)}" if merged
+          else "\n".join(f"## {d['ref']}\n\n{RT.markdown(d)}" for d in docs))
     return merged, md
 
 
@@ -368,7 +369,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--e2e", action="store_true", help="one pass: build, inner, vstage, vcap, oprove, lean, negative once each, "
                        "one release per prove and no warm one")
         p.add_argument("--release", action="store_true", help="the recursive session through the ZK server's release side "
-                       "(85's RELEASE=1): one inner session, each part proved once in order and held to its release window")
+                       "(85's RELEASE=1): one inner session, each part proved once in order and held to its release window, "
+                       "its stream's failure budget 1 unless --env RELEASE_BUDGET=b")
         p.add_argument("--env", action="append", default=[], metavar="KEY=VALUE",
                        help="passed to job.sh and on to 85 (LEVELS=L0, REPEAT_LEAN=1, TAG=..., KEEP_DATA=1, ...); repeatable")
 

@@ -818,11 +818,11 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The session's law is the sample's** where the session's population is: at the session `A` v2 sets up on the
 parameters `θ` (`SetsUp`), a sample v2 made in a composition composite `k` accepted, on those parameters, over `A.n`
-units, ran under `A.law`. -/
+units, ran under `A.design`. -/
 theorem law_of_setsUp {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray}
     {units : Array ℕ} (hS : Verity.SameAccepts k s) (hθ : s.params = θ) (hd : Drew k s dr L n ξ units)
-    (hn : A.n = n) : A.law = L := by
+    (hn : A.n = n) : A.design = L := by
   obtain ⟨a, b, e, p, c, ev, hcase, hacc, hL, -, -⟩ := hd
   obtain ⟨p', hp', -, -, hlaw, -⟩ := hA.params
   rw [← hθ] at hp'
@@ -868,7 +868,8 @@ theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     {bs : Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     _root_.Spot.OneStageZk.popHeld p.base.verifier c.record = .ok () := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
   · cases h
@@ -1245,7 +1246,8 @@ theorem trees_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ ts, _root_.Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
       _root_.Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
-  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
   · cases h

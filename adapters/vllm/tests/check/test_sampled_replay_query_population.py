@@ -15,16 +15,22 @@ and `commit_verdict` states the scope on EVERY PASS and FAILs by name when the r
 from __future__ import annotations
 
 import copy
+import importlib
 import json
+import sys
 
 import pytest
-
-from verity_vllm.check.c2_rules import _query_population_scope
 from verity.definitions.registry import bf16_gemm_check as BC
-from verity_vllm.check.commit_pass import commit_verdict
-from verity_vllm.check.replay import coverage as COV, driver as SR, index as IX, population as POP
+
 from tests.check import test_sampled_replay as T
 from tests.check.test_sampled_replay import moe_world, world  # noqa: F401  -- fixtures
+from verity_vllm.check.c2_rules import _query_population_scope
+from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check.replay import coverage as COV
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import population as POP
+from verity_vllm.check.replay import replay_codes as RC
 
 
 def _programs(w):
@@ -58,7 +64,7 @@ def test_the_honest_world_reconciles_against_its_manifest_identity_by_identity(w
     assert qt["source"].startswith("required manifest: Q_module_body_v1(P)")
     # the query of record BY ID with its definition digest: on the header, on the record, on the scope line
     assert man["query"]["query_id"] == "Q_module_body_v1" and man["query"]["boundary"] == "module-body"
-    assert qt["query_id"] == "Q_module_body_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 64
+    assert qt["query_id"] == "Q_module_body_v1" and qt["query_id_digest"] == man["query"]["query_id_digest"] and len(qt["query_id_digest"]) == 128
     assert rep["population"]["scope"].startswith("Q_module_body_v1(P) = ")
     # every family of this world has an evaluator: the reach is every instance output + every sampled id, and the sample evaluated some
     n_rows_fams = sum(v for k, v in qt["by_family"].items() if k in COV.QUERY_FAMILIES_WITH_ROWS)
@@ -135,7 +141,7 @@ def test_a_required_identity_no_row_produces_is_named_and_fails_the_reconciliati
     ghost = dict(next(r for r in man["identities"] if r["family"] == "instance_outputs"), op_path="model.layers.7.mlp.down_proj", output_member="0")
     bad["identities"].append(ghost)                                              # Q(P) requires something the Program never produces
     bmap, committed = world.bmap_and_reader()
-    # a post-commitment seed of record (root form: seed == run_root[:8]; the seed rule grades the label as a fact where it is on the tree)
+    # a root-form seed (seed == run_root[:8]): the seed rule recomputes it and does not grade it
     run_root = "71f69377" + "ab" * 28
     seed, seed_src = int.from_bytes(bytes.fromhex(run_root)[:8], "big"), "run root (first 8 bytes, after commitment)"
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=1, seed=seed, seed_source=seed_src, workers=0, manifest=bad)
@@ -386,7 +392,10 @@ def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_a
     assert POP.executed_prefix_of_record("r0", a_r=2, lag=2, cap=cap, eos_declared=True, served_len_commit=2, **ok)["faults"][0].startswith("LAG 2 outside")
     assert "outside [0, cap" in POP.executed_prefix_of_record("r0", a_r=cap + 1, lag=1, cap=cap, served_len_commit=cap + 1, **ok)["faults"][0]
     # (a)(b)(c) + the served-length rule, each a fault BY NAME; an unasserted fact is a fault, never a default
-    f = lambda **kw: POP.executed_prefix_of_record("r0", **{**dict(a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2), **ok, **kw})["faults"]
+
+    def f(**kw):
+        return POP.executed_prefix_of_record("r0", **{**dict(a_r=cap - 2, lag=1, cap=cap, eos_declared=True, served_len_commit=cap - 2), **ok, **kw})["faults"]
+
     assert f() == []
     assert any("not linked to the served output" in x for x in f(linked=None)) and any("(condition (a))" in x for x in f(linked=False))
     assert any("LAG rule not attested" in x for x in f(lag_attested=None)) and any("(condition (b))" in x for x in f(lag_attested=False))
@@ -524,9 +533,6 @@ def test_r3_without_a_served_list_the_arithmetic_is_the_mechanism_and_is_named_o
 def test_r3_a_broken_continuation_unit_fails_the_import_rather_than_falling_back_to_the_arithmetic(monkeypatch):
     """The recurrence is the mechanism whenever a served list is supplied: Continuation_v1 failing to import fails the population's import,
     never a record whose class silently reads 'arithmetic'."""
-    import importlib
-    import sys
-
     monkeypatch.setitem(sys.modules, "verity_vllm.program.lifting.continuation", None)
     monkeypatch.delitem(sys.modules, "verity_vllm.check.replay.population")
     with pytest.raises(ImportError):
@@ -545,9 +551,8 @@ class _NotYetPi:
 
 
 def test_a_not_yet_row_whose_address_rule_fails_is_a_mapping_fault_by_name_not_a_dropped_identity():
-    from verity_vllm.check.replay import replay_codes as RC
-
-    addresses, codes = {}, {}
+    addresses: dict[tuple, object] = {}
+    codes: dict[str, dict] = {}
     vus, ne, nef = POP.population(_NotYetPi(), "r0", addresses=addresses, codes=codes)
     domain = RC.NOT_YET["AttentionHead_v1"]
     assert vus == [] and list(addresses) == [("r0", 0, "model.layers.0.attn", "out")] and ne[domain] == 1
@@ -677,10 +682,10 @@ def test_r4_c2_the_controller_statement_is_cross_checked_against_the_replays_own
     assert c6 is not None and c6["program_rows"] == 14 and c6["header_rows"] == 0 and c6["rows_agree"] is None
 
 def test_revb_n_2_16_1_the_sampler_families_mechanism_names_what_consumes_them():
-    """`sampler_seed` / `sampler_splits` are uncovered BY NAME with a mechanism that says what CONSUMES the
-    committed values (the sampler VU's exact replay in form (A); stoch_recompute's attribution), as `input_token_ids`' entry does --
-    not only the linkage check on the values themselves."""
-    for fam in ("sampler_seed", "sampler_splits"):
-        m = COV.QUERY_FAMILY_MECHANISM[fam]
-        assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m, m
+    """`sampler_seed` is uncovered BY NAME with a mechanism that says what CONSUMES the committed value (the sampler VU's exact
+    replay in form (A); stoch_recompute's attribution), as `input_token_ids`' entry does -- not only the linkage check on the values
+    themselves."""
+    m = COV.QUERY_FAMILY_MECHANISM["sampler_seed"]
+    assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m, m
+    assert "sampler_splits" not in COV.QUERY_FAMILY_MECHANISM
     assert "boundary linkage" in COV.QUERY_FAMILY_MECHANISM["input_token_ids"]

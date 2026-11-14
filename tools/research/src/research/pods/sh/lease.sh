@@ -3,14 +3,30 @@
 # control pod or guard process is alive.  It ends THIS pod with the pod's own key once the lease has expired and LEASE_GRACE_S has
 # passed; nothing else is needed on the pod but a shell and python3 or curl.
 #
-#   sh lease.sh                    the loop (armed over ssh by `pods create`; also from the start command with --boot-lease)
+#   sh lease.sh                    the loop (the start command with --boot-lease, a machine's own service)
+#   sh lease.sh start              the loop, detached, unless the one the pid file names runs; prints its pid (`pods create`, over ssh)
+#   sh lease.sh pid                the pid of the running loop the pid file names; exit 1 when it names none
 #   sh lease.sh extend SECONDS BY  push the expiry to at least now + SECONDS (`research pods extend`, `research run --on`); prints it
 #   sh lease.sh show               the lease line
+#
+# One loop per pod.  The pid file ($LEASE_PID) is one line, `PID BIRTH`: the loop's pid and when that process was forked
+# (lease_birth), which together name one process for its whole life.  While the process it names runs, `start` starts no other
+# and a second loop exits; a file that names no running process (none, a zombie, a later process given the pid, a pid with no
+# BIRTH) names no loop.  The command line is not read: it is empty while a process is inside execve, which a loop started through
+# setsid and nohup is three times.
 #
 # The lease file ($LEASE_FILE) is one line, `EPOCH ISO BY`.  The loop re-reads it every tick; a file that is missing or does not
 # parse keeps the last expiry read (at boot: $RESEARCH_LEASE_EXPIRES, which `pods create` puts in the pod's environment), so a failed
 # read never extends the lease.  At EPOCH the pod guard (pod_guard.sh daemon) ends a pod whose runs all have custody; this loop ends
 # it at EPOCH + LEASE_GRACE_S whatever is still unfetched (the grace is the runs' own custody push).
+#
+# A read error is neither a missing file nor an expiry.  A lease or deadline file that is there and cannot be read (lease_first's
+# exit 2) is logged every tick, and the loop keeps what it last read of that file: the expiry, the deadline.  With nothing read to
+# keep (no expiry since the loop started, a deadline it never read) the loop ends the machine once that has lasted LEASE_GRACE_S, so
+# no fault carries a machine past its lease for ever.  `extend` has nothing it last read: it says the error on stderr and takes a
+# lease it cannot read as missing (it writes a new one) and a deadline it cannot read as a deadline of 0 (it extends nothing).
+# What the loop decides on (the two files, the pod's id and key, the tool that terminates) opens no other path: no redirect to
+# the null device, which a machine can lose.
 #
 # Termination: GraphQL podTerminate with the pod-scoped RUNPOD_API_KEY RunPod puts in the container's first process (as measured
 # through pod_guard.sh: a pod may terminate itself; it may not list or read pods, so `runpodctl get pod` is Unauthorized),
@@ -38,29 +54,41 @@ lease_now() { if [ -n "${LEASE_NOW:-}" ]; then echo "$LEASE_NOW"; else date +%s;
 lease_iso() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -r "$1" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo "@$1"; }
 lease_say() { echo "$(lease_iso "$(lease_now)") lease pid $$: $*" >> "$LEASE_LOG" 2>/dev/null || echo "lease: $*" >&2; }
 
+lease_first() {
+  # lease_first FILE: the first field of FILE's first line (nothing for an empty file).  Exit 1 when there is no such file; exit 2
+  # when the file is there and cannot be read, with the reader's own message in place of the field.  It opens FILE and nothing else.
+  [ -e "$1" ] || return 1
+  line=$(head -n 1 "$1" 2>&1) || { printf '%s\n' "$line"; return 2; }
+  set -f
+  # shellcheck disable=SC2086
+  set -- $line
+  set +f
+  printf '%s\n' "${1:-}"
+}
+
 lease_read() {
-  # the expiry epoch in the lease file, or nothing (missing, unreadable, not a number)
-  e=""
-  [ -r "$LEASE_FILE" ] && read -r e _rest < "$LEASE_FILE" 2>/dev/null
+  # the expiry epoch in the lease file.  Exit 1: no lease file, or one that names no epoch; exit 2: a read error (lease_first's)
+  e=$(lease_first "$LEASE_FILE") || { st=$?; printf '%s\n' "$e"; return "$st"; }
   case $e in ''|*[!0-9]*) return 1;; esac
   echo "$e"
 }
 
 lease_cap() {
-  # the latest moment the lease may reach (deadline - margin), or nothing when there is no deadline file
-  [ -e "$LEASE_DEADLINE_FILE" ] || return 1
-  d=""
-  read -r d _rest < "$LEASE_DEADLINE_FILE" 2>/dev/null
+  # the latest moment the lease may reach (deadline - margin).  Exit 1: no deadline file; exit 2: a read error (lease_first's)
+  d=$(lease_first "$LEASE_DEADLINE_FILE") || { st=$?; printf '%s\n' "$d"; return "$st"; }
   case $d in ''|*[!0-9]*) d=0;; esac
   echo $(( d - LEASE_DEADLINE_MARGIN_S ))
 }
 
 lease_env() {
   # $1 from the container's first process, else this shell's environment
-  v=$(tr '\0' '\n' < "$LEASE_ENVIRON" 2>/dev/null | sed -n "s/^$1=//p" | head -1)
+  v=""
+  [ -r "$LEASE_ENVIRON" ] && v=$(tr '\0' '\n' < "$LEASE_ENVIRON" | sed -n "s/^$1=//p" | head -1)
   if [ -z "$v" ]; then eval "v=\${$1:-}"; fi
   printf '%s' "$v"
 }
+
+lease_has() { [ -n "$(command -v "$1")" ]; }
 
 lease_terminate() {
   me=$1
@@ -70,7 +98,7 @@ lease_terminate() {
   gql=${LEASE_API_GQL:-https://api.runpod.io/graphql}
   rest=${LEASE_API_REST:-https://rest.runpod.io/v1}
   body='{"query": "mutation { podTerminate(input: {podId: \"'"$me"'\"}) }"}'
-  if command -v python3 >/dev/null 2>&1; then
+  if lease_has python3; then
     LEASE_KEY="$key" LEASE_BODY="$body" python3 - research-pod-lease "$gql" "$rest" "$me" <<'PY'
 import os, sys, urllib.error, urllib.request
 gql, rest, me = sys.argv[2:5]
@@ -92,14 +120,14 @@ except Exception as e:  # noqa: BLE001
 sys.exit(1)
 PY
     rc=$?
-  elif command -v curl >/dev/null 2>&1; then
+  elif lease_has curl; then
     out=$(curl -sS -m 60 -H "Authorization: Bearer $key" -H 'Content-Type: application/json' -d "$body" "$gql" 2>&1)
     case $out in *'"errors"'*|'') echo "GraphQL podTerminate: $out"; rc=1;; *) echo "TERMINATED $me (GraphQL podTerminate, curl)"; rc=0;; esac
   else
     rc=1
   fi
   [ "$rc" -eq 0 ] && return 0
-  if command -v runpodctl >/dev/null 2>&1; then
+  if lease_has runpodctl; then
     RUNPOD_API_KEY=$key runpodctl remove pod "$me" && { echo "TERMINATED $me (runpodctl)"; return 0; }
   fi
   return 1
@@ -110,11 +138,18 @@ lease_extend() {
   secs=${1:?seconds}; by=${2:-hand}
   case $secs in ''|*[!0-9]*) echo "lease: extend wants whole seconds, got '$secs'" >&2; return 2;; esac
   want=$(( $(lease_now) + secs ))
-  cur=$(lease_read) || cur=${RESEARCH_LEASE_EXPIRES:-0}
+  cur=$(lease_read); st=$?
+  if [ "$st" = 2 ]; then echo "lease: cannot read $LEASE_FILE ($cur): taken as missing" >&2; fi
+  [ "$st" = 0 ] || cur=${RESEARCH_LEASE_EXPIRES:-0}
   case $cur in ''|*[!0-9]*) cur=0;; esac
-  if cap=$(lease_cap); then
-    if [ "$cur" -gt "$cap" ]; then cur=0; want=$cap; fi
-    if [ "$want" -ge "$cap" ]; then want=$cap; by="$by(clamped-to-deadline)"; fi
+  latest=$(lease_cap); st=$?
+  if [ "$st" = 2 ]; then
+    echo "lease: cannot read $LEASE_DEADLINE_FILE ($latest): taken as a deadline of 0, so nothing is extended" >&2
+    latest=$(( 0 - LEASE_DEADLINE_MARGIN_S ))
+  fi
+  if [ "$st" != 1 ]; then
+    if [ "$cur" -gt "$latest" ]; then cur=0; want=$latest; fi
+    if [ "$want" -ge "$latest" ]; then want=$latest; by="$by(clamped-to-deadline)"; fi
   fi
   if [ "$want" -gt "$cur" ]; then
     mkdir -p "$(dirname "$LEASE_FILE")" || return 1
@@ -124,20 +159,46 @@ lease_extend() {
   cat "$LEASE_FILE" 2>/dev/null || printf '%s %s %s\n' "$cur" "$(lease_iso "$cur")" "(environment)"
 }
 
+lease_birth() {
+  # lease_birth PID: when the running process PID was forked, `TICKS@BOOT`, or nothing (no such process, or a zombie).  TICKS is
+  # field 22 of /proc/PID/stat (clock ticks since boot, set at fork and unchanged by execve), counted after the name's closing `)`
+  # since a name may hold spaces; BOOT is the boot's id, since ticks start over at each boot and a pid file can outlive one.
+  stat=$(sed -n '$s/.*) //p' "/proc/$1/stat" 2>/dev/null)
+  case $stat in ''|[ZXx]' '*) return 1;; esac
+  echo "$(echo "$stat" | cut -d' ' -f20)@$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)"
+}
+
+lease_holder() {
+  # the pid of the running loop the pid file names, or nothing
+  pid=""; born=""
+  [ -r "$LEASE_PID" ] && read -r pid born _rest < "$LEASE_PID" 2>/dev/null
+  [ -n "$born" ] && [ "$(lease_birth "$pid")" = "$born" ] && echo "$pid"
+}
+
+lease_hold() {
+  # lease_hold PID: name PID in the pid file, written beside it and moved into place so that no reader finds it empty
+  { printf '%s %s\n' "$1" "$(lease_birth "$1")" > "$LEASE_PID.tmp.$$" && mv -f "$LEASE_PID.tmp.$$" "$LEASE_PID"; } 2>/dev/null
+}
+
 lease_claim() {
-  # one loop per pod: a live loop named in the pid file keeps it
-  old=$(cat "$LEASE_PID" 2>/dev/null)
-  if [ -n "$old" ] && [ "$old" != "$$" ] && kill -0 "$old" 2>/dev/null; then
-    case $(tr '\0' ' ' < "/proc/$old/cmdline" 2>/dev/null) in *lease.sh*) return 1;; esac
+  # one loop per pod: this one runs unless the pid file names another that does
+  if old=$(lease_holder); then [ "$old" = "$$" ]; else lease_hold "$$"; return 0; fi
+}
+
+lease_start() {
+  # the loop, detached and named in the pid file before this returns, unless the one the file names runs; prints its pid
+  if ! pid=$(lease_holder); then
+    setsid nohup sh "$0" loop >> "$LEASE_LOG" 2>&1 < /dev/null &
+    pid=$!
+    lease_hold "$pid"
   fi
-  echo "$$" > "$LEASE_PID" 2>/dev/null
-  return 0
+  echo "$pid"
 }
 
 lease_loop() {
-  mkdir -p "$LEASE_DIR" 2>/dev/null
+  mkdir -p "$LEASE_DIR"
   if [ "${LEASE_ONCE:-0}" != 1 ] && ! lease_claim; then
-    lease_say "another lease loop ($(cat "$LEASE_PID" 2>/dev/null)) holds this pod; exiting"
+    lease_say "another lease loop ($old) holds this pod; exiting"
     return 0
   fi
   exp=${RESEARCH_LEASE_EXPIRES:-}
@@ -149,18 +210,37 @@ lease_loop() {
     if [ -n "$exp" ]; then shown=$(lease_iso "$exp"); else shown="unknown (no lease file, no RESEARCH_LEASE_EXPIRES)"; fi
     lease_say "armed: pod ${me:-?}, expiry $shown, grace ${LEASE_GRACE_S}s"
   fi
+  latest=""; since=""
   while :; do
-    if e=$(lease_read); then exp=$e; fi
     now=$(lease_now)
-    due=0
-    if [ -n "$exp" ] && [ "$now" -ge $((exp + LEASE_GRACE_S)) ]; then due=1; fi
-    if cap=$(lease_cap) && [ "$now" -ge "$cap" ]; then due=1; exp=$cap; fi
-    if [ "$due" = 1 ]; then
+    bad=""; blind=0
+    e=$(lease_read); st=$?
+    if [ "$st" = 0 ]; then exp=$e
+    elif [ "$st" = 2 ]; then bad="$LEASE_FILE ($e)"; [ -n "$exp" ] || blind=1
+    fi
+    c=$(lease_cap); st=$?
+    if [ "$st" = 0 ]; then latest=$c
+    elif [ "$st" = 1 ]; then latest=""
+    else bad="${bad:+$bad and }$LEASE_DEADLINE_FILE ($c)"; [ -n "$latest" ] || blind=1
+    fi
+    if [ "$blind" = 1 ]; then [ -n "$since" ] || since=$now; else since=""; fi
+    if [ -n "$since" ]; then
+      ends=$(lease_iso $((since + LEASE_GRACE_S)))
+      lease_say "cannot read $bad: not an expiry, but nothing was read to keep; the machine ends at $ends unless a read succeeds"
+    elif [ -n "$bad" ]; then
+      lease_say "cannot read $bad: not an expiry; keeping what was last read"
+    fi
+    due=""
+    if [ -n "$exp" ] && [ "$now" -ge $((exp + LEASE_GRACE_S)) ]; then due=lease; fi
+    if [ -n "$latest" ] && [ "$now" -ge "$latest" ]; then due=lease; exp=$latest; fi
+    if [ -z "$due" ] && [ -n "$since" ] && [ "$now" -ge $((since + LEASE_GRACE_S)) ]; then due=unread; fi
+    if [ -n "$due" ]; then
+      if [ "$due" = lease ]; then why="lease expired $(lease_iso "$exp")"; else why="read errors with nothing to keep since $(lease_iso "$since")"; fi
       if [ -z "$me" ]; then
-        lease_say "lease expired $(lease_iso "$exp") but no RUNPOD_POD_ID: cannot terminate"
+        lease_say "$why but no RUNPOD_POD_ID: cannot terminate"
         rc=2
       else
-        lease_say "lease expired $(lease_iso "$exp") + ${LEASE_GRACE_S}s grace: terminating $me"
+        lease_say "$why + ${LEASE_GRACE_S}s grace: terminating $me"
         out=$(lease_terminate "$me" 2>&1); rc=$?
         lease_say "$out"
         [ "$rc" -eq 0 ] && return 0
@@ -176,7 +256,9 @@ lease_loop() {
 
 case ${1:-loop} in
   loop) lease_loop ;;
+  start) lease_start ;;
+  pid) lease_holder ;;
   extend) shift; lease_extend "$@" ;;
   show) cat "$LEASE_FILE" 2>/dev/null || { echo "no lease file at $LEASE_FILE" >&2; exit 1; } ;;
-  *) echo "usage: lease.sh [loop | extend SECONDS BY | show]" >&2; exit 2 ;;
+  *) echo "usage: lease.sh [loop | start | pid | extend SECONDS BY | show]" >&2; exit 2 ;;
 esac

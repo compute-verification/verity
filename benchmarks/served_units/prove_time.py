@@ -2,9 +2,9 @@
 `session_set`), and per block type the fit of that time against the statement's blocks N, T(N) = fixed + N · per_block
 (least squares over its N), its seconds a block amortized at each N (T(N) / N), and with ``--card`` (a GPU's run) the
 block's proof overhead: seconds a block times the card's peak MACs a second over the block's MACs, marginal (``per_block``)
-and amortized. A coordinate's MACs are its K; the card's peak is its s8 rate (`verity.hardware`; e4m3 runs at that rate on
-the cards here, their ``weight.e4m3`` 1). A type without a static K (a census type) gets its seconds a block and no
-overhead.
+and amortized. A block's MACs are its stage.json's ``macs`` (a fused expert block's N K), else its static K (a coordinate's);
+the card's peak is its s8 rate (`verity.hardware.cards`; e4m3 runs at that rate on the cards here, their ``weight.e4m3`` 1).
+A type with neither (a census type) gets its seconds a block and no overhead.
 
     python prove_time.py OUT_DIR [--card SKU]     prints the summary as JSON
 """
@@ -28,8 +28,8 @@ def _session_set():
 
 def peak_macs(card: str) -> float:
     sys.path.insert(0, str(ROOT))
-    from verity import hardware
-    c = hardware.load(card)
+    from verity.hardware import cards
+    c = cards.load(card)
     return c["rate"]["tensor"]["value"] * c["sm"]["count"]["value"] * c["clock"]["sm"]["value"] * 1e6
 
 
@@ -50,12 +50,13 @@ def main(out: Path, card: str | None) -> dict:
     res = {"card": card, "peak_macs_per_s": peak, "statements": {}, "types": {}, "table": []}
     types = {}
     for dev in ("gpu", "cpu"):
-        for d in sorted((out / dev).glob("*-n*")):
+        for d in sorted(p for p in (out / dev).glob("*") if (out / "stage" / p.name / "stage.json").is_file()):
             st = json.loads((out / "stage" / d.name / "stage.json").read_text())
             s = session_set(d, gpu=dev == "gpu")
             rec = {"device": dev, "tag": st["tag"], "n": st["n"], "k_log": st["k_log"], "unit_log": st.get("unit_log"),
                    "vus_per_block": st["vus_per_block"],
-                   "ands": st["ands"], "macs": st.get("statics", {}).get("K"), "public_inputs": st.get("public_inputs", []),
+                   "ands": st["ands"], "macs": st.get("macs") or st.get("statics", {}).get("K"),
+                   "public_inputs": st.get("public_inputs", []),
                    "accepted": s.get("accepted"), "prove_total_s": s.get("prove_total_s"),
                    "prove_total_all_s": s.get("prove_total_all_s"), "session_s": s.get("session_s"), "buckets": s.get("buckets"),
                    "gpu_util_mean_pct": s.get("gpu_util_mean_pct"), "sm_clock_mean_mhz": s.get("sm_clock_mean_mhz"),
@@ -90,6 +91,6 @@ def main(out: Path, card: str | None) -> dict:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("out", type=Path)
-    ap.add_argument("--card", default=None, help="the GPU's card (verity.hardware SKU) for the proof overhead")
+    ap.add_argument("--card", default=None, help="the GPU's card (verity.hardware.cards SKU) for the proof overhead")
     a = ap.parse_args()
     print(json.dumps(main(a.out, a.card), indent=1, default=str))

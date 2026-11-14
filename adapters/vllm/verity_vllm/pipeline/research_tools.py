@@ -12,7 +12,7 @@ Rules encoded here (Phase 5a of the v2 plan):
   batch, input/output lengths, arrival mix, sampling, execution mode, the
   verification query id (default the query of record, ``Q_word_v1{X=16,W=32,R=no-recompute}``) — plus the
   stage-specific flags that change the stage's *outputs*.  RETAIN mode,
-  window sizing, GPU utilisation, hot-engine toggles etc. are footprint /
+  window sizing, GPU utilisation etc. are footprint /
   schedule knobs: recorded as params, **not** key params.
 * ``key_conditions`` is ``hw.family`` plus the torch and vllm pins of the
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
@@ -21,7 +21,7 @@ Rules encoded here (Phase 5a of the v2 plan):
   plus every directory that ships Verity core (``research.pythonpath.package_dirs``:
   ``verity``, or each member's part of the namespace).
   ``source_identity.code_identity`` is the one code identity over it (the
-  hot Commit worker's key, the TP Commit's tree of record).
+  TP Commit's tree of record).
 
 This module imports only the standard library, so it is loadable from any interpreter (``research`` loads it by dotted path or,
 failing that, by file — see ``research.store.tools_registry``).  The names that read ``research.pythonpath`` and
@@ -107,7 +107,6 @@ NON_KEY_FLAGS = (
     "tap_cap_mb",
     "open_after_release",
     "replay_cache",
-    "hot_engine",
     "py",
 )
 
@@ -116,7 +115,7 @@ PRODUCES: dict[str, list[str]] = {
     "plan": ["vllm-commit-plan/v1", "execution-evidence/v1", "run-files/v1"],
     "match": ["vllm-match-record/v1", "execution-evidence/v1", "run-files/v1"],
     "commit": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
-    "replay": ["vllm-verdict/v1", "vllm-replay-slim/v1", "execution-evidence/v1", "run-files/v1"],
+    "replay": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
 }
 
 

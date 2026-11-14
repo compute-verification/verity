@@ -27,7 +27,7 @@ salt       store_salt(key, label, c) = `codec.xof`(m)[0 : 192], SHA512(m ‖ u32
 payload    `audit.payload_tree` over the store, chunk j salted with store_salt(key, PAYLOAD_LABEL, j) under the
            verifier's key (its payload-key message), so its root follows from the pin, the store's shape and that key
            (`expected_root`, in worker processes: at a whole node's 130M chunks 432 s on 11 cores, the Lean's
-           `Store.expectedRoot` 306 s on 11 threads, `benchmarks/remote_session/binding_bench.py`)
+           `Store.expectedRoot` 306 s on 11 threads)
 binding    at startup the pin read, every pinned file held to it, the arena laid out and its weights chunks' digests
            computed; at each hello (`Binding.hold`) the store its size makes and that store's payload root under the
            verifier's key, against the hello's, else Refused with why
@@ -165,7 +165,7 @@ def pin_of(data: bytes, path: str, role: str | None = None) -> dict:
         checkpoints = {_pinned(x.get("checkpoint")) for x in mine}
         if len(checkpoints) != 1:
             raise Refused(f"the registry {path} has {len(mine)} lines of {role}, pinning {len(checkpoints)} "
-                          "checkpoints: one is the pin")
+                          "checkpoints: one is the pin") from None
         doc = mine[-1]
     if isinstance(doc, dict) and doc and all(isinstance(v, dict) for v in doc.values()):
         if role not in doc:
@@ -522,3 +522,7 @@ class Binding:
         return {"name": self.role, "checkpoint_sha512": self.pin["checkpoint_sha512"], "pin": str(self.pin_path),
                 "checkpoint": str(self.directory), "files": len(self.pin["checkpoint"]), "workers": self.workers,
                 "salt": SALT_VERSION, **self.state}
+
+
+__all__ = ["Arena", "BLOCK", "Binding", "KEY_BYTES", "PAYLOAD_LABEL", "Refused", "SALT_DOMAIN", "Store", "arena",
+           "arena_of", "checkpoint_sha512", "expected_root", "file_sha512", "pool", "read_pin", "store_salt"]

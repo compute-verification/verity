@@ -1,11 +1,11 @@
 """The Site in code (`Core.Site`, `CoreProtocol/Site.lean`, served by `site-difftest`) held to its Python mirror,
-`verity.hardware.site`: an entry's refusal against the log before it (`site_refusal`, `Registration.Entry.refusal`), a whole
+`verity.device`: an entry's refusal against the log before it (`site_refusal`, `Registration.Entry.refusal`), a whole
 log's check and fold (`site_check`, `Registration.check`), and the views of a log's site, unchecked (`site_views`), its
 devices' models read against an auditor at a tick. Both sides take the digests that are deployed, so every head, digest
 and refusal is compared.
 
 The inputs are logs that start from each composite's first entry, the lifecycle example's site, followed by its 15 later
-entries (`verity/hardware/site/tests/test_site.py`'s `ENTRIES`, copied here: every refusal and an accepted entry). Each entry
+entries (`verity/tests/tests/test_device.py`'s `ENTRIES`, copied here: every refusal and an accepted entry). Each entry
 is changed at random a few times (a field of a location, link or sheet, an element dropped, repeated or added, the
 head it follows), and checked against auditors whose sheets and tolerances vary. They also come as malformed JSON: a
 node replaced or deleted, or a key added.
@@ -22,7 +22,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.hardware.site import (COMPOSITES, KINDS, OPERAND_CLASSES, OUTSIDE, OWNERS, TICK, TIERS, Auditor, DeviceFigures,
+from verity.device import (COMPOSITES, KINDS, OPERAND_CLASSES, OUTSIDE, OWNERS, TICK, TIERS, Auditor, DeviceFigures,
                               Entry, Link, Loc, Malformed, Refused, Registration, Sheet, Site, _rat_json, check, genesis,
                               refusal)
 
@@ -362,4 +362,23 @@ def test_a_device_models_its_bounding_figures(server):
     j = {"auditor": AUDITOR["onsite"].to_json(), "log": log.to_json(), "tick": str(TICK)}
     views = ref_views(j)
     assert views["ids"]["gpu9"]["device"]["rate"]["tc"] == 68 and views["ids"]["gpu0"]["device"]["rate"]["tc"] == 64
+    assert server.call("site_views", j) == ("output", D.canonical(views))
+
+
+def test_a_rational_of_4301_digits(server):
+    """A clock, a tolerance and a tick whose numerator and denominator have 4,301 digits each, one more than Python's
+    `int` and `str` convert by default: both sides read them, write the sheet stating one under the same digest, accept
+    it at that tolerance, and round a device's rate up over that tick."""
+    n = 10 ** 4300 + 1
+    over = "1" + "0" * 4299 + "2/1" + "0" * 4299 + "1"
+    sheet = figures(SHEET_A, clock=Fraction(n + 1, n))
+    log = first("onsite")
+    log = log.append(Entry(log.head, (sheet,), (Loc("gpu9", "device", "node0", sheet=sheet.digest()),)))
+    j = {"auditor": replace(AUDITOR["onsite"], tolerance=Fraction(n + 1, n)).to_json(), "log": log.to_json()}
+    assert j["auditor"]["tolerance"] == over == sheet.to_json()["figures"]["clock"]
+    assert ref_check(j) == {"head": log.head, "site": Site.of_log(log).to_json()}
+    assert server.call("site_check", j) == ("output", D.canonical(ref_check(j)))
+    j["tick"] = over
+    views = ref_views(j)
+    assert views["ids"]["gpu9"]["device"]["rate"]["tc"] == 64 * GHZ + 1 and views["ids"]["gpu9"]["sheet"] == sheet.to_json()
     assert server.call("site_views", j) == ("output", D.canonical(views))

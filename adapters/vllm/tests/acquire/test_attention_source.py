@@ -20,19 +20,28 @@ from typing import Any
 
 import pytest
 import torch
+from verity.definitions.registry.dsa_topk import waksman_switches
 
 from tests.acquire import glm53_model as G
-from tests.acquire.glm53_model import CMAP, INDEXER, L, SPARSE, STEPS, glm_model, metadata, run_step
+from tests.acquire.glm53_model import (
+    CMAP,
+    INDEXER,
+    SPARSE,
+    STEPS,
+    L,
+    glm_model,
+    metadata,
+    run_step,
+)
 from tests.acquire.test_route_source import Run, map_names
 from verity_vllm.acquire.sources import attention_source as AS
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import binding as B
-from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 from verity_vllm.program.predict import dsa as D
+from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.query.manifest.format import RUN_FAMILY
-from verity.definitions.registry.dsa_topk import waksman_switches
 
 NORM_ROPE = G.fused_norm_rope
 OTHERS = ("module_hook", "sampler", "allreduce_norm")
@@ -111,12 +120,12 @@ def expected(tid: str, seen: dict[str, Any]) -> torch.Tensor:
 
 @pytest.mark.slow
 @pytest.mark.parametrize("target", [True, False], ids=["on-target", "off-target"])
-def test_each_step_binds_once_each_name_capture_map_ids_lists(runs, capsys, target):
+def test_each_step_binds_once_each_name_capture_map_ids_lists(runs, target):
     r = runs[target]
     for k, (_md, routes, phase) in enumerate(STEPS):
         got = r.names(k)
         assert len(got) == len(set(got)), f"step {k} binds a name twice"
-        assert sorted(got) == sorted(map_names(capsys, routes, phase, binders=(AS.BINDER,), off_target=not target)), f"step {k}"
+        assert sorted(got) == sorted(map_names(routes, phase, binders=(AS.BINDER,), off_target=not target)), f"step {k}"
     assert r.att.stats["unpaired"] == 0 and r.att.stats["layout_refused"] == 0 and r.att.stats["mha_unbound"] == 0
 
 
@@ -168,8 +177,8 @@ def test_every_value_handed_to_the_committer_is_one_the_native_collector_stages(
     assert runs[True].att.stats["copied_by_tap"]["q_nope_absorb"] == multi * L
 
 
-def full_steps(r: AttnRun, capsys, target: bool) -> dict[int, list[str]]:
-    return {k: r.names(k) + map_names(capsys, routes, phase, binders=OTHERS, off_target=not target)
+def full_steps(r: AttnRun, target: bool) -> dict[int, list[str]]:
+    return {k: r.names(k) + map_names(routes, phase, binders=OTHERS, off_target=not target)
             for k, (_md, routes, phase) in enumerate(STEPS)}
 
 
@@ -180,15 +189,15 @@ def routes_bad(violation: dict[str, Any], names: set[str], counts: tuple[int, in
 
 
 @pytest.mark.slow
-def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(runs, capsys):
+def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(runs):
     q8 = f"model.layers.{min(INDEXER)}.self_attn/index_q"
     on, off = runs[True], runs[False]
-    steps = full_steps(on, capsys, True)
+    steps = full_steps(on, True)
     got = on.check(steps, sources=[on.src, on.att])
     assert got["ok"] is True, got["violations"][:2]
     v = on.check({**steps, 1: [n for n in steps[1] if n != q8]}, sources=[on.src, on.att])["violations"]
     assert [x["step"] for x in v] == [1] and routes_bad(v[0], {q8}, (0, 1)), "on the target a step without it fails"
-    steps = full_steps(off, capsys, False)
+    steps = full_steps(off, False)
     got = off.check(steps, sources=[off.src, off.att])
     assert got["ok"] is True, got["violations"][:2]
     v = off.check({**steps, 1: steps[1] + [q8]}, sources=[off.src, off.att])["violations"]
@@ -196,7 +205,7 @@ def test_identity_check_holds_a_step_to_the_target_only_taps_on_the_target_only(
 
 
 @pytest.mark.slow
-def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
+def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows():
     r = AttnRun()
     wrapped, G.fused_norm_rope = G.fused_norm_rope, NORM_ROPE
     try:
@@ -205,14 +214,14 @@ def test_a_cache_write_the_source_did_not_see_binds_no_cache_rows(capsys):
         G.fused_norm_rope = wrapped
         r.close()
     rows = {r.att.names["mla_kv_cache"][i] for i in range(L)} | {r.att.names[t][i] for t in ("indexer.k_cache", "indexer.k_scale") for i in INDEXER}
-    assert set(map_names(capsys, SPARSE, "decode", binders=(AS.BINDER,))) - set(r.names(0)) == rows
+    assert set(map_names(SPARSE, "decode", binders=(AS.BINDER,))) - set(r.names(0)) == rows
     assert r.att.stats["unpaired"] == L and G.fused_norm_rope is NORM_ROPE
-    v = r.check({0: r.names(0) + map_names(capsys, SPARSE, "decode", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
+    v = r.check({0: r.names(0) + map_names(SPARSE, "decode", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
     assert routes_bad(v[0], rows, (0, 1))
 
 
 @pytest.mark.slow
-def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
+def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound():
     md = metadata(prefill=True, dense=True)
     md.prefill.chunked_context = types.SimpleNamespace()
     r = AttnRun()
@@ -222,7 +231,7 @@ def test_a_prefill_over_a_chunked_context_leaves_its_mha_output_unbound(capsys):
         r.close()
     mha = {r.att.names["attn.mha"][i] for i in range(L)}
     assert not mha & set(r.names(0)) and r.att.stats["mha_unbound"] == L
-    v = r.check({0: r.names(0) + map_names(capsys, ("dense-mha",), "prefill", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
+    v = r.check({0: r.names(0) + map_names(("dense-mha",), "prefill", binders=OTHERS)}, sources=[r.src, r.att])["violations"]
     assert routes_bad(v[0], mha, (0, 1)), "the step fails closed"
 
 
@@ -339,7 +348,7 @@ def test_each_sparse_mla_call_boundary_holds_the_attn_tensor_of_its_layer_and_st
 @pytest.mark.slow
 def test_the_binding_map_covers_each_held_call_boundary_exactly_and_names_the_rest(bruns):
     on = bruns[True]
-    layouts = {}
+    layouts: dict[int, list[TensorMeta]] = {}
     for k, recs in on.rec.items():
         layouts[k], off = [], 0
         for j, (name, t) in enumerate(recs):
@@ -475,6 +484,7 @@ def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step()
     """[GLM-5.3] ql_nope is bmm(q_nope^T, W_UK_T).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes, which the native
     committer refuses ("layout is not 2-D pitched"); the source stages its contiguous copy, the same values in row-major order."""
     import torch
+
     from verity_vllm.acquire.sources import attention_source as AS
     got = []
     src = object.__new__(AS.AttentionSource)

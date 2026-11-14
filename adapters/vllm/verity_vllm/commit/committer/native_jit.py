@@ -23,18 +23,23 @@ import fcntl
 import hashlib
 import os
 import re
-import sys
 from collections.abc import Callable, Sequence
 from typing import Any
 
 from verity.definitions.kernels import ROW_COMMIT, SHA512
+
+from verity_vllm.log import init_logger
+
+__all__ = ["CUDA_CFLAGS"]
+
+logger = init_logger(__name__)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCES = ("native_collect.cpp", "native_gather.cu", "native_rows.cu")
 #: headers a source includes by name from outside the sources' directory: the GPU's one SHA-512 and its one row commit
 SHARED = {"sha512.cuh": str(SHA512), "row_commit.cuh": str(ROW_COMMIT)}
 CFLAGS = ("-O3",)
-CUDA_CFLAGS = ("-O3", "--use_fast_math")
+CUDA_CFLAGS = ("-O3",)
 
 _DEF = re.compile(r'\.def(?:_readonly|_readwrite|_property_readonly|_property|_static)?\(\s*"([A-Za-z_][A-Za-z0-9_]*)"')
 _CLASS = re.compile(r'py::class_<[^>]+>\(\s*m\s*,\s*"(\w+)"')
@@ -145,11 +150,10 @@ def staged_sources(build_dir: str, sources: Sequence[str]) -> list[str]:
             body = f.read()
         dst = os.path.join(sd, rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        try:
+        same = False
+        if os.path.isfile(dst):
             with open(dst, "rb") as f:
                 same = f.read() == body
-        except FileNotFoundError:
-            same = False
         if not same:
             tmp = f"{dst}.{os.getpid()}.tmp"
             with open(tmp, "wb") as f:
@@ -193,7 +197,7 @@ def jit_load(name: str, sources: Sequence[str], *, parent: str | None = None, cf
     with build_lock(bd):
         stale = os.path.join(bd, "lock")
         if os.path.exists(stale):
-            print(f"[jit] removing {stale}: no live build holds {bd}.build-lock, so a killed build left it", file=sys.stderr, flush=True)
+            logger.warning("[jit] removing %s: no live build holds %s.build-lock, so a killed build left it", stale, bd)
             with contextlib.suppress(FileNotFoundError):
                 os.remove(stale)
         module = loader(name=name, sources=staged_sources(bd, sources), extra_cflags=list(cflags), extra_cuda_cflags=list(cuda_cflags),

@@ -154,6 +154,35 @@ def test_prune_trees_folds_the_code_clones_packs_into_one_once_they_pass_50(tmp_
     assert packs() == 1 and git("rev-list", "--count", "HEAD", cwd=repo) == "51"
 
 
+def test_prune_trees_takes_each_train_and_after_landing_tree_an_hour_idle_that_no_process_works_in(tmp_path):
+    """A train's checkout with its log, and the tree of a job of the steps after a landing that was killed before it removed its
+    own (`research merge`'s `_own_tree`), go once nothing in them changed for an hour and no process works in them; one changed
+    since, one a process works in, and anything else in $TRAIN_TREES stay."""
+    trains = (tmp_path / "trains").resolve()
+
+    def tree(name: str, idle: bool) -> Path:
+        t = trains / name
+        t.mkdir(parents=True)
+        (t / "f").write_text("")
+        for p in (t / "f", t) if idle else ():
+            os.utime(p, (1_000_000, 1_000_000))
+        return t
+
+    gone = [tree("train-0123456789ab", True), tree("research-after-land-0123456789ab-k1ll3d", True)]
+    gone.append(trains / "train-0123456789ab.log")
+    gone[-1].write_text("")
+    busy = tree("research-after-land-ba9876543210-runs0n", True)
+    kept = [busy, tree("research-after-land-ba9876543210-fresh", False), tree("other-0123456789ab", True)]
+    env = {**os.environ, "REPO": str(tmp_path / "verity"), "FAST": str(tmp_path / "fast"), "TRAIN_TREES": str(trains)}
+    job = subprocess.Popen(["cat"], cwd=busy, stdin=subprocess.PIPE)
+    try:
+        subprocess.run(["sh", "-c", f'{function("prune_trees")}prune_trees'], env=env, check=True)
+    finally:
+        job.stdin.close()
+        job.wait()
+    assert [p.name for p in gone if p.exists()] == [] and all(p.exists() for p in kept)
+
+
 def test_merge_resets_a_local_main_that_drifted(repo):
     clone, tip = repo
     git("checkout", "-q", "-B", "main", cwd=clone)

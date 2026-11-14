@@ -22,6 +22,8 @@ public import Proofs.Core.Accel.Model
 * `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting (P1) and (P2), and at the `x`
   `CardWithinAccel` gives; `WorkSoundH200`, `WorkSoundSm120`, `WorkSoundOnCardH200` and `WorkSoundOnCardSm120` from
   `Proofs.Pouw.Dither.WorkSound`. None reads a premise beyond `WorkSound`'s and the statement's.
+* `WorkSoundAtTables`: `workSoundAt_of_workSound` at every card table, menu and host row, the statement that names no
+  table.
 * `h200_semantics`, `sm120_semantics`: the exact `s8` semantics (`Verity.Accel.s8Open`) meets (P1) and (P2) on each
   card, so `WorkSoundAt`'s hypotheses on `x` are not empty.
 * `h200_onCard`, `sm120_onCard`: at that semantics, on any period's devices, `cardAccel` (programs as runs within the
@@ -92,6 +94,7 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
       linarith [h4.2.1, h4.2.2]
     show G.use (A.answer b) (A.answerIn o x b) r ≤ G.rate r * Pd.T
     exact h1.2.trans (mul_le_mul_of_nonneg_left hwa (g2.1 r).le)
+  unfold WorkBound
   refine ⟨h G P nsb Reg Obs _ dev Pd μ Wmm Wsha Wans (fun b => pubCost e μ pb.mm (macs b))
     (fun b => pubCost e μ pb.sha (comps b)) ηw δ (nmax * Wmac) (Ein + Eout) κS Q κdmm κdsha sel Badv ξ κx κsha
     hdual hinst' hH hη hδ hδ1 (mul_nonneg hn hWmac) (add_nonneg hEi hEo) hξ hκd hcap g1 g2 g3 p1 p2 sak sha out svc'
@@ -145,6 +148,10 @@ theorem workSoundH200_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : Work
 
 theorem workSoundSm120_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundSm120 :=
   workSoundAt_of_workSound h _ _ _
+
+/-- **The headline on every card table at θ**, from `WorkSound`'s proof. -/
+theorem WorkSoundAtTables : Pouw.Guarantees.DitherInstance.WorkSoundAtTables :=
+  fun c pb hr => workSoundAt_of_workSound Pouw.SecurityProofs.Dither.WorkSound c pb hr
 
 /-- **The headline on the H200 at θ**, from `WorkSound`'s proof. -/
 theorem WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200 :=
@@ -233,7 +240,7 @@ open Classical in
 /-- **`OnCard` is met, with G1, G2 and G3**: at positive card rates, positive other rates and their memory,
 `cardAccel` is the period's devices at `x` under the identity match, meeting (G1), (G2) and (G3). -/
 theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (u : ResUnits)
-    (P : RoundProto) (L : Layout (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r)
+    (P : RoundProto) (L : RoundPlan (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r)
     (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     OnCard (cardAccel c x D u) c x D P L (Equiv.refl _) ∧ (cardAccel c x D u).G1 ∧ (cardAccel c x D u).G2 ∧
       (cardAccel c x D u).G3 := by
@@ -293,7 +300,7 @@ theorem cardAccel_callsAtPub {c : Verity.Accel.Card} (x : Verity.Accel.Open) (D 
 period's devices with positive other rates, some accelerator is the devices under some match, meets (G1), (G2) and
 (G3), and has its oracle calls at a public compression. -/
 theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto)
-    (L : Layout (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
+    (L : RoundPlan (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
       OnCard G Verity.Accel.H200.card Verity.Accel.s8Open D P L e ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧
         CallsAtPub G e pubBestH200 := by
@@ -303,7 +310,7 @@ theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto)
 
 /-- **`WorkSoundSm120`'s hypotheses on the card are met**, as on the H200. -/
 theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto)
-    (L : Layout (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
+    (L : RoundPlan (D.machine Verity.Accel.s8Open) P) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
       OnCard G Verity.Accel.Sm120.card Verity.Accel.s8Open D P L e ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧
         CallsAtPub G e pubBestSm120 := by

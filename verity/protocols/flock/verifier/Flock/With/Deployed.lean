@@ -18,8 +18,8 @@ public import Flock.With.Returns
 public import Flock.With.ReturnsWalk
 public import Flock.With.Zk
 public import Flock.With.ZkEq
-public import Flock.Witness
-import Flock.Sizes
+public import Flock.WitnessZk
+import Base.Sizes
 import Std.Data.HashMap
 import Std.Data.HashSet
 import Std.Data.TreeMap.Raw.Lemmas

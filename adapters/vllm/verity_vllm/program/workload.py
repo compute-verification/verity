@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.codec import _spec_id, decode_program, encode_program, program_digest
-from verity.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
+from verity.circuits.defs import Body, CompositeDefinition, BodyNode, SpecializedDefinition
 from verity.definitions.circuits.constants import REGISTRATION
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
@@ -40,7 +40,7 @@ from verity_vllm.program.shared_definitions import canonicalize
 SCHEMA = "verity/workload-program/v1"
 
 
-def _is_input_node(n: Node) -> bool:
+def _is_input_node(n: BodyNode) -> bool:
     return n.form == "batch" and is_input(n.fn)
 
 
@@ -210,7 +210,7 @@ def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
         counts[g] = counts.get(g, 0) + 1
     params = tuple((names[j], body.nodes[j].out) for j in range(K))
     logs: dict = {}
-    nodes = [Node(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K, logs)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs,
+    nodes = [BodyNode(n.form, n.fn, tuple(Coll(a.type, _remap(a.refs, K, logs)) for a in n.args), n.out, axes=n.axes, n=n.n, n_xs=n.n_xs,
                   name=n.name) for n in body.nodes[K:]]
     offsets = [0]
     for n in nodes:
@@ -266,10 +266,10 @@ class WorkloadRequest:
 
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
-# wrapper's `seed`, its seed rule's inputs (`seed_rule.PARAMS`, the window's salt each request's own copy) and `splits` are its
-# request's own, like the prompt, and so are a warm request's cached `prefix` (on the sparse-attention decoder with its index-K
-# slots `prefix_ik` and scales `prefix_iks`), and a resumed request's `last_token`
-_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "seeded", "body_seed", "seed_salt", "user", "splits", "prefix", "prefix_ik", "prefix_iks",
+# wrapper's `seed` and its seed rule's inputs (`seed_rule.PARAMS`, the window's salt each request's own copy) are its request's
+# own, like the prompt, and so are a warm request's cached `prefix` (on the sparse-attention decoder with its index-K slots
+# `prefix_ik` and scales `prefix_iks`), and a resumed request's `last_token`
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "seeded", "body_seed", "seed_salt", "user", "prefix", "prefix_ik", "prefix_iks",
                          "last_token")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
@@ -502,7 +502,7 @@ class WorkloadProgram:
         uniform = len(set(idx)) == 1
         if not uniform:
             # the shared group may sit at different positions per component ONLY when what precedes/follows it is
-            # request-local by construction (prompt, seed, splits, peers_*: a TP rank Program's received collective values, K per shape); any other
+            # request-local by construction (prompt, seed, peers_*: a TP rank Program's received collective values, K per shape); any other
             # group at a shifting position is still refused -- it would mean the components disagree on what the model's inputs are
             foreign = sorted({g for r in requests for g in r.component.groups if g != shared and not _is_request_local(g)})
             if foreign:

@@ -1,6 +1,6 @@
 """P11: names say the job, and versions appear only in hashed data.
 
-Checked today, against ``allowlists/p11_names.json``:
+Checked against ``allowlists/p11_names.json``:
 
 * ``module-name`` / ``package-name`` / ``def-name`` / ``class-name`` / ``flag-name`` / ``env-name``: a file, directory,
   function, class, flag or environment-variable name (``add_argument``, ``config.option`` and its ``env``) with a
@@ -36,7 +36,7 @@ OPTION = "verity_vllm.config.option"
 
 
 def name_tokens(name: str) -> list[str]:
-    out = []
+    out: list[str] = []
     for part in re.split(r"[_\-.]+", name):
         out += re.findall(r"[A-Z]+[0-9]*(?![a-z])|[A-Z]?[a-z]+[0-9]*|[0-9]+", part) if not part.islower() else [part]
     return [t.lower() for t in out if t]

@@ -324,6 +324,12 @@ private def exReadField (k : String) (v : Json) (j : Json) : Json :=
 private def exBothRegistering : Own :=
   { exRegistering with boundary := exOwn.boundary.setObjVal! "registered" (getD exRegistering.interior "registered") }
 
+/-- `exOwn`, the interior registration registering a value of the boundary's port `bx`'s name beside `w2`. -/
+private def exRegisteringBx : Own :=
+  { exOwn with interior := exInterior.setObjVal! "registered" (Json.arr #[
+      Json.mkObj [("value", "bx"), ("root", exRoot 5), ("domain", exRoot 6), ("leaves", Lean.toJson (4 : Nat))],
+      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]) }
+
 -- the reads that rest on the interior's own values, which the attached record names (`interiorReads`, `attach`): a
 -- value only the interior registers; not an own port's, a linked port's, or a value the boundary registers too
 #guard jeq (.arr (interiorReads exRegistering [exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]))
@@ -332,7 +338,27 @@ private def exBothRegistering : Own :=
 #guard (interiorReads exOwn [exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]]).isEmpty
 #guard (interiorReads exLinked [exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]]).isEmpty
 #guard (interiorReads exBothRegistering [exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).isEmpty
-#guard (exCheck true (exReported "w2" 9 exBothRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+-- a name is one registration's (`namesOk`): the interior registering a value the boundary registers too, or a value of
+-- one of the boundary's ports' names, is refused, whatever the statements read (`second-interior-names`)
+#guard (exCheck true (exReported "w2" 9 exBothRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-interior-names"]
+#guard namesOk exRegistering && namesOk (exRegisteringW 6) && !namesOk exBothRegistering && !namesOk exRegisteringBx
+#guard (exCheck true (exReported "w2" 9 exRegisteringBx) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-interior-names"]
+-- what a replay block returns is read only at round 1's port (`returnsOk`): the interior registering a value of a name
+-- the block's return has in the boundary record is refused, whatever the statements read and with the form off too
+-- (`second-return`); a value of another name is not, and neither is one where the return has no such name
+#guard returnsOk exRegistering && returnsOk { exRegistering with returns := #["o0"] } &&
+  !returnsOk { exRegistering with returns := #["o0", "w2"] } && returnsOk { exOwn with returns := #["w2"] }
+#guard (exCheck true (exReported "w2" 9 { exRegistering with returns := #["o0"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+#guard (exCheck true (exReported "w2" 9 { exRegistering with returns := #["w2"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-return"]
+#guard (exCheck false (exReported "w2" 9 { exRegistering with returns := #["w2"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-return"]
+#guard (exCheck true (exReported "w2" 9 { exRegisteringBx with returns := #["bx"] })
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-interior-names", "second-return"]
+#guard (check true { exRegistering with returns := #["w1"] } none).codes == #["second-return", "second-statements"]
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {} #[Json.mkObj [("value", "w2")]]) "interior_reads")
   (.arr #[Json.mkObj [("value", "w2")]])
 #guard jeq (getD (attach (Json.mkObj [("checks", Json.mkObj [])]) {}) "interior_reads") .null
@@ -486,6 +512,38 @@ private def exReturning (ks : List Nat) : Array Flock.Program.Defn :=
   some #[(⟨"Pair_v0", "x", "x"⟩, 3, #[⟨0, 1, 2, 0⟩, ⟨1, 2, 0, 1⟩])]
 #guard linksOf (exReturning [1, 0]) 1 == none
 #guard linksOf (exReturning [0, 0]) 1 == none
+
+/-- A template `Two_v0` of one parameter `x`, returning two fields. -/
+private def exTwoDefn : Flock.Program.Defn :=
+  exDefn "Two_v0" false #["x"] #[exNode .prim 2 #[exArg true 0], exNode .prim 2 #[exArg true 0]]
+    #[.affine false 0 0 1, .affine false 1 0 1] (.tuple #[.value 8, .value 8])
+
+/-- `Two_v0` (3) called on leaf `i` of the replay block's `x`. -/
+private def exTwoAt (i : Nat) : Flock.Program.Node :=
+  { exNode .call 3 #[exParts #[.affine true 0 i 1]] with out := .tuple #[.value 8, .value 8] }
+
+/-- `exDefsN 2` with `Two_v0` (3), the replay block's body `block` returning `ret` of type `rty`. -/
+private def exHeads (ret : Array Flock.Program.Part) (rty : Flock.Program.Ty := .array 2 (.value 8))
+    (block : Array Flock.Program.Node := #[exTwoAt 0, exTwoAt 1]) : Array Flock.Program.Defn :=
+  (exDefsN 2 block ret rty).push exTwoDefn
+
+-- a caller of one instance returns one whole field `f` of its output, linking the template's `o<f>`, each field its
+-- own link; its whole output of two fields, the same field unlike its callers, a batch's field, or a caller's output
+-- not its template's, none
+#guard linkRuns (exHeads #[.affine false 0 0 1, .affine false 1 0 1]) 1 ==
+  some #[(⟨"Two_v0", "x", "x"⟩, 2, #[⟨0, 2, 0, 1⟩]), (⟨"Two_v0", "o0", "o0"⟩, 2, #[⟨0, 2, 0, 1⟩])]
+#guard linksOf (exHeads #[.affine false 0 1 1, .affine false 1 1 1]) 1 ==
+  some #[⟨"Two_v0", "x", "x"⟩, ⟨"Two_v0", "o1", "o0"⟩]
+#guard linkRuns (exHeads #[.affine false 0 0 1, .affine false 1 0 1, .affine false 0 1 1, .affine false 1 1 1]
+    (.tuple #[.array 2 (.value 8), .array 2 (.value 8)])) 1 ==
+  some #[(⟨"Two_v0", "x", "x"⟩, 2, #[⟨0, 2, 0, 1⟩]), (⟨"Two_v0", "o0", "o0"⟩, 2, #[⟨0, 2, 0, 1⟩]),
+    (⟨"Two_v0", "o1", "o1"⟩, 2, #[⟨0, 2, 0, 1⟩])]
+#guard linksOf (exHeads #[.affine false 0 0 2, .affine false 1 0 2] (.array 4 (.value 8))) 1 == none
+#guard linksOf (exHeads #[.affine false 0 0 1, .affine false 1 1 1]) 1 == none
+#guard linksOf (exHeads #[.affine false 0 0 1] (.value 8) #[{ exNode .batch 3
+    #[{ exParts #[.affine true 0 0 2] with dims := some (2, 1) }] with n := 2, out := .array 2 exTwoDefn.ret }]) 1 ==
+  none
+#guard linksOf (exHeads #[.affine false 0 0 1] (.value 8) #[exNode .call 3 #[exParts #[.affine true 0 0 1]]]) 1 == none
 -- a batch's members read one row each, an outer axis mapped, or the one row a shared argument is
 #guard linkRuns (exDefsN 2 #[{ exNode .batch 0 #[{ exParts #[.affine true 0 0 2] with dims := some (2, 1) }] with
     n := 2 }] #[] (.tuple #[])) 1 == some #[(⟨"Pair_v0", "x", "x"⟩, 2, #[⟨0, 2, 0, 1⟩])]
@@ -655,5 +713,15 @@ private def exWiredBinding (own : Own) : Option String := do
 #guard (check true (exWiredAt 2 1) none).codes == #["second-wires"]
 #guard (check true { exWired with rows := #[⟨"Triple_v0", "x", 3, #[⟨0, 2, 0, 0⟩]⟩] } none).codes == #["second-wires"]
 #guard (check true (exWiredAt 3 2) none).codes == #["second-statements"]
+-- a wire whose writer's port a link names reads an output the replay block returns, and one whose writer's part is not
+-- before its reader's, or is its reader's own, is out of order: neither makes wires
+#guard wiresOk exTwoParts exWired
+#guard !wiresOk exTwoParts { exWired with links := some #[⟨"Pair_v0", "out", "o0"⟩] }
+#guard (check true { exWired with
+    links := some #[⟨"Pair_v0", "out", "o0"⟩]
+    rows := exWired.rows.push ⟨"Pair_v0", "out", 3, #[⟨0, 3, 0, 1⟩]⟩ } none).codes == #["second-wires"]
+#guard !wiresOk exTwoParts.reverse exWired
+#guard (check true { exWired with parts := some exTwoParts.reverse } none).codes == #["second-wires"]
+#guard !wiresOk exTwoParts { exWiredAt 1 0 with wires := some #[{ exWire with writer := "Triple_v0" }] }
 
 end Spot.SecondStage

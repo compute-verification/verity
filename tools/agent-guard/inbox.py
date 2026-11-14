@@ -2,6 +2,8 @@
 """`inbox.py`: tell a running agent something, on this VM or any other. The shell hook (`shell_hook.py`) hands it over.
 
     python3 tools/agent-guard/inbox.py send AGENT_ID --text 'TEXT'   (or --file PATH; `--file -` reads stdin)
+    python3 tools/agent-guard/inbox.py send AGENT_ID --wait S ...    then say whether a VM took it within S seconds; exit 1
+                                                                     when none did: its hook is not taking its messages
     python3 tools/agent-guard/inbox.py send AGENT_ID --local ...     only this VM's inbox, no push
     python3 tools/agent-guard/inbox.py pull AGENT_ID [--repo DIR]    move AGENT_ID's pushed messages into this VM's inbox
     python3 tools/agent-guard/inbox.py list                          each agent's pending and delivered messages (a
@@ -11,20 +13,38 @@
     python3 tools/agent-guard/inbox.py check AGENT_ID [--repo DIR]   on AGENT_ID's own VM: whether this VM's hook polls
                                                                      for it, and whether Cursor reads a shell hook here; exit
                                                                      1, with how to read the branch, if not
+    python3 tools/agent-guard/inbox.py guard [AGENT_ID] [--repo DIR] on your own VM: nothing when a shell hook has run for
+                                                                     you here; else one line (the guard and the inbox are
+                                                                     not running, why, the fix) and exit 1. `research`
+                                                                     prints it once a session
     python3 tools/agent-guard/inbox.py selftest [AGENT_ID]           on your own VM ($CURSOR_CONVERSATION_ID by default):
                                                                      the checks of `check`, then send yourself a message your
                                                                      next commands must deliver: delivery end to end
+    python3 tools/agent-guard/inbox.py turns [AGENT_ID]              on AGENT_ID's own VM ($CURSOR_CONVERSATION_ID by
+                                                                     default): the model each of its turns' hook events
+                                                                     name, as this VM's event log has it; exit 1 when the
+                                                                     log holds no event of it
 
 `send` pushes the message as a commit to origin's branch `inbox/AGENT_ID` (one file, `inbox.md`), from the checkout it runs
 in (`--repo`). Wherever AGENT_ID runs, its shell hook starts `pull` in the background at most every $AGENT_INBOX_POLL_S
 seconds (default 30): `pull` appends the branch's new messages to this VM's inbox and pushes a commit that empties the file,
 so a message reaches one VM once. A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `AGENT_ID.md`, and
 messages sent before delivery queue up in it. The agent's next shell command is refused once with them as the refusal's text,
-and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands; one
-still waiting when its turn completes is the turn's follow-up (`stop_hook.py`). An agent whose turn has ended (FINISHED or
-IDLE) runs no command and takes nothing until it is resumed, with Task or a follow-up. `send` says when earlier messages to
-the agent are still uncollected on origin.
-`--local` writes this VM's inbox directly and reaches only agents whose shell commands pass through this VM's hook.
+and the agent re-runs the command, so a pushed message arrives within a poll interval and two of the agent's commands.
+Nothing delivers one at a turn's end: an agent whose turn has ended (FINISHED or IDLE) runs no command and starts no turn
+for a message that waits (`stop_hook.py` offers one to the runtime as the turn's follow-up; no delivery relies on it). One
+its VM holds unshown when its turn ends may be gone by its next turn: `pull` has emptied the branch, and the inbox is under
+`/tmp`, which a cloud VM does not keep across a long pause. So an agent whose turn has ended is reached by resuming it with
+the text itself, with Task or a follow-up, never by `send` alone. `send` says so each time, and says when earlier messages
+to the agent are still uncollected on origin; `send --wait S` says whether a VM took this one: taken is on the agent's VM,
+neither shown nor acted on, and shown only if its turn runs another command. `--local` writes this VM's inbox directly and
+reaches only agents whose shell commands pass through this VM's hook.
+
+Which hooks a session runs is fixed when its VM boots, by its branch's tracked `.cursor/hooks.json`, and nothing on a
+running VM changes it. A shell hook that ran for an agent leaves its event in the guard's event log, or (a copy from before
+that log) the inbox's poll mark: `check`, `selftest` and `guard` read both. Every hook's event there holds, where Cursor's
+payload has them, its turn's id (`generation_id`) and the model the payload names, which `turns` prints for one agent: a
+line per turn with when its first and last event were recorded, how many it has, and the model. Each VM's log is its own.
 
 AGENT_ID is the agent's conversation id: a cloud agent's or a subagent's is the `bc-…` id its Task call returned.
 """
@@ -116,10 +136,11 @@ def commit(repo: Path, agent: str, text: str, parent: str | None, message: str) 
     return sha
 
 
-def push(agent: str, text: str, repo: Path) -> str:
-    """Append `text` to origin's `inbox/agent`, retrying while another push moves the branch; the new tip."""
+def push(agent: str, text: str, repo: Path, ident: str | None = None) -> str:
+    """Append `text` to origin's `inbox/agent` as the message `ident`, retrying while another push moves the branch; the new
+    tip."""
     full_id(agent)
-    item, err = entry(text, secrets.token_hex(6)), None
+    item, err = entry(text, ident or secrets.token_hex(6)), None
     for _ in range(PUSH_TRIES):
         try:
             at = tip(repo, agent)
@@ -144,8 +165,38 @@ def unpulled(repo: Path, agent: str) -> tuple[int, str | None]:
     return len(stamps), (stamps[0] if stamps else None)
 
 
+#: seconds between `send --wait`'s looks at origin, and the longest it may wait: no tool call blocks more than 20 minutes
+WAIT_EVERY_S, WAIT_MAX_S = 5.0, 1200.0
+
+
+def taken(repo: Path, agent: str, ident: str) -> bool:
+    """Whether a VM has taken the message `ident` off origin's `inbox/agent`: `pull` empties the branch's file."""
+    at = tip(repo, agent)
+    return at is None or ident not in HEAD.findall(remote_text(repo, agent, at))
+
+
+def wait_taken(repo: Path, agent: str, ident: str, max_s: float, sleep=time.sleep, clock=time.monotonic) -> float | None:
+    """Seconds until a VM took the message `ident`, looking every WAIT_EVERY_S for `max_s`; None when none took it. A look
+    git couldn't make says so and counts as not taken."""
+    start = clock()
+    while True:
+        try:
+            if taken(repo, agent, ident):
+                return clock() - start
+        except RuntimeError as e:
+            print(f"inbox: could not read origin's inbox/{agent}: {e}", file=sys.stderr)
+        left = max_s - (clock() - start)
+        if left <= 0:
+            return None
+        sleep(min(WAIT_EVERY_S, left))
+
+
 def age_s(stamp: str, now: float | None = None) -> float:
     return (time.time() if now is None else now) - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%MZ"))
+
+
+def utc(t: int) -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t))
 
 
 def stale_note(agent: str, n: int, oldest: str, earlier: bool = False) -> str:
@@ -157,10 +208,13 @@ def stale_note(agent: str, n: int, oldest: str, earlier: bool = False) -> str:
             f"FETCH_HEAD:{FILE}`, and `inbox.py check {agent}` on its VM says why")
 
 
-#: a target that ended its turn runs no shell command, so its hook never pulls (a worker finished and marked its PR ready
-#: before two stop messages reached it); a sender without the Cursor API can't see that, so `send` always says it
-UNTIL_RESUMED = ("it arrives only while {agent}'s turn runs shell commands: if {agent} has ended its turn (FINISHED or IDLE), "
-                 "resume it with Task (or a follow-up), which delivers at once")
+#: a target that ended its turn runs no shell command, so its hook neither pulls nor delivers, and it starts no turn for a
+#: message that waits (a worker finished and marked its PR ready before two stop messages reached it); what its VM's inbox
+#: holds then, under `/tmp`, a cloud VM may not keep until its next turn, so a resume carries the text; a sender without
+#: the Cursor API can't see that a turn has ended, so `send` always says it
+UNTIL_RESUMED = ("{agent}'s next shell command delivers it, and nothing delivers it at a turn's end. If {agent} has ended its "
+                 "turn (FINISHED or IDLE), resume it with the text itself (Task or a follow-up): a message its VM holds "
+                 "unshown when its turn ends may be gone by its next turn")
 
 
 #: Cursor reads hooks.json as JSONC and strips these before parsing it, inside strings too: a `/*` in a command (a glob such as
@@ -183,33 +237,123 @@ def as_cursor_reads(text: str) -> object:
     return parsed(text)
 
 
-def hook_problems(agent: str, repo: Path) -> list[str]:
-    """Why this VM's shell hook may not run for `agent`: each hooks.json Cursor could read here (the checkout's, and each
-    directory's above it, since a workspace root can hold the checkout) that it reads otherwise than as JSON or with no shell
-    hook, and no event of `agent` in EVENT_LOG, where every run of this hook records one."""
-    problems, shell_hook_read = [], False
-    found = [d / ".cursor/hooks.json" for d in (repo.resolve(), *repo.resolve().parents) if (d / ".cursor/hooks.json").is_file()]
-    for path in found:
-        text = path.read_text(errors="replace")
-        read = as_cursor_reads(text)
-        config = read if isinstance(read, dict) else {}
-        if read != parsed(text):
-            problems.append(f"Cursor reads {path} otherwise than its JSON says: it strips a `/*` or `//` inside it as a comment"
-                            f", leaving {read if isinstance(read, str) else 'the steps ' + ', '.join(sorted(config.get('hooks') or {}))}")
-        hooks = (config.get("hooks") or {}).get("beforeShellExecution") or []
-        shell_hook_read |= any("shell_hook.py" in str(h.get("command")) for h in hooks if isinstance(h, dict))
-    if not shell_hook_read:
-        problems.append(f"Cursor reads no shell hook from {', '.join(map(str, found)) or f'a .cursor/hooks.json at {repo} or above'}")
-    seen = False
+def shell_hook_in(text: str) -> bool:
+    """Whether Cursor reads a shell hook from a hooks.json's `text`."""
+    read = as_cursor_reads(text)
+    hooks = (read.get("hooks") or {}).get("beforeShellExecution") or [] if isinstance(read, dict) else []
+    return any("shell_hook.py" in str(h.get("command")) for h in hooks if isinstance(h, dict))
+
+
+def hooks_file(repo: Path) -> Path | None:
+    """The one hooks.json a cloud agent's session reads: the one at the top of the checkout holding `repo`; one in a
+    directory above the checkout (a workspace root that holds it) is not read. None when `repo` is in no checkout."""
+    try:
+        return Path(git(repo, "rev-parse", "--show-toplevel").strip()) / ".cursor/hooks.json"
+    except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+        print(f"inbox: {repo.resolve()} is in no checkout: {e}", file=sys.stderr)
+        return None
+
+
+def file_problems(repo: Path) -> list[str]:
+    """How Cursor reads the hooks.json of `repo`'s checkout (`hooks_file`) otherwise than as its JSON, and whether it reads
+    no shell hook from it."""
+    path = hooks_file(repo)
+    if path is None or not path.is_file():
+        return [f"Cursor reads no shell hook: {repo.resolve()} is in no checkout" if path is None else
+                f"Cursor reads no shell hook: there is no {path}"]
+    problems, text = [], path.read_text(errors="replace")
+    read = as_cursor_reads(text)
+    if read != parsed(text):
+        steps = (read.get("hooks") or {}) if isinstance(read, dict) else {}
+        problems.append(f"Cursor reads {path} otherwise than its JSON says: it strips a `/*` or `//` inside it as a comment"
+                        f", leaving {read if isinstance(read, str) else 'the steps ' + ', '.join(sorted(steps))}")
+    if not shell_hook_in(text):
+        problems.append(f"Cursor reads no shell hook from {path}")
+    return problems
+
+
+def event_lines():
+    """EVENT_LOG's lines, oldest first: the file `settings.record_event` rotated it to, then the log itself."""
     for log in (Path(settings.EVENT_LOG + ".1"), Path(settings.EVENT_LOG)):
         if log.exists():
-            seen |= any('"hook": "shell_hook.py"' in ln and f'"conversation_id": "{agent}"' in ln
-                        for ln in log.read_text(errors="replace").splitlines())
-    if not seen:
-        problems.append(f"no shell hook has run for {agent} on this VM: {settings.EVENT_LOG} has no event of it, though this "
-                        "command's own hook would have written one (none runs, or an older copy without the log does). Cursor "
-                        "reads hooks.json when the session starts: after fixing it, restart the session")
+            yield from log.read_text(errors="replace").splitlines()
+
+
+def hook_seen(agent: str) -> bool:
+    """Whether a shell hook has run for `agent` on this VM: EVENT_LOG holds an event of it, or the inbox its poll mark. Only
+    the shell hook writes that mark, and a copy from before the event log writes it too: hook.sh runs origin/main's copy,
+    which can be older than the checkout's. Another hook's event shows nothing: from a hooks.json it misreads, Cursor can
+    run the Task hook on shell commands and no shell hook."""
+    if any('"hook": "shell_hook.py"' in ln and f'"conversation_id": "{agent}"' in ln for ln in event_lines()):
+        return True
+    return (INBOX / f"{agent}.polled").exists()
+
+
+def shown(value: object) -> str:
+    """One of an event's kept values (`settings.EVENT_VALUES`) as `turns` prints it: its printable characters, cut as the
+    hook cuts it, since any process on the VM can write the log; `-` where the event has none."""
+    if not isinstance(value, str) or not value:
+        return "-"
+    return "".join(c if c.isprintable() else "?" for c in value[:settings.EVENT_VALUE_MAX])
+
+
+def turns(agent: str) -> list[tuple[str, int, int, int, str]]:
+    """Each turn of `agent` that EVENT_LOG holds, oldest first: its generation id, when its first and its last event were
+    recorded (`t`, seconds since the epoch), how many events it has, whichever hook recorded them, and the model they name.
+    An event names a turn and a model only where Cursor's payload had them and the hook that ran kept them, so `-` stands
+    for either it lacks, and a generation id whose events name more than one model is a turn for each."""
+    seen: dict[tuple[str, str], tuple[int, int, int]] = {}
+    for ln in event_lines():
+        e = parsed(ln)
+        if not isinstance(e, dict) or e.get("conversation_id") != agent or not isinstance(e.get("t"), int):
+            continue
+        key = (shown(e.get("generation_id")), shown(e.get("model")))
+        first, last, n = seen.get(key, (e["t"], e["t"], 0))
+        seen[key] = (min(first, e["t"]), max(last, e["t"]), n + 1)
+    return sorted(((g, first, last, n, m) for (g, m), (first, last, n) in seen.items()), key=lambda turn: turn[1])
+
+
+#: Cursor reads a VM's hooks once, when the VM boots, from its branch's tracked hooks.json: nothing done on a running VM
+#: changes which hooks it runs
+AT_BOOT = "A VM reads its hooks once, when it boots, from its branch's .cursor/hooks.json"
+
+
+def hook_problems(agent: str, repo: Path) -> list[str]:
+    """Why this VM's shell hook may not run for `agent`: what `file_problems` finds at `repo`, and no trace of a shell hook
+    run for `agent` (`hook_seen`), which this command's own hook would have left."""
+    problems = file_problems(repo)
+    if not hook_seen(agent):
+        problems.append(f"no shell hook has run for {agent} on this VM: {settings.EVENT_LOG} has no event of it and {INBOX} no "
+                        f"poll mark of it, though this command's own hook would have left both. {AT_BOOT}: only a VM booted "
+                        "after that file is fixed runs it")
     return problems
+
+
+def guard_off(agent: str, repo: Path) -> str | None:
+    """One line for `agent` on its own VM when no shell hook has run for it here: the guard and the inbox are not running,
+    why (its branch's hooks.json, read at `repo`'s checkout), and the fix; None when one has run."""
+    if hook_seen(agent):
+        return None
+    head = (f"no shell hook has run for {agent} on this VM, so the guard that refuses a command printing a secret and the "
+            f"inbox are not running here. {AT_BOOT}")
+    if hooks_file(repo) is None:
+        return f"{head}. Run `python3 tools/agent-guard/inbox.py guard {agent}` in your checkout for why, and the fix"
+    problems = file_problems(repo)
+    try:
+        main = git(repo, "show", "origin/main:.cursor/hooks.json")
+    except (RuntimeError, OSError, subprocess.SubprocessError) as e:
+        main = f"unread ({e})"
+    new_vm = "a VM booted from the branch after that runs them"
+    if not problems:
+        why = "this branch's loads as written now, so it changed after this VM booted, or Cursor did not load it"
+        fix = f"Push the branch: {new_vm}"
+    elif shell_hook_in(main) and as_cursor_reads(main) == parsed(main):
+        why, fix = problems[0], f"Merge origin/main, whose hooks.json loads, and push: {new_vm}"
+    else:
+        why, fix = problems[0], ("origin/main's does not load either, as of this checkout's last fetch: fetch it, merge it "
+                                 f"once it loads, and push: {new_vm}")
+    return (f"{head}: {why}. {fix}. Until then `python3 tools/agent-guard/inbox.py check {agent}` says how to read your "
+            "messages by hand")
 
 
 def pull(agent: str, repo: Path, inbox: Path = INBOX) -> int:
@@ -246,7 +390,8 @@ def pull(agent: str, repo: Path, inbox: Path = INBOX) -> int:
         lock.unlink(missing_ok=True)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, sleep=time.sleep, clock=time.monotonic) -> int:
+    """`sleep` and `clock` are what `send --wait` waits by."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("send")
@@ -255,6 +400,8 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--text")
     g.add_argument("--file")
     s.add_argument("--local", action="store_true", help="this VM's inbox only, no push")
+    s.add_argument("--wait", type=float, metavar="S", help=f"then say whether a VM took it within S seconds (at most "
+                                                           f"{WAIT_MAX_S:g}); exit 1 when none did")
     s.add_argument("--repo", type=Path, default=Path("."), help="the checkout whose origin carries the message")
     p = sub.add_parser("pull")
     p.add_argument("agent")
@@ -266,10 +413,31 @@ def main(argv: list[str] | None = None) -> int:
     ck = sub.add_parser("check")
     ck.add_argument("agent")
     ck.add_argument("--repo", type=Path, default=Path("."))
-    sf = sub.add_parser("selftest")
-    sf.add_argument("agent", nargs="?", default=settings.CONVERSATION_ID)
-    sf.add_argument("--repo", type=Path, default=Path("."))
+    for name in ("guard", "selftest"):
+        sf = sub.add_parser(name)
+        sf.add_argument("agent", nargs="?", default=settings.CONVERSATION_ID)
+        sf.add_argument("--repo", type=Path, default=Path("."))
+    tn = sub.add_parser("turns")
+    tn.add_argument("agent", nargs="?", default=settings.CONVERSATION_ID)
     a = ap.parse_args(argv)
+    if a.cmd == "turns":
+        rows = turns(agent_id(a.agent))
+        if not rows:
+            print(f"inbox: {settings.EVENT_LOG} holds no event of {a.agent}: no hook has run for it on this VM, or its events "
+                  "have rotated out")
+            return 1
+        print(f"{'generation_id':<36}  {'first_event':<20}  {'last_event':<20}  events  model")
+        for generation, first, last, n, model in rows:
+            print(f"{generation:<36}  {utc(first)}  {utc(last)}  {n:>6}  {model}")
+        if any("-" in (generation, model) for generation, _, _, _, model in rows):
+            print("inbox: `-` stands for what a turn's events don't name: a hook from before the log kept it recorded them, or "
+                  "Cursor's payload had none", file=sys.stderr)
+        return 0
+    if a.cmd == "guard":
+        line = guard_off(full_id(a.agent), a.repo)
+        if line:
+            print(line)
+        return 1 if line else 0
     if a.cmd == "selftest":
         problems = hook_problems(full_id(a.agent), a.repo)
         token = secrets.token_hex(4)
@@ -285,20 +453,37 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "send":
         text = a.text if a.text is not None else (sys.stdin.read() if a.file == "-" else Path(a.file).read_text())
         if a.local:
-            print(f"queued for {a.agent}: {send(a.agent, text)}")
+            print(f"queued for {a.agent}: {send(a.agent, text)}; {UNTIL_RESUMED.format(agent=a.agent)}")
             return 0
+        if a.wait is not None and not 0 < a.wait <= WAIT_MAX_S:
+            raise SystemExit(f"inbox: --wait {a.wait:g} is not within 0 to {WAIT_MAX_S:g} seconds (no tool call blocks more than "
+                             "20 minutes)")
         try:
             before = unpulled(a.repo, full_id(a.agent))
         except RuntimeError:
             before = (0, None)
-        print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo)[:12]}; its "
-              f"shell hook delivers it within a poll interval, but {UNTIL_RESUMED.format(agent=a.agent)}")
+        ident = secrets.token_hex(6)
+        print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo, ident)[:12]}; "
+              f"{UNTIL_RESUMED.format(agent=a.agent)}"
+              + ("" if a.wait is not None else ". `--wait S` says whether its VM took it within S seconds"), flush=True)
         n, oldest = before
         if n and oldest and age_s(oldest) > STALE_S:
             print(f"inbox: NOT DELIVERED YET: {stale_note(a.agent, n, oldest, earlier=True)}", file=sys.stderr)
         elif n and oldest:
             print(f"inbox: {n} earlier message(s) uncollected since {oldest}; unpulled past {STALE_S // 60} min means "
                   f"{a.agent}'s VM is not pulling (`inbox.py status {a.agent}`)", file=sys.stderr)
+        if a.wait is None:
+            return 0
+        waited = wait_taken(a.repo, a.agent, ident, a.wait, sleep, clock)
+        if waited is None:
+            print(f"inbox: NOT TAKEN in {a.wait:g} s: no VM pulled {ident} off origin's inbox/{a.agent}, so its hook is not "
+                  f"taking its messages now: {a.agent} is inside one long command or has ended its turn, or its VM runs no "
+                  f"shell hook (`inbox.py guard {a.agent}` on its VM says). It stays on the branch for a later pull; to "
+                  "stop its work now, cancel its runs yourself", file=sys.stderr)
+            return 1
+        print(f"inbox: taken {waited:.0f} s after the push: {a.agent}'s VM pulled {ident}. Taken is neither shown nor acted "
+              "on: its next shell command shows it, and if its turn ends first it may be gone by its next turn (then resume "
+              f"{a.agent} with the text itself); its runs and its issue show whether it acted")
         return 0
     if a.cmd == "status":
         n, oldest = unpulled(a.repo, full_id(a.agent))

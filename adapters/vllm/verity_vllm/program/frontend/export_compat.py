@@ -19,12 +19,15 @@ counts them as structural scaffolding.
 from __future__ import annotations
 
 import importlib
+import importlib.machinery
 import inspect
+import socket
 import sys
 from contextlib import contextmanager
 
 import torch
 
+from verity_vllm.config import vllm_revision
 from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.program.frontend.dsv4_leaves import dsv4_attention_leaves
 from verity_vllm.program.frontend.marlin_moe_leaf import mxfp4_marlin_moe_leaf
@@ -137,7 +140,6 @@ class _AnswerCudaFinder:
     def find_spec(self, name, path, target=None):
         if name != "vllm.platforms":
             return None
-        import importlib.machinery
         sys.meta_path.remove(self)
         spec = importlib.machinery.PathFinder.find_spec(name, path)
         if spec is not None and spec.loader is not None:
@@ -194,9 +196,8 @@ def read_back_applied() -> dict:
         except Exception as e:  # noqa: BLE001
             out["num_sms_error"] = f"{type(e).__name__}: {e}"
     try:
-        import vllm
         import vllm.envs as envs
-        out["vllm_version"] = str(vllm.__version__)
+        out["vllm_version"] = vllm_revision()
         out["batch_invariant"] = bool(envs.VLLM_BATCH_INVARIANT)
     except Exception as e:  # noqa: BLE001
         out["vllm_error"] = f"{type(e).__name__}: {e}"
@@ -218,7 +219,6 @@ def read_back_applied() -> dict:
 
 def host_facts() -> dict:
     """The construction HOST (informational; not part of any identity): hostname, CUDA visibility, the host GPU's name."""
-    import socket
     from verity_vllm import settings
     h = {"hostname": socket.gethostname(), "CUDA_VISIBLE_DEVICES": settings.raw("CUDA_VISIBLE_DEVICES"), "cuda_available": bool(torch.cuda.is_available()),
          "host_gpu": None}
@@ -553,7 +553,7 @@ def fused_allreduce_rms_norm_leaf(model=None):
                      and bool(bus.settings.get("flashinfer")) and hidden_states.dtype == torch.bfloat16
                      and len(shape) == 2 and shape[1] == 6144 and M <= 42
                      and tuple(residual.shape) == shape and tuple(norm.weight.shape) == (6144,))
-            if fused:
+            if fused and bus is not None:
                 return bus.fused_allreduce_rms_norm(hidden_states, residual, norm.weight, float(norm.variance_epsilon))
         except (AttributeError, RuntimeError, TypeError, ValueError):
             pass

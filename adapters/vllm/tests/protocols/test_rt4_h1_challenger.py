@@ -12,7 +12,7 @@ challenger's signed close, sealed under its ledger.
 * the window's sampling coin opens once, after a root over the manifest, the last receipts and every round's root
   and coin; an early sample, a sample from another family and a challenge phase closed with no sample are refused.
 * round s's root commits the A and z tables of its calls and round s - 1's receipts.
-* a window whose coins were held in the serving process is no challenge phase's and credits nothing; pouw-serve
+* a window whose coins were held in the serving process is no challenge phase's and credits nothing; ncp-v2
   takes the auditor host's challenger (the Commit's coins, its C2 replay challenge among them: `test_commit_coins`).
 * a window admits in round 0 only unless its ``admission`` is ``per-round``.
 * the release log is the only evidence that a round's coin followed its root, so an unsigned log would pass roots chosen
@@ -28,26 +28,30 @@ import socket
 import threading
 from pathlib import Path
 from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import salt as PS  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.spot.device import challenger as LC  # noqa: E402
-from verity.protocols.spot.device import remote as R  # noqa: E402
-from verity.protocols.spot.device.challenger import LiveCommitment, record_message  # noqa: E402
-from verity.commitments.crypto import lms  # noqa: E402
-from verity_vllm.pipeline import pouw_serve  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
+from verity.commitments.crypto import lms
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import salt_of
+from verity.protocols.spot.device import challenger as LC
+from verity.protocols.spot.device import remote as R
+from verity.protocols.spot.device.challenger import LiveCommitment, record_message
 
-from tests.protocols import challenger_host as CH  # noqa: E402
-from tests.protocols import test_pouw_h1 as T  # noqa: E402
+from tests.protocols import challenger_host as CH
+from tests.protocols import test_pouw_h1 as T
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 PRIVATE, KEY = CH.challenger_key(1, H=6)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
@@ -86,7 +90,8 @@ class _Session:
                  reserved: bool = False, withhold: bool = False) -> None:
         self.name, self.tree, self.directory = name, tmp_path / name, tmp_path / name / "out"
         self.leaf, self.reserved, self.withhold, self.seed = leaf, reserved, withhold, seed
-        self._monkeypatch, self.draw, self.at = monkeypatch, None, T.DRAW_AT if withhold else T.AUDITOR
+        self._monkeypatch, self.at = monkeypatch, T.DRAW_AT if withhold else T.AUDITOR
+        self.draw: _Session | None = None
         self.challenger = challenger or Wd.live_challenger(0, 3, CH.entropy(seed))
         self.directory.mkdir(parents=True)
         (self.directory / R.HELLOS).write_text("")
@@ -103,7 +108,8 @@ class _Session:
         self._thread = threading.Thread(target=self._serve, args=(ours, session))
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
-        self.commitment, self.secrets = self.challenger.commitment.root.hex(), []
+        self.commitment = self.challenger.commitment.root.hex()
+        self.secrets: list[bytes | None] = []
         if not withhold:
             monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(
                 lambda cls, at, secret=None: self._reach(at, secret)))
@@ -132,7 +138,7 @@ class _Session:
         self.secrets.append(secret)
         return self.client if at == self.at else None
 
-    def _serve(self, sock: socket.socket, session: R.Session) -> None:
+    def _serve(self, sock: socket.socket, session: R.ChallengePhase) -> None:
         with sock:
             self.reason = R.serve(sock, session, iter(range(1 << 20)).__next__)
 
@@ -201,7 +207,8 @@ def _window(gate, tmp_path, monkeypatch, name: str, seed: int):
     phase's record is signed) and ended over its ``out/``, then its sample's challenge phase (`draw_name`), which `gate`
     reserved and opened withheld on the window's sample root (the `_Session.draw`), ended after it: its commitment and its
     challenge phase."""
-    made, draw = {}, draw_name(name)
+    made: dict[str, Any] = {}
+    draw = draw_name(name)
     gate.reserve(name, Wd.live_families(3))
 
     def opened(session: str, root: str, withhold: bool = False) -> dict:
@@ -514,21 +521,21 @@ def test_a_period_is_its_lanes_windows_between_its_signed_open_and_close_and_cre
         f"period p1's window {s} (Commit {r}) ended complete and has no accepted window: a window abandoned after its "
         "coins" for s, r in ((SB, dropped["session"]["root"]), (db, dropped["draw"]["root"]))]
     assert PHC.period_reason(ledger, "p1", [SA, SB, db]) == [
-        f"period p1's window {da} (Commit {kept['draw']['root']}) ended complete and has no accepted window: a window "
-        "abandoned after its coins"]
+        (f"period p1's window {da} (Commit {kept['draw']['root']}) ended complete and has no accepted window: a window "
+         "abandoned after its coins")]
     assert PHC.period_reason(ledger, "p1", [SA, da, SB, db, sk]) == [
-        f"session {sk}, an accepted window, is not one of period p1's windows ({[SA, da, SB, db]}, lane vllm's between "
-        "its period-open and its period-close)"]
+        (f"session {sk}, an accepted window, is not one of period p1's windows ({[SA, da, SB, db]}, lane vllm's between "
+         "its period-open and its period-close)")]
     released = ledger.window("cc" * 64)["end"]["body"]["released"]
     assert set(released.values()) == {0} and PHC.period_reason(ledger, "p2", [si]) == [
-        f"period p2's window {si} is incomplete (Commit {'cc' * 64}, ended 'closed by the client', released {released}): "
-        "a refused window refuses its period"]
+        (f"period p2's window {si} is incomplete (Commit {'cc' * 64}, ended 'closed by the client', released {released}): "
+         "a refused window refuses its period")]
     assert PHC.period_reason(ledger, "p3", []) == [
         f"period p3's window {sn} is incomplete (Commit {'cd' * 64}, never ended): a refused window refuses its period"]
     assert PHC.period_reason(ledger, "p0", []) == ["period p0 closed with no window"]
     assert PHC.period_reason(ledger, "p4", [so]) == [
-        "period p4 has no period-close in the auditor's ledger, so its windows aren't all known: an open period credits "
-        "nothing"]
+        ("period p4 has no period-close in the auditor's ledger, so its windows aren't all known: an open period credits "
+         "nothing")]
     assert PHC.period_reason(ledger, "p5", []) == ["the auditor's ledger has no period p5"]
 
 
@@ -564,7 +571,7 @@ def test_the_ledger_refuses_periods_and_reserves_off_the_gates_rules():
             "entry 2: period p's close doesn't list exactly its windows and their outcomes")
     refused(lambda g: (g.period_open("p"), g.period_close("p", complete=True)), "entry 1: period p's close doesn't list")
     for cap, c in ((0, circuit), (2, circuit.upper()), (2, None), (True, circuit)):
-        refused(lambda g: g.period_open("p", cap=cap, circuit=c),
+        refused(lambda g, n=cap, c=c: g.period_open("p", cap=n, circuit=c),
                 "entry 0: period p's cap is a positive integer and its circuit a SHA-512 in lowercase")
     refused(lambda g: (g.period_open("p", cap=1, circuit=circuit), g.open("s-a", COMMIT_A, families),
                        g.open("s-b", COMMIT_B, families)), "entry 2: period p's window 1 is past its cap 1")
@@ -606,8 +613,8 @@ def test_the_ledger_refuses_periods_and_reserves_off_the_gates_rules():
     assert ledger.window(COMMIT_B)["reserve"]["seq"] == 3 and ledger.window(COMMIT_A)["reserve"] is None
     assert PHC.period_reason(ledger, "p", []) == [
         f"period p's window {s} is incomplete (reserved and never opened): a refused window refuses its period",
-        f"period p's window {t} is incomplete (Commit {COMMIT_B}, ended None, released None): a refused window refuses "
-        "its period"]
+        (f"period p's window {t} is incomplete (Commit {COMMIT_B}, ended None, released None): a refused window refuses "
+         "its period")]
 
 
 def test_the_session_setting_is_the_gates_open_answer_for_the_window():
@@ -671,7 +678,9 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     window = ledger.window(root)
     assert window["open"]["session"] == sid and window["open"]["seq"] == 8
     assert window["open"]["body"]["host"] == f"vy-challenger-1.{sid}" and window["end"]["body"]["complete"] is True
-    fetch = lambda s: SMOKE / s if (SMOKE / s).is_dir() else None  # noqa: E731
+
+    def fetch(s):
+        return SMOKE / s if (SMOKE / s).is_dir() else None
     given = {"session": sid, "seq": 8, "root": root, "commitment": commitment}
     assert PHC.held(given, ledger, root) == (None, window)
     smoke = {"coin_source": "challenger", "session": given}
@@ -700,8 +709,8 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
                        c: ([w6e92["session"], wb89c["session"]], False), d: (["s20261020T123859Z-90aa"], False)}
     assert ledger.periods[b]["cap"] == 1 and ledger.periods[a]["cap"] is None
     pinned = PHC.Ledger.of([head], key, pins=[CH.PINS])
-    for given, why in ((w4080, f"the auditor's ledger's period {a}, which holds session {w4080['session']}, commits no "
-                                "cap or circuit"), (w306d, LC.NO_PINS), (wb89c, LC.NO_PINS)):
+    for given, why in ((w4080, (f"the auditor's ledger's period {a}, which holds session {w4080['session']}, commits no "
+                                 "cap or circuit")), (w306d, LC.NO_PINS), (wb89c, LC.NO_PINS)):
         held, w = PHC.held(given, ledger)
         assert held is None and "hellos.jsonl" in w["end"]["body"]["files"]
         with pytest.raises(LC.CoinError) as refused:
@@ -714,16 +723,16 @@ def test_infras_v2_head_and_sessions_bind_under_the_gates_key():
     assert ledger.window(wb89c["root"])["reserve"]["seq"] == 22 and ledger.window(w4080["root"])["reserve"] is None
     assert PHC.period_reason(ledger, a, [w4080["session"]]) == [] and PHC.period_reason(ledger, b, [w306d["session"]]) == []
     assert PHC.period_reason(ledger, a, []) == [
-        f"period {a}'s window {w4080['session']} (Commit {w4080['root']}) ended complete and has no accepted window: a "
-        "window abandoned after its coins"]
+        (f"period {a}'s window {w4080['session']} (Commit {w4080['root']}) ended complete and has no accepted window: a "
+         "window abandoned after its coins")]
     assert PHC.period_reason(ledger, a, [w306d["session"]])[0].startswith(
         f"session {w306d['session']}, an accepted window, is not one of period {a}'s windows")
     assert PHC.period_reason(ledger, c, [wb89c["session"]]) == [
-        f"period {c}'s window {w6e92['session']} is incomplete (Commit {w6e92['root']}, ended 'serve.py exited -15', "
-        "released {'pouw/round': 0, 'pouw/salt': 0}): a refused window refuses its period"]
+        (f"period {c}'s window {w6e92['session']} is incomplete (Commit {w6e92['root']}, ended 'serve.py exited -15', "
+         "released {'pouw/round': 0, 'pouw/salt': 0}): a refused window refuses its period")]
     assert PHC.period_reason(ledger, d, []) == [
-        f"period {d}'s window s20261020T123859Z-90aa is incomplete (reserved and never opened): a refused window refuses "
-        "its period"]
+        (f"period {d}'s window s20261020T123859Z-90aa is incomplete (reserved and never opened): a refused window refuses "
+         "its period")]
     with pytest.raises(LC.CoinError, match="entry 9: its signature doesn't verify"):
         PHC.Ledger.of([head[:9] + [head[9].replace('"replay":2', '"replay":3')]], key)
     with pytest.raises(LC.CoinError, match="entry 30: its signature doesn't verify"):
@@ -746,9 +755,11 @@ def test_a_windows_own_session_holds_no_draw_coin_and_its_draw_session_is_the_le
         early.client.open(Wd.DRAW, 0, probe)
     host = _Session(tmp_path, monkeypatch, SA, leaf=2, seed=14, reserved=True)
     honest = _serve(host.remote())
-    assert host.ended() is None and host.draw.ended() is None and host.trusted(honest) is None
-    assert host.draw.window == {"root": honest["draw"]["root"]} and honest["draw_session"]["session"] == DRAW_NAME
-    assert host.trusted(honest, draw_root=probe.hex()).startswith("the window's draw session is not trusted: ")
+    sample = host.draw
+    assert sample is not None
+    assert host.ended() is None and sample.ended() is None and host.trusted(honest) is None
+    assert sample.window == {"root": honest["draw"]["root"]} and honest["draw_session"]["session"] == DRAW_NAME
+    assert (host.trusted(honest, draw_root=probe.hex()) or "").startswith("the window's draw session is not trusted: ")
     assert host.trusted(honest, withheld=False) == f"the window's draw session: {LC.WITHHELD}"
 
 
@@ -785,8 +796,10 @@ def test_a_draw_from_another_family_off_its_root_or_never_opened_is_refused(tmp_
     quiet.client.close()
     assert quiet.ended() is None
     quiet.open(DRAW_NAME, honest["draw"]["root"], withhold=True)
-    quiet.draw.client.close()
-    assert quiet.draw.ended() is None
+    sample = quiet.draw
+    assert sample is not None
+    sample.client.close()
+    assert sample.ended() is None
     c = quiet.challenger.commitment.to_json()
     closed = {**honest, "coins": c, "round_coins": c, "salt_opening": salt.to_json(),
               "session": {**honest["session"], "session": SB, "root": opened.hex()},
@@ -853,21 +866,13 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     auditor = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=14)
     auditor.client.close()
     assert auditor.ended() is None
-    assert "coins from a challenger the verifier doesn't hold" in auditor.trusted(local)
+    assert "coins from a challenger the verifier doesn't hold" in (auditor.trusted(local) or "")
 
 
 @pytest.mark.slow
-def test_pouw_serve_and_ncp_v2_take_the_auditor_hosts_challenger():
-    """``pouw-serve``'s ``--challenger`` and ``--session`` are the pouw settings ncp-v2's salt comes from, one
-    never without the other; ncp-v2 accepts the setting and ncp-v1 doesn't."""
-    opts = pouw_serve.Options(workload="w.json", challenger=T.AUDITOR, session=json.dumps(T.SESSION))
-    assert pouw_serve.protocols_config(opts) == {"pouw": {"challenger": T.AUDITOR, "session": T.SESSION, "draws": 16}}
-    assert "coins" in pouw_serve.protocols_config(pouw_serve.Options(workload="w.json"))["pouw"]
-    with pytest.raises(ValueError, match="--challenger needs --session"):
-        pouw_serve.protocols_config(pouw_serve.Options(workload="w.json", challenger=T.AUDITOR))
-    with pytest.raises(ValueError, match="--session is the session"):
-        pouw_serve.protocols_config(pouw_serve.Options(workload="w.json", session=json.dumps(T.SESSION)))
-
+def test_ncp_v2_takes_the_auditor_hosts_challenger():
+    """The pouw settings ``challenger`` and ``session`` are where ncp-v2's salt comes from, one never without the
+    other; ncp-v2 accepts the setting and ncp-v1 doesn't."""
     def refused(entry, settings):
         return T.PO.refusals(T.PO.Context(stage="serve", enabled=(entry,), settings=settings))
     remote = {"pouw": {"challenger": T.AUDITOR, "session": T.SESSION}}
@@ -883,15 +888,12 @@ class _NcpLinear:
 
 def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_path, monkeypatch):
     """ncp-v2 under the setting ``challenger`` takes its epoch's salt from the auditor host's salt coin, opened
-    after the weights' root, carries its challenge phase, and closes the challenge phase at release; pouw-serve parses the flags."""
-    from verity.protocols.pouw.verifier.audit import salt_of
-
-    from verity_vllm.pipeline import cli
+    after the weights' root, carries its challenge phase, and closes the challenge phase at release."""
     host = _Session(tmp_path, monkeypatch, "auditor", leaf=1, seed=18)
     monkeypatch.setattr(pouw, "linear_types", lambda: (_NcpLinear,))
     w = (torch.randn(32, 64, generator=torch.Generator().manual_seed(3))).bfloat16().float()
-    model = SimpleNamespace(modules=lambda: iter([layer]), named_modules=lambda: iter([("up", layer)]))
     layer = _NcpLinear(w)
+    model = SimpleNamespace(modules=lambda: iter([layer]), named_modules=lambda: iter([("up", layer)]))
     ctx = T.PO.Context(stage="serve", enabled=("pouw:ncp-v2",), settings={"pouw": {"challenger": T.AUDITOR,
                                                                                    "session": T.SESSION}})
     with T.PO.install(model, ctx) as comp:
@@ -902,8 +904,6 @@ def test_ncp_v2s_salt_is_the_auditor_hosts_salt_coin_after_the_weights_root(tmp_
     assert received[Wd.SALT] == (weights,)
     opening = LC.LiveOpening.from_json(c["salt_opening"])
     assert c["salt"] == salt_of(host.challenger.commitment, opening.coin, weights).hex()
-    parsed = cli.parse("pouw-serve", ["--workload", "w.json", "--challenger", T.AUDITOR, "--session", json.dumps(T.SESSION)])
-    assert pouw_serve.protocols_config(parsed)["pouw"]["session"] == T.SESSION
 
 
 def test_a_window_admits_in_round_0_only_unless_its_admission_is_per_round():

@@ -5,11 +5,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, is_int, split_heads
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_slot_rows,
+    is_int,
+    split_heads,
+)
 from verity_vllm.observe.fold.patterns.ops import bound_args, op_name
-from verity_vllm.observe.fold.patterns.resolutions import _fmt, _group_transparent, hint_of, unsupported
-from verity_vllm.observe.fold.patterns.transparent import find_descendants, scope_transparents
-from verity_vllm.observe.fold.resolver import Gather, PerRow, Resolution, StepContext, Transparent, Unsupported
+from verity_vllm.observe.fold.patterns.resolutions import (
+    _fmt,
+    _group_transparent,
+    hint_of,
+    unsupported,
+)
+from verity_vllm.observe.fold.patterns.transparent import (
+    find_descendants,
+    scope_transparents,
+)
+from verity_vllm.observe.fold.resolver import (
+    Gather,
+    PerRow,
+    Resolution,
+    StepContext,
+    Transparent,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 
@@ -56,7 +76,11 @@ def kv_slots(ctx: StepContext, request_id: str, T: int, layer: str | None = None
     the step has several groups; see `kv_group_of`)."""
     g = kv_group_of(ctx, layer)
     bs = ctx.start.block_size if g is None else int(g["block_size"])
-    bt = ctx.start.block_tables.get(request_id) if g is None else (g.get("block_tables") or {}).get(request_id)
+    if g is None:
+        bt = ctx.start.block_tables.get(request_id)
+    else:
+        tables = g.get("block_tables")
+        bt = tables.get(request_id) if tables else None
     if bt is None:
         raise GeometryError(f"no block table for request {request_id!r}")
     if len(bt) * bs < T:
@@ -74,12 +98,16 @@ def _kv_moves(rc: TreeNode, ctx: StepContext, pattern: str, consumed: tuple[int,
         group = kv_group_of(ctx, layer)
     except GeometryError as e:
         return unsupported(rc, str(e), layer=layer)
-    public_slots = ctx.start.slot_mapping if group is None else (group.get("slot_mapping") or [])
+    if group is None:
+        public_slots = ctx.start.slot_mapping
+    else:
+        slots = group.get("slot_mapping")
+        public_slots = slots if slots else []
     key, value = a.get("key", a.get("arg0")), a.get("value", a.get("arg1"))
     kc, vc = a.get("key_cache", a.get("arg2")), a.get("value_cache", a.get("arg3"))
     sm = a.get("slot_mapping", a.get("arg4"))
     dt = a.get("kv_cache_dtype", a.get("arg5"))
-    if not all(isinstance(v, ViewDesc) for v in (key, value, kc, vc, sm)):
+    if not (isinstance(key, ViewDesc) and isinstance(value, ViewDesc) and isinstance(kc, ViewDesc) and isinstance(vc, ViewDesc) and isinstance(sm, ViewDesc)):
         return unsupported(rc, "reshape_and_cache_flash arguments not bound as expected", args={k: _fmt(v) for k, v in a.items()})
     if dt not in ("auto", "bfloat16"):
         return unsupported(rc, "KV cache dtype is not bf16 (`auto`)", kv_cache_dtype=dt)

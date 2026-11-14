@@ -7,14 +7,13 @@ import re
 
 _S_STATIC_RE = re.compile(r"[{,]S=(\d+)(?=[,}])")
 _TOPP_FAMILY = "GumbelTopPTokenSelect_v1"
-_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the derived S operand
+_SPLITS_OPERAND = 5   # GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temperature, splits): the Const32[S] operand
 
 
 def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None:
     """The launch's top-p split count S carried by a fold TokenSelect instance.  The value of
-    the select's `Const32[S]` splits operand (compare.RootView._bind_splits keeps it in `B.splits_values[select node]`; the constant itself
-    is bound to the Program's request-owned `splits` input entry, or held equal to a single-request Program's own `Const32[S]` by
-    `constant_splits_agree`), else the `S=<n>` static of the older form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
+    the select's `Const32[S]` splits operand (compare.RootView._bind_splits keeps it in `B.splits_values[select node]`, held equal to
+    the Program's own `Const32[S]` by `constant_splits_agree`), else the `S=<n>` static of the older form `GumbelTopPTokenSelect_v1{V,S}` (the fold's spec strings may carry
     a `prefix:`).  None when the instance carries no readable S."""
     if B is not None and inst is not None:
         v = getattr(B, "splits_values", {}).get(inst.get("k"))
@@ -22,8 +21,8 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
             return int(v)
         # an unbound instance sequence (a RootView-shaped reader without compare's binding): the 6th operand must be ONE run
         # ("n", k, 0, 1) onto a `Const32[0x<S>]_v1` instance emitted for the select (fold._const, patterns._stage3 Const(32, S, "splits"))
-        args = inst.get("args") or []
-        if len(args) > _SPLITS_OPERAND and len(args[_SPLITS_OPERAND]) == 1:
+        args = inst.get("args")   # none for a reader's row that carries no operands
+        if args and len(args) > _SPLITS_OPERAND and len(args[_SPLITS_OPERAND]) == 1:
             run = args[_SPLITS_OPERAND][0]
             if len(run) == 4 and run[0] == "n" and (run[2], run[3]) == (0, 1):
                 j = (getattr(B, "k2i", None) or {}).get(run[1])
@@ -37,11 +36,11 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
 
 
 def constant_splits_agree(A, B) -> dict | None:
-    """A Program carries the registered S = SplitsFor_v1(1, num_SMs) as its own `Const32[S]` per select,
+    """A Program carries the registered S = registered_splits(num_SMs) as its own `Const32[S]` per select,
     bound like the fold's and removed from both sequences by `compare.RootView._bind_splits`, so neither the canonical hash nor a DAG hash
     carries its value: the two sides agree only if the constants are equal at every event both have (an event on one side only is a
     step the structural comparison already reports, e.g. a component's steps past an EOS).  None when either side binds no constant
-    (a derived-S Program reads its `splits` input instead).  Mismatches are [event, S of A, S of B]."""
+    (a greedy side).  Mismatches are [event, S of A, S of B]."""
     ea, eb = _splits_by_event(A), _splits_by_event(B)
     if not (ea and eb):
         return None
@@ -82,7 +81,7 @@ def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -
     per_req: dict[str, dict] = {}
     for e in requests:
         rid = e["request_id"]
-        ps = present.get(rid) or []
+        ps = present.get(rid)   # the steps with its rows; a request never scheduled has no entry
         if not ps:
             continue
         first = int(e.get("first_step", ps[0]))
@@ -93,7 +92,7 @@ def scheduled_live_counts(requests: list[dict], present: dict[str, list[int]]) -
         ok = (a_r is not None and finish in ("length", "eos")
               and (finish != "eos" or e.get("eos_verified") is True)
               and not e.get("g6_problems"))
-        if not ok:
+        if not ok or a_r is None:
             for s in ps:
                 unest[s].append(rid)
             per_req[rid] = {"established": False, "observed_steps": [ps[0], ps[-1]]}
@@ -142,6 +141,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     fails closed.  Without `scheduled` the SampleEnd batch is held to the observed logits rows."""
     from verity.definitions.registry.sampling_vocab import SHARED_GREEDY
     from verity.definitions.registry.topp_geometry import registered_splits
+
     from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)
@@ -153,8 +153,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
         n_topp += 1
         per_step[engine_step_of.get(i)].add(top_p_split_count(sp, B, r))
     sched_live = (scheduled or {}).get("live") if isinstance(scheduled, dict) else None
-    info: dict = {"relation": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every launch, whatever the live batch "
-                              "(engine.topp_pin); num_SMs declared",
+    info: dict = {"relation": "S = registered_splits(num_SMs) at every launch, whatever the live batch (engine.topp_pin); num_SMs declared",
                   "top_p_token_selects": n_topp, "checked_steps": 0,
                   "live_source": ("scheduled workload state (G6: declared arrivals, served lengths = cap or verified EOS, declared lag rows, "
                                   "prefill chunks) -- the record's logits rows and SampleEnd batch must equal it" if sched_live is not None
@@ -165,10 +164,13 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     if n_topp == 0:
         info["note"] = "no top-p TokenSelect in the fold: nothing to check"
         return {"info": info, "problems": problems}
-    sg = gp.get("sampler_geometry") if isinstance(gp.get("sampler_geometry"), dict) else {}
+    sg = gp.get("sampler_geometry")
+    sg = sg if isinstance(sg, dict) else {}
     nsm = sg.get("num_sms")
     if nsm is None:
-        nsm = ((gp.get("applicability") or {}).get("components") or {}).get("num_sms")
+        app = gp.get("applicability")   # the Program's declared conditions, its components' facts among them; an older declaration has none
+        comps = app.get("components") if app else None
+        nsm = comps.get("num_sms") if comps else None
     info["num_sms"] = nsm
     info["declared_by"] = "sampler_geometry" if sg.get("num_sms") is not None else ("applicability.components.num_sms" if nsm is not None else None)
     if nsm is None:
@@ -187,7 +189,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     sched_dis: list[dict] = []
     unest_steps: list[dict] = []
     unscheduled: list[dict] = []
-    sched_unest = (scheduled or {}).get("unestablished") or {} if sched_live is not None else {}
+    sched_unest = scheduled["unestablished"] if scheduled and sched_live is not None and scheduled.get("unestablished") else {}
     for s in sorted(per_step, key=lambda x: (x is None, x if x is not None else -1)):
         Ss = per_step[s]
         if s is None or s not in steps:

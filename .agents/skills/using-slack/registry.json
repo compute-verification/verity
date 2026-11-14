@@ -69,7 +69,7 @@
   "handles": [
     {
       "handle": "infra",
-      "holder": "bc-5a69647d-04f7-5d94-9ff1-56593e2e1037",
+      "holder": "bc-6a6f43b8-948e-5389-a706-1b4904497078",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0CA15YVA0P",
@@ -88,7 +88,9 @@
       "branch_suffixes": [
         "558b",
         "9e59",
-        "98f5"
+        "98f5",
+        "1037",
+        "5127"
       ],
       "examples": [
         "Which machines do we have right now, and what is each one busy with?",
@@ -125,7 +127,6 @@
         "verity/composite/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
@@ -142,7 +143,6 @@
         "verity/hardware/world/",
         "verity/hardware/record.py",
         "verity/hardware/registration.py",
-        "verity/hardware/site/",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
         "benchmarks/definitions/numerics/cuda/",
@@ -177,7 +177,6 @@
         "benchmarks/served_units/",
         "benchmarks/unit_block/",
         "benchmarks/served_commit/",
-        "benchmarks/g2/",
         "benchmarks/compile_cost/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
@@ -196,7 +195,6 @@
         "adapters/vllm/verity_vllm/pipeline/build.py",
         "adapters/vllm/verity_vllm/pipeline/match.py",
         "adapters/vllm/verity_vllm/pipeline/commit.py",
-        "adapters/vllm/verity_vllm/pipeline/commit_group.py",
         "adapters/vllm/verity_vllm/pipeline/commit_plan.py",
         "adapters/vllm/workloads/",
         "adapters/vllm/manifests/",
@@ -208,7 +206,8 @@
         "adapters/vllm/tests/program/",
         "adapters/vllm/tests/commit/",
         "adapters/vllm/tests/acquire/",
-        "adapters/vllm/tests/query/"
+        "adapters/vllm/tests/query/",
+        "benchmarks/definitions/"
       ],
       "branch_suffixes": [
         "8c79",
@@ -243,14 +242,13 @@
         "security/Proofs/Nci/",
         "benchmarks/pouw/",
         "verity/protocols/pouw/clear/",
-        "benchmarks/pouw/machine_model/",
+        "benchmarks/machine_model/",
         "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "verity/protocols/inference_only/nci/",
-        "benchmarks/int8_class_rate/",
-        "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
+        "benchmarks/compute/",
         ".agents/skills/kernel-engineering/",
         "adapters/vllm/verity_vllm/protocols/pouw/__init__.py",
         "adapters/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -266,7 +264,7 @@
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-        "fixtures/bench-instances/",
+        "benchmarks/numerical/bench-instances/",
         "benchmarks/census/",
         "security/Definitions/Accounting/CoinFlow.lean",
         "security/Definitions/Accounting/Filler.lean",
@@ -294,14 +292,11 @@
         "security/Proofs/Accounting/HMu/",
         "security/Proofs/Accounting/PouwWork.lean",
         "security/Proofs/Accounting/TS.lean",
-        "security/Proofs/Accounting/TS/",
-        "archive/examples/h200/",
-        "demos/dither_full_util/"
+        "security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
         "e9ac",
-        "ea24",
         "1de3"
       ],
       "examples": [
@@ -321,7 +316,22 @@
       "linear": "CMP",
       "linear_label": "lane:compute-research",
       "owns": [
-        "verity/hardware/"
+        "verity/hardware/",
+        "benchmarks/pouw/tensor_kinds/",
+        "benchmarks/pouw/opcode_probe/",
+        "benchmarks/pouw/sass_census/",
+        "benchmarks/pouw/facet_break/",
+        "benchmarks/pouw/dc/",
+        "benchmarks/pouw/theory/",
+        "benchmarks/pouw/lean_headline.py",
+        "benchmarks/pouw/lean_headline_dc.py",
+        "benchmarks/pouw/tests/test_lean_headline.py",
+        "benchmarks/pouw/tests/test_lean_headline_dc.py",
+        "benchmarks/tensor_duty/",
+        "benchmarks/int8_class_rate/"
+      ],
+      "branch_suffixes": [
+        "ea24"
       ]
     },
     {
@@ -335,7 +345,7 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/configuration/deploy/",
+        "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime/README.md", "verity/runtime/__init__.py", "verity/runtime/channels.py", "verity/runtime/process.py", "verity/runtime/pyproject.toml", "verity/runtime/runner.py", "verity/runtime/sources.py", "verity/runtime/stream.py", "verity/runtime/tests/", "verity/runtime/transcript.py",
         "security/Definitions/Pous/",
         "security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -368,10 +378,10 @@
         "security/Definitions/Accounting/Memory.lean",
         "security/Definitions/Accounting/RateAudit.lean",
         "security/Definitions/Accounting/RateAuditDeployed.lean",
-        "security/Definitions/Accounting/RateAuditHorizon.lean",
         "security/Definitions/Accounting/RateAuditInteractive.lean",
         "security/Definitions/Accounting/RateAuditJoint.lean",
         "security/Definitions/Accounting/RateAuditPartial.lean",
+        "security/Definitions/Accounting/RateAuditPooled.lean",
         "security/Definitions/Accounting/RateAuditRemote.lean",
         "security/Definitions/Accounting/RateAuditSketch.lean",
         "security/Definitions/Accounting/RateAuditSketchDeployed.lean",
@@ -396,9 +406,9 @@
         "security/Definitions/Accounting/Guarantees/Memory.lean",
         "security/Definitions/Accounting/Guarantees/RateAudit.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
-        "security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
+        "security/Definitions/Accounting/Guarantees/RateAuditPooled.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
         "security/Definitions/Accounting/Guarantees/Requirement.lean",
@@ -434,7 +444,7 @@
     },
     {
       "handle": "network-accounting",
-      "holder": "bc-5c916421-64a5-5c38-94ba-2e28fe629237",
+      "holder": "bc-61b263cf-c60b-54d2-9f4f-d20a83b15a1a",
       "remit": "Network accounting: the network certifier (verity/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
@@ -450,15 +460,21 @@
         "security/Definitions/NetworkCertifier/",
         "security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
+        "benchmarks/certifier_term/",
         "benchmarks/network_e2e/",
         "benchmarks/datacenter/",
         "benchmarks/network_sim/",
-        "benchmarks/prove_path/"
+        "benchmarks/prove_path/",
+        "benchmarks/certifier_timing/",
+        "benchmarks/scan_cost/"
       ],
       "branch_suffixes": [
         "728f",
         "a190",
-        "061a"
+        "061a",
+        "9237",
+        "0a40",
+        "2b94"
       ],
       "examples": [
         "How do you stop a GPU node from secretly sending data out over the network?",
@@ -476,6 +492,9 @@
       "usergroup": "S0CAAA80KGT",
       "retired_usergroups": [
         "S0C5LSDENA1"
+      ],
+      "owns": [
+        "benchmarks/metrics.toml"
       ]
     },
     {
@@ -497,8 +516,11 @@
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
+      "staffs": [
+        "review-*"
+      ],
       "owns": [
-        "verity/configuration/config/",
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
@@ -507,8 +529,7 @@
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
         "tools/research/src/research/merge.py",
-        "tools/research/src/research/drive.py",
-        "tools/research/tests/test_queue_drive.py"
+        "benchmarks/landing/"
       ],
       "branch_suffixes": [
         "4292",
@@ -601,8 +622,7 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore",
-        "archive/"
+        ".gitignore"
       ]
     },
     {
@@ -616,6 +636,7 @@
         "adapters/vllm/",
         "demos/vllm/",
         "benchmarks/replay_determinism/",
+        "benchmarks/prod_repro/",
         "ruff.toml"
       ],
       "linear": "VLLM",
@@ -643,11 +664,12 @@
       "owns": [
         "benchmarks/harness/",
         "benchmarks/overhead/",
+        "benchmarks/prove/",
         "benchmarks/recursion_e2e/",
         "benchmarks/recursion_figures/",
-        "benchmarks/specs/",
+        "benchmarks/exfiltration/",
+        "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
-        "benchmarks/judge.py",
         "benchmarks/README.md"
       ],
       "branch_suffixes": [
@@ -664,7 +686,7 @@
     },
     {
       "handle": "kernels",
-      "holder": "bc-0104b328-7489-5a12-a90e-2a15e14ff08a",
+      "holder": "bc-026b7d5e-6674-5e9c-9eef-4aac970acc3b",
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
@@ -675,7 +697,9 @@
         "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
-        "15ad"
+        "15ad",
+        "f08a",
+        "0ebe"
       ],
       "examples": [
         "How much slower is serving with the commitments on, compared with plain vLLM at full load?",
@@ -695,6 +719,7 @@
       "owns": [
         "verity/protocols/inference_only/rho/",
         "benchmarks/circuit_properties/",
+        "benchmarks/inference_only/",
         "benchmarks/training_slowdown/"
       ],
       "branch_suffixes": [

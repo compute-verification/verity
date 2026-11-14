@@ -6,6 +6,7 @@ are audited, accepted when held and rejected when dropped. The Lean verifier dec
 beside it, and the two must agree at every event, window verdict and record field."""
 from __future__ import annotations
 
+import dataclasses
 import os
 import queue
 import random
@@ -253,14 +254,14 @@ def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its
             "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
                       "host": {"bytes": 8_589_934_592, "ms": 25.468371}}}
     for r in (timing.READ_BYTES_PER_S, timing.SPEC_BYTES_PER_S):
-        parts = verifier.timing_parts(capacity_bytes_per_s=r, **d101)
+        parts = verifier.timing_parts(capacity_bytes_per_s=r, node=ledger.Node.stated(), **d101)
         assert sum(parts.values()) == pytest.approx(1 - d101["reads_bytes"] / (r * d101["span_ns"] / 1e9), abs=1e-12)
-    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, **d101)
+    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, node=ledger.Node.stated(), **d101)
     assert sum(parts.values()) == pytest.approx(0.09926702029063428, abs=1e-12)
     assert {k: round(v * 100, 2) for k, v in parts.items()} == {
         "above_stated_tiers": 0.0, "host_dram_idle": 3.68, "hbm_below_stated": 0.66, "receipts_beyond_read": 5.48,
         "boundaries_and_allowance": 0.10, "blocks_left_out": 0.0}
-    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, **d101)
+    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, node=ledger.Node.stated(), **d101)
     assert spec["above_stated_tiers"] == pytest.approx(1 - timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
 
 
@@ -277,6 +278,52 @@ def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_ea
     for short in ({"hbm": {"bytes": 15 * block, "ms": 1e-6}}, None):
         (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=short)
         assert "timing_parts" not in r["ledger"]["measured"] and "timing_parts" not in r["ledger"]["inputs"]
+
+
+def test_a_sessions_lines_deduct_the_on_chip_bytes_and_rebuilds_of_the_node_its_ledger_was_built_from(monkeypatch):
+    """A session's ledger is built from one node (`ledger.Node.stated`), and the memory line and the paced line deduct
+    that node's on-chip bytes and rebuilds, whatever `timing` states: here a node with four blocks on its chips and no
+    squarings, where `timing`'s has 3,105,652,736 B and a squaring ceiling."""
+    B, stated = rcodec.BLOCK_BYTES, ledger.Node.stated
+
+    def small(**kw) -> ledger.Node:
+        return dataclasses.replace(stated(**kw), chip_bytes=4 * B, rebuild_burst_bytes=4.0 * B,
+                                   squarings_per_s={"p512": 0.0})
+
+    monkeypatch.setattr(ledger.Node, "stated", small)
+    (r,), (pr,) = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)])
+    assert r["accepted"] and pr["accepted"]
+    lg = r["ledger"]
+    assert lg["inputs"]["chip_bytes"] == 4 * B and lg["inputs"]["squarings_per_s"] == 0
+    assert lg["memory"]["chip_bytes"] == 4 * B and all(w["chip_blocks"] == 4 for w in lg["memory"]["windows"])
+    assert lg["paced"]["chip_blocks"] == 4 == lg["paced"]["burst_blocks"]
+    assert all(x["rebuild_blocks"] == 0 == x["rebuild_absent_blocks"] for x in lg["paced"]["stretches"])
+
+
+def test_a_sessions_record_and_timing_parts_state_the_tiers_of_the_node_its_ledger_was_built_from(monkeypatch):
+    """The record's `inputs.node` and the timing parts' G and H are the tiers of the session's node
+    (`ledger.Node.tiers`), whatever `timing` states: here two GPUs and a host whose rates sum to the node's R at each
+    reading, so the measured reading has nothing above its stated tiers and the spec reading the gap between the two."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    stated = ledger.Node.stated
+    tiers = {"hbm": ledger.Tier(2, 8e12, 7e12, 4096), "dram": ledger.Tier(1, 4e12, 2e12, 8192)}
+
+    def other(**kw) -> ledger.Node:
+        return dataclasses.replace(stated(**kw), spec_bytes_per_s=2e13, read_bytes_per_s=1.6e13, tiers=tiers)
+
+    monkeypatch.setattr(ledger.Node, "stated", other)
+    block = rcodec.BLOCK_BYTES
+    read = {"hbm": {"bytes": 12 * block, "ms": 1e-6}, "host": {"bytes": 4 * block, "ms": 1e-6}}
+    (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=read)
+    lg = r["ledger"]
+    assert lg["inputs"]["node"] == {
+        "gpus": 2, "gpu_spec_bytes_per_s": 8e12, "gpu_read_bytes_per_s": 7e12, "host_spec_bytes_per_s": 4e12,
+        "host_read_bytes_per_s": 2e12, "gpu_chip_bytes": 4096, "host_chip_bytes": 8192}
+    assert (lg["spec"]["capacity_bytes_per_s"], lg["measured"]["capacity_bytes_per_s"]) == (2e13, 1.6e13)
+    for name in ("spec", "measured"):
+        assert sum(lg[name]["timing_parts"].values()) == pytest.approx(lg[name]["terms"]["timing"], abs=1e-12)
+    assert lg["measured"]["timing_parts"]["above_stated_tiers"] == 0
+    assert lg["spec"]["timing_parts"]["above_stated_tiers"] == pytest.approx(1 - 1.6e13 / 2e13)
 
 
 def test_an_unpaced_session_declares_its_snapshot_line_and_no_time_held_line(monkeypatch):
@@ -777,6 +824,9 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert lg["delta"]["rejection"] == len(record.windows) * record.samples / 2 ** 64 > 0
     assert record.samples == r["samples"] == 200 and record.public()["samples"] == 200
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+    assert lg["named"] == lg["memory"]["named"] == reading["named"] == ledger.NAMED_TERMS, (
+        "each object of the record that carries a δ or an error names the PRF term it leaves out")
+    assert all(x["named"] == ledger.NAMED_TERMS for x in lg["declared"]["memory"].values() if "delta" in x)
     assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
     def same(x, y) -> bool:

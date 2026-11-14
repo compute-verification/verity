@@ -11,8 +11,13 @@ from typing import Any, Mapping
 from verity_config import Admission, ConfigError, gpus, load, sha256
 
 VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
-SPEC_ROOT = Path(__file__).resolve().parents[3] / "specs"
-SOURCE_ROOT = SPEC_ROOT.parents[1]
+SPEC_ROOT = Path(__file__).resolve().parents[2] / "specs"
+SOURCE_ROOT = Path(__file__).resolve().parents[4]
+#: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run
+#: recorded then names its spec by that path, and so does a command written then: each is the spec of that name in
+#: `SPEC_ROOT` (`former_name`).
+FORMER_SPEC = "benchmarks/specs/{name}.toml"
+FORMER_SPECS = PurePosixPath(FORMER_SPEC).parent.as_posix()
 GPUS = gpus()
 ENV_NAME = re.compile(r"[A-Z_][A-Z0-9_]*")
 # What the dispatcher, the queue or the launcher sets: a spec naming one would be overridden or would override them.
@@ -130,11 +135,20 @@ class ResolvedSpec:
         return sha256(self, identity=True)
 
 
+def former_name(spec: str | Path) -> str | None:
+    """The name of the spec that a path under the specs' former directory (`FORMER_SPECS`) names; None for a name or any
+    other path."""
+
+    path = PurePosixPath(Path(spec).as_posix())
+    under = path.parent.as_posix()
+    return path.name.removesuffix(".toml") if under == FORMER_SPECS or under.endswith("/" + FORMER_SPECS) else None
+
+
 def _spec_path(spec: str | Path) -> Path:
     path = Path(spec)
     if path.is_file():
         return path
-    named = SPEC_ROOT / f"{spec}.toml"
+    named = SPEC_ROOT / f"{former_name(spec) or spec}.toml"
     if named.is_file():
         return named
     raise ConfigError(f"no benchmark spec {spec!r}")

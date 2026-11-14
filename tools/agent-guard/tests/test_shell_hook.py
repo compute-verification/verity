@@ -71,18 +71,80 @@ def test_the_shell_hook_judges_a_pretooluse_shell_event_like_a_beforeshellexecut
     assert ask("env | cut -d= -f1") == "deny" and ask("ls") == "allow"
 
 
-def test_each_hook_run_records_its_events_key_names_and_never_a_value(event_log):
-    W = "bc-44444444-4444-4444-8444-444444444444"
-    subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution", "conversation_id": W,
-                                                             "command": "echo not-to-be-copied", "cwd": "/"}),
-                   capture_output=True, text=True, check=True)
-    subprocess.run([sys.executable, HOOK], input="not json", capture_output=True, text=True, check=True)
+def test_each_hook_records_its_events_key_names_and_of_its_values_only_the_model_and_the_turns_id(tmp_path, event_log):
+    """Cursor's payload names a model and a turn (`generation_id`) beside the command, the account and paths. Each hook's
+    line keeps those two where the payload has them as strings, cut at 64 characters, and no other value, so which model a
+    turn's events name is read on the agent's own VM (`inbox.py turns`)."""
+    W, turn = "bc-44444444-4444-4444-8444-444444444444", "0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f"
+    registry = tmp_path / "registry.json"
+    registry.write_text(json.dumps({"handles": []}))
+    env = {**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"), "AGENT_GUARD_REGISTRY": str(registry),
+           "AGENT_GUARD_TASK_LOG": str(tmp_path / "task.jsonl")}
+    sent = {"conversation_id": W, "generation_id": turn, "model": "a-model-name", "cursor_version": "0.0-not-to-be-copied",
+            "sandbox": False, "session_id": "session-not-to-be-copied", "tool_use_id": "tool-not-to-be-copied",
+            "transcript_path": "/not-to-be-copied/transcript.jsonl", "user_email": "an-address-not-to-be-copied",
+            "workspace_roots": ["/not-to-be-copied"]}
+    shell = {**sent, "hook_event_name": "beforeShellExecution", "command": "echo not-to-be-copied", "cwd": "/"}
+    task = {**sent, "hook_event_name": "preToolUse", "tool_name": "Task",
+            "tool_input": {"subagent_type": "explore", "prompt": "not-to-be-copied", "model": "not-to-be-copied"}}
+    stop = {**sent, "hook_event_name": "stop", "status": "completed", "loop_count": 0}
+
+    def run(name, event):
+        subprocess.run([sys.executable, HOOK.parent / name], input=event if isinstance(event, str) else json.dumps(event),
+                       capture_output=True, text=True, check=True, env=env)
+
+    for name, event in (("shell_hook.py", shell), ("task_hook.py", task), ("stop_hook.py", stop)):
+        run(name, event)
+    run("shell_hook.py", {**shell, "model": "m" * 500, "generation_id": "g" * 500})
+    run("shell_hook.py", {**shell, "model": {"name": "not-to-be-copied"}, "generation_id": 7})
+    run("shell_hook.py", {k: v for k, v in shell.items() if k not in ("model", "generation_id")})
+    run("shell_hook.py", "not json")
     text = event_log.read_text()
-    first, second = (json.loads(ln) for ln in text.splitlines())
+    lines = [json.loads(ln) for ln in text.splitlines()]
     assert "not-to-be-copied" not in text
-    assert (first["hook"], first["event"], first["conversation_id"]) == ("shell_hook.py", "beforeShellExecution", W)
-    assert first["keys"] == ["command", "conversation_id", "cwd", "hook_event_name"]
-    assert second["keys"] == "str" and second["conversation_id"] is None
+    assert [(e["hook"], e["event"], e["conversation_id"], e["generation_id"], e["model"]) for e in lines[:3]] == [
+        ("shell_hook.py", "beforeShellExecution", W, turn, "a-model-name"),
+        ("task_hook.py", "preToolUse", W, turn, "a-model-name"), ("stop_hook.py", "stop", W, turn, "a-model-name")]
+    assert [e["keys"] for e in lines[:3]] == [sorted(shell), sorted(task), sorted(stop)]
+    assert lines[1]["tool_input_keys"] == ["model", "prompt", "subagent_type"]
+    assert sorted(lines[0]) == ["conversation_id", "event", "generation_id", "hook", "keys", "model", "t", "tool_input_keys",
+                                "tool_name"], "the two values, and nothing else new"
+    cut, typed, without, unread = lines[3:]
+    assert (cut["model"], cut["generation_id"]) == ("m" * 64, "g" * 64)
+    assert not {"model", "generation_id"} & (set(typed) | set(without) | set(unread)), "kept only where the payload has a string"
+    assert typed["keys"] == sorted(shell) and unread["keys"] == "str" and unread["conversation_id"] is None
+    listed = subprocess.run([sys.executable, INBOX_TOOL, "turns", W], capture_output=True, text=True, check=True, env=env).stdout
+    assert re.search(rf"^{turn}  \S+  \S+ +3  a-model-name$", listed, re.M), listed
+
+
+@pytest.fixture(scope="module")
+def before_any_test():
+    """What a module's fixture has before any per-test fixture has run: a hook it started, and a copy of the environment."""
+    event = {"hook_event_name": "a module's fixture", "command": "true", "cwd": "/"}
+    subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True)
+    return dict(os.environ)
+
+
+def test_no_hook_a_test_starts_records_in_the_machines_log_whatever_environment_it_is_handed(before_any_test, scratch_event_log,
+                                                                                            event_log):
+    """A module's fixture runs before conftest's per-test log is named in the environment, and a test that builds a hook's
+    environment from nothing, or takes every `AGENT_GUARD_*` variable out of it, drops the name. One fixture (conftest's
+    `scratch_event_log`) gives each such hook a log under the test session's own directory: in the machine's log, a run's
+    hundreds of events would push real agents' events out as it rotates."""
+    def run(name, env):
+        event = {"hook_event_name": name, "command": "true", "cwd": "/"}
+        subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True, env=env)
+
+    def events(log):
+        return [json.loads(ln)["event"] for ln in log.read_text().splitlines()]
+
+    run("the test's own", None)
+    run("a module's copy", before_any_test)
+    run("from nothing", {"PATH": os.defpath})
+    run("stripped", {k: v for k, v in os.environ.items() if not k.startswith("AGENT_GUARD_")})
+    assert events(event_log) == ["the test's own"]
+    elsewhere = ["a module's fixture", "a module's copy", "from nothing", "stripped"]
+    assert [e for e in events(scratch_event_log) if e in elsewhere] == elsewhere
 
 
 def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_cant_lock_the_agent_out(tmp_path):
@@ -173,7 +235,7 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "compgen -e | rg NEBIUS",
     "[ -n \"${NEBIUS_SA_PRIVATE_KEY_B64:-}\" ] && echo set",
     "env FOO=1 python3 -c 'print(1)'",
-    "env -u PYTHONPATH uv run pytest tests",
+    "env -u PYTHONPATH uv sync",
     "/usr/bin/env bash -lc 'uv sync'",
     "printenv HOME",
     "printenv PATH | tr : '\\n'",
@@ -200,17 +262,12 @@ def test_a_command_that_would_print_the_environment_is_refused(command):
     "ps axc",
     "ps ax -o pid,comm",
     "ps",
-    "ps -p 1234 -o pid,args",
     "ps -o pid,etime,comm --ppid 4242",
     "ps -u research",
-    "ps -eo pid,args | grep \"[p]ytest\"",
-    "ps aux | rg -i lake",
-    "ps -ef | grep -v grep | grep \"[p]ython\"",
     "ssh n1 'ps -eo pid,args | grep \"[s]lot.py\"'",
-    "pgrep -af quick_tier",
+    "pgrep -l quick_tier",
     "tmux show-environment -g DISPLAY",
     "tmux -f /exec-daemon/tmux.portal.conf send-keys -t build:0.0 'make' C-m",
-    "cat /proc/1234/cmdline | tr '\\0' ' '",
     "",
 ])
 def test_everything_else_passes(command):
@@ -381,8 +438,10 @@ def test_a_message_pushed_from_one_vm_is_pulled_and_delivered_on_another_once(tm
 
 def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_target_can_check_its_own_vm(tmp_path, monkeypatch):
     """One branch held every message for three hours while each `send` said only "pushed". `status` and a later `send` say a
-    message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls. Every `send` says a
-    target whose turn ended (one finished before its stop messages reached it) takes nothing until resumed."""
+    message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls. Every `send`, pushed or
+    `--local`, says in its one line that the target's next shell command delivers the message, that nothing delivers it at a
+    turn's end, and that a target whose turn ended (one finished before its stop messages reached it) is resumed with the
+    text itself: what its VM held unshown may be gone by its next turn."""
     origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "worker"))
     env = {**os.environ, **GIT_ENV}
     subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
@@ -396,8 +455,14 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
 
     assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
     sent = tool("send", W, "--text", "fresh", "--repo", str(coord))
-    assert "FINISHED or IDLE" in sent.stdout and "resume it with Task" in sent.stdout   # MEMPOOL: a finished target never pulls
+    told = (f"{W}'s next shell command delivers it, and nothing delivers it at a turn's end. If {W} has ended its turn "
+            "(FINISHED or IDLE), resume it with the text itself (Task or a follow-up): a message its VM holds unshown when "
+            "its turn ends may be gone by its next turn")
+    assert re.fullmatch(re.escape(f"pushed for {W}: origin's inbox/{W} at ") + "[0-9a-f]{12}" + re.escape(
+        f"; {told}. `--wait S` says whether its VM took it within S seconds\n"), sent.stdout), sent.stdout
     assert "earlier" not in sent.stderr
+    here = tool("send", W, "--local", "--text", "on this VM", inbox=tmp_path / "local-inbox")
+    assert here.stdout == f"queued for {W}: {tmp_path / 'local-inbox' / f'{W}.md'}; {told}\n", here.stdout
     second = tool("send", W, "--text", "fresh too", "--repo", str(coord))
     assert "1 earlier message(s) uncollected since" in second.stderr and "NOT DELIVERED" not in second.stderr
     fresh = tool("status", W, "--repo", str(coord))
@@ -425,9 +490,11 @@ def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_t
     shutil.copytree(ROOT / ".cursor", worker / ".cursor")
     off = tool("check", W, "--repo", str(worker), inbox=tmp_path / "quiet-inbox")
     assert off.returncode == 1 and "NOT POLLING" in off.stdout and f"inbox/{W}" in off.stdout
+    assert f"PROBLEM: no shell hook has run for {W}" in off.stdout, "neither an event of it nor a poll mark"
     (box / f"{W}.polled").touch()
-    unseen = tool("check", W, "--repo", str(worker), inbox=box)
-    assert unseen.returncode == 1 and f"PROBLEM: no shell hook has run for {W}" in unseen.stdout
+    polled = tool("check", W, "--repo", str(worker), inbox=box)
+    # hook.sh runs origin/main's copy of the hook: one from before the event log polls and delivers, and records no event
+    assert polled.returncode == 0 and "PROBLEM" not in polled.stdout and "hook polls for" in polled.stdout, polled.stdout
     hook("ls", W, box)
     assert tool("check", W, "--repo", str(worker), inbox=box).returncode == 0
     assert "AGENT_INBOX_POLL_S is off" in tool("check", W, "--repo", str(worker), inbox=box, poll="off").stdout
@@ -470,6 +537,127 @@ def test_a_coordinators_self_check_sends_itself_a_message_its_next_commands_deli
     assert f"PROBLEM: no shell hook has run for {other}" in bad.stdout
 
 
+def test_guard_is_one_line_saying_what_is_off_why_and_the_fix_only_where_no_shell_hook_has_run_for_the_agent(tmp_path, event_log):
+    """A VM whose branch's hooks.json Cursor can't load runs no shell hook: no secret refusal, no inbox, and nothing says so.
+    `guard` prints nothing where a shell hook has run for the agent (its event, or the poll mark a copy from before the event
+    log leaves), and otherwise one line: what is off, how Cursor misreads which file, and the fix, which depends on whether
+    origin/main's file loads. The Task hook's event counts for nothing: from a misread file Cursor runs it on shell commands."""
+    origin, vm, box = tmp_path / "origin.git", tmp_path / "vm", tmp_path / "inbox"
+    env = {**os.environ, **GIT_ENV}
+    A, other = "bc-77777777-7777-4777-8777-777777777777", "bc-99999999-9999-4999-8999-999999999999"
+
+    def git(*args):
+        subprocess.run(["git", "-C", str(vm), *args], check=True, capture_output=True, env=env)
+
+    def guard(*args, repo=vm):
+        return subprocess.run([sys.executable, INBOX_TOOL, "guard", *args, "--repo", str(repo)], capture_output=True, text=True,
+                              env={**env, "AGENT_INBOX": str(box), "CURSOR_CONVERSATION_ID": A})
+
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    subprocess.run(["git", "clone", "-q", str(origin), str(vm)], check=True, capture_output=True, env=env)
+    hooks = vm / ".cursor/hooks.json"
+    hooks.parent.mkdir()
+    loads = (ROOT / ".cursor/hooks.json").read_text()
+    misread = loads.replace("/[0-9a-f]*/", "/*/")
+    assert misread != loads
+    hooks.write_text(loads)
+    git("add", ".cursor")
+    git("commit", "-q", "-m", "hooks Cursor reads as written")
+    git("push", "-q", "origin", "HEAD:main")
+    git("fetch", "-q", "origin")
+
+    hooks.write_text(misread)                 # the branch this VM booted on predates main's fix
+    off = guard()
+    assert off.returncode == 1 and off.stdout.count("\n") == 1, off.stdout + off.stderr
+    assert off.stdout.startswith(f"no shell hook has run for {A} on this VM, so the guard that refuses a command printing a "
+                                 "secret and the inbox are not running here.")
+    assert f"Cursor reads {hooks.resolve()} otherwise than its JSON says" in off.stdout
+    assert "Merge origin/main, whose hooks.json loads, and push: a VM booted from the branch after that runs them" in off.stdout
+    (vm / "sub").mkdir()
+    assert guard(A, repo=vm / "sub").stdout == off.stdout, "the checkout's file, from anywhere inside it"
+
+    event_log.write_text(json.dumps({"hook": "task_hook.py", "event": "beforeShellExecution", "conversation_id": A}) + "\n"
+                         + json.dumps({"hook": "shell_hook.py", "event": "beforeShellExecution", "conversation_id": other}) + "\n")
+    assert guard().stdout == off.stdout, "the Task hook's event, and another agent's shell hook, show nothing of this one's"
+
+    git("commit", "-q", "-am", "main's file doesn't load either")
+    git("push", "-q", "origin", "HEAD:main")
+    git("fetch", "-q", "origin")
+    both = guard()
+    assert both.returncode == 1 and "origin/main's does not load either, as of this checkout's last fetch" in both.stdout
+    assert "Merge origin/main, whose" not in both.stdout
+
+    hooks.write_text(loads)
+    late = guard()
+    assert late.returncode == 1 and "this branch's loads as written now, so it changed after this VM booted" in late.stdout
+    (tmp_path / "nowhere").mkdir()
+    lost = guard(repo=tmp_path / "nowhere")
+    assert lost.returncode == 1 and lost.stdout.count("\n") == 1 and "in your checkout for why, and the fix" in lost.stdout
+
+    box.mkdir()
+    (box / f"{A}.polled").touch()
+    assert (guard().returncode, guard().stdout) == (0, ""), "a hook from before the event log polls, and records no event"
+    (box / f"{A}.polled").unlink()
+    assert guard().returncode == 1
+    hook("true", A, box)
+    assert (guard().returncode, guard().stdout) == (0, ""), "this hook's own event"
+
+
+def test_send_wait_tells_the_sender_whether_a_vm_took_this_message(tmp_path, monkeypatch, capsys):
+    """`send` says "pushed" whether or not anything will ever pull the message, and its warning that a target isn't pulling
+    comes only with a later send, minutes on. `send --wait S` looks at origin until a VM has pulled this message: taken, and
+    after how long, or NOT TAKEN and exit 1 after S seconds, when the sender has to stop the work itself. Taken is said as
+    neither shown nor acted on: a turn that ends before another command may lose it. The clock and the sleep are the
+    test's: the worker's pull happens inside the sender's second sleep."""
+    origin, coord, worker, box = (tmp_path / n for n in ("origin.git", "coord", "worker", "worker-inbox"))
+    env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    for clone in (coord, worker):
+        subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True, env=env)
+    for k, v in GIT_ENV.items():
+        monkeypatch.setenv(k, v)
+    inbox = guard_module("inbox", monkeypatch)
+    W = "bc-88888888-8888-4888-8888-888888888888"
+    now, naps, pull_in_nap = [0.0], [], []
+
+    def sleep(seconds):
+        naps.append(seconds)
+        now[0] += seconds
+        if len(naps) in pull_in_nap:
+            inbox.pull(W, worker, box)
+
+    def send(text, wait):
+        code = inbox.main(["send", W, "--text", text, "--wait", wait, "--repo", str(coord)], sleep=sleep, clock=lambda: now[0])
+        return code, capsys.readouterr()
+
+    code, said = send("pause: nobody pulls this", "12")
+    assert code == 1 and naps == [5.0, 5.0, 2.0], naps
+    assert f"pushed for {W}" in said.out and "taken" not in said.out
+    assert "inbox: NOT TAKEN in 12 s: no VM pulled" in said.err and "cancel its runs yourself" in said.err
+    assert inbox.unpulled(coord, W)[0] == 1, "it stays on the branch for a later pull"
+
+    del naps[:]
+    pull_in_nap.append(2)
+    code, said = send("pause: the worker's hook pulls this", "60")
+    assert code == 0 and naps == [5.0, 5.0], naps
+    pushed, took = said.out.splitlines()
+    assert pushed.startswith(f"pushed for {W}: ")
+    assert re.fullmatch(re.escape(f"inbox: taken 10 s after the push: {W}'s VM pulled ") + "[0-9a-f]{12}" + re.escape(
+        ". Taken is neither shown nor acted on: its next shell command shows it, and if its turn ends first it may be gone by "
+        f"its next turn (then resume {W} with the text itself); its runs and its issue show whether it acted"), took), took
+    assert "NOT TAKEN" not in said.err and inbox.unpulled(coord, W)[0] == 0
+    delivered = hook("ls", W, box)
+    assert delivered["permission"] == "deny" and "pause: the worker's hook pulls this" in delivered["user_message"]
+
+    for wait in ("0", "1201"):
+        with pytest.raises(SystemExit, match="--wait .* is not within 0 to 1200 seconds"):
+            send("never pushed", wait)
+    assert inbox.unpulled(coord, W)[0] == 0
+    del naps[:]
+    assert inbox.wait_taken(tmp_path / "no-checkout", W, "0" * 12, 5, sleep, lambda: now[0]) is None and naps == [5.0]
+    assert "could not read origin's inbox" in capsys.readouterr().err, "a look git couldn't make is not a message taken"
+
+
 STOP_HOOK = ROOT / "tools/agent-guard/stop_hook.py"
 
 
@@ -481,9 +669,11 @@ def stop(conversation: str, inbox: Path, status: str = "completed", roots: tuple
     return json.loads(out)
 
 
-def test_a_message_still_queued_when_a_turn_completes_is_its_follow_up_once(tmp_path):
-    """A worker that ends its turn with no further shell command never met the shell hook's refusal, so a message sent after
-    its last command waited until it was resumed by hand. The stop hook hands it to Cursor as the turn's follow-up."""
+def test_the_stop_hook_offers_a_message_still_queued_when_a_turn_completes_as_its_follow_up_once(tmp_path):
+    """A worker that ends its turn with no further shell command never meets the shell hook's refusal, so a message sent after
+    its last command is not shown in that turn and may be gone by its next. The stop hook offers it to Cursor as the turn's
+    follow-up, once, for a runtime that honours one; no delivery relies on it, and the shell hook does not deliver again a
+    message the stop hook took."""
     W = "bc-77777777-7777-4777-8777-777777777777"
     queue(W, "park the PR", tmp_path)
     assert stop(W, tmp_path, status="aborted") == {}
@@ -571,6 +761,46 @@ def test_the_inbox_list_says_since_when_a_message_is_pending(tmp_path):
     assert any(x.startswith("delivered bc-33333333-3333-4333-8333-333333333333 ") and "since" not in x for x in listed)
 
 
+def test_turns_prints_the_model_each_turn_of_an_agent_names_from_both_files_of_the_event_log(event_log):
+    """`turns` reads this VM's event log, the file it rotated to first: a line per generation id of the agent, oldest first,
+    with when its first and last event were recorded, how many it has and the model they name, so a rule about models can
+    be checked by turn. `-` stands for what an event doesn't name, a generation id whose events name two models is a line
+    for each, and only printable characters of the log are printed."""
+    A, other = "bc-12121212-1212-4212-8212-121212121212", "bc-34343434-3434-4434-8434-343434343434"
+    one, two, three = (f"{n * 8}-0000-4000-8000-000000000000" for n in "123")
+
+    def line(t, agent=A, hook="shell_hook.py", **kept):
+        return json.dumps({"t": t, "hook": hook, "event": "beforeShellExecution", "conversation_id": agent, **kept}) + "\n"
+
+    def turns(*args, **env):
+        return subprocess.run([sys.executable, INBOX_TOOL, "turns", *args], capture_output=True, text=True,
+                              env={**os.environ, **env})
+
+    Path(f"{event_log}.1").write_text(
+        line(1_000_000_000) + line(1_000_000_060, generation_id=one, model="model-a")
+        + line(1_000_000_090, other, generation_id=three, model="model-c"))
+    event_log.write_text(
+        line(1_000_000_120, hook="task_hook.py", generation_id=one, model="model-a") + "not json\n"
+        + line(1_000_003_600, generation_id=two, model="model-b")
+        + line(1_000_003_660, hook="stop_hook.py", generation_id=two, model="model-b")
+        + line(1_000_003_720, generation_id=two, model="model-c\x1b[2J") + line(1_000_007_200, generation_id=three))
+    listed = turns(A)
+    assert listed.returncode == 0 and listed.stdout.splitlines() == [
+        "generation_id                         first_event           last_event            events  model",
+        "-                                     2001-09-09T01:46:40Z  2001-09-09T01:46:40Z       1  -",
+        f"{one}  2001-09-09T01:47:40Z  2001-09-09T01:48:40Z       2  model-a",
+        f"{two}  2001-09-09T02:46:40Z  2001-09-09T02:47:40Z       2  model-b",
+        f"{two}  2001-09-09T02:48:40Z  2001-09-09T02:48:40Z       1  model-c?[2J",
+        f"{three}  2001-09-09T03:46:40Z  2001-09-09T03:46:40Z       1  -"], listed.stdout
+    assert listed.stderr.startswith("inbox: `-` stands for what a turn's events don't name")
+    mine = turns(CURSOR_CONVERSATION_ID=other)
+    assert (mine.returncode, mine.stdout.splitlines()[1:], mine.stderr) == (
+        0, [f"{three}  2001-09-09T01:48:10Z  2001-09-09T01:48:10Z       1  model-c"], ""), "this shell's agent by default"
+    nobody = turns("bc-nobody")
+    assert nobody.returncode == 1 and nobody.stdout == (
+        f"inbox: {event_log} holds no event of bc-nobody: no hook has run for it on this VM, or its events have rotated out\n")
+
+
 def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):
     """The hook reads the whole conversation id, so a message queued under an id prefix was never delivered."""
     inbox, repo = tmp_path / "inbox", tmp_path / "not-a-checkout"
@@ -594,7 +824,8 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     """A worker that switches its coordinator's checkout drags every editable install in it to that branch. A worktree belongs to the first
     agent that runs git in it; another agent may read it and check out files, but not switch its branch, and may not push a
     branch another agent created or holds, until it is handed over."""
-    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV,
+           "AGENT_GUARD_PUSH_REMOTES": str(tmp_path / "origin.git")}            # origin stands in for the queue's repository
     ws, origin = tmp_path / "ws", tmp_path / "origin.git"
     for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)]):
         subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
@@ -636,10 +867,343 @@ def test_one_agent_per_checkout_switching_another_agents_worktree_or_pushing_its
     assert ask("git checkout lane", "")["permission"] == "allow", "no conversation id: nothing to judge"
 
 
+#: a GitHub installation token's shape, from parts, as the URL a Cursor VM's insteadOf rewrites to carries one
+TOKEN = "gh" "s_" "dummyDUMMYdummy0123456789abcdefABCDEF"
+QUEUE_URLS = ["https://github.com/compute-verification/verity.git", "https://github.com/compute-verification/verity",
+              "git@github.com:compute-verification/verity.git", "ssh://git@github.com/compute-verification/verity",
+              f"https://x-access-token:{TOKEN}@github.com/compute-verification/verity", "https://github.com/compute-verification/infra.git"]
+OTHER_URLS = ["https://github.com/compute-verification/research-notes.git", "https://github.com/someone/verity-fork",
+              "https://github.com/compute-verification/verity-notes", "https://github.com/someone/compute-verification/verity"]
+
+
+def test_the_push_rules_cover_the_queues_repositories_and_no_other(tmp_path):
+    """`main`, `checked` and `next` are the queue's branches of verity and infra, and the registry names a branch without its
+    repository; every agent's `research notes sync` pushes the notes' `main`, and a lane's notes branch may share a name with a
+    registered verity branch. So a typed push to any other repository meets neither the three branches' rule nor the owner rule."""
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "branches.json").write_text(json.dumps({"lanes/infra": "bc-other"}))
+    ws = tmp_path / "notes"
+    for args in (["init", "-q", "-b", "main", str(ws)], ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
+                 ["-C", str(ws), "remote", "add", "origin", OTHER_URLS[0]],
+                 *(["-C", str(ws), "remote", "add", f"q{i}", u] for i, u in enumerate(QUEUE_URLS)),
+                 *(["-C", str(ws), "remote", "add", f"o{i}", u] for i, u in enumerate(OTHER_URLS))):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+    env = {k: v for k, v in os.environ.items() if k != "AGENT_GUARD_PUSH_REMOTES"}
+
+    def ask(command):
+        event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": "bc-me", "cwd": str(ws)}
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                             env={**env, **GIT_ENV, "AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0"})
+        return json.loads(out.stdout)
+
+    for command in ("git push origin main", "git push", "git push origin HEAD:refs/heads/next", "git push origin lanes/infra",
+                    "git push origin HEAD:refs/heads/$B", *(f"git push o{i} main" for i in range(len(OTHER_URLS))),
+                    *(f"git push o{i} lanes/infra" for i in range(len(OTHER_URLS)))):
+        assert ask(command) == {"permission": "allow"}, command
+    for i in range(len(QUEUE_URLS)):
+        for command, said in ((f"git push q{i} main", "only drive and the lander move"),
+                              (f"git push q{i} HEAD:refs/heads/checked", "only drive and the lander move"),
+                              (f"git push q{i} lanes/infra", "belongs to agent bc-other"),
+                              (f"git push q{i} HEAD:refs/heads/$B", "expands only after")):
+            out = ask(command)
+            assert out["permission"] == "deny" and said in out["agent_message"] and TOKEN not in out["agent_message"], command
+    for command in ("git push https://github.com/compute-verification/verity.git main", "git push $R main"):
+        assert ask(command)["permission"] == "deny", command
+
+
+@pytest.fixture
+def clones(tmp_path):
+    """The hook's answer to a command agent bc-me types in a clone of verity, of infra or of the notes (each origin's URL;
+    nothing is fetched or pushed), each on `main` with branches `lane/mine` and `theirs`, `theirs` bc-other's."""
+    (tmp_path / "state").mkdir()
+    (tmp_path / "state" / "branches.json").write_text(json.dumps({"theirs": "bc-other"}))
+    urls = {"verity": QUEUE_URLS[0], "infra": QUEUE_URLS[5], "notes": OTHER_URLS[0]}
+    for name, url in urls.items():
+        d = str(tmp_path / name)
+        for args in (["init", "-q", "-b", "main", d], ["-C", d, "commit", "-q", "--allow-empty", "-m", "a"],
+                     ["-C", d, "branch", "lane/mine"], ["-C", d, "branch", "theirs"], ["-C", d, "remote", "add", "origin", url]):
+            subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("AGENT_GUARD_", "GIT_CONFIG"))}
+
+    def ask(form: str, clone: str) -> dict:
+        command = form
+        for key, value in (("{VURL}", urls["verity"]), ("{NURL}", urls["notes"]), ("{V}", tmp_path / "verity"),
+                           ("{N}", tmp_path / "notes")):
+            command = command.replace(key, str(value))
+        event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": "bc-me",
+                 "cwd": str(tmp_path / clone)}
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                             env={**env, **GIT_ENV, "AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0"})
+        return json.loads(out.stdout)
+    return ask
+
+
+#: pushes of `main` or of bc-other's branch with options, push's or git's own, that take a value in the word after them or in
+#: their own: each goes to the clone's origin
+VALUED_OPTION_PUSHES = [
+    "git push -o ci.skip origin main", "git push --push-option x origin main", "git push --push-option=x origin main",
+    "git push --repo origin", "git push --repo=origin", "git -C . push -o x origin HEAD:main",
+    "git push --receive-pack git-receive-pack origin main", "git push --exec git-receive-pack origin main",
+    "git push --recurse-submodules check origin main", "git push -uo x origin main", "git push -oci.skip origin main",
+    "git push --push-opt x origin main", "git push origin main -o x", "git push -o x origin theirs",
+    "bash -c 'git push -o ci.skip origin main'", "tmux send-keys 'git push --push-option x origin main' C-m",
+    "tmux send-keys -t w 'git push --receive-pack P origin main' Enter", "bash -lc 'git push -o x origin theirs'",
+    "git --attr-source HEAD push origin main", "git --config-env user.name=HOME push origin main",
+]
+
+
+@pytest.mark.parametrize("form", VALUED_OPTION_PUSHES)
+def test_a_pushs_options_that_take_a_value_are_read_as_git_reads_them(clones, form):
+    """The typed rule took the first word that isn't an option for the remote, so `git push -o ci.skip origin main` read as a
+    push to a repository `ci.skip`, not verity, and passed; `main`'s guard, which judges every push of `main`, refused it."""
+    for clone in ("verity", "infra"):
+        out = clones(form, clone)
+        assert out["permission"] == "deny" and ("only drive and the lander move" in out["agent_message"]
+                                                or "belongs to agent bc-other" in out["agent_message"]), (form, clone, out)
+    assert clones(form, "notes") == {"permission": "allow"}, form
+
+
+def test_a_repo_option_names_the_repository_unless_a_word_does(clones):
+    for clone in ("verity", "infra", "notes"):
+        assert clones("git push --repo={VURL}", clone)["permission"] == "deny", clone
+        assert clones("git push --repo {VURL}", clone)["permission"] == "deny", clone
+        assert clones("git push --repo={NURL}", clone) == {"permission": "allow"}, clone
+    assert clones("git push --repo={VURL} origin main", "notes") == {"permission": "allow"}, "git pushes to origin, the notes"
+
+
+@pytest.mark.parametrize("form, clone", [
+    ("git push nosuchremote main", "notes"),                             # neither a remote nor a URL nor a path
+    ("git push --repo origin main", "notes"),                            # git takes `main` for the repository
+    ("git push --frobnicate x origin main", "notes"),                    # no option of git push
+    ("GIT_DIR={V}/.git git push origin main", "notes"),
+    ("GIT_DIR={N}/.git git push origin main", "notes"),                  # named by GIT_DIR, whichever it is
+    ("GIT_WORK_TREE={N} git push origin main", "notes"),
+    ("env GIT_DIR={V}/.git git push origin main", "notes"),
+    ("export GIT_DIR={V}/.git; git push origin main", "notes"),
+    ("git push origin main; export GIT_DIR={V}/.git", "notes"),           # a loop or a function may run it first
+    ("git --git-dir={V}/.git push origin main", "notes"),
+    ("git --git-dir {V}/.git push origin main", "notes"),
+    ("git --work-tree={N} push origin main", "notes"),
+    ("git -c remote.origin.pushurl={VURL} push origin main", "notes"),
+])
+def test_a_push_whose_repository_the_guard_cant_tell_is_judged_as_one_to_the_queues(clones, form, clone):
+    """Where the words may be misread, or the command names its repository or changes the configuration git reads, the push is
+    judged as one to verity or infra, never passed; the refusal says how to name the repository so the guard can tell it."""
+    out = clones(form, clone)
+    assert out["permission"] == "deny" and "only drive and the lander move" in out["agent_message"], (form, out)
+
+
+#: commands with a `cd` that never runs, or that runs only where the push doesn't: the shell pushes from the clone it started in
+NEVER_RUN_CDS = [
+    "true || cd {T}; git push origin main", "false && cd {T}; git push origin main", "if false; then cd {T}; fi; git push origin main",
+    "while false; do cd {T}; done; git push origin main", "f() { cd {T}; }; git push origin main",
+]
+#: and commands whose `cd` the guard would have to follow, and doesn't
+UNFOLLOWED_CDS = [
+    *(f.replace("cd {T}", "pushd {T}") for f in NEVER_RUN_CDS),
+    "function f { cd {T}; }; git push origin main", "(cd {T} && true); git push origin main", "bash -c 'cd {T}'; git push origin main",
+    "cd {T} | true; git push origin main", "case x in x) cd {T};; esac; git push origin main", "C=cd; $C {T}; git push origin main",
+    "git push origin main; cd {T}", "popd; git push origin main", ". ./env.sh; git push origin main",
+    "cd {T} && git push origin main", "cd {T}; git push --repo=origin", "(cd {T} && git push origin main)",
+    "cd {T} && git push origin HEAD:main", "cd {T} && git -C . push origin main", "cd {T}/.. && git -C ../.. push origin main",
+    "cd {T} && git -C ~ push origin main", "source ./env.sh && git -C {T} push origin main", ". ./env.sh; git -C {T} push origin main",
+    "C=cd; $C /tmp; git -C {T} push origin main", "cd /tmp && GIT_DIR={T}/.git git -C {T} push origin main",
+    "cd /tmp && git --git-dir={T}/.git -C {T} push origin main",
+]
+#: and commands whose git names its checkout by an absolute `-C`: it runs there wherever a `cd`, `pushd` or `popd` leaves the shell
+ABSOLUTE_C = [
+    "cd {T} && git -C {T} push origin main", "cd /tmp && git -C {T} push origin main", "cd /tmp; git -C {T} push origin HEAD:main",
+    "pushd /tmp && git -C {T} push origin main && popd", "(cd /tmp && git -C {T} push origin main)", "popd; git -C {T} push origin main",
+    "false && cd /tmp; git -C {T} push origin main", "cd /tmp && git -C /nowhere -C {T} push origin main",
+    "cd /tmp && git -C {T}/.. -C {T} push origin main", "cd /tmp && git -c x.y=z -C {T} push -o x origin main",
+    "bash -c 'cd /tmp && git -C {T} push origin main'", "tmux send-keys -t w 'cd /tmp && git -C {T} push origin main' C-m",
+]
+
+
+@pytest.mark.parametrize("form", NEVER_RUN_CDS + UNFOLLOWED_CDS)
+def test_a_cd_anywhere_in_the_command_leaves_a_push_unplaced(clones, form):
+    """The rule followed a `cd` as if it held, so `false && cd NOTES; git push origin main` in a verity clone passed as a push to
+    the notes, and the shell pushed verity's `main`; `main`'s guard, which judges every push of `main`, refused it. The guard
+    now places a push by the hook's cwd, git's `-C` and a URL alone: any `cd` in the command, run or not, leaves it unplaced,
+    and a push it can't place is judged as one to verity or infra, its current branch any branch."""
+    for clone, target in (("verity", "{N}"), ("infra", "{N}"), ("notes", "{V}")):
+        out = clones(form.replace("{T}", target), clone)
+        assert out["permission"] == "deny" and "with no `cd` in the command, `git -C <checkout> push" in out["agent_message"], (
+            form, clone, out)
+
+
+@pytest.mark.parametrize("form", ABSOLUTE_C)
+def test_an_absolute_git_C_places_a_push_whatever_cd_the_command_holds(clones, form):
+    """`cd /tmp && git -C /abs/checkout push ...` was refused as unplaced, though git runs in `/abs/checkout` wherever the shell
+    is. It is now judged as the push it is: of the notes' `main` it passes from any clone, of verity's it is refused as `main`'s,
+    with no word about a `cd`."""
+    for clone in ("verity", "infra", "notes"):
+        assert clones(form.replace("{T}", "{N}"), clone) == {"permission": "allow"}, (form, clone)
+        out = clones(form.replace("{T}", "{V}"), clone)
+        assert out["permission"] == "deny" and "only drive and the lander move" in out["agent_message"], (form, clone, out)
+        assert "The guard judged it as a push to verity or infra" not in out["agent_message"], (form, clone, out)
+
+
+def test_an_absolute_git_C_places_the_checkout_a_push_or_switch_runs_in(tmp_path):
+    """The push an agent types from a tool shell that starts elsewhere, `cd /tmp && git -C WT push -u origin HEAD`, pushes WT's
+    branch: placed by its absolute `-C`, it is held to that branch's owner like any other, and a branch switch to WT's owner.
+    A relative `-C`, a `source`, a `.`, a command or a `-C` the shell names only later, and a repository named by `GIT_DIR` or
+    `--git-dir` leave it unplaced, as before."""
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV,
+           "AGENT_GUARD_PUSH_REMOTES": str(tmp_path / "origin.git")}            # origin stands in for the queue's repository
+    ws, wt, origin = tmp_path / "ws", tmp_path / "wt", tmp_path / "origin.git"
+    for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)],
+                 ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
+                 ["-C", str(ws), "worktree", "add", "-q", str(wt), "-b", "mine"]):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    def ask(command, agent="bc-worker", cwd=ws):
+        event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent, "cwd": str(cwd)}
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True,
+                             env={**os.environ, **env}, check=True).stdout
+        return json.loads(out)
+
+    assert ask("git status", "bc-coord", ws) == {"permission": "allow"}
+    assert ask("git status", "bc-worker", wt) == {"permission": "allow"}
+    placed = [f"cd /tmp && git -C {wt} push -u origin HEAD", f"cd {wt} && git -C {wt} push", f"cd /tmp; git -C {wt} push origin @",
+              f"pushd /tmp && git -C {wt} push -u origin HEAD && popd", f"(cd /tmp && git -C {wt} push -u origin HEAD)",
+              f"cd /tmp && git -C {ws} -C {wt} push -u origin HEAD", f"cd /tmp && git -C {wt} -C . push -u origin HEAD",
+              f"bash -c 'cd /tmp && git -C {wt} push -u origin HEAD'",
+              f"tmux send-keys -t w 'cd /tmp && git -C {wt} push -u origin HEAD' C-m"]
+    for command in placed:
+        for cwd in (ws, wt, tmp_path):
+            assert ask(command, cwd=cwd) == {"permission": "allow"}, (command, cwd)
+        out = ask(command, "bc-coord")
+        assert out["permission"] == "deny" and "branch mine belongs to agent bc-worker" in out["agent_message"], (command, out)
+        out = ask(command.replace(str(wt), str(ws)))                   # the same push of the coordinator's checkout: `main`'s
+        assert out["permission"] == "deny" and out["agent_message"].startswith(
+            "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): this push would update `main`"), (command, out)
+
+    unplaced = [(f"cd {wt} && git push -u origin HEAD", "a `cd`"), (f"cd {tmp_path} && git -C wt push -u origin HEAD", "a `cd`"),
+                (f"cd {wt}/.. && git -C ./wt push -u origin HEAD", "a `cd`"), ("cd /tmp && git -C ~ push -u origin HEAD", "a `cd`"),
+                (f"pushd {tmp_path} && git -C wt push -u origin HEAD", "a `pushd`"),
+                (f"source ./env.sh && git -C {wt} push -u origin HEAD", "a `source` in it, which can change what git reads"),
+                (f". ./env.sh; git -C {wt} push -u origin HEAD", "runs `.`, which may move it to another directory or change"),
+                (f"C=cd; $C /tmp; git -C {wt} push -u origin HEAD", "runs `$C`"),
+                (f"cd /tmp && GIT_DIR={ws}/.git git -C {wt} push -u origin HEAD", "the command sets `GIT_DIR`"),
+                (f"cd /tmp && git --git-dir={ws}/.git -C {wt} push -u origin HEAD", "names its repository with `--git-dir`")]
+    for command, why in unplaced:
+        out = ask(command, cwd=wt)
+        assert out["permission"] == "deny" and "the guard can't tell which checkout this push runs in" in out["agent_message"], (
+            command, out)
+        assert why in out["agent_message"], (command, out)
+        assert "by its absolute path or with no `cd` in the command, `git -C <checkout> push -u origin HEAD`" in out["agent_message"]
+    out = ask(f"D={wt}; cd /tmp && git -C $D push -u origin HEAD", cwd=wt)
+    assert out["permission"] == "deny" and "expands only after the guard has read it" in out["agent_message"], out
+
+    for command in (f"cd /tmp && git -C {wt} switch -c x", f"pushd /tmp; git -C {wt} checkout -b y", f"(cd /tmp && git -C {wt} switch mine)"):
+        assert ask(command) == {"permission": "allow"}, command
+        out = ask(command, "bc-coord", wt)
+        assert out["permission"] == "deny" and f"{wt} is agent bc-worker's checkout" in out["agent_message"], (command, out)
+    for command in (f"cd {tmp_path} && git -C wt switch -c z", f"source ./env.sh; git -C {wt} switch -c z",
+                    f"cd /tmp && git --git-dir={ws}/.git -C {wt} switch -c z"):
+        out = ask(command)
+        assert out["permission"] == "deny" and "can't tell whose checkout" in out["agent_message"], (command, out)
+        assert "by its absolute path or with no `cd` in the command: `git -C <checkout> " in out["agent_message"], out
+
+
+def test_a_push_whose_branch_the_guard_cant_tell_is_told_so_and_what_it_accepts(clones):
+    """`cd WT && git push -u origin HEAD` updates whatever WT has checked out, not `main`: its refusal leads with what the guard
+    can't tell and why, and names the push it accepts. A push that names `main` in its own words leads with the protected
+    branches whatever the `cd`, and then says how to name another repository's checkout."""
+    prefix = "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): "
+    for form, why in (("cd {T} && git push -u origin HEAD", "the command has a `cd` in it"), ("cd {T} && git push", "a `cd`"),
+                      ("pushd {T} && git push origin @", "a `pushd`"), ("GIT_DIR={T}/.git git push", "the command sets `GIT_DIR`")):
+        for clone, target in (("verity", "{N}"), ("infra", "{N}"), ("notes", "{V}")):
+            out = clones(form.replace("{T}", target), clone)
+            message = out["agent_message"]
+            assert out["permission"] == "deny" and message.startswith(
+                prefix + "the guard can't tell which checkout this push runs in, so which branch it pushes, because "), message
+            assert why in message and "`git -C <checkout> push -u origin HEAD`" in message, message
+            assert "`git push -u origin <your-branch>`" in message and "only drive and the lander move" not in message, message
+    out = clones("cd {N} && git push origin main", "verity")
+    assert out["agent_message"].startswith(prefix + "this push would update `main`, `checked` or `next`"), out
+    assert "because the command has a `cd` in it" in out["agent_message"], out
+    assert "`git -C <checkout> push <remote> <refspec>`" in out["agent_message"], out
+
+
+def test_what_the_guard_can_place_in_another_repository_still_passes(clones):
+    out = clones("git push nosuchremote main", "notes")
+    assert "git -C <checkout> push <remote> <refspec>" in out["agent_message"] and "is no remote" in out["agent_message"]
+    out = clones("cd {N} && git push origin main", "verity")
+    assert out["permission"] == "deny" and "has a `cd` in it" in out["agent_message"], out
+    for form, clone in (("git push origin main", "notes"), ("git -C {N} push -o x origin main", "verity"),
+                        ("git -C {N} push origin main", "infra"), ("git push {NURL} main", "verity"),
+                        ("git push --repo={NURL}", "infra"), ("git push nosuchremote lane/mine", "notes")):
+        assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
+@pytest.mark.parametrize("form", [
+    "cd {T} && git push origin lane/mine", "false && cd {T}; git push -u origin lane/mine",
+    "pushd {T} && git push origin HEAD:refs/heads/lane/mine", "cd {T} && git push --force-with-lease origin lane/mine",
+])
+def test_a_lanes_own_branch_still_passes_after_a_cd(clones, form):
+    """Where a push goes matters only for `main`, `checked`, `next` and another agent's branches: a lane's branch, named, passes
+    from wherever the shell pushes it."""
+    for clone, target in (("verity", "{N}"), ("infra", "{N}"), ("notes", "{V}")):
+        assert clones(form.replace("{T}", target), clone) == {"permission": "allow"}, (form, clone)
+
+
+def test_a_branch_switch_the_guard_cant_place_is_refused(tmp_path):
+    """The branch-switch rule followed a `cd` too: from the coordinator's checkout, `false && cd MINE; git switch lane` read as
+    a switch of the worker's own checkout and passed, and the shell switched the coordinator's. A switch in a command with a
+    `cd`, or naming its repository by `GIT_DIR` or `--git-dir`, is refused; `git -C` places it."""
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    ws, wt = tmp_path / "ws", tmp_path / "wt"
+    for args in (["init", "-q", "-b", "main", str(ws)], ["-C", str(ws), "commit", "-q", "--allow-empty", "-m", "a"],
+                 ["-C", str(ws), "branch", "lane"], ["-C", str(ws), "worktree", "add", "-q", str(wt), "-b", "mine"]):
+        subprocess.run(["/usr/bin/git", *args], check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+    def ask(command, agent, cwd):
+        event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent, "cwd": str(cwd)}
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True,
+                             env={**os.environ, **env}, check=True).stdout
+        return json.loads(out)
+
+    assert ask("git status", "bc-coord", ws) == {"permission": "allow"}
+    assert ask("git status", "bc-worker", wt) == {"permission": "allow"}
+    lies = [f.replace("{T}", str(wt)).replace("git push origin main", "git switch lane") for f in NEVER_RUN_CDS]
+    for command in (*lies, *(c.replace("cd ", "pushd ") for c in lies), f"cd {wt} && git switch -c x", f"cd {wt} && git checkout lane",
+                    f"GIT_DIR={ws}/.git git switch lane", f"git --git-dir={ws}/.git switch lane"):
+        out = ask(command, "bc-worker", ws if "GIT_DIR" not in command and "git-dir" not in command else wt)
+        assert out["permission"] == "deny" and "can't tell whose checkout" in out["agent_message"], (command, out)
+        assert "`git -C <checkout> " in out["agent_message"], out
+    for command in (f"git -C {wt} switch -c x", f"cd {wt} && git checkout -- README", f"cd {ws} && git log -1"):
+        assert ask(command, "bc-worker", ws) == {"permission": "allow"}, command
+
+
+@pytest.mark.parametrize("form", [
+    "git push --all origin", "git push --al origin", "git push --branches origin", "git push --bran origin",
+    "git push --mirror origin", "git push origin 'refs/heads/*:refs/heads/*'", "git push origin :",
+    "git push origin HEAD:heads/main", "git push origin @:main", "git push origin 'refs/heads/the*:refs/heads/the*'",
+])
+def test_every_branch_and_main_by_another_name_are_judged(clones, form):
+    for clone in ("verity", "infra"):
+        assert clones(form, clone)["permission"] == "deny", (form, clone)
+    assert clones(form, "notes") == {"permission": "allow"}, form
+
+
+@pytest.mark.parametrize("form", [
+    "git push -o ci.skip origin lane/mine", "git push -u origin lane/mine", "git push --force-with-lease origin lane/mine",
+    "git push --force-with-lease=lane/mine:abc origin +lane/mine", "git push --push-option=x origin HEAD:refs/heads/lane/mine",
+    "git push origin --delete lane/mine", "git push --no-verify -q origin lane/mine", "bash -c 'git push -o x origin lane/mine'",
+    "tmux send-keys 'git push -u origin lane/mine' C-m", "git push -- origin lane/mine",
+])
+def test_a_lanes_pushes_of_its_own_branch_still_pass(clones, form):
+    for clone in ("verity", "infra", "notes"):
+        assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
 def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_are_refused_for_any_agent(tmp_path):
     """Only drive moves `main` and `next`, so an agent's push to either is refused; and git config values can hold a GitHub
     installation token, so printing them is refused."""
-    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV}
+    env = {"AGENT_GUARD_STATE": str(tmp_path / "state"), "AGENT_GUARD_MIN_AVAIL": "0", **GIT_ENV,
+           "AGENT_GUARD_PUSH_REMOTES": str(tmp_path / "origin.git")}            # origin stands in for the queue's repository
     ws, origin = tmp_path / "ws", tmp_path / "origin.git"
     for args in (["init", "-q", "--bare", "-b", "main", str(origin)], ["clone", "-q", str(origin), str(ws)]):
         subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True, env={**os.environ, **GIT_ENV})

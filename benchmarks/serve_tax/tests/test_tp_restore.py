@@ -97,7 +97,11 @@ def test_the_served_argv_is_the_record_arms_with_the_context_tp_and_pool_given()
     assert argv[-2:] == ["--tensor-parallel-size", "2"] and argv.count("--max-model-len") == 1
     assert "--num-gpu-blocks-override" not in argv
     argv = T.served_argv(Namespace(model_id="moonlight", max_model_len=None, tp=None, num_gpu_blocks=4096), Path("/ck"), 0)
-    assert argv[argv.index("--num-gpu-blocks-override") + 1] == "4096"
+    assert argv[argv.index("--num-gpu-blocks-override") + 1] == "4096" and "--kv-cache-dtype" not in argv
+    # a cache format goes on the served argv, which is what the restore's engine is built from (`engine_args`)
+    argv = T.served_argv(Namespace(model_id="glm53", max_model_len=None, tp=None, kv_cache_dtype="fp8"), Path("/ck"), 0)
+    assert argv[-2:] == ["--kv-cache-dtype", "fp8"]
+    assert T.served_argv(Namespace(model_id="glm53", max_model_len=None, tp=None, kv_cache_dtype=None), Path("/ck"), 0) == argv[:-2]
 
 
 def test_a_restored_engines_settings_that_differ_are_named_with_both_values():
@@ -144,7 +148,7 @@ def test_a_share_of_the_plan_gets_long_prompts_joined_from_the_plans_own():
 
 
 def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
-    T.edge_site(tmp_path)
+    T.edge_site(tmp_path, T.S.ARMS["record"])
     eps = sorted(p.read_text() for p in tmp_path.glob("*.dist-info/entry_points.txt"))
     assert eps == ["[vllm.general_plugins]\nverity_serve_tax = servetax_plugin:register\n",
                    "[vllm.general_plugins]\nverity_tp_edge = tp_edge:register\n"]

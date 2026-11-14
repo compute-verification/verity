@@ -3,6 +3,7 @@ another request's prompt, seed, peers, witness or node canonicalised as a cross-
 
 from __future__ import annotations
 
+import bisect
 import collections
 
 from verity_vllm.check.match import prefix_reads as PX
@@ -16,7 +17,9 @@ class Projection(PX.CachedKv, C.RootView):
     """Request r's view of the oracle RootView: the subset of instances attributed to r, segmented at r's TokenSelects (a warm request's reads
     of its cached prefix: `prefix_reads.CachedKv`)."""
 
-    def __init__(self, oracle: C.RootView, label: str, inst_idx: list[int], tok_node: int, weights_node: "int | set[int] | frozenset[int]",
+    _all_seed_nodes: set[int]   # every request's seed node: set by the caller, which knows them all; `_src` reads it when set
+
+    def __init__(self, oracle: C.RootView, label: str, inst_idx: list[int], tok_node: int, weights_node: int | set[int] | frozenset[int],
                  seed_node: int | None = None, peer_node: int | None = None):
         # no super().__init__: reuse the decoded oracle, never decode twice
         self.label = label
@@ -52,20 +55,27 @@ class Projection(PX.CachedKv, C.RootView):
         self.weights_node = weights_node if isinstance(weights_node, int) else (min(self.weights_nodes) if self.weights_nodes else None)
         self.k2i = {r["k"]: i for i, r in enumerate(self.inst)}
         self.oracle_rows = None
-        self.oracle_wmap = getattr(oracle, "oracle_wmap", None)
-        self._wlos = getattr(oracle, "_wlos", None)
-        self.oracle_wmap_overlaps = getattr(oracle, "oracle_wmap_overlaps", None)
+        # the oracle's weights field map with its sorted offsets and its overlaps (a loaded fold's, `program_loaders`); an oracle
+        # without one leaves this view without one, and `_src` then names a weight read by its node
+        if getattr(oracle, "oracle_wmap", None) is not None:
+            self.oracle_wmap, self._wlos, self.oracle_wmap_overlaps = oracle.oracle_wmap, oracle._wlos, oracle.oracle_wmap_overlaps
         self.compact = getattr(oracle, "compact", False)   # the oracle's operand representation (runs | progressions)
         # Record-global offset of each weights Input node's first leaf (compare.load_oracle): without it every
         # multi-node weight read would be located at offset 0 of the field map -- the wrong field (or `W?`) -- on the projection side only
         self.input_base = getattr(oracle, "input_base", {})
         # the fold's bound top-p split constants (compare.RootView._bind_splits): select node -> S; the
-        # request's e-th select canonicalises its splits operand as ("SPLITS", e, e+1) against the Program's `splits` input entry e
+        # request's e-th select canonicalises its splits operand as ("SPLITS", e, e+1)
         self.splits_values = getattr(oracle, "splits_values", {})
-        self.splits_nodes = getattr(oracle, "splits_nodes", set())
-        self.xreq = collections.Counter()
+        self.xreq: collections.Counter[str] = collections.Counter()
         self.xreq_examples: list[dict] = []
         self._segment()
+
+    def canon(self, i: int, unfold: bool = False) -> list[list[tuple]]:
+        """The view's canon, but a warm request's attention instance reads its cached key / value rows as `prefix_reads.CachedKv` links them."""
+        rl = self._kv_row_leaves(i) if self.cached_rows else None
+        if rl is None:
+            return super().canon(i, unfold)
+        return self._kv_canon(i, rl, unfold)
 
     def _src(self, run, unfold: bool):
         space, idx, lo, hi = run
@@ -80,8 +90,6 @@ class Projection(PX.CachedKv, C.RootView):
                     return ("TOK", lo, hi)
                 if idx in self.seed_nodes:
                     return ("SEED", lo, hi)
-                if idx in self.splits_nodes:
-                    return ("SPLITS", lo, hi)
                 if idx == self.peer_node:
                     return self._peer_src(idx, lo, hi)     # the request's own received-collective peer input
                 if idx in self.witness_fields:
@@ -115,8 +123,6 @@ class Projection(PX.CachedKv, C.RootView):
                         return [("TOK", (lo0, hi0), (dL, dH), c)]
                     if idx0 in self.seed_nodes:
                         return [("SEED", (lo0, hi0), (dL, dH), c)]
-                    if idx0 in self.splits_nodes:
-                        return [("SPLITS", (lo0, hi0), (dL, dH), c)]
                     if idx0 == self.peer_node:
                         return self._peer_srcP(p, unfold)     # the request's own received-collective peer input
                     if idx0 in self.witness_fields:
@@ -156,7 +162,6 @@ class Projection(PX.CachedKv, C.RootView):
 
     def _own_count(self, lo_i: int, hi_i: int) -> int:
         """How many of this request's instance node indices lie in [lo_i, hi_i]."""
-        import bisect
         own = getattr(self, "_own_sorted", None)
         if own is None:
             own = self._own_sorted = sorted(self.k2i)

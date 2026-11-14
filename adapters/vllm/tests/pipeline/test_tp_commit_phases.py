@@ -12,11 +12,10 @@ from types import ModuleType
 
 import pytest
 
+from tests.pipeline import served_ranks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import timeline as T
 from verity_vllm.pipeline.tp import phases as PH
-
-from tests.pipeline import served_ranks
 
 WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
             "execution": "bi-eager"}
@@ -26,6 +25,8 @@ RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "ste
 class _LLM:
     """`vllm.LLM` over two ranks: building it and every `collective_rpc` but the CPU readings around a run mark the timeline (``LLM``,
     ``rpc.<method>``); each rpc answers one dict per rank, but the ``n``-th call of the method ``fails`` names raises."""
+
+    calls: dict[str, int]
 
     def __init__(self, mark: T.Timeline, fails: tuple[str, int] | None = None, ranks: int = 2) -> None:
         self.mark, self.fails, self.ranks, self.calls = mark, fails, ranks, {}
@@ -67,7 +68,9 @@ def timeline(tmp_path, monkeypatch) -> Path:
 
 def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_failed_step_was_in(timeline, tmp_path, monkeypatch):
     """The first instrumented run's finalize fails on a rank: every span before it ended ok, the run's span ended not ok with the
-    error on its way out, and nothing is left open (the reader would run an open span on to `now`)."""
+    error on its way out, and nothing is left open (the reader would run an open span on to `now`).  Inductor's config is unloaded
+    for the test: another test in the same worker may have imported it before the engine's pin, which
+    `engine.env.require_inductor` refuses."""
     pytest.importorskip("torch")
     from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
@@ -85,8 +88,9 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
 
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
     vllm = ModuleType("vllm")
-    vllm.LLM = llm
+    vllm.__dict__["LLM"] = llm
     monkeypatch.setitem(sys.modules, "vllm", vllm)
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     for owner, name, value in [(prof, "apply_env", lambda: {}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (va, "load_workload", lambda path, max_tokens: WORKLOAD),
                                (va, "target_of_workload", lambda wl, *a: None), (va, "case_of", lambda wl, case: case),

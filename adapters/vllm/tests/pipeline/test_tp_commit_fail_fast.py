@@ -11,10 +11,9 @@ from types import ModuleType
 
 import pytest
 
+from tests.pipeline import served_ranks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import commit as TPCM
-
-from tests.pipeline import served_ranks
 
 WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
             "execution": "bi-eager"}
@@ -39,6 +38,8 @@ class _LLM:
 
 
 def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], Path]:
+    """Inductor's config is unloaded for the test: another test in the same worker may have imported it before the engine's pin,
+    which `engine.env.require_inductor` refuses."""
     pytest.importorskip("torch")
     from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
@@ -50,8 +51,9 @@ def _commit(tmp_path: Path, monkeypatch, *flags: str) -> tuple[int, list[str], P
     events: list[str] = []
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
     vllm = ModuleType("vllm")
-    vllm.LLM = _LLM(events)
+    vllm.__dict__["LLM"] = _LLM(events)
     monkeypatch.setitem(sys.modules, "vllm", vllm)
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
 
     def run(eng, requests, sampling):
         events.append("run")

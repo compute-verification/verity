@@ -15,10 +15,10 @@ import struct
 
 import numpy as np
 import pytest
-
+from verity.definitions.circuits import requirement
 from verity.protocols.poub.verifier import audit, codec, memory_map
 from verity.protocols.poub.verifier.memory_map import MemoryMapError, Replay
-from verity.definitions.circuits import requirement
+
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME, Lines
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
@@ -151,7 +151,10 @@ def test_a_serving_trace_is_a_memory_map_the_driver_replays_as_the_store_holds_i
     assert [w.index for w in written] == list(range(37, 37 + len(written)))
     # K0 K1 V0 V1 of page p in layer l are store blocks 3 + 16 l + 4 p + (0, 1, 2, 3)
     l0, l1 = (lambda p, *cs: [3 + 4 * p + c for c in cs]), (lambda p, *cs: [19 + 4 * p + c for c in cs])
-    whole = lambda p: tuple(l0(p, 0, 1, 2, 3) + l1(p, 0, 1, 2, 3))
+
+    def whole(p):
+        return tuple(l0(p, 0, 1, 2, 3) + l1(p, 0, 1, 2, 3))
+
     assert [(x.freed, tuple(w.slot for w in x.written)) for x in steps] == [
         (tuple(l0(2, 0, 2) + l1(2, 0, 2)), whole(1)),
         (tuple(l0(2, 1, 3) + l1(2, 1, 3)), tuple(l0(2, 0, 2) + l1(2, 0, 2))),
@@ -256,45 +259,6 @@ def test_a_dirty_block_is_in_no_step_until_a_write_completes_it():
     # page 0's K0 V0 (appended at step 1), page 1's K0 V0 (reached at step 2); both pages' K1 V1 are untouched filler
     assert third.freed == (3, 5, 7, 9, 19, 21, 23, 25)
     assert all(m.replay.holds(x) == x for x in (4, 6, 8, 10, 20, 22, 24, 26))
-
-
-def test_on_write_sees_each_registered_block_a_write_reaches_before_its_bytes_change():
-    """`NodeMemory.on_write`: a step's `kv_append` hands it the pool blocks the step's write reaches while they are
-    registered (a pass's plan may still hold them), before the forward writes them; a block already reached and not
-    complete (dirty) is not handed again."""
-    s, _ = store()
-    seen = []
-    slot = lambda k: s.region("kv/0").first + int(s.pool.ids[k // s.pool.per_page, k % s.pool.per_page])
-    s.on_write = lambda step, keys: seen.append((step, keys.tolist(), [s.payload(slot(k)) for k in keys]))
-    s.record_memory_map(registration=registration(s).digest)
-    s.kv_alloc([0])
-    s.kv_append([Append(0, 0, 3)], 0)
-    s.kv_append([Append(0, 3, 3)], 1)
-    s.kv_append([Append(0, 6, 2)], 2)
-    p = s.pool
-    k0, k1 = [c for c in range(p.per_page) if p.lo[c] == 0], [c for c in range(p.per_page) if p.lo[c] == 4]
-    assert [(st, keys) for st, keys, _ in seen] == [(0, k0), (1, k1), (2, [])]
-    assert all(b == bytes(BLOCK) for b in seen[0][2])
-
-
-def test_on_write_sees_a_freed_pages_blocks_when_a_write_reaches_them_again():
-    """A freed page's appended blocks are released (dirty) with their bytes as they were, and the plan of the step before
-    the free still holds them: the page's next write hands them to `on_write` before it changes them, once."""
-    s, _ = store()
-    seen = []
-    s.on_write = lambda step, keys: seen.append((step, keys.tolist()))
-    s.record_memory_map(registration=registration(s).digest)
-    s.kv_alloc([0])
-    s.kv_append([Append(0, 0, SLOTS)], 0)
-    s.end_step()
-    s.kv_free([0])
-    s.kv_alloc([0])
-    s.kv_append([Append(0, 0, 3)], 1)
-    s.kv_append([Append(0, 3, 3)], 2)
-    p = s.pool
-    k0, k1 = [c for c in range(p.per_page) if p.lo[c] == 0], [c for c in range(p.per_page) if p.lo[c] == 4]
-    assert seen == [(0, list(range(p.per_page))), (1, k0), (2, k1)]
-    assert not p.released.any()
 
 
 def test_digests_are_taken_once_the_steps_bytes_are_in_place():

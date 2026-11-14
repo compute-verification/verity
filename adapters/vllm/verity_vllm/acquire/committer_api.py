@@ -19,9 +19,9 @@ the run — so a fast subset cannot be reported as the full interface.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
 
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
+from verity_vllm.records.schema_ids import COVERAGE_DECLARATION_SCHEMA
 
 
 @dataclass
@@ -68,21 +68,7 @@ class Opening:
     salt: bytes = b""           # the row's salt (`step_rows.salt`, `step_rows.SALT_BYTES`)
 
 
-class Committer(Protocol):
-    name: str
-
-    def register_weights(self) -> dict: ...
-    def install(self) -> None: ...
-    def uninstall(self) -> None: ...
-    def finalize(self) -> RunCommitment: ...
-    def open(self, sample: list[tuple[int, int]]) -> list[Opening]: ...
-    def verify(self, run: RunCommitment, opening: Opening) -> bool: ...
-    def coverage_declaration(self, run: RunCommitment) -> dict: ...
-    def reset(self) -> None: ...
-
-
-
-DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
+DECLARATION_SCHEMA = COVERAGE_DECLARATION_SCHEMA
 
 
 def declaration(committer: str, path_label: str, classes: list[dict], notes: list[str] | None = None) -> dict:
@@ -90,3 +76,6 @@ def declaration(committer: str, path_label: str, classes: list[dict], notes: lis
                   "rule": <citation for registered/derived; None for leaves>, "count": <values bound>, "bytes": <bytes bound>,
                   "evidence": <free text: hook names / kernels / tests>}]"""
     return {"schema": DECLARATION_SCHEMA, "committer": committer, "path": path_label, "classes": classes, "notes": notes or []}
+
+
+__all__ = ["Opening", "RunCommitment", "StepCommitment", "declaration"]

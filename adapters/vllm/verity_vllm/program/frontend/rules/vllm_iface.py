@@ -29,7 +29,13 @@ and vLLM V1's model-level attention entry point (vllm/attention/layer.py):
 
 from __future__ import annotations
 
+import contextlib
+
 import torch
+
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 _LIB_NAME = "vllm_iface"
 _lib = torch.library.Library(_LIB_NAME, "FRAGMENT")  # noqa: TOR901
@@ -94,18 +100,16 @@ _define_once("unified_cache_pad(Tensor live, Tensor zero, int slot) -> ()", "uni
 _define_once("kv_prefix(Tensor prefix) -> ()", "kv_prefix", lambda prefix: None)
 # The stochastic token select of vLLM d9105ea80's sampler for ONE request with temperature + top-p (no top-k / penalties /
 # logit bias / min_p), as one op the wrapper authors per sampled step: `Sampler.sample` = f32 widening -> `_temperature_kernel` ->
-# `apply_top_k_top_p_triton` (`_apply_topp_split`, `splits` splits) -> `_gumbel_sample_kernel` (Gumbel-max with the stream key
+# `apply_top_k_top_p_triton` (`_apply_topp_split`, S splits) -> `_gumbel_sample_kernel` (Gumbel-max with the stream key
 # `tl.randint(seed, pos)`) -> block argmax.  `logits` bf16 [.., V]; `seed` int64 [1] (the request's `SamplingParams.seed`, a RUNTIME
 # input); `temperature` / `top_p` the request's declared policy (STRUCTURAL: constants of the Program); `pos` the position of the
-# logits row (`input_batch.positions[logits_indices]`: the last input token of the step); `splits` int32 [1] the pipeline's split count
-# for this event -- a DERIVED input of the workload (S_t = SplitsFor_v1(|live(t)|, num_SMs)) the request wrapper
-# reads from its request-owned `splits` Input, not a static.  [registered S] The Build passes `splits=None` and `S` = the registered
-# split count SplitsFor_v1(1, num_SMs) (`topp_geometry.registered_splits`), at which every served event runs (`engine.topp_pin`).
+# logits row (`input_batch.positions[logits_indices]`: the last input token of the step); `S` the registered split count
+# (`topp_geometry.registered_splits`), at which every served event runs (`engine.topp_pin`).
 # Not a vLLM op: a stand-in with an explicit schema like `unified_cache_pad`; the frontend rule `GumbelTopPTokenSelect[vllm]` binds it
-# to `GumbelTopPTokenSelect_v1{V}` (verity.definitions.registry.sampling; S its 6th operand).
-_define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, Tensor? splits, int? S=None) -> Tensor",
+# to `GumbelTopPTokenSelect_v2{V,S}` (verity.definitions.registry.sampling; `Const32[S]` its 6th operand).
+_define_once("gumbel_topp_token_select(Tensor logits, Tensor seed, float temperature, float top_p, int pos, int S) -> Tensor",
              "gumbel_topp_token_select",
-             lambda logits, seed, temperature, top_p, pos, splits, S=None: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))
+             lambda logits, seed, temperature, top_p, pos, S: logits.new_empty(tuple(logits.shape[:-1]), dtype=torch.int32))
 
 # vLLM's default Hopper block-FP8 linear.  The real op is registered in
 # `kernels/linear/scaled_mm/flashinfer.py`; this stand-in lets CPU-only derive
@@ -259,7 +263,8 @@ def real_C():
     try:
         import vllm  # noqa: F401
         return torch.ops._C
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.debug_once("vLLM does not import here, so no rule targets its `_C` ops: %s", repr(e))
         return None
 
 
@@ -269,10 +274,8 @@ def targets_for(name: str) -> set:
     C = real_C()
     if C is not None and hasattr(C, name):
         out.add(getattr(C, name).default)
-    try:
+    with contextlib.suppress(AttributeError, RuntimeError):
         out.add(getattr(torch.ops.vllm, name).default)
-    except (AttributeError, RuntimeError):
-        pass
     return out
 
 

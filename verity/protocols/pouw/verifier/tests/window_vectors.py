@@ -21,15 +21,15 @@ from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import ROLE_W, ROLE_X, row_leaf
-from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.prover.circuit import leaves as L
+from verity.protocols.pouw.verifier import window as Wd
 
 OUT = Path(__file__).with_name("vectors") / "window.json"
 TAG = "verity/pouw/window-vectors/v1"
 K = 32
 P = 4
 CAP = 2
-DRAWN = (1, 4, 6)
+SAMPLED = (1, 4, 6)
 ROLES = {"a": ROLE_X, "b": ROLE_W}
 #: per call, its shape [m, k, n], its first tile in the pass and the rows each side keeps, by their index in the call
 CALLS = ({"shape": [80, K, 128], "tile0": 3, "keep": {"a": [0, 1, 70], "b": [5, 64]}},
@@ -107,7 +107,7 @@ def tile_reads(w: dict) -> list[dict]:
 
 
 def registration(w: dict) -> dict:
-    k = len(DRAWN)
+    k = len(SAMPLED)
     return {"population": w["work"].n, "law": {"law": "subset", "k": k},
             "roots": [{"port": Wd.PORT, "root": w["root"].hex(), "leaves": P, "domain": w["domain"].domain_id.hex()}]}
 
@@ -135,9 +135,9 @@ def vectors() -> dict:
                  "domain_b": w["side_domains"]["b"].domain_id.hex(), "rows": a["rows"], "row_1": a["words"][1],
                  "leaves": [x.hex() for x in a["leaves"]], "pad_leaf": sdom.pad(a["rows"]).hex(),
                  "root": a["root"].hex(), "path_of_1": [x.hex() for x in Wd.side_path(sdom, a["levels"], 1)]},
-        "public_inputs": {"registration": reg, "drawn": list(DRAWN), "cap": CAP,
-                          "sessions": [Wd.public_inputs(reg, DRAWN, s, CAP, domain_h3).hex()
-                                       for s in range(Wd.sessions(len(DRAWN), CAP))]},
+        "public_inputs": {"registration": reg, "drawn": list(SAMPLED), "cap": CAP,
+                          "sessions": [Wd.public_inputs(reg, SAMPLED, s, CAP, domain_h3).hex()
+                                       for s in range(Wd.sessions(len(SAMPLED), CAP))]},
     }
 
 

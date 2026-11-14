@@ -115,10 +115,12 @@ Flock's knowledge extractor, `κ` its extraction failure), for every `δ' > 0`
 with AM–GM (`√(γx) ≤ δ' + γx/(4δ')`), and it assumes no hash: a prover whose fork finder beats `ecr` gets `⊤`, so it
 is the per-prover `δ_bind` the statements take (`MovedIn ≤ δ_bind`), on the IR's layer under live coins and on the
 sample's (`Declared.atSample`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
-`2·T_q` SHA-512 calls. At the best `δ'` the bound is about `|L|·√(E[cost F]/2^256)`, and a seeded window prices it at
-the budget its premium reads (one `T` for the cheater): at `2^128` it is `|L|·2^-64` (`2^-44` to `2^-34` at `|L|` from
-`2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). `ecr` is the
-weaker of the two collision claims at a fixed cost (`StrictBirthday` implies it) and the one that applies to
+`2·T_q` SHA-512 calls. At the best `δ'`, `|L|·√(ecr(F) + κ)/2`, the bound is `|L|·√(ecr(F) + κ)`, and a seeded
+window prices it at the budget its premium reads (one `T` for the cheater), with `κ = 0` and `E[cost F] = T` (a finder
+that runs the window twice costs `2T`, which is `√2` more): at `2^128` it is `|L|·2^-64` (`2^-44` to `2^-34` at `|L|`
+from `2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). Each
+figure takes `L` as one window's positions. `ecr`
+is the weaker of the two collision claims at a fixed cost (`StrictBirthday` implies it) and the one that applies to
 expected-time finders such as an extractor. -/
 def BindingOfECR : Prop :=
   ∀ {J Q Pos V : Type} [Nonempty V] (C B : Type) [Fintype C] [Fintype B] (S m s : ℕ)

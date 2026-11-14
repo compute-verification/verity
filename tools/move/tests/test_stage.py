@@ -192,16 +192,33 @@ def test_a_map_a_second_run_changes_again_is_refused(tmp_path, monkeypatch, caps
 def test_a_path_map_that_acknowledges_a_split_reference_stages(tmp_path, monkeypatch, capsys):
     """A map that splits a directory acknowledges each reference to it in [split], and `layout.py` refuses an
     acknowledgement no reference needs. On the move's own commit every reference is rewritten, so none needs one: the
-    second run takes the map as `restack.py` runs it on a branch (`--report-splits`), and still must change nothing."""
+    second run takes the map as `restack.py` runs it on a branch (`--report-splits`), and still must change nothing.
+    An entry of a list of paths needs none: the mover writes it as where its files went, so a row for it is refused."""
     split = PATHS.replace('"alpha/" = "beta/"\n', '"alpha/" = "beta/"\n"alpha/sub/" = "gamma/"\n').replace(
         '"alpha" = "beta"\n', '"alpha" = "beta"\n"alpha.sub" = "gamma"\n') + '\n[split]\n"gates.toml: alpha" = "the gate"\n'
-    files = {**TREE, "alpha/sub/__init__.py": "", "alpha/sub/z.py": "Z = 1\n", "gates.toml": 'requires = ["alpha/"]\n',
+    files = {**TREE, "alpha/sub/__init__.py": "", "alpha/sub/z.py": "Z = 1\n", "gates.toml": 'requires = "alpha/"\n',
              "tools/move/alpha_map.toml": split}
     repo, base = _repo(tmp_path, files)
     assert _stage(monkeypatch, repo, "tools/move/alpha_map.toml", "--base", base, "--no-lock", "--branch", "staged") == 0, \
         capsys.readouterr().err
-    assert _show(repo, "staged", "gates.toml") == 'requires = ["beta/"]'
+    assert _show(repo, "staged", "gates.toml") == 'requires = "beta/"'
     assert _show(repo, "staged", "gamma/z.py") == "Z = 1"
+    repo, base = _repo(tmp_path / "list", {**files, "gates.toml": 'requires = ["alpha/"]\n'})
+    assert _stage(monkeypatch, repo, "tools/move/alpha_map.toml", "--base", base, "--no-lock", "--branch", "staged") == 1
+    assert "[split] acknowledges what no reference needs any more: gates.toml: alpha" in capsys.readouterr().err
+
+
+def test_a_path_map_that_would_delete_an_init_with_content_is_refused_naming_it_and_the_fix(tmp_path, monkeypatch, capsys):
+    """The map takes the data sheet out of `gamma/`, whose `__init__.py` holds a docstring: the mover refuses, and the
+    refusal names the file and the fix; no branch is made."""
+    data = PATHS.replace('"alpha/" = "beta/"\n', '"gamma/g.toml" = "data/g.toml"\n').replace('"alpha" = "beta"\n', "")
+    repo, base = _repo(tmp_path, {**TREE, "gamma/__init__.py": '"""Gamma."""\n', "gamma/g.toml": "g = 1\n",
+                                  "tools/move/data_map.toml": data})
+    assert _stage(monkeypatch, repo, "tools/move/data_map.toml", "--base", base, "--no-lock", "--branch", "staged") == 1
+    err = capsys.readouterr().err
+    assert "failed on" in err and "(exit 1)" in err and "comments and whitespace: gamma/__init__.py\n" in err
+    assert err.rstrip().endswith("or delete it in a hand commit before the move")
+    assert git(repo, "branch", "--list", "staged") == ""
 
 
 def test_a_map_that_renames_nothing_is_refused(tmp_path, monkeypatch, capsys):

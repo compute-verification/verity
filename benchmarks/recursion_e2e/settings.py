@@ -1,5 +1,5 @@
 """The recursion bench's environment variables, each declared once in a `verity_config.settings.Registry` and checked by
-its `Registry.check` (``verity/settings.py``): what ``job.sh`` reads (its own, and those of
+its `Registry.check` (``tools/config/verity_config/verity_settings.py``): what ``job.sh`` reads (its own, and those of
 ``verity/protocols/flock/pod/85-rec-reprice.sh``'s it sets a default for), and what ``run.py`` and ``forge_after.py`` read.
 
 ``job.sh`` takes its variables as ``KEY=VALUE`` arguments (``run.py``'s ``job_env``) and passes every one on to 85.  It runs
@@ -9,7 +9,7 @@ debug setting on a run of record (one with ``RESEARCH_RUN_ID``); then writes the
 their digest, which ``params.txt`` (so the result's ``params``) carries as ``settings``.  ``run.py`` refuses the same before it
 launches.  85's other variables (``LEVELS``, ``PCPUS``, ...) pass through undeclared: 85 owns them.
 
-Stdlib only, as ``run.py`` is, and so are ``verity_config`` and ``verity.settings``, which it imports from the tree:
+Stdlib only, as ``run.py`` is, and so are ``verity_config`` and ``verity_config.verity_settings``, which it imports from the tree:
 ``job.sh`` runs it with the pod's python3.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity" / "configuration" / "config"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from verity_config.settings import VALUE, WHERE, Registry, Setting, csv
@@ -62,7 +62,8 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("RELEASE", int, 0, VALUE, "1: the recursive session through the ZK server's release side (85's RELEASE): the inner "
       "session opens it, oprove proves its parts in order through the Lean session loop, each held to its release window"),
     S("RELEASE_WINDOWS_S", str, None, VALUE, "each part's release window by class, seconds (85's RELEASE_WINDOWS_S); unset, 85's"),
-    S("RELEASE_BUDGET", int, None, VALUE, "the recursive session's stream's failure budget (85's RELEASE_BUDGET); unset, none"),
+    S("RELEASE_BUDGET", int, None, VALUE, "the recursive session's stream's failure budget, at least 1 (85's RELEASE_BUDGET): "
+      "RELEASE=1 needs it, and --release sets 1"),
     S("TREE_SECRET_FILE", str, None, WHERE, "TREE_FROM's session secret, a file of hex (85's TREE_SECRET_FILE)"),
     S("TAG", str, None, WHERE, "85's data/TAG directory; unset, rb-<run id>"),
     S("FLOCK_WORK", str, "/workspace/jobs/rec-bench", WHERE, "85's work tree: its caches and data"),

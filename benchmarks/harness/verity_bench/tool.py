@@ -1,4 +1,4 @@
-"""Evidence-store declaration for one vLLM benchmark sweep point."""
+"""Evidence-store declarations for the harness's points: one vLLM benchmark sweep point, one steady-state point."""
 
 from research.store.tool import Tool
 
@@ -23,13 +23,33 @@ VLLM_BENCH_POINT = Tool(
     command=["bash", "benchmarks/harness/run_point.sh"],
     closure=[
         "benchmarks/harness/**",
-        "benchmarks/specs/**",
+        "benchmarks/harness/specs/**",
         "adapters/vllm/**",
-        "verity/configuration/config/**",
+        "tools/config/**",
         "uv.lock",
     ],
     key_params=["identity"],
     key_conditions=["hw.gpu.family"],
     produces=["verity-vllm-benchmark/v1", "run-files/v1"],
+    parse=parse_point,
+)
+
+#: A steady-state point (`verity_bench.steady_spec`). Its identity is the one key: it already digests the files the
+#: point's time depends on, so the lookup matches it across commits and on any card of the spec's model.
+STEADY_POINT = Tool(
+    name="steady_point",
+    version="0",
+    command=["bash", "benchmarks/harness/steady_point.sh"],
+    closure=[
+        "benchmarks/harness/**",
+        "benchmarks/harness/specs/**",
+        "benchmarks/one_stage/server_rate.py",
+        "benchmarks/served_units/stage.py",
+        "tools/config/**",
+        "verity/protocols/flock/pod/**",
+        "verity/protocols/flock/prover/**",
+    ],
+    key_params=["identity"],
+    produces=["verity-steady-point/v1", "run-files/v1"],
     parse=parse_point,
 )

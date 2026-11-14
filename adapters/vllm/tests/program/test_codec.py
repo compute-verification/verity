@@ -6,13 +6,29 @@ from __future__ import annotations
 import json
 
 import pytest
-
-from verity.circuits import Array, Program, Value, bind, composite, decode_program, encode_program, program_digest, REGISTRY
+from verity.circuits import (
+    REGISTRY,
+    Array,
+    Program,
+    Value,
+    bind,
+    composite,
+    decode_program,
+    encode_program,
+    program_digest,
+)
 from verity.circuits.codec import IdentityConflict
 from verity.circuits.defs import CompositeDefinition
 from verity.definitions.registry import b1
 
-from tests.program.test_running_example import Add16, Dot, Id16, Mul16, Relu16, make_program
+from tests.program.test_running_example import (
+    Add16,
+    Dot,
+    Id16,
+    Mul16,
+    Relu16,
+    make_program,
+)
 
 V16 = Value(16)
 A2 = Array(2, V16)
@@ -299,7 +315,14 @@ def test_attention_head_zero_padding_references_one_zero_gate():
 
 def test_v1_alias_writes_a_repeated_reference_sequence_as_a_pass_through_to_the_earlier_argument():
     from types import SimpleNamespace
-    from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1, _BodyEncoder, _Tables, _decode_refs
+
+    from verity.circuits.codec import (
+        SCHEMA_V0,
+        SCHEMA_V1,
+        _BodyEncoder,
+        _decode_refs,
+        _Tables,
+    )
     from verity.circuits.refs import Affine, Concat
     a0, a1, a2, a3 = (Affine("n", i, 0, 4) for i in range(4))
     A = Concat([a0, a1])
@@ -324,11 +347,12 @@ def test_v1_alias_writes_a_repeated_reference_sequence_as_a_pass_through_to_the_
 
 @pytest.mark.slow
 def test_v1_kv_cache_arguments_alias_the_previous_position_and_denote_the_same_program():
-    from verity_vllm.program import profile_descriptor as PD
-    from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1, encode_program as enc
-    from verity_vllm.program.descriptor_equivalence import canonical_runs
+    from verity.circuits.codec import SCHEMA_V0, SCHEMA_V1
+    from verity.circuits.codec import encode_program as enc
+
+    from tests.program.descriptor_equivalence import canonical_runs
     LP, STEPS = 4, 2
-    desc = PD.build("B0", LP, STEPS)
+    desc = enc(Program(bind(b1.Serve, C=b1.B0_CONFIG, LP=LP, STEPS=STEPS)))
     assert desc["schema"] == SCHEMA_V1
     root = desc["definitions"][desc["root"]]["body"]
     fn_of = desc["callees"].__getitem__  # v1: callee ids are interned

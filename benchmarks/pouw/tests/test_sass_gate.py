@@ -1,4 +1,4 @@
-"""The SASS gate (`harness/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
+"""The SASS gate (`benchmarks/pouw/harness/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
 `ftz_refused.cu` (sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
 and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
 (version, build, arguments) isn't pinned with a numeric run exempts nothing; an instruction a toolkit excepts (MUFU.EX2
@@ -11,18 +11,20 @@ binaries; and, where a CUDA toolkit is present, real builds."""
 
 from __future__ import annotations
 
+import ctypes
+import hashlib
 import json
+import math
+import re
 import struct
 import subprocess
-import sys
 from pathlib import Path
 
+import ieee_pin
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
-
-import sass_gate as SG  # noqa: E402
-
+#: the gate as the harness's scripts hold it: one module a process, which `ieee_pin` loads from its repository path
+SG = ieee_pin.SG
 FIX = Path(__file__).parent / "fixtures" / "sass_gate"
 NOTES = json.loads((FIX / "tool_notes.json").read_text())
 PLAIN_COVERED = {"int-seed": 10, "__cuda_sm20_rem_s64": 1, "__cuda_sm20_div_u64": 1, "__cuda_sm20_div_u16": 1,
@@ -310,6 +312,31 @@ def test_a_signature_ignores_how_an_immediate_is_loaded_and_nothing_else():
     assert verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800000"))["covered"] == PLAIN_COVERED
     v = verdict("plain", text=in_function(n, "udiv16_k", hfma, "MOV R3, 0x4b800001"))
     assert {o["function"] for o in v["offending"]} == {"udiv16_k"} and "__cuda_sm20_div_u16's body" in v["offending"][0]["why"]
+
+
+def test_a_float_immediate_is_the_bits_struct_packs_and_none_exactly_where_float_or_struct_refuse():
+    """`_float_bits` asks before it converts. On every token of the fixtures' listings, and at the edges of `float`'s
+    grammar and of each format's range, it is `struct`'s bits of `float(text)`, and None exactly where one of them raises."""
+    edges = ["", "+", "-", ".", "e5", "1e", "1e+", "1.", ".5", "+.5e-3", "1E5", "inf", "-Infinity", "infinit", "nan", "-NAN",
+             "+INF", "-INF", "+QNAN", "-QNAN", "+SNAN", "0x3f800000", "0x1p+3", "1e39", "-1e39", "1e400", "1e-50", "4.9e-324",
+             "65504", "65519.999", "65520", "-65520", "65536", "3.4028234663852886e+38", "١٢"]
+    for past in SG._PAST.values():
+        edges += [repr(past), repr(-past), repr(math.nextafter(past, 0.0)), repr(-math.nextafter(past, 0.0))]
+    listed = set().union(*(re.split(r"[\s,;]+", f.read_text()) for f in sorted(FIX.glob("*.txt"))))
+    assert {"+INF", "2.125", "1.78813934326171875e-07", "16777216", "R4", "0x4b800000"} <= listed
+    for fmt, word in (("f", "<I"), ("e", "<H")):
+        for text in sorted(listed.union(edges)):
+            got = SG._float_bits(text, fmt)
+            if got is None:
+                with pytest.raises((ValueError, OverflowError)):
+                    struct.pack("<" + fmt, float(text))
+            else:
+                assert got == struct.unpack(word, struct.pack("<" + fmt, float(text)))[0], text
+    assert SG._float_bits("+INF", "f") == 0x7F800000 and SG._float_bits("15", "e") == 0x4B80
+    assert SG._float_bits("16777216", "f") == 0x4B800000 and SG._float_bits("16777216", "e") is None
+    assert SG._float_bits("+QNAN", "f") is None and SG._float_bits("R4", "f") is None
+    # what `float` reads and no disassembler prints: digit separators and surrounding space
+    assert [SG._float_bits(text, "f") for text in ("1_0", " 1", "1 ")] == [None] * 3 and float("1_0") == float(" 1 ") * 10
 
 
 def test_a_sections_flags_line_keeps_its_function():
@@ -828,13 +855,35 @@ def elf(machine: int, sections: dict[str, bytes]) -> bytes:
     return header + body + table
 
 
-def fatbin(entries: list[tuple[int, bytes, int]]) -> bytes:
-    """A fatbin of (kind, payload, flags) entries: 2 an ELF, 1 PTX."""
+def fatbin(entries: list[tuple]) -> bytes:
+    """A fatbin of (kind, payload, flags) entries: 2 an ELF, 1 PTX. A Zstandard entry (`zstd`) adds the two sizes its
+    header states: its frame's and its content's."""
     body = b""
-    for kind, payload, flags in entries:
+    for kind, payload, flags, *sizes in entries:
+        stored, size = sizes or (0, 0)
         padded = payload + bytes(-len(payload) % 8 + 8)
-        body += struct.pack("<HHIQ", kind, 0x101, 64, len(padded)) + bytes(24) + struct.pack("<Q", flags) + bytes(16) + padded
+        body += (struct.pack("<HHIQI", kind, 0x101, 64, len(padded), stored) + bytes(20) + struct.pack("<QQQ", flags, 0, size)
+                 + padded)
     return struct.pack("<IHHQ", SG.FATBIN_MAGIC, 1, 16, len(body)) + body
+
+
+def frame(content: bytes) -> bytes:
+    """`content` as one Zstandard frame, by the library the gate reads one with."""
+    z = SG._libzstd()
+    z.ZSTD_compressBound.restype = z.ZSTD_compress.restype = ctypes.c_size_t
+    z.ZSTD_compressBound.argtypes = [ctypes.c_size_t]
+    z.ZSTD_compress.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int]
+    out = ctypes.create_string_buffer(z.ZSTD_compressBound(len(content)))
+    n = z.ZSTD_compress(out, len(out), content, len(content), 3)
+    assert not z.ZSTD_isError(n)
+    return out.raw[:n]
+
+
+def zstd(kind: int, content: bytes, stored: int | None = None, size: int | None = None, data: bytes | None = None) -> tuple:
+    """A Zstandard entry holding `content`, as nvcc writes one; `stored`, `size` and `data` put something else in its
+    header or its payload."""
+    data = frame(content) if data is None else data
+    return kind, data, 0x8011, len(data) if stored is None else stored, len(content) if size is None else size
 
 
 def test_the_fatbin_parser_finds_every_cubin_of_every_fatbin_even_same_named_ones():
@@ -855,6 +904,76 @@ def test_the_fatbin_parser_finds_every_cubin_of_every_fatbin_even_same_named_one
 def test_what_the_parser_cannot_read_fails(data, match):
     with pytest.raises(SG.SassGateFailed, match=match):
         SG.device_code(data, "x")
+
+
+#: the cubin `cuobjdump -xelf` unpacks from the object zstd_entry.fatbin is the device code of (zstd_entry.sh prints it)
+ZSTD_CUBIN_SHA256 = "aa7a9540e14790463e92ddaab238f4b6501ac5e4157482906f61691fc833521f"
+
+
+def test_a_zstandard_entry_nvcc_wrote_is_read_as_the_cubin_cuobjdump_unpacks():
+    data = (FIX / "zstd_entry.fatbin").read_bytes()
+    kind, _, ehs, _ = struct.unpack_from("<HHIQ", data, 16)
+    assert (kind, struct.unpack_from("<Q", data, 16 + 40)[0], data[16 + ehs:20 + ehs]) == (2, 0x8011, SG.ZSTD_MAGIC)
+    cubins, ptx = SG.device_code(data, "zstd_entry.fatbin")
+    assert [hashlib.sha256(c).hexdigest() for c in cubins] == [ZSTD_CUBIN_SHA256] and ptx == []
+    assert struct.unpack_from("<H", cubins[0], 0x12)[0] == SG.EM_CUDA and SG._elf_size(cubins[0]) == len(cubins[0])
+    assert ".text.scale_add" in SG._sections(cubins[0])
+    assert SG.device_code(elf(62, {".text": b"\x90" * 16, ".nv_fatbin": data}), "k.o") == (cubins, [])
+
+
+def test_zstandard_entries_are_read_each_from_its_own_frame_even_same_named_ones():
+    a, b = elf(SG.EM_CUDA, {".text.k": b"\x01" * 40}), elf(SG.EM_CUDA, {".text.k": b"\x02" * 4000})
+    two = fatbin([zstd(2, a), zstd(1, b"fma.rn.ftz.f32 %f4, %f1, %f2, %f3;\0"), (2, a, 0x11)]) + bytes(8) + fatbin([zstd(2, b)])
+    assert len(two) < len(b)
+    assert SG.device_code(elf(62, {".nv_fatbin": two}), "lib.so") == ([a, a, b], ["fma.rn.ftz.f32 %f4, %f1, %f2, %f3;"])
+
+
+CUBIN = elf(SG.EM_CUDA, {".text.k": b"\x01" * 400})
+
+
+@pytest.mark.parametrize("entry,match", [
+    (zstd(2, CUBIN, size=len(CUBIN) + 1), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, size=len(CUBIN) - 1), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, size=SG.MAX_INFLATED + 1), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, stored=0), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, stored=1 << 20), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, data=SG.ZSTD_MAGIC + CUBIN), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, stored=len(frame(CUBIN)) - 1), "libzstd can't read"),
+    (zstd(2, CUBIN, data=frame(CUBIN) + bytes(3)), "libzstd can't read"),
+    (zstd(2, CUBIN, data=frame(CUBIN) + frame(CUBIN)), "libzstd can't read"),
+])
+def test_a_zstandard_entry_that_is_not_what_its_header_states_fails_with_the_fix(entry, match):
+    with pytest.raises(SG.SassGateFailed, match=match) as ex:
+        SG.device_code(fatbin([entry]), "x")
+    assert "build with nvcc --no-compress, or ship the cubin" in str(ex.value)
+
+
+def test_a_zstandard_entry_without_the_library_fails_with_the_fix(monkeypatch):
+    def absent(name):
+        raise OSError(f"{name}: cannot open shared object file")
+    entry = fatbin([zstd(2, CUBIN)])
+    monkeypatch.setattr(SG, "_ZSTD", [])
+    monkeypatch.setattr(SG.ctypes, "CDLL", absent)
+    with pytest.raises(SG.SassGateFailed, match=r"no libzstd\.so\.1 to read it with .*build with nvcc --no-compress"):
+        SG.device_code(entry, "x")
+    assert SG.device_code(fatbin([(2, CUBIN, 0x11)]), "x") == ([CUBIN], [])
+
+
+def test_a_payload_stored_as_it_is_under_the_zstandard_flag_is_read_as_it_was():
+    text = b"add.rn.f32 %f1, %f2, %f3;\0"
+    assert SG.device_code(fatbin([zstd(2, CUBIN, data=CUBIN), zstd(1, text, data=text)]), "x") == ([CUBIN], [text[:-1].decode()])
+    with pytest.raises(SG.SassGateFailed, match="unknown fatbin entry"):
+        SG.device_code(fatbin([zstd(2, CUBIN, data=b"\x01" * 64)]), "x")
+
+
+@pytest.mark.parametrize("entry,match", [
+    (zstd(2, b"\x01" * 64), "unknown fatbin entry"),
+    (zstd(2, CUBIN[:-8]), "a cubin of"),
+    ((2, frame(CUBIN), SG.FATBIN_COMPRESSED | SG.FATBIN_ZSTD, len(frame(CUBIN)), len(CUBIN)), "compressed fatbin entry"),
+])
+def test_a_zstandard_entrys_content_is_held_to_what_a_stored_one_is(entry, match):
+    with pytest.raises(SG.SassGateFailed, match=match):
+        SG.device_code(fatbin([entry]), "x")
 
 
 def test_has_device_code_reads_the_section_headers(tmp_path):
@@ -965,6 +1084,20 @@ def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing
             SG.SassChecker(tools=TOOLS, cache=None).discover()
 
 
+def test_a_semaphores_page_the_gate_cant_read_fails_it_by_the_error(monkeypatch):
+    def refused(start, n):
+        raise PermissionError(13, "Permission denied")
+
+    fake = "/dev/shm/sem.mp-planted (deleted)"
+    monkeypatch.setattr(SG, "mapped", lambda: [fake])
+    monkeypatch.setattr(SG, "regions", lambda p: [(0x1000, 0x1000 + SG.PAGE)])
+    monkeypatch.setattr(SG, "read_mapped", refused)
+    with pytest.raises(SG.SassGateFailed, match=r"sem\.mp-planted \(deleted\) is mapped but deleted, and the gate can't read its "
+                                                r"page \(\[Errno 13\] Permission denied\)") as ex:
+        SG.SassChecker(tools=TOOLS, cache=None).discover()
+    assert isinstance(ex.value.__cause__, PermissionError)
+
+
 def test_this_process_maps_the_python_interpreter():
     assert any(Path(p).name.startswith("python") or "libpython" in p for p in SG.mapped())
 
@@ -984,7 +1117,9 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     listings can't: a toolkit whose expansions or notes differ, and a real host ELF's fatbin. A build passes only from a
     toolkit pinned for its target with a numeric run; an sm_90a cubin from any other fails closed (12.9 writes it no ptxas
     note, 13.0 unpinned arguments), and one from 13.0.1 fails only on the div and sqrt slow-path bodies its numeric run
-    didn't pin (`test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested`)."""
+    didn't pin (`test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested`). The library is built a
+    second time with its device code compressed (nvcc's --compress-mode=size, a Zstandard entry), and that build's verdict is
+    the uncompressed build's, the file's own path, digest and size aside."""
     try:
         tools = SG.find_tools()
     except SG.SassGateFailed as ex:
@@ -996,9 +1131,11 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     pinned = any(t["version"] in version and t["branch"] in version and t["numeric"] and f"-arch {arch} -m 64" in t["args"]
                  for t in SG.load_pins()["toolkits"].values())
     base = [str(nvcc), "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", *flags]
-    for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared", "--no-compress"])):
+    recs = {}
+    for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared", "--no-compress"]),
+                       ("libprobe-zstd.so", ["-Xcompiler", "-fPIC", "-shared", "--compress-mode=size"])):
         subprocess.run([*base, *extra, "-o", str(tmp_path / out), str(FIX / src)], check=True)
-        rec = SG.scan(tmp_path / out, tools, None)
+        rec = recs[out] = SG.scan(tmp_path / out, tools, None)
         code = [c for c in rec["cubins"] if c["functions"]]
         assert rec["cross_check"]["agree"] and len(code) == 1, (out, rec["cross_check"], len(code))
         assert (code[0]["toolkit"] is not None) is pinned, (out, code[0]["unpinned"])
@@ -1015,3 +1152,7 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
         elif pinned:
             fns = {o["function"] for o in rec["offending"]}
             assert fns and (fns <= FP32_KERNELS or src == "ftz_refused.cu"), (out, fns)
+    packed = (tmp_path / "libprobe-zstd.so").read_bytes()
+    typ, off, size = SG._sections(packed)[".nv_fatbin"]
+    assert packed[off:off + size].count(SG.ZSTD_MAGIC) >= 1 and b"\x7fELF" not in packed[off:off + size]
+    assert all(recs["libprobe-zstd.so"][k] == v for k, v in recs["libprobe.so"].items() if k not in ("path", "sha256", "bytes"))

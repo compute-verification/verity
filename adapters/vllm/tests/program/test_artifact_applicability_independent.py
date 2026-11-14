@@ -25,6 +25,7 @@ The reference hosts' recorded manifests are `test_artifact_applicability_indepen
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import pathlib
@@ -33,13 +34,14 @@ import shutil
 import subprocess
 import sys
 import threading
+import tokenize
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 import pytest
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-CB_A = tuple(REPO / f for f in ("verity_vllm/check/match/global_match.py", "verity_vllm/check/match/global_match_fast.py", "verity_vllm/check/match/program_compare.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/program/frontend/export_ops.py"))   # cb_a dissolved: its modules outside frontend/
+CB_A = tuple(REPO / f for f in ("verity_vllm/check/match/global_match.py", "verity_vllm/check/match/global_match_fast.py", "verity_vllm/check/match/program_compare.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/frontend/export_ops.py"))   # cb_a dissolved: its modules outside frontend/
 FRONTEND = REPO / "verity_vllm" / "program" / "frontend"
 #: frontend modules that are not its rules: the registered target records and the GEMM targets name every GPU's arch (tables,
 #: not the declared input)
@@ -120,8 +122,6 @@ def _source_files() -> list[pathlib.Path]:
 
 def _strip_comments_and_docstrings(src: str) -> str:
     """Code-only view: literals in comments/docstrings are documentation, not duplicated construction inputs."""
-    import io
-    import tokenize
     out = []
     try:
         toks = list(tokenize.generate_tokens(io.StringIO(src).readline))
@@ -193,8 +193,8 @@ def _can_build() -> tuple[bool, str]:
     if os.environ.get("CBTEST_SKIP_BUILDS") == "1":
         return False, "CBTEST_SKIP_BUILDS=1"
     try:
-        import vllm  # noqa: F401
         import torch  # noqa: F401
+        import vllm  # noqa: F401
     except Exception as e:  # noqa: BLE001
         return False, f"vllm/torch not importable here ({type(e).__name__}); run on the pod venv"
     if not _hf_snapshot_present():
@@ -322,7 +322,7 @@ def _rewrite(tree: pathlib.Path, subs: list[tuple[re.Pattern, str]], only: str |
     done = []
     for p in sorted(tree.rglob("*.py")):
         rel = str(p.relative_to(tree))
-        if "tests" in p.parts or not (rel.startswith(("verity_vllm/check/match/global_match.py", "verity_vllm/check/match/global_match_fast.py", "verity_vllm/check/match/program_compare.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/inputs_trace.py", "verity_vllm/program/frontend/triton_capture.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/instances_form.py", "verity_vllm/program/frontend/export_ops.py")) or rel.startswith("verity.ir/frontend")):
+        if "tests" in p.parts or not (rel.startswith(("verity_vllm/check/match/global_match.py", "verity_vllm/check/match/global_match_fast.py", "verity_vllm/check/match/program_compare.py", "verity_vllm/check/match/batch_decomp.py", "verity_vllm/pipeline/build.py", "verity_vllm/program/compact.py", "verity_vllm/program/frontend/export_compat.py", "verity_vllm/program/frontend/inputs_trace.py", "verity_vllm/program/frontend/triton_capture.py", "verity_vllm/program/frontend/vllm_meta.py", "verity_vllm/pipeline/global_program.py", "verity_vllm/program/frontend/export_ops.py")) or rel.startswith("verity.ir/frontend")):
             continue
         if only is not None and rel != only:
             continue
@@ -480,7 +480,7 @@ def identity_of(b: Build):
 
 def identity_targets(ident) -> dict:
     """The target/profile-fact part of an identity (so a code-version component cannot mask an unchanged target)."""
-    t = {}
+    t: dict[str, object] = {}
     if ident is None:
         return t
     for path, v in walk(ident):
@@ -1078,7 +1078,7 @@ def test_vii_construction_on_a_mismatched_host_never_mislabels(builds):
 # host != target is acceptable iff (c) construction on an L40S (142 SMs, GPU visible) with the 128-SM/8.9 profile yields the SAME
 # Program digest AND the same artifact identity as the baseline constructions (no GPU; a 4090)
 # ---------------------------------------------------------------------------------------------------------------------------------
-def _wrapper_doc(b: "Build") -> dict | None:
+def _wrapper_doc(b: Build) -> dict | None:
     for g in ADAPTER["identity_file_globs"]:
         for p in sorted(b.out.glob(g)):
             try:
@@ -1129,10 +1129,10 @@ def _r9_recorded_applicability(m: dict) -> dict:
         out["numerics_profile"] = m["profile"]
     pkgs = ((m.get("inputs_trace") or {}).get("site_packages_by_package") or {})
     for name in pkgs:
-        for pkg, field in (("torch-", "torch_version"), ("triton-", "triton_version"), ("vllm-", "vllm_version")):
+        for pkg, key in (("torch-", "torch_version"), ("triton-", "triton_version"), ("vllm-", "vllm_version")):
             if name.startswith(pkg) and name.endswith(".dist-info"):
                 ver = name[len(pkg):-len(".dist-info")]
-                out[field] = ver[:-len(".cu129")] if field == "vllm_version" and ver.endswith(".cu129") else ver
+                out[key] = ver[:-len(".cu129")] if key == "vllm_version" and ver.endswith(".cu129") else ver
     return out
 
 

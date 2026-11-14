@@ -11,32 +11,46 @@ attaches the route source (`route_source`) when a capture map describes its mode
 which binds DeepSeek-V4's attention body); when the rank's rows name
 `DeepGemmFp8Linear_v1` Calls, the block-FP8 linears' input quantization (`linear_quant_source`); when they name the MoE align
 Definitions, the Marlin experts' align schedule (`moe_align_source`); the rank worker attaches the MoE block source (`moe_source`,
-which claims the Marlin block's call boundaries when the manifest names no plane); and under tp-commit ``--memory-map`` the KV-slots source
-(`kv_slots_source`, for the rank's memory map, never the record).  The route, linear quant and align sources: once one rank has
+which claims the Marlin block's call boundaries when the manifest names no plane).  The route, linear quant and align sources: once one rank has
 one, every rank must have it.  The single-rank `attach` also attaches the call-boundary source (`call_boundary_source`) whenever the
 manifest names `call_boundaries` identities; `attached` names what it attaches for a row's manifest, constructing nothing (the CPU
-gate's `call-boundaries`, `acquire.gate`).  Both `attach` and every rank's `attach_rank` arm a derived-S Program's prescribed split
-count (`prescribe_idle_splits`), taps or none, and attach the narrowed-rows source (`narrowed_source`: the keys' and values' columns of
+gate's `call-boundaries`, `acquire.gate`).  Both `attach` and every rank's `attach_rank`, taps or none, attach the narrowed-rows source (`narrowed_source`: the keys' and values' columns of
 the last layer's prompt rows before the last) whenever the manifest names narrowed rows; once one rank has it, every rank must."""
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
-from verity_vllm.acquire.sources import (attention_source, call_boundary_source, dsv4_attention_source, int8_source,
-                                         kv_slots_source, linear_quant_source, moe_align_source, narrowed_source, norm_scale_source,
-                                         route_source, router_softmax_source, scale_products_source, vocab_range_source)
+from verity_vllm.acquire.sources import (
+    attention_source,
+    call_boundary_source,
+    dsv4_attention_source,
+    int8_source,
+    linear_quant_source,
+    moe_align_source,
+    moe_source,
+    narrowed_source,
+    norm_scale_source,
+    route_source,
+    router_softmax_source,
+    scale_products_source,
+    vocab_range_source,
+)
 from verity_vllm.acquire.sources.call_boundary_plan import Plan
-from verity_vllm.acquire.sources import moe_source
+from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
 from verity_vllm.config import option
-from verity.definitions.registry.topp_geometry import splits_for_v1
+from verity_vllm.log import init_logger
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
+from verity_vllm.query.manifest.format import identity_rows
+
+logger = init_logger(__name__)
 
 #: (the TapSources field, the rank result's key, the source module, the manifest family, the source's class)
 SOURCES = (("norm_tap_so", "norm_scale_source", norm_scale_source, NS.FAMILY, norm_scale_source.NormScaleSource),
@@ -77,18 +91,7 @@ def attach(com: Any, manifest: Mapping[str, Any] | None, required_classes: tuple
     required_classes, _src = int8_source.attach(com, int8_source.applies(manifest), manifest, required_classes,
                                                 explicit_classes=explicit_classes, model=model)
     narrowed_source.attach(com, manifest, model=model)
-    prescribe_idle_splits(com, manifest)
     return required_classes
-
-
-def prescribe_idle_splits(com: Any, manifest: Mapping[str, Any] | None) -> bool:
-    """For a derived-S Program (its manifest names `sampler_splits`), a sampling step on which vLLM ran no split kernel (every row at
-    top_p 1) binds the prescribed S `SplitsFor_v1(rows, num_SMs)` (`commit.committer.topp_splits.step_splits`); True when armed.  A
-    manifest without the family (greedy, or B1's constant S) arms nothing, and a step whose split kernels ran binds their S either way."""
-    if hasattr(com, "prescribe_idle_splits") and int(((manifest or {}).get("populations") or {}).get("by_family", {}).get("sampler_splits", 0) or 0):
-        com.prescribe_idle_splits = splits_for_v1
-        return True
-    return False
 
 
 def warmup(com: Any, on: bool) -> None:
@@ -111,7 +114,7 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
     align Definitions, and the MoE block source when the manifest names a call boundary it claims and no `moe_block_stream` plane (every
     rank attaches it, binding at the block's Calls: `pipeline.tp.rank_worker`, `moe_source.at_calls`); on any number of ranks, the
     narrowed-rows source when the manifest names narrowed rows."""
-    ids = (manifest or {}).get("identities") or []
+    ids = identity_rows(manifest)
     fams = {r.get("family") for r in ids}
     one = int((manifest or {}).get("ranks") or 1) == 1
     cmap = None if one else route_source.manifest_map(manifest)
@@ -128,14 +131,13 @@ def attached(manifest: Mapping[str, Any] | None) -> list[str]:
             *([narrowed_source.SHORT_NAME] if narrowed_source.applies(manifest) else [])]
 
 
-def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, *, kv_slots: bool = False, **given: Any) -> dict[str, Any]:
+def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **given: Any) -> dict[str, Any]:
     """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest, and the route source when a capture
-    map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal; and arm the
-    prescribed split count as `attach` does (`prescribe_idle_splits`: "SplitsFor_v1" when armed).  With ``kv_slots`` (tp-commit
-    ``--memory-map``) also the KV-slots source, never the record: the rank's map reads it (`pipeline.tp.rank_replay.memory_map`)."""
+    map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal."""
     man = json.loads(Path(manifest_path).read_text()) if manifest_path else {}
-    mine = dict(man, identities=[r for r in man.get("identities") or [] if int(r.get("rank", 0)) == int(rank)])
-    out: dict[str, Any] = {"prescribe_idle_splits": "SplitsFor_v1"} if prescribe_idle_splits(com, mine) else {}
+    rows = man.get("identities")
+    mine = dict(man, identities=[r for r in (rows if rows else ()) if int(r.get("rank", 0)) == int(rank)])
+    out: dict[str, Any] = {}
     for f, key, mod, _fam, _cls in SOURCES:
         if not given.get(f):
             continue
@@ -168,18 +170,19 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, *, k
             out["narrowed_source"] = {"sites": len(nr.sites)}
     except (SystemExit, ValueError, RuntimeError, AttributeError) as e:
         out["narrowed_source"] = {"error": repr(e)[:200]}
-    if kv_slots:
-        try:
-            out["kv_slots_source"] = {"layers": len(kv_slots_source.attach(com, model).layers)}
-        except (ValueError, RuntimeError, AttributeError) as e:
-            out["kv_slots_source"] = {"error": repr(e)[:200]}
     return out
 
 
-def for_ranks(taps: TapSources, *, kv_slots: bool = False) -> Any:
+def for_ranks(taps: TapSources) -> Any:
     """What `tp2_commit_make` calls on every rank: `attach_rank` with the taps that are on bound (picklable), also when none is, since
-    every rank arms the prescribed split count and attaches the route source; ``kv_slots`` bound when on."""
-    return partial(attach_rank, **taps.given(), **({"kv_slots": True} if kv_slots else {}))
+    every rank arms the prescribed split count and attaches the route source."""
+    return partial(attach_rank, **taps.given())
+
+
+def _recorded(rank: Mapping[str, Any], key: str) -> Any:
+    """What a rank recorded of the source `key` when it made its committer (`attach_rank`'s result); None where it recorded none."""
+    sources = rank.get("tap_sources")
+    return sources.get(key) if sources else None
 
 
 def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], taps: TapSources, *,
@@ -190,11 +193,9 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     Definitions) and the narrowed-rows source (when any rank's rows are narrowed) attached on every rank (else SystemExit); the attention
     hidden class every rank reports
     (`hidden_source.require_hidden_on_every_rank`)."""
-    from verity_vllm.acquire.sources.hidden_source import require_hidden_on_every_rank
-
     required_classes = require_hidden_on_every_rank(made, required_classes, versions, explicit_classes=explicit_classes)
     for key in ("route_source", "linear_quant_source", "moe_align_source", "narrowed_source"):
-        states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
+        states = {int(m["rank"]): _recorded(m, key) for m in made}
         if any(states.values()):
             bad = sorted(r for r, v in states.items() if not v or v.get("error"))
             if bad:
@@ -204,7 +205,7 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
     for f, key, _mod, fam, _cls in SOURCES:
         if not getattr(taps, f):
             continue
-        states = {int(m["rank"]): (m.get("tap_sources") or {}).get(key) for m in made}
+        states = {int(m["rank"]): _recorded(m, key) for m in made}
         bad = sorted(r for r, v in states.items() if not v or v.get("error"))
         if bad or not states:
             raise SystemExit(f"fail-closed: the {fam} source did not attach on ranks {bad} of {len(made)}: {[states[r] for r in bad][:2]}")
@@ -212,8 +213,8 @@ def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[st
             required_classes = (*required_classes, fam)
         versions[key] = states
         versions["required_classes"] = list(required_classes)
-        print(f"[tp2commit] {fam} source attached on every rank ({states[min(states)]}); required classes {list(required_classes)}", flush=True)
+        logger.info("[tp2commit] %s source attached on every rank (%s); required classes %s", fam, states[min(states)], list(required_classes))
     return required_classes
 
 
-__all__ = ["SOURCES", "TapSources", "attach", "prescribe_idle_splits", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]
+__all__ = ["SOURCES", "TapSources", "attach", "warmup", "attached", "attach_rank", "for_ranks", "require_on_every_rank"]

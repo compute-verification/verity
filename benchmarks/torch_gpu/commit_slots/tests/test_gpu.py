@@ -77,7 +77,7 @@ def test_the_edge_layout_on_graphs() -> None:
 
 
 def test_a_marked_step_on_graphs_marks_each_add() -> None:
-    """Marks (e2e_h200 times its commit by the last) are one an add on graphs, none captured, and finish's as ever."""
+    """Marks (a caller times its commit by the last) are one an add on graphs, none captured, and finish's as ever."""
     layout = S.h200_layout(layers=2)
     plan = G.Plan(CTX, layout)
     for step in (1, 2):
@@ -92,7 +92,12 @@ def test_a_marked_step_on_graphs_marks_each_add() -> None:
 
 
 def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
-    """Graphs captured on a green context's stream, their leaf grid sized to its SMs, replayed under a second key."""
+    """Graphs captured on a green context's stream, their leaf grid sized to its SMs, replayed under a second key.
+    Skipped where this Python's torch has no driver bindings to make a green context with."""
+    try:
+        G.driver_bindings()
+    except RuntimeError as e:
+        pytest.skip(str(e))
     layout = S.h200_layout(layers=3)
     plan = G.Plan(CTX, layout, sms=16)
     for step, key in ((6, KEY), (7, bytes(range(32)))):
@@ -104,13 +109,13 @@ def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
 @pytest.mark.parametrize("graphs", [False, True], ids=["eager", "graphs"])
 def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: bool) -> None:
     """At the HBM cap, with room for two groups' tables (the one being read and the one being made), a producer that
-    frees each group's tables once it has made the next group's (e2e_h200's driver, its stream waiting for the reads
-    ``LAG`` groups back) gets the group before's memory back for the group after while the side stream lags its reads,
-    so across two steps the allocator never retries (a retry frees its cache and waits on every stream) and nothing
-    runs out, and the roots are an unpressured run's. What it catches that the roots' tests can't: a commit that keeps a
-    freed table from the producer's next allocation, as ``record_stream`` onto the side stream did (a table was reusable
-    only once that stream had run everything queued on it when the table was freed, so the third group's retried), or
-    as holding tables two adds did (the third group's ran out)."""
+    frees each group's tables once it has made the next group's (a serving loop's driver, its stream waiting for the
+    reads a fixed number of groups back) gets the group before's memory back for the group after while the side stream
+    lags its reads, so across two steps the allocator never retries (a retry frees its cache and waits on every stream)
+    and nothing runs out, and the roots are an unpressured run's. What it catches that the roots' tests can't: a commit
+    that keeps a freed table from the producer's next allocation, as ``record_stream`` onto the side stream did (a table
+    was reusable only once that stream had run everything queued on it when the table was freed, so the third group's
+    retried), or as holding tables two adds did (the third group's ran out)."""
     dev, width, slots, lag = torch.device("cuda"), 4 << 20, 64, 2
     group = S.Group((width,), tuple((S.Row((S.Part(0, a, 32 << 10),)),) for a in range(0, width, 32 << 10)))
     plan = G.Plan(CTX, S.CommitShape("commit-slots/test-hbm-cap/v1", (group,) * 6))

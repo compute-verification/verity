@@ -447,6 +447,27 @@ def test_an_honest_cache_hit_compiles_to_the_cached_request_program():
     assert cmd[cmd.index("--cached") + 1] == "16" and "--cached" not in trace_commands(s, reg, "/t")[0]
 
 
+@pytest.mark.parametrize("body", [GREEDY, STOCH])
+def test_a_recomputed_cache_hit_compiles_to_the_uncached_request_program(body):
+    """With `recompute_hits`, r1's hit of r0's first block is its own Program's to compute: the uncached request Program (C 0), with
+    no `prefix` input and no producer in GP-01, stochastic too, its rows still from the hit (positions 0..15 in no row). R2 passes,
+    the stand-in computing the block from r1's own tokens."""
+    reg = _registered()
+    c = compile_steps(reg, *_hit(16, body=body), recompute_hits=True)
+    assert c.batch_rule is None and not c.refused
+    u = c.requests[1]
+    alone = compile_steps(reg, *_session([(24, 3, {**body, "max_tokens": 3}, _prompt(0, 16) + _prompt(1, 24)[16:])],
+                                         [[(0, 0, 24)], [(0, 24, 1)], [(0, 25, 1)]]))
+    assert (u.LP, u.T, u.C, u.recomputed, u.producers, u.digest) == (24, 2, 0, 16, (), alone.requests[0].digest)
+    assert "prefix" not in [n for n, _ in c.programs[u.digest].fn.signature()[0]]
+    assert c.steps[1] == [RowRef(0, c.requests[0].digest, 24, 1, 1), RowRef(1, u.digest, 16, 8, 1)]
+    assert [r.prefix for r in c.workload.requests] == [None, None]
+    s = c.summary()
+    assert s["requests"][1]["recomputed"] == 16 and all("--cached" not in cmd for cmd in trace_commands(s, reg, "/t"))
+    if body is GREEDY:
+        assert u.digest == _whole(reg, 24, 2, 3)
+
+
 @pytest.mark.parametrize("hit,body,fact", [
     (8, GREEDY, "request 1: step 1's cache hit reads 8 tokens of request 0's KV, not whole blocks of 16"),
     (16, STOCH, "request 1: a prefix-cache hit of 16 tokens on a stochastic request"),
@@ -998,6 +1019,8 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
 @pytest.mark.parametrize("engine,edit,fact", [
     ({"max_num_batched_tokens": 16384}, {}, "engine arg max_num_batched_tokens 16384, not a stated value of at most 8192"),
     ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 131072"),
+    ({"max_model_len": -1}, {}, "engine arg max_model_len -1, not a stated value of at most 131072"),
+    ({"max_model_len": 262144}, {}, "engine arg max_model_len 262144, not a stated value of at most 131072"),
     ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
     ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),
@@ -1097,6 +1120,46 @@ def test_class_g_plans_a_request_from_its_history_in_the_window(session, units, 
         a = plan_steps(reg, solo, bodies).requests[k]
         assert B._unit(a) == B._unit(u) and (a.carried_in, a.carried_out, a.prefix() is None) == (u.carried_in, u.carried_out, not u.C)
     assert WA.follows(A_OUT, A_IN) == [(0, 0)] and WA.follows(A_MID_OUT, A_MID_IN) == [(0, 0)]
+
+
+@pytest.mark.parametrize("session,chunks,entries", [(_hit(16), (16, 8), (24, 8)), (_hit_chunked(), (16, 4, 4), (24, 4, 4))])
+def test_class_g_plans_a_recomputed_hit_as_chunks_at_the_launches_that_computed_it(session, chunks, entries, tmp_path):
+    """With `recompute_hits`, r1's hit of r0's first block is a prefill chunk of its own Program (C 0, no producer) at the launch of
+    step 0, where r0's row of 24 computed it: the chunk computes the first 16 rows of that sequence (`entries`), then r1's own
+    chunks and decodes run at their launches. Alone (R2's solo form, the stand-in prefilled in the hit's chunks) it plans the same."""
+    reg = _class_g(tmp_path, engine=CACHE_ON)
+    advice, ingress = session
+    u = plan_steps(reg, advice, ingress, recompute_hits=True).requests[1]
+    assert (u.C, u.recomputed, u.hit_steps, u.chunks, u.entries, u.producers, u.prefix()) == (0, 16, (0,), chunks, entries, (), None)
+    assert u.launch[:2] == (((24, 0),), ((1, 24), (chunks[1], 16)))
+    solo, bodies, k = B._solo(advice, ingress, 1, u.chunks[:1])
+    a = plan_steps(reg, solo, bodies, recompute_hits=True).requests[k]
+    assert B._unit(a) == B._unit(u) and a.entries == () and a.launch[0] == ((16, 0),)
+
+
+def _two_producers(split: bool) -> tuple[I1.Advice, dict]:
+    """r2 (LP 40) admitted on a hit of 32 tokens, its first block r0's and its second r1's, which r1 computed over a first block of
+    its own: in the same row as it (`split` False), or in a row of step 0 beside r0's, the second block a row of step 1."""
+    p, one = _prompt(0, 40), {**GREEDY, "max_tokens": 1}
+    first = [(0, 0, 16), (1, 0, 16)] if split else [(0, 0, 16), (1, 0, 32)]
+    return _session([(16, 1, one, p[:16]), (32, 1, one, p[:32]), (40, 1, one, p)], [
+        first, *([[(1, 16, 16)]] if split else []),
+        [(2, 32, 8, {"cache_hit": 32, "sources": (I1.Source(0, 16), I1.Source(1, 16))})]])
+
+
+@pytest.mark.parametrize("session,fact", [
+    (_two_producers(False), "request 2: its hit's positions 16 … 31 are request 1's rows from position 0 at step 0, a row that starts "
+                            "before them"),
+    (_two_producers(True), "request 2: its hit's positions 16 … 31 are request 1's rows at step 1, computed over a history of other "
+                           "rows than the hit holds"),
+    (_past_its_outputs(), "request 0's KV at positions below 16 has no row of the window that computed it (the window carries it in)"),
+])
+def test_class_g_refuses_a_hit_no_one_chain_of_its_rows_recomputes(session, fact, tmp_path):
+    """A recomputed hit is the chain of rows that computed it, each at its launch over the history before it, so it is refused where
+    serving computed it otherwise: a block whose row started before it (two requests computed one block in the same step), a row
+    whose own history was another than the hit's, or rows a window before computed."""
+    with pytest.raises(Unexpressible, match=re.escape(fact)):
+        plan_steps(_class_g(tmp_path, engine=CACHE_ON), *session, recompute_hits=True)
 
 
 def _traced_form(reg: Registered, u) -> str:
@@ -1208,6 +1271,21 @@ def test_a_class_g_cache_hit_reads_its_cached_rows_as_inputs(tmp_path):
     assert _history_params(c.programs[c.requests[1].digest]) == [("prompt", 24), ("prefix", 4 * 16 * 576), ("prefix_ik", 3 * 16 * 128),
                                                                  ("prefix_iks", 3 * 16)]
     assert c.requests[1].launch[0] == ((1, 24), (8, 16))
+
+
+@pytest.mark.slow
+def test_a_class_g_recomputed_hit_compiles_with_no_history_input(tmp_path):
+    """Class G on GLM-5.3's first four layers, r1 admitted on a hit of r0's first block, under `recompute_hits`: r1's Program reads
+    no history, computing the block's 16 rows in r0's launch of step 0 (24 rows at position 0) before its own 8 at step 1, and GP-01
+    records no producer; the batch rules pass, R2 with the stand-in prefilled in the hit's chunk. What no cheaper test can: that a
+    window's recomputed hit compiles through the batch rules on the DSA decoder."""
+    reg = _class_g(tmp_path, engine=CACHE_ON, layers=4)
+    c = compile_steps(reg, *_hit(16), recompute_hits=True)
+    u = c.requests[1]
+    assert c.batch_rule is None and [(w.LP, w.T, w.C) for w in c.requests] == [(24, 3, 0), (24, 2, 0)]
+    assert [r.prefix for r in c.workload.requests] == [None, None] and (u.chunks, u.entries) == ((16, 8), (24, 8))
+    assert _history_params(c.programs[u.digest]) == [("prompt", 24)]
+    assert u.digest != compile_steps(reg, *_hit(16)).requests[1].digest
 
 
 @pytest.mark.slow

@@ -1,0 +1,326 @@
+[
+ {
+  "type": "fi-linear-k2048",
+  "provers": 1,
+  "n": 1024,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "FlashInferFp8Linear_v1{K=2048,N=1}",
+   "k_log": 24,
+   "blocks": 1024,
+   "full": 2048
+  },
+  "exits": {
+   "verifier-fi-linear-k2048": 0,
+   "prover-gpu0": -15
+  },
+  "accepted": 9,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": false,
+  "void": [
+   "exited nonzero: prover-gpu0 rc -15"
+  ],
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
+ },
+ {
+  "type": "gq-k6144",
+  "provers": 1,
+  "n": 512,
+  "warm": 1,
+  "sessions": 8,
+  "stage": {
+   "definition": "Fp8GroupQuantUe8m0_v1{K=6144,G=128}",
+   "k_log": 25,
+   "blocks": 512,
+   "full": 1024
+  },
+  "exits": {
+   "verifier-gq-k6144": 0,
+   "prover-gpu0": -15
+  },
+  "accepted": 9,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": false,
+  "void": [
+   "exited nonzero: prover-gpu0 rc -15"
+  ],
+  "statements_per_s": null,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0
+ },
+ {
+  "type": "dsa-logits-v3",
+  "provers": 1,
+  "n": 1024,
+  "warm": 1,
+  "sessions": 18,
+  "stage": {
+   "definition": "DsaMqaLogits_v3{N=1,H=32,D=128}",
+   "k_log": 23,
+   "blocks": 1024,
+   "full": 4096
+  },
+  "exits": {
+   "verifier-dsa-logits-v3": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 19,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.5944596361907026,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 0.9575
+ },
+ {
+  "type": "fr-w13",
+  "provers": 1,
+  "n": 256,
+  "warm": 1,
+  "sessions": 23,
+  "stage": {
+   "definition": "MoeExpertFp8ReadGemm_v1{READ=EmbeddingRead_v1{V=256,H=3072},K=6144,N=1,G=128,KB=128,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v2}",
+   "k_log": 25,
+   "blocks": 256,
+   "full": 1024
+  },
+  "exits": {
+   "verifier-fr-w13": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 24,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.5140595280933532,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 2.0702
+ },
+ {
+  "type": "fr-w2",
+  "provers": 1,
+  "n": 256,
+  "warm": 1,
+  "sessions": 48,
+  "stage": {
+   "definition": "MoeExpertFp8ReadGemmW_v1{READ=EmbeddingRead_v1{V=256,H=4096},K=256,N=32,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v2}",
+   "k_log": 25,
+   "blocks": 256,
+   "full": 1024
+  },
+  "exits": {
+   "verifier-fr-w2": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 49,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.4884959210590592,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 2.0748
+ },
+ {
+  "type": "residual-add",
+  "provers": 1,
+  "n": 128,
+  "warm": 1,
+  "sessions": 10,
+  "stage": {
+   "definition": "ResidualAdd_v1{N=6144}",
+   "k_log": 26,
+   "blocks": 128,
+   "full": 512
+  },
+  "exits": {
+   "verifier-residual-add": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 11,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.37946343869768145,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 2.9366
+ },
+ {
+  "type": "sm-fp8-k2048",
+  "provers": 1,
+  "n": 1024,
+  "warm": 1,
+  "sessions": 12,
+  "stage": {
+   "definition": "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}",
+   "k_log": 23,
+   "blocks": 1024,
+   "full": 4096
+  },
+  "exits": {
+   "verifier-sm-fp8-k2048": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 13,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.6472910868017347,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 0.9545
+ },
+ {
+  "type": "sm-fp8-k6144",
+  "provers": 1,
+  "n": 512,
+  "warm": 1,
+  "sessions": 9,
+  "stage": {
+   "definition": "ScaledMmFp8BlockSharedScale_v1{K=6144,N=1,G=128}",
+   "k_log": 24,
+   "blocks": 512,
+   "full": 2048
+  },
+  "exits": {
+   "verifier-sm-fp8-k6144": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 10,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.5889975262103899,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 1.2449
+ },
+ {
+  "type": "ar-multimem",
+  "provers": 1,
+  "n": 128,
+  "warm": 1,
+  "sessions": 29,
+  "stage": {
+   "definition": "AllReduceMultimem_v1{WORLD=8,SIZE=3072,TREES=(((((((0,(1,2)),3),5),6),4),7),((((((0,(1,2)),3),5),6),4),7),((((((0,(1,2)),3),5),6),4),7),((((((0,(1,2)),3),5),6),4),7),((((((0,(1,2)),3),5),6),4),7),((((((0,(1,2)),3),5),6),4),7),((((((0,(1,2)),3),5),6),4),7),((((((0,(1,2)),3),5),6),4),7)),FTZ=False}",
+   "k_log": 27,
+   "blocks": 128,
+   "full": 256
+  },
+  "exits": {
+   "verifier-ar-multimem": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 30,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.20042490078967412,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 6.0881
+ },
+ {
+  "type": "rmsnorm-v8",
+  "provers": 1,
+  "n": 128,
+  "warm": 1,
+  "sessions": 31,
+  "stage": {
+   "definition": "RMSNormFusedCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=256}",
+   "k_log": 27,
+   "blocks": 128,
+   "full": 256
+  },
+  "exits": {
+   "verifier-rmsnorm-v8": 0,
+   "prover-gpu0": 0
+  },
+  "accepted": 32,
+  "refused_n": 0,
+  "warm_per_prover": {
+   "prover-gpu0": 1
+  },
+  "unfiled": 0,
+  "gpus": 1,
+  "flat": true,
+  "statements_per_s": 0.15520238390861685,
+  "throttled": {
+   "nr_throttled": 0,
+   "throttled_usec": 0
+  },
+  "idle_provers": 0,
+  "verify_s": 6.2514
+ }
+]

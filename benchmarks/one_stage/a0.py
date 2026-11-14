@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import secrets
+import select
 import shutil
 import subprocess
 import sys
@@ -34,6 +35,7 @@ from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
 from verity.protocols.spot.device import challenger as Ch, coins as CC
 from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.spot.verifier.one_stage.proofs import verifier_env
 
 import r2_population as R2
 
@@ -200,12 +202,19 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
     return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
 
 
+#: `session` reads its verifier's log for ``SERVING`` this often, for this long at most (seconds): the prover starts
+#: within a read of the verifier's listening, and the wait is outside the prover's clock
+SERVING_POLL, SERVING_WAIT = 0.02, 900.0
+
+
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
-            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
+            tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
     its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
-    and its audit of the session's record, and a session whose challenger failed is refused.
+    and its audit of the session's record, and a session whose challenger failed is refused. With ``tree_from`` (the
+    caller's ``--tree-from`` flags) it takes its tree from the challenger those name instead, whose audit is the caller's.
     `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
@@ -217,7 +226,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
     ch = None
-    if own_challenger(env, zk):
+    if tree_from is None and own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
@@ -225,14 +234,13 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
-                              *(ch[1] if ch else [])],
+                              *(ch[1] if ch else tree_from or [])],
                              stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
     try:
-        for _ in range(1800):
-            if "SERVING" in (out / "serve.log").read_text() or serve.poll() is not None:
-                break
-            time.sleep(0.5)
+        late = time.monotonic() + SERVING_WAIT
+        while "SERVING" not in (out / "serve.log").read_text() and serve.poll() is None and time.monotonic() < late:
+            time.sleep(SERVING_POLL)
         p = run([bin_, "prove", *zf, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
                  "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env,
                 timeout=prove_timeout)
@@ -253,6 +261,27 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
             live.update(accepted=False, why=f"challenger: {json.dumps(got)[:600]}")
     recs = sorted((out / "sessions").glob("*/session.json"))
     return (json.loads(recs[-1].read_text()) if recs else None), live
+
+
+def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
+    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the circuit's template
+    section and META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
+    from verity_flock import circuit as FC
+
+    if st.meta.get("statement") != FC.TMPL_STATEMENT:
+        return {}
+    if not tmpl_unit_bin:
+        raise SystemExit("a templated statement's prover reads its unit placed by flock-tmpl-unit: give --tmpl-unit-bin")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "unit.tmpl").write_text(FC.template_of(st.text))
+        (d / "unit.layout").write_text(st.meta["layout"])
+        p = run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
 
 
 def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
@@ -282,63 +311,253 @@ def prover_env(firewall: str | None, st: dict) -> dict:
     return dict(DIRECT)
 
 
+def identity(f: Path) -> tuple | None:
+    """File ``f``'s identity, the same for every link of one file; None for a file that is not there."""
+    if not f.exists():
+        return None
+    s = f.stat()
+    return (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
+
+
+def bound_files(st: dict) -> list[str]:
+    """What statement ``st`` is verified against besides its circuit, public file and tables, each by `verify`'s flag
+    for it (the file is ``st["<flag>_file"]``): its partition, program and registered reads where it has them, and with
+    registered reads the window's registered circuit record (``interface``) where it has one."""
+    return [x for x in ("partition", "program", "registered", "interface")
+            if st.get(f"{x}_file") and (x != "interface" or st.get("registered_file"))]
+
+
+def archive_files(st: dict, n: int) -> list[Path]:
+    """What `lean_verify` archives for statement ``st`` on ``n`` units: the circuit, the public file, the tables, and
+    what else the statement is verified against (`bound_files`)."""
+    d = st["dir"]
+    return [d / "circuit.txt", d / f"pub-{n}.bin", *sorted(f for f in (d / "tables").glob("*") if f.is_file()),
+            *(Path(st[f"{x}_file"]) for x in bound_files(st))]
+
+
+def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held: dict | None = None) -> dict[Path, str]:
+    """Each of ``files`` in ``archive`` under its SHA-512 (Lean's ``archive-put``, its log ``log``), and each one's
+    key there; a file Lean could not put has none. ``held``, a dict a run's archives share: a file archived once, by its
+    identity (`identity`), is linked into a later archive rather than read again, and a call whose every file is held
+    starts no process. Lean holds an object to its key when it reads it (`archiveGet`)."""
+    ids = {f: identity(f) if held is not None else None for f in files}
+
+    def known(f: Path) -> tuple[str, Path] | None:
+        pre = held.get(ids[f]) if ids[f] is not None else None
+        return pre if pre is not None and pre[1].exists() else None
+
+    new, seen = [], set()
+    for f in files:
+        if ids[f] is None or (known(f) is None and ids[f] not in seen):
+            new.append(f)
+            seen.add(ids[f])
+    put = {}
+    if new:
+        p = run([lean, "archive-put", str(archive), *map(str, new)], log)
+        put = {x[1]: x[0] for x in (line.split() for line in p.stdout.splitlines()) if len(x) == 2}
+        for f in new:
+            if ids[f] is not None and str(f) in put:
+                held[ids[f]] = (put[str(f)], archive / "sha512" / put[str(f)])
+    keys = {}
+    for f in files:
+        pre = known(f)
+        if pre is None:
+            if str(f) in put:
+                keys[f] = put[str(f)]
+            continue
+        keys[f] = pre[0]
+        if not (archive / "sha512" / pre[0]).exists():
+            (archive / "sha512").mkdir(parents=True, exist_ok=True)
+            os.link(pre[1], archive / "sha512" / pre[0])
+    return keys
+
+
+#: `VerifyMembers` waits this long for a member's answer, as `run` waits for a `verify` process, and this long for the
+#: process to exit once its standard input is closed or its output has ended (seconds), by this clock
+MEMBER_WAIT, EXIT_WAIT = 3600.0, 60.0
+monotonic = time.monotonic
+
+
+class VerifyMembers:
+    """Lean's ``verify-members``, one process for a run's members (`Flock.VerifyMembers`): started on the run's
+    registered program (``program``, its key in ``archive``), which it reads once, it takes a member as one line, the JSON
+    array of `verify`'s arguments for it, and answers with what `verify` prints for that member and then
+    ``MEMBER {"exit":E,"index":I}``, E `verify`'s exit status and I the line's place.
+
+    `verify` hands it the next member and writes that member's log as `run` writes a `verify` process's, with one more
+    line saying how it was run, so the log's readers read either. A member is handed in once, in the members' order. A
+    member the process does not answer (it ended, it wrote nothing for `MEMBER_WAIT` seconds, or it answered another place)
+    has no verdict, and neither has any member after it: the process is ended, by its PID, and never started again.
+    `close` ends it and writes its own log (``log``); until then its standard error is the ``.stderr`` file beside it.
+
+    It runs in this process's environment as it is, not in `verifier_env`. A `verify` process exits after its member;
+    this one stays for the run, beside the run's provers, and under the verifier's allocator setting it would hold
+    every page it freed once it had read the program. So it starts under the allocator's default unless this process's
+    environment sets a value."""
+
+    def __init__(self, lean: str, archive: Path, program: str, log: Path):
+        self.cmd = [lean, "verify-members", "--archive", str(archive), "--program", program]
+        self.log, self.stderr, self.started = log, log.with_suffix(".stderr"), time.time()
+        # its standard error is a file of this run's alone, which `_stderr` reads through an opening of its own; the pipes
+        # are unbuffered, read and written through their descriptors
+        with self.stderr.open("wb") as err:
+            self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, bufsize=0,
+                                         env=environ(None))
+        self.members, self.ended = 0, None
+        self._buf, self._err_read, self._ends = b"", 0, []
+
+    def _stop(self, why: str, kill: bool = False) -> None:
+        """The process answers no member from here: ``why``, with its exit status, is every later member's reason."""
+        if kill and self.proc.poll() is None:
+            self.proc.kill()
+        try:
+            self.proc.wait(timeout=EXIT_WAIT)
+        except subprocess.TimeoutExpired as e:
+            self.proc.kill()
+            self.proc.wait()
+            why = f"{why}, and did not exit in {e.timeout:.0f} s"
+        self.ended = f"{why} (it exited {self.proc.returncode})"
+
+    def _line(self, wait: float) -> bytes | str:
+        """The process's next line of standard output; or, a str, why there is none: its output ended, or it wrote
+        nothing for ``wait`` seconds."""
+        late = monotonic() + wait
+        while b"\n" not in self._buf:
+            left = late - monotonic()
+            if left <= 0 or not select.select([self.proc.stdout], [], [], left)[0]:
+                return f"wrote nothing for {wait:.0f} s"
+            got = os.read(self.proc.stdout.fileno(), 1 << 16)
+            if not got:
+                return "ended"
+            self._buf += got
+        line, _, self._buf = self._buf.partition(b"\n")
+        return line
+
+    def _stderr(self) -> str:
+        """What the process wrote on standard error since the last call."""
+        with self.stderr.open("rb") as f:
+            f.seek(self._err_read)
+            got = f.read()
+        self._err_read += len(got)
+        return got.decode(errors="replace")
+
+    def verify(self, args: Sequence[str], log: Path) -> tuple[str, str]:
+        """The next member, `verify`'s arguments ``args``: what `verify` printed for it, nothing where the process did not
+        answer it; and why it has no verdict if it has none (`verify`'s exit status, or what the process did instead).
+        ``log``: the member's log."""
+        i, t = self.members, time.time()
+        self.members += 1
+        printed, status = [], None
+        if self.ended is None:
+            line = json.dumps(list(args)).encode() + b"\n"
+            try:
+                while line:
+                    line = line[os.write(self.proc.stdin.fileno(), line):]
+            except OSError as e:
+                self._stop(f"the kept verifier could not be handed member {i} ({e})")
+        while self.ended is None and status is None:
+            line = self._line(MEMBER_WAIT)
+            if isinstance(line, str):
+                self._stop(f"the kept verifier {line} before member {i}'s MEMBER line", kill=line != "ended")
+            elif not line.startswith(b"MEMBER "):
+                printed.append(line.decode(errors="replace"))
+            else:
+                self._ends.append(line.decode(errors="replace"))
+                try:
+                    end = json.loads(line[7:])
+                except ValueError as e:
+                    end = f"not JSON ({e})"
+                if isinstance(end, dict) and end.get("index") == i and isinstance(end.get("exit"), int):
+                    status = end["exit"]
+                else:
+                    self._stop(f"the kept verifier answered member {i} with {self._ends[-1][:200]}", kill=True)
+        stderr = self._stderr()
+        # what the process printed for a member it did not answer is kept, and is no verdict to any reader of the log
+        stdout = "".join(("" if status is not None else "not taken: ") + x + "\n" for x in printed)
+        why = f"no verdict (rc {status}): {stderr[-400:]}" if status is not None else f"no verdict: {self.ended}: {stderr[-400:]}"
+        log.write_text(f"$ {self.cmd[0]} verify {' '.join(args)}\n# rc {status} in {time.time() - t:.3f} s\n"
+                       f"# run as member {i} of: {' '.join(self.cmd)}" + ("" if status is not None else f"\n# {self.ended}")
+                       + f"\n--- stdout\n{stdout}\n--- stderr\n{stderr}")
+        return (stdout if status is not None else ""), why
+
+    def close(self) -> int:
+        """Ends the process, its standard input closed so that it exits once it has answered what it was handed: its exit
+        status, and its log as `run` writes one (its members' ``MEMBER`` lines; their verdicts are in their own logs)."""
+        if self.ended is None:
+            self.proc.stdin.close()
+            while isinstance(line := self._line(EXIT_WAIT), bytes):
+                self._ends.append(line.decode(errors="replace"))
+            self._stop("closed after its last member" if line == "ended" else f"the kept verifier {line} once its input closed",
+                       kill=line != "ended")
+        self.log.write_text(f"$ {' '.join(self.cmd)}\n# rc {self.proc.returncode} in {time.time() - self.started:.1f} s\n"
+                            f"# {self.members} members handed in; {self.ended}\n--- stdout\n"
+                            + "".join(x + "\n" for x in self._ends) + self._buf.decode(errors="replace")
+                            + f"\n--- stderr\n{self.stderr.read_text(errors='replace')}")
+        self.stderr.unlink()
+        for f in (self.proc.stdin, self.proc.stdout):
+            f.close()
+        return self.proc.returncode
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
-                flags: Sequence[str] = ()) -> dict:
+                flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
     """The verifier: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
-    `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins tree
-    --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
-    identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
-    Lean holds the object to its key when it reads it (`archiveGet`). ``st["statement"]``: the statement `verify` sets up
+    `hold_registered`) when the statement reads registered values, with the window's registered circuit record
+    (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds (`bound_files`); `zk`,
+    a `--zk` session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more
+    of `verify`'s (a plain session's ``--coins tree --stratified K``). ``members``: the run's kept verifier
+    (`VerifyMembers`), which is handed `verify`'s arguments for this session as its next member in place of a `verify`
+    process of its own, and gives the same verdict. ``st["archived"]``, a dict a run's members share (`archive_put`'s
+    ``held``): a file archived once, the members' circuit or a file the run put before its sessions, is linked into
+    every later archive rather than put again. ``st["statement"]``: the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
-    holds each statement to."""
+    holds each statement to. `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's
+    environment sets its own. The kept verifier does not (`VerifyMembers`)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
-    archive = out / "archive"
-    tables = sorted(str(f) for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
-    part = [str(st["partition_file"])] if st.get("partition_file") else []
-    prog = [str(st["program_file"])] if st.get("program_file") else []
-    reads = [str(st["registered_file"])] if st.get("registered_file") else []
-    circuit, held = st["dir"] / "circuit.txt", st.get("archived")
-    s = circuit.stat()
-    ident = (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
-    pre = held.get(ident) if held is not None else None
-    if pre is not None:
-        (archive / "sha512").mkdir(parents=True, exist_ok=True)
-        if not (archive / "sha512" / pre[0]).exists():
-            os.link(pre[1], archive / "sha512" / pre[0])
-    p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables, *part,
-             *prog, *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
-    keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
-    if pre is not None:
-        keys["circuit.txt"] = pre[0]
-    elif held is not None and "circuit.txt" in keys:
-        held[ident] = (keys["circuit.txt"], archive / "sha512" / keys["circuit.txt"])
-    bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
-    bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
-    bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
+    archive, files = out / "archive", archive_files(st, n)
+    keys = archive_put(lean, archive, files, out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"),
+                       st.get("archived"))
+    bound = [y for x in bound_files(st) for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
+    args = ["--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
+            "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,
+            *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)]
     t = time.time()
-    p = run([lean, "verify", "--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
-             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)],
-            out / f"{log}.log")
-    line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
-    v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
+    if members is None:
+        p = run([lean, "verify", *args], out / f"{log}.log", env=verifier_env())
+        stdout, none = p.stdout, f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"
+    else:
+        stdout, none = members.verify(args, out / f"{log}.log")
+    line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)
+    v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": none}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
             "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
             **{k: v[k] for k in ("public_header_sha512", "registered_sha512", "unit_draw", "session_tables") if k in v},
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
+#: how Lean's reason opens where a file of the session, its record or a rep's proof, was not there to read (`verify` in
+#: FlockVerify.lean, after the statement is set up and before any check of a proof)
+NO_SESSION_FILES = "session files:"
+
+
 def lean_refused(v: dict, names: str | None = None) -> bool:
-    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not at setup, where a missing
-    or unreadable input is refused, unless the refusal names `names`, a check Lean makes there."""
+    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not where it read none: at
+    setup, where a missing or unreadable input is refused, or for want of a file of the session (`NO_SESSION_FILES`);
+    unless the refusal names `names`, a check Lean makes there."""
     why = v.get("why") or ""
     return v.get("accepted") is False and v.get("digest") is not None and bool(why) and (
-        names in why if names else not why.startswith("setup:"))
+        names in why if names else not why.startswith(("setup:", NO_SESSION_FILES)))
+
+
+def lean_read_no_proof(v: dict) -> bool:
+    """Lean's own verdict refused the session for want of a file of it (`NO_SESSION_FILES`), so it read no proof: what a
+    prover that sent none, or a ZK server that held one back, leaves. It says no proof left, never that Lean refused one."""
+    return lean_refused(v, NO_SESSION_FILES) and v["why"].startswith(NO_SESSION_FILES)
 
 
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:

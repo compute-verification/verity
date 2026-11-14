@@ -8,9 +8,10 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-SPOT (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
-`verity/protocols/remote/verifier/`) composes it with PoUW (`verity/pouw/period/v1`) and the inference-only
-policy, and onsite (`verity/protocols/onsite/verifier/`) with the other subprotocols. Each composite's verifier runs
+SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,
+`verity/protocols/remote/verifier/`) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development executable
+`verity/remote/v0`, with PoUW's period `verity/pouw/period/v1`) and the inference-only policy, and onsite
+(`verity/protocols/onsite/verifier/`) with the other protocols. Each configuration's verifier runs
 `VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
 One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
 evidence name no `proofs`), and so is the recursive audit (`verity/sampled-proofs/recursive/v1`, `RECURSIVE_REFUSED` at
@@ -38,7 +39,7 @@ verifier draws the second stage on fresh coins (`Second`). The proof server then
 blocks, one session a template, and the verifier audits both stages.
 
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
-network certification, in the remote and onsite deployments) wrap SPOT[Flock] in the recursion layer and the ZK server
+network certification, in the remote and onsite configurations) wrap SPOT[Flock] in the recursion layer and the ZK server
 (`parties.PROTOCOL`). The network certifier is a layer of its own: it stamps each request's release order and bucket at
 ingress, and SPOT[Flock] reads that stamp as a certified input. Neither imports the other (`tests/test_boundaries.py`),
 and they compose only above both.
@@ -63,24 +64,15 @@ that `flock-verify --zk` accepts the files and the run passes the registration's
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
 (`Bridge.SampledKSLiveV5` and those behind it) read the file through `Flock.Desc.parseStmt`, so they also cover templated
 statements (`Flock.Tags.templated`, whose acceptance `flock_verify_sound` covers), at the circuit `HmOut.unrolled`
-builds. The top statement rests on these named assumptions:
-
-- `UniformRandomBytes`: the bytes the verifier's sample reads from its operating system are uniform (the CSPRNG
-  idealized; its docstring says what that leaves out).
-- `RecordCustodyZKJPLaw` (read as `RecordCustodyZKJ`): the record `flock-verify --zk` reads is the one the challenger
-  wrote for the live session, and its sample file is the one `flock-verify draw` printed for the verifier's own sample.
-- `SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`), in `security/Definitions/Assumptions/Flock.lean`:
-  SHA-512's collision resistance, taken at the collision finders the proof builds from the prover (`TableCRZAt` and
-  `LinkCRZCAt`, which unfold to them).
+builds. The top statement rests on these named assumptions, each stated by its docstring: `UniformRandomBytes`,
+`SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`) in `security/Definitions/Assumptions/Flock.lean`,
+the last two taken at the collision finders the proof builds from the prover (`TableCRZAt` and `LinkCRZCAt`, which
+unfold to them), and `RecordCustodyZKJPLaw` (read as `RecordCustodyZKJ`) in
+`security/Proofs/Flock/Soundness/Assumptions/ZkP.lean`.
 
 In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
 carries a composite's acceptance to `SampledKSLiveV3`'s event.
-
-The sample happens after the registration, so the prover fixes everything a sampled proof block's statement depends on
-before any coin. In the remote protocol the coins come from the auditor's challenger, under three assumptions,
-`ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`; onsite adds two proposed assumptions,
-`CoinsConfidential` and `OneClock` ("Where things are").
 
 ## Outline
 
@@ -133,12 +125,17 @@ template-major, so each cell is a range of the interior's proof blocks and the s
 `C(n − w, k) / C(n, k)`, a replay block's cells independently; the profile at the footprint reads a replay block as
 `Subset(min k_t)` over `T·n_max` proof blocks, which bounds that product. The verifier samples both stages
 (`Select.select`, `Select.selectSecond`), and the two-stage certificate's knowledge soundness at Flock's masked record
-holds of that code (`SamplingDeploy.ksTwo_code`, `security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
-are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
-rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
+holds of that code under the premises `SamplingDeploy.ksTwo_code` states.
+A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
+1 when every replay block is closed. S is at least the bits one replay block returns, which the verifier counts from its
+Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
+unit on 16-bit words of its own) and a two-stage registration carries (`WindowCommitmentRecord.returned`);
+`plancheck.two` refuses a cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
-step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of positions of its requests), which round 2
-refuses unless it covers the replay blocks in order and each request's positions in order (`second-schedule`).
+step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
+refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
+block returns is read only at the boundary record's port for it: an interior registration that registers a value of
+that name is refused (`second-return`).
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
@@ -154,70 +151,56 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 ## Where things are
 
 - **The Lean.** Today it sits in Flock's soundness package, `security/Proofs/Flock/Soundness/Audit/`,
-  whose `README.md` lists every theorem: the one-stage audit (`OneStage`), the sampling designs (`Law`, `Stratified`,
-  `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent sample (`RegDraw`), exfiltration (`Influence`,
-  `Harm`), the compiled layer (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for Flock.
-  The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`). The challenger's
-  coins are the named assumption `Assumptions.UniformRandomBytes`.
-- **The executable sample** is the Lean verifier's `verity/protocols/flock/verifier/Flock/Draw.lean` (`flock-verify draw`): the
+  whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
+  The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`).
+- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
-  `verity/protocols/spot/verifier/lean`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
-  (`check`), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
+  `verity/protocols/spot/verifier/lean`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R8
+  (`check`, with the fan-out its verdict publishes), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
   (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
-  `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
-  beside it (`verifiers`), and where they disagree the check is refused naming both. The service's `Stream` and
+  `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back). The service's `Stream` and
   `benchmarks/one_stage` call it. Python is held to the Lean by
   `verity/protocols/spot/verifier/lean/tests/test_difftest.py`. The same package ports the challenger's sample from the
   selection rule on (`Spot/Select.lean`: `service.selection_law`, `draw.derive` and `service.select_draw`,
   with the number of coin bytes it reads), which the difftest holds to the Python on fixed coins, every rule and random
-  partitions. It is the `Stream`'s sample of record: `Stream.select` hands it the bytes of the challenger's coins the
-  Python sample read, and refuses the sample (`disagree`) unless the Lean samples the same object from exactly those bytes.
+  partitions. It is the `Stream`'s sample of record.
   The Lean also runs a registration whole, from the registration through the verdict (`Spot/Run.lean`,
-  `verifier.run`): the public-items rule, R1-R7, the receipt, the sample from those bytes and its checks, the hold on
-  the verdicts and the audit record. `Stream.outcome` holds each outcome on a sample from the coins to it, and an outcome the two don't make alike
+  `verifier.run`). `Stream.outcome` holds each outcome on a sample from the coins to it, and an outcome the two don't make alike
   is a reject whose audit record fails `run`. `Spot/Slots.lean` puts that sample in the claims' terms
-  (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
-  root's input gates (sampled `all`: the input proof block is always checked), and the sample's checked proof blocks as
-  their slots in class, stratum and block order.
+  (`Claims.Sampling.Partition`, `Deploy.checked`).
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `Spot/OneStageZk.lean`, the executable
-  `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
-  circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
-  record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It refuses none or
-  several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose
-  `units.indices` aren't its population's units in order (`indicesHeld`), a population that isn't the program's proof
-  blocks in order (`Slots.popOk`), parameters naming no challenger coins or a key off `Lms.deployed`, and coins past
-  `Challenger.LIMITS`. It reads the
+  `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
+  and check are in the module's docstring. It reads the
   sample's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `security/Properties/Challenger.lean`) and holds
-  the session's record to the coin trees the signed release log shows the challenger sampled and opened, a link
-  `root_B` of any length but its statement's refused before the hash (`LINK_ROOT_LEN`;
-  `Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
-  link points and round coins that tree's openings after its link's roots and each round's message, the sample
-  released before any round and the link first (`order_why`). Then it runs
-  `flock-verify verify --zk`'s one-stage path (the Flock library calls `verifyCmd` makes) on those blobs, accepts
-  the session only if the public file's units are the population in order (`FilePart.check`), binds `proved_units` to
-  what the session proved, and hands its verdict to v1's `checkAt` at those coins.
+  the session's record to the coin trees the signed release log shows the challenger sampled and opened
+  (`Spot/ChallengerTrees.lean`, `challenger.sessions_tree_reason`, `order_why`).
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
+  to `verify`'s.
+  A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
+  `statements`; `one_stage.proofs.members_v2` writes it), which the audit parses and refuses. The executable's
+  `members` (`Spot/MembersParse.lean`, `proofs.members_parsed`) prints what its parsers read of a case, with no verdict,
+  and its `refusal` (`Spot/MembersRefusal.lean`, `one_stage.members.refusal`) why the audit's check refuses it, each as
+  its module's docstring says; the refusal accepts nothing and never
+  exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
+  (`one_stage.closing`, `challenger.members_tree_reason`).
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`verity/composite/device/live_challenger/coin_link.py`).
   - **Remote's coin path in Lean** (`security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
-    lock): the challenger logs every coin it releases (`ChallengerLogsCoins`) and flips each only after what it samples
-    is recorded (`FlipsAfterRecorded`), and the verifier reads coins only from its log (`VerifierReadsLog`). Under them
+    lock): `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`. Under them
     a logged coin's sample misses a set fixed before it at most as the sampling design allows (`SampleAfterRecorded`, proved).
     None mentions a network certifier.
 
   Onsite, the challenger rests on two more premises about where it runs, which the network certifier's spec and
   ACCEL's cite by name:
   - `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential` (`security/Definitions/Pouw/Assumptions/Dither.lean`,
-    in the lock), whose docstring is its statement: a replica's coins reach no machine outside its certifier's boundary
-    before it has them, so the strategy run on a replica reads none of its own coins, and ACCEL's pooled guarantee
+    in the lock), whose docstring is its statement, and ACCEL's pooled guarantee
     `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
     authenticated channel, which the challenger doesn't have. Deployed, one auditor host runs the challenger and the
     certifier, and a run's coins leave it only on the peer's certifier coin link, which the gate refuses to open
@@ -225,18 +208,17 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   - `OneClock`, an assumption under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
-- **The Python.** `verity.protocols.spot.verifier.one_stage` is the one-stage audit's reference: `registration`,
-  `draw` (the sample's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof system over it, whose `Stream`
-  samples from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
-  `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
+- **The Python.** `verity.protocols.spot.verifier.one_stage` is the one-stage audit's reference and `service` the
+  proof system over it; `optimize`, `candidates` and `costfit` plan a sampling design (`benchmarks/sampling_plan`).
+  Core API lists each module.
 - **The Lean-generated vectors.** `tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
   `stratified_miss_eq_greedy` evaluated by Lean, and `exfiltration_two_lean.json` `card_influenceTwo_le_uniform`'s
   count on two-stage designs (`tests/lean/`, by `generate.sh`); `tests/test_consumers.py` holds the consumers to them.
   `tests/test_coins.py` holds the samplers and `draw_first` to the Lean verifier's `drawOn` on raw bytes,
   `tests/test_one_stage.py` the work sizes to Flock's tests' pins, and `verity/protocols/flock/prover/tests/stratified_agree.py`
   the Lean verifier's sample to `one_stage.draw`.
-- **The parties.** `parties` holds both deployments (Core API) as parties of `verity.configuration.deploy`, each machine's work a
-  capability it is given, with SPOT[Flock]'s challenger on the verifier's side; `verity.configuration.deploy.runtime.run` runs them.
+- **The parties.** `parties` holds both deployments (Core API) as parties of `verity.runtime`, each machine's work a
+  capability it is given, with SPOT[Flock]'s challenger on the verifier's side; `verity.runtime.runner.run` runs them.
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with Flock's circuit prover and the Lean
   verifier.
 - **The users.** Flock samples and checks the sample in its Lean verifier and proves the sampled proof blocks. The vLLM integration
@@ -259,7 +241,7 @@ from verity.protocols.spot.costfit import fit
 ~~~
 
 - `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law` and
-  `Sequential`.
+  `TwoStage`.
   - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
     to before the audit record (the Python; a `Stream` runs each by the verifier, `verifier.check_public` and
     `verifier.check_verdicts`).
@@ -274,7 +256,7 @@ from verity.protocols.spot.costfit import fit
   - `selection_law` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
     challenger's coins (or a sampler) under the expanded design, with a work sample's closure.
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
-  the verifier's copies (R1 to R7), `matches_public` to its public file, `receipt` logs it, `digest` names it, and `window_domain` is a
+  the verifier's copies (R1 to R8), `matches_public` to its public file, `receipt` logs it, `digest` names it, and `window_domain` is a
   registered root's commitment domain (`verity.commitments.window`'s, which an integration commits under).
 - `draw`: `parse_design` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a sample to the registration and the verifier's sampling design, and `check_proved`
@@ -285,16 +267,14 @@ from verity.protocols.spot.costfit import fit
 - `registered`: registered values: `Registered.commit` (the prover's rows, salts and tree), `domain`,
   `registered_entries` and `reads` (the verifier's leaf counts, domains and read map, from its own program), `reads_file`
   (the Lean verifier's `--registered`), `verify_read`.
-- `served`: `register_served`, how a served path registers its `ServedTree`s as ports
-  of the verifier's `--registered` file: the record's `registered` entries, R7's copies and the file.
+- `served`: `register_served`, how a served path registers its `ServedTree`s ("Served trees", below).
 - `audit`: `audit_record`, and the profile in its forms: `profile`, `wrong_units`, `integrity_profile`; `core_law` is a
   sampling design as core's `Stratified`; `session_registered` reads the registered roots off the verdicts of record.
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
   (and `verifiers`: both verifiers' outcomes).
 - `hello`: `check_run`, the run's Hello and its one coin tree over `run_streams`.
-- `verifier`: the verifier: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
-  `check_public`, `check_verdicts` (given the service's Python verdict), `stream` and `fleet`, by the Lean and the
-  Python; `RECORD_VERDICT` names whose is the record's.
+- `verifier`: each check by the Lean and the Python, as "The verifier" above lists them, and `hello`;
+  `check_verdicts` is given the service's Python verdict.
 - `proofs`: the proof system's own run of Flock's Lean verifier on a statement's proof files (`Proof`:
   circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
   `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
@@ -309,10 +289,12 @@ from verity.protocols.spot.costfit import fit
   with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per proof block, commitment, serve-time
-  `Commitment`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
+  `TensorCommit`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
   commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
-  and `work_law` registers it as `work:1`.
+  and `work_law` registers it as `work:1`. Its two modes (`CostModel.commit_weight`, `PROVING_ONLY`) and its prices of
+  n equal proof blocks (`Grain`, `grain_costs`, `grain_optimum`, `sqrt_grain`) are in its docstrings, under the laws of
+  the Lean's `GranularityOptimum`, `Achievability` and `ExfiltrationOptimum`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`verity.circuits.partition_v2.unit_class`); `pressure` gives the developer hints.
 - `costfit`: Flock's cost model fitted from measurements, as a cost-model/v1 record.
@@ -330,23 +312,15 @@ that registers values is `verity/registration/v2`: the same keys and `registered
 Its digest is `SHA-512(format ‖ 0 ‖ canon(record))`, canon being canonical JSON (RFC 8785,
 `verity.circuits.codec.canonical_json`).
 
-The verifier holds the record to its own copies with R1 to R7 (`check`):
-
-- R1: the format, the protocol, the sampling design and the run's kind (`window.kind`);
-- R2: the program, query and partition digests and the population;
-- R3: the scheme, and each port's root, leaf count and domain;
-- R4: the leaf layer;
-- R5: the anchors;
-- R6: `previous`, one record a window, the window's stream and prover, and its seed salt;
-- R7: the registered values.
+The verifier holds the record to its own copies with R1 to R8 (`check`). The Lean verifier runs the same check
+(`Spot.Registration.check`), `Properties.Spot.R1` to `R8` state what each accepts, and
+`verity/protocols/spot/verifier/lean/tests/test_difftest.py` holds the Python to the Lean.
 
 It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only then samples. It also holds its own public
-file to the record (`matches_public`), which `FailClosed.flock_verify_public_ties` ties to the proved rows. The Lean
-verifier runs the same check (`Spot.Registration.check`), and `Properties.Spot.R1` to `R7`
-state what it accepts. `verity/protocols/spot/verifier/lean/tests/test_difftest.py` holds the Python to the Lean. The
+file to the record (`matches_public`), which `FailClosed.flock_verify_public_ties` ties to the proved rows. The
 challenger's `service.WindowCommitmentRecord` is a record it admitted, with its receipt and its position in the
-stream. The format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s
-docstring.
+stream. The format, each check's rule and codes and the window domains (`window_domain`) are in
+`one_stage.registration`'s docstring.
 
 Pinned by `tests/test_one_stage.py`, and the window domain also by `adapters/vllm/tests/commit/test_serving_rows.py`.
 
@@ -376,9 +350,13 @@ A program's weights, constants and tables are values: committed once, under hidi
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
   (`verity/protocols/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
-- **Reads.** The verifier derives every proof block's reads from its own program (`reads`). Flock's Lean verifier
-  checks each registered port's rows, paths and positions against the `--registered` file the verifier writes
-  (`reads_file`; `Flock.Registered`, `Flock.TemplateQuery`).
+- **Reads.** Every port of a statement is either a registered port of the `--registered` file
+  (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows' root and
+  domain as the registration holds them, and the public header's must be the same (`bind_ports`; `Flock.RegBound`). No
+  port that reads a registered input of the verifier's own program is ever bound, and nor is any port the window's
+  registered circuit record declares registered for the statement's template (its registered reads, table reads and
+  openings' verdicts, outputs included: `RegBound.declaredOf`), which must be a registered port of the file. A file
+  that binds ports is verified with that record (`flock-verify --interface`), and refused without it.
 - **Served trees.** A served path registers each tree a proof block reads as a registered value. `served.register_served`
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
@@ -421,10 +399,8 @@ core's `verity/circuits/tests/partition_vectors.json` and `template_instance_vec
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
   --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_design`), each number in ASCII digits
   (`draw.digits`, as the Lean reads them; a sample's `p` too).
-- As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
-  `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
-  `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
-  sampling design expanded.
+- As objects they are the forms `one_stage.draw`'s docstring gives, the rules expanded by `draw.derive`. The
+  registration carries the sampling design expanded.
 - `derive` refuses a `K` outside `[1, N]`, a work sampling design without the verifier's work table, a subcircuit the
   table does not name, and a population that does no work.
 - Two sampling designs are the same when their canonical JSON bytes are (`draw.same_design`), so `true` is not `1`, as the
@@ -436,16 +412,8 @@ Pinned by `tests/test_one_stage.py`'s checks of each sampling design's text, obj
 ### What a proof block's work may count
 
 The work sampling design's bound on miss probability holds over the work the table credits; what the table may
-credit is a rule of its own, documented with `draw.work_table`:
-
-- A proof block's work is counted on the rows the Program declares, never on rows a kernel pads it with.
-- Filler is credited nothing: a proof block of filler only, or one the prover declares uncredited before the sample, does work 0.
-  Its floor still samples it for integrity, and missing it costs no work. A proof block mixing real and filler rows is credited
-  its real cells only.
-- The work sampling design weights by subcircuit, so every proof block of a subcircuit is credited the same work. A subcircuit whose
-  proof blocks are padded differently is split before the sampling design is derived, or credited 0: the bound needs every
-  proof block's inclusion probability to be at least `K w_u / W` over the credited `W`, which a per-subcircuit work that
-  over-credits a proof block breaks.
+credit is a rule of its own, stated in `one_stage.draw`'s docstring ("What the table credits"): the rows the Program
+declares, nothing for filler, and one work for every proof block of a subcircuit.
 
 `test_derive_expands_the_work_rule_over_the_verifiers_table` covers a subcircuit credited nothing.
 
@@ -510,7 +478,7 @@ Pinned by `tests/test_consumers.py` and the Lean-generated vectors, each regener
 
 - **The public-items rule** (`check_public`): each observable item of a registration record is the service's own, a
   declared Value's one salted root, or an item the Spec declares in `public` with its kind and reason. It runs before
-  one-stage's R1 to R7.
+  one-stage's R1 to R8.
 - **The sample.** `register` logs the record and its receipt, and `select` samples once from the challenger's coins as the
   Lean verifier's `Flock.Draw.drawWith` does, with no derivation, held to `draw.check_draw`.
 - **Sessions over several rounds** (`Stream(rounds=R)`, `Stream.session`), which Flock's verifier refuses
@@ -520,10 +488,8 @@ Pinned by `tests/test_consumers.py` and the Lean-generated vectors, each regener
 - **The stream's rules** (budget, open registrations, salt, deadlines, once-only steps), decided op by op by the verifier
   (`verifier.stream`: `Spot/Stream.lean` beside `service._step`) on the counts and entries the op reads. A
   disagreement stops the stream.
-- **The fleet's halt (R5-all)** (`service.Fleet`): at the failure that brings any stream of an operator to its budget,
-  every stream of the operator halts, each outcome not yet final ends as `halted`, never `accept`, and nothing of the
-  operator registers again. Decided by the verifier (`verifier.fleet`: `Spot/Fleet.lean` beside
-  `service._fleet_step`, and `Stream.lean`'s `halt`), whose properties are `security/Properties/Spot/Halt.lean`.
+- **The fleet's halt (R5-all)** (`service.Fleet`), decided by the verifier (`verifier.fleet`: `Spot/Fleet.lean` beside
+  `service._fleet_step`, and `Stream.lean`'s `halt`): `security/Properties/Spot/Halt.lean` states it.
 - **No retries**, **the failure budget**, **the log's history** (a check reads a few records, with the whole log's
   verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
   built.

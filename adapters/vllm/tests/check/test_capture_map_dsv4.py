@@ -19,16 +19,15 @@ import re
 from pathlib import Path
 
 import pytest
+from verity.definitions.registry import catalog
 
+from tests.check.capture_map_check import check, check_target, report
 from tests.check.test_capture_map_versions import violations
 from verity_vllm.acquire.sources import moe_source, route_source
-from verity_vllm.check.capture_map import check, check_target
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.commit import identity as ID
 from verity_vllm.commit.committer.native_host import ACQUIRE_CLASSES
 from verity_vllm.engine import meta_inventory as MI
-from verity_vllm.pipeline import cli
-from verity.definitions.registry import catalog
 
 HERE = Path(__file__).parent
 FIX = HERE / "fixtures" / "deepseek_v4"
@@ -314,8 +313,8 @@ def test_deepgemm_off_or_another_moe_backend_fails():
     assert len(problems) == 1 and problems[0].startswith("expect model.layers.{i}.attn.wo_b kernels.quant_method.fp8_linear.type")
     inv = copy.deepcopy(RANK0)
     next(g for g in inv["groups"] if g["type"] == "RoutedExperts")["kernels"]["quant_method"]["mxfp4_backend"]["_value_"] = "TRITON"
-    assert _check(inv=inv) == ["expect model.layers.{i}.ffn.experts.routed_experts kernels.quant_method.mxfp4_backend._value_ = "
-                               "'MARLIN', the inventory has 'TRITON'"]
+    assert _check(inv=inv) == [("expect model.layers.{i}.ffn.experts.routed_experts kernels.quant_method.mxfp4_backend._value_ = "
+                               "'MARLIN', the inventory has 'TRITON'")]
 
 
 def test_an_unregistered_definition_fails(registry):
@@ -378,7 +377,7 @@ def test_the_decode_index_rows_are_programs(registry):
         p = CMAP["programs"][pid]
         assert p["status"] == "port" and p["definitions"] and all(d in registry for d in p["definitions"]), pid
     csa, hca = (set(CM.layer_set(CMAP, k, ENV)) for k in ("csa", "hca"))
-    by = {}
+    by: dict[tuple, list] = {}
     for t, layer in CM._step_taps(CMAP, ENV, "decode", DECODE):
         if t["op"] == "layers.{i}.attn.decode_indices":
             by.setdefault((t["port"], layer), []).append(t)
@@ -520,16 +519,15 @@ def test_moe_source_binds_six_values_on_every_layer_and_a_hash_layers_token_ids(
     assert runner["type"] in moe_source.MOE_MODULE_CLASSES and sorted(runner["layers"]) == list(range(ENV["L"]))
 
 
-def _cli_check(inventory: Path, capsys) -> tuple[int, str]:
-    code = cli.main(["capture-map", "check", "--map", str(MAP), "--config", str(FIX / "config.json"), "--inventory", str(inventory)])
-    return code, capsys.readouterr().out
+def _check_document(inventory: Path) -> tuple[int, str]:
+    return report(MAP, FIX / "config.json", inventory)
 
 
-def test_the_check_command_passes_the_meta_build_and_fails_a_rank_without_deepgemm(tmp_path, capsys):
-    code, out = _cli_check(FIX / "inventory-tp8-rank0.json", capsys)
+def test_the_check_passes_the_meta_build_and_fails_a_rank_without_deepgemm(tmp_path):
+    code, out = _check_document(FIX / "inventory-tp8-rank0.json")
     assert code == 0 and "FAIL" not in out and f"rank 0: 0 problems, signature {RANK0['signature']}" in out
     per_rank = [{"rank": r, **copy.deepcopy(RANK0)} for r in range(TP)]
     per_rank[6]["selections"] = {**RANK0["selections"], "VLLM_USE_DEEP_GEMM": False}
     (tmp_path / "live.json").write_text(json.dumps(MI.live_document(per_rank)))
-    code, out = _cli_check(tmp_path / "live.json", capsys)
+    code, out = _check_document(tmp_path / "live.json")
     assert code == 1 and out.count("FAIL") == 1 and "FAIL rank 6: switch VLLM_USE_DEEP_GEMM" in out

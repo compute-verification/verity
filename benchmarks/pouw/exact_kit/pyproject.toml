@@ -1,7 +1,7 @@
 [project]
 name = "verity-exact-kit"
 version = "0.1.0"
-description = "Exact-checker primitives for theory and referee scripts: F_2 and F_p linear algebra, Moebius coefficients, kernel searches, SAT, and one check registry."
+description = "Exact-checker primitives for theory and referee scripts: F_2 linear algebra, word rotations, kernel searches, SAT, and one check registry."
 requires-python = ">=3.12"
 # No workspace dependency: uv takes a project nested in benchmarks/pouw's for a project outside the workspace when it builds
 # it, so a `{ workspace = true }` source here fails to resolve. sympy: the suite's cross-checks of the linear algebra (a

@@ -8,16 +8,26 @@ from __future__ import annotations
 
 import bisect
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
-
-from verity_vllm.check.replay import cached_prefix as CP
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.query.manifest.format import moe_plane_kind
-from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 
+from verity_vllm.check.replay import cached_prefix as CP
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.program.compact import (
+    expanded_file_args,
+    p_item_indices,
+    runs_from_file_items,
+)
+from verity_vllm.query import norm_scales as NS
+from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.manifest.format import moe_plane_kind
+from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.required import population
+
+__all__ = ["DEFAULT_QUERY", "SAMPLER_OP", "SEED_PARAM", "ProgramIndex", "const_word", "index_of", "parse_struct", "row_args"]
 
 SAMPLER_OP = "runner.sampler"
 IDS_MEMBER = "in"
@@ -85,8 +95,8 @@ def parse_struct(type_str: str) -> list[tuple[str, int, list[int], int]]:
         if rest.startswith("Value<"):
             bits = int(rest[len("Value<"):].rstrip(">").rstrip(">"))
         count = 1
-        for n in shape:
-            count *= n
+        for dim in shape:
+            count *= dim
         out.append((name.strip(), count, shape, bits))
     return out
 
@@ -120,7 +130,23 @@ def index_key(*, prefix: str | None = None, attention_paths: list[str] | None = 
     return (prefix, tuple(attention_paths or ()), t and (t["rank"], t["world"]), program_dir, query or DEFAULT_QUERY, bool(norm_scales))
 
 
-def index_of(inst: dict[str, Any], reuse: Iterable["ProgramIndex"] = (), **kw: Any) -> "ProgramIndex":
+def plane_copies(d: dict) -> list[dict]:
+    """The second names a described row's output is committed under (`ProgramIndex.describe`: a MoeSum's plane beside its
+    module's own output).  A description states `copies` only for such a row; every other row has none."""
+    copies = d.get("copies")
+    return copies if copies else []
+
+
+def described(pi: ProgramIndex, r: dict) -> dict:
+    """`pi.describe(r)` of a row the caller took from the population (a picked VU, a row a request's replay needs), which holds
+    only modelled rows."""
+    d = pi.describe(r)
+    if d is None:
+        raise TypeError(f"row {r.get('i')} ({RM.spec_family(r['spec'])}) is unmodelled")
+    return d
+
+
+def index_of(inst: dict[str, Any], reuse: Iterable[ProgramIndex] = (), **kw: Any) -> ProgramIndex:
     """``ProgramIndex(inst, **kw)``: the one of ``reuse`` built from this very document (no reader modifies one,
     `instances_file.read_instances`) with these same arguments (`index_key`), else a new one -- one index of a GLM-5.3 TP8 rank
     Program takes minutes."""
@@ -153,15 +179,12 @@ class ProgramIndex:
         self._v2_ports: dict[int, dict[str, str]] = {}
         self._v2_module: dict[int, str] = {}
         self._v2_fault: dict[int, str] = {}
-        from verity_vllm.correspondence.reader_for_query import Correspondence
-        from verity_vllm.query.program_view import from_instances
-        from verity_vllm.query import norm_scales as NS
-        from verity_vllm.query.required import population
         # a manifest built under the norm-scale policy spells an ATen norm's rsqrt as `<norm module>/norm_scale`, not a Call boundary
-        population = NS.population if norm_scales else population
+        of = NS.population if norm_scales else population
         P = from_instances(inst)
         corr = Correspondence.of(P, program_dir, implementation_paths=attention_paths or ())
-        pop = population(P, corr, tp=self.tp, **({"query": q} if (q := query or DEFAULT_QUERY) else {}))
+        q = query or DEFAULT_QUERY
+        pop = of(P, corr, tp=self.tp, query=q) if q else of(P, corr, tp=self.tp)
         for cid in pop.producers():
             mem = pop.members_of(cid)
             if mem:
@@ -176,6 +199,8 @@ class ProgramIndex:
         # a warm Program's cached-prefix input (`cached_prefix.layout_of`), and per request reading it the producers' rows (`populate`)
         self.kv_prefix: dict[str, Any] | None = CP.layout_of(program_dir)
         self.cached_prefix: dict[str, CP.CachedPrefix] = {}
+        # per warm request whose Program recomputes its hit instead (`recomputed_prefix`, `populate`): its C and certified prompt
+        self.recomputed: dict[str, tuple[int, list[int]]] = {}
         self.segs = RM.segment_steps(self.rows, inst.get("checks"))
         self._seg_lo = [lo for lo, _hi in self.segs]
         self.by_i = {int(r["i"]): r for r in self.rows}
@@ -223,7 +248,7 @@ class ProgramIndex:
                 first = ((r.get("args") or [[]])[0] or [None])[0]
                 src = self.by_i.get(int(first[1])) if first and first[0] == "n" else None
                 prod = RM.split_name(src.get("name") or "")[0] if src else None
-                kind = "act_quant" if prod == mod0 and moe_plane_kind(RM.spec_family(src["spec"]), prod) == "act" else "in_quant"
+                kind = "act_quant" if src and prod == mod0 and moe_plane_kind(RM.spec_family(src["spec"]), prod) == "act" else "in_quant"
             elif kind == "act_quant":
                 self._moe_fused.add(int(r["i"]))
             if kind is not None:
@@ -266,12 +291,12 @@ class ProgramIndex:
 
     def ids_params(self) -> set[int]:
         """The Program parameter(s) carrying the declared prompt ids: every parameter that is not the registered `weights` record, not a
-        sampler input (`seed`, `splits`), not the `schedule` witness, not a supplied input (`values`, `run_<i>`) and not a warm Program's
+        sampler input (`seed`), not the `schedule` witness, not a supplied input (`values`, `run_<i>`) and not a warm Program's
         cached prefix -- the same reading `_gather_inputs` resolves a `['p', a, k, k+1]` slice by (the committed `input_token_ids` row
         k - C of the arrival step)."""
         pfx = self.kv_prefix["input"] if self.kv_prefix else None
         return {a for a, n in enumerate(self.pnames)
-                if n not in ("weights", SEED_PARAM, RM.SPLITS_PARAM, RM.SCHEDULE_PARAM) and a not in self.supplied and a != pfx}
+                if n not in ("weights", SEED_PARAM, RM.SCHEDULE_PARAM) and a not in self.supplied and a != pfx}
 
     def embed_op_path(self) -> str | None:
         """The op_path of the Program's Embedding rows (the `input_token_ids` identity lives under it as member `in`): the first row whose
@@ -352,7 +377,7 @@ class ProgramIndex:
         `[k]` name index when the Program names one; a violation yields members [] + `plane_error` -> counted by NAME as a mapping failure
         (population), never a silent read of another pair's words."""
         s = self.step_of(i)
-        g = self._moe_geo[s].get(mod) or {}
+        g = self._moe_geo[s][mod]                 # there: the kind that sends the row here put its module in its step's geometry
         layer = RM.layer_of(mod)
         M, TOPK = int(g.get("M", 0) or 0), int(g.get("TOPK", 0) or 0)
         ord_ = int(self._moe_ord.get(i, -1))

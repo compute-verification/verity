@@ -15,6 +15,9 @@ Each stage of SPOT[Flock] reads its `L = 2^20` bytes off its round's coin (`coin
 and there are as many coins as byte strings of length `L` (`2^128` elements, `65536` times), so the map is a bijection
 (`coinEquiv`) and carries the uniform law on coins to the uniform law on the bytes. That is `CallsUniform` at SPOT's
 byte maps (`callsUniform`), A3 at each stage's call, as a theorem with no premise on the operating system.
+
+A stage that reads `R` rounds' coins reads their `R · L` bytes coin by coin (`stageByte`), one for one with the `R`
+coins (`stageEquiv`), so those bytes are uniform too: `SamplingDeploy.StageUniform` at every `R` (`stageUniform`).
 -/
 
 @[expose] public section
@@ -57,5 +60,19 @@ noncomputable def coinEquiv : FlockDeploy.Coin ≃ (Fin 1 → Fin L → Fin 256)
 statement. -/
 theorem callsUniform : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte := fun _ E =>
   FlockSoundness.ZK.prCoin_congr_equiv coinEquiv E
+
+/-- **A stage's bytes and its coins, one for one** (`stageByte`): each coin's bytes (`coinEquiv`), laid end to end. -/
+noncomputable def stageEquiv (R : ℕ) : (Fin R → FlockDeploy.Coin) ≃ (Fin 1 → Fin (R * L) → Fin 256) :=
+  ((Equiv.piCongrRight fun _ : Fin R => coinEquiv.trans (Equiv.funUnique (Fin 1) (Fin L → Fin 256))).trans
+    ((Equiv.curry (Fin R) (Fin L) (Fin 256)).symm.trans
+      (Equiv.arrowCongr finProdFinEquiv (Equiv.refl (Fin 256))))).trans
+    (Equiv.funUnique (Fin 1) (Fin (R * L) → Fin 256)).symm
+
+theorem stageEquiv_apply (R : ℕ) (cs : Fin R → FlockDeploy.Coin) : stageEquiv R cs = fun _ => stageByte cs := rfl
+
+/-- **A3 at a stage of `R` coins**: the `R · L` bytes a stage reads off `R` uniform coins are uniform bytes, at every
+statement and every `R`. -/
+theorem stageUniform (R : ℕ) : SamplingDeploy.StageUniform (fun _ => R) (fun _ => R * L) fun _ => stageByte :=
+  fun _ E => FlockSoundness.ZK.prCoin_congr_equiv (stageEquiv R) E
 
 end SpotFlock

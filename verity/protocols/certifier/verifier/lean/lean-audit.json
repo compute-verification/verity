@@ -5,7 +5,7 @@
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
   "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
-  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), of the client's check of a window's served certificates (certificates, NetworkCheck.LinkWindow.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn), audited under NetworkCheck"
+  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), of the client's check of a window's served certificates (certificates, NetworkCheck.LinkWindow.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn, in NetworkCheck.Clocks), audited under NetworkCheck"
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
@@ -18,7 +18,7 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
- "meaning": ["NetworkCheck", "NetworkCertifier"],
+ "meaning": ["NetworkCheck", "NetworkCertifier", "Base"],
  "layers": {
   "NetworkCheck.Certificate": {
    "imports": ["Flock.Hash", "Flock.Bytes", "Flock.Canon", "Identity.Tagged"],
@@ -33,14 +33,16 @@
   "NetworkCheck.Period": {
    "imports": [
     "NetworkCheck.Check",
+    "NetworkCheck.Clocks",
     "CoreProtocol.Profile",
     "Flock.Program",
     "Flock.Public",
     "Flock.WindowRecord",
-    "NciCheck.Desc"
+    "NciCheck.Desc",
+    "NciCheck.DefinitionDigest"
    ],
    "except": [],
-   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description), no Mathlib and nothing of Security"
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security; the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description) and a Definition's digests (the slot entries' pins), no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
@@ -51,10 +53,12 @@
    "imports": ["NetworkCheck.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
    "why": "N2's link-window verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.Clocks": {
+   "imports": ["NetworkCheck.Check"],
+   "except": [],
+   "why": "the clock openings are code: v4's certificate and sync, its encodings and its one LMS check, no Mathlib, nothing of Security and nothing of the inference-only policy's check, so `network-records` builds without it"
   }
- },
- "reads_exempt": {
-  "Flock": "C-Flock is excepted until its spec is extracted: the records check's evidence bridge reads C-Flock's `V`, JSON accessors and `unhex`, on both sides of its equation"
  },
  "guarantees": {
   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {
@@ -105,7 +109,7 @@
   "NetworkCheck.RecordsGrid.expectedGrids_eq": {
    "owner": "@network-accounting",
    "signature": [
-    "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.Link)",
+    "NetworkCheck.RecordsGrid.expectedGrids_eq (g : NetworkCheck.Check.Grid) (W : Nat) (l : NetworkCheck.Check.LinkOpening)",
     "  (w : Fin W) :",
     "  Eq (Array.instGetElem?NatLtSize.getElem? (NetworkCheck.Records.expectedGrids g W l) w.val)",
     "    (Option.some (NetworkCheck.Check.expectedGrid g W l w.val))"
@@ -117,7 +121,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "f01677158fd01ce797e4aeb4ee75e878a6814ba9c555769206aa657521ad7f85"
+   "type_hash": "dbcc147c8dbdc7ca9944cc5dbab8f57d8f093fae2c773f4f64b4449524a75458"
   }
  },
  "shape": {
@@ -142,6 +146,23 @@
   }
  },
  "reads": {
+  "Base.Bytes": {
+   "digest": "eac9ae1a7ef63f519e5b78ddeef06e91a00cd7c1d46f8f3c28c9476d8ad332cf",
+   "definitions": {
+    "Flock.V": "9a2fbe4642d5cc5cadfef0c823bb3b77ffe1f0a9ec677602dad8a142eeb4f4ee",
+    "Flock.unhex": "8bd6065ce900e4d8fc7e4d2a2c53501ed1e58aa583d9f77c275fa70e9e300f8a"
+   }
+  },
+  "Base.Canon": {
+   "digest": "42ff3c69beb2a0b5638e6dde39c656c79bbf13cfab1f090513868d52b2bec928",
+   "definitions": {
+    "Flock.J.arr": "e94445c03299d8a507d899f63836a7bf1449487d9f7e5e8fdf40233a8f5909ed",
+    "Flock.J.asArr": "8c8fe69a75431b26078e305bdad40a3b268662295d9220586464d390d136c81e",
+    "Flock.J.asNat": "49b227feff28956c302a2052b79f700f29c909592cc1608bb096b432f5830089",
+    "Flock.J.asStr": "313977466d5e7304826be7ecbdd33553eb995855321e50f66a2c24dafce41fae",
+    "Flock.J.get": "83264da7cfd473882e5cd6482d8674aa9f59c256d3389bc2ff70c0e5713ebccc"
+   }
+  },
   "NetworkCertifier.Grid": {
    "digest": "59a58292501a755ca4903f9c9ad222cf7241923d31b27272557daa397f783bcd",
    "definitions": {
@@ -181,19 +202,19 @@
    }
   },
   "NetworkCheck.Check": {
-   "digest": "12e523e69790dd5ab98926c8315a5879ccb32a87f48c147ff3a886eeca251013",
+   "digest": "c02b674fdae9c4dfd3192090389e9bce0495b0b4ca60169489e65f8b363bcdf7",
    "definitions": {
-    "NetworkCheck.Check.Evidence": "cc8a5e6c80f7620bce6aa166595f88344d900b06e347edcbea57536272a4fdea",
+    "NetworkCheck.Check.Evidence": "937370e1fe49513919cbb912fea6932f2051c9cbda009f84d79adbc95515470d",
     "NetworkCheck.Check.Grid": "dda3c8c0a91166be337f73036e47a1f3321211ac26bb5c6d6e67cf10aea5a1ca",
-    "NetworkCheck.Check.Link": "8582b4e86f88bf7bef14f409b440e4f97f865f05ff5118f0302106774d32d8c8",
-    "NetworkCheck.Check.Link.frames": "1d3a0183434af6ce1fb04e9c4ab5779a76f0c85ea3f69bf85508da5996b75f90",
-    "NetworkCheck.Check.Link.syncs": "849530f76448bfc3825469073737c5343adc725102e8e37f1c130c879c77778f",
+    "NetworkCheck.Check.LinkOpening": "1fcc25102345919f0587df077dc6249fea0890084e75871cc64d727ecdf1ddbd",
+    "NetworkCheck.Check.LinkOpening.frames": "269be90febbfbc3be0415d0553ff51a3491e9366fc22bad28b207d3308d798b3",
+    "NetworkCheck.Check.LinkOpening.syncs": "0328381d83656a690ac0b852fd7b522254eba5931b81957ab9fdc2d44e45ad10",
     "NetworkCheck.Check.bitsOfBytes": "5ef530d0b8f0ff850f0bdac70d3d72aedbfa6d35ba0338f613a3c516b3c12382",
     "NetworkCheck.Check.byteOfBits": "0da821922a7f14cd263aca7acd1c90895213d2b2567ac72da473bcfbb7a323bf",
     "NetworkCheck.Check.bytesOfBits": "55c3111e9ce28105d625953261c07fd8e2b21b79a71ea813a860956b1981c526",
     "NetworkCheck.Check.bytesOfBitsList": "0b76a9a879012d7db7db4df394c03084e076edba96d9ddc56f63e736fcc7f05d",
-    "NetworkCheck.Check.evidenceOf": "95b388d9320eb233c66c3ab445c144463b21f1570869a192c384671554c9f480",
-    "NetworkCheck.Check.expectedGrid": "c8ef197c4ebf98199a319644cab14a47fb2fb2d2b61b24450c39b5cd2ef5c0a7",
+    "NetworkCheck.Check.evidenceOf": "5d88950c0ebc92e23935c1e812b94c329471153f5ae540159c64c270f05b0eff",
+    "NetworkCheck.Check.expectedGrid": "79e63f8643a6924502b397bce3ba5e6370044026c3695f3dc1da034e61748e93",
     "NetworkCheck.Check.frameOf": "978f4eeec36467012ff967785656dc6e434f18e6a5933db72f58cbc7162ce8c6",
     "NetworkCheck.Check.noSync": "a31f787c6eec7a1f4e85320d9acf8c203f50695cec1f8bdc7684b615179075a0",
     "NetworkCheck.Check.ratOf": "034fc4127890627944f38ccb6808b44389c9eb72692048987dcfb9370c9f9ee1",
@@ -201,11 +222,11 @@
    }
   },
   "NetworkCheck.Records": {
-   "digest": "bd1995f9eed66c82bff469a1b0cf10900f1a2dea5b994228182365b36b33ccc0",
+   "digest": "388bd7d2066b3532753d4c8732113179cae5b0bc94d5a5d05e22f0f735514132",
    "definitions": {
     "NetworkCheck.Records.ByteEvidence": "aa580ff61f821fabe5e248a95383f2dd41c8feb9df229aa23b945432e9a56338",
     "NetworkCheck.Records.ByteEvidence.links": "b73e6b3cbefa0c40337c3be09433789a9542fdfc99d418eb20158be63520c062",
-    "NetworkCheck.Records.ByteEvidence.toEvidence": "2459bd627a5d996749daeea312e9062b254512f97858a3a4b9561833ff8e3b4f",
+    "NetworkCheck.Records.ByteEvidence.toEvidence": "4913433b85a9f4e7180f9d357e7ecad9280e7a708dcfadcef961c6b2ed94a994",
     "NetworkCheck.Records.ByteFrame": "f78ce13a64161db4abd2680336b8088354b99024932510355ee7a83f382c693e",
     "NetworkCheck.Records.ByteFrame.anchor": "bfbe4c09eb2620591f42cf330b1beb8cbcf4582964b17152e40ade92d0ea2919",
     "NetworkCheck.Records.ByteFrame.index": "2da144a7fd970eaaf37349f3972b0d7152774f0853db1792dddabced1277fd4b",
@@ -215,12 +236,12 @@
     "NetworkCheck.Records.ByteLink": "39994588ec3baea88afe681116aa5f224655094099ff284ce3c14b576384843d",
     "NetworkCheck.Records.ByteLink.frames": "97dc2bc73b3e41a3f99224f8a229b54937de685581c7a6ee9166ca1da8ff05c9",
     "NetworkCheck.Records.ByteLink.syncs": "ef3add28ec5bd9f2122ee57915ae48cb2d8701c6f90d5c64c68104ce4c19e77f",
-    "NetworkCheck.Records.ByteLink.toLink": "f922f97469c5e5424cb2fc541f68e772cc63eb1c5a159ab092a7e70f390e0e13",
+    "NetworkCheck.Records.ByteLink.toLink": "b3d4754704559a5379f1105b837bdb6843fe2ce8ed0b6f4795be4e5461594834",
     "NetworkCheck.Records.RawGrid": "e83f00f4eacd8a1ff0d0d7d44838f9fe1601e5c2cec5e9b5fc9ea6e4d7114ca4",
     "NetworkCheck.Records.byteFrameOf": "7a1928693bd3cc73e58e48028ba5f6bd9fc15d988c49e01962b8988512cb877a",
     "NetworkCheck.Records.enqueueCounts": "f93ce2c8694803daf1a089d881b7969bd87bac809122a2afe373fa0096ee4b66",
     "NetworkCheck.Records.evidenceOf": "1c7b4d0aa93d56b977ef99caa2d9e38c146c4155e9f3a84af1db4f57becf110c",
-    "NetworkCheck.Records.expectedGrids": "237a9804ac98ec77a7635c70ea9612702aa0097650e4293b834b7144932fd38e",
+    "NetworkCheck.Records.expectedGrids": "d91fdf1d0f32dbb9464032f92bf4adf1f6676519878108106e4dbe3a6fdba0fc",
     "NetworkCheck.Records.expectedGridsOfBytes": "8f74648cb8761964d8896248caf4ea5b2ba58e3687ea239d3d701de56329c9b0",
     "NetworkCheck.Records.handingRev": "84b6066276355175a66bcfd7ac34059c27725900ba5216db06eecf7addd264b6",
     "NetworkCheck.Records.releases": "a3c6f119eb0e7d4edea05cc8d0db5d820ab6df3ea35e018823f2024f174c0449",

@@ -71,6 +71,8 @@ ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "Lis
 # custody's in <root>/requests/<run-id>/store-read/; unlike custody's it is put in the workload's environment
 READ_DIR_NAME = "store-read"
 READ_ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2")
+#: the variables a minted key travels in: cred.json's keys, which the store.toml staged beside it names
+KEY_ENV = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 PUSH_TRIES = 3
 PUSH_RETRY_S = 20.0
 TRIAGE_STATES = ("fetched", "r2", "forced-unverified", "attempt-no-record", "attempt-unpreserved", "conflict", "no-custody", "running",
@@ -112,8 +114,9 @@ def _sha256(p: Path) -> str:
 #: DIRTY_CAPTURE is a dirty source's bytes (env.py): never trimmed, so the record, not the machine's tree, is their durable copy.
 RUN_FILES = frozenset({"stdout.log", "stderr.log", "launcher.log", "sampler.log", "job.json", "status.json", "events.jsonl", "failure.json",
                        "result.json", "launch.json", "remote.json", "refused.json", "slot.json", DIRTY_CAPTURE})
-#: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run).
-RUN_FILE_GLOBS = ("logs/stall-*.txt",)
+#: The runner's own files under stamped names (fnmatch on the run-dir-relative path): the stall watch's py-spy dumps (telemetry.run),
+#: and the runner's answers to `research run-preserve` (run_preserve.ANSWERS).
+RUN_FILE_GLOBS = ("logs/stall-*.txt", "control/preserve/answers/*")
 #: The launcher's record of a remote run (remote.py): only on the launching machine, rewritten by every `status` and `fetch`, and never
 #: in the record the run's machine takes, so custody of the launcher's copy neither checks it nor lets eviction remove it.
 LAUNCHER_RECORD = "remote.json"
@@ -176,8 +179,9 @@ def stage(run_dir: Path, into: Path, rels: list[str] | None = None) -> list[str]
     return rels
 
 
-#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: check's presigned
-#: URLs of the Lean dependency bundles (`tools/verity/check/check.py` LEAN_DEPS_URLS), which a run of anything else never takes out of inputs/,
+#: What a run may be sent that grants access until it expires, as globs relative to its run dir and its request dir: the presigned URLs
+#: of the Lean bundles a check or a Lean records run is sent (`tools/verity/check/check.py` LEAN_DEPS_URLS, `research.cli.lean_records_urls`),
+#: which a run of anything else never takes out of inputs/,
 #: and the temporary name a shipped tree's preflight writes that file under before replacing it; and those of the recorded checks'
 #: verdict packs (VERDICT_URLS) and of the agreement's pinned upstream build and inputs (AGREEMENT_URLS)
 CREDENTIALS = ("inputs/lean-deps-urls.json", "inputs/.lean-deps-urls.json.*", "inputs/verdicts-urls.json", "inputs/agreement-urls.json")
@@ -391,11 +395,21 @@ def _mint(ttl: str | int, actions: tuple[str, ...], dir_name: str, flag: str,
     return public, [(f"{dir_name}/{STORE_TOML}", toml.encode()), (f"{dir_name}/{CRED_FILE}", (json.dumps(secret) + "\n").encode())]
 
 
+JOB_ACCESS = {"push": mint_for_machine, "fetch": mint_reader}
+
+
+def job_env(access: str, ttl: str | int = DEFAULT_TTL, *, environ: dict[str, str] | None = None) -> dict[str, str]:
+    """A cluster job's store key, which it holds in place of the parent pair: the three AWS_* variables and `expires_utc` of the key
+    `mint_for_machine` mints (`access` "push": write, no delete or copy) or `mint_reader` ("fetch": read only).  MintError as theirs."""
+    _, files = JOB_ACCESS[access](ttl, environ=environ)
+    return json.loads(next(data for path, data in files if path.endswith("/" + CRED_FILE)))
+
+
 def reader_env(read_dir: Path) -> dict[str, str]:
-    """The workload's environment for its staged `--store-read` key: RESEARCH_STORE_CONFIG and the three AWS_* variables."""
+    """The workload's environment for its staged `--store-read` key: RESEARCH_STORE_CONFIG and the KEY_ENV variables."""
     d = Path(read_dir)
     cred = json.loads((d / CRED_FILE).read_text())
-    return {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}}
+    return {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in KEY_ENV}}
 
 
 @contextlib.contextmanager
@@ -403,7 +417,7 @@ def custody_env(custody_dir: Path) -> Iterator[None]:
     """The store's remote for the duration: RESEARCH_STORE_CONFIG -> the staged store.toml, AWS_* from cred.json; restored after."""
     d = Path(custody_dir)
     cred = json.loads((d / CRED_FILE).read_text())
-    want = {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")}}
+    want = {"RESEARCH_STORE_CONFIG": str(d / STORE_TOML), **{k: cred[k] for k in KEY_ENV}}
     saved = {k: os.environ.get(k) for k in want}
     os.environ.update(want)
     try:
@@ -799,7 +813,7 @@ def triage_report(st: Any, roots: list[Path], *, older_min: float | None = None,
             "rows": rows, "needs_action": len(todo), "settling": sum(1 for r in rows if r["settling"])}
 
 
-__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output",
-           "drop_credentials", "force_refusal", "has_custody", "mark_failed", "marker_problem", "mint_for_machine", "mint_reader",
+__all__ = ["ACTIONS", "CREDENTIALS", "EXCLUDED", "JOB_ACCESS", "KIND", "MARKER", "PUBLISH_LOG", "SCHEMA", "custody_env", "divert_output",
+           "drop_credentials", "force_refusal", "has_custody", "job_env", "mark_failed", "marker_problem", "mint_for_machine", "mint_reader",
            "READ_ACTIONS", "READ_DIR_NAME", "reader_env", "push_run",
            "put_run_record", "ran_evidence", "run_files", "runner_publish", "trimmed_of", "triage", "triage_row", "verify"]

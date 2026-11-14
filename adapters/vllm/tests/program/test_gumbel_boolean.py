@@ -19,20 +19,19 @@ import zlib
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
-from verity.circuits.cut import separable
-from verity.circuits.defs import REGISTRY, bind
+from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
+from verity.circuits.cut import separable
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions import word as W
 from verity.definitions.registry import gumbel_boolean as GB
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_boolean as SB
-from verity.definitions import word as W
 
 F32 = GB.F32
 
@@ -76,6 +75,8 @@ TRACED = [GB.NvLogf, GB.NvLogfV5, GB.GumbelSetup, GB.GumbelStreamKeyHead, GB.Gum
           GB.GumbelLaneTail]
 TRACED_SPECS = ["NvLogf_v3", "NvLogf_v5", "GumbelSetup_v1{N=5}", "GumbelSetup_v1{N=64}", "GumbelStreamKeyHead_v1", "GumbelStreamKeyTail_v1",
                 "GumbelLaneHead_v1", "GumbelLaneRounds_v1", "GumbelLaneTail_v1"]
+#: those whose builders run Philox rounds, each of which commits the words it returns (`gumbel_boolean.philox_round`)
+PHILOX_SPECS = ["GumbelStreamKeyHead_v1", "GumbelStreamKeyTail_v1", "GumbelLaneHead_v1", "GumbelLaneRounds_v1", "GumbelLaneTail_v1"]
 
 
 def _rng(*key) -> np.random.Generator:
@@ -121,6 +122,8 @@ def test_pinned_counts_and_digests_through_the_lane() -> None:
 @pytest.mark.parametrize("spec", [pytest.param(s, marks=pytest.mark.slow) if s == "GumbelLaneTail_v1" else s
                                   for s in TRACED_SPECS])
 def test_the_ands_are_the_builders_live_ands(spec) -> None:
+    """A traced Definition's ANDs are its builder's live ANDs but for its committed copies (a Philox round's words,
+    `forms.Circuit.commit`): rows of a lowering that runs the builder, and no gates."""
     target = _target(spec)
     d = target.defn
     params, ret = target.signature()
@@ -132,7 +135,9 @@ def test_the_ands_are_the_builders_live_ands(spec) -> None:
     else:
         T = d.traced()
         C.output("out", TR._flat_out(d.build(C, *ins), ret))
-    assert T.counts["and"] == C.counts()["ands"] == {**PINS, **LANE_PINS}[spec][0]
+    copies = sum(1 for v in C.live() if C.kind[v] == "and" and C.data[v][1].is_const())
+    assert (copies > 0) == (spec in PHILOX_SPECS)
+    assert T.counts["and"] == C.counts()["ands"] - copies == {**PINS, **LANE_PINS}[spec][0]
 
 
 def test_the_pieces_add_up() -> None:
@@ -286,7 +291,7 @@ def test_setup_is_the_lane_values(N) -> None:
     """`GumbelSetup_v1{N}` on random keys and the edges, at temperatures 1, +0, -0, a subnormal and a NaN (noisy iff not
     zero)."""
     key = np.concatenate([KEY_EDGES, _rng("setup").integers(0, 1 << 32, 2000, dtype=np.uint64)])
-    temp = np.resize(TEMPS, len(key))
+    temp: np.ndarray = np.resize(TEMPS, len(key))
     got = BS.evaluate_words(bind(GB.GumbelSetup, N=N), key.astype(np.uint32), temp.astype(np.uint32)).astype(np.uint64)
     for i, k in enumerate(key.tolist()):
         ks, ka, lows = lane_values(k, N)
@@ -331,7 +336,7 @@ def select_rows(V: int, n: int, rng) -> tuple[np.ndarray, ...]:
     apart, and subnormals among signed zeros (flushed when noisy, kept at temp 0); temperatures in turn 1, +0, -0, a subnormal
     and a NaN (noisy: a NaN is not zero)."""
     x = rng.integers(0, 1 << 32, (n, V), dtype=np.uint64)
-    kind = np.arange(n) % 9
+    kind: np.ndarray = np.arange(n) % 9
     few = np.array([0x3F800000, 0x40000000, 0x40400000, 0xC0000000, 0, 0x80000000], np.uint64)
     x[kind == 1] = rng.choice(few, (int((kind == 1).sum()), V))
     x[kind == 2] = rng.choice(F32_SPECIALS, (int((kind == 2).sum()), V))

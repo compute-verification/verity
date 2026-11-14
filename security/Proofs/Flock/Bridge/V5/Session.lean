@@ -259,7 +259,7 @@ satisfying message `M`, committed values that carry each opening of `revealV5` t
 at the public file's leaf map make proof block `u` correct, whatever its interior values. Its values are the openings'
 bits, the decoder's on `u`'s committed wires (`opening_spec`), on which `u` is correct (`loweringSoundZK_of_place`) and
 which carry the constants (`openingsCanonV5_const`), and each opening is canonical (`openingsCanonV5`), so its row's
-datum opens it (`transports_shapedP_at`, under `dupName` and `RootFixesDomainL`). -/
+datum opens it (`transports_shapedP_at`, under `dupId` and `RootFixesDomainL`). -/
 theorem correct_of_revealV5
     (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
@@ -267,7 +267,7 @@ theorem correct_of_revealV5
     (pi : Flock.HmIn.Ports) (hpi : Flock.HmIn.parse D.unroll = .ok pi)
     (pub : Flock.Public) (hpub : Flock.HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    (hdup : Flock.Registered.dupName D.unroll = none)
+    (hdup : Flock.PortRoots.dupId D.unroll pub = false)
     (hroots : RootFixesDomainL D.unroll (LeafMap.ofPublic D.unroll pub n))
     (kd : ℕ) (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀) :
@@ -312,7 +312,7 @@ theorem correct_of_revealV5
     exact opens_dataOfRow hr' (transports_shapedP_at (dj := dj) (y₀ := y₀) (ht := ht)
       (hc := Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) (hscope := hscope) (hU := hU) (hpi := hpi)
       (hpub := hpub) R
-      (rowsOk_of_scopeOkH hscope) (rootsDistinctL_of_fixes hdup hroots)
+      (rowsOk_of_scopeOkH hscope) (rootsDistinctL_of_fixes (LeafMap.ofPublic_dom _ _ _) hdup hroots)
       (fun u q => ref_lt_cntP hpub u.isLt q.isLt) hr' (vb.opening S R u M (vb.pos g)).1
       (vb.opening S R u M (vb.pos g)).2.1 (vb.opening S R u M (vb.pos g)).2.2 hv' hvw' hy' hcom')
 

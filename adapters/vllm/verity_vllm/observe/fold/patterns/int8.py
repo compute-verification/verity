@@ -7,7 +7,7 @@ registered Definitions (`program.registry.int8_exact`, `ml.circuits.ops.gemm`), 
         -> Compute(ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}, rows=M, (PerRow(xq), PerRow(s_a), Shared(w), Shared(s_w)), (PerRow(y),))
     vllm.unified_attention_with_output(query, ..., output!, layer) ⊃ one verity_int8::kv_quant_batch(key_cache, value_cache,
             block_table, lens, k_scales) -> (kq, vq, sv, v0), then one verity_int8::window_rows_batch(query, kq, vq, sv, v0, k_scales,
-            qsl, lens, scale), copied into output; or, under a credited read (`engine.int8_window`), the layer's
+            qsl, lens, scale), copied into output; or, under a credited read, the layer's
             verity_int8::credited_window(kv_cache, .., k!, v!) and verity_int8::kv_quant_window_batch(k, v, starts, lens, k_scales)
             in kv_quant_batch's place, starts[r] the earlier windows' rows
         -> per request r with a window (s = lens[r], its rows qsl[r] .. qsl[r+1] - 1), per KV head g
@@ -33,12 +33,38 @@ from dataclasses import dataclass
 from verity.circuits.defs import bind
 
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.geometry import GeometryError, as_slot_rows, is_row_major
+from verity_vllm.observe.fold.patterns.geometry import (
+    GeometryError,
+    as_slot_rows,
+    is_row_major,
+)
 from verity_vllm.observe.fold.patterns.kv_cache import _kv_moves, kv_layer_of, kv_slots
-from verity_vllm.observe.fold.patterns.ops import as_float, bound_args, op_name, op_parts
-from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.patterns.transparent import find_descendants, scope_transparents
-from verity_vllm.observe.fold.resolver import Compute, Const, GatherMany, Group, PerRow, Resolution, Shared, StepContext, Unsupported
+from verity_vllm.observe.fold.patterns.ops import (
+    as_float,
+    bound_args,
+    op_name,
+    op_parts,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    attribution_for,
+    hint_of,
+    unsupported,
+)
+from verity_vllm.observe.fold.patterns.transparent import (
+    find_descendants,
+    scope_transparents,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    GatherMany,
+    Group,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 LIBRARY = "verity_int8"
@@ -50,7 +76,8 @@ def _is_op(node: TreeNode, name: str) -> bool:
 
 def header_k_scales(ctx: StepContext) -> dict | None:
     try:
-        k = ((ctx.header.profile or {}).get("backends") or {}).get("int8_k_scales")
+        backends = (ctx.header.profile or {}).get("backends")
+        k = backends.get("int8_k_scales") if backends else None
         return k if isinstance(k, dict) else None
     except (AttributeError, TypeError):
         return None
@@ -99,7 +126,7 @@ class Int8ScaledMm:
         a = bound_args(node)
         xq, s_a, w, sw = a.get("xq"), a.get("s_a"), a.get("w"), a.get("s_w")
         outs = list(node.outs or ()) if isinstance(node.outs, (list, tuple)) else [node.outs]
-        if not all(isinstance(v, ViewDesc) for v in (xq, s_a, w, sw)) or len(outs) != 1 or not isinstance(outs[0], ViewDesc):
+        if not (isinstance(xq, ViewDesc) and isinstance(s_a, ViewDesc) and isinstance(w, ViewDesc) and isinstance(sw, ViewDesc)) or len(outs) != 1 or not isinstance(outs[0], ViewDesc):
             return unsupported(node, "verity_int8::scaled_mm arguments / result not bound as expected", args=list(a), outs=len(outs))
         (y,) = outs
         if xq.rank != 2 or not is_row_major(xq):
@@ -181,7 +208,7 @@ class Int8AttentionScope:
             return unsupported(node, "the record does not carry this layer's K scales (RunHeader.profile.backends.int8_k_scales)", layer=layer)
         kbits = tuple(int(b) & 0xFFFFFFFF for b in ks_all[layer])
         copies = {id(w): [c for c in find_descendants(node, lambda n: not n.is_triton and op_name(n.op) == "copy_")
-                          if _src_of(c) is not None and _out0(w) is not None and _src_of(c).alloc == _out0(w).alloc] for w in wrs}
+                          if (csrc := _src_of(c)) is not None and (wout := _out0(w)) is not None and csrc.alloc == wout.alloc] for w in wrs}
         rcs = find_descendants(node, lambda n: not n.is_triton and op_name(n.op) == "reshape_and_cache_flash")
         keep = {w.id for w in kvs + wrs + cws + css} | {c.id for cs in copies.values() for c in cs} | {n.id for n in rcs}
         kvn, w = kvs[0], wrs[0]
@@ -192,6 +219,8 @@ class Int8AttentionScope:
                                qsl=a.get("qsl"), lens=a.get("lens"), kv_lens=ka.get("lens"))
         if any((qsl[r + 1] > qsl[r]) != (s > 0) or not 0 <= qsl[r + 1] - qsl[r] <= s for r, s in enumerate(lens)):
             return unsupported(node, "a request's rows are not its window's last rows, or a window has no rows", qsl=qsl, lens=lens)
+        kc: ViewDesc | None
+        vc: ViewDesc | None
         if _is_op(kvn, "kv_quant_window_batch"):
             credited = _credited_window(node, cws)
             if isinstance(credited, Unsupported):
@@ -216,7 +245,7 @@ class Int8AttentionScope:
         computes: list[Compute] = []
         hint = hint_of(node, str(layer) or "attn")
         qa, scale, kouts = a.get("query"), as_float(a.get("scale")), list(kvn.outs or ())
-        if not all(isinstance(v, ViewDesc) for v in (qa, kc, vc)) or scale is None or len(kouts) != 4:
+        if not (isinstance(qa, ViewDesc) and isinstance(kc, ViewDesc) and isinstance(vc, ViewDesc)) or scale is None or len(kouts) != 4:
             return unsupported(node, "kv_quant_batch / window_rows_batch arguments not bound as expected", kv_quant=list(ka), window_rows=list(a))
         if not all(_same(a.get(nm), o) for nm, o in zip(("kq", "vq", "sv", "v0"), kouts)):
             return unsupported(node, "window_rows_batch does not read its kv_quant_batch's results", kv_quant=[repr(o) for o in kouts])
@@ -284,7 +313,7 @@ def _credited_window(scope: TreeNode, cws: list[TreeNode]) -> tuple[ViewDesc, Vi
         return unsupported(scope, "kv_quant_window_batch without exactly one credited_window in the scope", credited_window=len(cws))
     a = bound_args(cws[0])
     kv, k, v = a.get("kv_cache"), a.get("k"), a.get("v")
-    if not all(isinstance(x, ViewDesc) for x in (kv, k, v)) or kv.rank != 4 or kv.shape[3] % 2 or k.rank != 3 or k.shape != v.shape:
+    if not (isinstance(kv, ViewDesc) and isinstance(k, ViewDesc) and isinstance(v, ViewDesc)) or kv.rank != 4 or kv.shape[3] % 2 or k.rank != 3 or k.shape != v.shape:
         return unsupported(scope, "credited_window's kv_cache / k / v are not [pages, G, slots, 2D] / [rows, G, D] views",
                            kv_cache=repr(kv), k=repr(k), v=repr(v))
     P, Gk, S, D2 = kv.shape

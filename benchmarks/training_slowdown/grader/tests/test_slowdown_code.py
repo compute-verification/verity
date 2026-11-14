@@ -21,7 +21,7 @@ from verity_config.settings import of
 #: the stand-in: the modules the grader calls, at the capture it reads beside
 STANDIN = {f"{G.PACKAGE}/__init__.py": 'VERSION = "stand-in"\n',
            f"{G.PACKAGE}/opnames.py": "def gemm_like(name):\n    return name in ('mm', 'bmm')\n",
-           f"{G.PACKAGE}/formalism.py": "HE_BITS = {}\n",
+           f"{G.PACKAGE}/work.py": "HE_BITS = {}\n",
            f"{G.PACKAGE}/capture/__init__.py": "",
            f"{G.PACKAGE}/capture/products.py": f"CAPTURE = {G.CAPTURE!r}\n"}
 SLOWDOWN_CODE = of(__file__).VERITY_GRADER_SLOWDOWN_CODE
@@ -140,7 +140,7 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
                      torch.zeros(*STEP, dtype=torch.long))
     h = G.load_handover(s.path)
     out = G.read(h, code)
-    a = G.against(out, code.products.rows(g, gemm_dtype=None), code)
+    a = G.against(out, code.products.rows(g), code)
     assert a["agree"] == {"count": True, "N": True, "O": True, "widths": dtype is None, "token_dims": True}, a["rows"]
     assert all(a["totals"]["circuit"][x] == a["totals"]["trace"][x] for x in ("count", "N", "O"))
     if cc:

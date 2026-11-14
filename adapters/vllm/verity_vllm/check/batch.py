@@ -8,24 +8,28 @@ A template is batch-invariant when no request's outputs depend on its batch-mate
                 distinct ids of one structure (`structure`)
 
 A label says who holds a parameter's leaves: `SHARED` (weights, tables, constants: any output may read them), `BATCH` (a value
-the batch picks, such as the top-p split count S = SplitsFor_v1(live rows): no output may read it), `Rows(owners)` (equal rows,
+the batch picks, such as its live row count: no output may read it), `Rows(owners)` (equal rows,
 row i held by ``owners[i]``) or `Fields(labels)` (a tuple or a record, field by field). An owner is any hashable request label.
 
-`circuit-check --batch` runs both over the templates a compiler declares (`verity_vllm.program.predict.batch.templates`), and the
-compiler holds each composition to (a) (`verity_vllm.program.predict.batch.check_compiled`).
+`check` runs both over the templates a compiler declares (`verity_vllm.program.predict.batch.templates`), each held to the
+verdict declared beside it, and the compiler holds each composition to (a)
+(`verity_vllm.program.predict.batch.check_compiled`).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable, Hashable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Callable, Hashable, Iterable, Sequence
+from typing import Any
 
-from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.intervals import Intervals, full, isect, norm
 from verity.circuits.liveness import Liveness
 from verity.circuits.types import RecordType, Tuple, Type, field_starts, field_types
+
+__all__ = ["BATCH", "Fields", "SHARED", "Template", "own", "separable"]
 
 
 class _Mark:
@@ -263,14 +267,13 @@ def check(templates: Iterable[Template], *, liveness: Liveness | None = None) ->
 
 def report(verdicts: Sequence[TemplateInvariance]) -> str:
     """The verdicts as a Markdown table: each template, (a) and (b) with their first witness, and whether each is the one declared."""
-    def cell(got: bool | None, witness: tuple | None) -> str:
-        if got is None:
+    def cell(witness: tuple | None) -> str:
+        if witness is None:
             return "—"
-        return "pass" if got else f"**fail**: {witness[0]}"
+        return f"**fail**: {witness[0]}" if witness else "pass"
 
     rows = ["| template | (a) separable | (b) shape-invariant | shapes | as declared |", "|---|---|---|---|---|"]
     for v in verdicts:
-        a, b = v.got
-        rows.append(f"| `{v.template.name}` | {cell(a, v.crossings)} | {cell(b, v.splits)} | {v.shapes or '—'} | "
+        rows.append(f"| `{v.template.name}` | {cell(v.crossings)} | {cell(v.splits)} | {v.shapes or '—'} | "
                     f"{'yes' if v.ok else '**NO**'} |")
     return "\n".join(rows)

@@ -57,8 +57,12 @@ H200s. An entry without both, or an instruction `EXCEPTABLE` doesn't list, fails
 
 The cubins come from a .cubin, a fatbin, or a host ELF's .nv_fatbin section (parsed here, since ``cuobjdump -xelf`` writes
 same-named cubins over each other), each disassembled by nvdisasm; ``cuobjdump -sass`` of the whole binary must list the same
-flagged instructions, or the gate fails. A compressed fatbin entry fails too (build with nvcc's ``--no-compress``, or ship the
-cubin), as does a PTX entry with an .ftz or .approx instruction or div.full. Passes are cached by the binary's sha256, this
+flagged instructions, or the gate fails. A fatbin entry nvcc compressed as a Zstandard frame (its ``--compress-mode=size``, and
+what CUDA 13.3's nvcc writes of a large cubin by default) is read from that frame by the system's ``libzstd.so.1``, and the
+cross-check holds the result to cuobjdump's own reading. An entry the gate can't read fails, with the build that needs no
+reader (nvcc's ``--no-compress``, or ship the cubin): one in the older compression, a Zstandard one where there is no
+``libzstd.so.1``, and one whose frame isn't the size its header states. So does a PTX entry with an .ftz or .approx instruction
+or div.full. Passes are cached by the binary's sha256, this
 file's, the pins' and the tools' versions (``POUW_SASS_GATE_CACHE``, default ``~/.cache/pouw-harness/sass-gate``; ``none``
 disables).
 
@@ -76,8 +80,10 @@ from __future__ import annotations
 
 import argparse
 import copy
+import ctypes
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -88,6 +94,17 @@ import tempfile
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
+
+#: what `bench.py`, `ieee_pin.py`, the gates and build checks that load this file (`gpu_kit/`'s, `pearl_c_sm90/`'s,
+#: `pearl_c_sm120/`'s, `benchmarks/torch_gpu/`'s, `adapters/vllm/tests/engine/int8_attention_sass.py`) and the tests read
+__all__ = [
+    "DIV", "EM_CUDA", "EXCEPTABLE", "EXIT_FAIL", "FATBIN_COMPRESSED", "FATBIN_MAGIC", "FATBIN_ZSTD", "Function", "Insn",
+    "MAX_INFLATED", "MAX_LISTED", "MMA", "PAGE", "PINS", "PINS_VERSION", "POSIX_SEM", "SHT_NOTE", "SassChecker",
+    "SassGateFailed", "VERSION", "ZSTD_MAGIC", "cubin_verdict", "declared", "device_code", "find_tools", "flagged",
+    "has_device_code", "judge", "load_pins", "mapped", "mma_gate", "opcode", "parse_nvdisasm", "pin_record",
+    "ptxas_report", "read_mapped", "regions", "sass_functions", "scan", "signature_id", "tool_notes", "toolkit_of",
+    "update_pins", "why_failed", "write_verdict",
+]
 
 VERSION = "sass-gate/v4"
 EXIT_FAIL = 7
@@ -105,6 +122,11 @@ PAGE = 4096
 PTX_BAD = re.compile(r"\.(ftz|approx)\b|\bdiv\.full\b")
 FATBIN_MAGIC = 0xBA55ED50
 FATBIN_COMPRESSED = 0x2000
+#: an entry whose payload is one Zstandard frame (it begins with the format's magic): the frame's bytes are the u32 at
+#: offset 16 of the entry's header (the payload pads them to 8), and its content's the u64 at offset 56
+FATBIN_ZSTD = 0x8000
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+MAX_INFLATED = 1 << 31
 EM_CUDA = 190
 SHT_NOTE = 7
 MAX_LISTED = 20
@@ -794,11 +816,22 @@ def match_fast(fn: Function, c: int, kind: str, bodies: frozenset[str]) -> Match
     return _escape(fn, m) or m
 
 
-def _f32(text: str) -> int | None:
-    try:
-        return struct.unpack("<I", struct.pack("<f", float(text)))[0]
-    except (ValueError, OverflowError):
+#: every spelling `float` reads, digit separators and surrounding space aside (no disassembler prints those). Wider than
+#: `_FLOAT`, the numerators a pinned sequence takes: ``+INF`` is an immediate too
+_SPELLS_FLOAT = re.compile(r"[+-]?(?:(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?|inf(?:inity)?|nan)", re.IGNORECASE)
+#: the least magnitude that rounds past each format's largest finite value, which `struct` refuses to pack
+_PAST = {"f": float.fromhex("0x1.ffffffp+127"), "e": 65520.0}
+
+
+def _float_bits(text: str, fmt: str) -> int | None:
+    """The bits of the FP32 (``f``) or FP16 (``e``) immediate `text` spells; None when it spells no float (a register, a
+    NaN the disassembler names ``QNAN``) or a finite one past the format's range."""
+    if not _SPELLS_FLOAT.fullmatch(text):
         return None
+    x = float(text)
+    if math.isfinite(x) and abs(x) >= _PAST[fmt]:
+        return None
+    return int.from_bytes(struct.pack("<" + fmt, x), "little")
 
 
 def _immediate(ins: Insn) -> int | None:
@@ -809,11 +842,8 @@ def _immediate(ins: Insn) -> int | None:
             return 0
         return int(a[-1], 0) & 0xFFFFFFFF if re.fullmatch(r"-?(0x[0-9a-f]+|\d+)", a[-1]) else None
     if o in ("HFMA2", "HFMA2.MMA") and len(a) == 5 and a[1:3] == ["-RZ", "RZ"]:
-        try:
-            hi, lo = (struct.unpack("<H", struct.pack("<e", float(x)))[0] for x in a[3:])
-        except (ValueError, OverflowError):
-            return None
-        return hi << 16 | lo
+        hi, lo = (_float_bits(x, "e") for x in a[3:])
+        return None if hi is None or lo is None else hi << 16 | lo
     return None
 
 
@@ -975,7 +1005,7 @@ def _div_call(fn: Function, k0: int, bodies: frozenset[str]) -> tuple | str:
     qa = next(t for t, p in pats.items() if _defines(p) == "q")
     if re.fullmatch(r"U?R\d+", env["a"]):
         a = value(fn, qa, env["a"])
-    elif (bits := _f32(env["a"])) is not None:
+    elif (bits := _float_bits(env["a"], "f")) is not None:
         a = ("imm", bits)
     else:
         return f"the numerator {env['a']} isn't an FP32 immediate"
@@ -1305,8 +1335,47 @@ def _elf_size(data: bytes) -> int:
     return max(ends)
 
 
+_ZSTD: list[ctypes.CDLL] = []
+
+
+def _libzstd() -> ctypes.CDLL:
+    """The system's Zstandard library, loaded by the first entry that needs it."""
+    if not _ZSTD:
+        z = ctypes.CDLL("libzstd.so.1")
+        z.ZSTD_getFrameContentSize.restype = ctypes.c_ulonglong
+        z.ZSTD_getFrameContentSize.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
+        z.ZSTD_decompress.restype = ctypes.c_size_t
+        z.ZSTD_decompress.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t]
+        z.ZSTD_isError.restype = ctypes.c_uint
+        z.ZSTD_isError.argtypes = [ctypes.c_size_t]
+        _ZSTD.append(z)
+    return _ZSTD[0]
+
+
+def _inflate(payload: bytes, stored: int, size: int, where: str) -> bytes:
+    """A Zstandard entry's content: the one frame in the payload's first `stored` bytes, which must hold exactly the `size`
+    bytes the entry's header states. Anything else fails, with the build that needs no reader."""
+    fix = "build with nvcc --no-compress, or ship the cubin"
+    try:
+        z = _libzstd()
+    except (OSError, AttributeError) as ex:
+        raise SassGateFailed(f"{where}: a Zstandard-compressed fatbin entry, and no libzstd.so.1 to read it with ({ex}); "
+                             f"{fix}") from ex
+    frame = payload[:stored]
+    if not (0 < stored <= len(payload) and 0 < size <= MAX_INFLATED and z.ZSTD_getFrameContentSize(frame, stored) == size):
+        raise SassGateFailed(f"{where}: a Zstandard-compressed fatbin entry whose header ({stored} bytes holding {size}) "
+                             f"its frame doesn't bear out; {fix}")
+    out = ctypes.create_string_buffer(size)
+    n = z.ZSTD_decompress(out, size, frame, stored)
+    if z.ZSTD_isError(n) or n != size:
+        raise SassGateFailed(f"{where}: a Zstandard-compressed fatbin entry libzstd can't read as the {size} bytes its "
+                             f"header states; {fix}")
+    return out.raw
+
+
 def fatbin_entries(data: bytes, where: str) -> tuple[list[bytes], list[str]]:
-    """The ELF cubins and PTX texts of one or more concatenated fatbins; a compressed or unknown entry fails."""
+    """The ELF cubins and PTX texts of one or more concatenated fatbins, a Zstandard entry's read from its frame; an entry
+    in the older compression or of an unknown kind fails."""
     cubins, ptx, pos = [], [], 0
     while pos < len(data):
         magic, _, hsz, fsz = struct.unpack_from("<IHHQ", data, pos)
@@ -1320,10 +1389,15 @@ def fatbin_entries(data: bytes, where: str) -> tuple[list[bytes], list[str]]:
             if flags & FATBIN_COMPRESSED:
                 raise SassGateFailed(f"{where}: a compressed fatbin entry (kind {kind}) the gate can't read; build with "
                                      "nvcc --no-compress, or ship the cubin")
+            room = psz
+            if flags & FATBIN_ZSTD and payload[:4] == ZSTD_MAGIC:
+                payload = _inflate(payload, struct.unpack_from("<I", data, e + 16)[0],
+                                   struct.unpack_from("<Q", data, e + 56)[0], where)
+                room = len(payload)
             if kind == 2 and payload[:4] == b"\x7fELF":
                 size = _elf_size(payload)
-                if size > psz:
-                    raise SassGateFailed(f"{where}: a cubin of {size} bytes in a {psz}-byte fatbin entry")
+                if size > room:
+                    raise SassGateFailed(f"{where}: a cubin of {size} bytes in a {room}-byte fatbin entry")
                 cubins.append(payload[:size])
             elif kind == 1:
                 ptx.append(payload.rstrip(b"\0").decode("utf-8", "replace"))
@@ -1547,14 +1621,15 @@ def read_mapped(start: int, n: int) -> bytes:
 
 
 def posix_semaphore(path: str) -> str | None:
-    """Why a deleted /dev/shm/sem.* mapping is a semaphore, not device code; None when it may be device code."""
+    """Why a deleted /dev/shm/sem.* mapping is a semaphore, not device code; None when it may be device code. A mapping
+    of one page whose bytes can't be read fails the gate, by the error."""
     rs = regions(path)
     if not rs or any(e - s > PAGE for s, e in rs):
         return None
     try:
         data = [read_mapped(s, e - s) for s, e in rs]
-    except OSError:
-        return None
+    except OSError as ex:
+        raise SassGateFailed(f"{path} is mapped but deleted, and the gate can't read its page ({ex})") from ex
     if any(d[:4] == b"\x7fELF" or struct.pack("<I", FATBIN_MAGIC) in d for d in data):
         return None
     return "a POSIX semaphore (one page, no ELF or fatbin), not a library"
@@ -1688,9 +1763,8 @@ def update_pins(records: list[dict], toolkit: str, path: Path = PINS) -> dict:
 
 
 # ---- the build gate: ptxas's report and cuobjdump's SASS of one kernel family -----------------------------------------
-# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/, torch_gpu's s8_linear/ and attn_bf16/) states the
-# kernels it wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
-# torch_gpu's units/ reads the build through `ptxas_report` and `sass_functions`.
+# Each kernel family's build.sh gate (pearl_c_sm90/, pearl_c_sm120/ and torch_gpu's s8_linear/) states the kernels it
+# wants and the tensor-core forms each may run; `mma_gate` reads the build and refuses the rest.
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
 #: a ptxas line that refuses the build: a warning, an error or a serialized wgmma (C751x)

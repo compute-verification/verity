@@ -210,7 +210,7 @@ def test_a_window_carrying_verdicts_and_no_proof_files_is_refused(seed, tmp_path
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-@pytest.mark.parametrize("part", ["proof", "public", "drawn-units"])
+@pytest.mark.parametrize("part", ["proof", "public", "units"])
 def test_tampered_proof_files_fail_the_window(seed, part, tmp_path, verifier):
     """One byte of a session's proof or of its public file changed: the verifier rejects the session, so the
     window is refused whole (no partial credit, no retry)."""
@@ -250,7 +250,7 @@ def test_a_circuit_file_other_than_the_committed_one_is_refused_before_the_verif
 
 
 @pytest.mark.parametrize("seed", SEEDS)
-def test_statements_the_draw_did_not_ask_for_are_refused(seed, tmp_path, verifier):
+def test_statements_the_sample_did_not_ask_for_are_refused(seed, tmp_path, verifier):
     """A call proved twice (a retry), a statement of a call no sampled proof block is in, a statement whose session proved a unit
     of another call, and a sampled call with no statement: each refuses the window."""
     d, statements = window(seed, tmp_path)

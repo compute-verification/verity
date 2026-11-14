@@ -3,7 +3,7 @@
 A run is the setup's public outputs (`verity/pous/p2/v4/setup` on acceptance, `{"blocks", "commitment", "root", "salt"}`,
 `root` the root of `C*`'s leaves under `salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest
 in block order, `memory_challenger.block_digest`: the harness's `DIGESTS.bin`) and its record of one signed session
-(`ChallengePhaseRecord`: the signed session, the commitment published before it and its coin openings).  `check` judges
+(`ChallengePhaseRecord`: the signed session, the commitment it released with it and its coin openings).  `check` judges
 it with two inputs of the verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes
 from the run's record (whoever writes the record could otherwise list its own key), and the 32-byte id the audit fixes
 for its session, which the verifier computes itself and never reads from the record: on the served piece
@@ -32,7 +32,15 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.protocols.pous.device import memory_challenger as mc
-from .schemes.p2 import CERT_BLOCKS, CERT_K, DELTA_NS, POINT, RTT_ALLOWANCE_CAP_NS, P2Params
+
+from .schemes.p2 import (
+    CERT_BLOCKS,
+    CERT_K,
+    DELTA_NS,
+    POINT,
+    RTT_ALLOWANCE_CAP_NS,
+    P2Params,
+)
 from .verifier import DIGEST_BYTES, VerifierKey
 
 SALT_BYTES = 24
@@ -72,7 +80,7 @@ class Setup:
 
 @dataclass(frozen=True, slots=True)
 class ChallengePhaseRecord:
-    """One session as the memory challenger records it: what it signed, the commitment published before it and its coin
+    """One session as the memory challenger records it: what it signed, the commitment it released with it and its coin
     openings.  Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`)."""
 
     signed: mc.SignedSession

@@ -3,11 +3,17 @@
 a record written before the codes grades from its texts' decoding as it always did."""
 from __future__ import annotations
 
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.c2_rules import _replay_seed_of_record
 from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check.replay import replay_codes as RC
 
-from .test_commit_verdict_hopper_no_evaluator_gap import BASE, K_GEMM2, OC_COMPLETE, SR_HOPPER, _bnd
+from .test_commit_verdict_hopper_no_evaluator_gap import (
+    BASE,
+    K_GEMM2,
+    OC_COMPLETE,
+    SR_HOPPER,
+    _bnd,
+)
 
 
 def _coded(not_ev: dict, codes: dict) -> dict:
@@ -50,7 +56,7 @@ ROOT_SEED = int.from_bytes(bytes(range(8)), "big")
 
 def test_the_seed_form_on_the_record_decides_not_its_source_text():
     ok, how = _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": "the run root's first bytes", "seed_form": "run-root"}}, ROOT)
-    assert ok is True and "recomputed" in how
+    assert ok is None and "recomputed" in how and "not graded" in how
     ok, why = _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.ROOT_SEED_SOURCE, "seed_form": "prover-chosen"}}, ROOT)
     assert ok is False and "prover-chosen" in why
     # a record written before `seed_form`: its source text decodes to the form
@@ -58,5 +64,5 @@ def test_the_seed_form_on_the_record_decides_not_its_source_text():
     assert RC.seed_form({"sample": {"seed_source": RC.PROVER_SEED_SOURCE}}) == "prover-chosen"
     assert RC.seed_form({"sample": {"seed_source": RC.challenge_seed_source("abc")}}) == "challenge"
     assert RC.seed_form({"seed_source": "chosen somehow"}) == "unknown" and RC.seed_form({"sample": {}}) is None
-    assert _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.ROOT_SEED_SOURCE}}, ROOT)[0] is True
+    assert _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.ROOT_SEED_SOURCE}}, ROOT)[0] is None
     assert _replay_seed_of_record({"sample": {"seed": ROOT_SEED, "seed_source": RC.PROVER_SEED_SOURCE}}, ROOT)[0] is False

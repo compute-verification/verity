@@ -88,6 +88,28 @@ def test_a_wrong_reference_is_caught_and_shrunk(server):
     assert 'input:  {"a":1,"b":-2}' in report and "run(port, examples=300, seed=0)" in report, report
 
 
+def test_a_wrong_reference_is_caught_unshrunk(server):
+    """Without `shrink` the same wrong reference is caught on the first input the sides differ on, as it was sampled, and
+    nothing is compared after it but that input once more, for the report."""
+    seen = []
+
+    def spying(v):
+        seen.append(v)
+        return floor_div(v)
+
+    def differ(v) -> bool:
+        try:
+            return div(v) != floor_div(v)
+        except D.Reject:
+            return False
+
+    with pytest.raises(D.Mismatch) as e:
+        D.run(port("div", spying), examples=300, server=server, shrink=False)
+    first = next(i for i, v in enumerate(seen) if differ(v))
+    assert seen[first:] == [e.value.input] * 2
+    assert "the first input Hypothesis found" in str(e.value) and "run(port, examples=300, seed=0)" in str(e.value)
+
+
 def test_with_lean_of_record_python_is_held_to_it(server):
     """Under `of_record="lean"` the same disagreement fails with the Lean's verdict as the one Python is held to; a side
     that is neither Lean nor Python is refused."""

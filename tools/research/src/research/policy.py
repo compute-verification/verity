@@ -1,23 +1,24 @@
-"""Drive's policy over what the runners (`suites.py`, `circuit-check`, check.py's steps) report (`PATH`,
-`tools/verity/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures drive doesn't take as
-red until a deadline (`allow`):
+"""The landing's policy over what the runners (`suites.py`, `circuit-check`, check.py's steps) report (`PATH`,
+`tools/verity/check/policy.toml`): which ci.toml jobs are off the merge gate (`off_gate`) and which failures aren't taken as red
+until a deadline (`allow`):
 
     schema = "policy/v0"
     off_gate = ["circuit-check", "ratchet-gate"]
     [[allow]]
     id = "suite NAME::NODE ID"        # one test; "suite NAME", every failure of that suite; "circuit-check CHECK/CODE FAMILY"
-    owner = "ci"                      # a handle of the Slack registry, rung when it expires
+    owner = "ci"                      # a handle of the Slack registry
     expires = "2026-11-02T18:00:00Z"  # UTC
     reason = "why it may stay red until then"
 
 An unexpired allowance covers a failure (`Policy.suite`, `Policy.circuit`): a failed suite whose own `suite NAME` has one, or whose
 every failed test has one and that failed for nothing besides them (its report's `beyond_tests` is false); a failed circuit-check
 step whose every `FAIL` line's key (`circuit_keys`: `CHECK/CODE FAMILY`, the Definition without its statics) has one.  Expired, it
-is as if absent, and the judge names it (each Coverage's ``expired``) so drive's ring says which deadline passed.
+is as if absent, and the judge names it (each Coverage's ``expired``).
 
-Drive reads the file at the commit it judges (`at`), so an allowance lands with the tip it lets pass and a red `checked` can be
-unblocked by a reviewed change; `research merge` reads `off_gate` at the commit it merges (`merge.declared_jobs`), and the quick
-tier's judge reads it at the tier's base, a commit of `main`.  Stdlib only."""
+The verified queue's loop reads its allowances at the base of the candidate it judges (`at`; `Landing._allowed` and
+`Landing._task_allowed` judge its failures), so no candidate's own allowance covers its own failure; `research merge` reads
+`off_gate` at the commit it merges (`merge.declared_jobs`), and the quick tier's judge reads it at the tier's base, a commit of
+`main`.  Stdlib only."""
 from __future__ import annotations
 
 import re
@@ -54,9 +55,6 @@ class Allowance:
 
     def live(self, now: float) -> bool:
         return now < _utc(self.expires)
-
-    def text(self) -> str:
-        return f"`{self.id}` (owner {self.owner}, expires {self.expires}: {self.reason})"
 
 
 @dataclass(frozen=True)
