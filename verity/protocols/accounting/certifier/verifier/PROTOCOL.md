@@ -295,17 +295,17 @@ Stated in Lean: `NetworkCheck.Period` (`verity/protocols/accounting/certifier/ve
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
 and the bound `K` it publishes. Its parameters list the keys of the link's network certifier (`"keys"`), an entry
 for each certifier session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
-and the start of its stretch of link-windows, in the numbers the period's `first` is in. An entry's stretch runs from
-its start up to the next entry's, and the last entry's from its start on. Link-window W of the period picks the one
-entry whose stretch holds it, and each certificate and rows registration for W is held to that entry: its key, its
-session, and that session's own number for the link-window, W − a, since a session numbers its link-windows from 0.
-The developer's record, a clock-form registration's served window, is in the period's numbers. Refused by name: no
-entry; entries out of order; two entries with one start, whose stretches would overlap; one key identifier (a key's
-first 16 bytes) and one session twice; two entries with one key identifier; a period that starts before the first
-entry's stretch; parameters that still name `"key"`, `"session"` or `"sessions"`; and, at a link-window, a signer
-that is a listed key outside its stretch or is not listed. `certifierEntries` and `certifierLink` read the entries
-and the link off the parameters through the period's own decoder, for a composition that pins them. The period check
-reads the inference-only policy's layout check.
+and the start of its stretch of execution phases, in the numbers the period's `first` is in. An entry's stretch runs
+from its start up to the next entry's, and the last entry's from its start on. Execution phase W of the period picks the
+one entry whose stretch holds it, and each certificate and rows registration for W is held to that entry: its key, its
+session, and that session's own number for the execution phase, W − a, since a session numbers its execution phases
+from 0. The developer's record, a clock-form registration's served window, is in the period's numbers. Refused by
+name: no entry; entries out of order; two entries with one start, whose stretches would overlap; one key identifier (a
+key's first 16 bytes) and one session twice; two entries with one key identifier; a period that starts before the
+first entry's stretch; parameters that still name `"key"`, `"session"` or `"sessions"`; and, at an execution phase, a
+signer that is a listed key outside its stretch or is not listed. `certifierEntries` and `certifierLink` read the
+entries and the link off the parameters through the period's own decoder, for a composition that pins them. The
+period check reads the inference-only policy's layout check.
 
 ## A served link (`served`)
 
@@ -2330,10 +2330,36 @@ client's view read back from the certifier's record (`SecurityProofs.MonitoringP
 **Deployment requirement (`trusted-host`).** The bound holds only on a host that gives the network certifier's process:
 - CPU isolation from every co-tenant (its own cores), so that no co-resident process, the prover's above all, can
   make a tick late and so choose which windows fault (about 1 bit a window otherwise);
-- a monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from it.
+- a raw monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from
+  it.
 
 Both are part of the named assumption `trusted-host` (the auditor's host and its provider are trusted). Neither is
 checked here.
+
+**The clock.** The network certifier reads one clock, its host's raw monotonic clock, by its clock id
+(`pacer.raw_clock`): every tick's deadline, the wait before it and the pacer's release times. The host's time daemon
+steers its wall time and its monotonic clock, and not this one. A tick's wait that ends early waits again, so no
+tick runs before its deadline on that clock. A host that gives no raw clock runs no network certifier: there is no
+other clock to fall back on. How far the raw clock's second is from a true one is the host's hardware's, and no
+bound on it is stated here.
+
+**The device state and the session's start.** A registered key has one device state, a file of its own beside the
+key (`certificate.DeviceState`): the key's life so far, in milliseconds on the network certifier's clock, and the ids
+of the sessions started under it.
+- A run holds the state's lock from before its first tick until its publisher has closed, so a key has one run at a
+  time; a second is refused.
+- A session's base is the key's life when it starts. The state is moved on by the session's whole span, its
+  execution phases of T ticks each, and written through to disk before the base is signed, so a crash loses that
+  time and no later session reuses it. A session id already started is refused.
+- The network certifier then signs the start's certificate (`certificate.CertifiedStart`): a certificate of the
+  link's start name (`<link>-origin`), egress, window 0, over a tagged digest of the base and the schedule's
+  parameters digest. It is signed before the origin is set and is public (`deployment.json`'s `start`).
+- The start's tag says which clock the session's ticks are read on: `verity-network-certifier/start/v1` means the
+  host's raw clock, and a device whose ticks read any other clock signs its starts under another tag. The digest
+  names no clock, and that a device's ticks read the clock its tag means rests on `trusted-host`. A device that
+  signs no start is refused by a check that requires the session's certified start.
+- A state restored from an earlier copy is past what a file can see: that rests on `trusted-host`. The period check
+  does not read the start's certificate.
 
 **What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
 wire's bits. The third record, `fails`, holds one reason a failed connection.
@@ -2341,9 +2367,10 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   certifier's parameters digest in the head. A head is witness, so no reason reaches the client.
 - `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
   the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
-- `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
-  record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`)
-  runs the same rehearsal on the auditor's host.
+- `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that the session's start
+  is certified and that each client got exactly its egress record's cells, each in its bucket. The auditor gate's
+  `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs the same rehearsal on the auditor's
+  host.
 - The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
   index among the ingress records' `END` cells, `x-verity-release-run:` the network certifier's `run_id` (in

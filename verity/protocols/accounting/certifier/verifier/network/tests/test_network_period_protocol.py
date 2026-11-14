@@ -158,7 +158,7 @@ def signers(case: dict) -> set[str]:
 
 
 def by_window(case: dict) -> list[tuple[int, list[Certificate]]]:
-    """A case's link-windows by the period's numbers, each with its certificates, its clock certificate and its row
+    """A case's execution phases by the period's numbers, each with its certificates, its clock certificate and its row
     registrations' among them."""
     windows = json.loads(bytes.fromhex(case["evidence"]))["windows"]
     return [(case["params"]["first"] + i, certificates({"evidence": D.canonical({"windows": [x]}).encode().hex()}))
@@ -176,8 +176,8 @@ def listed_ids(case: dict) -> list[str]:
 
 
 def weaken(monkeypatch, pick) -> None:
-    """A mirror that holds a certificate or a row registration for the period's link-window `w` to the entry
-    `pick(p, w, key_id)` gives for the key identifier it names, where the mirror picks by the link-window alone
+    """A mirror that holds a certificate or a row registration for the period's execution phase `w` to the entry
+    `pick(p, w, key_id)` gives for the key identifier it names, where the mirror picks by the execution phase alone
     (`PC._entry_at`)."""
     def certifies_on(p, link, d, w, c):
         e = pick(p, w, c.key_id)
@@ -197,12 +197,12 @@ def weaken(monkeypatch, pick) -> None:
     monkeypatch.setattr(PC, "_rows_check", rows_check)
 
 
-def test_a_link_window_picks_its_entry_and_is_signed_at_its_sessions_number(server, monkeypatch):
+def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number(server, monkeypatch):
     """The parameters list the certifier's entries, each a key, its session and the start of its stretch, and the
-    period's link-window alone picks the entry its certificates and row registrations are held to: that entry's key,
-    its session, and that session's number for the link-window, the period's less the entry's start. A period of
-    either form whose every signature is the second of two entries' (`second-key`), and one whose link-windows two
-    entries' stretches hold, each link-window signed by its own entry at its own number (`two-stretches`), are
+    period's execution phase alone picks the entry its certificates and row registrations are held to: that entry's key,
+    its session, and that session's number for the execution phase, the period's less the entry's start. A period of
+    either form whose every signature is the second of two entries' (`second-key`), and one whose execution phases two
+    entries' stretches hold, each execution phase signed by its own entry at its own number (`two-stretches`), are
     accepted by Lean with the mirror's public; and a mirror that reads only the first listed entry, or holds a
     certificate to the period's number, refuses what Lean accepts."""
     cases = {(m, n): build(m, n, small=n % 2 == 0)
@@ -241,12 +241,12 @@ OUTSIDE_STRETCH = ("two-signers", "rows-two-signers", "cert-outside-stretch", "r
 
 
 def test_a_mirror_that_looks_the_entry_up_by_the_certificates_id_is_caught(server, monkeypatch):
-    """The link-window picks the entry, and nothing a certificate names does. A period of two listed entries whose
-    link-windows the second's stretch holds, in which the first entry signs too, in its own session at its own number
-    for the link-window (every other signature in `two-signers`, one certificate or one row registration in
+    """The execution phase picks the entry, and nothing a certificate names does. A period of two listed entries whose
+    execution phases the second's stretch holds, in which the first entry signs too, in its own session at its own
+    number for the execution phase (every other signature in `two-signers`, one certificate or one row registration in
     `…-outside-stretch`), is refused by Lean and by the mirror and by name (`PC.OUTSIDE`), though every signature
-    verifies under a listed key in that key's session, and every certificate at that session's number; and a mirror
-    that looks the entry up by the key identifier the certificate names accepts what Lean refuses by that name."""
+    verifies under a listed key in that key's session, and every certificate at that session's number; and a mirror that
+    looks the entry up by the key identifier the certificate names accepts what Lean refuses by that name."""
     cases = {(m, n): build(m, n, small=n % 2 == 0) for m in OUTSIDE_STRETCH for n in range(4)}
     for (m, n), case in cases.items():
         p = PC.params(case["params"])
@@ -275,15 +275,15 @@ def test_a_mirror_that_looks_the_entry_up_by_the_certificates_id_is_caught(serve
 #: The changes that put a certificate or a row registration under the picked entry's key in the other entry's session.
 OTHER_SESSION = ("cert-other-session", "rows-cert-other-session", "rows-reg-other-session")
 #: The changes that put a certificate or a row registration under the picked entry at the period's number for the
-#: link-window, not its session's.
+#: execution phase, not its session's.
 PERIOD_NUMBER = ("cert-period-number", "rows-cert-period-number", "rows-reg-period-number")
 
 
 def test_a_signature_in_another_entrys_session_or_at_the_periods_number_is_refused(server, monkeypatch):
     """An entry's session and numbers are its own: a period of two listed entries, the second's stretch holding its
-    link-windows, in which one certificate (the clock form's egress, ingress or clock certificate, one of the rows
+    execution phases, in which one certificate (the clock form's egress, ingress or clock certificate, one of the rows
     form's three records') or one row registration is the second entry's key's in the first entry's session, or names
-    the period's number for its link-window where the session's belongs, is refused by Lean and by the mirror, as no
+    the period's number for its execution phase where the session's belongs, is refused by Lean and by the mirror, as no
     unlisted signer's and no listed key's outside its stretch; and a mirror that takes the picked key's certificate in
     any listed session, or at either number, accepts what Lean refuses."""
     for m in (*OTHER_SESSION, *PERIOD_NUMBER):
@@ -375,11 +375,11 @@ ENTRIES_REFUSALS = {
 
 def test_entries_the_parameters_must_not_list_are_refused_by_name(server):
     """Parameters that list no entry; entries out of order, one starting before the one listed before it; two entries
-    with one start, whose stretches would overlap; one key identifier and one session twice, whose link-window n would
-    be two of the period's; two entries with one key identifier, a key in two sessions or another key under its
+    with one start, whose stretches would overlap; one key identifier and one session twice, whose execution phase n
+    would be two of the period's; two entries with one key identifier, a key in two sessions or another key under its
     identifier; a period that starts before the first entry's stretch; an entry that is the key alone; or that still
-    name `"key"`, `"session"` or `"sessions"`: each is refused at the parameters by Lean and by the mirror and by
-    name. So is a list or an entry that doesn't read."""
+    name `"key"`, `"session"` or `"sessions"`: each is refused at the parameters by Lean and by the mirror and by name.
+    So is a list or an entry that doesn't read."""
     for m in ("honest", "rows-honest", "second-key"):
         case = build(m, 0, small=True)
         bad = PC.bad_entries(case["params"])
@@ -859,8 +859,8 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():
     """The rows form's honest registrations are `warden_rows.registration`'s documents, which its own
-    `check_registration` reads back under the entry its link-window picks: that entry's key, its session, the
-    session's number for the link-window, and the period's schedule."""
+    `check_registration` reads back under the entry its execution phase picks: that entry's key, its session, the
+    session's number for the execution phase, and the period's schedule."""
     for m, n in ((m, n) for m in ("rows-honest", "rows-two-stretches") for n in range(4)):
         case = build(m, n, small=n % 2 == 0)
         p = PC.params(case["params"])

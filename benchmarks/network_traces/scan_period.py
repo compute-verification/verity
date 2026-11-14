@@ -5,8 +5,8 @@ and its Lean.
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key and its
-  session, the one entry the parameters list, its stretch starting at link-window 0, so the period's numbers are the
+* **The case** (`rows_case`) of execution phase W: the parameters the warden run's ``deployment.json`` (its key and its
+  session, the one entry the parameters list, its stretch starting at execution phase 0, so the period's numbers are the
   run's own, and one schedule, its integer fields and its response
   cap when it has one: the period check reads the id egress form, and a run in another is refused),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits

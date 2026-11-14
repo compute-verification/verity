@@ -5,8 +5,8 @@ that runs it: its mirror, `answer` (as `reference`), and its cases, `build` and 
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats (`NetworkCheck/Period.lean`'s module docstring)
 and checks a period with the Python the period's pieces already have: one-stage's answers and integrity profiles as PoUW
 reads them (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates,
-each under the listed entry its link-window picks (`certifier.certificate`, `_entry_at`: the entry's LMS key, its
-session, and that session's own number for the link-window, the period's less the entry's start; a signer that is
+each under the listed entry its execution phase picks (`certifier.certificate`, `_entry_at`: the entry's LMS key, its
+session, and that session's own number for the execution phase, the period's less the entry's start; a signer that is
 another listed key, outside its stretch, or that the parameters don't list is refused by name, `OUTSIDE`,
 `UNLISTED`), Σ_sync (`certifier.schedule`), one-stage's
 `registration.digest` (a
@@ -22,17 +22,17 @@ and `eps`, the union of those deltas as an exact ratio string, and in the rows f
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases). Its parameters list the signer's entry (its key, its session and the
 start of its stretch, at or before `first`, so the signer's numbers are the period's less that start), alone in a
-small period and otherwise among up to two more whose stretches hold none of the period's link-windows; `second-key`
-lists the signer second of two, and `two-stretches` two entries whose stretches each hold some of the period's
-link-windows, each link-window signed by its own entry at its own number. Refused: two listed entries that sign in
-turn, each in its own session at its own number, in a period one entry's stretch holds (`two-signers`); a certificate
-or a rows registration under the other listed entry, outside its stretch (`cert-outside-stretch`,
-`reg-outside-stretch`), under a key that isn't listed (`cert-unlisted`, `reg-unlisted`), under the picked key in the
-other entry's session (`cert-other-session`, `reg-other-session`), or at the period's number where the session's
-belongs (`cert-period-number`, `reg-period-number`); and parameters whose `"keys"` don't read (`bad_entries`): no
-entry, entries out of order or with one start, one key identifier twice, a period that starts before the first entry,
-or the earlier forms `"key"`, `"session"` and `"sessions"`. In the clock form: the
-link-windows of one link from the link-window
+small period and otherwise among up to two more whose stretches hold none of the period's execution phases; `second-key`
+lists the signer second of two, and `two-stretches` two entries whose stretches each hold some of the period's execution
+phases, each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn,
+each in its own session at its own number, in a period one entry's stretch holds (`two-signers`); a certificate or a
+rows registration under the other listed entry, outside its stretch (`cert-outside-stretch`, `reg-outside-stretch`),
+under a key that isn't listed (`cert-unlisted`, `reg-unlisted`), under the picked key in the other entry's session
+(`cert-other-session`, `reg-other-session`), or at the period's number where the session's belongs
+(`cert-period-number`, `reg-period-number`); and parameters whose `"keys"` don't read (`bad_entries`): no entry, entries
+out of order or with one start, one key identifier twice, a period that starts before the first entry, or the earlier
+forms `"key"`, `"session"` and `"sessions"`. In the clock form: the execution phases of one link from the execution
+phase
 `first`, each registered under the link's Program with its provenance, certified at both ends by a small LMS key in a
 sampled network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
@@ -135,11 +135,11 @@ KEY_NOT_KEYS = 'key: write "keys"'
 SESSION_IN_ENTRY = "session: write each key's session in its entry"
 SESSIONS_IN_ENTRY = "sessions: write each key's session in its entry"
 #: What a refusal says, as Lean's does (`unlisted`), of a certificate or a rows registration whose signer the
-#: parameters don't list, of one whose signer is a listed key outside its stretch, and of a link-window no listed
+#: parameters don't list, of one whose signer is a listed key outside its stretch, and of an execution phase no listed
 #: entry's stretch holds
 UNLISTED = "a signer that is not one of the listed keys"
 OUTSIDE = "a listed key outside its stretch"
-NO_STRETCH = "no listed entry's stretch holds link-window"
+NO_STRETCH = "no listed entry's stretch holds execution phase"
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 CAPPED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
@@ -210,7 +210,7 @@ class Audit:
 @dataclasses.dataclass(frozen=True)
 class Entry:
     """One entry of the parameters' `"keys"`, a certifier session's: its LMS key, its session, and the start of its
-    stretch of link-windows, in the numbers `first` is in."""
+    stretch of execution phases, in the numbers `first` is in."""
     key: LmsKey
     session: bytes
     start: int
@@ -746,7 +746,7 @@ def params(j) -> Params:
         raise D.Reject(str(x)) from None
     entries = _listed(j["keys"], lp)
     if first < entries[0].start:
-        raise D.Reject(f"first: link-window {first} {BEFORE}, which starts at {entries[0].start}")
+        raise D.Reject(f"first: execution phase {first} {BEFORE}, which starts at {entries[0].start}")
     program = _of(j["program"], str, "program")
     if not DIGEST.fullmatch(program):
         raise D.Reject("program: not a SHA-512 digest")
@@ -839,15 +839,16 @@ class Finding(Exception):
 
 
 def _entry_at(p: Params, w: int) -> Entry | None:
-    """`entryAt`: the entry link-window `w` picks, the last listed one whose start is at most `w`, whose stretch holds
-    `w`; none before the first entry's start. The link-window alone picks it, and nothing a certificate names does."""
+    """`entryAt`: the entry execution phase `w` picks, the last listed one whose start is at most `w`, whose stretch
+    holds `w`; none before the first entry's start. The execution phase alone picks it, and nothing a certificate names
+    does."""
     held = [e for e in p.entries if e.start <= w]
     return held[-1] if held else None
 
 
 def _unlisted(p: Params, w: int, key_ids: list[bytes]) -> str:
-    """`unlisted`: what a refusal at link-window `w` adds about its signers `key_ids`: no listed entry's stretch holds
-    `w`, a signer no entry lists, or a listed key outside its stretch."""
+    """`unlisted`: what a refusal at execution phase `w` adds about its signers `key_ids`: no listed entry's stretch
+    holds `w`, a signer no entry lists, or a listed key outside its stretch."""
     e = _entry_at(p, w)
     if e is None:
         return f": {NO_STRETCH} {w}"
@@ -857,8 +858,8 @@ def _unlisted(p: Params, w: int, key_ids: list[bytes]) -> str:
 
 
 def _certifies_on(p: Params, link: str, d: Direction, w: int, c: Certificate) -> bool:
-    """`certifiesOn`: a certificate of `link`'s end `d` for the period's link-window `w`, under the entry `w` picks:
-    its key, its session, and that session's number for the link-window, `w` less the entry's start."""
+    """`certifiesOn`: a certificate of `link`'s end `d` for the period's execution phase `w`, under the entry `w` picks:
+    its key, its session, and that session's number for the execution phase, `w` less the entry's start."""
     e = _entry_at(p, w)
     return (e is not None and c.direction is d and c.link == link and c.window == w - e.start
             and c.verify(e.key, e.session))
@@ -922,8 +923,8 @@ def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, re
 
 def _rows_check(p: Params, w: int, d: Direction, doc: dict) -> None:
     """`rowsCheck`: the verifier's own read of the registration (`warden_rows.check_registration`) under the entry the
-    period's link-window `w` picks: its key, its session, which the registration's domain binds, and that session's
-    number for the link-window, `w` less the entry's start, which its value, window, layout, domain and head name. A
+    period's execution phase `w` picks: its key, its session, which the registration's domain binds, and that session's
+    number for the execution phase, `w` less the entry's start, which its value, window, layout, domain and head name. A
     signer that is another listed key, outside its stretch, or that the parameters don't list is refused by name."""
     e = _entry_at(p, w)
     if e is None:
@@ -1317,16 +1318,16 @@ EXPECT = {
 }
 MUTATIONS = list(EXPECT)
 #: The changes to which entries the parameters list and which of them sign (`rows-…` in the rows form). Accepted: the
-#: signer's entry the second of two, and two entries whose stretches each hold some of the period's link-windows, each
-#: link-window signed by its own entry at its own number. Refused: two listed entries that sign in turn, each in its
-#: own session at its own number, in a period the second's stretch holds; a certificate or a rows registration under
-#: a key that isn't listed, under the picked key in the other entry's session, under the other listed entry, outside
-#: its stretch, and at the period's number where the session's belongs. `case` aims at none (`AIMS`), so its period
-#: lists the one entry that signs it.
+#: signer's entry the second of two, and two entries whose stretches each hold some of the period's execution phases,
+#: each execution phase signed by its own entry at its own number. Refused: two listed entries that sign in turn, each
+#: in its own session at its own number, in a period the second's stretch holds; a certificate or a rows registration
+#: under a key that isn't listed, under the picked key in the other entry's session, under the other listed entry,
+#: outside its stretch, and at the period's number where the session's belongs. `case` aims at none (`AIMS`), so its
+#: period lists the one entry that signs it.
 LISTS = ("second-key", "two-stretches", "two-signers", "cert-unlisted", "reg-unlisted", "cert-other-session",
          "reg-other-session", "cert-outside-stretch", "reg-outside-stretch", "cert-period-number", "reg-period-number")
-#: The changes whose parameters list two entries, the period's link-windows all in the second's stretch, the signer's:
-#: its start is at least 1, so the session's numbers are not the period's
+#: The changes whose parameters list two entries, the period's execution phases all in the second's stretch, the
+#: signer's: its start is at least 1, so the session's numbers are not the period's
 SECOND = ("second-key", "two-signers", "cert-other-session", "reg-other-session", "cert-outside-stretch",
           "reg-outside-stretch", "cert-period-number", "reg-period-number")
 
@@ -1798,8 +1799,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     ki = 0 if small else r.randrange(len(KEYS))
     key = _key(ki)
     N, W, H, toy = KEYS[ki]
-    # the choices of the entries the parameters list (`listed`, below, once the period's link-windows are known), and the
-    # signer's session
+    # the choices of the entries the parameters list (`listed`, below, once the period's execution phases are known),
+    # and the signer's session
     rk = random.Random(f"network-period keys {m} {seed}")
     session = r.randbytes(lms.SESSION_BYTES)
     # every form binds the link in its window record's canonical JSON, whose strings are ASCII without DEL
@@ -1817,9 +1818,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         first = rk.randrange(1, 6)
     # the entries the parameters list, by their stretches' starts, the signer's (`key`, `session`) among them, its
     # numbers the period's less its start; seed 1's key is never listed. Two entries whose stretches each hold some of
-    # the period's link-windows, the signer's from one of them on (`two-stretches`); two, the period in the second's
+    # the period's execution phases, the signer's from one of them on (`two-stretches`); two, the period in the second's
     # stretch, the signer's (`SECOND`); else the signer's, alone in a small period, or among up to two more whose
-    # stretches hold none of the period's link-windows, before the signer's or after the period
+    # stretches hold none of the period's execution phases, before the signer's or after the period
     other = lambda k, start: Stretch(k, rk.randbytes(lms.SESSION_BYTES), start)  # noqa: E731
     if m == "two-stretches":
         listed = [other(_key(ki, 2), rk.randint(0, first)), Stretch(key, session, first + rk.randrange(1, n_windows))]
@@ -1834,11 +1835,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         listed = sorted([Stretch(key, session, start), *map(other, more, starts)], key=lambda e: e.start)
 
     def stretch(w: int) -> Stretch:
-        """The listed entry whose stretch holds the period's link-window `w`."""
+        """The listed entry whose stretch holds the period's execution phase `w`."""
         return [e for e in listed if e.start <= w][-1]
 
     def number(w: int) -> int:
-        """The number of the period's link-window `w` in its entry's session: `w` less the entry's start."""
+        """The number of the period's execution phase `w` in its entry's session: `w` less the entry's start."""
         return w - stretch(w).start
     if rows:
         sched = bound = _small_schedule(r, small, capped=m in ("capped", "cap-schedule"))
@@ -1879,16 +1880,16 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         a = ties[first + t]["audit"]
     tied = {x["audit"] for x in ties.values()}
     signed = iter(range(1 << 30))
-    # the entry that signs the `n`-th signature for the period's link-window `w`: the one whose stretch holds `w`, or
-    # the two listed entries in turn (`two-signers`), the first outside its stretch
+    # the entry that signs the `n`-th signature for the period's execution phase `w`: the one whose stretch holds `w`,
+    # or the two listed entries in turn (`two-signers`), the first outside its stretch
     turn = lambda n, w: listed[n % len(listed)] if m == "two-signers" else stretch(w)  # noqa: E731
 
     def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey | None = None,
              s: bytes | None = None, n: int | None = None, e: Stretch | None = None,
              num: int | None = None) -> Certificate:
-        """A certificate for the period's link-window `w` under the entry `e`, or the one whose turn it is: under its
-        key, or `k`, in its session, or `s`, naming that session's number for the link-window, `w` less the entry's
-        start, or `num`."""
+        """A certificate for the period's execution phase `w` under the entry `e`, or the one whose turn it is: under
+        its key, or `k`, in its session, or `s`, naming that session's number for the execution phase, `w` less the
+        entry's start, or `num`."""
         n = next(signed) if n is None else n
         e = turn(n, w) if e is None else e
         k = e.key if k is None else k
@@ -1898,9 +1899,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
 
     def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes | None = None,
                       e: Stretch | None = None, num: int | None = None) -> list[dict]:
-        """Link `on`'s ingress and egress rows for the period's link-window `w`, each committed under schedule `s` (the
-        period's) by the entry `e`, or the one whose turn it is: in its session, or `ses`, at that session's number
-        for the link-window, or `num`, and registered, its head signed there."""
+        """Link `on`'s ingress and egress rows for the period's execution phase `w`, each committed under schedule `s`
+        (the period's) by the entry `e`, or the one whose turn it is: in its session, or `ses`, at that session's number
+        for the execution phase, or `num`, and registered, its head signed there."""
         s = s or sched
         out = []
         for d in (INGRESS, EGRESS):
@@ -1914,7 +1915,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         return out
 
     def resigned(doc: dict, w: int, **kw) -> dict:
-        """The registration `doc` of the period's link-window `w` with its head signed again, at the number it names."""
+        """The registration `doc` of the period's execution phase `w` with its head signed again, at the number it
+        names."""
         c = sign(doc["link"], Direction(doc["direction"]), w, bytes.fromhex(doc["certificate"]["digest"]),
                  num=doc["window"], **kw)
         return doc | {"certificate": {"digest": c.digest.hex(), "key": c.key_id.hex(), "signature": c.signature.hex()}}
@@ -1976,10 +1978,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 doc = resigned(doc, w, s=ses) if r.random() < 0.5 else registrations(w, ses=ses)[i]
             elif m == "reg-outside-stretch":
                 # the other listed entry's, outside its stretch: the head alone signed by it, or the rows committed by
-                # it in its session at its own number for the link-window
+                # it in its session at its own number for the execution phase
                 doc = resigned(doc, w, e=listed[0]) if r.random() < 0.5 else registrations(w, e=listed[0])[i]
             elif m == "reg-period-number":
-                # the picked entry's, at the period's number for the link-window, not its session's
+                # the picked entry's, at the period's number for the execution phase, not its session's
                 doc = registrations(w, num=w)[i]
             else:
                 lay = doc["layout"]
@@ -2100,7 +2102,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                                           for n, c in enumerate((egress, ingress, clock)))
             elif m in ("cert-other-session", "cert-outside-stretch", "cert-period-number"):
                 # one of the three under the picked key in the other entry's session, under the other listed entry,
-                # outside its stretch, or at the period's number for the link-window, not its session's
+                # outside its stretch, or at the period's number for the execution phase, not its session's
                 i = r.randrange(3)
                 how = {"cert-other-session": {"s": listed[0].session}, "cert-outside-stretch": {"e": listed[0]},
                        "cert-period-number": {"num": w}}[m]
