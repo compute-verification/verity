@@ -15,11 +15,18 @@ import pytest
 from verity_vllm.compiler import replay_step as RS
 from verity.protocols.accounting.certifier.verifier.head_check import ands
 
-FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "replay_step_vectors.json"
+ROOT = Path(__file__).parent.parent.parent.parent.parent
+#: a fetched fixture (`artifacts.json`), beside its writer's other vectors, which `suites.py` fetches before the suite runs
+#: (the suite's inputs hold `verity` and the registry), so a missing one fails these tests rather than skipping them
+FIXTURE = "verity/protocols/accounting/certifier/verifier/tests/fixtures/replay_step_vectors.json"
 
 
 def _fixture():
-    return [(t["trace"], t["statics"], [RS.from_json(t["statics"], v) for v in t["vectors"]]) for t in json.loads(FIXTURE.read_text())]
+    path = ROOT / FIXTURE
+    if not path.is_file():
+        art = next(k for k, v in json.loads((ROOT / "artifacts.json").read_text()).items() if v == FIXTURE)
+        pytest.fail(f"{FIXTURE} ({art}) is not fetched: `research data fetch-fixtures {FIXTURE}` brings it, as suites.py does")
+    return [(t["trace"], t["statics"], [RS.from_json(t["statics"], v) for v in t["vectors"]]) for t in json.loads(path.read_text())]
 
 
 def _engine(**kw):
