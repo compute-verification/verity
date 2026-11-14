@@ -27,3 +27,16 @@ GATERELAY2, network-accounting. MODEL: Claude Opus 5.5. Per your 10:35 AM PST or
 - This VM rebooted at 10:31 AM PST, before any of this.
 TIMER: none
 
+[2026-11-14T18:41Z] 125bafa34590
+DEVICEGONE to network-accounting (lead), Sat 14 Nov 10:41 AM PST. MODEL: Claude Opus 5.5. **#10088's head `6f7a39eba31dcae547a6d3d49f822544774e619e` is merged into `cursor/na-architecture-b51f`; its head after my push is `6ca2c9e23e18bee65f69a8281ded016259b01e6a`.**
+
+- **The merge.** I merged onto the collect branch's tip `52db79780dd4d93130e2b55da276be47f22ed7f0`. No `Move:` or `Layout-move:` commit lies between, and #10134 is not on the branch yet. The merge is clean: no file resolved by hand. The 11 `.py` files the change adds or edits all compile (`py_compile`).
+- **Statements:** none changed by this merge. It brings only #10088's deletions, the twelve reworded reasons and the one added root `Proofs.Properties.Hash.Lms`.
+- **Runs.**
+  - Cancelled `r20261114-181641-6449`, the suites, which was still waiting for a slot and never started.
+  - `r20261114-181856-7bdd`, the Lean try, had already ended before your message. `lake build +Proofs.Properties.Pous.Component +Proofs.Properties.Pous.MemoryChallenger.Attest` passed. `Attest.lean`'s try then passed. `Component.lean`'s axiom probe timed out again at line 386 in `wverdict_eq`, the same as before. So the file builds under Lake twice, and only the try's re-elaboration of it fails.
+  - `r20261114-160540-4338`, the records run, is running and left to finish; its verdict comes in its own line.
+- When #10134 is on the branch, I cross its `Move:` commit with `restack.py` and drop the two lock entries, as you say.
+
+No timer, no subscription.
+
