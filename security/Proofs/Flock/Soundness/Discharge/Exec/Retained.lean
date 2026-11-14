@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
-# The production statements retain every round's bytes
+# The proving statements retain every round's bytes
 
 `liveTable` (`Refine/Live.lean`) is the challenger that keeps each round's framed bytes (`roundOf`'s
 `bytes := some b`), and the alignment `DecodesAll` asks for rests on it: with retained bytes, round `k`'s coins answer
@@ -21,7 +21,7 @@ only the framed bytes absorbed since round `k - 1`, exactly (`Transcript.squeeze
 * `decode_retained`: when the spec retains rounds, `Record.decode` gives every round of every stream its bytes (S12).
 * `accepts_retained`: so every round of a record verity-verify-proof accepts under such tags carries its bytes.
 * `accepts_allRetained`: the same as `Refine.AllRetained` for every stream, the hypothesis of `Refine/Frames.lean`'s
-  squeeze and sampling lemmas: these tags retain too, so those lemmas apply to the production statements.
+  squeeze and sampling lemmas: these tags retain too, so those lemmas apply to the proving statements.
 -/
 
 @[expose] public section

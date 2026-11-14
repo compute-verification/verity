@@ -246,7 +246,7 @@ impl UnitNet {
         let sha256: [u8; 32] = Sha256::digest(text.as_bytes()).into();
         let mut lines = text.lines();
         let h: Vec<&str> = lines.next().expect("header").split_whitespace().collect();
-        assert_eq!(h[0], "flock-unit-io/v1", "not a flock-unit-io/v1 netlist");
+        assert_eq!(h[0], "flock-unit-io/v1", "not a flock-unit-io/v1 circuit description");
         let n = |i: usize| -> usize { h[i].parse().unwrap() };
         let (useful, const_pos, n_in, ni) = (n(2), n(3), n(4), n(5));
         assert_eq!((0..ni).map(|i| n(6 + i)).collect::<Vec<_>>(), vec![0, 1, 2, 3, 4]);
@@ -269,7 +269,7 @@ impl UnitNet {
     }
 
     pub fn load(path: &str) -> Self {
-        Self::parse(&std::fs::read_to_string(path).expect("netlist"))
+        Self::parse(&std::fs::read_to_string(path).expect("circuit description"))
     }
 
     /// log2 of the unit's slot: 13, or 14 for a circuit description past 2^13 rows. Statements of 2^13-row units are unchanged.
@@ -405,7 +405,7 @@ pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String>
         return Err(format!("CN3: a {}-byte row is one BLAKE3 chunk, whose last block is the ROOT, and {lay:?} never sets ROOT", lay.row_bytes()));
     }
     if !lay.fits(net.unit_log()) {
-        return Err(format!("UL1: {} units of 2^{} bits (a {}-row netlist) do not fit layout {lay:?}", lay.units(), net.unit_log(), net.useful));
+        return Err(format!("UL1: {} units of 2^{} bits (a {}-row circuit description) do not fit layout {lay:?}", lay.units(), net.unit_log(), net.useful));
     }
     let blocks = lay.blocks_per_vu() * inst.vus;
     if lay.k_log() + log2ceil(blocks).max(3) > MAX_M {
@@ -413,7 +413,7 @@ pub fn admit(lay: Layout, net: &UnitNet, inst: &Instances) -> Result<(), String>
                            lay.blocks_per_vu(), lay.k_log() + log2ceil(blocks).max(3)));
     }
     if (net.n_in == 608) != lay.is_fp4() {
-        return Err(format!("NV2: a netlist with {}-bit unit inputs does not pair with layout {lay:?}", net.n_in));
+        return Err(format!("NV2: a circuit description with {}-bit unit inputs does not pair with layout {lay:?}", net.n_in));
     }
     for t in ["a", "b"] {
         let s = inst.header["schemas"][t].as_str().unwrap_or("");
