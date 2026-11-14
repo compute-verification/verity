@@ -20,7 +20,7 @@ to its first window the check refuses (`Executions.prefixLen`), on those windows
 It is parametric in the deployed unit and names no device: the scheme `Sc`, the registered circuit `Cd`, the population
 `N_p` and the sample size `K_d` are arguments, as are the check's parameters `prm` (its check item names the scheme and its
 tile work), and the relation `rel` is the statement the service proves of each unit, whatever it is. An instance fixes
-them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
+them: `H1CheckedCreditMonitoringPeriod` is H1's tile unit on the torch loop (below).
 
 * `Accepts`: the check accepts the window.
 * `Executions`, `Executions.AcceptedUpTo`, `Executions.prefixLen`, `checkedLive`: each window's registration and the
@@ -33,13 +33,13 @@ them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
   soundness against the check: a window is accepted with a published unit whose opening fails its relation with
   probability at most `δ_ks`.
 * `RegisteredBeforeDraw`: each window's registration is fixed before the window's sampling coin.
-* `CheckedWorkPeriod`, `CheckedCreditPeriod`: `CircuitWorkMonitoringPeriod`'s and `CircuitCreditMonitoringPeriod`'s conclusions at the
+* `CheckedWorkMonitoringPeriod`, `CheckedCreditMonitoringPeriod`: `CircuitWorkMonitoringPeriod`'s and `CircuitCreditMonitoringPeriod`'s conclusions at the
   check's accepted prefix, under their premises at `checkedRun`, with `JointSound` replaced by `SampleIsCoin` and
   `ServiceSound`, and with `RegisteredBeforeDraw`.
-* `SaltIsLiveCoin`, `StagedPins`, `stagedAt`, `flatAtCoin`, `H1CheckedCreditPeriod`: H1's instance. Each window's salt
+* `SaltIsLiveCoin`, `StagedPins`, `stagedAt`, `flatAtCoin`, `H1CheckedCreditMonitoringPeriod`: H1's instance. Each window's salt
   is its round's live coin; the staged statement the subprotocol proves pins the pinned flat tile at one salt; the unit's
   relation, the staged statement at the window's salt; its rightness, the flat tile's at the window's coin; and
-  `CheckedCreditPeriod` at the torch loop's counts with those two in place of `Pins`.
+  `CheckedCreditMonitoringPeriod` at the torch loop's counts with those two in place of `Pins`.
 
 *What the check discharges.* The accepted prefix (`Outcomes.Credited`, `prefixLen`) and the credited words are the
 check's, defined from `protocol.check` and nothing else. `JointSound` at the checked run is about the model's sampled
@@ -85,7 +85,7 @@ check doesn't discharge it:
 refusing the whole period on any refused window. A loop credited through it takes these statements with `Accepts` at
 `Credit.window`'s verdict; a period it credits is one whose windows are all accepted, `Executions.prefixLen = n`.
 
-*H1's tile unit on the torch loop* (`H1CheckedCreditPeriod`, PoUW's subprotocol of the period above). The loop's W8A8
+*H1's tile unit on the torch loop* (`H1CheckedCreditMonitoringPeriod`, PoUW's subprotocol of the period above). The loop's W8A8
 two-layer MLP at `H = 128` serves 4 requests × 2 decode steps a window, and each linear's `K = 128` is two pinned H1
 tiles `PouwH1Tile_v1` (`K = 64`, `R = 4`, `C = 8`, `core_check.TILES`): 2 steps × 2 linears × 16 column blocks × 2
 halves of `K` = 128 real tiles a window, in a population of `N_p = 144` (the grid's 16 fillers, of zero rows and no
@@ -126,17 +126,17 @@ What it doesn't give: any link from the H1 window to the values integrity's wind
 loop's activations rests on the loop's own assertion (`H1Loop.run`). Its credit is the H1 window's committed tiles' words;
 tying them to integrity's values is the joint statement's.
 
-The proofs are in `Proofs.Pouw.Period`: `CircuitWorkMonitoringPeriod` at `checkedRun`, `Credited` there being `AcceptedUpTo` at
-`K_d > 0`, and `JointSound` from `ServiceSound` and `SampleIsCoin` by monotonicity; H1's instance is `CheckedCreditPeriod`
+The proofs are in `Proofs.Pouw.MonitoringPeriod`: `CircuitWorkMonitoringPeriod` at `checkedRun`, `Credited` there being `AcceptedUpTo` at
+`K_d > 0`, and `JointSound` from `ServiceSound` and `SampleIsCoin` by monotonicity; H1's instance is `CheckedCreditMonitoringPeriod`
 at its numbers with `SplitRateClosed` for `SplitRate` and `Pins` from `SaltIsLiveCoin` and `StagedPins`.
-`Proofs.Pouw.Period.Accept` runs the deployed check to an accept at H1's parameters (`N_p = 144`, `K_d = 24` on every
-accepted window), and `Proofs.Pouw.Period.Honest` is a live-salt period of those windows meeting every premise of
-`H1CheckedCreditPeriod`.
+`Proofs.Pouw.MonitoringPeriod.Accept` runs the deployed check to an accept at H1's parameters (`N_p = 144`, `K_d = 24` on every
+accepted window), and `Proofs.Pouw.MonitoringPeriod.Honest` is a live-salt period of those windows meeting every premise of
+`H1CheckedCreditMonitoringPeriod`.
 -/
 
 @[expose] public section
 
-namespace Properties.Pouw.Period
+namespace Properties.Pouw.MonitoringPeriod
 
 open PouwCheck
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
@@ -248,7 +248,7 @@ against the check (`ServiceSound`), with each registration fixed before its wind
 the check's first refusal (`Executions.prefixLen`, `j` of them), all but `(d_F + d₀)·N_w` of their live words
 (`checkedLive`) fixed right and all but `d₀·N_w` folded, with `a·d_F + b·d₀ < Λ·ln(1/δ_s) + j·min(a, b)·D₀`
 (`LiveWorkAt` at `rOfPrefix`), except with probability `δ_s + n·(δ_bind + δ_ks)`. -/
-def CheckedWorkPeriod : Prop :=
+def CheckedWorkMonitoringPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (_hKd : 0 < Kd) (prm : Params)
@@ -279,11 +279,11 @@ def CheckedWorkPeriod : Prop :=
         (rOfPrefix Sc Cd Np (ws.prefixLen prm x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
       δs + n * (δbind + δks)
 
-/-- **(L)'s credit in live words over the windows the deployed check accepts**: `CheckedWorkPeriod`'s premises at
+/-- **(L)'s credit in live words over the windows the deployed check accepts**: `CheckedWorkMonitoringPeriod`'s premises at
 `a, b > 0` give, except with probability `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words at least
 `(1 − ε(j))₊` of the live words of the windows before the check's first refusal (`creditPrefix` at `Executions.prefixLen`
 and `checkedLive`), `CircuitCreditMonitoringPeriod`'s conclusion at the check's prefix. -/
-def CheckedCreditPeriod : Prop :=
+def CheckedCreditMonitoringPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (_hKd : 0 < Kd) (prm : Params)
@@ -347,7 +347,7 @@ def flatAtCoin {C B V : Type} {m n Np : ℕ} (hm : 0 < m) (enc : C → ByteArray
   fun x w => flat (enc (coinAt (coinAt x w).1 ⟨0, hm⟩))
 
 /-- **(L)'s credit over the windows the deployed check accepts, at H1's tile unit on the torch loop.**
-`CheckedCreditPeriod` at the torch loop's window (module docstring): one round a window (`Cd.rounds = 1`,
+`CheckedCreditMonitoringPeriod` at the torch loop's window (module docstring): one round a window (`Cd.rounds = 1`,
 `w_max = 1`, every tile's noise reads the window's one salt), a population of `N_p = 144` of which `K_d = 24` are
 sampled, every tile's share of the words at most `1/128` (`ρ = 8/9`: 128 equal real tiles, the 16 fillers wordless),
 H1's lucks `p = 7/8`, `p0 = ½`, the word line `a = b = 1` and `SplitRateClosed`'s rate `Λ = 67/8`. The unit's relation
@@ -357,7 +357,7 @@ tile's at the window's coin (`flatAtCoin`); `Pins` is replaced by the window's s
 its window's sampling coin (`RegisteredBeforeDraw`). Then, except with probability
 `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the
 windows before the check's first refusal, `ε(j) = (67/8)·ln(1/δ_s)·N_w/N_live` (`creditPrefix`). -/
-def H1CheckedCreditPeriod : Prop :=
+def H1CheckedCreditMonitoringPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
     (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (hK : 24 ≤ 144) (prm : Params)
@@ -389,4 +389,4 @@ def H1CheckedCreditPeriod : Prop :=
       creditPrefix Sc Cd 144 (ws.prefixLen prm x) (checkedLive Sc Cd Wp prm ws x) 1 1 (67 / 8) δs) ≤
         δs + n * (δbind + δks)
 
-end Properties.Pouw.Period
+end Properties.Pouw.MonitoringPeriod

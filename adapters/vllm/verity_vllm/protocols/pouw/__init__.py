@@ -176,7 +176,7 @@ class Settings:
     coins: Any = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    #: ``ncp-v2``'s replay: the execution phase's work-law budget K, each call sampling its share (`plan.window_laws`); None is
+    #: ``ncp-v2``'s replay: the execution phase's work sampling design's budget K, each call sampling its share (`plan.window_sampling_designs`); None is
     #: `RECORD_K`
     draws: int | None = None
     #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first

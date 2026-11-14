@@ -22,7 +22,8 @@ its openings coin at W + t, and the append coins in the order sampled). Each eve
 * `close(t)`: the window's samples, once its roots are final (the next window's first root, `D_t` passed, or a paced
   window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
 * `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the samples); rejected `malformed` on a window with
-  no samples, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any window.
+  no samples, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any
+  window.
 
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.

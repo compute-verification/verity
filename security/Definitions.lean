@@ -75,7 +75,7 @@ public import Definitions.Slowdown.Guarantees.Fit
 public import Definitions.Slowdown.Guarantees.FitRate
 public import Definitions.Slowdown.Guarantees.Slowdown
 public import Definitions.Slowdown.Guarantees.Remote
-public import Definitions.Slowdown.Guarantees.RemotePeriod
+public import Definitions.Slowdown.Guarantees.RemoteMonitoringPeriod
 public import Definitions.Slowdown.Assumptions.Capability
 public import Definitions.Slowdown.Guarantees.Capability
 public import Definitions.Slowdown.Guarantees.Coverage

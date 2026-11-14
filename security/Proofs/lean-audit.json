@@ -7,7 +7,7 @@
   "Proofs.InferenceOnly",
   "Proofs.Pous",
   "Proofs.Pouw",
-  "Proofs.Pouw.PeriodJ10R.Binding",
+  "Proofs.Pouw.MonitoringPeriodJ10R.Binding",
   "Proofs.Certifier",
   "Proofs.Flock",
   "Proofs.Hash",

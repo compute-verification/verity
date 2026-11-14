@@ -14,8 +14,8 @@ openings `g` windows at a time (`audit.Params.groups_per_coin`, `Poub.Shared.run
 `verify` checks them against its own record. Where `Coins` indexes by window `t`'s coin `W + t`, these index by
 sample `c`'s, `W + c`.
 
-* `SampleIsSubset` (`Shared.close`, the sample): the sample's values are the sampler's `min(s, U)`-subset of `[0, U)`, `U`
-  the sample's receipts, each mapped to the receipt with that number, and each window of the sample holds its share.
+* `SampleIsSubset` (`Shared.close`, the sample): the sample's values are the sampler's `min(s, U)`-subset of `[0, U)`,
+  `U` the sample's receipts, each mapped to the receipt with that number, and each window of the sample holds its share.
 * `AcceptSamplesOpenable` (`Refused`, per sample): the sample's values are the sampler's, and once each window's check of its
   share accepts, each value is an openable receipt of the window it falls in (`receiptCount`). Like today's, which is
   on `verifyWindow` (`draws`, then `checkWindow`), it is on `draws` and `checkWindow` alone, over the records `ws` of
@@ -116,11 +116,11 @@ def AcceptSamplesOpenable : Prop :=
 def sampleRecords (g : Nat) (s : Session.State) (c : Nat) : List WindowRecord :=
   (sampleWindows g s.params.windows c).map s.record
 
-/-- **The session link**, per sample, at any `g ≥ 1` windows a sample: in a run from `State.init` that has sampled the first
-window of sample `c` (one of the session's, `c·g < W`), the sample is `draws` on the openings key of `c` and the coin
-`coins[W + c]` over the records `ws` of `c`'s windows (`sampleRecords`), `U` their receipts (`lengthsOf`); window `k` of
-it holds its share (`shareOf`, from its passes' start, `passCount`); and once window `k` is accepted, its share is
-empty (the close accepts it) or `checkWindow` of its share passes on some openings and the session's appends. -/
+/-- **The session link**, per sample, at any `g ≥ 1` windows a sample: in a run from `State.init` that has sampled the
+first window of sample `c` (one of the session's, `c·g < W`), the sample is `draws` on the openings key of `c` and the
+coin `coins[W + c]` over the records `ws` of `c`'s windows (`sampleRecords`), `U` their receipts (`lengthsOf`); window
+`k` of it holds its share (`shareOf`, from its passes' start, `passCount`); and once window `k` is accepted, its share
+is empty (the close accepts it) or `checkWindow` of its share passes on some openings and the session's appends. -/
 def RunSamplesRecords : Prop :=
   ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
@@ -138,8 +138,8 @@ def RunSamplesRecords : Prop :=
               openings = .accept)
 
 /-- **A sample's accepted windows open its values** (`RunSamplesRecords` and `AcceptSamplesOpenable` joined): in a run
-from `State.init` that has accepted every window of sample `c` (`c·g < W`), the sample's values `us` are the sampler's on
-the openings key of `c` and the coin `coins[W + c]`, `U` its windows' receipts, and each value `v` is an openable
+from `State.init` that has accepted every window of sample `c` (`c·g < W`), the sample's values `us` are the sampler's
+on the openings key of `c` and the coin `coins[W + c]`, `U` its windows' receipts, and each value `v` is an openable
 receipt, on the session's appends, of the window `k` it falls in, its number there `v − receiptCount (ws.take k)`. -/
 def AcceptedSamplesOpenable : Prop :=
   ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
@@ -176,9 +176,9 @@ def RecordKeptAfterSample : Prop :=
       sampledOf s' t = some d ∧ s'.record t = s.record t ∧
         ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
 
-/-- **The release order**, per sample (the deployment's, which the code cannot give): `D` gives the events a session sees
-on its coins, and sample `c`'s openings coin reaches none of them before the one that samples it. While the first `k`
-events leave sample `c`'s first window unsampled, the next is the same on coins that agree below `W + c`. -/
+/-- **The release order**, per sample (the deployment's, which the code cannot give): `D` gives the events a session
+sees on its coins, and sample `c`'s openings coin reaches none of them before the one that samples it. While the first
+`k` events leave sample `c`'s first window unsampled, the next is the same on coins that agree below `W + c`. -/
 def ReleaseOrder (g : Nat) (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (D : Array ByteArray → Array Session.Event) : Prop :=
   ∀ (coins coins' : Array ByteArray) (c k : Nat) (rs : Array Session.Result) (s : Session.State),
@@ -187,8 +187,8 @@ def ReleaseOrder (g : Nat) (params : Session.Params) (reg : Registration) (appen
     sampledOf s (c * g) = none → (D coins')[k]? = (D coins)[k]?
 
 /-- **`Live`, as the code states it**, per sample, on the events `D` a session sees on its coins: two sessions on coins
-that agree below `W + c`, each run to a point where window `t` of sample `c` is sampled, see the same record of it and the
-same openable receipts. -/
+that agree below `W + c`, each run to a point where window `t` of sample `c` is sampled, see the same record of it and
+the same openable receipts. -/
 def LiveUnder (g : Nat) (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (D : Array ByteArray → Array Session.Event) : Prop :=
   ∀ (coins coins' : Array ByteArray) (c k k' : Nat) (rs rs' : Array Session.Result) (s s' : Session.State),

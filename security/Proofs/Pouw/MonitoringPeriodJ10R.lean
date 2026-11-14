@@ -1,16 +1,16 @@
 module
 
-public import Properties.Pouw.PeriodJ10R
+public import Properties.Pouw.MonitoringPeriodJ10R
 public import Proofs.Compose.ComposeMonitoringPeriod
 public import Proofs.Compose.Compose.SplitRateClosed
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Accounting.Lemmas.Compose
 
 /-!
-# Proof of `H1J10RCheckedCreditPeriod`
+# Proof of `H1J10RCheckedCreditMonitoringPeriod`
 
-`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, as `Proofs.Pouw.Period` proves
-`CheckedCreditPeriod`: a window is credited exactly when it and every earlier one are accepted by `Credit.window`
+`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, as `Proofs.Pouw.MonitoringPeriod` proves
+`CheckedCreditMonitoringPeriod`: a window is credited exactly when it and every earlier one are accepted by `Credit.window`
 (`credited_iff`, at `k s_T > 0`), so the run's accepted prefix and live words are `Credit.window`'s (`prefixLen_eq`,
 `creditedLive_eq`), and `JointSound` at `tileLayer` follows from `TileSampleIsCoin` and `TileServiceSound` by
 monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks (`rate_j10r`: its first term,
@@ -20,9 +20,9 @@ monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks 
 
 @[expose] public section
 
-namespace Properties.Pouw.PeriodJ10R.SecurityProofs
+namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
 
-open Properties.Pouw.PeriodJ10R
+open Properties.Pouw.MonitoringPeriodJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-- **A window is credited under `Credit.window` exactly when it and every earlier one are accepted**, at
@@ -110,7 +110,7 @@ window's salt, is its rightness, the same at the window's round-0 coin, because 
 theorem pins_j10r {C B V : Type} {m n Np : ℕ} (hm : 0 < m) {salt : Paths (Paths C m × B) n → Fin n → ByteArray}
     {enc : C → ByteArray} {place : Paths (Paths C m × B) n → Fin n → Fin Np → Place}
     {tile : Noise → List (List ℕ) → Fin Np → (ℕ → V) → Prop}
-    (hs : Properties.Pouw.Period.SaltIsLiveCoin hm salt enc) :
+    (hs : Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin hm salt enc) :
     ∀ x w j v, pinnedAt salt place tile x w j v → j10rAtCoin hm enc place tile x w j v := by
   intro x w j v h
   unfold pinnedAt at h
@@ -118,9 +118,9 @@ theorem pins_j10r {C B V : Type} {m n Np : ℕ} (hm : 0 < m) {salt : Paths (Path
   rw [← hs x w]
   exact h
 
-/-- **`H1J10RCheckedCreditPeriod`**: `CircuitCreditMonitoringPeriod` at `tileRun`, its accepted prefix and live words
+/-- **`H1J10RCheckedCreditMonitoringPeriod`**: `CircuitCreditMonitoringPeriod` at `tileRun`, its accepted prefix and live words
 `Credit.window`'s, at `rate_j10r`'s rate and `pins_j10r`'s pins. -/
-theorem h1J10RCheckedCreditPeriod : H1J10RCheckedCreditPeriod := by
+theorem h1J10RCheckedCreditMonitoringPeriod : H1J10RCheckedCreditMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr _hM hKd ws opened enc place tile
     Wp Pl folded ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved _hReg hDraw hServ hSalt hLucks hUF
   obtain ⟨hMu, hRB, hGs⟩ := hLucks
@@ -185,4 +185,4 @@ theorem j10rBlocks_eq (M k R C I J : ℕ) :
   simp only [PouwCheck.Credit.j10rBlocks, J10R.unitBlocks, J10R.NoiseLayout.row, J10R.NoiseLayout.col, J10R.rb, J10R.cb,
     J10R.rowBits, J10R.colBits, nDigits_eq]
 
-end Properties.Pouw.PeriodJ10R.SecurityProofs
+end Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs

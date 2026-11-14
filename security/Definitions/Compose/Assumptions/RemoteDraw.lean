@@ -58,9 +58,9 @@ verifier's opening sample (`Accounting.Remote.Draw`), each a named `Prop` on a s
 * `Counted`: the trace's wrong receipts are among the windows': each credited pass's wrong registered blocks are wrong
   receipts of the window it ran in.
 
-The sample is the deployed one, not a premise: each window's openings are `Key.subset` on the first blocks its coin gives
-(`Run.opened`), the sampler exact on each sample's first block and the rest free. The openings coins are uniform and
-independent of the other coins, as the challenger flips them (the trace's uniform measure on `DrawCoins`).
+The sample is the deployed one, not a premise: each window's openings are `Key.subset` on the first blocks its coin
+gives (`Run.opened`), the sampler exact on each sample's first block and the rest free. The openings coins are uniform
+and independent of the other coins, as the challenger flips them (the trace's uniform measure on `DrawCoins`).
 -/
 
 @[expose] public section

@@ -1173,7 +1173,7 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
 
 
 @pytest.mark.slow
-def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
+def test_verify_run_accepts_an_honest_pass_as_the_work_sampling_design_does(honest_pass):
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
     got = VR.verify(path, 3, 1, "test", source, coins=published(path))

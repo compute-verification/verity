@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.TS.J10R
-public import Properties.Pouw.Period
+public import Properties.Pouw.MonitoringPeriod
 public import PouwCheck.Credit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A period's credit over the windows served H1's verdict credits (`PouwCheck.Credit.executionPhase`), J10-R
 
-`Properties.Pouw.Period.CheckedCreditPeriod` with served H1's verdict on a window, `Credit.executionPhase`, in place of
+`Properties.Pouw.MonitoringPeriod.CheckedCreditMonitoringPeriod` with served H1's verdict on a window, `Credit.executionPhase`, in place of
 `protocol.check`, and with the tiles' sample the sampling block's stratified sample: the window's units are one subcircuit
 of the sampling block, their stratum `s_T` of the block's assignment `σ`, and its `k s_T` units are sampled uniformly
 inside it, independently of the other strata (`FlockSoundness.Audit.SamplingDesign.stratified σ k hk`,
@@ -49,7 +49,7 @@ sample size is the block's `k s_T`, read from the block's sample, not chosen her
   the sampling design is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
   order; and the tile stratum's coordinate of the block's sample at a permutation of the stratum, the units of its first
   `k s_T` images.
-* `TileStratumAcceptProb`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
+* `TileStratumAcceptProb`, proved (`Proofs.Pouw.MonitoringPeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
   a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
   which is how `SamplingDesign.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.SamplingDesign.stratified_proj_escape`,
   the per-stratum projection of the joint sample; `tileStratumAcceptProb_eq_proj` joins the two). So the period's tile coin
@@ -60,26 +60,26 @@ sample size is the block's `k s_T`, read from the block's sample, not chosen her
   window's inputs as functions of the period's coins; and the units its sample demands proofs of, as `executionPhaseLayout`
   samples them (`Credit.descriptorDrawn`: `Credit.executionPhaseDrawn` at the descriptor's strata and the sampling coin).
 * `CreditExecutionPhases.AcceptedUpTo`, `CreditExecutionPhases.prefixLen`, `creditLive`: the prefix before the first refused window
-  and its live words, as `Properties.Pouw.Period`'s with `Credit.executionPhase`'s verdict.
+  and its live words, as `Properties.Pouw.MonitoringPeriod`'s with `Credit.executionPhase`'s verdict.
 * `tileRun`, `tileLayer`: the period's proofs with `Credit.executionPhase`'s verdict as every sampled tile's (`Credit.executionPhase`
   gives no partial credit: `proved` holds every sampled proof block to one accepted outcome), the `i`-th sampled tile's opening
   the service's at its window unit (`unitOf` of the tile stratum's unit).
 * `TileSampleIsCoin`, `TileServiceSound`: on every accepted window, `creditDrawn` gives the units of the tile coordinate at
   the window's sampling coin, `k s_T` of them; the service's soundness against `Credit.executionPhase`.
-* `RegisteredBeforeDraw`: each window's commitment fixed before its sampling coin, `Properties.Pouw.Period`'s form at
+* `RegisteredBeforeDraw`: each window's commitment fixed before its sampling coin, `Properties.Pouw.MonitoringPeriod`'s form at
   `PreDraw`. It keeps the window's round coins, so it doesn't order the anchors before the salt (its docstring).
 * `saltOf`, `Place`, `pinnedAt`, `j10rAtCoin`, `SharedNoiseLucks`, `j10rRate`: each window's salt as
   `Credit.executionPhase` reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and
   tile coordinates, its call's roots) and the noise and fold keys J10-R derives there; the unit's relation, its one
   description (`j10r_reference`'s at its place under the window's salt), and its rightness (the same at the window's
   coin); the three lucks at J10-R's shared noise, one claim; the rate `SplitRateClosed` gives at H1's lucks.
-* `H1J10RCheckedCreditPeriod`: `CheckedCreditPeriod`'s conclusion at `Credit.executionPhase`'s accepted prefix over the tile
+* `H1J10RCheckedCreditMonitoringPeriod`: `CheckedCreditMonitoringPeriod`'s conclusion at `Credit.executionPhase`'s accepted prefix over the tile
   stratum, at H1's lucks and J10-R's unit, under its premises with `SampleIsCoin` and `ServiceSound` replaced by
   `TileSampleIsCoin` and `TileServiceSound`, `StagedPins` gone (one description, `pinnedAt`) and the lucks as
   `SharedNoiseLucks`. It states no parametric version:
-  `CheckedCreditPeriod`'s premises are `CircuitCreditMonitoringPeriod`'s, which its proof applies at `tileRun` directly.
+  `CheckedCreditMonitoringPeriod`'s premises are `CircuitCreditMonitoringPeriod`'s, which its proof applies at `tileRun` directly.
 
-*What differs from `H1CheckedCreditPeriod`.* The verdict is `Credit.executionPhase` (served H1's, 18 JSON inputs), not
+*What differs from `H1CheckedCreditMonitoringPeriod`.* The verdict is `Credit.executionPhase` (served H1's, 18 JSON inputs), not
 `protocol.check`. The sample is the tile stratum of the sampling block's stratified sample, with `N_p` and `K_d` its size
 and `k s_T`, not a `subset:K′` of a fixed population of 144. The unit's noise is J10-R's (`Accounting.TS.J10R`): a
 call's one seed `seed_c` (`callSeed`, of the salt, the call's first unit and its registered roots root(`a/<K>@<s>`)
@@ -119,24 +119,24 @@ and 65,536 (down); such a unit is past Flock's `2^27` until `h1zy` has J10-R lan
   reading of the model's uniform permutation as the sample is exact only when the sample's stream is the live coin's own
   bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle,
   a named assumption, which this statement then uses.
-* `RegisteredBeforeDraw`, `SaltIsLiveCoin`: as in `H1CheckedCreditPeriod`.
+* `RegisteredBeforeDraw`, `SaltIsLiveCoin`: as in `H1CheckedCreditMonitoringPeriod`.
 * `TileServiceSound`: a fact to prove, Flock's soundness at each sampled proof block under live coins.
 * `SharedNoiseLucks`: a claim (above). The unit's place (`place`) is a parameter: no Lean function exports the verifier's derivation of a
 unit's call and blocks (`Credit.registeredFile`'s `j10r`).
 * `UnitFixed` (`Accounting.Assumptions.TS`), a named premise, not a code fact: it bounds the play's `fixed` and `folded`
   words, which `Play` leaves abstract (no definition from the committed values until the adaptive model), so no code
-  can prove it. `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` shows it, and every other premise, satisfiable.
+  can prove it. `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s `j10r_meets` shows it, and every other premise, satisfiable.
 
-The proofs are in `Proofs.Pouw.PeriodJ10R`, as `Proofs.Pouw.Period`'s: `CircuitCreditMonitoringPeriod` at `tileRun`. Its two
-lemmas: the honest one, `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` (an honest period meets every premise, given
+The proofs are in `Proofs.Pouw.MonitoringPeriodJ10R`, as `Proofs.Pouw.MonitoringPeriod`'s: `CircuitCreditMonitoringPeriod` at `tileRun`. Its two
+lemmas: the honest one, `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s `j10r_meets` (an honest period meets every premise, given
 three facts of `Credit.executionPhase` on honest windows that its compiled verifier's difftests evidence), and the nontrivial
-one, `Proofs.Pouw.PeriodJ10R.Nontrivial`'s `j10r_nontrivial` (the conclusion fails at the verifier that accepts every
+one, `Proofs.Pouw.MonitoringPeriodJ10R.Nontrivial`'s `j10r_nontrivial` (the conclusion fails at the verifier that accepts every
 window, against the prover that fixes no word).
 -/
 
 @[expose] public section
 
-namespace Properties.Pouw.PeriodJ10R
+namespace Properties.Pouw.MonitoringPeriodJ10R
 
 open Lean (Json)
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
@@ -163,7 +163,7 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
 /-- **The tile coordinate at a uniform permutation is the stratum's sample**: it misses a set `B` of the sampling
 block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
 `m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.SamplingDesign.stratified_escape`. Proved:
-`SecurityProofs.tileStratumAcceptProb` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the sampling design's side is
+`SecurityProofs.tileStratumAcceptProb` (`Proofs.Pouw.MonitoringPeriodJ10R.Stratum`). Its twin on the sampling design's side is
 `SamplingDesign.stratified_proj_escape`: `SamplingDesign.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
 `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
 `SecurityProofs.tileStratumAcceptProb_eq_proj` equates the two, so the period's tile coin is the block's sample at the tile
@@ -246,7 +246,7 @@ end CreditExecutionPhases
 
 open Classical in
 /-- **The accepted prefix's live words**: the words of each window's live tiles (`ExecutionPhasePlay.liveAt`), over the windows
-before the first refusal. `Properties.Pouw.Period.checkedLive` with `Credit.executionPhase`'s prefix. -/
+before the first refusal. `Properties.Pouw.MonitoringPeriod.checkedLive` with `Credit.executionPhase`'s prefix. -/
 noncomputable def creditLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
     (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditExecutionPhases (Paths C Cd.rounds × B) n)
     (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
@@ -303,7 +303,7 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
       ∃ t : Fin (tileCount σ sT), unitOf (tileAt σ sT t) ∈ d.toList ∧
         ¬ rel x w t (opened x w (unitOf (tileAt σ sT t)))) ≤ δks
 
-/-- **Each window's commitment is fixed before its sampling coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
+/-- **Each window's commitment is fixed before its sampling coin**: `Properties.Pouw.MonitoringPeriod.RegisteredBeforeDraw` at
 `Credit.executionPhase`'s pre-draw inputs (`PreDraw`). It keeps window `w`'s round coins, the salt among them, so it carries
 the commitment before the sampling coin and not the order binding needs: H1's anchors (`x`, `sx`, the weight rows, `sw`;
 J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt) committed before the window's salt
@@ -420,9 +420,9 @@ one round a window (`Cd.rounds = 1`, `w_max = 1`: every unit's noise reads the w
 `j10r_reference`'s at the unit's place under the window's salt as `Credit.executionPhase` reads it (`pinnedAt`), which
 `TileServiceSound` is about, and its rightness `j10r_reference`'s at the noise and fold keys of its place under the
 window's coin (`j10rAtCoin`); `Pins` is replaced by the window's salt being its live coin
-(`Properties.Pouw.Period.SaltIsLiveCoin`), and the three lucks are `SharedNoiseLucks`. Then, except with probability `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at
+(`Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`), and the three lucks are `SharedNoiseLucks`. Then, except with probability `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at
 least `(1 − ε(j))₊` of the live words of the windows before the first refusal. -/
-def H1J10RCheckedCreditPeriod : Prop :=
+def H1J10RCheckedCreditMonitoringPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n)
@@ -448,7 +448,7 @@ def H1J10RCheckedCreditPeriod : Prop :=
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
     RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
-    Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile))
       (monitoringPeriodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
@@ -458,4 +458,4 @@ def H1J10RCheckedCreditPeriod : Prop :=
       creditPrefix Sc Cd (tileCount σ sT) (ws.prefixLen x) (creditLive Sc Cd Wp ws x) 1 1 (j10rRate (k sT) ρ) δs) ≤
         δs + n * (δbind + δks)
 
-end Properties.Pouw.PeriodJ10R
+end Properties.Pouw.MonitoringPeriodJ10R

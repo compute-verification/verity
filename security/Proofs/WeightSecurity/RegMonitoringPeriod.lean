@@ -11,7 +11,7 @@ import Proofs.Flock.SamplingGeneric.Reg
 /-!
 # A period of one-stage windows at the committed traces, proved
 
-`PeriodReg` is `period_undetected` at `oneRegRec`. Each record reads only the strategy its window is played with, so
+`MonitoringPeriodReg` is `period_undetected` at `oneRegRec`. Each record reads only the strategy its window is played with, so
 both of a window's bounds hold at every strategy: `hacc` is `Compiled.KSReg`'s first conjunct at the statement and
 prover it sends, and `hstage` is the contract's sample (`Compiled.Sessions.draws`) at the committed incorrect set,
 which the statement and prover fix before the run's coins.
@@ -20,10 +20,10 @@ which the statement and prover fix before the run's coins.
   probability at most `ε_reg` at the statement and prover it sends, and never out of scope.
 * `oneRegRec_missed_le`: its sample misses the committed incorrect set with probability at most `x^n`, `n` the count
   its strategy fixes.
-* `periodReg_of`: `PeriodReg` from each window's `KSReg` and contract, at designs that miss each set `B` with
+* `monitoringPeriodReg_of`: `MonitoringPeriodReg` from each window's `KSReg` and contract, at designs that miss each set `B` with
   probability at most `x^{|B|}`.
-* `compilerPeriodReg_of`: `CompilerPeriodReg` from `CompilerKSReg`. So **`CompilerPeriodReg` is proved**
-  (`compilerPeriodReg`), at `compilerKSReg`.
+* `compilerMonitoringPeriodReg_of`: `CompilerMonitoringPeriodReg` from `CompilerKSReg`. So **`CompilerMonitoringPeriodReg` is proved**
+  (`compilerMonitoringPeriodReg`), at `compilerKSReg`.
 -/
 
 @[expose] public section
@@ -102,12 +102,12 @@ theorem oneRegRec_missed_le (H : Msg → Msg) (L : Compiled Coin A) (hS : L.Sess
 
 /-- **The period at the committed traces, from each window's committed form and contract**: when every window's
 verifier meets `Compiled.KSReg` and the contract, and every statement in its scope has a sampling design that misses
-each set `B` of proof blocks with probability at most `x^{|B|}`, `PeriodReg` holds. -/
-theorem periodReg_of (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) {x : ℝ} (hx0 : 0 ≤ x) (hx1 : x ≤ 1)
+each set `B` of proof blocks with probability at most `x^{|B|}`, `MonitoringPeriodReg` holds. -/
+theorem monitoringPeriodReg_of (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) {x : ℝ} (hx0 : 0 ≤ x) (hx1 : x ≤ 1)
     (hks : ∀ t, (Lv t).KSReg H) (hS : ∀ t, (Lv t).Sessions H)
     (hpa : ∀ t y s P, (Lv t).parse y = some s → (Lv t).partition s = some P → InScope P s →
       ∀ B ⊆ Finset.range P.blocks.length, s.design.Pa P B ≤ x ^ B.card) :
-    PeriodReg (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv x := by
+    MonitoringPeriodReg (O := O) (V := V) (Tick := Tick) (Adv := Adv) H Lv x := by
   intro T ε s herr M
   have h := period_undetected (fun t => oneGame (Lv t) ((O → V) × Tick × Adv))
     (fun t τ => oneRegRec H (Lv t) (oneRegCount H (Lv t) τ.2.1.1 τ.2.1.2))
@@ -122,14 +122,14 @@ theorem periodReg_of (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) {x : ℝ} 
   rw [← ENNReal.ofReal_pow hx0] at h
   exact h
 
-/-- **The period bound from the committed form**: `CompilerKSReg` gives `CompilerPeriodReg`, with each window's miss
+/-- **The period bound from the committed form**: `CompilerKSReg` gives `CompilerMonitoringPeriodReg`, with each window's miss
 from its sampling design and its refusal of what is out of scope, both from its contract (`Compiled.Sessions`). -/
-theorem compilerPeriodReg_of (hks : CompilerKSReg) : CompilerPeriodReg := by
+theorem compilerMonitoringPeriodReg_of (hks : CompilerKSReg) : CompilerMonitoringPeriodReg := by
   intro Coin _ _ _ A O V Tick Adv H Lv x hA hS hx0 hx1 hpa
-  exact periodReg_of H Lv hx0 hx1 (fun t => hks Coin A (Lv t) H hA (hS t).1 (hS t).2) (fun t => (hS t).2) hpa
+  exact monitoringPeriodReg_of H Lv hx0 hx1 (fun t => hks Coin A (Lv t) H hA (hS t).1 (hS t).2) (fun t => (hS t).2) hpa
 
-/-- **The period bound at the committed traces**: `compilerPeriodReg_of` at `compilerKSReg`. -/
-theorem compilerPeriodReg : CompilerPeriodReg :=
-  compilerPeriodReg_of compilerKSReg
+/-- **The period bound at the committed traces**: `compilerMonitoringPeriodReg_of` at `compilerKSReg`. -/
+theorem compilerMonitoringPeriodReg : CompilerMonitoringPeriodReg :=
+  compilerMonitoringPeriodReg_of compilerKSReg
 
 end WeightSecurity.SecurityProofs

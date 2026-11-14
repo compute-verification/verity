@@ -143,7 +143,7 @@ theorem sampleMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Fin
 
 end JointAuditV5
 
-namespace JointPeriodV5
+namespace JointMonitoringPeriodV5
 
 variable {W : ℕ → JointAuditV5}
 
@@ -169,7 +169,7 @@ theorem within_of_le {δ : ℝ} (ands bits : (t : ℕ) → Fin (W t).nJ → ℕ)
     (hl : ENNReal.ofReal δ ≤ (l.map AuditRecV5.pa).prod) : Within W δ ands bits l :=
   ⟨hl, harm_le_maxHarm ands hl, harm_le_maxHarm bits hl⟩
 
-end JointPeriodV5
+end JointMonitoringPeriodV5
 
 end Flock.Guarantees
 
@@ -238,20 +238,20 @@ theorem JointPooledV5 : Flock.Guarantees.JointPooledV5 := by
     AuditRecV5.pa (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨ENNReal.ofReal ((W t).pa ((W t).incorrectSet τ)), ENNReal.ofReal_ne_top, fun _ => rfl,
       (W t).sampleMiss_le (hA3 t hτ.1) ((W t).incorrectSet τ) τ⟩) T 0 s (ENNReal.ofReal δ) hs
-  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ JointPeriodV5.Within W δ ands bits l) (JointPeriodV5.run W T s)
+  calc value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ JointMonitoringPeriodV5.Within W δ ands bits l) (JointMonitoringPeriodV5.run W T s)
       ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨
           ((∀ r ∈ l, ¬ r.sampledWrong) ∧ (l.map AuditRecV5.pa).prod < ENNReal.ofReal δ))
-          (JointPeriodV5.run W T s) := by
+          (JointMonitoringPeriodV5.run W T s) := by
         refine value_mono (fun l hl => ?_) _
         by_cases hd : ∃ r ∈ l, r.sampledWrong
         · obtain ⟨r, hr, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hl.1 r hr, hdr⟩
         · refine Or.inr ⟨fun r hr hdr => hd ⟨r, hr, hdr⟩, ?_⟩
           by_contra hlt
-          exact hl.2 (JointPeriodV5.within_of_le ands bits (not_lt.1 hlt))
-    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (JointPeriodV5.run W T s) +
+          exact hl.2 (JointMonitoringPeriodV5.within_of_le ands bits (not_lt.1 hlt))
+    _ ≤ value (fun l => ∃ r ∈ l, r.accepted ∧ r.sampledWrong) (JointMonitoringPeriodV5.run W T s) +
           value (fun l => (∀ r ∈ l, ¬ r.sampledWrong) ∧ (l.map AuditRecV5.pa).prod < ENNReal.ofReal δ)
-            (JointPeriodV5.run W T s) :=
+            (JointMonitoringPeriodV5.run W T s) :=
         value_or_le _ _ _
     _ ≤ (∑ t ∈ Finset.range T, (W t).eps) + ENNReal.ofReal δ := by
         gcongr

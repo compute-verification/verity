@@ -1,10 +1,10 @@
 module
 
 public import Proofs.Compose.ComposeMonitoringPeriod.Honest
-public import Proofs.Pouw.Period
-public import Proofs.Pouw.Period.Accept
-public import Properties.Pouw.Period
-public import Properties.Pouw.Period.Witnesses
+public import Proofs.Pouw.MonitoringPeriod
+public import Proofs.Pouw.MonitoringPeriod.Accept
+public import Properties.Pouw.MonitoringPeriod
+public import Properties.Pouw.MonitoringPeriod.Witnesses
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -43,13 +43,13 @@ import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# An honest live-salt period meets `H1CheckedCreditPeriod`'s premises
+# An honest live-salt period meets `H1CheckedCreditMonitoringPeriod`'s premises
 
-The positive twin of `Properties.Pouw.Period.H1CheckedCreditPeriod`, as
+The positive twin of `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod`, as
 `Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` executionPhases at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
 parameters `Accept.h1Params`, and which meets every premise of the instance
-(`h1_meets`). The instance itself is `Properties.Pouw.Period.Witnesses`', where the witnesses' statements read it.
+(`h1_meets`). The instance itself is `Properties.Pouw.MonitoringPeriod.Witnesses`', where the witnesses' statements read it.
 
 The check takes these numbers at `h1Params`: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
 all 24 sampled tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `SampleIsCoin` and this
@@ -70,15 +70,15 @@ witness use are the deployed check's own.
   the staged and flat relations are `True` (`StagedPins`).
 
 The conclusion then speaks of the whole period: its accepted prefix is all `n` executionPhases (`prefixLen_all`) and its
-credited live words are `128·n` (`checkedLive_all`), so `h1_credit` is `H1CheckedCreditPeriod`'s bound at `128·n` live
+credited live words are `128·n` (`checkedLive_all`), so `h1_credit` is `H1CheckedCreditMonitoringPeriod`'s bound at `128·n` live
 words, not at none.
 -/
 
 @[expose] public section
 
-namespace Properties.Pouw.Period.SecurityProofs.HonestH1
+namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
-open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs Properties.Pouw.Period.SecurityProofs.Accept
+open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 open PouwCheck (Params UnitsOk Ascending)
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
@@ -298,7 +298,7 @@ theorem sum_div_le {n : ℕ} (hn : 0 < n) (f : Fin n → Fin 144 → ℝ)
 
 /-! ## Every premise -/
 
-/-- **An honest live-salt period meets every premise of `H1CheckedCreditPeriod`**, in its order, at its numbers
+/-- **An honest live-salt period meets every premise of `H1CheckedCreditMonitoringPeriod`**, in its order, at its numbers
 (`N_p = 144`, `K_d = 24`, one round, `ρ = 8/9`, `w_max = 1`, lucks `7/8` and `½`), any `δ_s > 0`,
 `δ_bind = δ_ks = 0` and 128 fixed and folded words a window; the deployed check accepts every window on every path,
 the accepted prefix is the whole period and its live words are `128·n`. -/
@@ -367,7 +367,7 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
   · exact ite_words_le _ j
   · exact ite_zero_le _ j
 
-/-- **`H1CheckedCreditPeriod`'s conclusion at the honest live-salt period**: `h1_meets` gives the instance every
+/-- **`H1CheckedCreditMonitoringPeriod`'s conclusion at the honest live-salt period**: `h1_meets` gives the instance every
 premise, so except with probability `δ_s` its fixed words are at least `(1 − ε(n))₊` of its `128·n` live words. -/
 theorem h1_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play n).accepts x ∧ n * ((play n).run x).fixed <
@@ -375,8 +375,8 @@ theorem h1_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
         (checkedLive Honest.scheme circuit (period n) prm (executionPhases n) x) 1 1 (67 / 8) δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
     hUF, -, -, -⟩ := h1_meets n hn hδs
-  exact h1CheckedCreditPeriod Honest.scheme circuit hn hN hr1 hM hK24 prm (executionPhases n) opened salt enc staged flat
+  exact h1CheckedCreditMonitoringPeriod Honest.scheme circuit hn hN hr1 hM hK24 prm (executionPhases n) opened salt enc staged flat
     (period n) (play n) (fun _ => 128) δs 0 0 hS hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hStaged hMu
     hRB hGs hUF
 
-end Properties.Pouw.Period.SecurityProofs.HonestH1
+end Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1

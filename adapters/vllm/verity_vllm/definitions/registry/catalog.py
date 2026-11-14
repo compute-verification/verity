@@ -7,12 +7,19 @@ imported its module.  A reader of Definitions beyond the registry names their pa
 """
 from __future__ import annotations
 
+from types import ModuleType
+
+from verity.circuits.defs import DefinitionTable
+
+__all__ = ["SCOPES", "load"]
+
 #: the packages `load` imports, by scope
 SCOPES = {"registry": "verity_vllm.definitions.registry", "ops": "verity.circuits.ops"}
 _LOADED: dict[str, list[str]] = {}
 
 
-def load(scope: str | tuple[str, ...] = "registry", _package=None, _errors: list[str] | None = None):
+def load(scope: str | tuple[str, ...] = "registry", _package: ModuleType | None = None,
+         _errors: list[str] | None = None) -> tuple[DefinitionTable, list[str]] | None:
     """(REGISTRY, import errors) with every module of each package `scope` names (`SCOPES`) imported, its subpackages' too, in
     `pkgutil.walk_packages` order (`quarantine`, `tests` and this module aside), each package once a process.  A module that fails
     to import is named in the errors, never read as "not registered".
