@@ -321,7 +321,7 @@ theorem honest_recorded_prefix
         simp
       simp [MemoryChallenger.Properties.Recorded.round, certifiedObserved, certifiedBlock_size hk,
         honestCoins, MemoryChallenger.CoinTree.k, hidx, certifiedBlock_digest hk, honestRound,
-        Array.range_succ]
+        MemoryChallenger.Round.elapsedNs, Array.range_succ]
 
 theorem honestChallengerRun_recorded
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt)) :
