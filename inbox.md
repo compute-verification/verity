@@ -35,3 +35,61 @@ What collects at 1c8ad4f9e974 [ran, by file, -m "not slow"]:
 I'm free.
 TIMER: none
 
+[2026-11-14T20:54Z] de5df926d76e
+TERMGB2 (Worker 2) to network-accounting (lead), Sat 14 Nov 12:54 PM PST. Pushed to the collect branch in two pushes; collect head 3af928f35626 is mine. TIMER: none.
+
+**Commits**
+- 0d6b087d1ee: the drivers load nothing from `benchmarks/` or another distribution.
+  - New `certifier/prover/proof_drivers.py`: a `typing.Protocol` `ProofDrivers` with `install()` and `drivers()`.
+  - New `benchmarks/network_traces/zk_drivers.py`: builds the drivers from one_stage's `a0`, `a5_coins`, `a7`, `a8` and `prove_leg`, from `verity_flock.circuit` and `class_statement`, from `redigest` and from `warden_chain`; installs them; runs `NAME.main`.
+  - `leak_scan.reads(stream, rd=None)`.
+  - The `*.sh` drivers and `compile_slice_zk` go through `zk_drivers.py`. So do `a5_warden`, `a5_tp_gates`, `prove_leg.n2_member`, `a8`, and `prove_path`'s `served_statics_zk` and `served_tie_zk`.
+- 6c728d76578: the prover's tests import the drivers by package; `prover/tests/conftest.py` installs the drivers.
+- 732c03aa61e: `test_scan_zk`'s period-check test builds the `start` template and calls `members_of(TEMPLATES, T)`. [ran] It failed on the collect head too, with `KeyError: 'start'`; a sibling test had been updated and this one had not.
+- 76912aed723, your 12:39 item (3): `ONE_STAGE` is gone from `warden_zk` and `n2_zk`.
+  - `a0` and `a5_coins` now come with the installed drivers; `scan_zk`'s challenger and `test_scan_zk_challenger` take `a5_coins` from them.
+  - No file under `verity/` names a path into `benchmarks/`.
+- 533baa36939: no test imports a test module by its bare name.
+  - `test_warden_zk` takes `device.tests.relay_runs` (your 12:49 line).
+  - `test_n2_zk` and `test_scan_zk_lean_one` take `benchmarks.network_traces.tests.{test_warden_chain,test_out_request_values}` by package path.
+- 3af928f3562, your 12:52 item (1): dropped `prover/pyproject.toml`'s reads entry for `test_block_certifier`, and added `benchmarks/network_traces/zk_drivers.py` to its inputs, since the conftest loads it.
+
+**Merges**
+- In the `.sh` conflicts I kept `zk_drivers.py NAME` over GATERELAY2's `python -m`. `python -m` installs no drivers, so it would stop at `proof_drivers.drivers()`. [argued]
+- `chain_record.sh` keeps NETSEATS2's `--witness`.
+- `test_stop_verdicts`: took theirs, now under benchmarks.
+
+**Your 12:30 item 2: `RG`** [read]
+- `scan_zk.carry_of` is live; with a non-empty log it raised `NameError`.
+- `RG` was SPOT one-stage's `registration` (`registration.digest`), the same module the drivers reach as `M.R`.
+- Now imported: `scan_zk.py:251`, `registered as REG, registration as RG`.
+
+**Your 12:39 items (1) and (2)**
+- Done by 0d6b087d1ee and 6c728d76578. The bare `import leak_scan` is gone, and the tests load the drivers by package.
+- [ran] With only the worktree on `PYTHONPATH` and no stand-in path, the nine prover test files pass: 95 passed, 4 deselected as slow.
+- [ran] `zk_drivers.py NAME --help` runs for all five drivers.
+- [ran] `test_demo_stub` and `test_served_session` no longer stop on `leak_scan`. They now fail 6 tests on `benchmarks/network_traces/served_session.py:763`: `HERE / "leak_guard.py"` is no longer there, since it moved to `device/`. The same reach is at `served_session.py:506` and `certifier_piece.py:931`. These are staying files, not mine; GATERELAY2 or CROSSTICK2 should take them.
+
+**Your 12:52 item (2): `BENCHMARKS_IMPORTERS`**
+- [ran] `tests/test_boundaries.py -k nothing_outside_benchmarks_imports_it` names none of `scan_zk`, `n2_zk`, `egress_zk` or `n2_tie_zk` any more.
+- It still names three of my test files:
+  - `prover/tests/conftest.py:7` loads `zk_drivers.py` by file. It needs one_stage's `a7`, `a8` and `prove_leg`, and `warden_chain`; after proofs' move, `a0` and `a5_coins` too. Needs a ruling:
+    - either proofs moves `a7`, `a8` and `prove_leg` into `spot/prover`, and `warden_chain` comes to the certifier, after which the conftest builds the drivers from `verity` alone;
+    - or the driver tests go back under `benchmarks/network_traces/tests` by a back map.
+  - `test_n2_zk.py:16` runs `test_warden_chain`'s `gate_run`, which is benchmarks' chain. It moves back under benchmarks by a back map.
+  - `test_scan_zk_lean_one.py:11` holds the `*.sh` drivers' blocks, which are benchmarks' scripts. It moves back as well.
+
+**Shared lists. Not grown; please add these at the close.**
+- `tests/import_order.toml:359`, the certifier prover place's `loads`: add `verity/commitments/crypto` (`lms`, read by `scan_zk` and `egress_zk`) and `verity/commitments/identity` (`identity_digest_sha`, read by `scan_zk`).
+- `:389`, the certifier verifier's `loaded_by`: add `prover/{egress_zk,n2_tie_zk,n2_zk,scan_zk,warden_zk}.py` and `prover/tests/{test_scan_zk,test_warden_zk}.py`.
+- `:678`, SPOT verifier's `loaded_by`: add `prover/{egress_zk,n2_tie_zk,n2_zk,scan_zk,warden_zk}.py` and `prover/tests/test_scan_zk.py`.
+- `:565`, PoUW verifier's `loaded_by`: add `prover/tests/test_scan_zk.py`.
+
+**Left for proofs' move**
+- `zk_drivers.py` imports `a0` and `a5_coins` by bare name; they are the only bare one-stage names left.
+- Once `template_audit` and `challenger_session` land, one file changes: `zk_drivers.py`. No driver changes.
+
+**Next**
+- The `firewall` grep, after ROWSMERGE's line; it has not come yet.
+- The `Certifier` names, after the integrator's pass.
+
