@@ -15,11 +15,11 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
-ROOT = Path(__file__).resolve().parents[3]
+HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
+ROOT = Path(__file__).resolve().parents[6]
 sys.path.insert(0, str(HERE))
 sys.path.append(str(ROOT))  # for benchmarks.network_traces
-from benchmarks.network_traces import block_certifier as BC  # noqa: E402
+from verity.protocols.accounting.certifier.prover import block_certifier as BC  # noqa: E402
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 (ROWS_RUN,) = ANSWERS

@@ -106,7 +106,7 @@ still, those rows' terms among it.
 
 The suite beside the runner (`tests/`) holds the result to the calculator's document and to the kit's schema. What
 the command prints without `--out`, and the calculator's numbers, are held where the calculator's tests are,
-`benchmarks/network_traces/tests/test_certifier_term.py`.
+`verity/protocols/accounting/certifier/device/tests/test_certifier_term.py`.
 
 ## The rows
 
@@ -160,7 +160,7 @@ from the signed head of an execution phase and the verdict records on a class of
   line says the schedule was not handed;
 - a class with a count of 0 owes none.
 
-`benchmarks/network_traces/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
+`verity/protocols/accounting/certifier/prover/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
 The records are in the evidence store, in the run files of the runs that carry
 `run_of_record=exfiltration-glm53-stop-verdicts`, each file one JSON object a line:
 
@@ -174,7 +174,7 @@ The records are in the evidence store, in the run files of the runs that carry
   below);
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read. Its one writer is the offline check of the network
-  certifier's run, `benchmarks/network_traces/warden_serve.py check` with `--key-sha512 HEX --session HEX` and
+  certifier's run, `verity/protocols/accounting/certifier/device/warden_serve.py check` with `--key-sha512 HEX --session HEX` and
   `--registrations FILE`. The auditor hands that check the SHA-512 of the network certifier's public key and its
   session, and the check holds the run's deployment record to them: a run made under another key or session, a
   rehearsal's own, gets no file, and that problem is the first the check lists. The file's first line says what
@@ -350,7 +350,7 @@ with none given it moves only as the least lanes that serve them do.
   - R is the most connections the schedule releases in an execution phase of T buckets: lanes · ⌈(T + ingress
     buckets − 1) / (D + 1)⌉, D being the delay. It is a bound: at some schedules no load releases as many.
   - The classes, the delay and the ingress buckets are inputs (`--classes`, `--delay`, `--ingress-buckets`), by
-    default those of the lengths rows' cost runner (`benchmarks/network_traces/connection_rows_run.py cost`): six
+    default those of the lengths rows' cost runner (`verity/protocols/accounting/certifier/device/connection_rows_run.py cost`): six
     classes and a delay of 30 buckets, which its ingress buckets equal.
   - The lanes are the input the entries read (`--lanes`). With none given the schedule is not known, so the count
     is at the least lanes whose schedule releases what a link serves in an execution phase: any schedule that

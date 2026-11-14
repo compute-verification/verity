@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
+HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 sys.path.insert(0, str(HERE / "tests"))
 from test_warden_zk import needs_lean, reads_of, statement  # noqa: E402
 

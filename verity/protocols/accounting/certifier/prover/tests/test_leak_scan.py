@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")))
 import leak_scan as LS  # noqa: E402
 
 REPS = ("s-circuit.rep0.bin", "s-circuit.rep1.bin")
