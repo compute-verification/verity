@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # N2's verdict of record from zero-knowledge proofs of its registered proof block (n2_zk.py) on a CPU machine, on
 # hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean
-# frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, as a job of 96 GB whose
+# frame, N2's network-records and SPOT's verifier built in the tree. From a clone, as a job of 96 GB whose
 # input is the run's tarball n2-run.tar.gz:
 #   env N2_MEM_GB=96 N2_RUN=n2-run.tar.gz bash benchmarks/network_traces/n2_zk.sh
 # The run: an active network certifier's directory, as its server writes it, from N2_RUN, a tarball sent with `--send`
