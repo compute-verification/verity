@@ -1,13 +1,14 @@
 """Pearl-C4's reference replay on real activations (CPU; a development shortcut: the protocol's check is a ZK proof,
-PouwCheck), per linear of a `pearlc_capture.py` directory: X, the linear's input rows (float32 holding BF16 exactly),
-and its weight W (the model's BF16 safetensors); or of an `fp4_v3_real.capture` npz file (X and W of each linear as
-float32 holding BF16), judged in the clear as the scheme (`verity.protocols.pouw.prover.schemes.pearl_c4`) judges a unit:
+PouwCheck), per linear of a capture directory (``manifest.json``: each linear's input file and shape, and the model's
+``snapshot``): X, the linear's input rows (float32 holding BF16 exactly), and its weight W (the snapshot's BF16
+safetensors); or of a capture npz file (X and W of each linear as float32 holding BF16), judged in the clear as
+the scheme (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`) judges a unit:
 
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);
-* the split unit's screened blocks (`dead_blocks`, 9.5ρ), and the rows D-SS's retired one-in-64 cap would have rejected;
+* the split unit's screened blocks (`dead_blocks`, 9.5ρ), and the rows D-SS's retired one-in-64 limit would have rejected;
 * on --tiles 64 x 64 grid tiles of the split unit, sampled by a seeded RNG: the verifier's forming with D-SB
-  (`PearlC4._side`) and the replayed debit of the tile's credited words against the cap (`tile_cap`), item by item.
+  (`PearlC4._side`) and the replayed inert work of the tile's credited words against its bound (`tile_cap`), item by item.
 
 Shortcuts: the split is a stand-in, not a pinned rule (the ⌊k/100⌋ channels with the largest max|x| over the captured rows
 leave the unit, ties to the lower channel; the kept ones are zero-padded to a multiple of 128); the noise is keyed by
@@ -33,11 +34,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
-from verity.protocols.pouw.prover.schemes import pearl_c_work as W
-from verity.protocols.pouw.prover.schemes import pearl_kw as P
 from verity_config.settings import of
+
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
+from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
 
 settings = of(__file__)
 TILE, ROWS_PER_TASK, ALIGN = 64, 2048, 128
@@ -61,7 +63,7 @@ def x_codes(path: Path | np.ndarray, label: str = "") -> np.ndarray:
 
 
 def npz_manifest(path: Path) -> dict:
-    """A manifest for an `fp4_v3_real.capture` npz (``layers.<i>.<linear>.x`` and ``.w``, float32 holding BF16): per
+    """A manifest for a capture npz (``layers.<i>.<linear>.x`` and ``.w``, float32 holding BF16): per
     linear ``model.layers.<i>.<linear>``, its X's shape from the member's header (nothing is loaded)."""
     def shape(z, member: str) -> list[int]:
         fmt = np.lib.format
@@ -79,7 +81,7 @@ def npz_manifest(path: Path) -> dict:
     return {"model": path.name, "npz": str(path), "inputs": inputs}
 
 
-def capture_sha256(job: "Job") -> str:
+def capture_sha256(job: Job) -> str:
     """The capture's identity: its manifest's sha256, or an npz's own (hashed once, kept in the output directory)."""
     if not job.npz:
         return sha256(job.capture / "manifest.json")
@@ -115,7 +117,7 @@ def unit_rows(codes: np.ndarray, keep: np.ndarray, k_unit: int) -> list[bytes]:
 
 
 class Job:
-    """A `pearlc_capture.py` directory, or an `fp4_v3_real.capture` npz file (X and W of each linear)."""
+    """A capture directory, or a capture npz file (X and W of each linear)."""
 
     def __init__(self, capture: Path, out: Path, seed: int):
         self.capture, self.out, self.seed = capture, out, seed
@@ -171,7 +173,7 @@ def admit(job: Job, name: str, side: str, r0: int, r1: int) -> dict:
 
 
 def tile(job: Job, name: str, t: int) -> dict:
-    """One seeded grid tile of the split unit through the verifier's forming (D-SB) and its replayed debit."""
+    """One seeded grid tile of the split unit through the verifier's forming (D-SB) and its replayed inert work."""
     x, w = job.x(name), job.w(name)
     keep, k_unit = job.keep(name)
     (m, _), n = x.shape, w.shape[0]
@@ -180,7 +182,6 @@ def tile(job: Job, name: str, t: int) -> dict:
     rows, cols = list(range(ti * TILE, (ti + 1) * TILE)), list(range(tj * TILE, (tj + 1) * TILE))
     fast = settings.PEARL_C4_F1 == "fast"
     if fast:
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
         import f1_fast
     s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None, hashing="h0")
     unit = Matmul(0, Shape(m, k_unit, n), 0)
@@ -198,8 +199,8 @@ def tile(job: Job, name: str, t: int) -> dict:
     got |= {"credited": [len(cred_a), len(cred_b)], "rejected": ""}
     if not (cred_a and cred_b):
         return got
-    debit, cap = s.tile_cap(W.UnitRecord(unit, m, len(keep)), SimpleNamespace(a=a, b=b, e_a=e_a, e_b=e_b), cred_a, cred_b)
-    return got | {"debit": s.last_debit.to_json(), "cap": str(cap), "ratio": float(debit / cap)}
+    inert, bound = s.tile_cap(W.UnitRecord(unit, m, len(keep)), SimpleNamespace(a=a, b=b, e_a=e_a, e_b=e_b), cred_a, cred_b)
+    return got | {"debit": s.last_debit.to_json(), "cap": str(bound), "ratio": float(inert / bound)}
 
 
 def run(task: tuple) -> tuple[tuple, dict]:

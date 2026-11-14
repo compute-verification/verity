@@ -10,16 +10,39 @@ import functools
 import json
 import shlex
 import threading
+from collections.abc import Iterator
 from concurrent.futures import Future
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
+from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
+from verity.protocols.proofs.spot.device.challenger import CoinError
 
-from verity.protocols.pouw.prover.circuit import h1window as HW
-from verity.protocols.spot.device.challenger import CoinError
+from tests.pipeline import predicted
+from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
+from tests.pipeline.test_serve_openai import (
+    CERTIFIER_BODY,
+    Serving,
+    records,
+    serve_concurrently,
+)
+from tests.protocols import challenger_host as CH
+from tests.protocols.test_pouw_h1 import Runner, _so
+from tests.protocols.test_pouw_h1_commit import (
+    ROWS,
+    STEPS,
+    Committer,
+    K,
+    Linear,
+    Model,
+    _ids,
+    _manifest_sites,
+    _served_commit,
+)
+from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
 from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_coins as CC
@@ -29,14 +52,6 @@ from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 from verity_vllm.protocols.pouw.h1 import served as SV
-
-from tests.pipeline import predicted
-from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving, records, serve_concurrently
-from tests.protocols import challenger_host as CH
-from tests.protocols.test_pouw_h1 import Runner, _so
-from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS, Committer, Linear, Model, _ids, _manifest_sites, _served_commit
-from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
 
 #: each window's two requests: step 0 admits both (prompt tokens, cap), step 1 decodes a row of each
 PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]})
@@ -70,11 +85,13 @@ class _Server:
         return run
 
 
+@pytest.mark.slow
 def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_that_credit_nothing(tmp_path, monkeypatch):
     """Two Commit windows, each one H1 window over the committer's steps 0 and 1: each window's A tables and input ids are
     the rows the server's Commit acquired (ROOTS1 tied, none of the Commit's own trees), under the period's one Program and
     weights' root, on the epoch's in-process coins (a fresh epoch a window), so no row is gate-passed; at each close H1's
-    hooks and its tap come off, leaving the committer as it was. A window that served no step is neither tied nor not."""
+    hooks and its tap come off, leaving the committer as it was. A window that served no step is neither tied nor not, and
+    on in-process coins is released without padding its steps (`serve_h1.UNSERVED`): no transcript, nothing gated."""
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
     described = arm.describe()
@@ -97,9 +114,59 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
         assert arm.close(w) is None
     assert salts[0] != salts[1]
     arm.open(2)
+    run = pouw.h1_run(SH.ENTRY)
     idle = arm.close(2)
-    assert (idle["tied"], idle["steps_served"], idle["gate"]["gate_passed"]["rows"]) == (None, 0, 0), "it served no step"
+    assert (idle["tied"], idle["steps_served"], idle["release"]) == (None, 0, SH.UNSERVED), "it served no step"
+    assert idle["gate"]["gate_passed"] is None and not run.closed and run.calls == []
+    assert not (tmp_path / "h1" / "w2").exists()
+    assert "_acquire" not in vars(srv.com) and "execute_model" not in vars(srv.runner)
     assert arm.summary() == {"windows": 3, "tied": 2, "untied": [], "gate_passed_rows": 0, "releasing": 0, "unused": []}
+    srv.src.uninstall()
+
+
+def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no_draw(tmp_path, monkeypatch):
+    """Async scheduling's last call before the stop only returns the last outputs, so the Commit window it opens holds no
+    step. On in-process coins that window's release pads none of its S steps and samples nothing (`serve_h1.UNSERVED`); it
+    still goes through ``closer`` behind the windows before it, so the outcomes, and the window lines that wait for
+    them, stay in window order, and the draw-gated release neither waits on it nor counts it refused."""
+    from verity_vllm.pipeline import serve_release as RL
+
+    srv, closer = _Server(monkeypatch), Later()
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), closer=closer)
+    draws = RL.Draws((SH.DRAWER, "other"))
+    arm.drawing(draws)
+    arm.open(0)
+    srv.serve(PROMPTS[0], 0)
+    pending = [arm.close(0)]
+    arm.open(1)
+    pending.append(arm.close(1))
+    assert not any(f.done() for f in pending) and arm.summary()["releasing"] == 2 and arm.outcomes == []
+    closer.run()
+    served, unserved = (f.result() for f in pending)
+    assert [o["window"] for o in arm.outcomes] == [0, 1] and arm.summary()["releasing"] == 0
+    assert served["tied"] and served["steps_served"] == STEPS and "release" not in served
+    assert (unserved["steps_served"], unserved["release"], unserved["tied"]) == (0, SH.UNSERVED, None)
+    assert "draw" not in unserved and "error" not in unserved
+    assert set(unserved["seconds"]) == {"reserve", "install", "close_on_loop", "queued", "release", "ended"}
+    assert (tmp_path / "h1" / "w0" / PH.CALLS_FILE).is_file() and not (tmp_path / "h1" / "w1").exists()
+    summary = draws.summary()
+    assert 1 not in summary["drawn_not_released"] and 1 not in summary["refused"], summary
+    srv.src.uninstall()
+
+
+def test_a_window_on_a_gate_session_that_served_no_step_still_opens_and_closes_its_session(tmp_path, monkeypatch):
+    """A window whose coins are a gate session is released in full though it served no step: its S steps padded, its
+    session opened on an empty round 0 and closed, and its end entry waited for, so the session it took doesn't leave its
+    period incomplete."""
+    srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
+    arm.open(0)
+    run = pouw.h1_run(SH.ENTRY)
+    out = arm.close(0)
+    assert "release" not in out and out["steps_served"] == 0 and out["tied"] is None and run.closed, out
+    assert out["session"]["end"] == {"opened": True, "rc": 0, "closed": True, "complete": True}, out["session"]
+    assert (tmp_path / "h1" / "w0" / PH.CALLS_FILE).is_file()
     srv.src.uninstall()
 
 
@@ -188,7 +255,7 @@ def test_with_h1_receipts_each_window_registers_the_zy_receipts_a_lanes_combine_
     opened without receipts registers none, which the combine's reader refuses. Slow: only the window Program's real tile
     unit (`h1window.tile_unit`, about half a minute to declare) has the receipt the combine reads, so the stand-in unit
     the other tests serve can't show it."""
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
 
     from tests.protocols import test_pouw_h1_receipts as TR
 
@@ -238,8 +305,9 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     import gzip
     import hashlib
 
-    from verity.protocols.pouw.verifier import credit as CR
     from verity.circuits.codec import program_digest
+    from verity.protocols.accounting.pouw.verifier import credit as CR
+
     from verity_vllm.protocols.pouw.h1 import served as SV
 
     srv = _Server(monkeypatch)
@@ -284,8 +352,12 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     the windows wrote holds the weight trees' salt key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
-    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
-                               listens=lambda port: ports.append(port) or True)
+
+    def listens(port: int) -> bool:
+        ports.append(port)
+        return True
+
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=listens)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     assert (arm.describe()["coins"], arm.describe()["peer"]) == ("challenger", PEER)
     pins, main = [CH.write_pins(tmp_path / "pins.jsonl")], list(CH.MAIN)
@@ -310,7 +382,7 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
         assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
         ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)
         mine = {sid, draw["session"]}
-        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s in mine else None) is None
+        assert PHC.session_reason(record["commitment"], ledger, lambda s, mine=mine: tmp_path / s if s in mine else None) is None
         assert run.details["challenger"] == {"closed": True}
     assert len(set(sids)) == 2 and ports == [7811] * 4
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]
@@ -440,8 +512,8 @@ def test_a_reserve_ahead_that_expires_before_its_window_is_replaced_and_none_is_
     """A session reserved ahead that expires within `MARGIN` of its window's open is left unused and the window reserves
     another; a reserve the gate answers inside a period makes none ahead, since one no window opened would leave the
     period incomplete."""
-    answers = iter([{"expires_utc": "2026-10-27T20:04:00Z", "period": None},
-                    {"expires_utc": "2026-10-27T22:00:00Z", "period": "p1"}])
+    answers: Iterator[dict[str, str | None]] = iter([{"expires_utc": "2026-10-27T20:04:00Z", "period": None},
+                                                     {"expires_utc": "2026-10-27T22:00:00Z", "period": "p1"}])
     seen: list[str] = []
     last: dict = {}
 
@@ -478,7 +550,8 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     call tables' hasher, compiles the z/y kernels, builds the Lean verifier and waits for that reserve, all before
     serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session (with
     its sampling session, reserved withheld beside it) is the one reserved at startup."""
-    from verity.protocols.pouw.verifier import verifier
+    from verity.protocols.accounting.pouw.verifier import verifier
+
     from verity_vllm.protocols.pouw.h1 import hooks as PHK
     from verity_vllm.protocols.pouw.h1 import tables_device as TD
 
@@ -495,8 +568,17 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(SH, "worker", lambda name: None)
     monkeypatch.setattr(SH, "H1Windows", functools.partial(SH.H1Windows, unit=_unit(), clock=lambda: next(ticks)))
     monkeypatch.setattr(PHK, "_ROOTS", {})
-    monkeypatch.setattr(PH, "weight_root", lambda w, rows, *key: roots.append(w) or weight_root(w, rows, *key))
-    monkeypatch.setattr(PHK, "warm_zy", lambda layers, rows: warmed.append((len(layers), rows)) or 3)
+
+    def rooted(w, rows, *key):
+        roots.append(w)
+        return weight_root(w, rows, *key)
+
+    def warm(layers, rows):
+        warmed.append((len(layers), rows))
+        return 3
+
+    monkeypatch.setattr(PH, "weight_root", rooted)
+    monkeypatch.setattr(PHK, "warm_zy", warm)
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None,
@@ -705,7 +787,9 @@ class ArmSpy:
     runner are on; ``fail`` the windows whose open raises."""
 
     def __init__(self, runner: Any, fail: tuple[int, ...] = ()) -> None:
-        self.runner, self.fail, self.seen, self.open_ = runner, fail, [], None
+        self.runner, self.fail = runner, fail
+        self.seen: list[tuple[str, int, bool]] = []
+        self.open_: int | None = None
 
     def open(self, window: int) -> None:
         self.seen.append(("open", window, "execute_model" in vars(self.runner)))
@@ -713,7 +797,7 @@ class ArmSpy:
             raise ValueError("no int8 source")
         self.open_ = window
 
-    def close(self, window: int) -> dict[str, Any] | None:
+    def close(self, window: int) -> dict[str, Any] | Future | None:
         self.seen.append(("close", window, "execute_model" in vars(self.runner)))
         got, self.open_ = ({"window": window, "tied": True} if self.open_ == window else None), None
         return got
@@ -742,6 +826,7 @@ def test_commit_windows_open_the_arm_on_the_installed_committer_and_close_it_fir
     assert spy.seen == [(e, w["window"], True) for w in wins for e in ("open", "close")]
     assert [w["pouw_h1"] for w in wins] == [{"error": "open: ValueError: no int8 source"} if w["window"] in fail
                                             else {"window": w["window"], "tied": True} for w in wins]
+    assert s.windows is not None
     got = s.windows.summary()
     assert got["passed"] and got["pouw_h1"] == {"windows": len(wins), "failed": list(fail), "closing": []}
 
@@ -775,6 +860,7 @@ def test_commit_windows_write_a_windows_line_once_its_arms_release_ends(tmp_path
     (spy,) = spies
     closed = sorted(spy.futures)
     assert len(closed) > 1 and not (tmp_path / "windows.jsonl").exists()
+    assert s.windows is not None
     held = s.windows.summary()
     assert held["pouw_h1"]["closing"] == closed and held["windows"] == 0 and not held["passed"]
     failed = closed[1]
@@ -805,48 +891,59 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
             return str(e)
         return None
 
+    def refused(*more: str) -> str:
+        said = refusal(*more)
+        assert said is not None, f"{more} was not refused"
+        return said
+
     h1 = ("--protocols", SH.ENTRY)
     assert refusal(*h1) is None
     assert refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "per-round"}})) is None
     (cfg := tmp_path / "pouw.json").write_text(json.dumps({"pouw": {"retain_steps": 2}}))
     assert refusal(*h1, "--protocols-config", str(cfg)) is None
-    assert "PoUW H1) only" in refusal("--protocols", "pouw:ncp-v2")
-    assert "--commit, --scheme rows-sha512" in refusal(*h1, "--no-commit")
+    assert "(PoUW H1, serve_h1) and pouw:pearl-c-h100-v1-h3 (Pearl+, serve_pearl) only" in refused("--protocols", "pouw:ncp-v2")
+    assert "--commit, --scheme rows-sha512" in refused(*h1, "--no-commit")
     for t in ("2050", "2016"):
         assert refusal(*h1, "--max-num-batched-tokens", t) == refusal("--max-num-batched-tokens", t), t
-        assert f"--max-num-batched-tokens a multiple of 512, not {t}" in refusal("--max-num-batched-tokens", t)
+        assert f"--max-num-batched-tokens a multiple of 512, not {t}" in refused("--max-num-batched-tokens", t)
     assert refusal(*h1, "--max-num-batched-tokens", "1536") is None
     assert "multiple of 32" in SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest",
                                                                      str(man), *h1, "--max-num-batched-tokens", "2050"], environ={}))
     assert refusal("--protocols-config", "{}") == "--protocols-config without --protocols"
-    assert "the server's own" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"rows": 64}}))
-    assert "one gate session a window" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"challenger": "h:1"}}))
+    assert "the server's own" in refused(*h1, "--protocols-config", json.dumps({"pouw": {"rows": 64}}))
+    assert "one gate session a window" in refused(*h1, "--protocols-config", json.dumps({"pouw": {"challenger": "h:1"}}))
     gate = ("--challenger-gate", GATE, "--challenger-peer", PEER)
     assert refusal(*h1, *gate) is None
-    assert "go together" in refusal(*h1, *gate[:2]) and "go together" in refusal(*h1, *gate[2:])
-    assert "needs --protocols" in refusal(*gate)
+    assert "go together" in refused(*h1, *gate[:2]) and "go together" in refused(*h1, *gate[2:])
+    assert "needs --protocols" in refused(*gate)
     for flag in (("--h1-prover", str(tmp_path / "p")), ("--h1-receipts",)):
         assert refusal(*h1, *flag) is None
-        assert "--h1-window-commit are PoUW H1's window's: they need --protocols" in refusal(*flag)
-    assert "(pouw)" in refusal(*h1, "--protocols-config", json.dumps({"pous": {}}))
-    assert "'admission' is one of" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
-    assert "--protocols-config {" in refusal(*h1, "--protocols-config", "{not json")
+        assert "--h1-window-commit are PoUW H1's window's: they need --protocols" in refused(*flag)
+    assert "(pouw)" in refused(*h1, "--protocols-config", json.dumps({"pous": {}}))
+    assert "'admission' is one of" in refused(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
+    assert "--protocols-config {" in refused(*h1, "--protocols-config", "{not json")
 
     def h1_refusal(*more: str) -> str | None:
         return SH.refusal(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man),
                                                      *more], environ={}))
+
+    def h1_refused(*more: str) -> str:
+        said = h1_refusal(*more)
+        assert said is not None, f"{more} was not refused"
+        return said
+
     device = ("--retain", "device", "--retain-device-gb", "64", "--seal", "--release-after", SH.DRAWER)
     assert h1_refusal(*h1, *device) is None
-    assert f"--release-after {SH.DRAWER} waits for PoUW H1's draw" in h1_refusal(*device)
+    assert f"--release-after {SH.DRAWER} waits for PoUW H1's draw" in h1_refused(*device)
     assert h1_refusal(*device[:-1], "other") is None, "a drawer other than H1's comes in through --draws-dir"
     tie = ("--h1-window-commit", "bash commit.sh \"$@\"")
     sealed = ("--seal", "--h1-prover", str(tmp_path / "p"))
     assert h1_refusal(*h1, *sealed, *tie) is None
-    assert "--h1-window-commit are PoUW H1's window's: they need --protocols" in h1_refusal(*sealed, *tie)
+    assert "--h1-window-commit are PoUW H1's window's: they need --protocols" in h1_refused(*sealed, *tie)
     for less in (sealed[1:], sealed[:1]):
         assert "--h1-window-commit commits the sealed window from H1's prover state: it needs --seal and --h1-prover" \
-            in h1_refusal(*h1, *less, *tie)
-    assert f"--release-after {SH.DRAWER} holds the seal until that coin's draw" in h1_refusal(*h1, *device, *sealed[1:], *tie)
+            in h1_refused(*h1, *less, *tie)
+    assert f"--release-after {SH.DRAWER} holds the seal until that coin's draw" in h1_refused(*h1, *device, *sealed[1:], *tie)
 
 
 def test_the_window_program_holds_a_tile_unit_for_each_32_rows_of_slot_and_32_columns_of_each_linear_at_each_step():

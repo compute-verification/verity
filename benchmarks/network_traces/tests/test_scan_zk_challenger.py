@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-STUB = HERE.parents[1] / "verity" / "composite" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = HERE.parents[1] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def _load():
@@ -35,15 +35,16 @@ sz = _load()
 def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_form_and_draws(tmp_path, monkeypatch):
     """The stream holds the registration's R1-R7 against its own copy of the round's Program, the generator form the
     round registers (`scan_root`, `stream_of`), so it registers and samples the round: a stratified sample of 4 with
-    each template's stratum sampled, a session for each member holding a sampled unit and only for those, a
+    each template's stratum sampled, a session for each member holding a sampled proof block and only for those, a
     registration of the generator form's digest and partition, and coins whose evidence holds against the group's root
     and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
     (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's file and its
     statement's header (the prover's and the verifier's alike, or their statement digests differ), name every port of
     its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires. The round
-    names ``prog``, the slot entries `EVERY` units each read, tied, so R8 lets it through and both verifiers'
-    registration verdict publishes ``rests_on_period_check: ["prog"]``: this round's acceptance rests on a period check
-    (`NetworkCheck.Period`'s `wired`), which refuses its stand-in block (`period_case.UNWIRED`).
+    names each lane's ``prog<j>`` (`scan_zk.lane_kinds`), the slot entries `EVERY` units each read, tied, so R8 lets
+    them through and both verifiers' registration verdict publishes them (``rests_on_period_check``): this round's
+    acceptance rests on a period check (`NetworkCheck.Period`'s `wired`), which refuses its stand-in block
+    (`period_case.UNWIRED`).
 
     Runs 4 to 10 minutes on a node, about 4 alone: the synthetic run, lowering and staging the scan's three templates,
     and the Lean verifier's checks of the stream's registration, sample and run. It catches what no cheaper test
@@ -52,8 +53,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
       challenger's stream rebuilds (the stream's own window tests use toy templates, never `scan_root`);
     - a port of a staged member left out of its registered reads, which Lean's `checkComplete` refuses, so that every
       session fails Lean's verify.
-    The test class is the smallest, the group is one link-window, and the draw is one more than the three strata: the
-    sessions are stubbed, so a smaller draw saves nothing."""
+    The test class is the smallest, the group is one link-window, and the sample is one more than the three strata: the
+    sessions are stubbed, so a smaller sample saves nothing."""
     setup, k = sz.TEST, 4
     h = sz.host(tmp_path / "warden", draw=k, setup=setup)
     at = h.at
@@ -63,7 +64,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     pg = sz.program(M, setup.cls, sz.TEMPLATES, at.G, at.T, tmp_path / sz.PROGRAMS[sz.TEMPLATES])
     members = [sz.stage(M, pg, mr, tmp_path / "honest" / f"stage-{mr.name}") for mr in h.rounds["honest"]]
 
-    A = AC._module("a5_auditor", AC.TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **kw: [sys.executable, str(STUB), *real(*a, **kw)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
@@ -78,14 +79,15 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     monkeypatch.setattr(M.a8, "session", session)
     monkeypatch.setattr(M.a0, "lean_verify", lambda *a, **kw: {"accepted": False, "why": "not proved here"})
     monkeypatch.setattr(sz.WZ, "firewall", lambda M, m: {})
-    monkeypatch.setattr(AC, "negatives", lambda ev, pre: {})
+    monkeypatch.setattr(AC, "negatives", lambda ev, pre, key, main: {})
 
     a = SimpleNamespace(challenger="local", main=str(main), gate_key=None, peer=None, challenger_key=None)
     av = SimpleNamespace(bin=None, lean=None, lease=[], gpu=False, delta=2.0 ** -20)
     with sz.challenger(a, at, tmp_path) as coins:
         res = sz.audit(M, av, at, pg, "honest", members, dict(at.trees), tmp_path / "honest", 0, k, coins)
     assert "refused" not in res["draw"], res["draw"].get("refused")
-    assert res["checks_before_draw"]["registration"] and res["rests_on_period_check"] == ["prog"], res.get("checks")
+    tied = list(sz.lane_kinds(setup.cls))
+    assert res["checks_before_draw"]["registration"] and res["rests_on_period_check"] == tied, res.get("checks")
     assert (coins.published or {}).get("error") is None, coins.published.get("error")
 
     units, bases = res["draw"]["units"], {m["name"]: (m["base"], m["n"]) for m in members}

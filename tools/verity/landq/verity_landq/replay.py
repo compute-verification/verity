@@ -15,10 +15,10 @@ on `checked` marks it as breaking.
 
 `tasks` turns a shard plan (`check.py --shard-plan --json`, each part's measured seconds) into gating tasks with the inputs
 each part is keyed on: a suite's `inputs_of`, its runner and the lock; a Lean package's files and those of the packages it
-requires; and the whole tree for a `lean-suites` part, as graph/v2 keys one.
+requires; and the whole tree for a `lean-suites` part, which graph/v2 keys on it but its Markdown.
 
 `run` replays the trace in every combination of batch size, depth and node count, with breaking PRs, infra errors and false
-fails drawn at the rates given, `--seeds` times each, and prints one row per combination beside the old path's.  The queue
+fails sampled at the rates given, `--seeds` times each, and prints one row per combination beside the old path's.  The queue
 is `research.vqueue` from a checkout (`--queue vqueue:SRC`, SRC its `tools/research/src`), driven by `snapshots.Driver`,
 whose snapshot fields `--set KEY=VALUE` sets (`--set lean=3`), and which starts the tasks `--defer TASK` names as the loop
 starts the run beside a check (`--defer slim`).
@@ -161,8 +161,8 @@ def _owned(pkg: str, pkgs: set[str]) -> list[str]:
 
 
 def tasks(plan: dict, lean_suites: str = "tree") -> list[dict]:
-    """The plan's parts as gating tasks; a `lean-suites` part keyed on the whole tree (``lean_suites="tree"``, as graph/v2
-    keys it) or on its suite's inputs (``"suite"``)."""
+    """The plan's parts as gating tasks; a `lean-suites` part keyed on the whole tree (``lean_suites="tree"``, graph/v2's
+    key but the Markdown it leaves out) or on its suite's inputs (``"suite"``)."""
     sys.path.insert(0, str(ROOT / "tools/verity/check"))
     import suites as S
     found = {s.name: s for s in S.discover()}
@@ -192,9 +192,9 @@ def tasks(plan: dict, lean_suites: str = "tree") -> list[dict]:
         elif kind == "lean-audit" and name in lean_inputs:
             inputs = lean_inputs[name]
         elif kind in ("lean-build", "lean-unit-cut", "lean-agreement"):
-            inputs = sorted({*lean_inputs.get("verity/protocols/flock/verifier", []), "verity/protocols/flock/agreement/"})
+            inputs = sorted({*lean_inputs.get("verity/protocols/proofs/flock/verifier", []), "verity/protocols/proofs/flock/prover/agreement/"})
         elif kind in ("flock-circuit-build", "flock-rust-tests"):
-            inputs = ["verity/protocols/flock/prover/"]
+            inputs = ["verity/protocols/proofs/flock/prover/"]
         else:
             raise SystemExit(f"tasks: the plan's part {part} names no suite or Lean package this tree has")
         out.append({"name": part, "inputs": inputs, "minutes": round(seconds / 60, 2), "off_pool": False})

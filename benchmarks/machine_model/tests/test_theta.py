@@ -25,7 +25,9 @@ def test_every_rate_is_sourced_and_every_figure_holds(data):
 
 
 def test_d_by_route():
-    d = lambda data, reading: {r.name: round(r.d, 2) for r in T.routes(T.theta(data), reading)}
+    def d(data, reading):
+        return {r.name: round(r.d, 2) for r in T.routes(T.theta(data), reading)}
+
     two, imad = T.ADDING[0], T.ADDING[2]
     assert d(SM90, "sheet")[two] == 32 and d(SM90, "sheet")[imad] == 64
     assert d(SM90, "measured")[two] == 32.5
@@ -98,7 +100,9 @@ def test_every_unit_has_a_verdict_and_the_bounded_ones_a_share():
 
 
 def test_sha512_against_the_public_figures():
-    by = lambda data: {(s.public.card.split(" (")[0], s.public.form): s for s in T.sha(T.theta(data))}
+    def by(data):
+        return {(s.public.card.split(" (")[0], s.public.form): s for s in T.sha(T.theta(data))}
+
     rtx, h = by(SM120), by(SM90)
     server = rtx["RTX PRO 6000 Blackwell Server Edition", "generic"]
     assert server.per_clk == pytest.approx(7.894e9 / (188 * 2.43e9)) and server.c == 1
@@ -171,7 +175,7 @@ def test_a_ceiling_is_read_from_the_card_file_and_from_nowhere_else(tmp_path):
         assert f"{c['sku']}.toml, rate.tensor: " in t.rates[T.INT8].source
         h, sha = card(data, "host"), t.rates["host.sha512"]
         assert sha.sheet == pytest.approx(h["clock"]["turbo"]["value"] * 1e9 * 8 / 1036, rel=1e-12)
-        assert sha.source.startswith(f"verity/hardware/cards/{h['sku']}.toml, clock.turbo: ")
+        assert sha.source.startswith(f"hardware/cards/{h['sku']}.toml, clock.turbo: ")
     assert card(SM120, "host")["cpu"]["priority_cores"]["value"] == 8 and "(cpu.priority_cores, 8 a socket)" in \
         T.theta(SM120).rates["host.sha512"].what
     shutil.copytree(SM90, tmp_path / "d", ignore=shutil.ignore_patterns("census", "vectors", "designs"))
@@ -187,7 +191,7 @@ def test_a_ceiling_is_read_from_the_card_file_and_from_nowhere_else(tmp_path):
     with pytest.raises(SystemExit, match="h200-sxm-141gb.toml has no entry rate.warp"):
         T.theta(tmp_path / "d")
     p.write_text(text.replace('card = "rate.issue"\n', 'card = "host:rate.amx"\n', 1))
-    assert T.theta(tmp_path / "d").rates["issue"].source.startswith("verity/hardware/cards/xeon-platinum-8468-2s.toml")
+    assert T.theta(tmp_path / "d").rates["issue"].source.startswith("hardware/cards/xeon-platinum-8468-2s.toml")
     p.write_text(text.replace('card = "rate.issue"\n', 'card = "nic:rate.issue"\n', 1))
     with pytest.raises(SystemExit, match="nic:rate.issue names no card"):
         T.theta(tmp_path / "d")

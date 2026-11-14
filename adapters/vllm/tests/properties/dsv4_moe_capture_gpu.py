@@ -3,7 +3,7 @@ f32 `e_score_correction_bias`, top-6 of 384, renormalised, x2.5), the hash route
 `tid2eid`, the CUDA kernel `dsv4HashTopkSoftplusSqrt`) and the clamped SwiGLU (`_C.silu_and_mul_with_clamp`, limit 10), against
 `registry.dsv4_moe`'s `MoeRouterSqrtSoftplus_v1{E=384,SCALE=2.5}`, `MoeRouterHash_v1{E=384,SCALE=2.5}` and `SiluMulClamp_v1{I,LIMIT=10.0}`.
 
-One GPU process writes `<out>/dsv4_moe_capture.json`, the property record `dsv4_moe_capture` (`properties.record`), and `<out>/rows.npz`:
+One GPU process writes `<out>/dsv4_moe_capture.json`, the property record `dsv4_moe_capture` (`records.property_record`), and `<out>/rows.npz`:
 every captured row's inputs and both launches' outputs.  `ok` = every check below.  The device gate runs first and nothing else runs
 when it fails (exit 3):
 
@@ -51,14 +51,23 @@ import os
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
-from verity.definitions.ops import mufu as MU
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, lg2_words, router_twin, score_words
+from verity.definitions.numerics.dsv4_moe_twin import (
+    clamp_twin,
+    hash_twin,
+    lg2_words,
+    router_twin,
+    score_words,
+)
+from verity.circuits.ops import mufu as MU
 from verity.definitions.registry import dsv4_moe as D
 from verity.definitions.registry import mla_check as MC
 
@@ -106,7 +115,7 @@ def _bias(kind: str, rng: np.random.Generator, k: int) -> tuple[np.ndarray, np.n
     bias == +0)."""
     c = None
     if kind == "zero":
-        b = np.zeros(E, U32)
+        b: np.ndarray = np.zeros(E, U32)
     elif kind == "small":
         b = _w(rng.standard_normal(E) * 10.0 ** rng.uniform(-4, 0))
     elif kind == "decisive":
@@ -223,7 +232,7 @@ def hash_rows(seed: int = 2027, n: int = 8192, e: int = E) -> dict[str, np.ndarr
     tokens = rng.permutation(n).astype(np.int32)
     table = np.zeros((n, TOPK), np.int32)
     x = _w(rng.standard_normal((n, e)) * 3.0)
-    kinds = np.arange(n) % len(HASH_KINDS)
+    kinds: np.ndarray = np.arange(n) % len(HASH_KINDS)
     for r in range(n):
         kind = HASH_KINDS[kinds[r]]
         ids = rng.choice(e, TOPK, replace=False)
@@ -261,7 +270,7 @@ def clamp_sweep(d: int) -> np.ndarray:
     """Every gate word against 16 up words and every up word against 16 gate words, as rows (k, 2d) (the last padded with +0)."""
     probe = np.array([LIMIT_BF16, LIMIT_BF16 | 0x8000, LIMIT_BF16 + 1, LIMIT_BF16 - 1, 0x3F80, 0xBF80, 0, 0x8000, 0x7FC0, 0x7F80,
                       0xFF80, 0x0001, 0x4000, 0xC120, 0x3E00, 0xC2B0], np.uint16)
-    every = np.arange(1 << 16, dtype=np.uint16)
+    every: np.ndarray = np.arange(1 << 16, dtype=np.uint16)
     g = np.concatenate([np.tile(every, len(probe)), np.repeat(probe, 1 << 16)])
     u = np.concatenate([np.repeat(probe, 1 << 16), np.tile(every, len(probe))])
     k = -(-len(g) // d)
@@ -274,7 +283,7 @@ def clamp_rows(seed: int, n: int, d: int, sweep: bool) -> dict[str, np.ndarray]:
     """n rows of 2d bf16 words, row r's gate and up halves of kind `CLAMP_KINDS[r % 5]` each (the two sampled independently), then
     `clamp_sweep(d)` when asked."""
     rng = np.random.default_rng(seed)
-    kinds = np.arange(n) % (len(CLAMP_KINDS) - 1)
+    kinds: np.ndarray = np.arange(n) % (len(CLAMP_KINDS) - 1)
     gu = np.stack([np.concatenate([_halves(CLAMP_KINDS[k], rng, d), _halves(CLAMP_KINDS[int(rng.integers(len(CLAMP_KINDS) - 1))], rng, d)])
                    for k in kinds]) if n else np.zeros((0, 2 * d), np.uint16)
     if sweep:
@@ -520,7 +529,7 @@ def capture(rows: dict[str, dict[str, np.ndarray]], reps: int = 2) -> tuple[dict
     Hr = rows["hash"]
     xd, tokd, tabd = _device(Hr["x"]), _device(Hr["tokens"].view(U32), torch.int32), _device(Hr["tid2eid"].view(U32), torch.int32)
     before = xd.clone()
-    o = [launch_hash(xd, tokd, tabd) for _ in range(reps)]
+    o: list[Any] = [launch_hash(xd, tokd, tabd) for _ in range(reps)]
     rec["hash"] = {"launches": reps, "inputs_intact": bool(torch.equal(xd.view(torch.int32), before.view(torch.int32))),
                    "deterministic": all(np.array_equal(o[0][0], r[0]) and np.array_equal(o[0][1], r[1]) for r in o[1:])}
     got["hash"] = {"w": o[0][0], "ids": o[0][1]}
@@ -547,7 +556,7 @@ def compare(rows: dict[str, dict[str, np.ndarray]], got: dict[str, dict[str, np.
     rec: dict[str, Any] = {}
     for path, P in rows.items():
         want = expect(path, P)
-        bad = np.zeros(len(next(iter(want.values()))), bool)
+        bad: np.ndarray = np.zeros(len(next(iter(want.values()))), bool)
         for k, v in want.items():
             bad |= (v != got[path][k]).any(1)
         bad = np.flatnonzero(bad)
@@ -564,8 +573,6 @@ _PROGRAMS: dict[str, Any] = {}
 
 
 def _program(path: str):
-    from verity.circuits.defs import bind
-
     if path not in _PROGRAMS:
         _PROGRAMS[path] = (bind(D.MoeRouterSqrtSoftplus, E=E, SCALE=SCALE) if path == "router" else
                            bind(D.MoeRouterHash, E=E, SCALE=SCALE) if path == "hash" else
@@ -593,8 +600,6 @@ def program_outputs(path: str, got: dict[str, np.ndarray], i: int) -> list[int]:
 
 def program_row(job: tuple[str, list[int]]) -> list[int]:
     """The Program of a path on one row's input words (the reference evaluator)."""
-    from verity.circuits.evaluation import evaluate
-
     path, words = job
     return [int(v) for v in evaluate(_program(path), words)]
 
@@ -668,7 +673,7 @@ def _verdict(doc: dict[str, Any]) -> bool:
 def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str, want_sms: int, workers: int,
         program_sample: int) -> dict[str, Any]:
     from verity_vllm.engine import engine_profile as prof
-    from verity_vllm.properties.record import seal as seal_record
+    from verity_vllm.records.property_record import seal as seal_record
 
     from tests.properties import fa2_target_capture_gpu as C
     from tests.properties import fa_tap_exactness_gpu as G
@@ -710,10 +715,10 @@ def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str
     rows = all_rows(seed, n, clamp_n)
     doc["inputs"] = {p: {"rows": int(len(_row_kind(p, P))), "sha256": digest(*P.values())} for p, P in rows.items()}
     R, Hr = rows["router"], rows["hash"]
-    probe = {"router": lambda: launch_router(_device(R["x"][:GROUP]), _device(R["b"][0])),
-             "hash": lambda: launch_hash(_device(Hr["x"][:GROUP]), _device(Hr["tokens"][:GROUP].view(U32), torch.int32),
-                                         _device(Hr["tid2eid"].view(U32), torch.int32)),
-             **{p: (lambda p=p: launch_clamp(_bf16_device(rows[p]["gu"][:GROUP]))) for p in PATHS[2:]}}
+    probe: dict[str, Any] = {"router": lambda: launch_router(_device(R["x"][:GROUP]), _device(R["b"][0])),
+                             "hash": lambda: launch_hash(_device(Hr["x"][:GROUP]), _device(Hr["tokens"][:GROUP].view(U32), torch.int32),
+                                                         _device(Hr["tid2eid"].view(U32), torch.int32)),
+                             **{p: (lambda p=p: launch_clamp(_bf16_device(rows[p]["gu"][:GROUP]))) for p in PATHS[2:]}}
     doc["kernels"] = {p: kernel_names(probe[p], p) for p in PATHS}
     for path, k in doc["kernels"].items():
         print(f"[dsv4-moe] {_utc()} kernel {path}: ok={k['ok']} {k['names']}", flush=True)
@@ -755,7 +760,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--verify", metavar="RECORD", help="check a record's digest and verdict (no GPU)")
     a = ap.parse_args(argv)
     if a.verify:
-        from verity_vllm.properties.record import PropertyRecord
+        from verity_vllm.records.property_record import PropertyRecord
 
         rec = PropertyRecord(json.loads(Path(a.verify).read_text()))
         problems = rec.problems()

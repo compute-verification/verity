@@ -164,7 +164,8 @@ def test_a_commit_that_exits_holding_its_lease_keeps_it_until_its_gpu_is_empty(t
     ([["GPU-5"]] * 5, 3, 3, ["GPU-5"]),                                   # still there after the last look
 ])
 def test_a_new_lease_waits_for_another_process_to_leave_its_gpus(monkeypatch, looks, n, waited, left):
-    seq, slept = iter(looks), []
+    seq = iter(looks)
+    slept: list[float] = []
     monkeypatch.setattr(GL, "on_gpus", lambda uuids: next(seq))
     assert GL._foreign(["GPU-5"], slept.append, n) == (waited, left) and slept == [GL.CLEAR_EVERY_S] * waited
 
@@ -206,9 +207,14 @@ def test_a_commit_that_never_got_its_gpu_records_no_start(tmp_path):
 
 @pytest.mark.parametrize("item,seen", [({}, "device"), ({GL.WEIGHTS_HASH: "host"}, "host"), ({GL.WEIGHTS_HASH: "device-checked"}, "device-checked")])
 def test_a_leased_commit_hashes_its_weights_on_its_gpu_unless_the_item_says_how(tmp_path, item, seen):
-    env, got = {"GPU_LEASE": "/l/gpu-lease", **item}, []
-    GL.run(str(tmp_path), str(tmp_path / "commit.log"), ["true"], 60, env, lambda to, argv: got.append(env.get(GL.WEIGHTS_HASH)) or 0,
-           clock=lambda: 0.0)
+    env = {"GPU_LEASE": "/l/gpu-lease", **item}
+    got: list[str | None] = []
+
+    def run_tl(to: int, argv: list[str]) -> int:
+        got.append(env.get(GL.WEIGHTS_HASH))
+        return 0
+
+    GL.run(str(tmp_path), str(tmp_path / "commit.log"), ["true"], 60, env, run_tl, clock=lambda: 0.0)
     assert got == [seen] and env == {"GPU_LEASE": "/l/gpu-lease", **item}
 
 
@@ -261,7 +267,7 @@ def _toolchain(tmp_path: Path) -> tuple[str, str, Path]:
         (info / "RECORD").write_text(f"{d.split('-')[0]}/__init__.py,sha256=x,1\n")
     (tmp_path / "cuda" / "include").mkdir(parents=True)
     (tmp_path / "cuda" / "include" / "cuda.h").write_text("#define CUDA_VERSION 12090\n")
-    tree = tmp_path / "src" / "0123456789abcdef" / "integrations" / "vllm"
+    tree = tmp_path / "src" / "0123456789abcdef" / "adapters" / "vllm"
     (tree / "verity_vllm" / "acquire").mkdir(parents=True)
     (tree / "verity_vllm" / "acquire" / "tap.py").write_text("import triton\n\n\n@triton.jit\ndef k(x):\n    pass\n")
     (tree / "verity_vllm" / "row.py").write_text("STAGES = 1\n")
@@ -272,7 +278,7 @@ def test_the_jit_key_is_the_toolchain_the_device_class_and_the_trees_triton_kern
     py, cuda, a = _toolchain(tmp_path)
     k = RD.jit_key(py, cuda, PRO, str(a))
     assert re.fullmatch(r"[0-9a-f]{16}", k)
-    b = tmp_path / "src" / "fedcba9876543210" / "integrations" / "vllm"
+    b = tmp_path / "src" / "fedcba9876543210" / "adapters" / "vllm"
     shutil.copytree(a, b)
     (b / "verity_vllm" / "row.py").write_text("STAGES = 2\n")
     assert RD.jit_key(py, cuda, PRO, str(b)) == k                                  # another sync, its change outside the kernels
@@ -291,7 +297,7 @@ def test_the_jit_key_is_the_toolchain_the_device_class_and_the_trees_triton_kern
 
 
 def test_a_bi_eager_rows_jit_caches_move_from_its_job_tree_to_its_key_and_any_other_directory_is_kept(tmp_path):
-    tree, c, k = str(tmp_path / "src" / "0123456789abcdef" / "integrations" / "vllm"), tmp_path / "cache", "00ff00ff00ff00ff"
+    tree, c, k = str(tmp_path / "src" / "0123456789abcdef" / "adapters" / "vllm"), tmp_path / "cache", "00ff00ff00ff00ff"
     env = {"TRITON_CACHE_DIR": str(c / "triton" / "0123456789abcdef"), "VLLM_CACHE_ROOT": str(c / "vllm" / "0123456789abcdef")}
     RD.jit_cache(env, tree, lambda: k)
     assert env == {"TRITON_CACHE_DIR": str(c / "triton" / f"k-{k}"), "VLLM_CACHE_ROOT": str(c / "vllm" / f"k-{k}"),
@@ -306,7 +312,7 @@ def test_a_bi_eager_rows_jit_caches_move_from_its_job_tree_to_its_key_and_any_ot
     RD.jit_cache(scratch, tree, never)
     assert scratch["TRITON_CACHE_DIR"] == str(tmp_path / "scratch" / "rk" / "triton")
     checkout = {"TRITON_CACHE_DIR": str(c / "triton" / "verity")}                 # a checkout, not `job_tree.sh`'s copy
-    RD.jit_cache(checkout, str(tmp_path / "verity" / "integrations" / "vllm"), never)
+    RD.jit_cache(checkout, str(tmp_path / "verity" / "adapters" / "vllm"), never)
     assert checkout["TRITON_CACHE_DIR"] == str(c / "triton" / "verity")
 
 
@@ -368,10 +374,14 @@ def test_a_commit_whose_checks_after_its_last_run_read_host_memory_only_may_rele
 
 
 def test_the_commit_releases_its_lease_after_its_last_run_and_before_the_checks_that_follow():
-    """In `commit.main`: the release follows the last run's records that read the device (the run, its openings, the replay bundle's
-    device-resident tensors in `RB.start`) and precedes every check that reads host memory; nothing after it calls CUDA."""
+    """In `commit.main`, read with `write_verdict`'s text where `main` calls it: the release follows the last run's records that read
+    the device (the run, its openings, the replay bundle's device-resident tensors in `RB.start`) and precedes every check that
+    reads host memory; nothing after it calls CUDA."""
     src = Path(GL.__file__).with_name("commit.py").read_text()
-    main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    fns = {n.name: ast.get_source_segment(src, n) or "" for n in ast.parse(src).body if isinstance(n, ast.FunctionDef)}
+    head, verdict, tail = fns["main"].partition("\n    write_verdict(")
+    assert fns["main"].count("write_verdict(") == (1 if verdict else 0), "read at one call of write_verdict, a statement of main's body"
+    main = head + (fns["write_verdict"] if verdict else "") + verdict + tail
     marks = ["GL.acquire(TL)", "TL.end(_wstage", '"gpu_mem"', 'TL.start("validate.openings"', "RB.start(out, pair", "GL.release(TL",
              'TL.start("validate.binding_coverage"', 'TL.start("validate.manifest_coverage"', "RB.defer(", "TL.start(\"validate.weights_pin\"",
              "openings_after_release(com", "for c in coms.values():\n        c.close()", 'TL.start("closure.summary")']
@@ -396,7 +406,10 @@ def test_the_lease_record_dates_the_release_and_names_its_stage_or_why_it_was_ke
 
     t = 1790884800.0                                   # 2026-10-01T20:00:00Z
     env = {"GPU_LEASE": "/l/gpu-lease"}
-    ticks = lambda: iter([t - 30, t + 600]).__next__
+
+    def ticks():
+        return iter([t - 30, t + 600]).__next__
+
     _, rec = GL.run(str(tmp_path), str(tmp_path / "log"), ["x"], 600, env,
                     run_tl({"released": "2026-10-01T20:02:30Z", "t": t + 150.0, "released_at": "work.pair0.instrumented"}), clock=ticks())
     assert rec["released"] == "2026-10-01T20:02:30Z" and rec["released_at"] == "work.pair0.instrumented" and rec["kept"] is None
@@ -544,5 +557,6 @@ def test_the_match_takes_its_lease_in_a_gpu_phase_before_its_first_stage():
     from verity_vllm.pipeline import match as M
     src = Path(M.__file__).read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     assert main.count("GL.acquire()") == 1 and main.index("GL.acquire()") < main.index("run_stage(")
     assert re.search(r'if a\.phase in \("gpu", "all"\):\n\s+GL\.acquire\(\)', main)

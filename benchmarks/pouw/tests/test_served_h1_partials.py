@@ -1,33 +1,21 @@
 """Kernels' prover side of option A (`served_h1/partials.py`, /) held to the order the service states
 (`pouw.leaf_lanes`): row l of a sampled leaf's partials is lane l at the stated rows, columns and key block, its words in
-`leaf_lanes.word_order`, each `h1zy.lane_partial` (the row PouwH1LaneZy_v1 checks), and a dead leaf's rows are zero. Skips
-until served_h1/partials.py is on the tree."""
+`leaf_lanes.word_order`, each `h1zy.lane_partial` (the row PouwH1LaneZy_v1 checks), and a dead leaf's rows are zero."""
 from __future__ import annotations
-
-import importlib.util
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
 
-from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
+from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 
-SERVED = Path(__file__).resolve().parents[1] / "served_h1"
 RC, K = (32, 32), 64
 
 
 def _partials():
-    if not (SERVED / "partials.py").exists():
-        pytest.skip("served_h1/partials.py (#3101) is not on the tree")
     torch = pytest.importorskip("torch")
-    sys.path.insert(0, str(SERVED))
-    spec = importlib.util.spec_from_file_location("served_h1_partials", SERVED / "partials.py")
-    m = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = m
-    spec.loader.exec_module(m)
-    return m, torch
+    import partials
+    return partials, torch
 
 
 def test_kernels_partials_are_the_stated_lanes_in_the_stated_word_order():

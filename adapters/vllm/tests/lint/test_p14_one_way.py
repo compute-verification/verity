@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import ast
 import re
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -47,8 +47,8 @@ def _canonical_encoder(fn: ast.FunctionDef | ast.AsyncFunctionDef, names: R.Alia
     if not (isinstance(v, ast.Call) and names.resolve(v.func) == "json.dumps"):
         return False
     kw = {k.arg: k.value for k in v.keywords}
-    sep = kw.get("separators")
-    return isinstance(kw.get("sort_keys"), ast.Constant) and kw["sort_keys"].value is True \
+    sep, sort_keys = kw.get("separators"), kw.get("sort_keys")
+    return isinstance(sort_keys, ast.Constant) and sort_keys.value is True \
         and isinstance(sep, (ast.Tuple, ast.List)) and [getattr(e, "value", None) for e in sep.elts] == [",", ":"]
 
 
@@ -78,7 +78,7 @@ def file_violations(src: str, rel: str) -> list[R.Violation]:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():

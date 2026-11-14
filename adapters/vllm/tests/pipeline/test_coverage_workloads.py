@@ -3,12 +3,13 @@ The generated B0 workloads are `test_coverage_workloads_of_record`."""
 from __future__ import annotations
 
 import json
-import sys
+import logging
 import types
 from pathlib import Path
 
 import pytest
 
+from verity_vllm.config import workload_file
 from verity_vllm.pipeline import coverage_workloads as gw
 
 REPO = Path(__file__).resolve().parents[2]
@@ -251,7 +252,7 @@ def test_declaring_the_realized_arrivals_serves_the_same_forwards():
     va = _load_adapter()
     caps = [2, 7, 23, 3, 11, 29, 32, 13]
     gapped, declared = [0, 9, 13, 13, 15, 16, 18, 18], [0, 2, 9, 13, 15, 16, 18, 18]
-    wl = json.loads((REPO / "workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager.json").read_text())
+    wl = json.loads(workload_file(REPO / "workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager.json").read_text())
     assert [r["arrive_step"] for r in wl["requests"]] == declared and [r["max_tokens"] for r in wl["requests"]] == caps
     R = lambda i, n, a: types.SimpleNamespace(request_id=f"r{i}", prompt_token_ids=[1] * 9, max_tokens=n, arrive_step=a, _order=0)  # noqa: E731
     for make, source in ((_LaggedStubEngine, "measured"), (lambda: _ChunkedStubEngine(budget=4096, scheduler=False), "measured"),
@@ -397,3 +398,14 @@ def test_expected_steps_prefers_the_control_run(tmp_path):
     ctl.parent.mkdir(parents=True, exist_ok=True)
     ctl.write_text(json.dumps({"requests": [{"request_id": "x", "prompt_token_ids": [1] * 5, "max_tokens": 16}], "timing": {"engine_steps": 21}}))
     assert G.RunArtifacts(run).expected_steps() == 21, "arrivals / chunking / EOS: the control run's realized steps"
+
+
+def test_the_command_names_each_file_it_writes_and_the_head_of_its_note(tmp_path, monkeypatch, caplog):
+    monkeypatch.setattr(gw, "Tok", lambda path: None)
+    monkeypatch.setattr(gw, "workload_doc", lambda **kw: {"note": f"{kw['profile']} at {kw['ctx']}: " + "n" * 300})
+    a = gw.Options(case="B0", model="m", tokenizer="t", profiles="P,Q", ctx="C", out_dir=str(tmp_path / "out"), checkpoints=str(tmp_path / "none.json"))
+    with caplog.at_level(logging.INFO, logger="verity_vllm"):
+        assert gw.main(a) == 0
+    logged = [(r.levelno, r.getMessage()) for r in caplog.records if r.name == "verity_vllm.pipeline.coverage_workloads"]
+    assert logged == [(logging.INFO, f"workload_cov_b0_{p.lower()}_c.json: " + (f"{p} at C: " + "n" * 300)[:200]) for p in "PQ"]
+    assert sorted(f.name for f in (tmp_path / "out").iterdir()) == ["workload_cov_b0_p_c.json", "workload_cov_b0_q_c.json"]

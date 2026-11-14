@@ -9,7 +9,7 @@ what `interior_rows.interior` takes as ``links`` and ``tables``, and the challen
   reading port's (`link_schemas`). `links` reads a block's off its Definition and round 1's record as round 2 does.
 * `Operand`: a parameter the replay gives (a picking unit's scores and count, a table read's row, salt and path). The
   verifier holds none of its bytes, so the value is the interior's own: its rows the replayed units' at their places,
-  each under a fresh salt, its root registered before the second draw's coins, and R7 holds its name, rows, words and
+  each under a fresh salt, its root registered before the second sample's coins, and R7 holds its name, rows, words and
   domain to the verifier's own entry (`link_words`).
 * `Supply`, `supplied`, `sources`, `history`: a parameter the verifier supplies. `supplied` makes its value at public
   salts and the verifier fills it from its own sources (`sources`), reading each source's bytes by the row's leaf type
@@ -21,6 +21,10 @@ what `interior_rows.interior` takes as ``links`` and ``tables``, and the challen
   root from them; and an index, row r of a sampled span the I32 the parameter holds there, which the verifier fills
   from its own bytes. Every read must open its span's table at its key (`gates.embedding.reference`) and every unit's
   supplied row must be the value's at its place before anything is committed; `table_reads` makes such reads.
+* `Return`, `returns`: the block's return a template's output port writes, the other end of a replay block. The
+  interior registers no value for it: where round 1's record commits the return as a port, round 2 reads the
+  template's output only at that port, so the interior commits those output rows under the serve's salts at the rows
+  each unit writes and its header opens them at round 1's root (`interior_rows.interior`'s ``returns``).
 """
 from __future__ import annotations
 
@@ -31,8 +35,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier import second_stage as SS
-from verity.protocols.spot.verifier.one_stage import registered as RG
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.circuits.codec import definitions
 from verity.commitments import hm96, history as HT
 from verity.commitments.gates import embedding as EMB
@@ -120,6 +124,30 @@ class Supply:
 
 
 Link = Supply | Operand
+
+
+@dataclass(frozen=True)
+class Return:
+    """A return of the replay block, and the output port that writes it: template ``template``'s output ``port`` is the
+    block's return ``value``, under the name round 2 gives its link (`second_stage.replay_links`). The return holds
+    ``per`` rows a replay block, and unit j of a block's n_t writes its row ``at[j]``: row ``sample[i]·per + at[j]`` of
+    the value for the i-th sampled block, where round 2 holds a return link's read (`second_stage`'s linked row).
+    ``held``: round 1's record commits the value as a port, so the read is of round 1's rows; without it round 2 has
+    no port to read the return at."""
+    template: str
+    port: str
+    value: str
+    per: int
+    at: tuple[int, ...]
+    held: bool = False
+
+    def __post_init__(self) -> None:
+        _places(self.value, self.per, self.at)
+
+    def rows(self, sample: Sequence[int]) -> list[int]:
+        """The row of the value each of the template's Q·n_t units writes, in slot order, for the replay sample
+        ``sample`` (the spans' slots in round 1's population)."""
+        return [int(s) * self.per + a for s in sample for a in self.at]
 
 
 def values(links: Sequence[Link]) -> dict[str, Link]:
@@ -218,6 +246,55 @@ def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n
         else:
             out.append(Operand(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port]))
     return tuple(out)
+
+
+def returns(program: Any, key: str, record: Mapping[str, Any], members: Members, n_rho: Cells) -> tuple[Return, ...]:
+    """The returns of the replay block ``program`` defines under descriptor id ``key``: each link round 2 derives
+    (`second_stage.replay_links`, named as round 1's record ``record`` names its ports) at a template's output port, with
+    its rows a block and the row each of the template's n_t units writes (`second_stage.replay_rows`), and whether
+    ``record`` commits the value as a port. ``members`` and ``n_rho``: as `links` takes them, which gives the links at
+    the templates' parameters. ValueError where the Definition makes no links, or a return names a template the window
+    has none of, a port that is no output of it or a unit no run places."""
+    by = {m.template: (m, n) for m, n in zip(*cells(members, n_rho), strict=True)}
+    named = SS.replay_links(program, key, record)
+    if named is None:
+        raise ValueError(f"replay block {key} makes no links round 2 derives (`second_stage.replay_links`)")
+    rows = {(r.template, r.port): r for r in SS.replay_rows(program, key)}
+    held = {r.get("port") for r in record.get("roots", ())}
+    out: list[Return] = []
+    for x in named:
+        if x.template not in by:
+            raise ValueError(f"{x.value} is written by {x.template}, a template the window has none of: {list(by)}")
+        m, n = by[x.template]
+        if x.port in dict(m.rows):
+            continue
+        if x.port not in dict(m.outs):
+            raise ValueError(f"{x.template}: {x.value} is linked at its {x.port!r}, none of its rows "
+                             f"{[p for p, _w in m.rows]} or outputs {[p for p, _w in m.outs]}")
+        r = rows[(x.template, x.port)]
+        at = tuple(SS.row_at(r.runs, j) for j in range(n))
+        if any(a is None for a in at):
+            raise ValueError(f"{x.template}: its {x.port!r} rows place other than its {n} units a span")
+        out.append(Return(x.template, x.port, x.value, r.per, at, x.value in held))
+    return tuple(out)
+
+
+def wired(rows: Sequence[Any], template: str, port: str, n: int, per: int) -> tuple[int, ...]:
+    """The writer unit each of ``template``'s ``n`` units a block reads at its wired port ``port``, among the writer's
+    ``per`` a block, as round 2 reads a wired port (`second_stage.wiredRow`): unit j's row under the port's runs in
+    ``rows`` (the replay block's, `second_stage.replay_rows`). Without rows for the port, the writer's one unit; a
+    writer of several units a block is refused, since a wire alone does not say which each unit reads."""
+    r = next((x for x in rows if (x.template, x.port) == (template, port)), None)
+    if r is None:
+        if per != 1:
+            raise ValueError(f"{template}: its wired {port!r} reads a writer of {per} units a block, and nothing says which "
+                             "each of its units reads: give the replay block's rows (`second_stage.replay_rows`)")
+        return (0,) * n
+    at = tuple(SS.row_at(r.runs, j) for j in range(n))
+    if r.per != per or any(a is None or a >= per for a in at):
+        raise ValueError(f"{template}: its wired {port!r} rows place other than its {n} units a block on its writer's "
+                         f"{per}")
+    return tuple(int(a) for a in at)
 
 
 def _supplies(links: Sequence[Link]) -> tuple[Supply, ...]:
@@ -354,7 +431,7 @@ def _digest_words(b: bytes) -> np.ndarray:
 
 
 def kept_table(kept: BT.Served) -> HT.HistoryTable:
-    """The table `interior_rows.interior` opens for a drawn span, from what rank 0 kept of it (`boundary_tables.load`): its C rows
+    """The table `interior_rows.interior` opens for a sampled span, from what rank 0 kept of it (`boundary_tables.load`): its C rows
     committed again under their kept salts, round 1's program, name, words and leaves, refused unless that is the entry
     round 1 listed. On the node only, as the rows are."""
     t = HT.HistoryTable(kept.program, kept.value, kept.words, kept.leaves)
@@ -405,6 +482,6 @@ def opened(m: CS.Member, d: Mapping[str, Mapping[str, np.ndarray]], cell: int, t
                              "root at its key, or its h and ok are not the read's")
 
 
-__all__ = ["DIGEST", "HELD", "INDEX", "READ", "TABLE", "Cells", "Link", "Members", "Operand", "Supply", "cells", "history",
-           "kept_table", "link_schemas", "link_values", "link_words", "links", "opened", "operand", "placed", "reader",
-           "sources", "span_values", "supplied", "table_reads", "values"]
+__all__ = ["DIGEST", "HELD", "INDEX", "READ", "TABLE", "Cells", "Link", "Members", "Operand", "Return", "Supply", "cells",
+           "history", "kept_table", "link_schemas", "link_values", "link_words", "links", "opened", "operand", "placed",
+           "reader", "returns", "sources", "span_values", "supplied", "table_reads", "values", "wired"]

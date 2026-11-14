@@ -17,7 +17,7 @@ import pytest
 from test_steady import DROP, END, SESSIONS, START, lease, made
 from verity_config import ConfigError
 
-from verity_bench import jobs, kit, settings
+from verity_bench import jobs, kit, served_table, settings
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -29,7 +29,7 @@ from verity_bench.tool import STEADY_POINT
 CIRCUIT = "the circuit of gemm64\n"
 PIN = hashlib.sha512(CIRCUIT.encode()).hexdigest()
 DRIVER, CUDA = "570.86.15", "12.8.93"
-SETUP = "benchmarks/specs/steady-setup.sh"
+SETUP = "benchmarks/harness/specs/steady-setup.sh"
 RECORD = "prove-glm53-flock-steady"
 #: a made-up artifact of the store, and the directory in it that holds a staged statement
 ART, IN_ART = "art:" + "5" * 64, "out/row1"
@@ -42,11 +42,11 @@ OWN = {"pin": PIN, "cores": {"count": 10, "list": "0-9", "numa_nodes": [0]},
 #: script and the spec's setup
 FILES = {
     "uv.lock": "lock\n", "pyproject.toml": "",
-    "verity/protocols/flock/prover/src/main.rs": "fn main() {}\n",
-    "verity/protocols/flock/prover/cuda/ntt.cu": "// kernel\n",
-    "verity/protocols/flock/prover/tests/test_prover.py": "def test(): pass\n",
-    "verity/protocols/flock/prover/README.md": "the prover\n",
-    "verity/protocols/flock/pod/70-class-sweep.sh": "FLAGS=-O3\n",
+    "verity/protocols/proofs/flock/prover/src/main.rs": "fn main() {}\n",
+    "verity/protocols/proofs/flock/prover/cuda/ntt.cu": "// kernel\n",
+    "verity/protocols/proofs/flock/prover/tests/test_prover.py": "def test(): pass\n",
+    "verity/protocols/proofs/flock/prover/README.md": "the prover\n",
+    "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O3\n",
     "benchmarks/one_stage/server_rate.py": "# times\n",
     SETUP: "export VERITY_BENCH_STEADY_BIN=/built/prover\n",
 }
@@ -87,11 +87,11 @@ def tree(tmp_path: Path, spec: dict | None = None, files: dict | None = None, na
         else:
             doc[key] = change
     root = tmp_path / name
-    for path, text in ({**FILES, "benchmarks/specs/steady.toml": toml(doc)} | (files or {})).items():
+    for path, text in ({**FILES, "benchmarks/harness/specs/steady.toml": toml(doc)} | (files or {})).items():
         if text is not None:
             (root / path).parent.mkdir(parents=True, exist_ok=True)
             (root / path).write_text(text)
-    return root, "benchmarks/specs/steady.toml"
+    return root, "benchmarks/harness/specs/steady.toml"
 
 
 def git(root: Path) -> None:
@@ -100,6 +100,38 @@ def git(root: Path) -> None:
     subprocess.run("git init -q && git add . && GIT_AUTHOR_DATE='@1700000000 +0000' GIT_COMMITTER_DATE='@1700000000 +0000' "
                    "git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -qm spec",
                    shell=True, cwd=root, check=True)
+
+
+def test_a_spec_was_added_when_its_first_path_was(tmp_path, monkeypatch):
+    """A spec that moved with its directory was added when the file was added under the former one: the runs recorded
+    under that path started after it, and the pull of the store's attempts reaches back to them."""
+
+    import subprocess
+
+    from verity_bench.vllm.presets import FORMER_SPECS
+
+    def commit(at: int, *argv: str) -> None:
+        when = f"@{at} +0000"
+        for step in (argv, ("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false",
+                                           "commit", "-qm", "specs")):
+            if step:
+                subprocess.run(["git", *step], cwd=root, check=True,
+                               env={**settings.environ(), "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+
+    monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
+    root = tmp_path / "tree"
+    (root / FORMER_SPECS).mkdir(parents=True)
+    (root / FORMER_SPECS / "moved.toml").write_text("moved\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    commit(1700000000)
+    (root / "elsewhere" / "specs").mkdir(parents=True)
+    (root / "elsewhere" / "specs" / "new.toml").write_text("new\n")
+    commit(1700009000, "mv", f"{FORMER_SPECS}/moved.toml", "elsewhere/specs/moved.toml")
+    assert not (root / FORMER_SPECS / "moved.toml").exists()
+    assert served_table.spec_added(root, "moved") == 1700000000
+    assert served_table.spec_added(root, "new") == 1700009000
+    with pytest.raises(ValueError, match="git has no commit adding elsewhere/specs/neither.toml here"):
+        served_table.spec_added(root, "neither")
 
 
 def load(tmp_path: Path, **changes) -> SP.SteadySpec:
@@ -151,7 +183,7 @@ REFUSED_SPECS = [
     ({"spec": {"driver": "v570"}}, "`driver` 'v570' isn't a version"),
     ({"spec": {"cuda_toolkit": ""}}, "`cuda_toolkit` '' isn't a version"),
     ({"spec": {"setup": None}}, "setup"),
-    ({"spec": {"setup": "benchmarks/specs/none.sh"}}, "`setup` 'benchmarks/specs/none.sh' is no script of the source tree"),
+    ({"spec": {"setup": "benchmarks/harness/specs/none.sh"}}, "`setup` 'benchmarks/harness/specs/none.sh' is no script of the source tree"),
     ({"spec": {"setup": "../steady-setup.sh"}}, "is no script of the source tree"),
     ({"spec": {"env": {"CUDA_VISIBLE_DEVICES": "0"}}}, "`env` can't set 'CUDA_VISIBLE_DEVICES'"),
     ({"spec": {"env": {"VERITY_BENCH_STEADY_BIN": "/x"}}}, "`env` can't set 'VERITY_BENCH_STEADY_BIN'"),
@@ -192,17 +224,17 @@ BOUND = {
     "the driver's version": {"spec": {"driver": "570.86.16"}},
     "the CUDA toolkit's version": {"spec": {"cuda_toolkit": "12.9.41"}},
     "the run's environment": {"spec": {"env": {"RUST_MIN_STACK": "2147483648"}}},
-    "which script is the setup": {"spec": {"setup": "benchmarks/specs/other-setup.sh"},
-                                  "files": {"benchmarks/specs/other-setup.sh": FILES[SETUP]}},
+    "which script is the setup": {"spec": {"setup": "benchmarks/harness/specs/other-setup.sh"},
+                                  "files": {"benchmarks/harness/specs/other-setup.sh": FILES[SETUP]}},
     "the block type": {"spec": {"row0": {"type": "gemm32"}}},
     "the statement's units": {"spec": {"row0": {"n": 2}}},
     "the statement's pin": {"spec": {"row0": {"pin": "cd" * 64}}},
     "the warm sessions": {"spec": {"row0": {"warm": 3}}},
     "the period its sessions file in": {"spec": {"row0": {"period": 4}}},
-    "the prover's source": {"files": {"verity/protocols/flock/prover/src/main.rs": "fn main() { loop {} }\n"}},
-    "a kernel": {"files": {"verity/protocols/flock/prover/cuda/ntt.cu": "// another kernel\n"}},
-    "a new source file": {"files": {"verity/protocols/flock/prover/src/extra.rs": "\n"}},
-    "the build's flags": {"files": {"verity/protocols/flock/pod/70-class-sweep.sh": "FLAGS=-O2\n"}},
+    "the prover's source": {"files": {"verity/protocols/proofs/flock/prover/src/main.rs": "fn main() { loop {} }\n"}},
+    "a kernel": {"files": {"verity/protocols/proofs/flock/prover/cuda/ntt.cu": "// another kernel\n"}},
+    "a new source file": {"files": {"verity/protocols/proofs/flock/prover/src/extra.rs": "\n"}},
+    "the build's flags": {"files": {"verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": "FLAGS=-O2\n"}},
     "the timing script": {"files": {"benchmarks/one_stage/server_rate.py": "# times otherwise\n"}},
     "the setup's text": {"files": {SETUP: "export VERITY_BENCH_STEADY_BIN=/other/prover\n"}},
 }
@@ -214,8 +246,8 @@ UNBOUND = {
     "where a statement is staged": {"spec": {"row0": {"staged": "/dev/shm/gemm64"}}},
     "the row's other counts": {"spec": {"row0": {"provers": [2]}}},
     "another row": {"spec": {"row": [SPEC["row"][0], SPEC["row"][1] | {"n": 8, "warm": 4}]}},
-    "the prover's tests": {"files": {"verity/protocols/flock/prover/tests/test_prover.py": "def test(): assert 1\n"}},
-    "a document": {"files": {"verity/protocols/flock/prover/README.md": "the prover, again\n"}},
+    "the prover's tests": {"files": {"verity/protocols/proofs/flock/prover/tests/test_prover.py": "def test(): assert 1\n"}},
+    "a document": {"files": {"verity/protocols/proofs/flock/prover/README.md": "the prover, again\n"}},
     "a file outside the closure": {"files": {"benchmarks/harness/verity_bench/cli.py": "# the harness\n"}},
 }
 
@@ -241,8 +273,9 @@ def test_the_identity_names_no_commit_and_each_point_has_its_own(tmp_path):
     root, spec = tree(tmp_path)
     plan = P.make_plan(root / spec, root=root, lookup=lambda spec, item, identity: (None, None))
     covered = SP.closure(root, plan.spec)
-    assert sorted(covered) == ["benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
-                               "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"]
+    assert set(covered) == {"benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh",
+                            "verity/protocols/proofs/flock/prover/cuda/ntt.cu", "verity/protocols/proofs/flock/prover/src/main.rs"}
+    assert len(covered) == 5
     assert plan.toolchain == P.Sources(plan.toolchain.files_sha256, 5)
     assert jobs.plan_json(plan)["points"][0] == {"point": plan.points[0].point.to_json(), "identity": found["gemm64-k1"],
                                                  "passing_run": None}
@@ -257,19 +290,19 @@ def test_in_a_checkout_only_tracked_files_count_so_a_shipped_tree_gives_the_same
     root, spec = tree(tmp_path, name="checkout")
     git(root)
     assert identities(tmp_path, "checkout") == shipped
-    for left in ("verity/protocols/flock/prover/target/release/flock-circuit", "verity/protocols/flock/prover/src/draft.rs",
-                 "verity/protocols/flock/pod/notes.sh"):
+    for left in ("verity/protocols/proofs/flock/prover/target/release/flock-circuit", "verity/protocols/proofs/flock/prover/src/draft.rs",
+                 "verity/protocols/proofs/flock/prover/pod/notes.sh"):
         (root / left).parent.mkdir(parents=True, exist_ok=True)
         (root / left).write_text("left by a build\n")
     assert identities(tmp_path, "checkout") == shipped, "untracked"
-    assert identities(tmp_path, "checkout", files={"verity/protocols/flock/prover/src/main.rs": "fn main() { loop {} }\n"}
+    assert identities(tmp_path, "checkout", files={"verity/protocols/proofs/flock/prover/src/main.rs": "fn main() { loop {} }\n"}
                       )[POINT] != shipped[POINT], "a tracked file as the working tree has it"
-    subprocess.run(["git", "add", "verity/protocols/flock/prover/src/draft.rs"], cwd=root, check=True)
-    assert identities(tmp_path, "checkout", files={"verity/protocols/flock/prover/src/main.rs": FILES[
-        "verity/protocols/flock/prover/src/main.rs"]})[POINT] != shipped[POINT], "a newly tracked source"
+    subprocess.run(["git", "add", "verity/protocols/proofs/flock/prover/src/draft.rs"], cwd=root, check=True)
+    assert identities(tmp_path, "checkout", files={"verity/protocols/proofs/flock/prover/src/main.rs": FILES[
+        "verity/protocols/proofs/flock/prover/src/main.rs"]})[POINT] != shipped[POINT], "a newly tracked source"
 
 
-@pytest.mark.parametrize("gone", ["benchmarks/one_stage/server_rate.py", "verity/protocols/flock/pod/70-class-sweep.sh"])
+@pytest.mark.parametrize("gone", ["benchmarks/one_stage/server_rate.py", "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh"])
 def test_a_tree_without_a_path_the_identity_covers_is_refused(tmp_path, gone):
     root, spec = tree(tmp_path, files={gone: None})
     with pytest.raises(ValueError, match=f"holds no {re.escape(gone.rsplit('/', 1)[0] if 'pod' in gone else gone)}"):
@@ -812,15 +845,15 @@ def test_plan_and_check_take_a_steady_spec_and_say_why_a_point_has_no_passing_ru
 
 
 def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_this_machine_alone(tmp_path, monkeypatch):
-    """The remote's attempts are pulled since the spec was added, which git says of a spec under `benchmarks/specs`."""
+    """The remote's attempts are pulled since the spec was added, which git says of a spec under `benchmarks/harness/specs`."""
 
     root, path = tree(tmp_path)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "here"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path, root).config))
     (elsewhere := root / "elsewhere.toml").write_text((root / path).read_text())
-    with pytest.raises(ValueError, match="elsewhere.toml isn't a spec of benchmarks/specs.*--local-only"):
+    with pytest.raises(ValueError, match=f"elsewhere.toml isn't a spec of {served_table.SPECS}, .*--local-only"):
         P.make_plan(elsewhere, root=root)
-    with pytest.raises(ValueError, match="git has no commit adding benchmarks/specs/steady.toml"):
+    with pytest.raises(ValueError, match="git has no commit adding benchmarks/harness/specs/steady.toml"):
         P.make_plan(root / path, root=root)
     assert [point.passing_run for point in P.make_plan(elsewhere, root=root, local_only=True).points] == [None] * 3
 
@@ -977,7 +1010,7 @@ class Node:
         self.ran.append(argv)
         log.write_text("log\n")
         if argv[1:2] == [SP.STAGER]:
-            stage = Path(argv[-1])
+            stage = Path(argv[4])
             stage.mkdir(parents=True)
             (stage / "circuit.txt").write_text(self.circuit)
             (stage / "pin.txt").write_text(self.said + "\n")
@@ -1040,7 +1073,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     stager, lease_argv, timer = node.ran
     scratch = Path(lease_argv[-1])
     assert scratch.parent == node.scratch_root and not scratch.exists(), "the scratch is removed"
-    assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage")]
+    assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage"), "--unbound"]
     assert kit.lease(1, 90) == ["gpu-lease", "1", "--wait", "--max-min", "90", "--"], "the kit's lease, and beside it:"
     assert lease_argv == ["gpu-lease", "1", "--wait", "--max-min", "90", "--preemptible", "--mem-gb", "80", "--",
                           sys.executable, "-m", "verity_bench.steady_node", "--spec", node.spec, "--point", POINT,
@@ -1075,8 +1108,9 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert result["workload_fingerprint"]["identity"] == node.identity
     assert result["schema"] == kit.RESULT_SCHEMA
     assert result["measurements"] == [{
-        "name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s", "commit": STAMP["commit"],
-        "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": [], "host": STAMP}], "the kit's writer's"
+        "name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s", "mark": "measured",
+        "commit": STAMP["commit"], "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": ["measured"],
+        "host": STAMP}], "the kit's writer's"
 
     spec = SP.load_spec(node.root / node.spec, root=node.root)
     assert SP.point_why(row, S.files_in(node.run_dir), spec, SP.point(spec, POINT), own=True) is None
@@ -1322,16 +1356,16 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     node = Node(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match=f"point identity changed: this tree gives {POINT} {node.identity}"):
         node.point(identity="0" * 64)
-    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
+    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text("fn main() { /* edited on the node */ }\n")
     with pytest.raises(ValueError, match="a file its time depends on differs from the launching checkout's"):
         node.point()
-    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text(FILES["verity/protocols/flock/prover/src/main.rs"])
+    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proofs/flock/prover/src/main.rs"])
     # a shipped tree is no checkout: a file a build left under the closure's directories counts, and the refusal says so
-    (left := node.root / "verity/protocols/flock/prover/target/built.o").parent.mkdir()
+    (left := node.root / "verity/protocols/proofs/flock/prover/target/built.o").parent.mkdir()
     left.write_text("object\n")
     with pytest.raises(ValueError) as shipped:
         node.point()
-    assert ("This tree is no checkout, so every file under verity/protocols/flock/prover, verity/protocols/flock/pod "
+    assert ("This tree is no checkout, so every file under verity/protocols/proofs/flock/prover, verity/protocols/proofs/flock/prover/pod "
             "counts: one the launching checkout doesn't track (what a build or a setup left there) changes the identity "
             "too. Its closure here is ") in str(shipped.value)
     assert re.search(r"Its closure here is \d+ files \(SHA-256 [0-9a-f]{16}\.\.\.\); `plan` prints the launching "
@@ -1340,13 +1374,13 @@ def test_the_node_side_refuses_a_tree_whose_point_is_not_the_one_it_was_launched
     left.unlink()
     git(node.root)
     left.write_text("object\n")
-    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
+    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text("fn main() { /* edited in the checkout */ }\n")
     with pytest.raises(ValueError) as checkout:
         node.point()
     assert "differs from the launching checkout's. Its closure here is " in str(checkout.value)
     assert "no checkout" not in str(checkout.value)
     monkeypatch.setenv("RUST_MIN_STACK", "1")
-    (node.root / "verity/protocols/flock/prover/src/main.rs").write_text(FILES["verity/protocols/flock/prover/src/main.rs"])
+    (node.root / "verity/protocols/proofs/flock/prover/src/main.rs").write_text(FILES["verity/protocols/proofs/flock/prover/src/main.rs"])
     with pytest.raises(ValueError, match=r"differs from spec 'steady''s env and setup in \['RUST_MIN_STACK'\]"):
         node.point()
     assert node.ran == [] and not (node.run_dir / "result.json").exists()

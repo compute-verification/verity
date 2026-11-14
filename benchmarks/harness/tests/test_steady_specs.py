@@ -1,4 +1,4 @@
-"""The steady-state specs of `benchmarks/specs` and the setup they name: what each spec's points are, that a row's pin and
+"""The steady-state specs of `benchmarks/harness/specs` and the setup they name: what each spec's points are, that a row's pin and
 its stored statement are the spec's alone (another pin is planned and launched by the same code), and the setup under
 the launcher on a made-up tree, with stand-ins for the prover's build, the toolkit's script and uv. No GPU, no node, no
 store and no clock."""
@@ -77,8 +77,8 @@ def real(tmp_path: Path, **changes: str) -> tuple[Path, str]:
     for old, new in changes.items():
         assert old in text, old
         text = text.replace(old, new)
-    path = f"benchmarks/specs/{HEAD}.toml"
-    root, _ = tree(tmp_path, files={path: text, SETUP: (ROOT / SETUP).read_text(), "benchmarks/specs/steady.toml": None})
+    path = f"benchmarks/harness/specs/{HEAD}.toml"
+    root, _ = tree(tmp_path, files={path: text, SETUP: (ROOT / SETUP).read_text(), "benchmarks/harness/specs/steady.toml": None})
     return root, path
 
 
@@ -168,7 +168,7 @@ def test_the_setup_is_part_of_every_points_identity(tmp_path):
 
 # ---- the setup under the launcher ------------------------------------------------------------------------------------------
 
-#: a stand-in for verity/protocols/flock/pod/cuda-13.3.sh, in its shape: it names a toolkit it finds, else unpacks one,
+#: a stand-in for verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh, in its shape: it names a toolkit it finds, else unpacks one,
 #: which resets the sourcing shell's arguments, and exits where it can't
 TOOLKIT = """for c in "$FLOCK_WORK/cuda-root"; do
   [ -z "${CUDA_TK:-}" ] && [ -x "$c/bin/nvcc" ] && export CUDA_TK=$c
@@ -218,7 +218,7 @@ class Launcher:
         tmp_path = tmp_path.resolve()
         self.root, self.work, self.run_dir, home = (tmp_path / name for name in ("tree", "work", "run", "home"))
         texts = {LAUNCHER: (ROOT / LAUNCHER).read_text(), SETUP: (ROOT / SETUP).read_text(),
-                 "verity/protocols/flock/pod/cuda-13.3.sh": TOOLKIT, "verity/protocols/flock/pod/70-class-sweep.sh": BUILD,
+                 "verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh": TOOLKIT, "verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh": BUILD,
                  "home/.local/bin/uv": UV}
         for path, text in texts.items():
             path = tmp_path / path if path.startswith("home/") else self.root / path
@@ -247,8 +247,8 @@ def test_the_setup_builds_the_prover_and_leaves_the_environment_a_point_runs_in(
     assert path.split(":")[0] == f"{toolkit}/bin", "the toolkit the prover is built with is first on PATH"
     assert libraries == f"{toolkit}/lib64", "the toolkit's own libraries, and no compat library over the node's driver"
     assert pythonpath.split(":") == [
-        f"{root}/benchmarks/harness", f"{root}/verity/configuration/config", str(root), f"{root}/tools/research/src",
-        str(root), f"{root}/verity/protocols/flock/prover/python", f"{root}/adapters/vllm",
+        f"{root}/benchmarks/harness", f"{root}/tools/config", str(root), f"{root}/tools/research/src",
+        str(root), f"{root}/verity/protocols/proofs/flock/prover/python", f"{root}/adapters/vllm",
         f"{root}/tools/verity/circuit_check/src", f"{root}/benchmarks/numerical/python"]
     setup = launcher.run_dir / "out" / "setup"
     assert (work / "build-saw.txt").read_text().splitlines() == [

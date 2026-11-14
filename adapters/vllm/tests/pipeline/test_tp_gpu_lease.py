@@ -27,9 +27,9 @@ from tests.pipeline.test_gpu_lease import fake_lease, released
 from tests.pipeline.test_row import TP_DENSE, _tp_row
 from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.engine import hooks
-from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline.tp import lease as TPL
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 
 GPUS = ("4", "5")
 LAST = "work.pair0.instrumented"
@@ -167,7 +167,8 @@ class _Cuda:
     (none left: nothing)."""
 
     def __init__(self, ev: list) -> None:
-        self.ev, self.looks = ev, []
+        self.ev = ev
+        self.looks: list = []
 
     def __call__(self) -> _Cuda:
         return self
@@ -244,18 +245,35 @@ def lease(tmp_path, monkeypatch):
     for owner, name, value in device(ev, watched):
         monkeypatch.setattr(owner, name, value)
     smi: list = []
-    monkeypatch.setattr(GL, "on_gpus", lambda uuids: smi.append(uuids) or [])
+
+    def on_gpus(uuids) -> list:
+        smi.append(uuids)
+        return []
+    monkeypatch.setattr(GL, "on_gpus", on_gpus)
     ranks = [_Rank(r, ev, locks) for r in (0, 1)]
     yield SimpleNamespace(ev=ev, watched=watched, smi=smi, locks=locks, started=started, holder=holder, ranks=ranks, llm=_LLM(ranks, ev),
                           cuda=GL.DRIVER, note=lambda: json.loads((tmp_path / "gpu_lease.released").read_text()))
     for p in reversed(hooks.live()):                  # ranks share this process, so their patches stack; release them newest first,
-        if p.owner is _WorkerProc:                    # which separate processes never need
+        if isinstance(p, hooks.Patch) and p.owner is _WorkerProc:      # which separate processes never need; only a `Patch` has an owner
             p.uninstall()
     for fd in fds if held else []:                    # a release closed them, and their numbers may be another file's by now
         os.close(fd)
     ours.close()
     holder.kill()
     holder.wait()
+
+
+@pytest.fixture
+def left_on():
+    """A hook entry that is no `Patch`, live from before the `lease` fixture starts until after it ends, as one an earlier test of the
+    process left installed is.  When `lease` has ended beside it, it is still on and no patch of the stand-in worker is."""
+    entry = hooks.service("left on by an earlier test", lambda: None, lambda handle: None)
+    yield entry
+    try:
+        assert entry in hooks.live()
+        assert not [p for p in hooks.live() if isinstance(p, hooks.Patch) and p.owner is _WorkerProc]
+    finally:
+        entry.uninstall()
 
 
 def _rpcs(ev: list) -> list[tuple[str, dict]]:
@@ -292,6 +310,13 @@ def test_the_last_runs_finalize_fixes_every_root_then_gives_every_gpu_back_at_on
                                                                                                    (1, (3 << 20) + 16, None, None)]
 
 
+def test_the_fixture_takes_the_ranks_patches_off_beside_a_live_hook_entry_that_is_no_patch(left_on, lease):
+    """`hooks.live()` lists every entry of the process (`Patch`, `Appended`, `Service`, `Armed`), and only a `Patch` has an owner."""
+    lease.cuda.looks = [[], [], [0]]
+    _last_run(lease)
+    assert _WorkerProc.shutdown is TPL._exit and left_on in hooks.live()
+
+
 def test_what_a_ranks_weights_view_holds_on_the_host_is_emptied_not_moved(lease):
     """`acquire.as_loaded`: a TP rank's MXFP4 Marlin experts are on the host as loaded, and every reader after the release reads them
     through the rank's weights view, so the release empties their served copies instead of moving a second one to the host
@@ -313,8 +338,8 @@ def _pinned(com: _Com) -> None:
 
 @pytest.mark.parametrize("keep,why", [
     ({1: lambda c: setattr(c, "retain", "none")}, "rank 1: the openings after release replay the run on the engine"),
-    ({0: _pinned, 1: lambda c: setattr(c, "retain", "none")}, "rank 0: the retained bytes are in torch's pinned host memory "
-                                                              "(torch-pinned-pow2), which the CUDA context's end frees; rank 1: the openings"),
+    ({0: _pinned, 1: lambda c: setattr(c, "retain", "none")}, ("rank 0: the retained bytes are in torch's pinned host memory "
+                                                               "(torch-pinned-pow2), which the CUDA context's end frees; rank 1: the openings")),
 ], ids=["one-rank", "both-ranks"])
 def test_a_rank_that_still_needs_its_device_keeps_every_gpu_to_the_exit(lease, keep, why):
     for r, f in keep.items():
@@ -414,7 +439,8 @@ def tp_commit(script: str) -> list[str]:
 
 def _run(tmp_path: Path, script: str) -> tuple[int, dict, str]:
     lease = fake_lease(tmp_path, ",".join(GPUS))
-    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "GPU_LEASE": lease, "GPU_LEASE_N": str(len(GPUS))}   # nvidia-smi: `fake_smi`
+    env = {"PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}", "GPU_LEASE": lease, "GPU_LEASE_N": str(len(GPUS)),   # nvidia-smi: `fake_smi`
+           "PYTHONPATH": os.pathsep.join(p for p in sys.path if p)}      # the stand-in imports what this process imports
     GL.hide_devices(env)
     log = tmp_path / "commit.log"
 
@@ -445,16 +471,17 @@ def test_the_tp_commit_takes_every_gpu_at_once_and_gives_them_back_together_whil
 
 @pytest.mark.parametrize("script,rc,kept", [
     ("raise SystemExit('the engine did not start')\n", 1, "the Commit ended before its release"),
-    ("from tests.pipeline.test_tp_gpu_lease import LAST, stand_ins\n"
-     "ev, llm = stand_ins(os.path.dirname(os.environ[GL.STARTED]))\n"
-     "llm.ranks[1]._tp2_commit['com']._stop_worker = lambda: 1 / 0\nllm.collective_rpc('tp2_commit_install')\n"
-     "TPL.finalize(llm, 60.0, LAST, last=True, wait=lambda s: None)\nprint('checks', [e[2:] for e in ev if e[1] == 'checks'], flush=True)\n"
-     "GL.run_main(lambda: sys.exit(5))\n", 5, "the ranks could not give their GPUs back: ZeroDivisionError"),
+    (("from tests.pipeline.test_tp_gpu_lease import LAST, stand_ins\n"
+      "ev, llm = stand_ins(os.path.dirname(os.environ[GL.STARTED]))\n"
+      "llm.ranks[1]._tp2_commit['com']._stop_worker = lambda: 1 / 0\nllm.collective_rpc('tp2_commit_install')\n"
+      "TPL.finalize(llm, 60.0, LAST, last=True, wait=lambda s: None)\nprint('checks', [e[2:] for e in ev if e[1] == 'checks'], flush=True)\n"
+      "GL.run_main(lambda: sys.exit(5))\n"), 5, "the ranks could not give their GPUs back: ZeroDivisionError"),
 ], ids=["before-its-engine", "a-rank-stuck-on-its-device"])
 def test_a_tp_commit_that_fails_holding_its_lease_frees_every_gpu_at_its_exit(tmp_path, script, rc, kept):
     got, rec, log = _run(tmp_path, script)
     assert got == rc and rec["kept"].startswith(kept) and rec["released_at"] == "process.end", log
-    assert rc == 1 or "checks [([False, False], False), ([False, False], False)]" in log      # the checks ran holding both locks
+    # the stand-in's own end, not an import's: the engine's failure, or the checks run holding both locks
+    assert ("the engine did not start" if rc == 1 else "checks [([False, False], False), ([False, False], False)]") in log, log
     assert all(released(tmp_path / f"{g}.lock") for g in GPUS)
 
 
@@ -464,6 +491,7 @@ def test_the_tp_commit_takes_its_lease_before_the_device_and_gives_it_back_only_
     failed one stopped the Commit after, before the value check it skips; and in the row, the Commit under the lease."""
     src = Path(TPL.__file__).with_name("commit.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     marks = ["TPL.acquire()", "va.target_of_workload(wl)", "LLM(**kw)", '"tp2_commit_make"', '"tp2_commit_install"', "TPL.finalize(llm",
              '"tp2_commit_open"', '"tp2_commit_xrank_dump"', "TPL.reset(llm", "TPL.stop(llm", "if args.value_check and not stopped:"]
     at = [main.index(m) for m in marks]
@@ -492,7 +520,11 @@ def test_a_tp_commit_hashes_its_weights_on_the_device_unless_the_item_says_other
         monkeypatch.setattr(R, name, value)
     seen: list[dict] = []
     monkeypatch.setattr(t, "manifest_global", lambda *a: 0)
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(dict(t.child_env)) or 0)
+
+    def run_tl(stage, to, log, cmd) -> int:
+        seen.append(dict(t.child_env))
+        return 0
+    monkeypatch.setattr(t, "run_tl", run_tl)
     t.commit()
     assert [e.get(GL.WEIGHTS_HASH) for e in seen] == [mode] and (GL.STARTED in seen[0]) == leased
     assert f"weights hash {mode}" in Path(f"{t.d}/row.log").read_text() and "commit PASS" in Path(f"{t.d}/stages.txt").read_text()
@@ -592,6 +624,7 @@ def test_the_tp_capture_takes_its_lease_before_the_device_and_before_its_engine(
     arguments, the LLM), and no CUDA call of its own before it."""
     src = Path(TPL.__file__).with_name("capture.py").read_text()
     main = ast.get_source_segment(src, next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "main"))
+    assert main is not None
     marks = ["TPL.acquire()", "case_of(", "LLM(**kw)"]
     at = [main.index(m) for m in marks]
     assert at == sorted(at) and main.count("TPL.acquire()") == 1, dict(zip(marks, at))

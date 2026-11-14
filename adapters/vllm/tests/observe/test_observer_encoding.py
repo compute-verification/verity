@@ -3,12 +3,30 @@ without torch): encode_arg, StorageAdapter.view_of / generations / pending drain
 
 from __future__ import annotations
 
+import sys
+from types import SimpleNamespace
+
 import pytest
+
+from verity_vllm.observe import storage as S
 
 torch = pytest.importorskip("torch")
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Note, StorageAlloc, StorageFree, ViewDesc  # noqa: E402
-from verity_vllm.observe.observer import EmptyMode, Observer, Recorder, encode_arg, op_name  # noqa: E402
+from verity_vllm.observe.events import (  # noqa: E402
+    DispatchEnter,
+    DispatchExit,
+    Note,
+    StorageAlloc,
+    StorageFree,
+    ViewDesc,
+)
+from verity_vllm.observe.observer import (  # noqa: E402
+    EmptyMode,
+    Observer,
+    Recorder,
+    encode_arg,
+    op_name,
+)
 from verity_vllm.observe.storage import StorageAdapter  # noqa: E402
 
 
@@ -33,6 +51,31 @@ def test_encode_scalars_and_containers():
     assert encode_arg(torch.strided, st) == "torch.strided"
     other = encode_arg(object(), st)
     assert isinstance(other, dict) and set(other) == {"$repr"} and len(other["$repr"]) <= 200
+    assert encode_arg(type("Wide", (), {"__repr__": lambda self: "w" * 300})(), st) == {"$repr": "w" * 200}, "a repr is cut at 200 characters"
+
+
+def test_encode_symbolic_scalars():
+    """A symbol with a value encodes as that number; one without (int() and float() of it raise) as its repr."""
+    from torch._dynamo.source import ConstantSource
+    from torch.fx.experimental.symbolic_shapes import ShapeEnv
+
+    st, env = StorageAdapter(), ShapeEnv()
+    src = ConstantSource("n")
+    backed = env.create_symintnode(env.create_symbol(7, source=src), hint=7, source=src)
+    assert isinstance(backed, torch.SymInt) and encode_arg(backed, st) == 7
+    for x in (env.create_unbacked_symint(), env.create_unbacked_symfloat(), env.create_unbacked_symbool()):
+        assert encode_arg(x, st) == {"$repr": repr(x)[:200]}
+    assert encode_arg([backed, env.create_unbacked_symint()], st)[0] == 7
+
+
+def test_encode_a_dict_by_its_keys_as_strings_and_tritons_constants_by_their_type_names():
+    st, t = StorageAdapter(), torch.zeros(2)
+    assert encode_arg({"a": t, 3: (1, None)}, st) == {"a": st.view_of(t), "3": [1, None]}
+    constexpr = type("constexpr", (), {"__init__": lambda self, value: setattr(self, "value", value)})
+    assert encode_arg(constexpr([4, torch.int8]), st) == [4, "torch.int8"]
+    assert set(encode_arg(type("constexpr", (), {})(), st)) == {"$repr"}, "a constexpr with no value is its repr"
+    assert encode_arg(type("dtype", (), {"__module__": "triton.language.core", "__str__": lambda self: "fp32"})(), st) == "fp32"
+    assert set(encode_arg(type("dtype", (), {"__module__": "numpy"})(), st)) == {"$repr"}, "a dtype that is not triton's is its repr"
 
 
 def test_view_of_fields_and_shared_storage():
@@ -92,6 +135,89 @@ def test_generation_bump_on_pointer_reuse_raw():
     assert st.live_count() == 1
 
 
+def test_a_null_pointer_or_an_empty_range_is_its_devices_null_allocation_raw():
+    st = StorageAdapter(use_weakrefs=False)
+    null = st.observe_raw(0x1000, 0, "cpu")
+    assert st.observe_raw(0, 64, "cpu", key=1) == null and st.observe_raw(0, 0, "cpu") == null
+    assert st.events_pending() == [StorageAlloc(null, 0, 0, "cpu", 0, "null")] and st.live_count() == 0
+    assert st.view_of(torch.empty(0)).alloc == null and not st.has_pending()         # the allocation an empty tensor has
+    other = st.observe_raw(0, 64, "cuda:0")
+    assert other != null and st.events_pending() == [StorageAlloc(other, 0, 0, "cuda:0", 0, "null")]
+    assert (st.stats["observed"], st.stats["allocs"]) == (4, 0)
+
+
+def test_an_allocation_seen_first_without_its_storage_takes_the_key_it_is_seen_with_next_raw():
+    st = StorageAdapter(use_weakrefs=True)
+    a = st.observe_raw(0x1000, 64, "cpu")
+    st.events_pending()
+    assert st.observe_raw(0x1000, 64, "cpu", key=7) == a and st.observe_raw(0x1000, 64, "cpu") == a and not st.has_pending()
+    b = st.observe_raw(0x1000, 64, "cpu", key=8)           # another storage object in the keyed allocation's range: a new one
+    ev = st.events_pending()
+    assert b != a and ev[0] == StorageFree(a, True) and (ev[1].alloc, ev[1].generation) == (b, 1) and len(ev) == 2
+
+    st = StorageAdapter(use_weakrefs=True)
+    a = st.observe_raw(0x1000, 64, "cpu")
+    assert st.observe_raw(0x1000, 64, "cpu", key=7) == a
+    st.events_pending()
+    c = st.observe_raw(0x9000, 64, "cpu", key=7)           # the keyed storage at a new pointer: its allocation is freed
+    ev = st.events_pending()
+    assert ev[0] == StorageFree(a, True) and ev[1].alloc == c and len(ev) == 2 and st.live_count() == 1
+
+
+def test_a_new_range_frees_every_live_allocation_that_starts_inside_it_raw():
+    st = StorageAdapter(use_weakrefs=False)
+    a, b, c = (st.observe_raw(p, 16, "cpu") for p in (0x2000, 0x2010, 0x2030))
+    elsewhere = st.observe_raw(0x2000, 16, "cuda:0")
+    st.events_pending()
+    d = st.observe_raw(0x1ff0, 0x40, "cpu")                # [0x1ff0, 0x2030): `a` and `b` start inside it, `c` at its end
+    assert st.events_pending() == [StorageFree(a, True), StorageFree(b, True), StorageAlloc(d, 0x1ff0, 0x40, "cpu", 0, "op")]
+    assert st.live_count() == 3 and st.stats["frees_implied"] == 2
+    assert st.observe_raw(0x2030, 16, "cpu") == c and st.observe_raw(0x2000, 16, "cuda:0") == elsewhere and not st.has_pending()
+    e = st.observe_raw(0x2028, 9, "cpu")                   # [0x2028, 0x2031): `c` starts at its last byte, and `d` reaches into it
+    assert st.events_pending() == [StorageFree(d, True), StorageFree(c, True), StorageAlloc(e, 0x2028, 9, "cpu", 0, "op")]
+
+
+def test_a_pointer_seen_with_another_size_or_a_storage_seen_on_another_device_is_a_new_allocation_raw():
+    st = StorageAdapter(use_weakrefs=False)
+    a = st.observe_raw(0x1000, 64, "cpu", origin="param")
+    assert st.events_pending() == [StorageAlloc(a, 0x1000, 64, "cpu", 0, "param")], "the origin is the caller's"
+    b = st.observe_raw(0x1000, 32, "cpu")                  # the same pointer and no storage object to tell by: the size does
+    assert st.events_pending() == [StorageFree(a, True), StorageAlloc(b, 0x1000, 32, "cpu", 1, "op")]
+    assert st.observe_raw(0x1000, 32, "cpu") == b and (st.stats["allocs"], st.live_count()) == (2, 1)
+
+    st = StorageAdapter(use_weakrefs=True)
+    a = st.observe_raw(0x1000, 64, "cpu", key=7)
+    st.events_pending()
+    b = st.observe_raw(0x1000, 64, "cuda:0", key=7)        # the same storage object and pointer, on another device
+    assert st.events_pending() == [StorageFree(a, True), StorageAlloc(b, 0x1000, 64, "cuda:0", 0, "op")] and st.live_count() == 1
+
+
+def test_weakref_probe_answers_no_without_torch_or_weakrefs(monkeypatch):
+    """`use_weakrefs` is off where torch is absent, where a storage is not one preserved object, and where it takes no
+    weakref; a `StorageAdapter` made there falls back to implied frees."""
+    class NoWeakref:
+        @staticmethod
+        def ref(_obj):
+            raise TypeError("cannot create weak reference to 'UntypedStorage' object")
+
+    def absent(_self):
+        raise AttributeError("'Tensor' object has no attribute 'untyped_storage'")
+
+    with monkeypatch.context() as m:
+        m.setattr(S, "weakref", NoWeakref)
+        assert S._probe_weakrefs() is False and StorageAdapter().use_weakrefs is False
+    with monkeypatch.context() as m:
+        m.setattr(torch.Tensor, "untyped_storage", lambda self: object())
+        assert S._probe_weakrefs() is False
+    with monkeypatch.context() as m:
+        m.setattr(torch.Tensor, "untyped_storage", property(absent))
+        assert S._probe_weakrefs() is False
+    with monkeypatch.context() as m:
+        m.setitem(sys.modules, "torch", None)
+        assert S._probe_weakrefs() is False
+    assert S._probe_weakrefs() is StorageAdapter().use_weakrefs
+
+
 def test_weakref_death_is_a_direct_free_and_reuse_bumps_generation():
     st = StorageAdapter()
     if not st.use_weakrefs:
@@ -105,11 +231,12 @@ def test_weakref_death_is_a_direct_free_and_reuse_bumps_generation():
     ev = st.events_pending()
     assert ev == [StorageFree(va.alloc, False)]
     # allocate the same size until the allocator hands the pointer back (usually immediately)
+    b = None
     for _ in range(50):
         b = torch.ones(n)
         if b.untyped_storage().data_ptr() == ptr:
             break
-        del b
+        b = None
         st.events_pending()
     else:
         pytest.skip("allocator did not reuse the pointer")
@@ -143,9 +270,8 @@ def test_nested_mode_instances_share_the_recorder_and_link_parents():
     # its func(...) call reaches the outer mode, whose record has the inner call as parent
     rec, events = _rec()
     a = torch.randn(2, 2)
-    with Observer(rec):
-        with Observer(rec):
-            torch.mm(a, a)
+    with Observer(rec), Observer(rec):
+        torch.mm(a, a)
     enters = [e for e in events if isinstance(e, DispatchEnter)]
     assert len(enters) == 2 and enters[0].parent is None and enters[1].parent == enters[0].id
     exits = [e.id for e in events if isinstance(e, DispatchExit)]
@@ -154,13 +280,48 @@ def test_nested_mode_instances_share_the_recorder_and_link_parents():
 
 def test_exception_survives_with_a_note():
     rec, events = _rec()
-    with Observer(rec):
-        with pytest.raises(RuntimeError):
-            torch.mm(torch.zeros(2, 3), torch.zeros(2, 3))
+    with Observer(rec), pytest.raises(RuntimeError):
+        torch.mm(torch.zeros(2, 3), torch.zeros(2, 3))
     notes = [e for e in events if isinstance(e, Note)]
     assert notes and notes[0].text == "exception in dispatcher call" and notes[0].data["op"] == "aten.mm.default"
     assert [e for e in events if isinstance(e, DispatchExit)][-1].outs is None
     assert rec.open == []
+
+
+def test_an_encoding_failure_is_noted_and_the_call_runs_all_the_same(monkeypatch):
+    rec, events = _rec()
+    a, b = torch.randn(2, 3), torch.randn(3, 2)
+
+    def no_view(t):
+        raise ValueError("no view")
+
+    monkeypatch.setattr(rec.storage, "view_of", no_view)
+    with Observer(rec):
+        c = torch.mm(a, b)
+    assert torch.equal(c, a @ b)
+    [enter] = [e for e in events if isinstance(e, DispatchEnter)]
+    [exit_] = [e for e in events if isinstance(e, DispatchExit)]
+    assert (enter.op, enter.args, enter.kwargs, exit_.id, exit_.outs) == ("aten.mm.default", [], {}, enter.id, None)
+    said = {"id": enter.id, "op": "aten.mm.default", "error": "ValueError('no view')"}
+    assert [(e.text, e.data) for e in events if isinstance(e, Note)] == [("encode error (args)", said), ("encode error (outs)", said)]
+    assert [type(e).__name__ for e in events] == ["Note", "DispatchEnter", "Note", "DispatchExit"]
+    assert rec.counts["notes"] == 2 and rec.open == []
+
+
+def test_the_recorders_stream_is_the_current_cuda_streams_and_minus_one_where_cuda_cannot_say(monkeypatch):
+    rec, _ = _rec()
+    rec._cuda = False
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda: pytest.fail("a recorder without CUDA asked for its stream"))
+    assert rec.stream() == 0
+    rec._cuda = True
+    monkeypatch.setattr(torch.cuda, "current_stream", lambda: SimpleNamespace(cuda_stream=77))
+    assert rec.stream() == 77
+
+    def no_stream():
+        raise RuntimeError("CUDA error: initialization error")
+
+    monkeypatch.setattr(torch.cuda, "current_stream", no_stream)
+    assert rec.stream() == -1
 
 
 def test_missing_reentry_impl_keeps_why_each_path_failed(monkeypatch):

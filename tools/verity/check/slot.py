@@ -27,7 +27,10 @@ memory free when they began (two cold ones, each with targets of well over 100 G
 runs, the slot holds a research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what
 the check may still take. `--budget-gb GB` (10^9 bytes) is for a CMD that plans on more than its run reserves, one whose
 processes reach their figure only some of the time: CMD gets the larger of the slot's mem= and it as SLOT_MEM_ENV, and the slot
-waits for and reserves what it would without it.
+waits for and reserves what it would without it. A try reads the machine's memory once, and the live reservations once for
+each way its slots count them (`Poll`), however many slots the pool has, since one such reading walks every live
+reservation's process tree; `--status` reads them once a listing, the same way. A slot's lock is tried only when nothing
+blocks the slot (`take`): a waiter never takes, even for a moment, the lock of a slot it couldn't start a check in.
 With every slot busy it retries every POLL_S, reading
 SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is, unless
 CHECK_SLOTS named that file: then it exits NOT_STARTED, naming the pools the machine has (a run sent to a pool the node lacks
@@ -37,11 +40,13 @@ with a core outside this process's own (os.sched_getaffinity) is skipped, since 
 A slot with book=GB beside its mem= (`c 0-95 only=trains mem=300 book=150`) waits for book GB free and reserves book GB
 (`booked`), for checks that plan on mem= and reach it only some of the time: the ledger then holds what such a check is
 expected to reach, not the most it may. mem= stays the slot's size for everything else: what CMD gets as SLOT_MEM_ENV and what
-MIN_MEM_ENV tests. A run that asks more than book (RUN_MEM_ENV) waits for and reserves its ask, as on any slot. A check past
-book meets nothing here: the reservation caps nothing and the machine's own limits act, and where OOM kills are ordered by
-reservation (research's `oom_order.py`) it counts as over its reservation from book, not from mem=. A line whose book= isn't
-a whole number of GB from 1 to its mem= starts no check, and the wait and `--status` say so with the fix. A slot.py from
-before the key, which a check of an older tree runs, reads the line as its mem= alone and reserves that.
+MIN_MEM_ENV tests. A run that asks more than book (RUN_MEM_ENV: a train check's shard asks what its steps took, check.py's
+`shard_ask_gib`) waits for and reserves its ask, as on any slot. CMD gets what the slot books as BOOK_ENV, and check.py
+grants its steps no more than that between them (`check.slot_mem_gb`). A check past book meets nothing here: the
+reservation caps nothing and the machine's own limits act, and where OOM kills are ordered by reservation (research's
+`oom_order.py`) it counts as over its reservation from book, not from mem=. A line whose book= isn't a whole number of GB
+from 1 to its mem= starts no check, and the wait and `--status` say so with the fix. A slot.py from before the key, which a
+check of an older tree runs, reads the line as its mem= alone and reserves that.
 
 A slot with peaks=N (`r0 8-19 mem=15 peaks=8`) counts what live lane runs reserve and haven't reached as many runs together
 reach it (`reserved_gb`): the N largest whole, room for N of them to reach their reservations at the same moment, and each
@@ -54,7 +59,13 @@ counts every reservation whole.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
 live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
-lock is not in the line: it takes that slot whenever it frees.
+lock is not in the line: it takes that slot whenever it frees. A lane waiter whose ask (RUN_MEM_ENV) is over the memory free
+holds no one behind it: only memory keeps it from starting, so the waiters behind it go on, whatever they ask, and each
+starts once its own ask is free (`ahead`). It holds its place again once its ask fits in what is free and what the runs that
+came after it reserve (`passed_gb`): it would start if they ended, so nothing more passes it, and it waits only for runs
+that already hold a slot, however many that fit join behind it. A waiter with no ask keeps its place throughout: it
+reserves a slot's own mem= and nothing where there is none, never more than a run behind it would there, so no run fits
+where it doesn't.
 
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
@@ -71,9 +82,10 @@ run so far plus SECONDS, through its harness's control file (research.telemetry.
 
 `CHECK_MIN_MEM_GB=GB` (MIN_MEM_ENV) in the environment: only a slot whose mem= is at least GB (or that sets none) is taken; on
 a machine that lists no such slot the waiter exits NOT_STARTED at once, naming the slots it has. `check.py --record --priority`
-sets it (`research run --env`) for a check that runs pytest, lean-suites or circuit-check (its `train_gb`), so a train never runs
-in a lane slot: in one, every parallel suite gets one test worker, the one-process suites one process between them and
-circuit-check one target at a time, two to four times a train slot's wall time. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
+sets it (`research run --env`) for a check that runs pytest, lean-suites, circuit-check, the Rust build or a Lean build or
+audit (its `train_gb`), so a train never runs in a lane slot: in one, every parallel suite gets one test worker, the
+one-process suites one process between them and circuit-check one target at a time, two to four times a train slot's wall
+time, and a build or audit can run out of memory. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
 
 `--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on when none had a
 free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them, and never waits in one
@@ -90,7 +102,8 @@ that blocks it, if any, then a line for each of its windows open now or starting
 its comment's first words); then one line per live waiter, a priority one marked so. --json prints the same as one JSON
 object (`status_doc`), which `check.py --slots` reads from every machine. A check that came through here also names its run
 (RESEARCH_RUN_ID), the tree it checks (its working directory, which `research run` names by commit) and who asked (`--by
-NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in `check-NAME.who` beside the lock, with when it joined
+NAME`, else RESEARCH_AGENT_URL): a waiter in its ticket, the holder in `check-NAME.who` beside the lock, with its ticket's
+name and the GiB it reserves (which `passed_gb` reads), when it joined
 the line and when it took the slot, shown only while its pid holds the lock, so a hand-run `flock` is never shown as the
 check that came before it. A holder with no record of the slot's taking (that `flock`, a check an older slot.py started) is
 listed with when its process started, as that, and no time held: a check is one process from joining the line on, so its
@@ -98,12 +111,24 @@ process's age counts its wait too (`holding`, which keeps that start and age as 
 the record's `took`, `held_minutes`, `joined` and `waited_minutes`). A waiting check prints the same lines, the waiters
 before it only, each time its reason to wait changes, so its log says whom it waits behind. Inside a `research run`
 (RESEARCH_RUN_DIR) it also keeps the run's RUN_SLOT: waiting (since when and why), held (which slot, since when it waited and
-when it took the slot, and the last `why` it waited for when it waited) or left (why), so `research status` shows a run
-whose check waits here as `waiting`, not running, and what a run waited behind outlasts its wait.
+when it took the slot, the last `why` it waited for when it waited, the GiB the slot reserves for it, `reserves_gib` (0 for
+none), and the scope its check runs in on a `scope=1` slot, `scope`) or left (why), so `research status` shows a run
+whose check waits here as `waiting`, not running, what a run waited behind outlasts its wait, and the run's record can say
+what it asked of its slot and where its check ran (research.memmark).
+
+A machine keeps one copy of this file of its own, NODE_COPY, which `research deploy install` places from `main`. A run that
+names a pool (`research run --pool`) takes its slot by that copy where the machine has one, so the waiters of a pool's line
+are held to one copy's rules whatever tree each run ships, and by its tree's copy where the machine has none, which that
+copy says in a line. RUN_SLOT says which copy ran (`copy`). The copy is this one file with nothing beside it (alone, it
+names the default check cache: `cache_disk`), and an install renames a new file over it: a waiter read its copy before it
+joined the line and reads it no more, so it waits on by the rules it started with, in the place its ticket's name gave
+it. A ticket is read whichever copy wrote it: a key a copy doesn't know is left alone, and a ticket without a key is one
+that names none (no `mem_gb`: it asks no memory, and always counts).
 """
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import importlib.util
 import json
 import os
@@ -131,17 +156,18 @@ RUN_SLOT = "slot.json"
 #: a slot's mem= as CMD sees it: the GiB its check may take (`--budget-gb`'s where that is larger), which check.py gives
 #: circuit-check as its --mem-gb and suites.py divides among its test processes
 SLOT_MEM_ENV = "CHECK_SLOT_MEM_GB"
+#: the GiB the slot books for CMD (`booked`), which check.py grants no more than (`check.slot_mem_gb`): what SLOT_MEM_ENV
+#: plans on is a slot's size, and a check past its booking counts against no reservation. None with `--budget-gb`, which asks
+#: to plan past the booking
+BOOK_ENV = "CHECK_SLOT_BOOK_GB"
 #: the least mem= a slot this waiter takes must have (the module docstring)
 MIN_MEM_ENV = "CHECK_MIN_MEM_GB"
 #: the check's own scope unit (a `scope=1` slot), which spans.py reads its memory from
 SCOPE_ENV = "CHECK_SCOPE_UNIT"
-#: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`): a slot whose mem= is smaller waits for and reserves
+#: the GB (10^9 bytes) a run asks of its slot (`research run --pool --mem-gb`, or a train check's shard: check.py's
+#: `shard_ask_gib`, through `research run --env`): a slot whose mem= is smaller waits for and reserves
 #: this instead (reserving only the slot's mem= would under-report the run in the ledger)
 RUN_MEM_ENV = "CHECK_RUN_MEM_GB"
-#: a lane waiter that asks at most this many GB (RUN_MEM_ENV) passes the lane waiters ahead of it that only memory keeps from
-#: starting: a 448 GB run at the head held 7 idle slots and every small check behind it. Small runs end and free
-#: their memory soon, so passing the head costs it little
-BACKFILL_MAX_GB = 32
 #: on a slot with peaks=N, the share `reserved_gb` counts of each unreached lane reservation past the N largest: about what a
 #: lane run holds of its reservation, averaged over the time it holds its slot. To measure it again, over a day of pool runs:
 #: the GiB-hours the runs held (each run's cgroup memory less its page cache, sampled in its resources.jsonl) over the
@@ -160,6 +186,11 @@ RAMLOCK = Path(os.environ.get("RESEARCH_RAMLOCK_DIR", "/workspace/ramlock"))
 #: how often a waiting twin whose claims are on another machine looks there for its twin's claim
 TWIN_PEEK_S = 120
 TWIN_SSH_S = 30
+#: this machine's own copy of this file (deploy.toml's entry for it; research's slot_only.NODE_SLOT), and the record `research
+#: deploy install` keeps of what it places (each node's `record` in deploy.toml): a line per installed file, with its path, its
+#: bytes as git names a file's (`blob`) and the commit they were taken from
+NODE_COPY = Path("/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py")
+DEPLOY_RECORD = Path("/workspace/research/deploy/record.jsonl")
 
 
 def cpulist(s: str) -> set[int]:
@@ -211,8 +242,8 @@ def _peaks(name: str, opts: dict[str, str]) -> dict:
 
 def lane_peaks(slots: list[dict]) -> dict:
     """`reserved_gb`'s peaks= for a pool as a whole, as keyword arguments: the largest peaks= of the slots a lane run may take
-    there, and none (every reservation whole) when one of them has no peaks=. A lane waiter's backfill and a placement's
-    count of the pool's free memory read it, so neither finds more free than any slot of the pool would."""
+    there, and none (every reservation whole) when one of them has no peaks=. A waiter's count of the line ahead (`ahead`) and
+    a placement's count of the pool's free memory read it, so neither finds more free than any slot of the pool would."""
     lane = [s.get("peaks") for s in slots if not s.get("trains")]
     return {"peaks": max(lane)} if lane and all(lane) else {}
 
@@ -385,6 +416,29 @@ def reserved_gb(proc: Path = Path("/proc"), priority: bool = False, peaks: int |
     return int(sum(left for left, train in by.values() if train) + sum(lane[:peaks]) + PEAK_SHARE * sum(lane[peaks:])) >> 30
 
 
+class Poll:
+    """One poll's reading of the machine's memory: `memory_gb`, and `reserved_gb` for each way a slot counts the live
+    reservations (a train's gate, or a lane's, whole or by a peaks=), each read the first time a slot asks for it and kept
+    for the slots asked about after it. One `reserved_gb` reads every live reservation's process tree, so read for each
+    slot a poll would take as many times longer as its pool has slots. A waiter makes one for each try, and a listing one
+    for itself: none is kept from one poll to the next, so no slot is ever judged by an earlier poll's figure."""
+
+    def __init__(self) -> None:
+        self._free: int | None = None
+        self._held: dict[tuple[bool, int | None], int] = {}
+
+    def memory_gb(self) -> int:
+        if self._free is None:
+            self._free = memory_gb()
+        return self._free
+
+    def reserved_gb(self, priority: bool = False, peaks: int | None = None) -> int:
+        how = (priority, peaks)
+        if how not in self._held:
+            self._held[how] = reserved_gb(priority=priority, **({} if peaks is None else {"peaks": peaks}))
+        return self._held[how]
+
+
 def booked(slot: dict) -> int | None:
     """The GiB `slot` waits for and reserves: its mem=, or on a line with book= the larger of book and what the run asks
     (RUN_MEM_ENV, which `asking` raised mem= to: a run never reserves less than it asks)."""
@@ -487,11 +541,12 @@ def disk_short(path: Path | None = None) -> str | None:
     return None
 
 
-def blocked(slot: dict, now: datetime, priority: bool = False) -> str | None:
+def blocked(slot: dict, now: datetime, priority: bool = False, poll: Poll | None = None) -> str | None:
     """Why `slot` can't start a check at `now` (a window open or within its lead, a disk short of space (`disk_short`), or less
     memory free than it reserves, `booked`), or None. A `priority` waiter's check, or any check of an only=trains slot (which only those
     take), counts only other priority checks' reservations (`reserved_gb`), whole; any other check of a slot with peaks= counts
-    the lane runs' as that says."""
+    the lane runs' as that says. The memory free and the reservations are `poll`'s, which a caller asking about several slots
+    hands to each, so they are read once for them all; without one they are read for this slot."""
     windows, unread = _windows(slot)
     if unread:
         return unread
@@ -504,7 +559,8 @@ def blocked(slot: dict, now: datetime, priority: bool = False) -> str | None:
         return slot["refused"]
     train = priority or bool(slot.get("trains"))
     crowd = {} if train or not slot.get("peaks") else {"peaks": slot["peaks"]}
-    if (need := booked(slot)) and (free := memory_gb() - (held := reserved_gb(priority=train, **crowd))) < need:
+    poll = poll or Poll()
+    if (need := booked(slot)) and (free := poll.memory_gb() - (held := poll.reserved_gb(train, **crowd))) < need:
         whose = "live train checks" if train else "live runs"
         how = f", the {crowd['peaks']} largest counted whole and the rest at {PEAK_SHARE:g}" if crowd else ""
         return (f"{free} GB of memory free" + (f" ({held} GB more is reserved by {whose} that haven't reached it{how})" if held else "")
@@ -546,10 +602,17 @@ def asking(slots: list[dict]) -> list[dict]:
     return [{**s, "mem": max(s.get("mem") or 0, want)} if want else s for s in slots]
 
 
-def take(slots: list[dict], lock_dir: Path, now: datetime, priority: bool = False) -> tuple[dict, int] | None:
-    """The first free, unblocked slot (`blocked` for a `priority` waiter or not) and the descriptor holding its lock, or None."""
+def take(slots: list[dict], lock_dir: Path, now: datetime, priority: bool = False,
+         poll: Poll | None = None) -> tuple[dict, int] | None:
+    """The first free, unblocked slot (`blocked` for a `priority` waiter or not) and the descriptor holding its lock, or None.
+    Every slot is judged by one reading of the machine's memory: `poll`'s, or the walk's own. A slot is asked whether it is
+    blocked before its lock is tried, so a waiter never takes, even for a moment, the lock of a slot it couldn't start a
+    check in: whatever reads that lock as held (`locked`, `holder`, another waiter's `take`) would read a check there.
+    Trying the lock first would spare next to nothing: a try that takes no slot says what keeps each one, a held one too,
+    so it reads the memory all the same."""
+    poll = poll or Poll()
     for slot in slots:
-        if blocked(slot, now, priority):
+        if blocked(slot, now, priority, poll):
             continue
         fd = os.open(lock_dir / f"check-{slot['name']}.lock", os.O_RDWR | os.O_CREAT, 0o664)
         try:
@@ -747,6 +810,41 @@ def defer_run(waited_s: float, line: str, run_dir: str | None) -> str | None:
     return f"{line}: the run's timeout is now {t:g} s from its start: {now:g} s, plus the {waited_s:g} s it waited here"
 
 
+def copy(commit: str | None = None) -> dict:
+    """Which copy of this file runs, for the run's RUN_SLOT: the machine's own (`of`: machine, NODE_COPY) or the run's tree's
+    (`of`: tree); its bytes as git names a file's (`blob`, which `research deploy drift` compares); and its commit where one
+    is known. A tree's is the tree's ``commit`` (the asker's). The machine's is the commit DEPLOY_RECORD's newest line
+    for the copy took those bytes from, and where that names none, `no_commit` says why: the record can't be read, or its
+    newest line for the copy names other bytes or there is none (a copy changed by hand, or one whose install hasn't written
+    its line yet). A copy that can't be read back says only that (`unread`)."""
+    me = Path(__file__)
+    try:
+        data = me.read_bytes()
+    except OSError as e:
+        return {"unread": f"{type(e).__name__}: {e}"}
+    ran = {"of": "machine" if me.resolve() == NODE_COPY.resolve() else "tree",
+           "blob": hashlib.sha1(b"blob %d\0" % len(data) + data, usedforsecurity=False).hexdigest()}
+    if ran["of"] == "tree":
+        return {**ran, **({"commit": commit} if commit else {})}
+    try:
+        lines = [ln for ln in DEPLOY_RECORD.read_text().splitlines() if str(NODE_COPY) in ln]
+    except (OSError, UnicodeDecodeError) as e:
+        return {**ran, "no_commit": f"{DEPLOY_RECORD}: {type(e).__name__}: {e}"}
+    last, torn = {}, []
+    for ln in lines:
+        try:
+            d = json.loads(ln)
+        except ValueError as e:
+            torn.append(str(e))
+            continue
+        if isinstance(d, dict) and d.get("path") == str(NODE_COPY) and d.get("blob"):
+            last = d
+    if last.get("blob") == ran["blob"] and last.get("commit"):
+        return {**ran, "commit": last["commit"]}
+    why = f"names blob {last['blob']} last for this file" if last else "names no install of this file"
+    return {**ran, "no_commit": f"{DEPLOY_RECORD} {why}" + (f", and {len(torn)} of its lines for it can't be read" if torn else "")}
+
+
 def record_slot(run_dir: str | None, doc: dict) -> None:
     """``doc`` as the run's RUN_SLOT, replaced whole, so `research status` shows a check waiting in the line as waiting and not as
     running since its run began. Nothing outside a
@@ -762,27 +860,29 @@ def record_slot(run_dir: str | None, doc: dict) -> None:
         print(f"slot: the run's {RUN_SLOT} not written: {e}", file=sys.stderr, flush=True)
 
 
-def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc")) -> list[dict]:
-    """Each slot as `--status --json` gives it: its name, cores, `holding`, what blocks it now (`blocked`) and its `upcoming`
-    windows."""
+def slot_docs(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc"), poll: Poll | None = None) -> list[dict]:
+    """Each slot as `--status --json` gives it: its name, cores, `holding`, what blocks it now (`blocked`, by one reading of
+    the machine's memory for every slot: `poll`'s, or the listing's own) and its `upcoming` windows."""
+    poll = poll or Poll()
     return [{"name": s["name"], "cpus": s["cpus"], "windows": s["windows"], "lead": s["lead"], "trains": s.get("trains", False),
              "mem": s.get("mem"), **({"book": s["book"]} if s.get("book") else {}),
              **({"peaks": s["peaks"]} if s.get("peaks") else {}),
              "holder": holding(lock_dir / f"check-{s['name']}.lock", lock_dir / f"check-{s['name']}.who", now, proc),
-             "blocked": blocked(s, now), "upcoming": upcoming(s, now)} for s in slots]
+             "blocked": blocked(s, now, poll=poll), "upcoming": upcoming(s, now)} for s in slots]
 
 
-def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc"), before: str | None = None) -> list[str]:
+def status(slots: list[dict], lock_dir: Path, now: datetime, proc: Path = Path("/proc"), before: str | None = None,
+           poll: Poll | None = None) -> list[str]:
     """`--status`'s lines (a windowed slot's `upcoming` windows below it); with `before` (a ticket's name), only the waiters
-    that came before it."""
+    that came before it; with `poll` (a waiter's, for the try it lists), what blocks each slot is by that reading."""
     out = []
-    for s in slot_docs(slots, lock_dir, now, proc):
+    for s in slot_docs(slots, lock_dir, now, proc, poll):
         out.append(f"{s['name']}  cores {s['cpus']}" + ("  trains only" if s["trains"] else "")
                    + (f"  mem {s['mem']} GB" + (f" (reserves {s['book']})" if s.get("book") else "") if s["mem"] else "")
                    + (f"  peaks {s['peaks']}" if s.get("peaks") else "")
                    + f"  {held_text(s['holder'])}" + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
         out += [f"{s['name']}  {window_text(w)}" for w in s["upcoming"]]
-    return out + waiters(lock_dir / LINE, now, before)
+    return out + waiters(lock_dir / LINE, now, before, lambda name: passed_gb(name, lock_dir, proc))
 
 
 def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
@@ -790,7 +890,7 @@ def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
     if not SLOTS.exists():
         return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}", "slots": None, "waiters": []}
     return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}", "slots": slot_docs(parse(SLOTS.read_text()), SLOTS.parent, now, proc),
-            "waiters": waiting(SLOTS.parent / LINE, now)}
+            "waiters": waiting(SLOTS.parent / LINE, now, passed=lambda name: passed_gb(name, SLOTS.parent, proc))}
 
 
 def _when(who: dict, key: str, who_file: Path) -> datetime | None:
@@ -852,20 +952,24 @@ def held_text(h: dict | None) -> str:
     return f"held by pid {h['pid']}" + (f" {times}" if times else "") + (f" ({who})" if who else "") + f": {h['cmd']}"
 
 
-def waiters(line: Path, now: datetime, before: str | None = None) -> list[str]:
+def waiters(line: Path, now: datetime, before: str | None = None, passed: Callable[[str], float] | None = None) -> list[str]:
     """One line per live waiter in ``line`` (`waiting`)."""
-    return [waiter_text(w) for w in waiting(line, now, before)]
+    return [waiter_text(w) for w in waiting(line, now, before, passed)]
 
 
 def waiter_text(w: dict) -> str:
     return (f"waiting since {w['since']} ({w['minutes']} min)" + (" with priority" if w["priority"] else "") + f": pid {w['pid']}"
-            + (f" ({describe(w)})" if describe(w) else ""))
+            + (f" ({describe(w)})" if describe(w) else "")
+            + (f"; runs that came after it reserve {w['passed_gib']:g} GB of the {gib(w['mem_gb'])} GB it waits for"
+               if w.get("passed_gib") else ""))
 
 
-def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
+def waiting(line: Path, now: datetime, before: str | None = None, passed: Callable[[str], float] | None = None) -> list[dict]:
     """Each live waiter in ``line``, oldest first (priority ones first, as they take slots): since when and for how many
     minutes, whether with priority, and the pid, run, tree, asker and ask (`mem_gb`, the GB its run asks of its slot) its
-    ticket names; with `before` (a ticket's name), only those that came before it."""
+    ticket names; with `before` (a ticket's name), only those that came before it. With `passed` (`passed_gb`, by a ticket's
+    name), a lane waiter with an ask also names the GiB the runs that passed it reserve (`passed_gib`), where they reserve
+    any: `ahead` counts it again once its ask fits in that and what is free."""
     out = []
     for p in sorted(line.iterdir()) if line.is_dir() else []:
         if before is not None and p.name >= before:
@@ -885,9 +989,12 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
             os.close(fd)
         t = datetime.fromtimestamp(int(p.name.lstrip(PRIORITY).split("-")[0].split(RANKED)[-1]) / 1e9, timezone.utc)
         who = _read(p)
+        asks = isinstance(who.get("mem_gb"), (int, float)) and who["mem_gb"] > 0 and not p.name.startswith(PRIORITY)
+        gone = passed(p.name) if passed and asks else 0
         out.append({"since": f"{t:%Y-%m-%dT%H:%MZ}", "minutes": round((now - t).total_seconds() / 60),
                     "priority": p.name.startswith(PRIORITY), "pid": who.get("pid", int(p.name.split("-")[-1])),
-                    **{k: who[k] for k in ("run", "tree", "commit", "by", "twin", "mem_gb") if who.get(k)}})
+                    **{k: who[k] for k in ("run", "tree", "commit", "by", "twin", "mem_gb") if who.get(k)},
+                    **({"passed_gib": gone} if gone else {})})
     return out
 
 
@@ -913,11 +1020,16 @@ def join(lock_dir: Path, priority: bool = False, who: dict | None = None, line: 
     return d / name, fd
 
 
-def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None) -> int:
+def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None,
+          passed: Callable[[str], float] | None = None) -> int:
     """How many live waiters came before `ticket`'s; a dead waiter's ticket is removed. With `free_gb` (the GiB free now, or a
     function read once, the first time a ticket ahead names an ask), a lane waiter whose ticket asks more than that is not
-    counted: only memory keeps it from starting, so it holds no one behind it (BACKFILL_MAX_GB). A priority waiter, or a ticket
-    that names no ask, always counts."""
+    counted: only memory keeps it from starting, so it holds no one behind it, whatever they ask (a run whose 72 GB were
+    free stood behind a head asking more than was free, and ten smaller runs behind it, beside 11 idle slots). With `passed`
+    (`passed_gb`, by a ticket's name) it counts again once its ask fits in what is free and what the runs that passed it
+    reserve: it would start if they ended, so nothing more passes it and it waits only for them, and a stream of runs that
+    fit can't keep it out. A priority waiter always counts, and so does a ticket that names no ask: that waiter reserves a
+    slot's own mem=, never more than a run behind it would there, so none fits where it doesn't."""
     n, free = 0, None
     for p in sorted(ticket.parent.iterdir()):
         if p.name >= ticket.name:
@@ -935,10 +1047,27 @@ def ahead(ticket: Path, free_gb: float | Callable[[], float] | None = None) -> i
             asks = _asks(fd) if free_gb is not None and not p.name.startswith(PRIORITY) else 0.0
             if asks and free is None:
                 free = free_gb() if callable(free_gb) else free_gb
-            n += 0 if asks and asks > free else 1
+            n += 0 if asks and asks > free + (passed(p.name) if passed and asks > free else 0) else 1
         finally:
             os.close(fd)
     return n
+
+
+def passed_gb(ticket: str, lock_dir: Path, proc: Path = Path("/proc")) -> float:
+    """The GiB reserved by the lane runs that hold a slot of ``lock_dir`` and joined its line after the waiter whose ticket is
+    named ``ticket``: what the runs that passed it give back as they end. A holder's record (`check-NAME.who`) names its own
+    ticket and the GiB it reserved (`booked`), and counts only while its pid holds the slot's lock. Each counts whole, as a
+    run may reach what it reserved, also in a pool whose slots count the unreached part of it at a share (peaks=). Not
+    counted: what a run holds past or without a reservation, a priority check (its ticket sorts before every lane
+    waiter's), and a holder whose record names no ticket (an older slot.py's). Against those a waiter is passed for as
+    long as memory keeps it."""
+    gb = 0.0
+    for who_file in sorted(lock_dir.glob("check-*.who")):
+        who = _read(who_file)
+        if (isinstance(who.get("ticket"), str) and who["ticket"] > ticket and isinstance(who.get("reserves_gib"), (int, float))
+                and who.get("pid") == holder(who_file.with_suffix(".lock"), proc)):
+            gb += who["reserves_gib"]
+    return gb
 
 
 def _asks(fd: int) -> float:
@@ -1066,7 +1195,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     min_mem = min_mem_gb()
     if not cmd:
         sys.exit(USAGE)
-    if not SLOTS.exists() and os.environ.get("CHECK_SLOTS"):
+    named = os.environ.get("CHECK_SLOTS")           # a pool's slots, named in the machine's own check slots' place
+    if not SLOTS.exists() and named:
         pools = ", ".join(p.parent.name for p in lane_pools(SLOTS.parent.parent / "slots")) or "none"
         print(f"slot: not started: CHECK_SLOTS names {SLOTS}, which this machine doesn't have, and CMD would run on any core "
               f". Name one of its pools instead (CHECK_SLOTS={SLOTS.parent.parent}/NAME/slots, or `research run --pool "
@@ -1109,11 +1239,15 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
               file=sys.stderr, flush=True)
         return NOT_STARTED
     me = asker(by, pair)
+    ran = copy(me.get("commit"))
+    if ran.get("of") == "tree" and named and not NODE_COPY.exists():
+        print(f"slot: this machine has no slot.py of its own ({NODE_COPY}), so the run's tree's copy holds its place in the "
+              f"pool's line", file=sys.stderr, flush=True)
     ticket, tfd = join(SLOTS.parent, priority=priority, who=me, rank=rank)
     told, joined, peeked = None, now(), None
     run_dir = research_run_dir()
     since = {"since": f"{joined:%Y-%m-%dT%H:%M:%SZ}", **({"priority": True} if priority else {}), **({"twin": pair} if pair else {}),
-             **({"rank": rank} if rank is not None else {})}
+             **({"rank": rank} if rank is not None else {}), **({"copy": ran} if ran else {})}
     record_slot(run_dir, {"state": "waiting", **since})
 
     def gone(why: str) -> int:
@@ -1129,11 +1263,11 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
             peeked = now()
             if state == "taken":
                 return gone(f"its twin took a slot first ({describe(info) or 'claimed'})")
-        n = ahead(ticket)
-        if n and not priority and asked_gb() <= BACKFILL_MAX_GB:
-            n = ahead(ticket, free_gb=lambda: memory_gb() - reserved_gb(**lane_peaks(slots)))
+        poll = Poll()                                               # this try's reading of the machine's memory, and no other's
+        n = ahead(ticket, free_gb=lambda: poll.memory_gb() - poll.reserved_gb(**lane_peaks(slots)),
+                  passed=lambda name: passed_gb(name, SLOTS.parent))
         got = None if n else take([s for s in slots if (priority or not s["trains"]) and holds(s, min_mem)], SLOTS.parent, now(),
-                                  priority)
+                                  priority, poll)
         if got and pair:
             state, info = twin("claim", pair, {**me, "took": f"{now():%Y-%m-%dT%H:%MZ}"})
             if state != "claimed":
@@ -1145,11 +1279,11 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         if got:
             break
         why = f"{n} check(s) ahead in line" if n else \
-            "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now(), priority) or held_why(s, priority, min_mem)}"
+            "every check slot is taken (" + "; ".join(f"{s['name']}: {blocked(s, now(), priority, poll) or held_why(s, priority, min_mem)}"
                                                    for s in slots) + ")"
         if why != told:
             print(f"slot: {why}; retrying every {POLL_S} s", file=sys.stderr, flush=True)
-            for ln in status(slots, SLOTS.parent, now(), before=ticket.name):
+            for ln in status(slots, SLOTS.parent, now(), before=ticket.name, poll=poll):
                 print(f"slot:   {ln}", file=sys.stderr, flush=True)
             record_slot(run_dir, {"state": "waiting", **since, "why": why})
             told = why
@@ -1162,17 +1296,20 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     took = f"{now():%Y-%m-%dT%H:%M:%SZ}"
     who = SLOTS.parent / f"check-{slot['name']}.who"
     tmp = who.with_name(f".{who.name}.{os.getpid()}")
-    tmp.write_text(json.dumps({**me, "joined": f"{joined:%Y-%m-%dT%H:%M:%SZ}", "took": took}) + "\n")
+    tmp.write_text(json.dumps({**me, "ticket": ticket.name, "reserves_gib": booked(slot) or 0,
+                               "joined": f"{joined:%Y-%m-%dT%H:%M:%SZ}", "took": took}) + "\n")
     tmp.chmod(0o664)
     os.replace(tmp, who)
     os.set_inheritable(fd, True)
     os.sched_setaffinity(0, cpulist(slot["cpus"]))
-    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV, SCOPE_ENV, MIN_MEM_ENV)}
+    env = {k: v for k, v in os.environ.items() if k not in ("LEASE_DIR", SLOT_MEM_ENV, BOOK_ENV, SCOPE_ENV, MIN_MEM_ENV)}
     env.update(LEASE_DEADLINE_FILE="/nonexistent/research-deadline", CHECK_SLOT=slot["name"],
                VERITY_TEST_CACHE=str(Path.home() / ".cache" / "verity" / f"tests-slot-{slot['name']}"),
-               **({SLOT_MEM_ENV: str(plan)} if (plan := max(slot.get("mem") or 0, budget or 0)) else {}))
-    record_slot(run_dir, {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": took,
-                          **({"why": told} if told else {})})
+               **({SLOT_MEM_ENV: str(plan)} if (plan := max(slot.get("mem") or 0, budget or 0)) else {}),
+               **({BOOK_ENV: str(book)} if (book := booked(slot)) and budget is None else {}))
+    held = {"state": "held", **since, "slot": slot["name"], "cores": slot["cpus"], "took": took, "reserves_gib": booked(slot) or 0,
+            **({"why": told} if told else {})}
+    record_slot(run_dir, held)
     print(f"slot: check slot {slot['name']} (cores {slot['cpus']})", file=sys.stderr, flush=True)
     if said := reserve(slot, now(), priority):
         print(said, file=sys.stderr, flush=True)
@@ -1183,6 +1320,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     elif slot.get("scope"):
         cmd, unit = scoped(cmd, slot["name"], run_id() or str(os.getpid()))
         env[SCOPE_ENV] = unit
+        record_slot(run_dir, {**held, "scope": f"{unit}.scope"})
         print(f"slot: check in its own scope {unit}.scope", file=sys.stderr, flush=True)
     os.execvpe(cmd[0], cmd, env)
 

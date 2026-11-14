@@ -8,16 +8,16 @@ import gzip
 import json
 
 import pytest
-
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat
 from verity.circuits.types import Array, Value
-from verity_vllm.check.match import program_compare as CMP
-from verity_vllm.check.match.canonical_operands import as_progression
 from verity.definitions.registry import b1, b1_tp2
 from verity.definitions.registry import prims as P
+
+from verity_vllm.check.match import program_compare as CMP
+from verity_vllm.check.match.canonical_operands import as_progression
 
 H, V = 8, 8
 BF16, I32 = Value(16), Value(32)
@@ -74,4 +74,18 @@ def test_a_link_table_naming_another_count_of_user_inputs_is_refused(tmp_path):
     d = _derived(tmp_path, {})
     (tmp_path / "tp_links.json").write_text(json.dumps({"world": 2, "rank": 0, "user_inputs": USER[:3], "prompt_inputs": ["prompt"], "links": []}))
     with pytest.raises(ValueError, match="names 3 user inputs, derive-report has 4"):
+        CMP.load_derived(d, "derived")
+
+
+@pytest.mark.parametrize("name", ["peers_1", "lengths"])
+def test_a_peer_or_a_witness_named_past_the_programs_input_nodes_is_refused(tmp_path, name: str):
+    """The Program has five Input nodes: its four user inputs and one weights field.  A report and a link table that both state
+    six user inputs put the fifth at node 4, which the Program has, and the sixth at node 5, which it does not: the sixth is named."""
+    d = _derived(tmp_path, {})
+    report = json.loads((tmp_path / "derive-report.json").read_text())
+    report["provenance"]["source"]["example_inputs"] = [[0]] * 6
+    (tmp_path / "derive-report.json").write_text(json.dumps(report))
+    (tmp_path / "tp_links.json").write_text(json.dumps({"world": 2, "rank": 0, "user_inputs": [*USER, "more", name], "links": [],
+                                                        "prompt_inputs": ["prompt"], "peer_inputs": ["peers_0", "peers_1"]}))
+    with pytest.raises(ValueError, match=rf": user input 5 \({name}\) is not an Input node of the Program$"):
         CMP.load_derived(d, "derived")

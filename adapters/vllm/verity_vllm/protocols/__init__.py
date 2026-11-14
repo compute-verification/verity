@@ -6,7 +6,7 @@ reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
 (`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled; PoUB, which
 serving drives by flag rather than as an option, is imported by name too (`driver`), only under its flag.  The
-protocol logic is its package's (`verity.protocols.pouw.verifier`, `verity.protocols.pous.verifier`, `verity.protocols.spot.verifier`), never this package's.
+protocol logic is its package's (`verity.protocols.accounting.pouw.verifier`, `verity.protocols.accounting.pous.verifier`, `verity.protocols.proofs.spot.verifier`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
 first, and uninstall in reverse:
@@ -24,8 +24,8 @@ weights (`at_commit`), and after its warm-ups, so every ``apply`` an executor se
 **Refused** (`refusals`): an unknown protocol; a scheme its package does not register, or an adapter not on this tree;
 a protocols config naming a protocol the run does not enable; a set at TP > 1 (each rank would install its own, which is
 not wired); two executors at one site; beside sampled proofs, an executor whose protocol package has no circuit for its
-scheme (`CIRCUITS`, `traced_as`: every PoUW scheme but ``ncp-v2``, and Pearl's noise-dependent output for good);
-with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
+scheme (`CIRCUITS`, `traced_as`: every PoUW scheme but ``ncp-v2``), unless the window's circuit is cut at its sites (`CUT`,
+below); with ``pous`` on, an option that keeps a weight-derived copy resident across forwards (``keeps_weight_copy``); and
 whatever an adapter refuses for its context (sampled proofs outside the Commit stage, for one).
 
 **Weights of record.**  An option that releases weights from the model (POUS) returns their plaintext from
@@ -40,9 +40,13 @@ Program describes: POUS's decode is bit-identical and leaves the circuit untouch
 protocol package has a circuit for its scheme (``traced_as``).
 
 **Circuits.**  What sampled proofs traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
-`verity.protocols.pouw.prover.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
+`verity.protocols.accounting.pouw.prover.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
 executed call).  The selector admits an executor beside sampled proofs only for a scheme with a circuit, and `traced_as`
-gives the Commit the circuit of each executed call.
+gives the Commit the circuit of each executed call.  An executor with none whose calls commit tables a window's circuit
+can be cut at (an adapter's ``cuts``: Pearl-C's, whose calls commit their A rows and y) is admitted only when the
+sampled-proofs setting ``cut`` (`CUT`) names it: serve-openai's Commit windows under Pearl+ (`serve_pearl`), whose
+window-commit cuts each window's circuit at its linears and reads Pearl+'s tables there (`window_class.PearlTables`).  A
+row's Commit (`at_row`, `commit_context`) replays the row's request Programs, which are never cut, and refuses ``cut``.
 """
 from __future__ import annotations
 
@@ -50,21 +54,23 @@ import dataclasses
 import hashlib
 import importlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
 from typing import Any
 
 from verity_vllm import config
 from verity_vllm.engine import hooks
+from verity_vllm.errors import Refused
 from verity_vllm.protocols.interface import Context, Installed, Option, Target
+from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
 __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target",
            "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
-           "from_engine", "install", "into_verdict", "load_settings",
-           "parse", "refusals", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS", "circuit_registry",
-           "traced_as"]
+           "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
+           "parse", "refusals", "refused", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS",
+           "CUT", "circuit_registry", "traced_as"]
 
 #: protocol -> its adapter module in this package
 ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "spot"}
@@ -79,18 +85,17 @@ DRIVERS = {"remote-bandwidth": "remote_bandwidth"}
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 #: protocol -> the module of its protocol package that says what sampled proofs traces its executed computation as:
 #: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
-CIRCUITS = {"pouw": "verity.protocols.pouw.prover.circuit"}
-RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
+CIRCUITS = {"pouw": "verity.protocols.accounting.pouw.prover.circuit"}
+#: the sampled-proofs setting naming the executor whose sites the window's circuit is cut at (`refusals`)
+CUT = "cut"
+RECORD_SCHEMA = PROTOCOL_COMPOSITION_SCHEMA
 
 parse = config.parse_protocols
 
 
-class Refused(ValueError):
-    """The run cannot enable this set; ``reasons`` lists every refusal."""
-
-    def __init__(self, reasons: tuple[str, ...] | list[str]) -> None:
-        self.reasons = tuple(reasons)
-        super().__init__("protocol options refused: " + "; ".join(self.reasons))
+def refused(reasons: str | Sequence[str]) -> Refused:
+    """The refusal of a set, for a caller to raise: `errors.Refused` reading "protocol options refused: <reasons>"."""
+    return Refused(reasons, "protocol options")
 
 
 def _imported(name: str, module: str, what: str) -> ModuleType:
@@ -99,14 +104,14 @@ def _imported(name: str, module: str, what: str) -> ModuleType:
     except ModuleNotFoundError as e:
         here = e.name is not None and e.name.startswith(f"{__name__}.") and f"{module}.".startswith(f"{e.name}.")
         why = "is not on this tree" if here else f"needs {e.name}, which is not installed"
-        raise Refused([f"{name}: its {what} {module} {why}"]) from e
+        raise refused([f"{name}: its {what} {module} {why}"]) from e
 
 
 def adapter(name: str) -> ModuleType:
     """The adapter module of protocol ``name``; `Refused` when the protocol is unknown or its adapter cannot be imported
     on this tree (not landed yet, or its protocol package missing)."""
     if name not in ADAPTERS:
-        raise Refused([f"unknown protocol {name!r} (known: {', '.join(ADAPTERS)})"])
+        raise refused([f"unknown protocol {name!r} (known: {', '.join(ADAPTERS)})"])
     return _imported(name, f"{__name__}.{ADAPTERS[name]}", "adapter")
 
 
@@ -114,7 +119,7 @@ def driver(name: str, part: str) -> ModuleType:
     """Module ``part`` of protocol ``name``'s driver (`DRIVERS`); `Refused` when the protocol has none or the module cannot
     be imported on this tree."""
     if name not in DRIVERS:
-        raise Refused([f"no driver of protocol {name!r} (known: {', '.join(DRIVERS)})"])
+        raise refused([f"no driver of protocol {name!r} (known: {', '.join(DRIVERS)})"])
     return _imported(name, f"{__name__}.{DRIVERS[name]}.{part}", "driver")
 
 
@@ -137,7 +142,7 @@ def circuit_registry(name: str) -> ModuleType | None:
     try:
         return importlib.import_module(module)
     except ModuleNotFoundError as e:
-        raise Refused([f"{name}: its circuit registry {module} is not installed ({e.name})"]) from e
+        raise refused([f"{name}: its circuit registry {module} is not installed ({e.name})"]) from e
 
 
 def traced_as(entry: str, m: int, k: int, n: int) -> Any:
@@ -196,7 +201,7 @@ def from_engine(ctx: Context, llm: Any, *, epoch: int = 0) -> Context:
         if got:
             settings[name] = {**settings.get(name, {}), **got}
     if bad:
-        raise Refused(bad)
+        raise refused(bad)
     return dataclasses.replace(ctx, settings=settings, filled={})
 
 
@@ -219,6 +224,8 @@ def refusals(ctx: Context) -> tuple[str, ...]:
     if stray:
         out.append(f"the protocols config names {stray}, which this run does not enable")
     executors: dict[str, str] = {}
+    sampled = ctx.scheme("sampled-proofs") is not None
+    cut, cut_at = ctx.settings_of("sampled-proofs").get(CUT) if sampled else None, None
     for entry, name in zip(ctx.enabled, names):
         scheme = entry.partition(":")[2]
         try:
@@ -237,13 +244,34 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             if site in executors:
                 out.append(f"{entry}: {site} already has an executor, {executors[site]}; a site has one")
             executors.setdefault(site, entry)
-        if sites and ctx.scheme("sampled-proofs") is not None and not _has_circuit(name, scheme, out):
-            out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
-                       f"SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
+        if sites and sampled and not _has_circuit(name, scheme, out):
+            if not getattr(mod, "cuts", lambda s: False)(scheme):
+                out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, "
+                           f"so SPOT would trace it as the stock computation (refused until the option names one: "
+                           f"traced_as)")
+            elif cut == entry:
+                cut_at = entry
+            else:
+                out.append(f"{entry}: executes {', '.join(sites)}, and no Definition computes what it does there: SPOT "
+                           f"takes it only in a window whose circuit is cut at its sites and reads the tables its calls commit "
+                           f"(window_class.PearlTables), which the sampled-proofs setting '{CUT}' names ({{\"sampled-proofs\": "
+                           f"{{\"{CUT}\": \"{entry}\"}}}})")
         if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")
+    if cut is not None and cut != cut_at:
+        out.append(f"the sampled-proofs setting '{CUT}' names {cut!r}, and a window's circuit is cut only at the sites of an "
+                   f"enabled executor with no circuit of its own whose calls commit the tables the cut reads (an adapter's cuts)")
     return tuple(out)
+
+
+def _uncut(ctx: Context) -> list[str]:
+    """A row's Commit refuses a cut: its replay evaluates the row's request Programs, which are never cut."""
+    if ctx.settings_of("sampled-proofs").get(CUT) is None:
+        return []
+    return [(f"the sampled-proofs setting '{CUT}': a row's Commit replays the row's request Programs, which are never cut at an "
+             f"executor's sites; a window's circuit is cut at them in serve-openai's Commit windows (serve_pearl), whose "
+             f"window-commit reads the executor's tables there")]
 
 
 class Composition:
@@ -334,10 +362,10 @@ def install(model: Any, ctx: Context, *, rank: int = 0) -> Composition:
     the error propagates."""
     bad = refusals(ctx)
     if bad:
-        raise Refused(bad)
+        raise refused(bad)
     stray = undeclared(ctx.enabled)
     if stray:
-        raise Refused([f"options installed outside this composition are live: {list(stray)}"])
+        raise refused([f"options installed outside this composition are live: {list(stray)}"])
     comp = Composition(ctx)
     target = Target(model, ctx, rank)
     comp.weight_commitments = target.weight_commitments
@@ -409,9 +437,9 @@ def commit_context(profile: Any, *, world: int = 1, settings: Any = None) -> Con
         return None
     ctx = Context(stage="commit", enabled=tuple(profile.protocols), world=int(world),
                   enforce_eager=getattr(profile, "compilation", None) is None, settings=load_settings(settings))
-    bad = refusals(ctx)
+    bad = (*refusals(ctx), *_uncut(ctx))
     if bad:
-        raise Refused(bad)
+        raise refused(bad)
     return ctx
 
 
@@ -422,16 +450,17 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
     a knob that contradicts the target, and every refusal of the set at the Commit (a TP row, an adapter not on this tree)."""
     enabled, declared = parse(knob), parse((config.RowEngine.of(workload).target or {}).get("protocols"))
     if enabled and declared and enabled != declared:
-        raise Refused([f"PROTOCOLS {list(enabled)} contradicts the workload target's protocols {list(declared)}"])
+        raise refused([f"PROTOCOLS {list(enabled)} contradicts the workload target's protocols {list(declared)}"])
     enabled = enabled or declared
     if not enabled or enabled == config.DEFAULT_ROW_PROTOCOLS:
         return None
     if not any(e.startswith("sampled-proofs:") for e in enabled):
-        raise Refused([f"{list(enabled)}: a row is a sampled-proofs run, so its set names sampled-proofs:<scheme> "
-                       "(serve without it through verity_vllm.LLM)"])
-    bad = refusals(Context(stage="commit", enabled=enabled, world=int(world), settings=load_settings(workload.get("protocols_config"))))
+        raise refused([(f"{list(enabled)}: a row is a sampled-proofs run, so its set names sampled-proofs:<scheme> "
+                        "(serve without it through verity_vllm.LLM)")])
+    ctx = Context(stage="commit", enabled=enabled, world=int(world), settings=load_settings(workload.get("protocols_config")))
+    bad = (*refusals(ctx), *_uncut(ctx))
     if bad:
-        raise Refused(bad)
+        raise refused(bad)
     return enabled
 
 
@@ -452,11 +481,11 @@ def commit_guard(profile: Any, *, world: int = 1, installs: bool = True, setting
     try:
         ctx = commit_context(profile, world=world, settings=settings)
         if ctx is not None and not installs:
-            raise Refused(["this Commit (TP) installs no protocol options yet"])
+            raise refused(["this Commit (TP) installs no protocol options yet"])
         declared = ctx.scheme("sampled-proofs") if ctx is not None else None
         if commit_scheme is not None and declared is not None and declared != commit_scheme:
-            raise Refused([f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
-                           f"commits under {commit_scheme}: run it with --commit-scheme {declared}"])
+            raise refused([(f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
+                            f"commits under {commit_scheme}: run it with --commit-scheme {declared}")])
     except Refused as e:
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None
@@ -474,7 +503,7 @@ def capture_context(profile: Any, *, settings: Any = None) -> Context | None:
                   settings={k: v for k, v in load_settings(settings).items() if k != "sampled-proofs"})
     bad = refusals(ctx)
     if bad:
-        raise Refused(bad)
+        raise refused(bad)
     return ctx
 
 

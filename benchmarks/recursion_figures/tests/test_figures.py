@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 import math
 
-import pytest
-
 import figures as F
+import pytest
 
 PARTS = ["L0", "L1", "alg-p0", "cap"]
 
@@ -39,7 +38,7 @@ def test_figures_scale_one_session_to_every_machine_window():
     kappa = F.log2_add(F.KAPPA_LOG2, F.KNOWLEDGE_LOG2)
     assert dc["window"]["ks"] == world["window"]["ks"]
     assert dc["window"]["ks"]["world"]["error_log2"] == round(F.log2_add(kappa, t + F.EPS_LOG2), 2)
-    year = dict(F.PERIODS)["year"]
+    year = dict(F.MONITORING_PERIODS)["year"]
     y = dc["periods"]["year"]
     R = year // w
     assert y["sessions"] == fl["datacenter"]["machines"] * R and y["covered_ands"] == y["sessions"] * 3000

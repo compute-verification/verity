@@ -20,14 +20,17 @@ y is dq of their z and the served y is theirs.
   ``<untraced>`` is a tensor no traced op wrote, ``<none>`` a z the path never computed.
 * **What it sees.** Only ops through torch's dispatcher.  A kernel launched outside it (a cubin through the driver) writes
   nothing the trace sees, so its output is ``<untraced>`` and earns nothing: a fused kernel is credited once it is a
-  dispatcher op (``torch.library``) returning its z and its y.
+  dispatcher op (``torch.library``) returning its z and its y.  Ops run `outside` the trace are not seen either; that is
+  for work beside the call that writes neither its y nor its z and runs no GEMM, so its verdict is the same without it.
 """
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import cache
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any
 
 #: the matmul family: a call of any of these is a GEMM
 GEMMS = frozenset({"aten::_int_mm", "aten::mm", "aten::addmm", "aten::addmm_", "aten::_addmm_activation", "aten::bmm",
@@ -84,15 +87,23 @@ def key(t: Any) -> tuple[str, int] | None:
     return (str(t.device), p) if p else None
 
 
+@cache
+def _writes(func: Any) -> tuple[tuple[tuple[int, str], ...], tuple[bool, ...]]:
+    """An op's schema, read once: the arguments it marks written (position, name), and which results alias nothing."""
+    s = func._schema
+    return (tuple((i, a.name) for i, a in enumerate(s.arguments) if a.alias_info is not None and a.alias_info.is_write),
+            tuple(r.alias_info is None for r in s.returns))
+
+
 def _written(func: Any, args: Sequence[Any], kwargs: Mapping[str, Any], out: Any) -> list[Any]:
     """The tensors an op wrote: its results that alias nothing, and the arguments its schema marks written."""
-    s, w = func._schema, []
-    for i, a in enumerate(s.arguments):
-        if a.alias_info is not None and a.alias_info.is_write:
-            w += _tensors(kwargs.get(a.name) if a.name in kwargs else args[i] if i < len(args) else None)
+    written, fresh = _writes(func)
+    w = []
+    for i, name in written:
+        w += _tensors(kwargs.get(name) if name in kwargs else args[i] if i < len(args) else None)
     rets = out if isinstance(out, (tuple, list)) else (out,)
-    for r, t in zip(s.returns, rets):
-        if r.alias_info is None:
+    for f, t in zip(fresh, rets):
+        if f:
             w += _tensors(t)
     return w
 
@@ -133,11 +144,10 @@ class Trace:
 
     def dispatch(self, mode: Any, func: Any, args: Sequence[Any], kwargs: Mapping[str, Any]) -> Any:
         name = func._schema.name
-        top = self._top is None
-        if top:
-            self._top = Invocation(len(self.invocations), name)
-            self.invocations.append(self._top)
-        inv = self._top
+        inv, top = self._top, self._top is None
+        if inv is None:
+            inv = self._top = Invocation(len(self.invocations), name)
+            self.invocations.append(inv)
         try:
             impl = None if func.namespace in KNOWN else _impl(func, args)
             if impl is not None:
@@ -159,6 +169,21 @@ class Trace:
     def producer(self, t: Any) -> Invocation | None:
         k = key(t) if t is not None else None
         return self.invocations[self.writer[k]] if k in self.writer else None
+
+
+@contextmanager
+def outside() -> Iterator[None]:
+    """The ops inside run past the innermost dispatch mode when it is a `Trace`'s, which doesn't see them; under any other
+    innermost mode, or none, they run as they would."""
+    from torch.utils._python_dispatch import (
+        _get_current_dispatch_mode,
+        _pop_mode_temporarily,
+    )
+    if not isinstance(_get_current_dispatch_mode(), _mode()):
+        yield
+        return
+    with _pop_mode_temporarily():
+        yield
 
 
 def verdict(trace: Trace, y: Any, z: Any) -> dict[str, Any]:
@@ -185,4 +210,4 @@ def reasons(verdicts: Iterable[Mapping[str, Any]]) -> dict[str, int]:
 
 
 __all__ = ["GEMMS", "GEMM_COUNT", "Invocation", "KNOWN", "NONE", "NOT_CREDITED", "NOT_GEMMS", "RECORDS", "Trace", "UNTRACED",
-           "key", "reasons", "verdict"]
+           "key", "outside", "reasons", "verdict"]

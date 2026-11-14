@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -13,7 +14,7 @@ ENTRIES = [{"identity": {"request_id": "alice", "step": 3, "op_path": "model.lay
             "kind": "leaf", "encoding": {"dtype": "bfloat16", "shape": [4, 3]}, "zeta": 1.5e-7, "name": "naïve\n\"q\""},
            {"kind": "registered-input", "digest": Path("/w/x"), "b": None, "a": [True, False, {}]},
            {}, [], "s", 7]
-COMPACT = {"separators": (",", ":"), "default": str}
+COMPACT: dict[str, Any] = {"separators": (",", ":"), "default": str}
 
 
 @pytest.mark.parametrize("n", [0, 1, 2, 5, len(ENTRIES)])

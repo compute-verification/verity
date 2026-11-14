@@ -1,22 +1,40 @@
 """The Commit in H1's serving engine, installed: the committer (`committer`, the windowed collector under
 rows-sha512: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), the int8 source at each linear H1 records, the
 step-input port that gives each step's input ids, and the tap that keeps what the Commit acquired for H1
-(`protocol_options.pouw_h1_commit.CommitTap`). Here in ``acquire`` because it builds the int8 source; `pouw_h1_commit`
+(`protocols.pouw.h1.commit.CommitTap`). Here in ``acquire`` because it builds the int8 source; `protocols.pouw.h1.commit`
 holds the tap and the values and imports nothing from ``acquire``. On a server that commits already (serve-openai's
 rows-sha512 collector), `tap` puts H1's tap on that Commit instead.
 
 A MoE layer's routed experts (`engine.int8_experts.ExpertSite`) are no modules: each expert projection's site is
-named as H1 names it (`pouw_h1_hooks.expert_names`, ``prefix.expert.projection``), and its Int8RowQuant_v1 output is
+named as H1 names it (`protocols.pouw.h1.hooks.expert_names`, ``prefix.expert.projection``), and its Int8RowQuant_v1 output is
 acquired under that name inside the call (`ExpertGemm.apply`), as `Int8ExpertsMethod` runs every expert on every forward:
 an expert no token routed to is a call of zero rows, acquired as its zero rows [0, K] and scales [0]."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+from functools import partial
 from types import SimpleNamespace
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from verity_vllm.acquire.sources.int8_source import Int8Source
-from verity_vllm.protocols.pouw.h1.commit import SCHEME, CommitTap, Sites, _EveryStep, site
+from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
+from verity_vllm.engine import hooks
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw.h1.commit import (
+    SCHEME,
+    CommitTap,
+    Sites,
+    site,
+)
+from verity_vllm.protocols.pouw.h1.hooks import expert_names
 from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
+
+
+class _EveryStep(dict):
+    """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        return dict.get(self, 0, default)
 
 
 class H1Source(Int8Source):
@@ -31,10 +49,9 @@ class H1Source(Int8Source):
         self.quant, self._at, self.experts = sites, _EveryStep(self._at), dict(experts)
 
     def install(self) -> None:
-        from verity_vllm.engine import hooks
         super().install()
         for name, s in self.experts.items():
-            self._hooks.append(hooks.wrap(s.quant_method, "apply", lambda orig, name=name: self._scoped(name, orig)))
+            self._hooks.append(hooks.wrap(s.quant_method, "apply", partial(self._scoped, name)))
 
     def _scoped(self, name: str, orig: Any) -> Any:
         """Expert site ``name``'s ``apply`` with the source's scope at ``name``, so its ``row_quant`` is acquired as the
@@ -63,7 +80,6 @@ class H1Source(Int8Source):
 def _linears(model: Any, layers: Sequence[Any]) -> tuple[list[str], dict[str, Any]]:
     """H1's ``layers``: the modules' names in ``model`` and the routed experts by their H1 names. ValueError on a module
     the model doesn't name."""
-    from verity_vllm.protocols.pouw.h1.hooks import expert_names
     names = expert_names(list(layers))
     experts = {n: layers[w] for w, n in names.items()}
     ids = {id(m) for w, m in enumerate(layers) if w not in names}
@@ -75,23 +91,20 @@ def _linears(model: Any, layers: Sequence[Any]) -> tuple[list[str], dict[str, An
 
 def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
     """The int8 source (`H1Source`) on committer ``com``, at the Int8RowQuant_v1 site of each of ``layers`` (H1's
-    linears, `pouw_h1_hooks.layers`) at every engine step: a linear by its name in ``model``, as `pouw.install` names it,
-    and a routed expert by its H1 name (`pouw_h1_hooks.expert_names`)."""
+    linears, `protocols.pouw.h1.hooks.layers`) at every engine step: a linear by its name in ``model``, as `pouw.install` names it,
+    and a routed expert by its H1 name (`protocols.pouw.h1.hooks.expert_names`)."""
     modules, experts = _linears(model, layers)
     return H1Source(com, model, modules, experts)
 
 
-def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: CommitTap | None = None) -> CommitTap:
-    """H1's tap (``tap``, else a new `CommitTap`) on the Commit already serving ``model`` (serve-openai's rows-sha512
+def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int]) -> CommitTap:
+    """H1's tap, a new `CommitTap`, on the Commit already serving ``model`` (serve-openai's rows-sha512
     collector, `pipeline.serve_seal.committer`), in place of a Commit of its own (`attach`): the step's input ids are its
     step-input port's (`served_record.StepInputPort`) and each of H1's ``layers``' x_q and s_a are its int8 source's
     (`Int8Source`, the bench row's manifest's sites, under their op paths), so H1's A tables are tied to the values the
     served window commits. ValueError when the Commit has no port or no int8 source, when ``layers`` hold a routed
     expert (only H1's own source acquires those), or when the source doesn't acquire some linear at each engine step of
     ``steps``, the window's. ``tap.untap()`` removes it."""
-    from verity_vllm.acquire.sources.int8_source import Int8Source
-    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
-
     sources = list(getattr(com, "sources", ()))
     src = next((s for s in sources if isinstance(s, Int8Source) and not isinstance(s, H1Source)), None)
     if not any(isinstance(s, StepInputPort) for s in sources):
@@ -105,7 +118,7 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: 
     if missing := [(e, m) for e in steps for m in modules if (e, m) not in src.quant]:
         raise ValueError(f"the Commit's int8 source acquires {len(missing)} of H1's (engine step, linear) sites nowhere, "
                          f"{missing[:3]}: its manifest names no Int8RowQuant_v1 site there")
-    tap = tap if tap is not None else CommitTap()
+    tap = CommitTap()
     names = set(modules)
     tap.port = PORT_NAMES[0]
     tap.ops = {op: site(m) for (_e, m), op in src.quant.items() if m in names}
@@ -115,7 +128,7 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: 
 
 def committer(engine: Any, run_id: str) -> Any:
     """H1's committer on ``engine``, its run ``run_id``: the declared Commit's (`pipeline.commit`'s native_collect_v2b, built
-    as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`pouw_h1_commit.SCHEME`). It retains
+    as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`protocols.pouw.h1.commit.SCHEME`). It retains
     its values nowhere unless VERITY_RETAIN says otherwise: H1 reads them from its tap, and the windowed collector retains
     none on the device."""
     from verity_vllm import settings
@@ -145,8 +158,6 @@ def envelope(engine: Any) -> dict[str, int]:
 def port_tokens(com: Any, tokens: int) -> int:
     """The step-input port's T for a token budget of ``tokens``: rounded up to whole chunks of the committer's i64 ids,
     the only T `served_record.StepInputPort` takes, so H1's T = 64 rows is a port of 512 ids."""
-    from verity_vllm.commit.served_record import StepInputPort
-
     per = int(com.chunk) // StepInputPort.IB
     return -(-int(tokens) // per) * per
 
@@ -159,8 +170,6 @@ def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, run
     (`port_tokens`); the staging and its window ring sized for the engine's workload (`envelope`); and its `CommitTap`
     (``tap``, else a new one) on the port. Returns the committer, the source and the tap; ``committer.close()`` and
     ``tap.untap()`` remove them."""
-    from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
-
     work = envelope(engine)
     com = committer(engine, run_id)
     if (got := getattr(com, "commit_scheme", None)) != SCHEME:
@@ -179,8 +188,8 @@ def attach(engine: Any, layers: Sequence[Any], tap: CommitTap | None = None, run
 
 
 class RankCommit(RankExtension):
-    """`pouw_h1_ranks.RankExtension` with the Commit on the rank (`h1rank_commit`), the ``worker_extension_cls``
-    `pouw_h1_ranks.COMMIT_EXTENSION`; here because it attaches the int8 source. The holder releases it with the rank
+    """`protocols.pouw.h1.ranks.RankExtension` with the Commit on the rank (`h1rank_commit`), the ``worker_extension_cls``
+    `protocols.pouw.h1.ranks.COMMIT_EXTENSION`; here because it attaches the int8 source. The holder releases it with the rank
     (`RankExtension.h1rank_release`)."""
 
     def _h1rank_engine(self, model: Any, cp: Mapping[str, Any]) -> Any:
@@ -194,12 +203,12 @@ class RankCommit(RankExtension):
 
     def h1rank_commit(self, cp: Mapping[str, Any] | None = None, run_id: str = "h1") -> dict[str, Any]:
         """The Commit on this rank (`attach`, its run ``run_id`` named with the rank's first linear), its tap a
-        `pouw_h1_ranks.RankTap` naming each of the rank's H1 linears as the window does; returns the committer's name, its
+        `protocols.pouw.h1.ranks.RankTap` naming each of the rank's H1 linears as the window does; returns the committer's name, its
         scheme and the port it acquires the step's input ids under. A site the rank's source acquires that the window has
         no name for (a routed expert's included) is refused: under its rank-local name it would meet no call, or another
-        rank's site of the same name."""
-        from verity_vllm.protocols import pouw
-        st = self._h1rank  # type: ignore[attr-defined]
+        rank's site of the same name. A rank that holds no H1 window (before `h1rank_install`, after `h1rank_release`) is
+        refused."""
+        st = self._h1rank_state()
         run: RankRun = st["run"]
         model, layers = self._h1rank_layers()
         names = {name: run.modules[run.lo + int(i)] for i, name in pouw._named(model, layers).items()}

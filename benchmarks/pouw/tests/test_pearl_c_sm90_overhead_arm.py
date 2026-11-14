@@ -22,9 +22,9 @@ sys.path.insert(0, str(POUW / "harness"))
 
 import arm as A  # noqa: E402
 import baselines as B  # noqa: E402
-from verity.protocols.pouw.verifier import window as Wd  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Shape as Unit  # noqa: E402
-from verity.protocols.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import window as Wd  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit  # noqa: E402
+from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 
 
@@ -115,17 +115,17 @@ def test_without_a_sent_cubin_the_arm_builds_one_for_development(tmp_path, monke
     assert OA.settings().VERITY_BENCH_CUBIN is None
 
 
-def test_the_development_build_is_build_sh_s_cubin_and_gates_alone(tmp_path, monkeypatch):
+def test_the_development_build_is_build_sh_s_cubin_and_gates(tmp_path, monkeypatch):
     runs = []
 
-    def run(argv, env, stdout, stderr):
-        runs.append((argv, env["CUBIN_ONLY"]))
+    def run(argv, stdout, stderr):
+        runs.append(argv)
         return subprocess.CompletedProcess(argv, len(runs) - 1)
 
     monkeypatch.setattr(OA.subprocess, "run", run)
     out = tmp_path / "pearl-plus-cubin"
     assert OA.build_dev(out) == out / "pearl_c_sm90.cubin"
-    assert runs == [(["bash", str(POUW / "pearl_c_sm90" / "build.sh"), str(out)], "1")]
+    assert runs == [["bash", str(POUW / "pearl_c_sm90" / "build.sh"), str(out)]]
     with pytest.raises(RuntimeError, match=r"build.sh exited 1 \(see .*pearl-plus-cubin.log\): send the cubin"):
         OA.build_dev(out)
 
@@ -180,6 +180,28 @@ def test_the_tiles_are_the_served_pipeline_s(m):
     assert OA.tiles_of(m, n) * R.NB == R.Pipeline.sizes(R.BM, n, k, OA.m16(m))["leaves"]
 
 
+def test_the_gate_is_the_call_s_check_as_the_harness_s_verdict():
+    """`gate` waits for the device, then hands the call's check to the harness as its `GateResult`, which `check_gate`
+    takes."""
+    class Dev:
+        synced = 0
+
+        def sync(self) -> None:
+            self.synced += 1
+
+    class Call:
+        outputs = ("y", "a_root")
+
+        def check(self) -> tuple[bool, dict[str, str], dict]:
+            return True, {"y": "all", "a_root": "all"}, {"index": OA.INDEX}
+
+    dev, call = Dev(), Call()
+    g = OA.PearlPlus().gate(dev, call, A.Shape("o", 16, 64, 64), frozenset({"hash"}))
+    assert isinstance(g, A.GateResult) and dev.synced == 1
+    assert (g.ok, g.checked, g.detail) == (True, {"y": "all", "a_root": "all"}, {"index": OA.INDEX})
+    A.check_gate(g, call)
+
+
 def test_without_a_window_of_record_no_epsilon_is_invented(tmp_path, monkeypatch):
     pinned = tmp_path / "overhead_arm.json"
     pinned.write_text(json.dumps({"cubin": OA.pinned()}))
@@ -222,6 +244,7 @@ def test_the_door_names_the_arm_and_its_epsilon_here(monkeypatch):
     monkeypatch.delitem(sys.modules, "overhead_arm", raising=False)
     try:
         (mod, cls), (emod, fn) = door.arm.split(":"), door.epsilon.split(":")
+        assert sorted(OA.__all__) == sorted([cls, fn])
         assert isinstance(getattr(importlib.import_module(mod), cls)(), A.BenchArm)
         eps = getattr(importlib.import_module(emod), fn)
         for n, k in LINEARS.values():

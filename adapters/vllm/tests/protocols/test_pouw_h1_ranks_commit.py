@@ -13,15 +13,37 @@ import hashlib
 import importlib
 import random
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
-# ruff: noqa: E402  (the imports below need torch, so they follow its importorskip)
-from torch import nn
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier import credit as CR
-from verity.protocols.pouw.verifier.coins import Challenger
+from torch import nn
+from verity.protocols.accounting.pouw.verifier import credit as CR
+from verity.protocols.accounting.pouw.verifier.coins import Challenger
+
+from tests.protocols import pouw_h1_gpu as G
+from tests.protocols import pouw_h1_ranks_gpu as RG
+from tests.protocols.test_pouw_h1_commit import (
+    EXPERTS,
+    FIRST,
+    INTERMEDIATE,
+    MOE,
+    PROMPTS,
+    Arm,
+    Committer,
+    K,
+    Linear,
+    MoE,
+    _ids,
+    vllm_config,
+)
+from tests.protocols.test_pouw_h1_ranks import Executor, _rounds, _so
+from tests.protocols.test_pouw_h1_served import _unit
 from verity_vllm.acquire import h1_commit as HC
 from verity_vllm.engine import int8_experts as X
 from verity_vllm.protocols import pouw
@@ -31,13 +53,6 @@ from verity_vllm.protocols.pouw.h1 import hooks as PHK
 from verity_vllm.protocols.pouw.h1 import ranks as PHR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import served as SV
-
-from tests.protocols import pouw_h1_gpu as G
-from tests.protocols import pouw_h1_ranks_gpu as RG
-from tests.protocols.test_pouw_h1_commit import (
-    EXPERTS, FIRST, I, K, MOE, PROMPTS, Arm, Committer, Linear, MoE, _ids, vllm_config)
-from tests.protocols.test_pouw_h1_ranks import Executor, _rounds, _so
-from tests.protocols.test_pouw_h1_served import _unit
 
 ROWS, STEPS = 32, 3
 KEY = hashlib.sha512(b"key").digest()[:32]
@@ -170,6 +185,21 @@ def test_a_zero_on_one_ranks_call_is_refused_at_arow(monkeypatch):
     assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
 
 
+@pytest.mark.parametrize("kind", RG.NEGATIVES)
+def test_the_harness_edit_of_rank_1s_first_call_is_refused_at_arow_and_names_no_expert_site(monkeypatch, kind):
+    """The GPU harness's ``a-zero`` and ``a-row-off`` on rank 1 (`pouw_h1_ranks_gpu._w_edit`): H1 handed its first call's
+    codes all zero, or with row 1's first code off by one, every Commit honest. The window is refused as rank 1's own
+    edited call is, and the edit names no expert site."""
+    holder, _ = _window(monkeypatch, negative=kind)
+    run = holder.run
+    assert holder.edited == [{"tp": 1, "at": None}]
+    assert run.details["roots1"]["reason"].startswith("roots1: round 0's A table h1/a/64@0 of calls [0, 1, 2, 3] is not "
+                                                      "the Commit's row-table/0/k64")
+    assert run.served.tap.own == 1 and _reasons(run) == {CT.UNTIED}
+    v = G.negative_verdict({"core": _verdict(holder), "roots1": run.details["roots1"], "same_tokens": True})
+    assert v["refused"] and v["arow"][1].startswith("round 0's A table of K = 64 h1/a/64@0 is not the Commit's "), v
+
+
 def test_a_ranks_input_ids_off_the_first_ranks_leave_the_window_untied(monkeypatch):
     """Rank 1's Commit acquiring other input ids at step 1 than rank 0's: the window's ids are the first rank's, and the
     tap refuses, so the serving process credits nothing."""
@@ -216,7 +246,7 @@ def test_a_moes_expert_calls_on_both_ranks_are_in_their_steps_a_tables_and_the_c
     assert run.details["roots1"] == {"tied": True, "reason": None, "values": 3 * STEPS, "own_trees": 0,
                                      "steps": {"0": FIRST, "1": FIRST + 1}}
     for s, rows in ((0, [2, 3, 0]), (1, [0, 1, 1])):
-        assert tap.where[CR.commit_rows(s, I)] == {
+        assert tap.where[CR.commit_rows(s, INTERMEDIATE)] == {
             "round": s, "calls": [14 * s + w for w in (2, 4, 6, 9, 11, 13)], "steps": [FIRST + s] * 6,
             "sites": [CT.site(n) for tp in (0, 1) for n in _rank_experts(X.DOWN, tp)], "rows": rows * 2}
         assert tap.where[CR.commit_rows(s, K)]["calls"] == [14 * s + w for w in (0, 1, 3, 5, 7, 8, 10, 12)]
@@ -240,10 +270,10 @@ def test_a_zero_on_one_expert_call_on_rank_1_is_refused_at_arow(monkeypatch):
     run = holder.run
     assert holder.edited == [{"tp": 1, "at": f"{MOE}.0.down"}]
     assert run.details["roots1"]["reason"].startswith(
-        f"roots1: round 0's A table h1/a/{I}@0 of calls [2, 4, 6, 9, 11, 13] is not the Commit's row-table/0/k{I} ")
+        f"roots1: round 0's A table h1/a/{INTERMEDIATE}@0 of calls [2, 4, 6, 9, 11, 13] is not the Commit's row-table/0/k{INTERMEDIATE} ")
     assert run.served.tap.own == 1 and _reasons(run) == {CT.UNTIED}
     v = G.negative_verdict({"core": _verdict(holder), "roots1": run.details["roots1"], "edited": holder.edited[0]["at"]})
-    assert v["refused"] and v["arow"][1].startswith(f"round 0's A table of K = {I} h1/a/{I}@0 is not the Commit's "), v
+    assert v["refused"] and v["arow"][1].startswith(f"round 0's A table of K = {INTERMEDIATE} h1/a/{INTERMEDIATE}@0 is not the Commit's "), v
 
 
 def test_a_rank_whose_commit_acquires_a_site_the_window_cannot_name_is_refused(monkeypatch):

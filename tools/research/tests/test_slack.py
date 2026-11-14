@@ -35,7 +35,7 @@ BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
-           "console", "dashboard", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
+           "console", "dashboard-goals", "dashboard-metrics", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
 
 
 class FakeSlack:
@@ -268,9 +268,9 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
 
 def test_every_handle_names_exactly_one_holder_and_a_predecessor_goes_in_its_lineage(registry):
     """Two holders in one handle split its doorbells and the watch's view (two coordinators would answer one chat).  A
-    handover's outgoing id goes in `lineage`."""
+    handover's outgoing id goes in `lineage`.  A handle no agent has taken yet has no `holder` key."""
     reg = json.loads(REAL_REGISTRY.read_text())
-    many = {h["handle"]: slack.AGENT_ID_RE.findall(h.get("holder") or "") for h in reg["handles"]}
+    many = {h["handle"]: slack.AGENT_ID_RE.findall(h["holder"] or "") for h in reg["handles"] if "holder" in h}
     assert {h: ids for h, ids in many.items() if len(ids) != 1} == {}, "one agent per handle: a second lane gets its own handle"
     with pytest.raises(slack.SlackError, match="lineage"):
         slack.check_registry({**reg, "handles": [{**reg["handles"][0], "lineage": ["gen-3"]}, *reg["handles"][1:]]}, "r")
@@ -317,6 +317,18 @@ def test_a_remit_longer_than_a_user_group_description_is_refused(registry):
         slack.load_registry(registry)
 
 
+def test_a_handles_staffs_are_name_patterns_that_match_no_handle():
+    """`staffs` names the agents a handle's holder alone registers (ci's readers, `review-*`); a pattern that matched a handle
+    would hand that lane's own name to it."""
+    reg = json.loads(REAL_REGISTRY.read_text())
+    ci = next(h for h in reg["handles"] if h["handle"] == "ci")
+    for ok in (["review-*"], ["review-3?", "seat-gemm"]):
+        slack.check_registry({**reg, "handles": [{**h, "staffs": ok} if h is ci else h for h in reg["handles"]]}, "r")
+    for bad in (["*"], ["c*"], ["infra"], ["Review-*"], "review-*", [7]):
+        with pytest.raises(slack.SlackError, match="staffs: the names of the agents its holder alone may register"):
+            slack.check_registry({**reg, "handles": [{**h, "staffs": bad} if h is ci else h for h in reg["handles"]]}, "r")
+
+
 def test_handles_and_subscriptions(registry, routes_dirs, capsys):
     add_route(routes_dirs[0], "infra", "1.0", holder="bc-5a69647d-04f7-5d94-9ff1-56593e2e1037", branch_suffixes=["558b", "9e59"])
     add_route(routes_dirs[1], "proofs", "2.0", holder="bc-8f4b652b-17bc-5055-a120-b56940b7c7a9", posters=["bc-8ece7cde"])
@@ -330,16 +342,15 @@ def test_handles_and_subscriptions(registry, routes_dirs, capsys):
     assert rc == 0 and (infra["holder"], infra["branch_suffixes"]) == ("bc-5a69647d-04f7-5d94-9ff1-56593e2e1037", ["558b", "9e59"])
     rc, out, _ = run(capsys, "subscriptions", "--as", "infra")
     assert rc == 0 and f'channelId="{ALERTS}", topLevelOnly=true' in out and COORD not in out
-    assert 'subscribe_linear_issue(options={"scope": "team", "teamId": "INF"}' in out        # a human's filing rings no inbox
-    assert "subscribe_linear_comment" not in out and "no comment subscription on INF" in out  # nearly all are its own echoes
+    assert "subscribe_linear" not in out and "no Linear subscription on INF" in out           # nearly all are its own writes
 
 
 def test_owners_pick_the_longest_prefix(registry, capsys, monkeypatch):
     rc, out, _ = run(capsys, "owners", "tools/research/src/research/slack.py", "tools/research/src/research/cli.py",
-                     "verity/definitions/ops/tc.py", "verity/circuits/cut.py", "AGENTS.md", "nowhere/x")
+                     "verity/circuits/ops/tc.py", "verity/circuits/cut.py", "AGENTS.md", "nowhere/x")
     assert rc == 0 and [line.split() for line in out.splitlines()] == [
         ["@comms", "tools/research/src/research/slack.py"], ["@infra", "tools/research/src/research/cli.py"],
-        ["@circuits", "verity/definitions/ops/tc.py"], ["@proofs", "verity/circuits/cut.py"],
+        ["@circuits", "verity/circuits/ops/tc.py"], ["@proofs", "verity/circuits/cut.py"],
         ["@top", "AGENTS.md"], ["-", "nowhere/x"]]
     monkeypatch.setattr("sys.stdin", io.StringIO("tools/research/src/research/slack.pyc\n./AGENTS.md\n"))
     rc, out, _ = run(capsys, "owners")

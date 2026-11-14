@@ -1,4 +1,4 @@
-"""The units a served Program spends under property/v1 (`verity.definitions.circuits.stacking`), by callee and class: the honest budget
+"""The units a served Program spends under property/v1 (`verity.circuits.stacking`), by callee and class: the honest budget
 `share.py` multiplies by a served rate.
 
 `units(fn)` runs property/v1's pass over the body of `fn` (a Program's root, or a bound Definition) and sums each node's tally by
@@ -22,14 +22,21 @@ import gzip
 import json
 import sys
 from collections import Counter
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any
 
-from verity.definitions.circuits import stacking as P
-from verity.definitions.circuits.census import census, family, step_ends
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import (
+    REGISTRY,
+    CompositeDefinition,
+    PrimitiveDefinition,
+    bind,
+)
 from verity.circuits.program import is_input
+from verity.circuits import stacking as P
+from verity.circuits.census import census, family, step_ends
+
 
 def charged(t: P.Tally) -> tuple[Counter, Counter]:
     """A tally's units by class, and its refused gates by ``code:primitive``."""
@@ -83,7 +90,7 @@ def units(fn: Any, ends: Sequence[int] | None = None, dyn: Sequence[bool] | None
             if listed != theirs["units"]:
                 raise AssertionError(f"step {s}: the callees' units {listed} are not stacking.analyze's {theirs['units']}")
         out["steps"] = [dict(s) for s in steps]
-        v = P.judge(a, c=dict.fromkeys(P.BUDGETED, 0), windows=[P.Window(range(len(a.steps)), 1, 1)])
+        v = P.judge(a, c=dict.fromkeys(P.BUDGETED, 0), windows=[P.CertifiedReads(range(len(a.steps)), 1, 1)])
         out["reasons"] = [r for r in v.reasons if r["code"] not in P.BUDGETED]
     out["arg_dyn"] = {}
     for k, nd in enumerate(body.nodes):

@@ -28,20 +28,20 @@ import ast
 from test_repository import ROOT, _tracked
 
 SEEDS = {
-    "verity/protocols/pouw/prover/circuit/seeds.py::_coin_salt": "PoUW's seed: (salt, position) to the unit's seed, under compile's checks",
+    "verity/protocols/accounting/pouw/prover/circuit/seeds.py::_coin_salt": "PoUW's seed: (salt, position) to the unit's seed, under compile's checks",
 }
 UNITS = {
-    "verity/protocols/pouw/prover/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
-    "verity/protocols/pouw/prover/circuit/h1zy.py::_unit_ports":
+    "verity/protocols/accounting/pouw/prover/circuit/h1tile.py::_unit_ports": "an H1 tile's position beside its receipt sink: a unit",
+    "verity/protocols/accounting/pouw/prover/circuit/h1zy.py::_unit_ports":
         "an H1 tile with its z/y record checked: its position beside its receipt sink, a unit",
-    "verity/protocols/pouw/prover/circuit/h1zy.py::_lane_ports":
+    "verity/protocols/accounting/pouw/prover/circuit/h1zy.py::_lane_ports":
         "a lane of an H1 leaf: the leaf's position beside its ok sink (its partial's check), a unit",
-    "verity/protocols/pouw/verifier/tests/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_h1zy.py::test_the_port_rules_follow_the_coin_into_a_lane_its_statement_calls":
         "the lane's stand-in statement template, a position beside its ok sink",
-    "verity/protocols/pouw/prover/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
-    "verity/protocols/pouw/verifier/tests/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
-    "verity/protocols/pouw/prover/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
-    "verity/protocols/pouw/verifier/tests/test_circuit_h1window.py::TILE_PORTS":
+    "verity/protocols/accounting/pouw/prover/circuit/compile.py::_compiled_ports": "the compiled root's positions beside its receipts sink",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_compile.py::UNIT_PORTS": "compile's test units, a position beside a receipt sink",
+    "verity/protocols/accounting/pouw/prover/circuit/h1window.py::_ports": "an H1 window's positions beside its units' receipt sinks",
+    "verity/protocols/accounting/pouw/verifier/tests/test_circuit_h1window.py::TILE_PORTS":
         "the window tests' stand-in tile, a position beside its receipt sink",
     "adapters/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
@@ -52,12 +52,12 @@ UNITS = {
     "verity/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
 }
 KEY_COUNTS = {
-    "verity/definitions/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
+    "verity/circuits/ops/gemm.py::KEY_COUNT": "PvRowPad's key count n: attention padded to T = 32",
     "verity/circuits/tests/test_population_ports.py::Counted":
         "the population tests' stand-in key count: a position alone, whose population keeps it",
-    "verity/definitions/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
+    "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
-    "verity/definitions/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
+    "verity/circuits/ops/boolean/softmax_row.py::QkSoftmaxPvPad":
         "QkSoftmaxPvPad's key count n, both halves' one port: a head's attention padded to T = 32",
     "verity/definitions/registry/torch_attention.py::_POSITION":
         "EagerSoftmax_v1's key count n: the keys HF's causal mask lets a training row see",
@@ -65,8 +65,8 @@ KEY_COUNTS = {
         "TrainStep_v1's key count n, the run input its attention calls read as theirs: a position with no coin",
 }
 WINDOWS = {
-    "verity/definitions/ops/boolean/shared_row.py::WINDOW":
-        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (CIR-113's form (B))",
+    "verity/circuits/ops/boolean/shared_row.py::WINDOW":
+        "SharedRowWindow's j and SharedRowRead's PORT_j, a proof block's segment of a shared row (the shared-row commit's form (B))",
 }
 TESTS = {
     "verity/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
@@ -83,6 +83,9 @@ TESTS = {
         "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
     "verity/circuits/tests/test_population_values.py::Unit":
         "a unit of a population with values: its position beside its receipt sink, so the ports see the members alone",
+    "adapters/vllm/tests/protocols/test_pouw_h1_drawn.py::StandInSeed":
+        "the drawn J10-R test's stand-in tile reads its coin and position through a seed, so credit's real Lean check "
+        "accepts the stand-in statement (every input bit read)",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | WINDOWS | TESTS
 
@@ -153,7 +156,7 @@ def test_only_pouw_mints_a_seed() -> None:
     assert not offenders, (
         "a position port outside PoUW's seeds.py: a Definition with a coin port and a position port and no sink is a seed, "
         "whose noise no port rule follows, so only PoUW's compile pass may build one. Mint seeds in "
-        "verity/protocols/pouw/prover/circuit/seeds.py, give a unit's position port a sink return (UNITS), declare a key count "
+        "verity/protocols/accounting/pouw/prover/circuit/seeds.py, give a unit's position port a sink return (UNITS), declare a key count "
         "with no coin port beside it (KEY_COUNTS), or name a test that builds one in TESTS with its reason:\n"
         + "\n".join(offenders))
     assert not set(ALLOWED) - used, f"ALLOWED entries that match nothing any more: {sorted(set(ALLOWED) - used)}"
