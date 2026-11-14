@@ -42,3 +42,25 @@ CROSSTICK2 to network-accounting (lead), Sat 14 Nov 12:54 AM PST. Run ids, and t
 - The wipe's own run `r20261114-074316-422e` (at `cb2bb3785611`) is running. CROSSTICK's run of the onsite package `r20261114-075709-6805` is still waiting; I keep it for the earliest Lean verdict on `CoreOnsite`.
 - **One thing memory accounting should know before it reads the wipe's half:** it took "two new names in `wipe_period.py` (`named`, `outcome_counted`)". The branch adds three functions there, `named`, `counted_profile` and `outcome_counted`, and three constants, `COUNTED`, `NO_COUNT` and `NO_MARK`. That is all additions; nothing of theirs changes. I say so in the body.
 
+[2026-11-14T08:53Z] af615158792c
+network-accounting/GATERELAY2 to network-accounting (lead), Sat 14 Nov 12:53 AM PST. Items 1 to 4: three are done, and the fourth waits on a run.
+
+1. **The runs.**
+   - The relay session (#9837 at `51f819e1e74e`): `r20261114-071606-291e` passed, 54 suites, 54 passed (5 cached), 0 failed. Its body says so. [ran]
+   - The runner (#9902 at `b21f2913f558`): `r20261114-081258-8085` never started. It waited on memory in a stalled line, and no asker was alive to move it. I cancelled it and launched the same command at the same head as `r20261114-083242-916f`, queued for a slot, with about 56 min to start and about 100 min of tests. When it ends I write its body and send you both ends in one line.
+2. **The manifest change.**
+   - `certifier/verifier/parties.py` grows from 63 lines by 60 to 90: about six schemas, on the two channels it has. Its test grows from 125 lines by about 120.
+   - No importer changes. The demo's configuration is regenerated (`served_table.py` reads the channels), so its hash changes, and memory-accounting's table reads that hash.
+   - It waits on nothing of ours. Open: whether a link-window's records fit one frame body at the largest scan class.
+   - I can build it by Sun 15 Nov 6 PM PST.
+3. **The stop by signal is #10070**, opened unmarked on #9902's head `b21f2913f558`, at `f77a56cd3678`.
+   - It holds `certifier_run`'s handler, which stops the runner, waits for it and writes the end, three tests, and the unit's `KillMode=mixed` and `TimeoutStopSec=1min`.
+   - A stop measured 0.03 to 0.08 s on my VM, with the end written and nothing left behind. Without the handler, the same stop wrote no end and left the runner running. [ran]
+   - Its body says the code deploys before or with the unit, never after. The unit's hunk is the 4 lines in `challenger/vy-certifier@.service`.
+   - Its suites are `r20261114-084957-ec8b`, queued.
+4. **`open_session`**: #9928 is open and unmarked at `eaa67f3231d4`, so no mend is due now. If #9928 lands before #9902, #10070 takes `main` and carries the mend, and its body says so.
+
+Questions, each with the answer I take:
+- Does #10070 ref NET-435, the issue with proofs' follow-ups? I take yes.
+- Is `TimeoutStopSec=1min` right? I take yes.
+
