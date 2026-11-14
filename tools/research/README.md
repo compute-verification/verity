@@ -504,7 +504,7 @@ fails the pass (`retention.STORED`). A preserved run's marker must still vouch f
 `--apply` gc deletes nothing and reads no remote; it prints every deletion and skip with its reason.
 
 A symlink or other entry that isn't a regular file holds no bytes, so the artifact need not hold it (custody never stores one).
-A preserved run whose run record lacks files custody did not store (it trimmed them past its cap: `uncovered`) holds their only
+A preserved run whose run record lacks files custody did not store (it trimmed them past its limit: `uncovered`) holds their only
 copy, as a never-stored run does: gc deletes it, under `--unpreserved-runs`, 7 days after custody verified the run (the marker's
 `verified_utc`; never the last write, which the store eviction moves), once the remote holds the rest, and lists it with that date
 until then. To keep one longer: `research keep RUNDIR ...`.
