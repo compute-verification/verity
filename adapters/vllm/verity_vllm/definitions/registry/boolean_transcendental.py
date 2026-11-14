@@ -334,16 +334,16 @@ def _log_tables() -> dict:
         q = _DEC.ln(_DEC.divide(decimal.Decimal(num), decimal.Decimal(den)))
         return int(_DEC.multiply(q, decimal.Decimal(2) ** LF).to_integral_value(rounding=decimal.ROUND_HALF_EVEN))
 
-    # stage 1: m = 1 + t 2^-8 + m1 2^-23, R1 = k1 / 2^9, U1 = (m R1 - 1 + 2^-8) 2^32 in [0, 2^25)
+    # step 1: m = 1 + t 2^-8 + m1 2^-23, R1 = k1 / 2^9, U1 = (m R1 - 1 + 2^-8) 2^32 in [0, 2^25)
     k1 = [512 if t == 0 else 256 if t == 255 else round(Fraction(1 << 18, 513 + 2 * t)) for t in range(256)]
     for t, k in enumerate(k1):
         assert (1 << 32) - (1 << 24) <= ((1 << 23) + (t << 15)) * k and ((1 << 23) + ((t + 1) << 15) - 1) * k < (1 << 32) + (1 << 24)
-    # stage 2: u1 = U1 2^-32 - 2^-8, index b = floor(u1 2^15), R2 = k2 / 2^16, U2 = (u2 + 2^-15) 2^48 in [0, 2^34)
+    # step 2: u1 = U1 2^-32 - 2^-8, index b = floor(u1 2^15), R2 = k2 / 2^16, U2 = (u2 + 2^-15) 2^48 in [0, 2^34)
     k2 = [1 << 16 if b in (0, -1) else round(Fraction(1 << 32, (1 << 16) + 2 * b + 1)) for b in range(-128, 128)]
     for bp, k in enumerate(k2):
         for u1 in (bp << 17, ((bp + 1) << 17) - 1):
             assert 0 <= ((1 << 32) - (1 << 24) + u1) * k - (1 << 48) + (1 << 33) < 1 << 34
-    # stage 3: u2 = U2 2^-48 - 2^-15, index g = floor(u2 2^22), R3 = k3 / 2^23, V3 = (u3 + 2^-22) 2^71 in [0, 2^50 - 2^11)
+    # step 3: u2 = U2 2^-48 - 2^-15, index g = floor(u2 2^22), R3 = k3 / 2^23, V3 = (u3 + 2^-22) 2^71 in [0, 2^50 - 2^11)
     k3 = [1 << 23 if g in (0, -1) else round(Fraction(1 << 46, (1 << 23) + 2 * g + 1)) for g in range(-128, 128)]
     for gp, k in enumerate(k3):
         for u2 in (gp << 26, ((gp + 1) << 26) - 1):

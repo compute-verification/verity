@@ -1,5 +1,5 @@
-"""The compiled server circuit's ingress: the request bytes the warden attests (the ingress transfer gates), parsed in-circuit to
-the prompt's token ids and ``max_tokens``.
+"""The compiled server circuit's ingress: the request bytes the network certifier attests (the ingress transfer gates), parsed
+in-circuit to the prompt's token ids and ``max_tokens``.
 
 Ingress schema v0 is one OpenAI completions request with the prompt as token ids, as compact JSON in a fixed key order with every
 integer right-aligned in a fixed-width field of leading spaces, then trailing spaces to a whole number of `BLOCK`-byte SHA-512
@@ -8,10 +8,10 @@ blocks (all JSON whitespace, so vLLM's OpenAI server reads it as it is):
     {"model":"<MODEL>","prompt":[<id>,<id>,...],"max_tokens":<m>,"temperature":0,"stream":true}<spaces>
 
 An id's field is `id_width(V)` characters (6 for a 128,256-entry vocabulary), ``max_tokens``' is `MAX_TOKENS_WIDTH`, and the
-padding is the fewest spaces that bring the body to a multiple of 128 bytes (1,024 bits), so the warden's attested blocks and the
-parse unit's input rows line up and a registered read opens whole blocks (128 B divides the warden's 4 KiB cells).  So the byte
-layout is a function of (MODEL, LP, V) alone, never of the prompt's digits: a template's statics carry no prompt content.  Greedy
-only (``"temperature":0``).
+padding is the fewest spaces that bring the body to a multiple of 128 bytes (1,024 bits), so the network certifier's attested
+blocks and the parse unit's input rows line up and a registered read opens whole blocks (128 B divides the network certifier's
+4 KiB cells).  So the byte layout is a function of (MODEL, LP, V) alone, never of the prompt's digits: a template's statics carry
+no prompt content.  Greedy only (``"temperature":0``).
 
 Ingress schema v1 is v0 sampled: ``temperature``, ``top_p`` and ``seed`` are fields of the body, so a request's sampling is as
 private as its prompt, and ``user`` is the request's id, which its seed derives from where it names none (the padding again
