@@ -11,9 +11,11 @@
   research goals priority ID 1|2|3|clear     sets its priority (anyone may), or clears it back to the derived one
   research goals replace FILE.json           the whole page: exactly the goals in FILE (a JSON list)
   research goals audit [--owner HANDLE ...] [--from FILE.json] [--now TIME] [--json]
-                                             # by lead: goals overdue, under no project, due before what they wait on
-                                             # or titled past eight words, and a lead with nothing due in 12 hours;
-                                             # each line names its fix; exit 1 when anything is found (goals_audit.py)
+                                             # by lead: goals overdue, off track and not written in a day, due within
+                                             # a day and not written in the day before, under no project, due before
+                                             # what they wait on or titled past eight words, and a lead with nothing due
+                                             # in 12 hours; each line names its fix; exit 1 when anything is found
+                                             # (goals_audit.py)
 
 The plan is one graph of goals. A goal is an outcome with one owner: a headline for a title (three to six plain words,
 no number; the writing-goals skill has the rule), a due date, a day meaning its end or a time with its offset such as

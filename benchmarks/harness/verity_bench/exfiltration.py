@@ -1614,8 +1614,7 @@ def record(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> None:
                        served_run=doc["compute_share"]["run"], runs=list(doc["runs"]))
     writer.measurement_file(DOCUMENT)
     for m in measurements(doc, metrics):
-        # the kit takes no `mark` yet: it heads the first input, where the Metrics tab reads it
-        writer.measurement(**{k: v for k, v in m.items() if k != "mark"})
+        writer.measurement(**m)
     writer.validation("passed", "verity_bench.exfiltration.build",
                       "the two parts cover the same GPU-seconds and requests over every scope both hold, and the same "
                       f"weights; each of the {len(doc['inputs'])} inputs carries one of {', '.join(MARKS)} with its "

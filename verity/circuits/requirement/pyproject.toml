@@ -15,7 +15,7 @@ untraced = ["tests/test_census_and_memory_map.py", "tests/test_requirement_difft
 # path, and the base packages the harness requires (`Base.Canon` and what it imports).
 inputs = ["verity/circuits", "verity/circuits/kernels/__init__.py", "verity/circuits/kernels/tc.py", "verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "verity/errors.py", "tools/difftest", "verity/definitions",
-          "verity/hardware/record.py",
+          "verity/channel.py",
           "adapters/vllm/verity_vllm",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/claims/__init__.py", "verity/protocols/accounting/pouw/verifier", "verity/protocols/accounting/poub/verifier",
