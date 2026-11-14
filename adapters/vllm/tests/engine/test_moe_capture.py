@@ -19,6 +19,7 @@ import json
 import sys
 import types
 from collections.abc import Iterator
+from importlib import metadata
 from types import SimpleNamespace
 from typing import Any
 
@@ -436,13 +437,35 @@ def test_a_step_in_micro_batches_and_one_not_dispatched_are_refused(workers: Wor
         run(w, STEPS[:1])
 
 
+def test_the_declared_plugin_arms_each_process_that_loads_it(workers: Workers, tmp_path,
+                                                            monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ValueError, match="no request or no module"):
+        MC.declare(tmp_path, [], list(MODULES))
+    with pytest.raises(metadata.PackageNotFoundError):
+        MC.register()
+    site = MC.declare(tmp_path / "site", ["c", "a"], list(MODULES))
+    monkeypatch.syspath_prepend(str(site))
+    [plugin] = [e for e in metadata.entry_points(group="vllm.general_plugins") if e.dist is not None
+                and e.dist.name == MC.DISTRIBUTION]
+    plugin.load()()
+    plugin.load()()
+    w = workers(0, SIZES)
+    w.compile_or_warm_up_model()
+    on = MC._ON[id(w.model_runner)]
+    assert on.targets == {"a", "c"} and on.names == tuple(sorted(MODULES)) and len(on.slots.plans) == 3
+    (site / f"{MC.DISTRIBUTION.replace('-', '_')}-0.0.dist-info" / MC.DECLARED).unlink()
+    with pytest.raises(ValueError, match="holds no capture.json"):
+        MC.register()
+
+
 def test_arm_installs_once_a_worker_and_refuses_a_second_arming(workers: Workers, v: Vllm,
                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValueError, match="no request or no module"):
         MC.arm(["a"], [])
     MC.arm(["a"], [MODULES[0]])
-    with pytest.raises(ValueError, match="already armed"):
-        MC.arm(["a"], [MODULES[0]])
+    MC.arm(["a"], [MODULES[0]])
+    with pytest.raises(ValueError, match="already armed, with other requests or modules"):
+        MC.arm(["b"], [MODULES[0]])
     w = workers(0, SIZES)
     w.compile_or_warm_up_model()
     w.compile_or_warm_up_model()

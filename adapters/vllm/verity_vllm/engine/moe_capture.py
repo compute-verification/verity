@@ -32,7 +32,10 @@ replayed step's forward the targets' rows are cut from the slots' first rows, wi
 (``dispatch``: its mode and padded tokens, ``NONE`` for a step that ran its launches in Python). So on an engine that
 captures graphs the capture is installed before it does: `arm`, in a process before it builds its worker, installs
 on the worker right before it warms up (`WORKER_SITE`). Installed later, it refuses the first replayed step of a
-target, and so does a forward compiled past the launcher, rather than keep less.
+target, and so does a forward compiled past the launcher, rather than keep less. An engine starts each rank's worker
+in a process of its own, so what arms them is a vLLM general plugin, which vLLM loads in each of its processes:
+`declare` writes a distribution that declares `register` as one, with the requests and modules to capture, under a
+directory the caller puts on those processes' path before vLLM is imported, and `register` arms with what it holds.
 Refused too: a module whose launches carry no ``A_scale`` (experts that are not block FP8), a router other than the
 grouped one, a step that samples draft tokens or runs in micro-batches, and a runner whose module has no
 ``sort_batch_req_ids`` (the runner is vLLM's V2 model runner, `v1.worker.gpu.model_runner`, whose order the step's
@@ -47,6 +50,7 @@ import hashlib
 import importlib
 import json
 import sys
+from importlib import metadata
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -55,9 +59,9 @@ import numpy as np
 
 from verity_vllm.engine import graph_slots, hooks, runner_step, step_trace
 
-__all__ = ["CAPTURE", "DISPATCH", "FUSED_MOE_SITE", "GRAPH_SITE", "KEPT", "LAUNCH_ARGS", "ROUTER_SITE", "TAG",
-           "TRITON_LAUNCH", "TRITON_MOE_SITE", "WORKER_SITE", "Capture", "arm", "disarm", "install", "launch_arg", "read",
-           "spans", "take", "uninstall", "write"]
+__all__ = ["CAPTURE", "DECLARED", "DISPATCH", "DISTRIBUTION", "FUSED_MOE_SITE", "GRAPH_SITE", "KEPT", "LAUNCH_ARGS",
+           "ROUTER_SITE", "TAG", "TRITON_LAUNCH", "TRITON_MOE_SITE", "WORKER_SITE", "Capture", "arm", "declare", "disarm",
+           "install", "launch_arg", "read", "register", "spans", "take", "uninstall", "write"]
 
 #: a capture's record, beside its ranks' files
 CAPTURE = "capture.json"
@@ -77,6 +81,9 @@ GRAPH_SITE = ("vllm.v1.worker.gpu.cudagraph_utils", "CudaGraphManager")
 DISPATCH = "dispatch_cg_and_sync_dp"
 #: the worker, whose ``compile_or_warm_up_model`` captures its runner's graphs: (module, name)
 WORKER_SITE = ("vllm.v1.worker.gpu_worker", "Worker")
+#: the distribution `declare` writes, and its file that names the requests and modules `register` arms with
+DISTRIBUTION = "verity-moe-capture"
+DECLARED = "capture.json"
 #: the launcher's positional index of each argument read from a launch, after (A, B, C):
 #: invoke_fused_moe_triton_kernel(A, B, C, A_scale, B_scale, topk_weights, sorted_token_ids, expert_ids,
 #: num_tokens_post_padded, mul_routed_weight, top_k, config, ...)
@@ -89,8 +96,8 @@ _ON: dict[int, Capture] = {}
 #: the slots of the captures taken off: a graph captured with a capture on replays its copies for as long as it
 #: lives, so the tensors they write stay allocated with the process
 _PARKED: list[graph_slots.Slots] = []
-#: `arm`'s patch of the worker, where this process is armed
-_ARMED: list[hooks.Hooks] = []
+#: `arm`'s patch of the worker, where this process is armed, with the requests and modules it arms with
+_ARMED: list[tuple[hooks.Hooks, tuple[str, ...], tuple[str, ...]]] = []
 
 
 def launch_arg(a: Sequence[Any], k: Mapping[str, Any], name: str) -> Any:
@@ -406,11 +413,15 @@ def install(worker: Any, targets: Sequence[str], modules: Sequence[str]) -> int:
 
 def arm(targets: Sequence[str], modules: Sequence[str]) -> None:
     """In a process that has built no worker yet: `install` on each worker it builds, right before the worker warms
-    up, which is when its runner captures its graphs. `disarm` takes the patch off."""
-    if _ARMED:
-        raise ValueError("this process is already armed: `disarm` it first")
+    up, which is when its runner captures its graphs. A process armed with the same requests and modules is left as it
+    is, and one armed with others is refused. `disarm` takes the patch off."""
     if not targets or not modules:
         raise ValueError("no request or no module to capture")
+    asked = (tuple(sorted(targets)), tuple(sorted(modules)))
+    if _ARMED:
+        if _ARMED[0][1:] != asked:
+            raise ValueError("this process is already armed, with other requests or modules: `disarm` it first")
+        return
     owner = getattr(importlib.import_module(WORKER_SITE[0]), WORKER_SITE[1], None)
     if not callable(getattr(owner, "compile_or_warm_up_model", None)):
         raise TypeError(f"{WORKER_SITE[0]} holds no {WORKER_SITE[1]}.compile_or_warm_up_model: the capture is installed "
@@ -425,13 +436,37 @@ def arm(targets: Sequence[str], modules: Sequence[str]) -> None:
 
     into = hooks.Hooks(tag=TAG)
     into.wrap(owner, "compile_or_warm_up_model", warm_up)
-    _ARMED.append(into)
+    _ARMED.append((into, *asked))
 
 
 def disarm() -> None:
     """Take `arm`'s patch of the worker off. A capture it installed stays on until `uninstall`."""
     while _ARMED:
-        _ARMED.pop().uninstall()
+        _ARMED.pop()[0].uninstall()
+
+
+def declare(site: Path | str, targets: Sequence[str], modules: Sequence[str]) -> Path:
+    """Write under ``site`` the distribution that declares `register` as a vLLM general plugin and names ``targets``
+    and ``modules`` to it; ``site``, which goes on the path of every process the engine starts before vLLM is
+    imported in it."""
+    if not targets or not modules:
+        raise ValueError("no request or no module to capture")
+    d = Path(site) / f"{DISTRIBUTION.replace('-', '_')}-0.0.dist-info"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {DISTRIBUTION}\nVersion: 0.0\n")
+    (d / "entry_points.txt").write_text(f"[vllm.general_plugins]\n{DISTRIBUTION.replace('-', '_')} = {__name__}:register\n")
+    (d / DECLARED).write_text(json.dumps({"requests": sorted(targets), "modules": sorted(modules)}))
+    return Path(site)
+
+
+def register() -> None:
+    """The vLLM general plugin `declare` declares: `arm` this process with the requests and modules the declaration
+    names. vLLM loads its general plugins in each of its processes, a rank's before it builds its worker."""
+    text = metadata.distribution(DISTRIBUTION).read_text(DECLARED)
+    if text is None:
+        raise ValueError(f"the distribution {DISTRIBUTION} holds no {DECLARED}: `declare` writes both")
+    named = json.loads(text)
+    arm(named["requests"], named["modules"])
 
 
 def _on(worker: Any) -> Capture:
