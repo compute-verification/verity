@@ -14,7 +14,9 @@ text does not read back, `RECORD_READ`, of a boundary record so read without the
 of an interior record, as given or so read, without the interior commitment's digest, `INTERIOR_DIGEST`, and of a second
 session's log that does not open a coin tree's rounds stream by stream, `REP_STREAM_ORDER`, included; the form's
 `#guard`s pin those) is outside the mirror: while `Spot.SecondStage.FORM` is false the form accepts nothing, which its
-Lean proves at every input (`checkBlobs_refuses`)."""
+Lean proves at every input (`checkBlobs_refuses`). The check's statement-and-session refusal is the one of those
+mirrored here: `stmts_sessions` is the difftest's reference for `STMT_COUNT` and `STMT_SESSION`, which the difftest holds
+the Lean to by mutating a kept honest play; it decides no verdict."""
 
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ from typing import Any
 
 from reference import ONE_STAGE
 from verity_difftest import Reject
+from verity_difftest import canonical
 from verity_difftest import protocol as P
 
 PROTOCOL = "verity/sampled-proofs/two-stage/v1"
@@ -130,3 +133,29 @@ def reason_mirrored(params: Any) -> bool:
     """Whether the parameters' refusal is the form's own, whose reason the twin gives word for word, rather than a
     delegated decoder's, which is held to the Lean by its verdict."""
     return not isinstance(refusal(params), Delegated)
+
+
+#: The check's refusal of a count of sessions other than the count of statements (`SampledTwo.STMT_COUNT`).
+STMT_COUNT = ("the sessions are not as many as the statements: round 2 reads one statement a session, in order, so a "
+              "session past the last statement or a statement with no session is refused")
+
+
+def STMT_SESSION(t: int) -> str:
+    """The check's refusal of a statement other than the one the session at its position makes
+    (`SampledTwo.STMT_SESSION`)."""
+    return (f"statement {t} is not the one the {t}-th of the statements' sessions makes: round 2 reads the statements "
+            "by position, each its template's session's, on that template's circuit")
+
+
+def stmts_sessions(own: list, stmts: list) -> str | None:
+    """`SampledTwo.stmtsSessions` as the difftest's reference, not a path that decides (the branch's "Python returns no
+    verdict"): `own` is the statement each session makes, in order (for a kept honest play, the evidence's own
+    `statements`, which pass); `stmts` is the evidence's. It returns the refusal a play reaches — `STMT_COUNT` where the
+    counts differ, `STMT_SESSION t` where position `t`'s statement is not its session's (`jeq` by canonical text) — or
+    None, and the difftest holds the Lean's `sampled-two-on` refusal of a mutated honest play to it."""
+    if len(own) != len(stmts):
+        return STMT_COUNT
+    for t in range(len(stmts)):
+        if canonical(own[t]) != canonical(stmts[t]):
+            return STMT_SESSION(t)
+    return None
