@@ -20,7 +20,6 @@ signer's key and session only."""
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import io
 import json
 import os
@@ -39,8 +38,9 @@ from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.accounting.certifier.verifier import load_check as LK
+from verity.protocols.accounting.certifier.device import load_relay as LR
+from verity.protocols.accounting.certifier.device.certifier_key import signer
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 ROOT = Path(__file__).resolve().parents[6]
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "weights-v1-tiny.json").read_text())
 H200_DIGESTS = json.loads((Path(__file__).parent / "fixtures" / "weights-v1-h200-digests.json").read_text())
@@ -50,17 +50,6 @@ PROGRAM = hashlib.sha512(b"the reading program").hexdigest()
 SMALL = (256, 189, 64)
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    sys.path.append(str(ROOT))  # for benchmarks.network_traces
-    spec = importlib.util.spec_from_file_location("network_traces_load_relay",
-                                                  ROOT / "verity/protocols/accounting/certifier/device/load_relay.py")
-    mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-LR = _load()
 TINY = LK.manifest(LK.TINY)
 
 
@@ -372,7 +361,6 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
                                leaves(v, data[v.offset:v.offset + v.nbytes]), mine, v.word_bits, v.schema)
         assert c.root == h.root and h.domain == LR.verifier_domain(PROGRAM)(v).domain_id, v.name
         at += TR.SALT_BYTES * v.leaves
-    from certifier_key import signer
     from verity.protocols.accounting.certifier.verifier import record_files as RF
     own, session = signer(tmp_path / "key", 5), os.urandom(32)
     regs = LR.sign_heads(Issuer(own, session), heads)

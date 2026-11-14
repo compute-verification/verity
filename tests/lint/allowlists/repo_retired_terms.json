@@ -4688,7 +4688,6 @@
     {"file": "verity/protocols/accounting/certifier/prover/n2_zk.py", "count": 143},
     {"file": "verity/protocols/accounting/certifier/prover/scan_period.py", "count": 12},
     {"file": "verity/protocols/accounting/certifier/prover/scan_zk.py", "count": 281},
-    {"file": "verity/protocols/accounting/certifier/prover/tests/test_block_certifier.py", "count": 31},
     {"file": "verity/protocols/accounting/certifier/prover/tests/test_egress_zk.py", "count": 2},
     {"file": "verity/protocols/accounting/certifier/device/tests/test_leak_guard.py", "count": 5},
     {"file": "verity/protocols/accounting/certifier/prover/tests/test_leak_scan.py", "count": 1},
@@ -5117,6 +5116,7 @@
     {"file": "verity/protocols/accounting/poub/verifier/lean/Poub/Wire.lean", "count": 2},
     {"file": "verity/protocols/accounting/poub/verifier/tests/poub_vectors.py", "count": 11},
     {"file": "verity/protocols/accounting/poub/verifier/tests/test_poub.py", "count": 9},
-    {"file": "verity/protocols/accounting/poub/verifier/tests/test_poub_vectors.py", "count": 11}
+    {"file": "verity/protocols/accounting/poub/verifier/tests/test_poub_vectors.py", "count": 11},
+    {"file": "benchmarks/network_traces/tests/test_block_certifier.py", "count": 31}
   ]
 }

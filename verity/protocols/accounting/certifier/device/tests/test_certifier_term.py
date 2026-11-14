@@ -452,7 +452,7 @@ def test_the_counts_schedule_is_the_cost_runners_by_default_and_each_part_is_an_
     defaults are that runner's own, read here from its parser: six classes and a delay of 30 buckets, which its
     ingress buckets equal; its 16 lanes and its execution phase of 600 buckets are the schedule the command prints
     the count at beside its own."""
-    import connection_rows_run as CR
+    from verity.protocols.accounting.certifier.device import connection_rows_run as CR
     cost = CR.parser().parse_args(["cost", "--out", "x"])
     assert (len(CR.CLASSES), cost.delay, cost.lanes, cost.window) == (6, 30, 16, 600)
     assert (LB.CLASSES, LB.DELAY, LB.COST_LANES, LB.COST_BUCKETS) == (6, 30, 16, 600)

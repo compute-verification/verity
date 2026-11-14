@@ -54,7 +54,7 @@ if [ "${N2_GPU:-0}" = 1 ]; then
     > "$OUT/gpu-samples.csv" 2>&1 &
   SMI=$!
 fi
-"$PY" verity/protocols/accounting/certifier/prover/n2_tie_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" \
+"$PY" -m verity.protocols.accounting.certifier.prover.n2_tie_zk prove --bin "$BIN" --lean "$LEAN" --out "$W/n2tie" \
   --class "${N2_CLASS:-test}" $GPU_ARG \
   ${N2_WARDEN_RUN:+--warden-run "$N2_WARDEN_RUN"} ${N2_WINDOWS:+--windows "$N2_WINDOWS"} \
   ${N2_PORT:+--port "$N2_PORT"} ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 \
