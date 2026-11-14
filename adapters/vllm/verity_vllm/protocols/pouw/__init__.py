@@ -26,7 +26,7 @@ weights were served.  Pearl-C commits one pass per engine step, a step held to w
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.protocols.accounting.pouw.verifier.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.protocols.accounting.pouw.prover.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
-runs beside sampled proofs only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+runs beside SPOT only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its execution phase's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
@@ -51,7 +51,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from verity.commitments import MerkleTree
@@ -741,7 +741,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     if settings.rows is None or settings.steps is None:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
-    shapes = [(int(n), int(k)) for n, k in (m.weight.shape for m in layers)]
+    shapes = cast("list[tuple[int, int]]", [tuple(int(d) for d in m.weight.shape) for m in layers])
     modules = {w: f"linear {w}" for w in roots} | _named(target.model, layers)
     wroot = (settings.served and settings.served.weights_root(shapes, modules, settings.rows, settings.steps, layers,
                                                               target.context.stage != "capture")) or weights_root(roots)

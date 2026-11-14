@@ -68,8 +68,8 @@ from verity_vllm.query.manifest import format as RM
 
 from . import scan_state as SS
 from . import window_weights as WW
-from .window_builder import WEIGHTS
-from .window_circuit import Lowered, WindowClass, _spans
+from .window_builder import WEIGHTS, _spans
+from .window_circuit import Lowered, WindowClass
 
 #: a unit's source: its node's served value, the class Program's value at a node the engine didn't compute, or its
 #: Definition's function of the window's values. It follows occupancy and lengths, so it is the committer's own bookkeeping
@@ -205,7 +205,7 @@ class Slot:
         self.source.append(SERVED)
 
     def _token(self, p: int, tok: Any) -> None:
-        """Position ``p``'s token (`window_circuit._Program._token`): the first position's its slot row's first id, below the
+        """Position ``p``'s token (`window_lowering._Program._token`): the first position's its slot row's first id, below the
         prompt cap `TokenFeed_v1`'s of the slot carried and the previous select, past it the previous select."""
         NP = self.cls.prompt
         sel = None if p == 0 else int(self.operand(tok)[0])
@@ -329,7 +329,7 @@ def _fold_narrowed(ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]
     -> the ops folded into. A narrowed op with no such op beside it stays, for the prefill's check to name."""
     out = []
     for o in [o for o in ops if o[1] and all(_NARROWED.fullmatch(m) for m in o[1])]:
-        w = (o[0], tuple(_NARROWED.fullmatch(m)[1] for m in o[1]))
+        w = (o[0], tuple(x[1] for x in map(_NARROWED.fullmatch, o[1]) if x))
         if len(ops.get(w, ())) != 1:
             continue
         rows, end = sorted(ops.pop(o), key=lambda d: int(d["row"])), ops[w][0]

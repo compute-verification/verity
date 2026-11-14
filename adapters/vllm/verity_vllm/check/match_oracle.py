@@ -537,7 +537,7 @@ class MatchOracle:
 
 def _port_view(member: str, producer: dict[str, Any] | None) -> int | None:
     """The output view of a several-output Call that `member` is: its manifest row's `port`, else the port `query.required.member_name`
-    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a digit; else None."""
+    spells into it (`<port>`, or `<hint>.<port>` when the Build recorded a hint), when that port is a decimal number; else None."""
     port = (producer or {}).get("port")
     port = str(port) if port is not None else member.rsplit(".", 1)[-1]
-    return int(port) if port.isdigit() else None
+    return int(port) if port.isdecimal() else None

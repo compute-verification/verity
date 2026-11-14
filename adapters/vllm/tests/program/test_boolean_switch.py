@@ -18,6 +18,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate, evaluate_words
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops import prims as MP
 from verity.circuits.program import Program
 from verity.circuits.refs import (
     Affine,
@@ -31,9 +34,6 @@ from verity.circuits.refs import (
 from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.types import Tuple as TupleT
 from verity.definitions import boolean as BB
-from verity.circuits.ops import fp32 as W
-from verity.circuits.ops import gemm as G
-from verity.circuits.ops import prims as MP
 from verity.definitions.replay import replayer
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
