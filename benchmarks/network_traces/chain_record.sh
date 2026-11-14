@@ -68,7 +68,10 @@
 # them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
 # and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
 # before the guard has read it: on every exit leak_guard.py reads the run dir and the hold, moves what holds a piece of
-# the witness to the quarantine and only then releases the rest of the hold to out/. A gate sent under inputs/ is
+# the witness to the quarantine and only then releases the rest of the hold to out/. In the same pass it reads each
+# JSON file bound for out/ by key (--keys, released_keys.py): one with a key that released_keys.json doesn't declare
+# public by name goes to the quarantine too and fails the record, and the guard's line counts the files checked by
+# key, those whose lists aren't written yet and those with no keys. A gate sent under inputs/ is
 # moved to the quarantine once unpacked. On a signal (a timeout's SIGTERM leaves seconds, not a scan), past the guard's
 # budget or when it can't run, nothing is released, and out/, inputs/ and the runner's logs are withheld whole too; a
 # SIGKILL leaves the hold where it is, out of the record.
@@ -103,7 +106,7 @@ leak_guard() {   # on every exit: the guard on the run dir and the hold, then jo
   elif [ "$OUT" = "$PUB" ]; then withhold "no hold at $Q/held"; rc=3
   else
     "${PY:-python3}" "$SRC/benchmarks/network_traces/leak_guard.py" "$RUN" "$Q" --gates "$G" --hold "$OUT" \
-      --release-to "$PUB" --report "$PUB/leak-guard.json" > "$W/leak-guard.out" 2> "$W/leak-guard.err"
+      --release-to "$PUB" --keys --report "$PUB/leak-guard.json" > "$W/leak-guard.out" 2> "$W/leak-guard.err"
     g=$?
     if [ "$g" = 0 ] || [ "$g" = 3 ]; then OUT=$PUB; log "chain: $(cat "$W/leak-guard.out")"
     elif [ -n "$SIGNALED" ]; then withhold "$SIGNALED ended the leak guard (exit $g)"; rc=143
