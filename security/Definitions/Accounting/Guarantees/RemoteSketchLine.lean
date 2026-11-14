@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.Remote.SketchLine
 public import Definitions.Accounting.Assumptions.RemoteHeld
-public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Certifier.Assumptions.RemoteOutside
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Assumptions.RemoteHeld
-public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Certifier.Assumptions.RemoteOutside
 public import Definitions.Accounting.Assumptions.RemoteDraw
 public import Properties.Accounting.Remote.Line.Record
 public import Properties.Accounting.Remote.Line.Premises

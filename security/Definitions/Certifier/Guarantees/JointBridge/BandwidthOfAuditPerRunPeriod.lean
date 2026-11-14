@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+public import Definitions.Certifier.JointBridge.BandwidthOfAuditPerRunPeriod
 import Mathlib.Basic.ENNReal.Real
 
 /-!
@@ -14,7 +14,7 @@ The bridge from the bandwidth audit v0's guarantee (`Accounting.Guarantees.Remot
 with probability at most `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ` over PoUB's own coins, at any value of the others.
 
 Proved by `Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod :
-Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod` (`Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod`),
+Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod` (`Proofs.Certifier.JointBridge.BandwidthOfAuditPerRunPeriod`),
 from `Accounting.SecurityProofs.BandwidthOfAuditPerRun`.
 -/
 

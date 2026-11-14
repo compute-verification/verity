@@ -97,7 +97,7 @@ public import Definitions.Certifier.Guarantees
 public import Definitions.Certifier.Guarantees.Pooled
 public import Definitions.Flock.Guarantees
 public import Definitions.Accounting.Assumptions.Remote
-public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Certifier.Assumptions.RemoteOutside
 public import Definitions.Pouw.Assumptions.CreditedWords
 public import Definitions.Accounting.Assumptions.RemoteP2
 public import Definitions.Accounting.Assumptions.Parties

@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pous.Period
-public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
+public import Definitions.Certifier.JointBridge.SpaceOfPeriodHeld
 import Mathlib.Basic.ENNReal.Real
 
 /-!
@@ -11,7 +11,7 @@ import Mathlib.Basic.ENNReal.Real
 (`Accounting.RealizesSpaceOfPeriodHeld`, under the verifier's whole decision outside a break) has the coins model's per-period
 guarantee for `.pous` (`Accounting.PeriodRun`), `PeriodRun.Sound c p .pous δ`, at PoUS's own error
 `δ + ε_max` (`1% + 2^-128`), under `Pous.Period.PeriodHeld`'s premises. It holds at the challenge times PoUS grades
-until `Pous.Guarantees.ContinuousAudit` is tied to the deployed check (`Definitions.Accounting.JointBridge.SpaceOfPeriodHeld`'s
+until `Pous.Guarantees.ContinuousAudit` is tied to the deployed check (`Definitions.Certifier.JointBridge.SpaceOfPeriodHeld`'s
 header). `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld` proves it from `Pous.Period.SecurityProofs.periodHeld`.
 -/
 

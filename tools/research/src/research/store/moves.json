@@ -3942,6 +3942,38 @@
         "security/Proofs/Accounting/ServingBlocks.lean": "security/Proofs/Slowdown/ServingBlocks.lean",
         "security/Proofs/Accounting/ServingBlocks/Witnesses.lean": "security/Proofs/Slowdown/ServingBlocks/Witnesses.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Accounting/Assumptions/RemoteOutside.lean": "security/Definitions/Certifier/Assumptions/RemoteOutside.lean",
+        "security/Definitions/Accounting/Bridge.lean": "security/Definitions/Certifier/Bridge.lean",
+        "security/Definitions/Accounting/Guarantees/JointBridge/BandwidthOfAuditPerRunPeriod.lean": "security/Definitions/Certifier/Guarantees/JointBridge/BandwidthOfAuditPerRunPeriod.lean",
+        "security/Definitions/Accounting/Guarantees/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean": "security/Definitions/Certifier/Guarantees/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Definitions/Accounting/Guarantees/JointBridge/CommOfPooledLeakAccepted.lean": "security/Definitions/Certifier/Guarantees/JointBridge/CommOfPooledLeakAccepted.lean",
+        "security/Definitions/Accounting/JointBridge/BandwidthOfAuditPerRunPeriod.lean": "security/Definitions/Certifier/JointBridge/BandwidthOfAuditPerRunPeriod.lean",
+        "security/Definitions/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean": "security/Definitions/Certifier/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Definitions/Accounting/JointBridge/CommOfPooledLeakAccepted.lean": "security/Definitions/Certifier/JointBridge/CommOfPooledLeakAccepted.lean",
+        "security/Definitions/Accounting/JointBridge/CommOfPooledLeakAcceptedWitness.lean": "security/Definitions/Certifier/JointBridge/CommOfPooledLeakAcceptedWitness.lean",
+        "security/Definitions/Accounting/JointBridge/CreditedWords.lean": "security/Definitions/Certifier/JointBridge/CreditedWords.lean",
+        "security/Definitions/Accounting/JointBridge/SpaceOfPeriodHeld.lean": "security/Definitions/Certifier/JointBridge/SpaceOfPeriodHeld.lean",
+        "security/Definitions/Accounting/NetWitness.lean": "security/Definitions/Certifier/NetWitness.lean",
+        "security/Proofs/Accounting/JointBridge/BandwidthOfAuditPerRunPeriod.lean": "security/Proofs/Certifier/JointBridge/BandwidthOfAuditPerRunPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean": "security/Proofs/Certifier/JointBridge/CommOfMonitoringPeriodLeakAccepted.lean",
+        "security/Proofs/Accounting/JointBridge/CommOfPooledLeakAccepted.lean": "security/Proofs/Certifier/JointBridge/CommOfPooledLeakAccepted.lean",
+        "security/Proofs/Accounting/JointBridge/CommOfPooledLeakAcceptedHonest.lean": "security/Proofs/Certifier/JointBridge/CommOfPooledLeakAcceptedHonest.lean",
+        "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean": "security/Proofs/Certifier/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
+        "security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean": "security/Proofs/Certifier/JointBridge/Guarantees/IntegrityOfIntegrityMonitoringPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/HonestH200.lean": "security/Proofs/Certifier/JointBridge/HonestH200.lean",
+        "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityBlock.lean": "security/Proofs/Certifier/JointBridge/IntegrityOfIntegrityBlock.lean",
+        "security/Proofs/Accounting/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean": "security/Proofs/Certifier/JointBridge/IntegrityOfIntegrityMonitoringPeriod.lean",
+        "security/Proofs/Accounting/JointBridge/SpaceOfPeriodHeld.lean": "security/Proofs/Certifier/JointBridge/SpaceOfPeriodHeld.lean",
+        "security/Proofs/Accounting/JointBridge/WorkOfCreditedWords.lean": "security/Proofs/Certifier/JointBridge/WorkOfCreditedWords.lean",
+        "security/Proofs/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean": "security/Proofs/Certifier/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean",
+        "security/Properties/Accounting/JointBridge/ServiceSoundOfSessions.lean": "security/Properties/Certifier/JointBridge/ServiceSoundOfSessions.lean",
+        "security/Properties/Accounting/JointBridge/SpaceOfPeriodHeld.lean": "security/Properties/Certifier/JointBridge/SpaceOfPeriodHeld.lean",
+        "security/Properties/Accounting/JointBridge/WorkOfCreditedWords.lean": "security/Properties/Certifier/JointBridge/WorkOfCreditedWords.lean",
+        "security/Properties/Accounting/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean": "security/Properties/Certifier/JointBridge/WorkOfH1CheckedCreditMonitoringPeriod.lean"
+      }
     }
   ]
 }

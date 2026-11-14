@@ -27,7 +27,7 @@ the step between the two:
 
 @[expose] public section
 
-namespace Properties.Accounting.JointBridge
+namespace Properties.Certifier.JointBridge
 
 open Pouw.RelativeSecurity (Paths)
 
@@ -96,4 +96,4 @@ def CheckProofSystemSoundNontrivial : Prop :=
     (ws : Properties.Pouw.Period.Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
     ¬ Properties.Pouw.Period.ServiceSound p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => False) 0
 
-end Properties.Accounting.JointBridge
+end Properties.Certifier.JointBridge

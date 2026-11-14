@@ -11,7 +11,7 @@ The premises of `Accounting.Guarantees.Remote.Held` and its time-held forms, eac
 * `Identity` (statement C's links clause): no block comes back into the node over its boundary links. The link-charged
   forms take `Links` instead, the links' ceiling. Statement C in full, no device outside the node computing for it, is
   no longer assumed of the prover: the memory line of record reads it from the network certifiers' record, an event
-  charged at δ_net (`Covered`, `IngressCounted` in `Definitions.Accounting.Assumptions.RemoteOutside`), with which it
+  charged at δ_net (`Covered`, `IngressCounted` in `Definitions.Certifier.Assumptions.RemoteOutside`), with which it
   splits `SketchBound`.
 * `SquaringCeiling s E B`: the node's compute re-encodes at most `s / E` blocks a tick and a burst of `B`: `s` squarings
   a tick at the codec's width over every GPU and the host (`Accounting.Assumptions.SquaringCeiling`,

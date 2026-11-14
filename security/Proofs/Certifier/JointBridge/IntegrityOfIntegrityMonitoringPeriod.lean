@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityMonitoringPeriod
+public import Proofs.Certifier.JointBridge.Guarantees.IntegrityOfIntegrityMonitoringPeriod
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

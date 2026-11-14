@@ -42,7 +42,7 @@ couple into the causal game (`Accounting.PeriodLive`). `WorkOfH1CheckedCreditMon
 for a period whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords` at the play's acceptance
 and the check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
 `u` a unit and `b_unit` bits a unit), from `Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its
-error `δ_s + n·(δ_bind + δ_ks)`. It is `Properties.Accounting.JointBridge.WorkOfCreditedWords` at H1's instance.
+error `δ_s + n·(δ_bind + δ_ks)`. It is `Properties.Certifier.JointBridge.WorkOfCreditedWords` at H1's instance.
 `WorkOfH1CheckedCreditMonitoringPeriod` is it at every price, word and unit count and unit width. Its instance at the H200's INT8
 price is a corollary, stated beside its proof.
 
@@ -59,7 +59,7 @@ most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
 
 @[expose] public section
 
-namespace Properties.Accounting.JointBridge
+namespace Properties.Certifier.JointBridge
 
 open Properties.Pouw.Period PouwCheck
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
@@ -126,4 +126,4 @@ def WorkOfH1CheckedCreditMonitoringPeriod : Prop :=
   ∀ (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (u bUnit : ℕ),
     WorkOfH1CheckedCreditMonitoringPeriodAt p macs u bUnit
 
-end Properties.Accounting.JointBridge
+end Properties.Certifier.JointBridge

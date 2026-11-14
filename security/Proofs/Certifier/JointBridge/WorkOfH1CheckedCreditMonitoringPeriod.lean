@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.Device
 public import Definitions.Pouw.PearlC.W1
-public import Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
+public import Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.JointBridge.WorkOfCreditedWords
+import Proofs.Certifier.JointBridge.WorkOfCreditedWords
 import Proofs.Pouw.Period
 import Std.Tactic.BVDecide.Normalize.Prop
 public import Proofs.Pouw.PearlC.Records
@@ -98,7 +98,7 @@ theorem pr_le_prob_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {
 /-- `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` from `H1CheckedCreditPeriod`, at the source's instance at each
 value of the coins. -/
 theorem workOfH1CheckedCreditMonitoringPeriodAt_of (hsrc : H1CheckedCreditPeriod) (p : Price) (macs : Compose.Kind → ℕ)
-    (u bUnit : ℕ) : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodAt p macs u bUnit := by
+    (u bUnit : ℕ) : Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodAt p macs u bUnit := by
   intro ι α I _ _ Ω _ d C r c ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind
     δks ws opened salt Wp Pl folded help real hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc
     hsalt hpins hmu hrb hguess hfix
@@ -111,8 +111,8 @@ theorem workOfH1CheckedCreditMonitoringPeriodAt_of (hsrc : H1CheckedCreditPeriod
   exact pr_le_prob_of_equiv (Equiv.refl _) fun _ h => h
 
 /-- **The joint period's PoUW guarantee from H1's checked credit**, at every price, per-kind multiply-add count, unit
-count and unit width (`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod`). -/
-theorem WorkOfH1CheckedCreditMonitoringPeriod : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod :=
+count and unit width (`Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod`). -/
+theorem WorkOfH1CheckedCreditMonitoringPeriod : Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod :=
   workOfH1CheckedCreditMonitoringPeriodAt_of Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod
 
 /-- **PoUW's per-period guarantee in the joint period from H1's checked credit on the H200, at INT8, for `K`-deep
@@ -127,7 +127,7 @@ multiply-adds, `K_net` the network certifier's bits, for a circuit with a credit
 none); a circuit of several tile shapes takes the smallest word. -/
 theorem WorkOfH1CheckedCreditMonitoringPeriodH200 :
     ∀ (sha fetch : ℚ) (K R C bUnit : ℕ),
-      Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodAt (h200S8Price sha fetch)
+      Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodAt (h200S8Price sha fetch)
         (fun _ => receiptWordMacs R C) (receiptUnitMacs K R C) bUnit :=
   fun sha fetch K R C bUnit =>
     WorkOfH1CheckedCreditMonitoringPeriod (h200S8Price sha fetch) (fun _ => receiptWordMacs R C) (receiptUnitMacs K R C) bUnit

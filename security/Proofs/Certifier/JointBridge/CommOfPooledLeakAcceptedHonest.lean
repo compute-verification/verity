@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Guarantees.JointBridge.CommOfPooledLeakAccepted
-public import Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness
+public import Definitions.Certifier.Guarantees.JointBridge.CommOfPooledLeakAccepted
+public import Definitions.Certifier.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Proofs.Certifier.Witnesses
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

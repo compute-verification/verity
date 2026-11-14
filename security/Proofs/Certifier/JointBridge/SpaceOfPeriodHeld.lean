@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pous.Period
-public import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
+public import Properties.Certifier.JointBridge.SpaceOfPeriodHeld
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Combinatorics.SimpleGraph.Init
 import Mathlib.Data.Sym.Sym2.Init
@@ -14,7 +14,7 @@ import Proofs.Pouw.Prob
 At any value `ξ` of the period's coins, PoUS's event over its own coordinate (it accepts while the capacity account held
 fewer than `S · len` bit-ticks) maps, through `RealizesSpaceOfPeriodHeld`'s coin equivalence, into `PeriodHeld`'s event
 at the other coins `other ξ`, whose probability `Pous.Period.SecurityProofs.periodHeld` bounds by `δ + ε_max`. The
-bound holds at the challenge times PoUS grades (`Definitions.Accounting.JointBridge.SpaceOfPeriodHeld`'s header).
+bound holds at the challenge times PoUS grades (`Definitions.Certifier.JointBridge.SpaceOfPeriodHeld`'s header).
 -/
 
 @[expose] public section

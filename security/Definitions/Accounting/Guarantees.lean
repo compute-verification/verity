@@ -26,9 +26,9 @@ public import Definitions.Pouw.Guarantees.Headline
 public import Definitions.Pouw.Guarantees.HeadlineDc
 public import Definitions.Accounting.Guarantees.Joint
 public import Definitions.Accounting.Guarantees.JointLive
-public import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
-public import Definitions.Accounting.Guarantees.JointBridge.CommOfMonitoringPeriodLeakAccepted
-public import Definitions.Accounting.Guarantees.JointBridge.CommOfPooledLeakAccepted
+public import Definitions.Certifier.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
+public import Definitions.Certifier.Guarantees.JointBridge.CommOfMonitoringPeriodLeakAccepted
+public import Definitions.Certifier.Guarantees.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.Guarantees.Localization
 public import Definitions.Pous.Guarantees.Memory
 public import Definitions.Pouw.Guarantees.PerRun

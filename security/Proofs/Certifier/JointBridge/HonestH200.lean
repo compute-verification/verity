@@ -5,7 +5,7 @@ public import Mathlib.CategoryTheory.Types.Basic
 public import Mathlib.RingTheory.WittVector.IsPoly
 public import Mathlib.Tactic.Polynomial.Basic
 public import Mathlib.Tactic.ReduceModChar
-public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
+public import Proofs.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
 public import Proofs.Pouw.Period.Honest
 public import Proofs.Pouw.Prob
 import Definitions.Pouw.TS
@@ -54,7 +54,7 @@ import Proofs.Accounting.Compose.SplitRateExp
 import Proofs.Accounting.ComposeMonitoringPeriod
 import Proofs.Pouw.HMu
 import Proofs.Pouw.Headline.Luck
-import Proofs.Accounting.JointBridge.WorkOfCreditedWords
+import Proofs.Certifier.JointBridge.WorkOfCreditedWords
 import Proofs.Pouw.TS
 import Proofs.Pouw.TS.ReceiptDuoCP
 import Proofs.Pouw.TS.ReceiptLi

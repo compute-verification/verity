@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
+public import Proofs.Certifier.JointBridge.Guarantees.IntegrityOfIntegrityBlock
 public import Proofs.Flock.EndToEnd.Carry
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

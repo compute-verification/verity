@@ -7,7 +7,7 @@ public import Definitions.Poub.Bandwidth
 public import Definitions.Poub.BandwidthAudit
 public import Definitions.Pouw.BoundReceipt
 public import Definitions.Pouw.BoundSketch
-public import Definitions.Accounting.Bridge
+public import Definitions.Certifier.Bridge
 public import Definitions.Accounting.Capacity
 public import Definitions.Pouw.CoinFlow
 public import Definitions.Accounting.Carrier
@@ -23,12 +23,12 @@ public import Definitions.Pouw.Headline
 public import Definitions.Pouw.HeadlineDc
 public import Definitions.Accounting.Joint
 public import Definitions.Accounting.JointPeriod
-public import Definitions.Accounting.JointBridge.CreditedWords
-public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
-public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
-public import Definitions.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccepted
-public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
-public import Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness
+public import Definitions.Certifier.JointBridge.CreditedWords
+public import Definitions.Certifier.JointBridge.SpaceOfPeriodHeld
+public import Definitions.Certifier.JointBridge.BandwidthOfAuditPerRunPeriod
+public import Definitions.Certifier.JointBridge.CommOfMonitoringPeriodLeakAccepted
+public import Definitions.Certifier.JointBridge.CommOfPooledLeakAccepted
+public import Definitions.Certifier.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Definitions.Accounting.JointLive
 public import Definitions.Pous.Memory
 public import Definitions.Pouw.PerRun
@@ -37,7 +37,7 @@ public import Definitions.Accounting.Physical
 public import Definitions.Slowdown.Tasks
 public import Definitions.Pouw.Pouw
 public import Definitions.Pouw.PouwWitness
-public import Definitions.Accounting.NetWitness
+public import Definitions.Certifier.NetWitness
 public import Definitions.Pouw.PouwWork
 public import Definitions.Poub.RateAudit
 public import Definitions.Poub.RateAuditDeployed

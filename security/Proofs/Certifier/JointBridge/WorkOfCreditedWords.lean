@@ -1,6 +1,6 @@
 module
 
-public import Properties.Accounting.JointBridge.WorkOfCreditedWords
+public import Properties.Certifier.JointBridge.WorkOfCreditedWords
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -65,8 +65,8 @@ theorem pr_le_pr_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {E 
   convert (Nat.cast_le (α := ℝ)).2 this using 3
 
 /-- **The joint period's PoUW guarantee from a credit in words, at any price**
-(`Properties.Accounting.JointBridge.WorkOfCreditedWords`). -/
-theorem WorkOfCreditedWords : Properties.Accounting.JointBridge.WorkOfCreditedWords := by
+(`Properties.Certifier.JointBridge.WorkOfCreditedWords`). -/
+theorem WorkOfCreditedWords : Properties.Certifier.JointBridge.WorkOfCreditedWords := by
   intro ι α I _ _ Ω _ d C r c p m u bUnit X _ acc fixed credit help δ real hcost hhelp hb ξ
   refine le_trans (pr_le_pr_of_equiv (F := fun x => acc ξ x ∧ fixed ξ x < credit ξ x) real.coin
     fun y ⟨hacc, hnot⟩ => ?_) (hb ξ)

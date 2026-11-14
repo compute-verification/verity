@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Certifier.Assumptions.RemoteOutside
 public import Definitions.Accounting.Assumptions.RemoteSketch
 public import Definitions.Accounting.Assumptions.RemoteHeld
 import Mathlib.Basic.ENNReal.Real

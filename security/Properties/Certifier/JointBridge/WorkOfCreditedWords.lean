@@ -50,14 +50,14 @@ the device outsourced at most `K/b_unit` units (`Accounting.Assumptions.HelpWith
 bound as a hypothesis over the source's own event, so it restates neither bound, and needs no time credit (Compose's
 time line): the joint period's claim is priced ops.
 
-H1's instance is `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod`, and its H200 one at INT8 is stated
+H1's instance is `Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod`, and its H200 one at INT8 is stated
 beside its proof (`Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriodH200`). Any other source that credits
 words, a period of v5/v6 tiles among them, takes the bridge unchanged.
 -/
 
 @[expose] public section
 
-namespace Properties.Accounting.JointBridge
+namespace Properties.Certifier.JointBridge
 
 /-- **PoUW's per-period guarantee in the joint period from a credit in words, at any price.** On any device and any
 period of a node's run whose PoUW audit is a source game's on PoUW's coordinate of the coins, with the work certificate
@@ -78,4 +78,4 @@ def WorkOfCreditedWords : Prop :=
     (∀ ξ, Pouw.pr (fun x : X => acc ξ x ∧ fixed ξ x < credit ξ x) ≤ δ) →
     r.Sound c p .pouw δ
 
-end Properties.Accounting.JointBridge
+end Properties.Certifier.JointBridge

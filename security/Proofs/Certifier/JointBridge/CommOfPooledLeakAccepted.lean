@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.JointBridge.CommOfPooledLeakAccepted
+public import Definitions.Certifier.Guarantees.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Certifier.Guarantees.PooledLeak
 public import Proofs.Certifier.PooledLeak
 import Mathlib.Algebra.Order.Floor.Extended
