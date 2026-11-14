@@ -218,8 +218,10 @@ def rowWire (w : Spot.Wires.Wire) (name : String) (j : Nat) : Option Spot.Wires.
   if !(decide (w.cut0 ≤ j) && decide (j < w.cut0 + w.cuts)) then none
   else if w.cuts == 1 then some { w with port := name }
   else if w.radix.getLast? != some w.cuts then none
-  else some { w with port := name, radix := w.radix.dropLast, step := w.step.dropLast, cut0 := j, cuts := 1,
-              base := w.base + (w.step.getLast?.getD 0) * ((j - w.cut0 : Nat) : Int) }
+  else some
+    { w with
+      port := name, radix := w.radix.dropLast, step := w.step.dropLast, cut0 := j, cuts := 1,
+      base := w.base + (w.step.getLast?.getD 0) * ((j - w.cut0 : Nat) : Int) }
 
 /-- The wires reading template `t`'s row `name` (`Index.rowOf`) that meet units `[lo, lo + n)`, each at that row
 (`rowWire`), by first unit. -/
@@ -253,13 +255,14 @@ def cutsOf? (rec : Json) : Option (Array ((String × String) × Nat)) :=
     ix.ports "A" == #["x", "y"] && ix.ports "B" == #["x"] && ix.ports "C" == #[]
 -- Port `parts` cut 2 ways, one wire over both rows: row 0 reads writer units `2u`, row 1 writer units `2u + 1`.
 #guard
-  let w : Spot.Wires.Wire := { reader := "A", port := "parts", writer := "B", out := "o0", start := 0, radix := [3, 2],
-    base := 0, step := [2, 1], cut0 := 0, cuts := 2 }
+  let w : Spot.Wires.Wire :=
+    { reader := "A", port := "parts", writer := "B", out := "o0", start := 0, radix := [3, 2], base := 0,
+      step := [2, 1], cut0 := 0, cuts := 2 }
   let ix := Index.of #[w] #[(("A", "parts"), 2)]
   let wr (name : String) (u : Nat) := (ix.meetsRow "A" name u 1).map fun v => v.writerAt (u - v.start)
   ix.rows "A" == #[("parts#0", "parts", 0), ("parts#1", "parts", 1)] && wr "parts#0" 2 == #[4] &&
     wr "parts#1" 2 == #[5] && wr "parts" 2 == #[] && wr "parts#2" 2 == #[] && ix.rowOf "A" "parts#01" == none &&
-    (Index.of #[{ w with cuts := 1, radix := [3] , step := [2] }]).rowOf "A" "parts" == some ("parts", 0)
+    (Index.of #[{ w with cuts := 1, radix := [3], step := [2] }]).rowOf "A" "parts" == some ("parts", 0)
 
 def WIRE_TREE_WHY : String :=
   "a sampled reader member reads one row of a port (the port, or row j of a port cut k ways) through writer rows in " ++
