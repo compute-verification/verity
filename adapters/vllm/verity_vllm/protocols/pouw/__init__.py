@@ -76,19 +76,19 @@ from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matm
 from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES
 
 from verity_vllm.protocols.interface import Context, Option, Target
-from verity_vllm.protocols.pouw import circuit as PC
-from verity_vllm.protocols.pouw import device as PD
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw import lead as PL
-from verity_vllm.protocols.pouw import native as PN
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.h1 import hooks as PHK
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import settings as PHS
-from verity_vllm.protocols.pouw.h1 import window as PHW
-from verity_vllm.protocols.pouw.h1.settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
-from verity_vllm.protocols.pouw.operands import Operands, ncp_tiles, quantize, stack_y
-from verity_vllm.protocols.pouw.pearl_c import passes as PP
+from verity.protocols.accounting.pouw.prover.serving import circuit as PC
+from verity.protocols.accounting.pouw.prover.serving import device as PD
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving import lead as PL
+from verity.protocols.accounting.pouw.prover.serving import native as PN
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity_vllm.protocols.pouw import h1_hooks as PHK
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity_vllm.protocols.pouw import h1_settings as PHS
+from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
+from verity.protocols.accounting.pouw.prover.serving.operands import Operands, ncp_tiles, quantize, stack_y
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
 
 NAME = "pouw"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
@@ -156,7 +156,7 @@ class Settings:
     #: bit flipped
     tamper: str | None = None
     device: str | None = None
-    #: Pearl-C on sm_120: the kernel directory (the run tree's ``benchmarks/pouw/pearl_c_sm120``) and build.sh's cubin
+    #: Pearl-C on sm_120: the kernel directory (the run tree's ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120``) and build.sh's cubin
     kernel: str | None = None
     cubin: str | None = None
     #: Pearl-C on sm_120: the schedule each pass runs under (`verity.protocols.accounting.pouw.verifier.serving.SCHEDULES`), serial by default

@@ -42,6 +42,8 @@ from verity_config.settings import of
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
 CATEGORY = {"gemm_pearlc": "gemm",
@@ -156,7 +158,7 @@ class Profile:
 def instrument(prof: Profile):
     """Wrap the device run's module functions before the install, so every call's steps and sections are timed.  Returns
     the function that puts them back."""
-    from verity_vllm.protocols.pouw import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
     run_cls = PPD.PearlCDeviceRun
     saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
     saved += [(run_cls, n, vars(run_cls).get(n)) for n in ("_shape", "_pipe", "end", "gemm")]  # None: a mixin's, undone by delattr
@@ -269,7 +271,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model")
     ap.add_argument("--revision")
-    ap.add_argument("--kernel", default=str(HERE.parent / "pearl_c_sm120"))
+    ap.add_argument("--kernel", default=str(SM120))
     ap.add_argument("--cubin")
     ap.add_argument("--mem-arm", type=float, default=0.3)
     ap.add_argument("--mem-base", type=float, default=0.2)

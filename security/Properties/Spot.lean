@@ -12,15 +12,15 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
 * **the registration** keeps R1–R8 against the verifier's own copies (`Registered`): the record's format, protocol, law
-  and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
-  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and window (`R6`); for a v2 record its registered
-  values (`R7`); and under a template query, no run Input its proof blocks don't each read alone (`R8`); and in the
-  per-member form each member's one count of link points (`RL`);
+  and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains,
+  a wired port at the root of the port that holds it (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record and
+  window (`R6`); for a v2 record its registered values (`R7`); and under a template query, no run Input its proof blocks
+  don't each read alone (`R8`); and in the per-member form each member's one count of link points (`RL`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
-  registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
-  (`Receipt`);
+  registered values' reads against the registered roots, a read named by one of the record's own ports taken only at
+  that port's root (`UnitsProved`), and the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
@@ -109,14 +109,28 @@ def RootIs (r want : Json) : Prop :=
   (∃ s, getD r "root" = .str s ∧ isHex s = true) ∧ jeq (getD r "leaves") (getD want "leaves") ∧
   jeq (getD r "domain") (getD want "domain")
 
+/-- One port of the verifier's layout that names the port it is wired to (`want`'s `"wired"`, a port whose rows are the
+leaves of that port's tree): the record has a root under its own name `p` and one under the port it names, each a
+string, and the two are one string. One tree is registered at both names. It says nothing of a port whose entry names
+none: the clause is only as good as the layout's `wired` entries, and a layout that leaves `wired` out is not refused
+for it. It is a second check of what `SecondStage.readOk_wired` gives, which holds each session's read of a wired port
+to its writer's root; where the verifier's parameters come from is the composite's to hold, not R3's. -/
+def WiredIs (rec : Json) (p : String) (want : Json) : Prop :=
+  ∀ q, getD want "wired" = .str q →
+    ∃ r h s, rootFor rec p = some r ∧ rootFor rec q = some h ∧ getD r "root" = .str s ∧ getD h "root" = .str s
+
 /-- R3: the record's scheme is the verifier's; it registers at least one root, each exactly `{port, root, leaves,
-domain}`; no port twice, and exactly the verifier's ports; and each of the verifier's ports has its root as derived. -/
+domain}`; no port twice, and exactly the verifier's ports; each of the verifier's ports has its root as derived; and
+each port the layout wires to another has that port's root (`WiredIs`: a second check of what
+`SecondStage.readOk_wired` gives, over the `wired` entries the verifier's parameters bring, whose provenance is the
+composite's and not R3's). -/
 def R3 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "scheme") (.str v.scheme) ∧
   rootsOf rec ≠ #[] ∧ (∀ r ∈ rootsOf rec, keys? r = some Registration.ROOT_KEYS) ∧
   (portsOf rec).size = (rootsOf rec).size ∧ (portsOf rec).size = v.ports.size ∧
   (∀ pw ∈ v.ports, ∃ q ∈ portsOf rec, jeq q (.str pw.1)) ∧
-  ∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2
+  (∀ pw ∈ v.ports, ∀ r, rootFor rec pw.1 = some r → RootIs r pw.2) ∧
+  ∀ pw ∈ v.ports, WiredIs rec pw.1 pw.2
 
 /-- R4: the record names the verifier's leaf layer (the SHA-512 of its public file), or null when the verifier holds none. -/
 def R4 (rec : Json) (v : Registration.Verifier) : Prop :=
@@ -297,8 +311,9 @@ def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
 
 /-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own sampling design over its
 program and query applies (`LinkPoints.lawOf`, with the population), some sample under it ends, and no member's fewest
-and most sampled proof blocks under it, over the samples that end, give different link points (`LinkPoints.refused`, which
-refuses a sampling design no sample of which ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+and most sampled proof blocks under it, over the samples that end, give different link points, nor is any member's
+fewest none, a sample that ends missing it (`LinkPoints.refused`, which refuses a sampling design no sample of which
+ends); a sample that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
 def RL (v : Registration.Verifier) : Prop :=
   v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
     LinkPoints.refused law n v.members = .ok #[]
@@ -386,11 +401,12 @@ def Receipt (c : Commitment) (e : Evidence) : Prop :=
   jeq (getD e.receipt "registration") (.str (Flock.hexOf c.digest))
 
 /-- The roots the verifiers that accepted report opening the sessions' registered reads against, for the
-record's own values (its roots' ports and its registered values): `{value: root}`, a value reported under two roots mapped
-to null; none when no such verdict reports any (`audit.session_registered`, which `Record.sessionRegistered` and
-`Record.ownRegistered` compute from the verdicts). -/
+record's own values (its roots' ports and its registered values), less the reads of its own ports at their own roots
+(each port's last root, `Record.byPort`): `{value: root}`, a value reported under two roots mapped to null; none when no
+such verdict reports any (`audit.session_registered` and `audit.less_own_reads`, which `Record.sessionRegistered`,
+`Record.ownRegistered` and `Record.lessOwnReads` compute from the verdicts). -/
 def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
-  Record.ownRegistered rec (Record.sessionRegistered vs)
+  Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs))
 
 /-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
 the same key and root in the second. -/
@@ -402,8 +418,8 @@ exactly the units the sample proves (its units and a work sample's closure, asce
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
 each port); and, when the record registers values or the verifiers report reads of the record's own values,
-those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
-entry). -/
+those reads, less those of its own ports at their own roots (`openedRoots`), were opened against exactly the record's
+`{value: root}` (`Record.registeredRoots`, each value's last entry). -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧

@@ -1,5 +1,5 @@
-"""The vLLM device path for Pearl-C on sm_120 (`verity_vllm.protocols.pouw.pearl_c`) against GPU 1's pipeline
-(``benchmarks/pouw/pearl_c_sm120``) on the CPU, with a recording stand-in for the device; and the pass verifier
+"""The vLLM device path for Pearl-C on sm_120 (`verity.protocols.accounting.pouw.prover.serving.pearl_c`) against GPU 1's pipeline
+(``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120``) on the CPU, with a recording stand-in for the device; and the pass verifier
 (``benchmarks/pouw/pearl_c_vllm/verify_run.py``) on an honest transcript that the scheme's reference prover builds."""
 from __future__ import annotations
 
@@ -27,9 +27,9 @@ import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
-from verity_vllm.protocols.pouw.pearl_c import host as PH
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PH
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 
@@ -66,14 +66,15 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.serving import SchemeId
 from verity.protocols.proofs.spot.device import challenger as Ch
-from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
 # the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 import clear_work as CW  # noqa: E402
 from clear_audit import Prover, Verifier  # noqa: E402
 
-KERNEL = Path(__file__).resolve().parents[1] / "pearl_c_sm120"
+KERNEL = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
+POUW = Path(__file__).resolve().parents[1]
 SCHEME = "pearl-c-sm120-v1-h3"
 SEED = bytes(range(32))
 SALT_KEY = bytes(range(100, 132))
@@ -104,9 +105,9 @@ def load(name: str, path: Path):
 
 
 R = load("pearl_c_sm120_run", KERNEL / "run.py")
-F = load("pearl_c_sm120_fixture", KERNEL / "fixture.py")
-VR = load("pearl_c_vllm_verify_run", KERNEL.parent / "pearl_c_vllm" / "verify_run.py")
-SD = load("pearl_c_vllm_served_debit", KERNEL.parent / "pearl_c_vllm" / "served_debit.py")
+F = load("pearl_c_sm120_fixture", POUW / "pearl_c_sm120" / "fixture.py")
+VR = load("pearl_c_vllm_verify_run", POUW / "pearl_c_vllm" / "verify_run.py")
+SD = load("pearl_c_vllm_served_debit", POUW / "pearl_c_vllm" / "served_debit.py")
 #: the device path's schemes whose device record is a variant of KERNEL's pipeline (pearl_c_sm90 runs h100's)
 KERNEL_SCHEMES = sorted(s for s in PPD.SCHEMES if SchemeId.parse(s).device in R.VARIANT_G)
 
@@ -469,7 +470,7 @@ def test_the_e2e_gate_fails_a_device_that_writes_nothing(device_run):
     """On the recording stand-in nothing is written, so every pass commits the poison: the repeat holds, and only the negative
     control (the call with its tile leaves omitted) can tell. It must, for every shape."""
     make, _, weights, *_ = device_run
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     rows = E2E.gate(make(), weights)
     calls = [r for r in rows if r["check"] == "call"]
     assert [(r["n"], r["m"]) for r in calls] == [(256, 8192), (256, 32), (128, 8192), (128, 32)]
@@ -865,7 +866,7 @@ def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(
 def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
     """`screen.excluded_host`, which a device's retained call decides its record by from the bytes its rows' write lands
     (the flags and A's rows as BF16), excludes the rows `screen.excluded` does from the flags and A's FP32 words."""
-    S = importlib.import_module("verity_vllm.protocols.pouw.pearl_c.screen")
+    S = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
     rng = np.random.default_rng(31)
     words = bf16_words(rng, 64, 1024).view(np.uint32)
     words[::3, 1::8] = 0x47000000                             # 2^15 off the screen's stride: rows live_row rejects
@@ -1225,7 +1226,7 @@ def test_verify_run_rejects_a_wrong_weight_row_and_undeclared_exclusions(honest_
 def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
     """``served_passes.py verify`` on serve dir `d` at 3 samples, a test instance's (`proved_pass`'s): its exit, its document
     and its core answer."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     rc = SP.main(["verify", "--passes", str(d), "--out", str(out), "--jobs", "1", "--draws", "3", "--test-instance", *more])
     answer = json.loads((out.parent / "answer.json").read_text())
     from verity.protocols.accounting.pouw.verifier import core_check as CC
@@ -1486,7 +1487,7 @@ def test_served_passes_verify_credits_the_timed_call_its_passes_less_the_runs_wh
     """Where served.json says which passes the timed call made, an accepted verdict also carries the credit over those
     alone (`served_passes.timed_credit`): the run's credited MACs less the warm-up pass's credited cells' MACs at (1 − ρ),
     rounded up, so the run's deduction for ε falls wholly on the timed pass."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     served = {"run": RUN, "passes": [{"pass": 0, "timed": False, "units": 2, "tiles": 4, "manifest": str(a)},
                                      {"pass": 1, "timed": True, "units": 2, "tiles": 4, "manifest": str(b)}]}
@@ -1527,7 +1528,7 @@ def test_a_seeded_serve_draws_the_same_coins_and_salt_key_and_takes_no_retention
     installs (`seed_install`) hold challengers of one coin commitment and take one hm96 salt key (`pearl_c.new_salt_key`,
     which the install's weight commitment calls); ``--seeded`` is refused beside retention and beside the challenger gate,
     before anything is built."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = SP.seeded("coins"), SP.seeded("coins")
     assert a(3) + a(70) + a(1) == b(74) and SP.seeded("salt key")(32) != SP.seeded("coins")(32)
     monkeypatch.setattr(PPD, "new_salt_key", PPD.new_salt_key)
@@ -1551,7 +1552,7 @@ def test_served_passes_same_holds_two_seeded_serves_of_one_load_to_the_same_pass
     with another pass count fails.  Serves that aren't both seeded and unretained, that served different loads or that
     drew different salts are refused, and so are two whose passes committed nothing, which would otherwise be the same
     for want of any root."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     passes = [{"pass": i, "timed": i > 0, "units": 64, "base": 64 * i, "tiles": 5888, "screened_rows": 8192,
                "failing_rows": 0, "unsure_rows": 0, "excluded_rows": 0, "transcript_root": f"{7 + i:0128x}",
                "activation_roots": [f"{100 + 3 * i + j:0128x}" for j in range(3)], "schedule": "serial"} for i in range(3)]
@@ -1601,7 +1602,7 @@ def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_ce
     `clear_work` credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over
     the pass alone: a filler row and an excluded A row each take their cells out, and an excluded B row its block of 64
     columns' (the band rule)."""
-    from verity_vllm.protocols.pouw.pearl_c.window import macs
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import macs
 
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     man = json.loads(path.read_text())
@@ -1676,7 +1677,7 @@ def test_uncredited_calls_split_each_calls_macs_by_cause_and_sum_to_the_runs_cre
 def _uncredited_case(tmp_path: Path, monkeypatch, capsys):
     """An accepted verdict over one proved pass in ``tmp_path/w0``, a test instance's verdict over it, and ``run(doc,
     passes)``: ``served_passes.py uncredited`` on that document, its exit code and what it printed."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path / "w0" / "pass-00000", PROMOTED[0])[0]
     shutil.copy(path.parent / "coins.json", tmp_path / "w0" / "coins.json")
     coins, source = published(path), b"verifier" * 4
@@ -1787,7 +1788,7 @@ def test_volunteer_pass_gives_up_the_rows_over_their_caps_and_every_tile_then_pa
     own cap (`proved_pass`), so the verifier rejects its tile.  `volunteer_pass` finds the same tiles from the words' counts,
     gives the row up, and rewrites the records and their root alone: the commitment, A's roots and the files are the pass's,
     every tile then passes the verifier's check, and a second run changes nothing."""
-    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins, before = published(path), json.loads(path.read_text())
     p = VR.load(path, coins)
@@ -1817,7 +1818,7 @@ def test_the_give_up_runs_exactly_while_the_verdict_rejects_a_drawn_credited_row
     (the run's verdict, `served_pearlplus.sh`'s) and `verify_run.verify` (a pass at a time, `glm53_passes.py`'s) reject iff
     it says yes, under their own rule and each ``--over-cap`` they take.  A verifier whose over-cap rule changes moves the
     give-up onto or off the prover's path with it; one that takes no ``over_cap`` refuses any."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins = published(path)
     p = VR.load(path, coins)
@@ -1877,7 +1878,7 @@ def test_volunteer_pass_on_the_device_counts_every_tile_as_the_replay_and_gives_
     filler rows zero, give every tile's counts as the CPU replay (`words`) gives them, so the pass gives up the same rows to
     the same records root.  A tile with a word the device marks non-finite takes the replay's counts, and a count unlike
     the replay's on a cross-checked tile stops the step before the records change."""
-    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins, before = published(path), path.read_text()
     p = VP.VR.load(path, coins)
@@ -1915,7 +1916,7 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
     """A pass whose rows over a cap are given up (`volunteer_pass`) is accepted by the run's verdict, which credits no cell
     of a given-up A row's band of 64 rows or a given-up B row's block of 64 columns.  More given-up rows than V-EX allows (⌈m/64⌉ of a call's A), or records changed after the
     pass published their root, the verdict refuses before it takes its coin."""
-    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins = published(path)
     assert VP.volunteer(path, coins, 1)["ok"]
@@ -2042,7 +2043,7 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     the same record chained after that one (its ``previous`` the record's digest, as a serve chains W after its first
     registration record, the weights'), which the tie holds to the same passes under W's own digest; the flag without
     ``--window-record`` is a usage error, and a record that can't be read leaves no W."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     d = _serve_dir(tmp_path, [warm, a, b])
     served = json.loads((d / "served.json").read_text())
@@ -2084,7 +2085,7 @@ def test_served_passes_volunteer_gives_up_each_retained_passs_rows_over_a_cap_an
     each pass with calls that served.json names: a pass with a credited row over its cap (`proved_pass` under the h100
     record's zero key) is left with none and its records' root is rewritten, so every tile then passes the verifier's check;
     its document names the node it ran on; a serve that retained no pass is refused."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     d, out = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json"
     before = json.loads(path.read_text())["records_root"]
@@ -2103,8 +2104,8 @@ def test_served_passes_volunteer_on_the_device_gives_up_the_cpus_rows_and_names_
     """``served_passes.py volunteer --device`` (a stand-in for the card, `_StandInDebit`) gives up the rows the CPU replay
     gives up, to the same records root, and its document names the debit cubin, the cross-check rate (``--device-check``,
     else `volunteer_pass.CROSS_CHECK`) and the tiles it replayed on the CPU too; the CPU's document has no ``device``."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
-    VP = load("volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
+    VP = load("volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     d, out, before = _serve_dir(tmp_path, [path]), tmp_path / "volunteer.json", path.read_text()
     cubin = tmp_path / "debit_sm90.cubin"
@@ -2144,7 +2145,7 @@ def test_served_passes_verify_credits_only_the_passes_retained_before_its_coin_a
     its coin against their commitment (``coin.json``).  The same retention again takes the same source, never another;
     ``retain`` and ``volunteer`` refuse once the coin is flipped, and a retention changed behind them is refused
     (``after-coin``) before any replay, whichever way it changed."""
-    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    SP = load("pearl_c_vllm_served_passes", POUW / "pearl_c_vllm" / "served_passes.py")
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     d = _serve_dir(tmp_path, [a, b])
     vol = tmp_path / "volunteer.json"
@@ -2184,7 +2185,7 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     """V-EX's give-up is the prover's before the coin: a pass whose records change after the verifier recorded its coin
     (`volunteer_pass` run past ``served_passes.py volunteer``'s refusal) is another run, and the verdict refuses it
     (``after-coin``) rather than sample again over it."""
-    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins, record = published(path), tmp_path / "coin.json"
     first = VR.verify_passes([path], 3, 1, "test", coins, record=record, test_instance=True)
@@ -2200,7 +2201,7 @@ def test_the_run_verdict_takes_its_source_from_its_draw_once_and_never_asks_a_dr
     the sample before any replay and reused by a later verdict without sampling; a sample that fails before it asks rejects
     and may be asked again, while one that fails after ``asking`` marked the record is refused (``asked-once``) and
     never redrawn."""
-    VP = load("pearl_c_vllm_volunteer_pass", KERNEL.parent / "pearl_c_vllm" / "volunteer_pass.py")
+    VP = load("pearl_c_vllm_volunteer_pass", POUW / "pearl_c_vllm" / "volunteer_pass.py")
     path = proved_pass(tmp_path, "pearl-c-h100-v1-h3", key=bytes(32))[0]
     coins = published(path)
     assert VP.volunteer(path, coins, 1)["ok"]
@@ -2248,10 +2249,10 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
     --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
     after C with the record's sample.  It refuses before reserving while the lane's period is open, and before its open
     when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
-    BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
+    BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64
     reserved = {"session": "s20261104T090000Z-dr01", "seq": 9, "peer": "vy-dc-h200", "by": "vllm", "period": None,
                 "withheld": True}
@@ -2311,9 +2312,9 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
     is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
     before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
     coin is asked when another reserve of the lane reached the gate first; another lane's reserve doesn't count."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
-    BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
+    BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root, sid = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64, "s20261104T120000Z-dr01"
     reserve = lambda s, **b: {"kind": "reserve", "session": s, "body": {"by": "vllm", **b}}  # noqa: E731
     salt = [{"kind": "period-open", "session": None, "body": {"period": "pc1", "lane": "vllm"}},
@@ -2836,7 +2837,7 @@ def test_h3_screens_check_holds_a_pass_to_the_reference(honest_pass):
     """h3_screen's check on a pass the reference proved: every tile's leaf is the reference's, and a call's dumped row digests,
     row seeds, seed_A and E_A lines (16 padding rows under seed_A) are; a wrong line or row digest is caught."""
     path, s, epoch, prover, tr, splits, records = honest_pass
-    HS = load("pearl_c_vllm_h3_screen", KERNEL.parent / "pearl_c_vllm" / "h3_screen.py")
+    HS = load("pearl_c_vllm_h3_screen", POUW / "pearl_c_vllm" / "h3_screen.py")
     d = path.parent
     assert HS._tiles(d, 1) == {"tiles": tr.commitment.count, "failed": 0, "failures": []}
     for u in epoch.workload.matmuls:
@@ -3042,9 +3043,9 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
     in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
     is asked."""
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
-    BA = load("pearl_c_vllm_bench_arm", KERNEL.parent / "pearl_c_vllm" / "bench_arm.py")
+    BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate = "ssh -i KEY -o BatchMode=yes research@gate"
     reserved = {"session": "s20261103T140000Z-0001", "seq": 7, "peer": "vy-dc-h200", "by": "vllm",
                 "expires_utc": "2026-11-03T16:00:00Z"}
@@ -3110,7 +3111,9 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         pos_a, pos_b = {i: p for p, i in enumerate(ref.tile.rows)}, {j: p for p, j in enumerate(ref.tile.cols)}
         a_codes, b_codes = [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols]
         formed = [(ops.a.alpha[pos_a[i]], ops.a.x[pos_a[i]], ops.a.beta[pos_a[i]]) for i in rows]
-        assert (t["atoms"], t["later_zero_promotions"], t["forming_elements"]) == CW.D.tile_debit(a_codes, b_codes, formed, s.device)
+        formed_b = [(ops.b.alpha[pos_b[j]], ops.b.x[pos_b[j]], ops.b.beta[pos_b[j]]) for j in cols]
+        assert (t["atoms"], t["later_zero_promotions"], t["forming_elements"], t["mends"]) == CW.D.tile_debit(
+            a_codes, b_codes, formed, formed_b, s.device)
         assert t["ok"] == (CW.check_opened(s, rec, ref.tile, a, b, ops) is None)
     assert got["later_zero_promotions"] == sum(t.get("later_zero_promotions", 0) for t in tiles)
 
@@ -3203,7 +3206,7 @@ def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tm
         SD.main(["m.json", "--per-input", "1", "--fresh-draws", "4", "--out", str(tmp_path)])
 
 
-ST = load("pearl_c_vllm_served_table", KERNEL.parent / "pearl_c_vllm" / "served_table.py")
+ST = load("pearl_c_vllm_served_table", POUW / "pearl_c_vllm" / "served_table.py")
 
 
 def test_the_served_table_cites_each_models_worst_input_and_refuses_what_it_cannot_cite(tmp_path):
@@ -3294,7 +3297,7 @@ def test_the_served_table_labels_a_windows_fraction_as_the_replay_diagnostic_bes
         ST.main(["--model", "qwen", str(inputs), "--window", "w1", "r1", str(paths[1]), "--out", str(out)])
 
 
-FH = load("pearl_c_vllm_forming_headroom", KERNEL.parent / "pearl_c_vllm" / "forming_headroom.py")
+FH = load("pearl_c_vllm_forming_headroom", POUW / "pearl_c_vllm" / "forming_headroom.py")
 
 
 def test_forming_headroom_on_a_recorded_line(tmp_path):
@@ -3341,7 +3344,7 @@ def test_forming_headroom_on_a_recorded_line(tmp_path):
         FH.main([str(path), "--out", str(out)])
 
 
-FD = load("pearl_c_vllm_forming_domain", KERNEL.parent / "pearl_c_vllm" / "forming_domain.py")
+FD = load("pearl_c_vllm_forming_domain", POUW / "pearl_c_vllm" / "forming_domain.py")
 
 
 def test_forming_domain_on_a_synthetic_pass(tmp_path, monkeypatch):
@@ -3463,9 +3466,10 @@ def test_the_batch_debit_is_the_scalar_debit_and_a_nan_code_is_the_scalars_rejec
 
 
 def test_the_batch_tile_debit_is_the_scalar_tile_debit():
-    """`fast_tile.tile_debit` is `pearl_c_debit.tile_debit`, forming elements included: on rows with salt-dead elements
-    (accumulators past both ends' saturation, and at 0), a zero row whose every block every word flags, and a row whose
-    accumulator overflows, where both reject alike."""
+    """`fast_tile.tile_debit` is `pearl_c_debit.tile_debit`, forming elements and mends included: on rows with salt-dead
+    elements (accumulators past both ends' saturation, and at 0), a zero row whose every block every word flags, B rows
+    whose ends make dead pairs and forced zeros with them, and a row whose accumulator overflows, where both reject
+    alike."""
     FT, s = SD.FT, PPD.scheme_of(SCHEME)
     rng, seen = np.random.default_rng(7), set()
     one = 0x3F800000
@@ -3477,19 +3481,23 @@ def test_the_batch_tile_debit_is_the_scalar_tile_debit():
         x[0][:7] = [0, 0x80000000, 1, 0x00800000, 0x3F000000, 0x45000000, 0xC5000000]
         beta = [int(np.float32(v).view(np.uint32)) for v in rng.uniform(0.01, 2.0, 3)]
         formed = [(one, x[i], beta[i]) for i in range(3)]
-        want = CW.D.tile_debit(a, b, formed, s.device)
-        assert FT.tile_debit(a, b, formed, s.device) == want
+        formed_b = [(one, x[i % 3][::-1] if i else x[0], beta[i % 3]) for i in range(4)]
+        want = CW.D.tile_debit(a, b, formed, formed_b, s.device)
+        assert FT.tile_debit(a, b, formed, formed_b, s.device) == want
         flags = [[CW.D.word_flags(r, c, s.device) for c in b] for r in a]
         dead = [CW.D.salt_dead(*f, s.device) for f in formed]
         assert want[:2] == CW.D.chain_debit(a, b, s.device) and want[2] == sum(
             1 for i in range(3) for l in range(384) if dead[i][l] or all(f[l // 32] for f in flags[i]))
+        ends_a, ends_b = [CW.D.row_ends(*f, s.device) for f in formed], [CW.D.row_ends(*f, s.device) for f in formed_b]
+        assert want[3] == sum(CW.D.word_mend(ea, eb, s.device) for ea in ends_a for eb in ends_b)
         seen.add(0 < sum(dead[0]) < 384)
+        seen.add(0 < want[3] < 3 * 4 * 384)
     assert seen == {True}
     formed[0] = (0x7F000000, x[0], beta[0])
     with pytest.raises(Exception) as want:
-        CW.D.tile_debit(a, b, formed, s.device)
+        CW.D.tile_debit(a, b, formed, formed_b, s.device)
     with pytest.raises(type(want.value), match=str(want.value)):
-        FT.tile_debit(a, b, formed, s.device)
+        FT.tile_debit(a, b, formed, formed_b, s.device)
 
 
 def test_the_batch_debit_word_by_word_is_each_words_scalar_debit():
@@ -3521,9 +3529,9 @@ def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
 
     def run():
         ops = s.encode(ctx, s.noise(ctx), a, b, tile)
-        formed = list(zip(ops.a.alpha, ops.a.x, ops.a.beta))
+        formed, formed_b = list(zip(ops.a.alpha, ops.a.x, ops.a.beta)), list(zip(ops.b.alpha, ops.b.x, ops.b.beta))
         return (ops, s.checked(ctx, ops), CW.D.chain_debit(ops.a.codes, ops.b.codes, s.device),
-                CW.D.tile_debit(ops.a.codes, ops.b.codes, formed, s.device))
+                CW.D.tile_debit(ops.a.codes, ops.b.codes, formed, formed_b, s.device))
 
     debits = (CW.D.chain_debit, CW.D.tile_debit)
     before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *debits, type(s).checked, C.blake3)
@@ -3579,7 +3587,8 @@ def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
     rec = PW.UnitRecord(Matmul(0, shape, 0), shape.m, shape.k, (), ())
     codes = lambda r: [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
                                          for _ in range(r - 1)]
-    debit, cap = CW.tile_cap(s, rec, codes(rows), codes(cols), [(0x3F800000, [0] * shape.k, 0x3F800000)] * rows)
+    debit, cap = CW.tile_cap(s, rec, codes(rows), codes(cols), [(0x3F800000, [0] * shape.k, 0x3F800000)] * rows,
+                             [(0x3F800000, [0] * shape.k, 0x3F800000)] * cols)
     credit = Fraction(s.credit_of(Shape(1, shape.k, shape.n)), shape.n) * rows * cols
     assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and debit > 0
     got = SD.tile_numbers(s, debit, cap)
@@ -3610,7 +3619,7 @@ def e2e_result(control_accepted: bool = False, interleave: str = "rep", failure:
 
 
 def test_panel_rows_are_what_panel_py_takes_for_a_measured_row():
-    PR = load("pearl_c_vllm_panel_rows", KERNEL.parent / "pearl_c_vllm" / "panel_rows.py")
+    PR = load("pearl_c_vllm_panel_rows", POUW / "pearl_c_vllm" / "panel_rows.py")
     rows = PR.rows(*e2e_result(), "panel.py")
     args = [dict(zip(r[3::2], r[4::2])) for r in (x[:-2] if "--decode-method" in x else x for x in rows)]
     assert [(a["--phase"], a["--shape"], a["--version"]) for a in args] == [
@@ -3629,7 +3638,7 @@ def test_panel_rows_are_what_panel_py_takes_for_a_measured_row():
 def test_with_graphed_fp8_decode_heads_over_it_and_the_eager_row_is_beside_it():
     """Decode's headline row is over stock FP8 under CUDA graphs, the eager row beside it at the
     shape's -eager name, in the same attempt; both behind the same gate, and prefill keeps its one row."""
-    PR = load("pearl_c_vllm_panel_rows", KERNEL.parent / "pearl_c_vllm" / "panel_rows.py")
+    PR = load("pearl_c_vllm_panel_rows", POUW / "pearl_c_vllm" / "panel_rows.py")
     rows = PR.rows(*e2e_result(graphed=True), "panel.py")
     args = [dict(zip(r[3::2], r[4::2])) for r in (x[:-2] if "--decode-method" in x else x for x in rows)]
     assert [(a["--phase"], a["--shape"]) for a in args] == [
@@ -3645,7 +3654,7 @@ def test_with_graphed_fp8_decode_heads_over_it_and_the_eager_row_is_beside_it():
 # ---- the e2e's schedule and its assembly --------------------------------------------------------------------------
 
 def test_the_schedule_alternates_the_baseline_rep_by_rep_or_in_abab_blocks():
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     (one,) = E2E.schedule(3, "rep")
     assert one == list(E2E.CYCLE) * 3 and one[0::2] == ["fp8"] * 9 and one.count("pearlc") == 3
     blocks = E2E.schedule(3, "blocks")
@@ -3654,7 +3663,7 @@ def test_the_schedule_alternates_the_baseline_rep_by_rep_or_in_abab_blocks():
 
 
 def test_with_a_statement_each_pearlc_rep_is_followed_by_a_pearlc_zk_rep_in_the_arm_engine():
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     (one,) = E2E.schedule(2, "rep", zk=True)
     assert one.count("pearlc-zk") == 2 and all(one[i + 1] == "pearlc-zk" for i, m in enumerate(one) if m == "pearlc")
     assert [m for m in one if m != "pearlc-zk"] == list(E2E.CYCLE) * 2 and E2E.GROUP["pearlc-zk"] == "arm"
@@ -3675,7 +3684,7 @@ def test_with_a_statement_each_pearlc_rep_is_followed_by_a_pearlc_zk_rep_in_the_
 def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes():
     """Off the panel's decode (32 prompts of 64 tokens) the key names the batch and the prompt, so `panel_rows.py` never reads
     a sweep point as its decode row; the graphed baseline captures the point's batch."""
-    E2E = load("pearl_c_vllm_e2e_sweep", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e_sweep", POUW / "pearl_c_vllm" / "e2e.py")
     E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
     assert E2E.decode_key() == "decode_b32" and E2E.CAPTURE_SIZES == [1, 2, 4, 8, 16, 24, 32]
     assert E2E.SHAPES == {"prefill_8192": "e2e-llama31-8b-vllm-m8192", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
@@ -3698,7 +3707,7 @@ def test_a_sweep_points_decode_batch_and_prompt_name_its_key_and_its_graph_sizes
 def test_a_prefill_point_off_8192_tokens_names_its_key():
     """``--prefill`` off the panel's 8,192 tokens keys the prefill row by its length, so `panel_rows.py` (``prefill_8192``)
     never reads it as the panel's prefill row."""
-    E2E = load("pearl_c_vllm_e2e_prefill", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e_prefill", POUW / "pearl_c_vllm" / "e2e.py")
     E2E.configure(types.SimpleNamespace(batch=32, prompt=64, prefill=2560))
     assert (E2E.prefill_key(), E2E.PREFILL) == ("prefill_2560", 2560)
     assert E2E.SHAPES == {"prefill_2560": "e2e-llama31-8b-vllm-m2560", "decode_b32_step": "e2e-llama31-8b-vllm-m32"}
@@ -3712,7 +3721,7 @@ def test_a_prefill_point_off_8192_tokens_names_its_key():
 
 
 def test_the_noise_sweep_pairs_each_pearl_c_rep_with_the_stock_reps_around_it(tmp_path):
-    NS = load("pearl_c_vllm_noise_sweep", KERNEL.parent / "pearl_c_vllm" / "noise_sweep.py")
+    NS = load("pearl_c_vllm_noise_sweep", POUW / "pearl_c_vllm" / "noise_sweep.py")
     fp8 = [10.0, 12.0, 14.0, 20.0, 22.0, 24.0]                       # two cycles of three fp8 reps
     steps = {"fp8": fp8, "pearlc": [13.2, 25.3], "pearlc-nohash": [14.3, 25.3], "bf16": [9.0, 9.0]}
     reps = lambda m: [{"rep": i, "step_s": s / 1e3, "clock": {"sm_mhz": 2100}} for i, s in enumerate(steps[m])]
@@ -3741,7 +3750,7 @@ def test_the_noise_sweep_pairs_each_pearl_c_rep_with_the_stock_reps_around_it(tm
 
 def test_a_wikitext_window_starts_with_the_configs_bos_when_the_tokenizer_names_none(monkeypatch):
     """Qwen3-8B's tokenizer has no BOS (vLLM refused its execution phases' None id); its config's `bos_token_id` stands in."""
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
 
     class Tok:
         def __init__(self, bos):
@@ -3768,7 +3777,7 @@ def test_a_wikitext_window_starts_with_the_configs_bos_when_the_tokenizer_names_
 
 
 def test_the_controller_runs_each_rep_on_the_same_prompt_and_warms_each_engine_once():
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     E2E.clocks = lambda: {"sm_mhz": 2090}
     p = {"warm": [1], "prefill": [[10], [11], [12]], "decode": [[2]] * 32}
 
@@ -3793,7 +3802,7 @@ def test_the_controller_runs_each_rep_on_the_same_prompt_and_warms_each_engine_o
 
 
 def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tmp_path, monkeypatch):
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     monkeypatch.setattr(E2E, "memory_mib", lambda: 30000)
 
     class Fake:
@@ -3826,7 +3835,7 @@ def test_the_smoke_starts_both_engines_and_records_a_failure_to_stay_resident(tm
 
 
 def test_the_whole_step_arm_captures_vllms_graphs_at_the_decode_batch_or_captures_sizes(monkeypatch):
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     monkeypatch.setitem(sys.modules, "vllm", types.SimpleNamespace(LLM=lambda **kw: kw))
     args = types.SimpleNamespace(model="m", revision=None, mem_base=0.2, mem_arm=0.3, whole_step=True, capture=None)
     got = E2E.engine(args, "arm")
@@ -3841,7 +3850,7 @@ def test_the_whole_step_arm_captures_vllms_graphs_at_the_decode_batch_or_capture
 # ---- the decode profile -------------------------------------------------------------------------------------------
 
 def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
-    PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
+    PF = load("pearl_c_vllm_profile", POUW / "pearl_c_vllm" / "profile_decode.py")
     assert [PF.kernel_category(k) for k in ("gemm_pearlc", "gemm_pearlc_d", "form_s5", "stats_s5", "stats_r", "words_k", "gemm_words",
                                             "s512_rows", "hm_leaves", "pd_commit_851", "pd_tiles_979", "flash_fwd_kernel",
                                             "paged_attention")] == [
@@ -3857,7 +3866,7 @@ def test_the_profile_maps_gpu_1s_kernels_to_their_categories(tmp_path):
 def test_the_served_profile_counts_stock_fp8s_cutlass_3_kernel_as_gemm(monkeypatch):
     """vLLM's FP8 linear on sm_120 is CUTLASS 3's `device_kernel`, the stock arm's matmul, not `other`."""
     monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
-    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    SP = load("pearl_c_vllm_served_profile", POUW / "pearl_c_vllm" / "served_profile.py")
     assert [SP.category(k) for k in ("device_kernel", "Kernel2", "gemm_pearlc_d", "words", "words_k", "stats_r", "s512_tile_leaves",
                                      "flash_fwd_splitkv_kernel", "some_device_kernel_x")] == [
         "gemm", "gemm", "pearlc:gemm", "pearlc:forming", "pearlc:forming", "pearlc:forming", "pearlc:tile_hash", "attention", "other"]
@@ -3868,7 +3877,7 @@ def test_the_served_profile_names_hash_fasts_kernels_and_gives_a_fold_its_segmen
     both run, is the step of the segment launch before it on its stream.  A Triton ``kernel``, which stock FP8 launches too, isn't
     the records' screen (``screen``, ``scatter``)."""
     monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
-    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    SP = load("pearl_c_vllm_served_profile", POUW / "pearl_c_vllm" / "served_profile.py")
     assert [SP.category(k) for k in ("s512_row_segs", "s512_tile_segs", "s512_heads", "s512_folds", "lines", "s512_seeds", "scatter",
                                      "kernel")] == [
         "pearlc:row_digests", "pearlc:tile_hash", "pearlc:setup", "pearlc:folds", "pearlc:lines_a", "pearlc:seeds", "pearlc:screen",
@@ -3888,7 +3897,7 @@ def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monk
     transcript tree's; the decode step's split is (dn − d1) / 64 of both."""
     import sqlite3
     monkeypatch.setenv("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
-    SP = load("pearl_c_vllm_served_profile", KERNEL.parent / "pearl_c_vllm" / "served_profile.py")
+    SP = load("pearl_c_vllm_served_profile", POUW / "pearl_c_vllm" / "served_profile.py")
     ms, g = 1_000_000, 5 << 24
     names = ["s512_row_segs", "s512_folds", "s512_tile_segs", "gemm_pearlc", "form_s5", "flash_fwd", "s512_pads", "s512_nodes",
              "lines", "screen"]
@@ -3923,8 +3932,8 @@ def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monk
 
 
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
-    from verity_vllm.protocols.pouw import pearl_c as PPD2
-    PF = load("pearl_c_vllm_profile", KERNEL.parent / "pearl_c_vllm" / "profile_decode.py")
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD2
+    PF = load("pearl_c_vllm_profile", POUW / "pearl_c_vllm" / "profile_decode.py")
     make, _, weights, *_ = device_run
     before = (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm, PPD2.PearlCDeviceRun.end)
     prof = PF.Profile()
@@ -4063,7 +4072,7 @@ def test_the_screen_launches_tritons_compiled_kernel_directly_only_where_triton_
     """After Triton's own launch at a specialization, `launch` calls its compiled kernel with the same arguments; another
     alignment compiles again, and a launch hook (Triton's chains hold none by default) or a CPU tensor takes Triton's path."""
     # the module itself: under the layout move its package re-exports a function named as the module
-    PS = importlib.import_module("verity_vllm.protocols.pouw.pearl_c.screen")
+    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
     enter, exit_ = types.SimpleNamespace(calls=[]), types.SimpleNamespace(calls=[])
     knobs = types.SimpleNamespace(runtime=types.SimpleNamespace(debug=False, add_stages_inspection_hook=None, launch_enter_hook=enter,
                                                                 launch_exit_hook=exit_),
@@ -4118,7 +4127,7 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     """A graph's last launch under Triton's CPU interpreter: the flags it writes at the slot's flag offset are `screen_into`'s
     for its first `rows` rows, its leaves and A root land at their offsets, and no other byte of the pass's buffers changes."""
     interpreted_triton(monkeypatch)
-    PS = importlib.import_module("verity_vllm.protocols.pouw.pearl_c.screen")
+    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4135,7 +4144,7 @@ def test_a_grouped_scatter_screens_each_flag_pair_at_its_row_of_the_map(monkeypa
     """A grouped call's scatter under Triton's CPU interpreter, with a row map: flag pair i is `screen_into`'s for row at[i]
     (of x, α and (s, ρ)), at the slot's flag offset, and the leaves and A root land as without one."""
     interpreted_triton(monkeypatch)
-    from verity_vllm.protocols.pouw.pearl_c import screen as PS
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import screen as PS
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4249,7 +4258,7 @@ def test_each_device_records_kernels_refuse_their_own_grain():
 #: pearl_c_sm90's pipeline (pearl-c-h100-v1-h3's), whose calls split A's commitment (`run.Pipeline.FUSED`'s tree_seed_a,
 #: past pd's rows `FUSED_GENERIC`'s)
 R90 = load("pearl_c_sm90_run", KERNEL.parent / "pearl_c_sm90" / "run.py")
-F90 = load("pearl_c_sm90_fixture", KERNEL.parent / "pearl_c_sm90" / "fixture.py")
+F90 = load("pearl_c_sm90_fixture", POUW / "pearl_c_sm90" / "fixture.py")
 #: hash_prefill.cuh's host build (`build`), with chain "pl"'s kernels beside hash_decode.cuh's
 P90 = load("pearl_c_sm90_prefill_test", Path(__file__).with_name("test_pearl_c_sm90_prefill.py"))
 H100_SCHEME = "pearl-c-h100-v1-h3"
@@ -4601,7 +4610,7 @@ def test_deferred_a_runs_as_tree_aside_only_where_the_call_keeps_its_step(sm90_r
     """A call runs A's tree on its side lane (and starts it behind the main lane's per-row keying) only where its side steps
     hold the tree: the e2e control's omits (A's commitment and the tile leaves) leave its side lane no step, so it starts no
     tree there and its call still runs; omitting the tile leaves alone keeps the tree aside."""
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     make, kernel, weights, _ = sm90_run
     run = make()
     seen, lanes = [], run._lanes
@@ -4734,8 +4743,8 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
     tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
     nothing, and its side lane's end becomes the set's event."""
-    from verity_vllm.protocols.pouw.pearl_c import host as PPH
-    from verity_vllm.protocols.pouw.pearl_c import lanes as PPL
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as PPL
     make, *_ = sm90_run
     run = make()
     calls = []
@@ -4778,7 +4787,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
     waits for stats_a before E' (``form_ep_a``, under FORM_EP) and for the whole fork at its end, so the per-row keying's
     end moves one step (the fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on
     the lane; without the driver (no graphs) the steps are as they were."""
-    from verity_vllm.protocols.pouw.pearl_c import graphs as PPG
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import graphs as PPG
     make, kernel, *_ = sm90_run
     run = make()
     calls = []
@@ -4821,7 +4830,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
 
 
 def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_drivers_code():
-    from verity_vllm.protocols.pouw.pearl_c import host as PPH
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
     got = []
 
     def cu(rc=0):
@@ -4864,7 +4873,7 @@ def test_the_schedule_changes_between_passes_and_the_ring_grows_poisoned(device_
 
 def test_the_gates_schedule_check_compares_with_serial_and_keeps_the_runs_schedule(device_run):
     make, _, weights, *_ = device_run
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     run = make(schedule="deferred")
     got = E2E.schedule_check(run, weights)
     assert got["ok"] and got["schedule"] == "deferred" and set(got) >= {"serial", "deferred", "priorities"}
@@ -4891,7 +4900,7 @@ class _Logprob:
 
 
 def test_prompt_logprobs_sums_every_token_after_the_first_and_keeps_the_top_1():
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     windows = [[1, 5, 6, 7], [1, 8, 9]]
 
     def timed(prompts, sp):
@@ -4911,7 +4920,7 @@ def test_prompt_logprobs_sums_every_token_after_the_first_and_keeps_the_top_1():
 
 
 def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, monkeypatch):
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     monkeypatch.setattr(E2E, "wikitext_windows", lambda model, limit: [[1, 2, 3]])
     started = []
 
@@ -4952,7 +4961,7 @@ def test_the_quality_run_does_a_group_a_chunk_and_skips_the_ones_done(tmp_path, 
 def test_the_quality_run_on_sm90a_runs_its_one_pearl_c_scheme(tmp_path, monkeypatch):
     """On pearl_c_sm90's kernels the quality run's Pearl-C group is ``pearl-c-h100-v1-h3`` alone, since sm_90a has no
     unpromoted record, so it finishes after two groups instead of asking for an sm_120 scheme on an H200."""
-    E2E = load("pearl_c_vllm_e2e_sm90", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e_sm90", POUW / "pearl_c_vllm" / "e2e.py")
     monkeypatch.setattr(E2E, "wikitext_windows", lambda model, limit: [[1, 2, 3]])
     started = []
 
@@ -4981,7 +4990,7 @@ def test_the_quality_run_on_sm90a_runs_its_one_pearl_c_scheme(tmp_path, monkeypa
 def test_a_tag_names_another_model_in_the_shape_names():
     """``--tag`` puts another model's name in both phases' shape names, so a Llama 3.2 1B row is never read as the panel's
     Llama-3.1-8B one; without it the names are the panel's."""
-    E2E = load("pearl_c_vllm_e2e_tag", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e_tag", POUW / "pearl_c_vllm" / "e2e.py")
     E2E.configure(types.SimpleNamespace(batch=32, prompt=64, tag="llama32-1b"))
     assert E2E.SHAPES == {"prefill_8192": "e2e-llama32-1b-vllm-m8192", "decode_b32_step": "e2e-llama32-1b-vllm-m32"}
     E2E.configure(types.SimpleNamespace(batch=32, prompt=64))
@@ -4991,7 +5000,7 @@ def test_a_tag_names_another_model_in_the_shape_names():
 def test_a_base_models_chat_prompts_are_their_text():
     """A base model (the demo's Llama 3.2 1B) has no chat template, so its chat prompts are their own text instead of the
     engine failing; an instruct model's are its template's turns, and any other refusal still raises."""
-    E2E = load("pearl_c_vllm_e2e_chat", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e_chat", POUW / "pearl_c_vllm" / "e2e.py")
 
     class Tokenizer:
         def __init__(self, error=None):
@@ -5029,7 +5038,7 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     from verity_vllm.protocols.linear.api import Stack
     zeroed_y(monkeypatch)
     make, _, weights, *_ = device_run
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     xs = [(w, torch.from_numpy(bf16_words(np.random.default_rng(60 + i), m, 1024).view(np.float32).copy()).to(torch.bfloat16))
           for i, (w, m) in enumerate(((0, 32), (1, 16), (0, 128), (1, 20)))]
     direct = make()
@@ -5056,7 +5065,7 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
 def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_run):
     from verity_vllm.protocols.linear.api import Control, Stack
     make, kernel, weights, *_ = device_run
-    E2E = load("pearl_c_vllm_e2e", KERNEL.parent / "pearl_c_vllm" / "e2e.py")
+    E2E = load("pearl_c_vllm_e2e", POUW / "pearl_c_vllm" / "e2e.py")
     run, args = make(), types.SimpleNamespace(schedule="deferred")
     arms = {m: E2E.arm_of(m, run, args) for m in ("bf16", "pearlc-nohash", "pearlc")}
     assert arms["bf16"].executor is None and arms["pearlc"].executor == arms["pearlc-nohash"].executor == run.entry
@@ -5118,7 +5127,7 @@ def _served_step_profile(path: Path) -> Path:
 
 
 def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_ranges(tmp_path):
-    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
     doc = S.analyze(_served_step_profile(tmp_path / "served.sqlite"), 8)
     assert (doc["batch"], doc["steps"], doc["decode_steps"], doc["full"]["n"], doc["other"]["n"]) == (8, 4, 3, 3, 1)
     f = doc["full"]
@@ -5137,7 +5146,7 @@ def test_the_served_step_profile_splits_each_decode_step_into_kernels_and_host_r
 
 
 def test_the_served_steps_breakdown_puts_each_arms_kernels_and_host_time_in_its_rows(tmp_path):
-    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
     pearl, base = tmp_path / "pouw_pearl-c-sm120-v1-h3", tmp_path / "stock-fp8_compiled"
     for d in (pearl, base):
         d.mkdir()
@@ -5162,7 +5171,7 @@ def test_the_served_steps_breakdown_puts_each_arms_kernels_and_host_time_in_its_
 
 def test_an_arm_whose_profile_has_no_nvtx_ranges_is_listed_as_missing_not_tabled(tmp_path):
     import sqlite3
-    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
     db = tmp_path / "eager.sqlite"
     con = sqlite3.connect(db)
     con.execute("CREATE TABLE StringIds (id INTEGER, value TEXT)")
@@ -5181,7 +5190,7 @@ def test_an_arm_whose_profile_has_no_nvtx_ranges_is_listed_as_missing_not_tabled
 
 
 def test_the_served_steps_host_records_are_the_timed_reps_decode_steps():
-    S = load("pearl_c_vllm_served_step", KERNEL.parent / "pearl_c_vllm" / "served_step.py")
+    S = load("pearl_c_vllm_served_step", POUW / "pearl_c_vllm" / "served_step.py")
     ms = 1_000_000
     steps = [{"phase": "measure", "rep": 0, "t0": 0, "t1": 9 * ms, "tokens": 8, "reqs": 8, "pc_ns": 3 * ms, "pc_n": 3},
              {"phase": "measure", "rep": 0, "t0": 0, "t1": 4 * ms, "tokens": 5, "reqs": 5, "pc_ns": ms, "pc_n": 3},

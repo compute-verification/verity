@@ -40,7 +40,7 @@ registration, `Embeds` and `FrameIs` (`sessionOpensTwo_of_rows`).
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 /-- **hm96's leaf is Flock's tree leaf of the commit string**: the leaf of a row's bytes `r` under the salt `y` is
 `Hm96.Default512.treeLeaf` of `b ‖ c`, the commit string of `r` under `y`. -/

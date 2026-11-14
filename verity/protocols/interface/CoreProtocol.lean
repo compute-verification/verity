@@ -14,5 +14,6 @@ public import CoreProtocol.BlobsExample
 public import CoreProtocol.Site
 public import CoreProtocol.SiteExample
 public import CoreProtocol.Account
+public import CoreProtocol.SiteV2Guards
 
 @[expose] public section

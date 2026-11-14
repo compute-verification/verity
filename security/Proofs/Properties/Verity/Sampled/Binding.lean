@@ -9,6 +9,7 @@ public import Proofs.Properties.Verity.Sampled.Trees
 public import Proofs.Properties.Challenger.CanonLine
 public import Proofs.Properties.Challenger.Limits
 public import Proofs.Properties.Verity.Sampled.Lines
+public import Proofs.Properties.Verity.Sampled.MemberForm.Named
 import all Init.Data.String.Defs
 
 /-!
@@ -28,15 +29,17 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   that decode as sampled proofs' one-stage form, v2's, under parameters naming a challenger and a window, each with what
   its coins are read under (`Properties.Challenger.oneStageZkSource`) and the record its evidence carries. The
   parameters' challenger key (`keyOf`) is that of their first component of sampled proofs' id that names one.
-* **An accepted v2 case is one of them** (`accepted_case`): a composite names each component's id once (`ids_nodup`), so
+* **An accepted v2 case is one of them** (`accepted_case`): a composite names each component's id once (`Verity.ids_nodup`), so
   on parameters naming the one-stage form, the case the sampled component accepts is v2's (`caseOf`), its record is one
-  of `records` under `keyOf`'s key, `drawCoins` reads from it the coins v2's check read, and v2 held the sessions'
-  records to the coin trees it read from it (`Verity.Sampled.Trees.accepted_trees`).
+  of `records` under `keyOf`'s key, `drawCoins` reads from it the coins v2's check read, and v2's check accepts at
+  them.
 * **An accepted read is a run's log** (`accepted_run`): where v2's check reads a log, it is what `readLog` reads
   from the lines of a run of the device that the device's ledger opens withheld on the sample's window, whose release
   log reads as its coin commitment's, with the run's released coins as the sample's (`Challenger.Drawn.drawn_log`), or
-  one of the records under `keyOf`'s key carries a break. The records the evidence names each pass the coin trees
-  `coinTreesOf` reads from that run's log (`trees_of`, `records_of`).
+  one of the records under `keyOf`'s key carries a break. The records the evidence names give each round that
+  run's log opens the coins its line shows (`Lines.TreeLines`), in either form of v2's check: the one statement's
+  records each pass the coin trees `coinTreesOf` reads from the log (`trees_of`, `records_of`), and a member's
+  passes its own tree less its closing round (`tree_lines_members`, `accepted_lines`).
 * **The constructions** at a strategy, on a uniform tape of its play (`Verity.Game.Tape`), at the device's history at
   each play (`dev`). The read finder (`readFinder`) outputs the first collision `findBreak` finds in a record, else a
   pinned lookup table v2 reads on the blobs sent at other bytes than its registered file (`tableCollision`), else the
@@ -212,10 +215,6 @@ theorem triples_ids : ∀ {cs : List _root_.Core.Protocol} {ps : List Core.Compo
     · exact ⟨hp.1, he.1⟩
     · exact triples_ids (cs := cs) (ps := ps) (ev := ev) hp.2 he.2 x hx
 
-/-- Each composite names each of its components' ids once. -/
-theorem ids_nodup (k : Verity.Registration.Composite) : ((componentsOf k).map (·.id)).Nodup := by
-  cases k <;> decide
-
 /-- `findSome?` at the one element of a list where the function is defined. -/
 theorem findSome_eq {β γ : Type} {f : β → Option γ} :
     ∀ {l : List β} {a : β} {b : γ}, a ∈ l → f a = some b → (∀ a' ∈ l, (f a').isSome → a' = a) →
@@ -260,16 +259,16 @@ theorem key_of_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment
 proofs at v2 (`ReadsV2`), on parameters that name its one-stage form (`ParamsAt`), a run accepted as a `same`
 composition whose sampled component accepts its own case has that case as v2's (`caseOf`), read under a challenger
 and a window its parameters name (`oneStageZkSource`); its record is one of the run's v2 records (`records`) under
-the parameters' challenger key (`keyOf`), v2's coins are what `drawCoins` reads from it, and v2 read the challenger's
-coin trees from it and held its sessions' records to them (`treesOf`, `treesHeld`). -/
+the parameters' challenger key (`keyOf`), v2's coins are what `drawCoins` reads from it, its evidence is one either
+form's parse returns, and v2's check accepts at those coins. -/
 theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : Sent}
     {p : Spot.OneStageZk.Params} (hp : ParamsAt s.params p) (hs : SameAccepts k s)
     (ha : ComponentAccepts k .sampled s) :
     ∃ c e d ξ, caseOf s = .ok (p, c, e) ∧ oneStageZkSource p c = some d ∧ (d, e.base.coins) ∈ records s ∧
       keyOf s.params = some d.key ∧ Spot.OneStageZk.coinsOf p c e = .ok ξ ∧
       drawCoins d.key d.window d.label d.after e.base.coins = .ok ξ ∧
-      ∃ ts, Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
-        Spot.OneStageZk.treesHeld p.own ts e (_root_.Core.Blobs.ofArray s.blobs) = .ok () := by
+      (∃ b, Spot.OneStageZk.evidenceEitherOf b = .ok e) ∧
+      ∃ pub prof, Spot.OneStageZk.checkBlobsAt p c ξ e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof := by
   obtain ⟨P, hP, ps, b, ev, ⟨hps, -, hev⟩, x, hx, hx1, hacc⟩ := ha
   obtain rfl : P = VStar.Recursive.Sampled.protocol := Option.some.inj (hP.symm.trans hk)
   obtain ⟨ps', b', ev', ⟨hps', -, hev'⟩, -, -, ⟨⟨⟨hpi, hei, -, -⟩, -, -⟩, -⟩, -⟩ := hs
@@ -324,7 +323,11 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
     have hf2 : ev.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) = some x.2.2 :=
       find_eq hmem2.2 (beq_iff_eq.2 hid2') fun a' ha' h =>
         List.inj_on_of_nodup_map hnde ha' hmem2.2 ((beq_iff_eq.1 h).trans hid2'.symm)
-    refine ⟨c, e, d, ξ, ?_, hd, ?_, ?_, hξ, hraw, Verity.Sampled.Trees.accepted_trees hch'⟩
+    have hat : Spot.OneStageZk.checkBlobsAt p c ξ e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof := by
+      unfold Spot.OneStageZk.checkBlobs at hch'
+      rw [hξ] at hch'
+      simpa only [Core.atCoins] using hch'
+    refine ⟨c, e, d, ξ, ?_, hd, ?_, ?_, hξ, hraw, dispatch_evidence he', pub, prof, hat⟩
     · simp only [caseOf, hps, ok_bind, hf1, hev, hf2, hnp, hc', he']
       rfl
     · unfold records
@@ -340,48 +343,6 @@ theorem accepted_case {k : Verity.Registration.Composite} (hk : ReadsV2 k) {s : 
         cases hsome
 
 /-! ## An accepted read is a run's log -/
-
-/-- v2's case names v2's parameters in the parameters sent. -/
-theorem caseOf_params {s : Sent} {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
-    {e : Spot.OneStageZk.Evidence} (h : caseOf s = .ok (p, c, e)) : ParamsAt s.params p := by
-  unfold caseOf at h
-  cases hps : (_root_.Core.canonicalJson s.params >>= Core.Composition.decodeParams) with
-  | error _ => rw [hps] at h; cases h
-  | ok ps =>
-    rw [hps, ok_bind] at h
-    cases hx : ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
-    | none => rw [hx] at h; cases h
-    | some x =>
-      rw [hx] at h
-      dsimp only at h
-      cases hev : Core.Composition.decodeEvidence s.evidence with
-      | error _ => rw [hev] at h; cases h
-      | ok ev =>
-        rw [hev, ok_bind] at h
-        cases hy : ev.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
-        | none => rw [hy] at h; cases h
-        | some y =>
-          rw [hy] at h
-          dsimp only at h
-          cases hnp : (_root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) with
-          | error _ => rw [hnp] at h; cases h
-          | ok q =>
-            rw [hnp, ok_bind] at h
-            rcases q with p' | q
-            · dsimp only at h
-              cases hc : Spot.OneStage.commitmentOf y.commitment with
-              | error _ => rw [hc] at h; cases h
-              | ok c' =>
-                rw [hc, ok_bind] at h
-                cases he : VStar.Recursive.Sampled.evidenceOf y.evidence with
-                | error _ => rw [he] at h; cases h
-                | ok r =>
-                  rw [he, ok_bind] at h
-                  rcases r with e' | _
-                  · obtain rfl : p' = p := congrArg Prod.fst (Except.ok.inj h)
-                    exact ⟨ps, hps, x, hx, hnp⟩
-                  · cases h
-            · cases h
 
 /-- A list of strings' JSON strings read back by a reader of strings is the list. -/
 theorem mapM_map_str {f : Json → Flock.V String} (hf : ∀ x, f (.str x) = .ok x) :
@@ -474,13 +435,79 @@ theorem records_of {s : Sent} {p : Spot.OneStageZk.Own} {e : Spot.OneStageZk.Evi
   obtain ⟨str, hs, hp⟩ := obind_some hf
   exact Verity.Sampled.Trees.records_held h (Array.mem_def.2 hr') hb hs (Option.some.inj hp)
 
+/-- **The records the per-member form holds to their trees give each round opened the coins its line shows**
+(`Lines.TreeLines`), as `Lines.tree_lines` gives of the one statement's: a member's record is held to its own tree
+less the round that closes its session (`memberTreeReason`), and a round that tree shows opened, the whole tree
+shows (`MemberForm.tree_round`). -/
+theorem tree_lines_members {recs : List Json} {log : List String} {ts : Array LoggedTree}
+    (h : coinTreesOf log = .ok ts)
+    (hrecs : ∀ rec ∈ recs, ∃ tabs evidence, memberTreeReason ts tabs rec evidence = none) :
+    Lines.TreeLines recs log := by
+  have hT := Lines.trees_log h
+  refine ⟨hT.spec, fun l hl j hev hnt hop R S k C hR hS hk hC rec hrec htree cs hcs => ?_⟩
+  obtain ⟨t, ht, htr, o, ho, hoc⟩ := hT.opened l hl j hev hnt hop R S k C hR hS hk hC
+  obtain ⟨tabs, evidence, htabs⟩ := hrecs rec hrec
+  obtain ⟨t', ht', -, o₀, -, -, hS'⟩ := Verity.Sampled.MemberForm.memberTreeReason_none htabs
+  obtain ⟨htr', o', ho', hoc'⟩ := Verity.Sampled.MemberForm.tree_round hS' hcs
+  have e : t' = t := List.inj_on_of_nodup_map hT.nodup (Array.mem_toList_iff.2 ht') (Array.mem_toList_iff.2 ht)
+    (htr'.symm.trans (htree.trans htr.symm))
+  subst e
+  rw [ho] at ho'
+  cases ho'
+  rw [← hoc, hoc']
+
+/-- **The records v2's check read give each round opened the coins its line shows**, in either form: where v2's
+check accepts evidence it parsed, it read the challenger's coin trees (`treesOf`), and on any log `coinTreesOf`
+reads as those trees, the records `recordsOn` reads from the blobs sent are ones a round's coins are read against
+(`Lines.TreeLines`). The one statement's check holds each record to the trees (`treesHeld`, `records_of`); the
+per-member form's holds each statement's session's record to its own tree less its closing round
+(`membersTreesHeld`, `tree_lines_members`). -/
+theorem accepted_lines {s : Sent} {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
+    {e : Spot.OneStageZk.Evidence} {pub : Spot.OneStage.Public} {prof : _root_.Core.Integrity} {b : ByteArray}
+    (he : Spot.OneStageZk.evidenceEitherOf b = .ok e)
+    (h : Spot.OneStageZk.checkBlobsAt p c ξ e (_root_.Core.Blobs.ofArray s.blobs) = .accept pub prof)
+    {recs : List Json} (hr : Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs) :
+    ∃ ts, Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
+      ∀ log, coinTreesOf log = .ok ts → Lines.TreeLines recs log := by
+  rcases Spot.OneStageZk.checkBlobsAt_accept h with ⟨hm, -, -⟩ | ⟨ms, sts, -, hsts, hM⟩
+  · obtain ⟨ts, hts, hheld⟩ := Verity.Sampled.Trees.accepted_trees hm h
+    exact ⟨ts, hts, fun log hlog => Lines.tree_lines hlog (records_of hheld hr)⟩
+  · obtain ⟨r, hrun, hall, -⟩ := Spot.OneStageZk.checkMembersAt_accept hM
+    obtain ⟨held, ts, lines, hheld, -, hts, -, -, hth⟩ :=
+      Verity.Sampled.MemberForm.membersStructure_ok (Verity.Sampled.MemberForm.membersRun_ok hrun hall).1
+    obtain ⟨named, hreason, hnamed⟩ := Verity.Sampled.MemberForm.membersTreesHeld_ok hth
+    refine ⟨ts, hts, fun log hlog => tree_lines_members hlog fun rec hrec => ?_⟩
+    obtain ⟨x, hx, hf⟩ := mapM_mem hr rec hrec
+    rw [Spot.OneStageZk.evidenceEitherOf_sessions he hsts, Array.toList_flatMap] at hx
+    obtain ⟨st, hst, hxs⟩ := List.mem_flatMap.1 hx
+    have hfst : (sts.zip held).toList.map (·.1) = sts.toList := by
+      rw [Array.toList_zip]
+      exact List.map_fst_zip (by
+        rw [Array.length_toList, Array.length_toList]
+        exact Nat.le_of_eq (Verity.Sampled.MemberForm.membersHeld_zip hheld).1)
+    rw [← hfst] at hst
+    obtain ⟨z, hz, rfl⟩ := List.mem_map.1 hst
+    have hmem : (z.2, x) ∈ Verity.Sampled.MemberForm.sessionsOf (sts.zip held).toList :=
+      List.mem_flatMap.2 ⟨z, hz, List.mem_map.2 ⟨x, hxs, rfl⟩⟩
+    obtain ⟨nm, hnm, blob, record, evidence, hb, hu, -, rfl⟩ :=
+      Verity.Sampled.MemberForm.forall₂_mem hnamed _ hmem
+    have h1 : Verity.Sampled.recordOn (_root_.Core.Blobs.ofArray s.blobs) x =
+        some ((Flock.JsonParse.parse record).toOption.getD Json.null) := by
+      unfold Verity.Sampled.recordOn
+      rw [hb]
+      simp only [Except.toOption, Option.bind_eq_bind, Option.bind_some, hu]
+      try rfl
+    obtain rfl := Option.some.inj (h1.symm.trans hf)
+    exact ⟨_, _, Verity.Sampled.MemberForm.membersTreeReason_each hreason _ (Array.mem_def.2 hnm)⟩
+
 /-- **An accepted read is `readLog` over a run of the device**: at a composite that reads sampled proofs at v2, on a
 run accepted as a `same` composition whose sampled component accepts its own case, where v2's check reads a log
 (`Verity.Sampled.coinsRead`), that log is what `readLog` reads from the lines of a run of the device under the
 challenger's key, a run the device's own ledger opens withheld on the sample's window, whose release log reads as its
 coin commitment's (`releasedRootsOf`), with that run's released coins as the sample's, on the records the evidence
-names, each of which passes the coin trees the run's log holds (`coinTreesOf`, `sessionTreeReason`); or one of the
-run's v2 records under the parameters' key carries a break. -/
+names, which give each round the run's log opens the coins its line shows (`coinTreesOf`, `Lines.TreeLines`), in
+either form of v2's check (`accepted_lines`); or one of the run's v2 records under the parameters' key carries a
+break. -/
 theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev : History) {s : Sent}
     (hs : SameAccepts k s) (ha : ComponentAccepts k .sampled s) {l : List Release}
     (hl : Verity.Sampled.coinsRead s = some l) :
@@ -490,7 +517,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
         (∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) ∧
         Verity.Sampled.recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs ∧
         Verity.Sampled.readLog d.label d.after recs (r.released d.label d.after) r.log = some l ∧
-        ∃ ts, coinTreesOf r.log = .ok ts ∧ ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none := by
+        ∃ ts, coinTreesOf r.log = .ok ts ∧ Lines.TreeLines recs r.log := by
   unfold Verity.Sampled.coinsRead at hl
   cases hcase : caseOf s with
   | error _ => simp [hcase, Except.toOption] at hl
@@ -510,7 +537,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
           | none => simp [hcase, hch, hξ, hlines, hrecs, Except.toOption] at hl
           | some recs =>
             simp [hcase, hch, hξ, hlines, hrecs, Except.toOption] at hl
-            obtain ⟨c', e', d, ξ', hcase', hd, hrec, hkey, hξ', hdraw, ts, hts, hheld⟩ :=
+            obtain ⟨c', e', d, ξ', hcase', hd, hrec, hkey, hξ', hdraw, ⟨eb, heb⟩, pub, prof, hat⟩ :=
               accepted_case hk (caseOf_params hcase) hs ha
             rw [hcase] at hcase'
             have hpce := Except.ok.inj hcase'
@@ -520,6 +547,7 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
             subst c' e'
             have e3 : ξ' = ξ := Except.ok.inj (hξ'.symm.trans hξ)
             subst ξ'
+            obtain ⟨ts, hts, hlines'⟩ := accepted_lines heb hat hrecs
             obtain ⟨hdl, hda⟩ : d.label = label ∧ d.after = c.digest := by
               unfold oneStageZkSource oneStageSource at hd
               rw [hch] at hd
@@ -528,7 +556,8 @@ theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev :
               | some w => rw [hw] at hd; cases hd; exact ⟨rfl, rfl⟩
             rcases Drawn.drawn_log (dev := dev) hdraw with ⟨r, hr, ho, hξr, hcr, ls, hlog, hls⟩ | b
             · have hlr : lines = r.log := Except.ok.inj (hlines.symm.trans (linesOf_eq hlog hls))
-              refine .inr ⟨d, e, recs, r, hr, ho, hcr, hrecs, ?_, ts, trees_of hts hlog hls, records_of hheld hrecs⟩
+              refine .inr ⟨d, e, recs, r, hr, ho, hcr, hrecs, ?_, ts, trees_of hts hlog hls,
+                hlines' _ (trees_of hts hlog hls)⟩
               rw [← hξr, ← hlr, hdl, hda]
               exact hl
             · exact .inl ⟨(d, e.base.coins), hrec, hkey, b⟩
@@ -547,28 +576,6 @@ def breakCalls (dev : History) (s : Sent) : ℕ :=
     (readHashed x.1.key x.1.label x.2).length + (deviceHashed dev x.1.key.pub).length).sum
 
 /-! ## v2's records are read at the deployed key, within `LIMITS` -/
-
-/-- The sampled component's one-stage parameters are `OneStageZk.paramsOfJson`'s, at what it reads past the form. -/
-theorem dispatch_params {j : Json} {p : Spot.OneStageZk.Params}
-    (h : VStar.Recursive.Sampled.paramsOfJson j = .ok (.inl p)) :
-    ∃ rest, Spot.OneStageZk.paramsOfJson rest = .ok p := by
-  unfold VStar.Recursive.Sampled.paramsOfJson at h
-  simp only [bind, Except.bind] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; done)
-    | (cases h; exact ⟨_, by assumption⟩)
-
-/-- The sampled component's one-stage evidence is `OneStageZk.evidenceOf`'s, at the bytes it reads past the form. -/
-theorem dispatch_evidence {b : ByteArray} {e : Spot.OneStageZk.Evidence}
-    (h : VStar.Recursive.Sampled.evidenceOf b = .ok (.inl e)) :
-    ∃ b', Spot.OneStageZk.evidenceOf b' = .ok e := by
-  unfold VStar.Recursive.Sampled.evidenceOf at h
-  simp only [bind, Except.bind] at h
-  repeat' split at h
-  all_goals first
-    | (cases h; done)
-    | (cases h; exact ⟨_, by assumption⟩)
 
 /-- **The challenger key the sampled component's one-stage parameters name is at `Lms.deployed`**
 (`Limits.paramsOfJson_deployed`). -/
@@ -1080,7 +1087,10 @@ theorem binds_of_prints (V : Vocab d α) (k : Verity.Registration.Composite) (de
   cases hc : Verity.Sampled.coinsRead o.sent with
   | none => exact (hl fun log hlog => by simp [readsV2, hc] at hlog).elim
   | some l =>
-    rcases accepted_run (composite_readsV2 k) (dev o) hs ha hc with ⟨x, hx, hk, hb⟩ |
+    have hv2 : ReadsV2 k := by
+      obtain ⟨P, hP, -⟩ := ha
+      exact readsV2_of_component hP
+    rcases accepted_run hv2 (dev o) hs ha hc with ⟨x, hx, hk, hb⟩ |
       ⟨dr, e, recs, r, hr, ho, hcr, -, h, ts, hts, hrecs⟩
     · exact .inl ⟨x, hx, by rw [← hθ]; exact hk, hb⟩
     · have hread := Lines.read_run (hP o hθ) hr ho hcr hts hrecs h
