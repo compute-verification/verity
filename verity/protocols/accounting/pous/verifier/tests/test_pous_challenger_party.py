@@ -360,6 +360,27 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         CS.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
 
 
+class Handed(Exception):
+    """What a stand-in for the runtime's `Side.of` raises once it has seen what it is handed."""
+
+
+def test_a_period_asks_its_caller_for_the_pous_side(tmp_path) -> None:
+    """A period's PoUS takes the side from the program that starts the run: `period.json`'s challenger under pous's key,
+    started on this node by `challenger_session.command` with its key and session log beside the periods."""
+    period_dir = tmp_path / "periods" / "p0"
+    period_dir.mkdir(parents=True)
+    (period_dir / "period.json").write_text("{}")
+    handed = []
+
+    def side_of(doc, node, key, local, what=None):
+        handed.append((doc, node, key, local, what))
+        raise Handed
+
+    with pytest.raises(Handed):
+        period.leg(period_dir, "n0", tmp_path / "out", side_of=side_of)
+    assert handed == [({}, "n0", "pous", CS.command(tmp_path / "periods" / "pous-challenger"), None)]
+
+
 def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_session_privately(tmp_path) -> None:
     """A request naming its audit carries setup's published outputs and the point's parameters, its setup refused unless
     its root is the binding, its blocks and parameters the session's and its salt PoUS's; the kept record is the request
