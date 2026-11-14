@@ -13,7 +13,7 @@ exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", 
            "tests/test_retired_terms.py", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
 
 [[words_in]]
-files = ["security/Proofs/Properties/Accounting/Remote/Run.lean"]
+files = ["security/Proofs/Properties/Compose/Remote/Run.lean"]
 words = { "drawnN" = "sampledN" }
 
 [[words_in]]
@@ -57,7 +57,7 @@ files = ["security/Proofs/Poub/ReadUnit/Witnesses.lean"]
 words = { "drawnHashed₀" = "sampledHashed₀" }
 
 [[words_in]]
-files = ["security/Proofs/Properties/Accounting/Remote/SubprotocolWitnesses.lean"]
+files = ["security/Proofs/Properties/Compose/Remote/SubprotocolWitnesses.lean"]
 words = { "draws_zero" = "samples_zero", "drawTerm_pos" = "sampleTerm_pos" }
 
 [[words_in]]
