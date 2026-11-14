@@ -30,3 +30,9 @@ Change 5 is pushed: cursor/circuits-cir278-mypy-cures-6f04 at e06f2a98e1f49d8290
 ## 2026-11-14T15:49:05Z
 
 Back after the stop. r20261114-080031-8e5d at 3579b2f1c85b was cancelled by its slot's limit. Ten suites passed: repository took 706 s, research 1165 s, verity-graph 1172 s, and seven others under 150 s each. verity-vllm, verity-numerical and verity-flock were still going when it was cut. Why so long: #9835 touches adapters/vllm, which is an input of 13 suites, verity-flock among them, and verity-flock alone took 11,390 s at 7bc0 (r20261114-060151-8531). Relaunched at 3579b2f1c85b50bad170b7fbf9b93dbba6f3128b, split by suite: verity-vllm and verity-numerical in r20261114-154809-8a4b, and verity-flock in three parts by --files: r20261114-154810-d405, r20261114-154809-c616 and r20261114-154809-ebb4.
+
+## 2026-11-14T15:55:44Z
+
+READY #10140 c75a9462e2a707029e524f521c861e53ca385fa0
+
+#10140 is change 4 (ruff by hand, with item I), opened unmarked. At 57d66cf1 its run r20261114-081858-03cd passed 20 of the 23 suites --changed selects, and the slot limit cut it before research, verity-numerical and verity-flock. The head moved to c75a9462 to put back test_artifact_applicability_independent_of_record.py and its entry, since the refactor line now deletes that file. Its suites run again split: r20261114-155348-9460 (verity-vllm), r20261114-155348-0603 (the other 20 and the ratchet), and r20261114-155348-cbca, -4bcf and -5289 (verity-flock in thirds). The four runs at 57d66cf1 that I launched at 15:50Z were cancelled as superseded.
