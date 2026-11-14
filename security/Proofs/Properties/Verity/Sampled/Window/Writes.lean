@@ -4,10 +4,10 @@ public import Proofs.Properties.Verity.Sampled.Window.Logged
 public import Proofs.Properties.Verity.Sampled.Window.Accepts
 
 /-!
-# A member's session's verdict is flock-verify `--zk`'s acceptance of what the member's writer writes
+# A member's session's verdict is verity-verify-proof `--zk`'s acceptance of what the member's writer writes
 
-A member's step (`MemberSteps.step`) concludes that flock-verify `--zk` accepts, at the member's inputs, what the
-member's writer writes for its session's outcome. One-stage v2 judges each session with `flock-verify --zk` at the
+A member's step (`MemberSteps.step`) concludes that verity-verify-proof `--zk` accepts, at the member's inputs, what the
+member's writer writes for its session's outcome. One-stage v2 judges each session with `verity-verify-proof --zk` at the
 session's own statement (`SessionVerdict`), on the record and the proof files it reads on the blobs. This module
 carries that verdict to the writer, at a member of a window, as `Sampled/Accepts.lean` does at one session:
 
@@ -47,7 +47,7 @@ open Claims.Bridge.CustodyZkP (repRounds acceptsZKP_wrZP_planZHJP)
 
 /-! ## A session's verdict at its statement -/
 
-/-- **What a session's verdict verified is a transcript flock-verify `--zk` accepts at its statement**: the record
+/-- **What a session's verdict verified is a transcript verity-verify-proof `--zk` accepts at its statement**: the record
 and the proof files of `SessionVerdict`, at `--zk`'s inputs of the statement's with no public inputs, at the session
 `Exec.setupOfP` sets up there (`setupAt_setupOfP`). -/
 theorem SessionVerdict.accepts {a : StepAt} {bs : _root_.Core.Blobs} {keys : Array String}
@@ -76,7 +76,7 @@ structure StatesMember {nJ : ℕ} (a : StepAt) (m : Member nJ) : Prop where
   own : m.own = none
   tables : TablesExtend m.I.tables a.I.tables
 
-/-- **A session's verdict is flock-verify `--zk`'s at its member**: where the session's statement is the member
+/-- **A session's verdict is verity-verify-proof `--zk`'s at its member**: where the session's statement is the member
 `m`'s, the record and the proof files its verdict verified are a transcript `AcceptsZKP m.I m.own` accepts, at the
 session `Exec.setupOfP` sets up at the member's inputs. -/
 theorem SessionVerdict.accepts_member {nJ : ℕ} {a : StepAt} {m : Member nJ} (hm : StatesMember a m)
@@ -126,7 +126,7 @@ def MemberMovesOf {nJ : ℕ} (m : Member nJ) (t : ℕ) (S : Finset (Fin nJ)) (R 
 
 /-- **A member's step's acceptance**: where a session's statement is the member `m`'s, its verdict holds of the
 record `record` and the proof files `proofs`, and the moves of `out` are those `record` decodes to with `proofs`
-(`MemberMovesOf`), flock-verify `--zk` accepts at the member's inputs what the member's writer writes for `out`
+(`MemberMovesOf`), verity-verify-proof `--zk` accepts at the member's inputs what the member's writer writes for `out`
 (`wr_accepts_of_verdict`, at a member of a window). -/
 theorem member_step_accepts {nJ : ℕ} (m : Member nJ) (t : ℕ) {a : StepAt} (hm : StatesMember a m)
     {bs : _root_.Core.Blobs} {keys : Array String} {s : _root_.Spot.OneStageZk.RunFiles} {record : String}

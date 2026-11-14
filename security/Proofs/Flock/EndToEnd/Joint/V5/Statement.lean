@@ -14,7 +14,7 @@ file, and the verifier's own recomputation `own`), as one-stage v2 verifies them
 registers every member, samples one sample over all their proof blocks on live coins with the deployed sample
 (`Bridge.execSel`, `Spot.Draw.drawUnits` on one stream) under the registration's law (`Bridge.LawOn`: subset,
 stratified or work, a stratum free to span members), each member's proof blocks `MemberV5.emb` into the population, and
-then runs one flock-verify session per member in the registration's order, member `m` proving its part of the sample
+then runs one verity-verify-proof session per member in the registration's order, member `m` proving its part of the sample
 (`MemberV5.part`, sampled by `subset |part|`). A member's sampled count is random and may be zero. The deployed sample
 ends or runs out of the stream's bytes (`sampleEnded`), and a sample that ran out is refused: the run accepts when the
 sample ended and the session of every member with a proof block in the sample accepts (`JointAuditV5.Accepts`).
@@ -246,7 +246,7 @@ noncomputable def game : Game ((w.Reg × Bool) × Finset (Fin w.nJ) × List Disc
   .send w.Reg fun R => .coin w.L.Ω fun ω =>
     (w.sessions (w.L.draw ω) R).map fun ts => ((R, w.ended ω), w.L.draw ω, ts)
 
-/-- **The run accepts**: the sample ended, and flock-verify `--zk --public-inputs` accepts, at its `own`, the session of
+/-- **The run accepts**: the sample ended, and verity-verify-proof `--zk --public-inputs` accepts, at its `own`, the session of
 every member with a proof block in the sample. A sample that ran out is refused whatever its sessions say. A member
 with no proof block in the sample has no statement to verify, so nothing reads its session's verdict. -/
 def Accepts (o : (w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript) : Prop :=
@@ -326,7 +326,7 @@ end JointAuditV5
 /-- **A window's sample over several members, `EndToEndHiddenV5`'s form.** For a window's audit as in `JointAuditV5`,
 whose one live sample under the registration's law covers every member's proof blocks and whose members' sessions each
 prove their part of it, every live prover `τ` and every set `W` of the population's proof blocks, the probability that
-the sample ended, flock-verify accepts the session of every member with a proof block in the sample and every proof
+the sample ended, verity-verify-proof accepts the session of every member with a proof block in the sample and every proof
 block of `W` is incorrect is at most
 $$P_a(W) + \sum_m (\varepsilon_{ks,m} + \varepsilon_{bind,m}),$$
 `P_a(W)` the sampling design's own miss of `W` on its strata. Its named assumptions: A3 (`Assumptions.UniformRandomBytes`) for the
@@ -349,7 +349,7 @@ def JointSampledV5 : Prop :=
       prob (fun o => w.Accepts o ∧ W ⊆ w.wrongSet τ) w.game τ ≤ ENNReal.ofReal (w.pa W) + w.eps
 
 /-- **A window's sample over several members, the share form.** For a window's audit as in `JointAuditV5`, every live
-prover `τ` and every share `ε`, the probability that the sample ended, flock-verify accepts the session of every member
+prover `τ` and every share `ε`, the probability that the sample ended, verity-verify-proof accepts the session of every member
 with a proof block in the sample and more than `ε·nJ` of the population's proof blocks are incorrect is at most the
 most the sampling design misses of any set of more than `ε·nJ` of them plus `Σ_m (ε_ks,m + ε_bind,m)`, under
 `JointSampledV5`'s named assumptions. -/

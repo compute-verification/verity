@@ -18,7 +18,7 @@ the claim reads of it (`WindowInstance.ClaimReads`). This module states it at th
   the registered files (`FilesSent`, which the window's read finder pays for) it reads these.
 * **A member on the files** (`MemberOn`): the window's member is one of the parameters' members
   (`Spot.OneStageZk.Member`) on files: the statement's tags, the circuit and public files the member's digests name,
-  the lookup tables the circuit file registers, one table, the member's partition object and program as flock-verify's
+  the lookup tables the circuit file registers, one table, the member's partition object and program as verity-verify-proof's
   inputs, no work, stratified or closure input and no recomputation of public input words, as
   `Spot.OneStageZk.inputsAt` hands them, and the member's units, a range of the window's population from its first.
   Its files are then read as `memberRead` reads them (`MemberOn.fileRead_eq`).
@@ -107,7 +107,7 @@ theorem fileRead_toV5 {nJ : ℕ} (m : Member nJ) (t : ℕ) : (m.toV5 t).fileRead
 
 /-- **The window's member `m` is the verifier's member `vm` on the files `F`**: the statement's tags; the circuit and
 public files `vm`'s digests name among `F` (`Verity.namedFile`); the lookup tables the circuit file registers
-(`pinnedTables`); one table; `vm`'s partition object and program as flock-verify's inputs; no work, stratified or
+(`pinnedTables`); one table; `vm`'s partition object and program as verity-verify-proof's inputs; no work, stratified or
 closure input and no recomputation of public input words; and `vm`'s units, as many as `m`'s proof blocks, each at
 its place of the window's population after `vm`'s first unit. -/
 structure MemberOn {nJ : ℕ} (F : Array ByteArray) (vm : _root_.Spot.OneStageZk.Member) (m : Member nJ) :

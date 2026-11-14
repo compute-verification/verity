@@ -208,7 +208,7 @@ structure MembersAt (W : Window) (tb : String) : Prop where
 
 /-- **What a session's verdict and the verifier's read give at session `v`** of the play `x`, at one table `tb`: the
 record sent for the session is `text`, the verifier's read holds the log to it at the evidence `w₀` (`SessionRead`),
-it decodes at `spec` to `sess`, flock-verify `--zk` accepts it with the proof files `proofs`, and `spec` is a
+it decodes at `spec` to `sess`, verity-verify-proof `--zk` accepts it with the proof files `proofs`, and `spec` is a
 session of the one table `tb`, `Σ` a SHA-512 digest, rounds retained, two link points and SHA-512 round digests. -/
 structure SessionSpecAt (x : Exchange) (tb : String) (v : ℕ) (text : String) (spec : Flock.SessionSpec)
     (tabs : Array Flock.Setup) (proofs : Array ByteArray) (sess : Flock.RunRecord) (J : Json) (w₀ : Claims.Msg) :

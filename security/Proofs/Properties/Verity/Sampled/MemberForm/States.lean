@@ -11,7 +11,7 @@ public import Proofs.Properties.Spot.Tables
 The per-member form reads one statement for each member of the parameters, off the blobs and before any session
 (`Spot.OneStageZk.Member.statement`), and judges the member's session at it. A window's member is that member on
 the registered files (`MemberOn`). This module ties the two, so that a session's verdict at the statement the form
-read is flock-verify `--zk`'s at the window's member (`SessionVerdict.accepts_member`):
+read is verity-verify-proof `--zk`'s at the window's member (`SessionVerdict.accepts_member`):
 
 * **What the statement read** (`statementOf_reads`, `statement_reads`): the statement's tags, the blobs' circuit and
   public files under the member's two digests, the circuit file's lookups, each a pinned table the blobs hold, and

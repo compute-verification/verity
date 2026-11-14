@@ -7,7 +7,7 @@ public import Spot.OneStageZk
 
 The parameters of the one-stage audit's v2 (`Spot.OneStageZk`) register its circuit file by its SHA-512, and
 the circuit names the lookup tables its session reads: its META's `lookups` (`OneStageZk.lookupsOf`). v2 refuses blobs
-whose pinned MUFU tables (`OneStageZk.tablesOf`, the tables `inputsOf` hands `flock-verify`) are other than those
+whose pinned MUFU tables (`OneStageZk.tablesOf`, the tables `inputsOf` hands `verity-verify-proof`) are other than those
 before it sets up a session (`tablesHeld`, the first statement of `run`), so wherever the one statement's check
 accepts, the session's table set is the registered circuit's.
 

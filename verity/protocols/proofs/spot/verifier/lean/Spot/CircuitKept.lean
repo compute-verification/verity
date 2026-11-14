@@ -5,7 +5,7 @@ public import Flock.KsScope
 /-!
 # What a statement's checks read of its circuit file, kept by the file
 
-`flock-verify verify --zk` makes three checks of a statement's files on the parsed circuit and the public file
+`verity-verify-proof verify --zk` makes three checks of a statement's files on the parsed circuit and the public file
 (`Flock.ProvedScope.checkOf`, `Flock.PortRoots.checkOf` and `Flock.KsScope.filesOf`). Each has two parts:
 
 * verdicts of the circuit alone, which walk its rows: the wires' order and the unit's scope (`rulesOf`,

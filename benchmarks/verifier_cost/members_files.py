@@ -56,7 +56,7 @@ def main() -> None:
     ap.add_argument("--case", type=Path, help="a driver's per-member case")
     ap.add_argument("--members", type=int, help="the stand-in window's members")
     ap.add_argument("--bin", type=Path, help="Flock's prover, for the stand-in window's audit")
-    ap.add_argument("--lean-bin", type=Path, help="the directory of flock-verify and flock-firewall, for that audit")
+    ap.add_argument("--lean-bin", type=Path, help="the directory of verity-verify-proof and flock-firewall, for that audit")
     a = ap.parse_args()
     if (a.case is None) == (a.members is None) or (a.members is not None and not (a.bin and a.lean_bin)):
         ap.error("give --case, or --members with --bin and --lean-bin")

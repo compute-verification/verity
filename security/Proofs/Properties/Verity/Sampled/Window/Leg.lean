@@ -15,7 +15,7 @@ premise and the decoders' (`windowCouplingTarget_of_logged`), and the decoders' 
   and the messages' finders, from the coin map's premise (`WindowCouples`) and the decoders' (`WindowDecodes`) at
   every strategy.
 * **The leg, a member at a time** (`windowSpotSound_of_members`): the decoders' premise at each member's session
-  (`MemberDecodes`): each member's session's trace, in the members' order, writes a transcript flock-verify `--zk`
+  (`MemberDecodes`): each member's session's trace, in the members' order, writes a transcript verity-verify-proof `--zk`
   accepts wherever the play v2 accepts is on a tape through the trace's end.
 * **The leg at the window's one sample** (`windowSpotSound_of_sample`): the walk, the sample and the members' steps
   in one statement. The coin maps are the sample-coupled ones (`windowSampleMaps`), whose premise holds off the
@@ -78,7 +78,7 @@ theorem windowSpotSound_of_logged (rd : WindowReadings) (K : WindowConstructions
 decoders' premise at each member's session (`MemberDecodes`), at any invariant `I` of the position the members'
 traces end at and the position a member's session starts at. At each window of `S`, each commitment and each strategy: the coin map's premise over the window
 (`WindowCouples`), and for each member with a proof block in the sample, in the members' order, its session's trace
-from where the one before it ended writes a transcript flock-verify `--zk` accepts at the member's `own`, wherever a
+from where the one before it ended writes a transcript verity-verify-proof `--zk` accepts at the member's `own`, wherever a
 tape through the trace's end plays a play v2's sampled verdict accepts that misses nowhere and `P` and `Q` hold of; a
 member with none has no session, and the next member's starts from the same position. The bound is
 `spotSound_of_window`'s: the sample's own miss, the members' terms summed and their roots terms
@@ -128,7 +128,7 @@ the one-stage form, meets SPOT's target at composite `k` wherever, at each windo
 * each round's reading picks only openings (`hR`);
 * the members' steps hold off the openings' empty classes at their counts (`hm`, `MemberSteps` at `linkEmptyAt` and
   `roundEmptyAt`): the session's trace of each member with a proof block in the sample, in the members' order, from a
-  position that keeps the play's start and whose stop is where `StopsAt` says, writes a transcript flock-verify `--zk`
+  position that keeps the play's start and whose stop is where `StopsAt` says, writes a transcript verity-verify-proof `--zk`
   accepts at the member's `own`, wherever a tape through the trace's end plays a play v2's sampled verdict accepts,
   that misses at no round and not at the record, and that `P` and `Q` hold of. A member with no proof block in the
   sample has no statement and no session in the play: the walk consumes no stop for it, and the next member's session

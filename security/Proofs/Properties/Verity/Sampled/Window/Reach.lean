@@ -32,7 +32,7 @@ it ends at, which the next member's session starts from:
 * **The decoders' premise at the window, a member at a time** (`WindowReaches.chain`, `MemberDecodes`,
   `windowDecodes_of_members`): `WindowDecodes` holds wherever the session's trace of each member with a proof block
   in the sample, in a chain whose end's tape plays an accepted play that misses nowhere, keeps the invariant and
-  writes a transcript flock-verify `--zk` accepts, and a member with none keeps the invariant where it is.
+  writes a transcript verity-verify-proof `--zk` accepts, and a member with none keeps the invariant where it is.
 -/
 
 @[expose] public section
@@ -414,7 +414,7 @@ on the coin map's tape, whatever `r` (`start`); the session's trace of each memb
 from a position `I` holds at, ending at a position `q` that `r` is past (`Pos.Past`), where `r` keeps the play's
 start and its tape's play the sampled verdict accepts, misses at no round and not at the record and `P` holds of, has
 `I` at the next place and the position past the stop after `q`, the session's closing round's, and writes a
-transcript flock-verify `--zk` accepts at the member's `own` (`step`); and
+transcript verity-verify-proof `--zk` accepts at the member's `own` (`step`); and
 a member with no proof block in the sample, which has no session, has `I` at the next place and the same position
 (`skip`). The invariant reads `r` because what a member's session answered is a fact about the play the verdict
 accepts, the one on `r`'s tape. -/

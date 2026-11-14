@@ -460,7 +460,7 @@ structure WindowFinderCR (V : Vocab d α) (K : WindowConstructions V) (W : Windo
 
 /-- **The coupling, the projection's target at the window `W`** (`CouplingTarget`, at a window): the plays of the
 period's game whose sampled verdict accepts are at most as likely as the plays of the window's audit, at the window
-widened by the projection's coins and the strategy projected there, that flock-verify `--zk` accepts at the session of
+widened by the projection's coins and the strategy projected there, that verity-verify-proof `--zk` accepts at the session of
 every member with a proof block in the sample (`JointAuditV5.Accepts`), plus the square root of each two-continuation
 finder's success, the coin trees' hiding term, the read finder's collision and the forger's forgery of the device's
 signature. -/

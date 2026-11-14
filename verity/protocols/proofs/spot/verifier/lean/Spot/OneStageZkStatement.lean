@@ -77,7 +77,7 @@ def templateOk (c : Flock.Circuit) : V Unit := do
   if c.upv = 0 then throw NO_ROW_WHY
   if returnedBits c > UNIT_CLASS_MAX then throw WIDE_WHY
 
-/-- The verifier's own inputs to `flock-verify verify --zk`: the program's descriptor (as JSON and as the bytes
+/-- The verifier's own inputs to `verity-verify-proof verify --zk`: the program's descriptor (as JSON and as the bytes
 `--program` reads), the partition object, the circuit and public files' committed SHA-512s and the registered file. -/
 structure Own where
   programJ : Json
@@ -234,7 +234,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   if sessions.map (·.name) != base.sessions then throw "proofs: the sessions are not the evidence's sessions, in order"
   pure { base, sessions, statements := none }
 
-/-- `flock-verify`'s `checkIdentifier` without the verifier's own identifier: a public header that names one refuses. -/
+/-- `verity-verify-proof`'s `checkIdentifier` without the verifier's own identifier: a public header that names one refuses. -/
 def checkIdentifier (st : Flock.Stmt) : V Unit :=
   match st.pub.header.getObjVal? "identifier" with
   | .error _ => pure ()
@@ -244,7 +244,7 @@ def checkIdentifier (st : Flock.Stmt) : V Unit :=
       throw s!"identifier: the public header's identifier is outside canonical JSON's RFC 8785 domain: {e}"
     throw "identifier: the public header names an identifier; pass the verifier's own (--identifier F)"
 
-/-- `flock-verify`'s `buildSessionOf` on an hm96-sha512 row statement with none of `--work`, `--stratified`,
+/-- `verity-verify-proof`'s `buildSessionOf` on an hm96-sha512 row statement with none of `--work`, `--stratified`,
 `--closure`, `--public-inputs` or `--identifier`. -/
 def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB : ByteArray) (coins : Flock.Coins)
     (tables : List (String × ByteArray)) (count : Nat) (draw partition : Option Json) (program : Option ByteArray)
@@ -260,7 +260,7 @@ def buildSessionOf (parsed : V Flock.Circuit) (tags : Flock.Tags) (circuitB pubB
   Flock.Registered.checkFull registered draw
   return r
 
-/-- `flock-verify`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
+/-- `verity-verify-proof`'s `programDigest`: SHA-512 of the canonical descriptor without `annotations`. -/
 def programDigest (b : ByteArray) : Option String := do
   let j ← (Flock.JsonParse.parse (← String.fromUTF8? b)).toOption
   let bare := match j with
@@ -317,7 +317,7 @@ def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
     | none => throw "the record draws an instance the public file's units.indices does not name"
   return units.qsort (· < ·)
 
-/-- The pinned MUFU lookup tables the blobs hold, each found under its pinned SHA-512 as `flock-verify --archive` finds
+/-- The pinned MUFU lookup tables the blobs hold, each found under its pinned SHA-512 as `verity-verify-proof --archive` finds
 it. -/
 def tablesOf (bs : Core.Blobs) : List (String × ByteArray) :=
   Flock.MUFU_TABLES.filterMap fun t =>
@@ -406,7 +406,7 @@ def ownTablesPiece (j : Json) : V Json := do
           | .ok () => Json.null
           | .error w => Json.str w)]
 
-/-- What `flock-verify verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
+/-- What `verity-verify-proof verify --zk` reads besides a session's directory, as `verdicts` runs it: the statement's tags
 `tags`, the circuit and public files, one table, the lookup tables the blobs hold, and the verifier's own partition
 object and program. -/
 def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Core.Blobs) : Flock.Witness.Inputs :=
@@ -419,7 +419,7 @@ def inputsAt (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (tables :
   { tags, circuitFile := circuitB, publicFile := pubB, count := 1, tables, partition := some p.partition,
     program := some p.program }
 
-/-- The bound on each length a session's statement holds: `flock-verify`'s statement writes every length in an 8-byte
+/-- The bound on each length a session's statement holds: `verity-verify-proof`'s statement writes every length in an 8-byte
 word. -/
 def WORD : Nat := 2 ^ 64
 
@@ -580,7 +580,7 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
       pure { coinKeys, all := r.all, proved := r.proved ++ units,
              out := r.out.push (verdictJson rd programSha s st true "" units) }
 
-/-- One session's `flock-verify verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own sample
+/-- One session's `verity-verify-proof verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own sample
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
 makes after it, the population check last (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in
 no blob or not UTF-8, its sample doesn't fit the session's statement (`drawFitsWhy`), or it accepted naming another
@@ -605,7 +605,7 @@ def provedHeld (proved want : Array Nat) : V Unit :=
   if proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
   else pure ()
 
-/-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
+/-- One `verity-verify-proof verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it, each
 session set up at its own record's sample: every session's verdict, the units the accepted ones proved and whether all
 accepted. A session accepts only where the registration's population is the public file's units in order
 (`FilePart.check`, last). A refusal, first, of blobs holding other lookup tables than the registered circuit's (`tablesHeld`),

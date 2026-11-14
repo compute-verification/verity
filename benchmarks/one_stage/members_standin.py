@@ -62,7 +62,7 @@ def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path) -> lis
     return [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(win),
             "--law", DESIGN, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, "--bin", str(flock),
-            "--lean", str(lean / "flock-verify"), "--firewall", str(lean / "flock-firewall"), "--ports", str(len(KS)),
+            "--lean", str(lean / "verity-verify-proof"), "--firewall", str(lean / "flock-firewall"), "--ports", str(len(KS)),
             "--out", str(out), "--deployed-key"]
 
 
