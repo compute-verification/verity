@@ -20,10 +20,10 @@ EPS = P["eps_agg"]
 STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 #: the brief's rungs, as overrides on the defaults
 RUNGS = {
-    "Today": {"residual": 1.0},
+    "Today": {"free": 1.0},
     "PoUW's floor credit": {},
-    "Floor credit and attested clock": {"residual": 0.213, "clock_share": 0},
-    "Best plausible PoUW design": {"residual": 0.01, "clock_share": 0, "eps_w": 0.0025},
+    "Floor credit and attested clock": {"free": 0.213, "clock_share": 0},
+    "Best plausible PoUW design": {"free": 0.01, "clock_share": 0, "eps_w": 0.0025},
 }
 #: PoUW's deficit at the floor, the best design's: at r̂ = 0 all of C is certified, so the deficit is ε_W C
 EPS_W = RUNGS["Best plausible PoUW design"]["eps_w"]
@@ -35,21 +35,21 @@ def slowdown(over: dict, tier: str) -> float:
     return S.slowdown(P | over, tier)
 
 
-def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
+def test_the_slowdown_is_a_hardware_multiple_against_the_unconstrained_run():
     """Unregistered compute trains like the unconstrained developer, and so do dark fragments of registered capacity
-    (reference efficiency: ``evaluate`` at ``residual_mfu`` = MFU_0); the rest are counted multiplications, so
+    (reference efficiency: ``evaluate`` at ``free_mfu`` = MFU_0); the rest are counted multiplications, so
     D = 1 / (s + rest / mfu): the slowdown calculator's ``multiple_bound`` in Lean's form, ``remoteSlowdown``, at tiers'
     terms."""
-    p = P | {"unregistered": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    p = P | {"unregistered": 0.01, "free": 0.01, "host_share": 0.05, "clock_share": 0.0}
     r = T.evaluate(p, T.TIERS["T4"], p["mfu"])
-    rest = r["residual"] + r["declared"] + r["cheat"]
+    rest = r["free"] + r["declared"] + r["cheat"]
     assert T.remote_terms(p, r) == (r["unregistered"], rest)
     assert S.slowdown(p, "T4") == pytest.approx(1 / (r["unregistered"] + rest / p["mfu"]), rel=1e-9)
-    assert r["residual"] == pytest.approx(p["mfu"] * T.evaluate(p, T.TIERS["T4"])["residual"], rel=1e-9)
-    assert all(S.slowdown(P | {"residual": 1.0}, t) == 1.0 for t in ("T1", "T2", "T3", "T4"))
+    assert r["free"] == pytest.approx(p["mfu"] * T.evaluate(p, T.TIERS["T4"])["free"], rel=1e-9)
+    assert all(S.slowdown(P | {"free": 1.0}, t) == 1.0 for t in ("T1", "T2", "T3", "T4"))
 
 
-def test_the_remote_dampener_at_the_defaults():
+def test_the_remote_slowdown_at_the_defaults():
     """At tiers' server (the floor credit; hosts carry no compute; reference efficiency) the residual r = 0.33 trains at
     MFU_0 and the inference-only policy's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/eta =
     3.04, the same terms against a reference at capacity. Without the reference-efficiency assumption the residual is at
@@ -60,8 +60,8 @@ def test_the_remote_dampener_at_the_defaults():
         return S.multiple_bound(p["mfu"], *T.remote_terms(p, T.evaluate(p, T.TIERS[t])), reference_efficiency=False)
     for t in ("T1", "T2", "T3", "T4"):
         r = T.evaluate(P, T.TIERS[t], P["mfu"])
-        assert S.slowdown(P, t) == pytest.approx(1 / (r["residual"] / P["mfu"] + r["declared"] / P["mfu"]), rel=1e-9)
-        assert r["residual"] / P["mfu"] == pytest.approx(T.residual_share(P) + LAG, rel=1e-9)
+        assert S.slowdown(P, t) == pytest.approx(1 / (r["free"] / P["mfu"] + r["declared"] / P["mfu"]), rel=1e-9)
+        assert r["free"] / P["mfu"] == pytest.approx(T.free_share(P) + LAG, rel=1e-9)
     assert S.slowdown(P, "T1") == pytest.approx(3.022, abs=1e-3)
     assert 1 / T.evaluate(P, T.TIERS["T1"])["efficiency"] == pytest.approx(3.04, abs=0.01)
     assert at_peak(P, "T1") == pytest.approx(1.215, abs=1e-3)
@@ -89,14 +89,14 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
     residual and the verdict lag train at MFU_0 (reference efficiency), nu is counted multiplications."""
     rows = {r["rung"]: r for r in S.ladder()}
     nu = X.nu(P) / P["mfu"]
-    best = T.residual_share(P | RUNGS["Best plausible PoUW design"])
+    best = T.free_share(P | RUNGS["Best plausible PoUW design"])
     assert rows["Best plausible PoUW design"]["slowdown"]["T1"] == pytest.approx(1 / (best + nu + LAG), rel=1e-4)
     floor = nu + EPS_W + EPS
     assert rows["Floor (r̂ = 0, 4 GB)"]["slowdown"]["T1"] == pytest.approx(1 / (floor + LAG), rel=1e-4)
     assert rows["Floor, one-minute verdict lag"]["slowdown"]["T3"] == pytest.approx(1 / (floor + 60 / H), rel=1e-4)
     one = P | S.streamed(1.0)
     assert X.mu(one) > 1 and rows["Power removal, 1 GB"]["slowdown"]["T3"] == pytest.approx(
-        1 / (T.residual_share(one) + nu + LAG), rel=1e-3)
+        1 / (T.free_share(one) + nu + LAG), rel=1e-3)
     fl = quantities(S.floor())
     assert fl["1 / (ε_W + ε′ + ν / MFU_0), the floor's limit as the verdict lag goes to 0"] == pytest.approx(
         1 / floor, rel=1e-12)
@@ -106,7 +106,7 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
 def test_fleet_wide_forgiveness_is_j_identities_of_verdict_lag():
     q = P | S.BEST
     _, fleet, server = (r["value"] for r in S.slide())
-    assert fleet == pytest.approx(1 / (T.residual_share(q) + S.SDC * LAG + X.nu(q) / P["mfu"]), rel=1e-4)
+    assert fleet == pytest.approx(1 / (T.free_share(q) + S.SDC * LAG + X.nu(q) / P["mfu"]), rel=1e-4)
     assert server == pytest.approx(S.SDC * LAG / P["nodes"], rel=1e-12)
 
 
@@ -124,11 +124,11 @@ def test_the_fit_bound_rows_are_fits_with_chi_on_top():
     assert F.row(edge, N, L)["fit_over_closed"] == pytest.approx(1.0, rel=1e-6)
 
 
-def test_the_regimes_add_unmonitored_compute_at_full_efficiency():
+def test_the_regimes_add_unregistered_compute_at_full_efficiency():
     """With today's wipes the fit bound caps nothing; at 6 GB it caps the best design's residual, which trains at
     MFU_0 (reference efficiency) where the cap and nu are counted multiplications."""
     q = P | S.BEST
-    registered = T.residual_share(q) + LAG + X.nu(q) / P["mfu"]
+    registered = T.free_share(q) + LAG + X.nu(q) / P["mfu"]
     mu = S.fit_mu(6.0) / P["mfu"]
     assert mu < registered
     for row in S.regimes()["rows"]:
@@ -187,10 +187,10 @@ def test_alpha_falls_only_where_k_reaches_the_level_in_its_range():
 def test_the_symbols_closed_forms_are_what_evaluate_uses():
     sym = {(r["symbol"], r["meaning"]): r["value"] for r in S.symbols()}
     capped = T.evaluate(P | S.streamed(1.0), T.TIERS["T3"])
-    if capped["memory_caps_residual"]:
-        assert sym[("μ̂", "at 1 GB")] == pytest.approx(capped["residual"] + capped["declared"], rel=0.01)
+    if capped["memory_caps_free"]:
+        assert sym[("μ̂", "at 1 GB")] == pytest.approx(capped["free"] + capped["declared"], rel=0.01)
     else:
-        assert sym[("μ̂", "at 1 GB")] >= capped["residual"] + capped["declared"]
+        assert sym[("μ̂", "at 1 GB")] >= capped["free"] + capped["declared"]
     assert sym[("μ̂", "at 6 GB")] == X.mu(P | S.streamed(6.0))
     assert sym[("ν = 2αΛ(K)/(κ b_a)", "NCI's term")] == pytest.approx(
         T.evaluate(P | S.BEST, T.TIERS["T1"])["declared"], rel=1e-6)
