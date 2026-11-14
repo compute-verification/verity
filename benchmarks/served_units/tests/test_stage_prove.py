@@ -8,6 +8,7 @@ staged on its cards alone."""
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -36,8 +37,8 @@ done
 '''
 #: lake: its call and the cards it sees logged; fails, unless $LAKE_OK
 LAKE = '#!/usr/bin/env bash\necho "lake $* cvd=[${CUDA_VISIBLE_DEVICES-unset}]" >> "$CALLS"\n[ -n "${LAKE_OK:-}" ]\n'
-#: findmnt -no OPTIONS|TARGET -T PATH: a mount that allows exec
-FINDMNT = '#!/usr/bin/env bash\ncase "$*" in *OPTIONS*) echo rw,relatime ;; *) echo / ;; esac\n'
+#: findmnt -no OPTIONS|TARGET -T PATH: a mount that allows exec, unless $NOEXEC
+FINDMNT = '#!/usr/bin/env bash\ncase "$*" in *OPTIONS*) echo rw,relatime${NOEXEC:+,noexec} ;; *) echo / ;; esac\n'
 #: window.py stage|prove UNITS: its call, groups, allowed cards and visible cards logged; `stage` stages one statement
 WINDOW = r'''import os, sys
 from pathlib import Path
@@ -105,12 +106,43 @@ def test_reads_the_leases_among_its_cards_alone_and_goes_on_when_they_are_free(j
 
 
 def test_stages_nowhere_in_ram(job):
-    """FLOCK_WORK holds flock-tmpl-unit, which a noexec /dev/shm can't run: a WORK_ROOT there is refused before staging."""
+    """FLOCK_WORK holds flock-tmpl-unit, which a noexec /dev/shm can't run: without RAM_WORK=1 a WORK_ROOT there is refused
+    before staging."""
     rc, steps, _ = job(LAKE_OK="1", WORK_ROOT="/dev/shm/stage-prove-test")
     assert rc == 4 and "REFUSED: WORK_ROOT /dev/shm/stage-prove-test is in RAM" in steps, steps
     assert "window.py stage" not in steps and not Path("/dev/shm/stage-prove-test").exists()
     rc, steps, _ = job(LAKE_OK="1", STEPS="stage", FLOCK_WORK="/dev/shm/stage-prove-test")
     assert rc == 4 and "REFUSED: FLOCK_WORK /dev/shm/stage-prove-test is in RAM" in steps, steps
+
+
+@pytest.fixture
+def shm(tmp_path):
+    d = Path("/dev/shm") / f"stage-prove-test-{tmp_path.name}"
+    yield d
+    shutil.rmtree(d, ignore_errors=True)
+
+
+def test_ram_work_stages_in_ram_with_the_executables_on_disk(job, tmp_path: Path, shm: Path):
+    """Under RAM_WORK=1 a FLOCK_WORK in /dev/shm holds the statements, and each directory an executable is built or run in is
+    a symlink into DISK_WORK; STEPS=prove of the same commit proves it and removes both."""
+    disk = tmp_path / "disk"
+    rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(disk))
+    assert rc == 0 and f"RAM_WORK=1: FLOCK_WORK {shm} holds the statements in RAM" in steps, steps
+    assert all((shm / d).is_symlink() and (shm / d).resolve() == disk / d
+               for d in ("py", "flock-gpu-link", "flock-circuit", "tmpl-unit"))
+    assert (shm / ".disk_work").read_text().strip() == str(disk) and (shm / "data/s/.done").exists()
+    assert (shm / ".staged").read_text().split()[0] == TREE
+    rc, steps, _ = job(STEPS="prove", FLOCK_WORK=str(shm), HELD="6")
+    assert rc == 0 and not shm.exists() and not disk.exists(), steps
+
+
+def test_ram_work_refuses_a_disk_work_in_ram_or_on_a_noexec_mount(job, tmp_path: Path, shm: Path):
+    rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=f"{shm}-exec")
+    assert rc == 4 and f"REFUSED: DISK_WORK {shm}-exec is in RAM" in steps, steps
+    rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "d"),
+                       NOEXEC="1")
+    assert rc == 4 and f"REFUSED: DISK_WORK {tmp_path / 'd'} is on a noexec mount" in steps, steps
+    assert "window.py stage" not in steps
 
 
 def test_refuses_a_device_or_steps_it_does_not_know(job):

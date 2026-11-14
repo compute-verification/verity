@@ -15,12 +15,16 @@
 #   2. (stage) window.py stage UNITS into FLOCK_WORK on disk, a fresh directory under WORK_ROOT unless FLOCK_WORK is given:
 #      prove_time.sh's stage step builds flock-tmpl-unit under it and places each templated statement's unit with it, so the
 #      job refuses a FLOCK_WORK under /dev/shm or on a noexec mount; window.py builds the prover beside the stagings. Under
+#      RAM_WORK=1 a FLOCK_WORK under /dev/shm holds the statements alone, its py, flock-gpu-link, flock-circuit and tmpl-unit
+#      symlinks into DISK_WORK (a fresh directory under /workspace/tmp unless given, refused if noexec), named in its
+#      .disk_work and removed with it; window.py counts it as host memory against WIN_MEM_GB. Under
 #      STEPS=stage the job ends here, FLOCK_WORK kept and, if every statement staged, .staged naming the commit
 #   3. (prove) window.py prove: one group per card of CARDS (one group on the CPU), each group's `gpu-lease 1` taken only among
 #      CARDS (GPU_LEASE_ALLOWED_FILE) and ending by KILL_AT less 3 minutes, the whole step under `timeout` to KILL_AT less 90 s;
 #      every session kept in out/kept/NAME; FLOCK_WORK removed at its end
 # env: UNITS (a path, or a name sent with the run) DEV (gpu|cpu) CARDS (gpu, to prove) SM (gpu) NOT_BEFORE KILL_AT; STEPS;
-#      FLOCK_WORK (under /workspace/tmp: STEPS=stage's choice, STEPS=prove's input); MIN_LEFT_S=1800 WORK_ROOT=/workspace/tmp
+#      FLOCK_WORK (under /workspace/tmp: STEPS=stage's choice, STEPS=prove's input); RAM_WORK=1 DISK_WORK (a FLOCK_WORK in
+#      /dev/shm); MIN_LEFT_S=1800 WORK_ROOT=/workspace/tmp
 #      WARM=1 RUNS=4 VCPUS=2 LEASE_MIN=60 WIN_MEM_GB=64 WIN_DISK_GB=40 WIN_FREE_GB=20 WIN_DEV_GIB=135
 set -uo pipefail
 IN=$RESEARCH_RUN_DIR/inputs; OUT=$RESEARCH_RUN_DIR/out; mkdir -p "$OUT"; L=$OUT/steps.txt
@@ -76,15 +80,30 @@ if has stage; then
     || { tail -20 "$OUT/lean-build.log" | tee -a "$L"; say "flock-read-tmpl BUILD FAILED: a table read can't stage"; exit 4; }
   say "flock-read-tmpl built in $(( $(date +%s) - t )) s"
 
-  # 2. stage, on disk
+  # 2. stage, on disk, or under RAM_WORK=1 the statements in RAM and the executables on disk
   FW=${FLOCK_WORK:-}; WR=${WORK_ROOT:-/workspace/tmp}; what="WORK_ROOT $WR"; [ -z "$FW" ] || what="FLOCK_WORK $FW"
-  case ${FW:-$WR} in /dev/shm*) say "REFUSED: $what is in RAM; flock-tmpl-unit is built and run under FLOCK_WORK, on disk"; exit 4 ;; esac
+  ram=; case ${FW:-$WR} in /dev/shm*) ram=1 ;; esac
+  if [ -n "$ram" ] && [ "${RAM_WORK:-}" != 1 ]; then
+    say "REFUSED: $what is in RAM; flock-tmpl-unit is built and run under FLOCK_WORK, on disk (RAM_WORK=1 puts it on DISK_WORK)"; exit 4
+  fi
   if [ -n "$FW" ]; then mkdir -p "$FW" || { say "no FLOCK_WORK $FW"; exit 4; }
   else mkdir -p "$WR" && FW=$(mktemp -d "$WR/stage-prove.XXXXXX") || { say "no FLOCK_WORK under $WR"; exit 4; }; fi
-  if findmnt -no OPTIONS -T "$FW" | tr ',' '\n' | grep -qx noexec; then
-    say "REFUSED: FLOCK_WORK $FW is on a noexec mount, where flock-tmpl-unit can't run"; has prove && rm -rf "$FW"; exit 4
+  EX=$FW
+  if [ -n "$ram" ]; then
+    EX=${DISK_WORK:-}; [ -n "$EX" ] || EX=$(mkdir -p /workspace/tmp && mktemp -d /workspace/tmp/stage-prove-exec.XXXXXX) \
+      || { say "no DISK_WORK under /workspace/tmp"; exit 4; }
+    case $EX in /dev/shm*) say "REFUSED: DISK_WORK $EX is in RAM"; exit 4 ;; esac
+    for d in py flock-gpu-link flock-circuit tmpl-unit; do
+      mkdir -p "$EX/$d" && { [ -L "$FW/$d" ] || ln -s "$EX/$d" "$FW/$d"; } || { say "no $d of DISK_WORK $EX linked into $FW"; exit 4; }
+    done
+    echo "$EX" > "$FW/.disk_work"
   fi
-  say "FLOCK_WORK $FW on $(findmnt -no TARGET -T "$FW") (exec allowed); flock-tmpl-unit is built and run under it"
+  if findmnt -no OPTIONS -T "$EX" | tr ',' '\n' | grep -qx noexec; then
+    exw=FLOCK_WORK; [ -z "$ram" ] || exw=DISK_WORK
+    say "REFUSED: $exw $EX is on a noexec mount, where flock-tmpl-unit can't run"; has prove && rm -rf "$FW"; exit 4
+  fi
+  [ -z "$ram" ] || say "RAM_WORK=1: FLOCK_WORK $FW holds the statements in RAM; its py, flock-gpu-link, flock-circuit and tmpl-unit are DISK_WORK $EX's"
+  say "flock-tmpl-unit is built and run under $EX, on $(findmnt -no TARGET -T "$EX") (exec allowed)"
   export FLOCK_WORK=$FW WIN_DISK_GB=${WIN_DISK_GB:-40} WIN_FREE_GB=${WIN_FREE_GB:-20} \
     WIN_UNTIL=$(date -u -d @$((KILL_AT - 1200)) +%Y-%m-%dT%H:%MZ)
   n=$(grep -vc '^#' "$UNITS")
@@ -104,7 +123,8 @@ fi
 # 3. prove
 export FLOCK_WORK=$FW
 left=$(( KILL_AT - 90 - $(date +%s) )); lease=$(( (KILL_AT - $(date +%s)) / 60 - 3 ))
-[ "$left" -gt 300 ] || { say "REFUSED: $left s to KILL_AT: nothing proved"; rm -rf "$FW"; exit 9; }
+drop() { local ex; ex=$(cat "$FW/.disk_work" 2>/dev/null); [ -z "$ex" ] || rm -rf "$ex"; rm -rf "$FW"; }
+[ "$left" -gt 300 ] || { say "REFUSED: $left s to KILL_AT: nothing proved"; drop; exit 9; }
 export WIN_GPUS=$ngroups WIN_DEV_GIB=${WIN_DEV_GIB:-135} WIN_KEEP=0 WARM=${WARM:-1} RUNS=${RUNS:-4} VCPUS=${VCPUS:-2} \
   LEASE_MIN=$(( ${LEASE_MIN:-60} < lease ? ${LEASE_MIN:-60} : lease ))
 say "window.py prove: $ngroups groups, lease $LEASE_MIN min, stopped in $left s"
@@ -113,5 +133,5 @@ say "window.py prove exit $rc"
 [ "$DEV" = gpu ] && nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name --format=csv,noheader > "$OUT/cards-at-end.txt" 2>&1
 fin=$(awk -F'\t' 'NR > 1 && $4 == 1' "$OUT/seconds.tsv" 2>/dev/null | wc -l)
 say "statements: $(awk 'NR > 1' "$OUT/seconds.tsv" 2>/dev/null | wc -l) started, $fin finished with exit 0; kept: $(ls "$OUT/kept" 2>/dev/null | wc -l)"
-rm -rf "$FW"
+drop
 exit $rc
