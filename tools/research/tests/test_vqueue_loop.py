@@ -4629,6 +4629,53 @@ def test_under_gate_check_a_candidate_on_one_in_flight_leaves_suites_to_its_base
     assert (dropped[two], dropped[three]) == ("its base failed",) * 2 and one in dropped and env.main() == main
 
 
+@pytest.mark.parametrize("case", ["its base's check passed them", "it still runs", "it passed"])
+def test_under_gate_check_a_candidate_that_left_suites_to_its_base_s_check_lands_only_on_that_check_s_pass_of_them(
+        env, monkeypatch, case):
+    """A candidate whose check left suites to its base's passes only once that check passed both suite steps.  Where it
+    did, the two land in one tick.  Where it never will, the candidate runs them itself: here its base's
+    check ended in infra and was started again under a deselect list, so it passed without some tests of the suites left to
+    it.  The candidate above, though its own check passed, doesn't land with its base; once that is `main` its check is
+    started again with no lender, its runs still running cancelled, and it lands on that check."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"tools/verity/check/common.py": "# the auditor imports this\n"})     # so it audits itself: no other wait
+    loop, runs = _check(env, monkeypatch, batch=1, depth=2)
+    loop.tick()
+    runs.end(main)
+    loop.tick()
+    started = {r["sha"]: r for r in env.lines() if r["action"] == "slim" and r["why"] == "started" and r["sha"] != main}
+    (one, _), (top, lent) = started.items()
+    assert (lent["record"]["suites_from"], lent["base"], lent["record"].get("lean_audit_from")) == (one, one, None)
+    if case == "its base's check passed them":
+        runs.end(one)
+        runs.end(top)
+        assert _acts(loop.tick()).count("advance") == 2 and env.main() == top
+        assert not [r for r in env.lines() if r["action"] == "slim" and r["why"].startswith("started again")]
+        return
+    runs.end(one, 2, "pytest", "error: no\n")
+    runs.state["c-5"] = ("done", 137, None)
+    (env.tmp / "deselect").write_text("pkg/tests/test_x.py::test_slow\n")
+    loop.world.deselect_file = env.tmp / "deselect"
+    logged = loop.tick()
+    assert [r["why"] for r in logged if r["action"] == "slim" and r["sha"] == one] == ["judged infra", "started again"]
+    assert logged[-1]["record"]["deselect"] is True
+    runs.end(one)
+    if case == "it passed":
+        runs.end(top)
+    loop.tick()
+    assert env.main() == one, "only its base lands"
+    logged = loop.tick()
+    assert env.main() == one and "advance" not in _acts(logged)
+    (again,) = [r for r in logged if r["action"] == "slim" and r["sha"] == top and r["why"].startswith("started again")]
+    assert again["why"] == (f"started again: {one[:12]}'s check, which it left suites to, landed without passing them: it runs "
+                            "them itself")
+    assert "suites_from" not in again["record"]
+    assert again.get("beside_cancelled") == (None if case == "it passed" else ["c-7", "c-8", "c-9"])
+    runs.end(top)
+    assert "advance" in _acts(loop.tick()) and env.main() == top
+
+
 def test_under_gate_check_a_candidate_changing_only_the_task_graph_s_contract_audits_itself(env, monkeypatch):
     """The task graph's contract is in every audit's key (`lean_audit.CONTRACT`): the candidate on a Lean one in flight
     whose member changes only it runs lean-audit itself, its record naming no check whose verdict it takes."""

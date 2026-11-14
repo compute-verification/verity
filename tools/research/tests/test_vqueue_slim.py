@@ -24,11 +24,11 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN, WHOLE,
-                                  Read, _json, _text, abandon, audit_built, audit_failures, audited, audits, based, combine,
-                                  failures, judge, key, lean_inputs, lean_reads, left, lends_suites, read_step, read_suite,
-                                  reads, replaced, joined, shard_count, start, step_kind, step_test, suite_kind, traced_reads,
-                                  unnamed)
+from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
+                                  WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
+                                  audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
+                                  lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
+                                  step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -945,6 +945,33 @@ def test_a_check_lends_its_suites_only_while_it_and_main_s_answer_for_both_suite
     assert not lends_suites(h.d, start(h.d, other, base, shards=1), green), "its policy isn't its base's"
     h.d.warn_steps = ("lean-suites",)
     assert not lends_suites(h.d, rec, green)
+
+
+def test_a_check_that_left_suites_to_another_passes_only_once_that_one_passed_both_suite_steps(world, monkeypatch, tmp_path):
+    """`borrowed`: the check that left suites to its base's (``suites_from``) never passes on its own steps alone.  While
+    that check keeps no verdict a pass is pending and a fail not ended; once it passed both suite steps the verdict is the
+    check's own.  A record that never will answer (`answers_suites`: it failed a suite step or ended in infra, ran under
+    a deselect list, or is no check that gates, as a quick tier's isn't whatever it says it passed) holds it the same way,
+    for the loop to start it again.  A check that left none out is never held."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    lender = start(h.d, base, base, shards=1)
+    rec = start(h.d, sha, base, shards=1, suites_from=base)
+    _slim(h, tmp_path)
+    own = judge(h.d, rec)
+    red = Verdict(FAIL, (_failed(h, base, sha, "circuit-check"),), ended=True)
+    assert own == Verdict(PASS) and answers_suites(lender) is None and answers_suites(None) is None
+    for source in (None, lender):
+        assert borrowed(own, rec, source) == Verdict(PENDING) and borrowed(red, rec, source) == replace(red, ended=False)
+    passed = {**lender, "verdict": {"state": PASS, "passed": ["pytest", "lean-suites", "lean-audit"]}}
+    assert answers_suites(passed) is True and borrowed(own, rec, passed) == own and borrowed(red, rec, passed) == red
+    never = [{**passed, "verdict": {"state": FAIL, "passed": ["lean-suites"], "failed": []}},
+             {**passed, "verdict": {"state": INFRA}}, {**passed, "deselect": True}, {**passed, "gate": "quick"},
+             {k: v for k, v in passed.items() if k != "gate"}]
+    for source in never:
+        assert answers_suites(source) is False and borrowed(own, rec, source) == Verdict(PENDING)
+        assert not lends_suites(h.d, start(h.d, sha, base, shards=1), source)
+    plain = start(h.d, sha, base, shards=1)
+    assert borrowed(own, plain, None) == own and borrowed(own, plain, never[0]) == own and borrowed(own, None, None) == own
 
 
 def test_a_check_that_waited_and_then_registered_no_run_is_infra_kept(world, monkeypatch):

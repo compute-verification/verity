@@ -359,8 +359,8 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     is ``base`` while it is a candidate in flight whose check that gates runs the suites (`lends_suites`), each launch names
     it (`LEND_ENV`, `_lending`) and the record keeps it (``suites_from``): the candidate's check leaves out each suite whose
     key in ``base``'s tree is its key in the candidate's (`suites.py --lend-from`), which ``base``'s check is running.  This
-    check's verdict then stands on that one's, as a candidate's does on its base's anyway: it counts only once ``base`` has
-    landed, and ``base`` dropped drops it.  Not with a ``deselect`` list in force, under which the two checks may run
+    check's verdict then stands on that one's: it passes only once that check passed both suite steps (`borrowed`), and
+    ``base`` dropped drops its candidate.  Not with a ``deselect`` list in force, under which the two checks may run
     different tests of a suite.  Each sends only the steps the
     candidate's own ci.toml declares as jobs (`declared_steps`).  With ``heavy_on`` (machines, a comma list) too, the check
     that gates sends the shard that audits `HEAVY_PART` (`heavy_shards`; the whole run, of one shard) to those machines
@@ -1352,21 +1352,46 @@ def audits(driver: Landing, rec: dict | None) -> bool:
     return rec is not None and rec.get("gate") == CHECK and LEAN_STEP in _gate(driver, rec)
 
 
+def answers_suites(rec: dict | None) -> bool | None:
+    """Whether the check ``rec`` records passed both suite steps (`SUITE_STEPS`), every test of them, so that it answers for
+    the suites a check left to it (`start`'s ``suites_from``): the check that gates, launched with no deselect list, its
+    kept verdict's ``passed`` holding both.  None while it keeps no verdict: it may yet.  False for any other, which never
+    will: a check that failed one, though its candidate landed on that failure as inherited; one that ended in infra; one
+    that ran under a deselect list; a run that isn't the check that gates."""
+    if rec is None:
+        return None
+    if rec.get("gate") != CHECK or rec.get("deselect"):
+        return False
+    if not isinstance(got := rec.get("verdict"), dict):
+        return None
+    return set(SUITE_STEPS) <= set(got.get("passed") or ())
+
+
 def lends_suites(driver: Landing, rec: dict | None, main: dict | None) -> bool:
-    """Whether the check ``rec`` records answers for the suites of a check built on its candidate (`start`'s
+    """Whether a check built on the candidate of the check ``rec`` records may leave suites to it (`start`'s
     ``suites_from``): it is the check that gates, judged on both suite steps (`_gate`, `SUITE_STEPS`), launched with no
-    deselect list, its candidate's policy its base's, and ``main``, the record of the check of `main` below the chain, keeps
-    a verdict that passed both.  With `main` passing a suite step, no candidate above it lands failing a test of it but
-    under an allowance, which the same policy gives the check built on it too, so a suite left to ``rec``'s check is one
-    that check would have been judged on alike; with `main` failing one, a candidate lands on that failure as inherited,
-    and a check that left the suite out would record a pass of the step for a tree that fails it, which the candidates
-    built on it are judged against (`based`)."""
+    deselect list, its candidate's policy its base's, so that an allowance it is judged under is one the check built on it
+    is judged under too, and ``main``, the record of the check of `main` below the chain, passed both
+    (`answers_suites`).  These only keep a check from leaving suites to one that won't answer for them, which costs it a
+    second start: what its pass counts on is the lender's verdict itself (`borrowed`)."""
     if rec is None or rec.get("gate") != CHECK or rec.get("deselect") or not set(SUITE_STEPS) <= set(_gate(driver, rec)):
         return False
     if driver._policy(rec["tip"]) != driver._policy(rec.get("base") or rec["tip"]):
         return False
-    got = (main or {}).get("verdict")
-    return isinstance(got, dict) and set(SUITE_STEPS) <= set(got.get("passed") or ())
+    return answers_suites(main) is True
+
+
+def borrowed(v: Verdict, rec: dict | None, source: dict | None) -> Verdict:
+    """``v``, `judge`'s verdict of the check ``rec`` records, where that check left suites to the check of the candidate it
+    is built on (``suites_from``): ``v`` once ``source``, that candidate's record as judged now, or the record of the check
+    of `main` once it has landed, answers for them (`answers_suites`); until then ``v`` never passes, a pass pending and
+    a fail not ended, which `vqueue.decide` holds while every failure is inherited.  So the candidate lands only where a
+    check that gates passed each suite it left out, under the key it has in its own tree.  A ``source`` that never will
+    answer holds it for good: the loop starts its check again once that candidate has landed, to run them itself
+    (`vqueue_loop.Loop._beside`)."""
+    if not rec or not rec.get("suites_from") or answers_suites(source):
+        return v
+    return Verdict(PENDING) if v.state == PASS else replace(v, ended=False) if v.state == FAIL else v
 
 
 def _audit(rec: dict | None) -> tuple[Failed, ...] | None:

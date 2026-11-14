@@ -106,7 +106,9 @@ it is rerun, so a failure the rerun clears is never its own.  One started once i
 has landed while the run beside `main` keeps no verdict on lean-audit, audits.  Its check also leaves to its base's the
 suites keyed in the base's tree as in its own (`Loop._suites_from`, `suites.py --lend-from`), which that check is running:
 only while the check of `main` passed both suite steps and the base's is judged on them under the policy of its own base
-(`vqueue_slim.lends_suites`), so its pass of a suite it left out is its base's, without which it never lands.  A failed step
+(`vqueue_slim.lends_suites`).  It passes only once its base's check passed both suite steps (`vqueue_slim.borrowed`), so
+its pass of a suite it left out is that check's, and where its base landed on a check that didn't, it is started again on
+`main` and runs them (`Loop._unanswered`).  A failed step
 is inherited by its failing tests, those the run beside its base's check failed too.  A shard that failed a step it is
 judged on, or a suite of one, fails it while the other shards still run (an early red, `vqueue_slim.judge`), decided as a
 finished fail is: on the lowest candidate at once, on one above it once its base's check has ended (`vqueue_slim.based`),
@@ -2771,7 +2773,9 @@ class Loop:
         check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
         note marked so), a run started while graph2 gated counts as none started, and a check that took lean-audit's verdict
         from the check of a candidate below reads lean-audit as pending while that candidate is in flight, and, once it has
-        landed, takes the verdict that the record ``lent`` gives keeps (`vqueue_slim.audited`, `_lent`).  There, a graph2
+        landed, takes the verdict that the record ``lent`` gives keeps (`vqueue_slim.audited`, `_lent`); one that left
+        suites to its base's check passes only once that check passed them (`vqueue_slim.borrowed`, on ``below``), and
+        is started again, its runs cancelled, once its base has landed on a check that didn't (`_unanswered`).  There, a graph2
         reading `Shadow` kept from before the check ended is read again (``again``) once this judging finds it ended, so the
         compare and the drop to come read graph2 as it is now."""
         started, rec = past.slim(sha)
@@ -2780,8 +2784,13 @@ class Loop:
         if self.dry_run or not started and not chained:
             v = Verdict(PENDING)
         else:
-            if not started:
-                self.write(got := self._started(n, main, origin, line, below=below[0] if base != main else None, lent=lent))
+            redo, stopped = "" if gates or not started or base != main else self._unanswered(rec, below[0]), {}
+            if redo and "verdict" not in rec and not self.shadow and (ids := list(rec.get("ids") or ())):
+                failed = self.world.cancel_runs(ids, f"vqueue: candidate {sha[:12]}'s check is {redo}")
+                stopped = {"beside_cancelled": ids, **({"beside_cancel_failed": failed} if failed else {})}
+            if not started or redo:
+                self.write(got := self._started(n, main, origin, {**line, **stopped}, *([redo] if redo else []),
+                                                below=below[0] if base != main else None, lent=lent))
                 wrote.append(got)
                 rec = got["record"]
             was = json.dumps(rec, sort_keys=True)
@@ -2790,6 +2799,7 @@ class Loop:
                 ran = (rec or {}).get("lean_audit_from")
                 source, landed = lent(ran) if ran and lent else (None, False)
                 v = self.slim.audited(self.world.slim_driver(), v, rec, source if landed else None)
+                v = self.slim.borrowed(v, rec, below[0])
                 if again is not None and isinstance(rec, dict) and "verdict" in rec:
                     j = again()[0]
             if json.dumps(rec, sort_keys=True) != was:
@@ -2814,6 +2824,16 @@ class Loop:
                 return replace(j, verdict=Verdict(PENDING), slim=v, record=rec, note="; ".join(
                     [*filter(None, [j.note]), f"waiting for the run beside {base[:12]}'s check: {', '.join(waits)}"]))
         return replace(j, verdict=both, slim=v, record=rec)
+
+    def _unanswered(self, rec: dict | None, on_main: dict | None) -> str:
+        """Why the check ``rec`` records, of a candidate now on `main`, is started again: it left suites to the check of
+        the candidate it was built on (``suites_from``), which has landed, and the record of `main`'s check (``on_main``:
+        that check's, or one started on `main` since) keeps a verdict that didn't pass them, or isn't the check that gates
+        (`vqueue_slim.answers_suites`), so nothing will have run them; "" else.  Started again on `main`, it leaves none
+        out."""
+        if not rec or not (took := rec.get("suites_from")) or self.slim.answers_suites(on_main) is not False:
+            return ""
+        return f"started again: {took[:12]}'s check, which it left suites to, landed without passing them: it runs them itself"
 
     def _other(self, rec: dict | None) -> bool:
         """Whether ``rec`` records a run beside a graph2 check where the check now gates: the check starts in its place."""
