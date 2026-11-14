@@ -9,12 +9,12 @@ public import Identity.Domains.Pouw
 
 What the prover declares for each matmul of a pass before the coin, and the root that binds it:
 
-* **`UnitRecord`**: the call's real rows (the rest are zero filler), its kept width |K|, the A rows and its weight's B rows
+* **`UnitRecord`**: the call's real rows (the rest are zero filler), its kept width |K|, the A rows and its fixed operand's B rows
   that fail the per-row rules (excluded), and the rows it gives up (voluntary, V-EX). `UnitRecord.reason` is its
   constructor's refusal, in `UnitRecord.__post_init__`'s words. `UnitRecord.credited` is the band rule: a voluntary A
   row takes its band of 64 A rows' credit, and an excluded or voluntary B row its block of 64 columns'.
-* **V-EX's count caps** (`checkRecords`): at most ⌈m/64⌉ voluntary A rows per record and ⌈n/64⌉ voluntary B rows per weight,
-  and every unit of a weight declares the same excluded and the same voluntary B rows.
+* **V-EX's count caps** (`checkRecords`): at most ⌈m/64⌉ voluntary A rows per record and ⌈n/64⌉ voluntary B rows per fixed operand,
+  and every unit of a fixed operand declares the same excluded and the same voluntary B rows.
 * **`recordsRoot`**: `tagged("verity/pouw/pearl-c/records/v2", salt, weights_root, (w, split(w))…, record…)`, each split
   `Split(k)` (no side channels: the served passes keep every channel, so |K| = k and `k_unit` = k rounded up to 128) and
   each record its v2 layout, with the voluntary rows appended when it has any.
@@ -30,7 +30,7 @@ namespace PouwCheck.PearlPlus
 
 open PouwCommit
 
-/-- One declared GEMM: `A (m × k) · Bᵀ`, `B` its weight's `n × k` rows. -/
+/-- One declared GEMM: `A (m × k) · Bᵀ`, `B` its fixed operand's `n × k` rows. -/
 structure Matmul where
   index : Nat
   m : Nat
@@ -88,7 +88,7 @@ def le (w x : Nat) : ByteArray := Id.run do
 
 def le32s (xs : List Nat) : ByteArray := xs.foldl (fun acc x => acc ++ le 4 x) ByteArray.empty
 
-/-- `UnitRecord.encode`: `<QQIIIIIII` index, weight, m, k, n, real rows, |K|, #excluded A, #excluded B, then the excluded
+/-- `UnitRecord.encode`: `<QQIIIIIII` index, fixed operand, m, k, n, real rows, |K|, #excluded A, #excluded B, then the excluded
 rows; with voluntary rows, `<II` their counts and then the rows. -/
 def UnitRecord.encode (r : UnitRecord) : ByteArray :=
   let u := r.matmul
@@ -105,7 +105,7 @@ def kUnit (k : Nat) : Nat := (k + ALIGN - 1) / ALIGN * ALIGN
 /-- `Split(k).encode()`: no side channels and no calibration digest. -/
 def splitEncode (k : Nat) : ByteArray := le32s [k, 0] ++ tagged Domains.POUW_PEARL_C_SPLIT [.bytes ByteArray.empty]
 
-/-- `records_root(salt, weights_root, splits, records)`, `splits` each weight's k (`Split(k)`). -/
+/-- `records_root(salt, weights_root, splits, records)`, `splits` each fixed operand's k (`Split(k)`). -/
 def recordsRoot (salt weightsRoot : ByteArray) (splits : List (Nat × Nat)) (records : List UnitRecord) : ByteArray :=
   let sorted := splits.mergeSort fun a b => a.1 ≤ b.1
   tagged Domains.POUW_PEARL_C_RECORDS
@@ -117,8 +117,8 @@ def VOLUNTARY_PER : Nat := 64
 /-- V-EX's count cap on `rows` rows: ⌈rows/64⌉. -/
 def voluntaryCap (rows : Nat) : Nat := (rows + VOLUNTARY_PER - 1) / VOLUNTARY_PER
 
-/-- `check_records` on records built from the workload's matmuls in order, `splits` each weight's k: the split's `k_unit`
-and |K| on every record, one set of excluded and one of voluntary B rows per weight, and V-EX's count caps. -/
+/-- `check_records` on records built from the workload's matmuls in order, `splits` each fixed operand's k: the split's `k_unit`
+and |K| on every record, one set of excluded and one of voluntary B rows per fixed operand, and V-EX's count caps. -/
 def checkRecords (splits : List (Nat × Nat)) (records : List UnitRecord) : Option String := Id.run do
   let mut exB : List (Nat × List Nat) := []
   let mut volB : List (Nat × List Nat) := []

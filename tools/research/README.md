@@ -31,6 +31,7 @@ src/research/
 ├── checkview.py    `research status RUN` on a check run; tools/verity/check's live view reads its targets
 ├── goals.py        `research goals`: the Goals page (the writing-goals skill)
 ├── linear.py       asks as Linear issues, and the audit the control pod's top watch runs
+├── response.py     `research msg linear response`: the minutes each lane takes to answer a Linear comment that rings it
 ├── flags.py        renamed(): an old flag kept as a hidden alias of its new name; infra/ops uses it
 ├── store/          the evidence store (`research data`); README.md there is the contract and names its modules
 ├── telemetry/      the recorded-attempt harness (below)
@@ -93,9 +94,9 @@ research data custody RUN [--publish] | --triage                 # a run's custo
 research run-preserve PATH [--kind K] [--meta JSON]              # in an --on run's workload: its runner preserves one file of $OUT now (§10.1)
 research fetch RUN [--all]               # records only, or every file sha256-verified with preserved.json written last
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
-                                         # current, peak, cap, growth from its own samples, NEAR CAP within 10%; remote: with RUN or --refresh
+                                         # current, peak, limit, growth from its own samples, NEAR LIMIT within 10%; remote: with RUN or --refresh
 research inspect RUN [--json|--py-spy]   # fetch, status RUN and inspect take a run another VM launched (a full id): found on
-                                         # --on NAME, else on each ssh machine but the auditor hosts, and its records fetched here
+                                         # --on NAME, else on each ssh machine but the auditor devices, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research pods SUBCOMMAND ...             # the machines: registry, ssh, sync, leases, the budgets guard (src/research/pods/README.md)
 research tele SUBCOMMAND ...             # the harness's own surface (below)
@@ -140,7 +141,7 @@ and fast-forwards to the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
-refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
+refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the Markdown size limits
 among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
 `tools/verity/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
 `check.py --slots` picks), and `research merge BRANCH` lands it.

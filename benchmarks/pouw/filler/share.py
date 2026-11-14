@@ -49,8 +49,11 @@ from collections.abc import Iterable, Mapping, Sequence
 
 #: what the scorer and the tests read
 __all__ = [
-    "ATT_TOK_L", "CERT", "DEC_OTHER_MS", "FA2_MS_8192", "F_MAX", "LAYERS", "LIMIT", "LIN_TOK", "LM_TOK", "PER_SM",
-    "PRE_OTHER_MS_TOK", "SMS", "StepFiller", "afw_name", "causal", "decode_n", "fstep_pick", "fstep_points",
+    "ATT_TOK_L", "A_LADDER", "A_V99", "CERT", "DEC_OTHER_MS", "FA2_MS_8192", "FILLER", "F_MAX", "Filler", "KV_TOK",
+    "LAYERS", "LIMIT", "LIN", "LIN_TOK", "LM_TOK", "Model", "PER_SM", "POOL_TOK", "PRE_OTHER_MS_TOK", "PointFiller",
+    "SMS", "StepFiller", "adaptive_pick", "afw_name", "causal", "decode_n", "dfill_fillers", "dfill_points", "fmt",
+    "fmt_in", "fstep_fillers", "fstep_pick", "fstep_points", "grid", "headline", "hidden", "interp", "main",
+    "measured_fillers", "mixes", "tau_table", "with_filler",
 ]
 
 SMS, PER_SM, F_MAX = 188, 1024, 2430e6
