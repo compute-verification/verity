@@ -27,7 +27,7 @@ from verity_bench import (
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
-from verity_bench.vllm.presets import local_checkpoint, served
+from verity_bench.vllm.presets import SweepPoint, local_checkpoint, served
 from verity_bench.vllm.result import write
 from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.runner import run_benchmark
@@ -81,7 +81,9 @@ def _point(args: Any) -> int:
     run_dir = Path(settings.RESEARCH_RUN_DIR).resolve()
     # A requeued (preempted) point reruns in its run directory: an earlier attempt's verdict must not outlive it.
     (run_dir / "result.json").unlink(missing_ok=True)
-    spec = plan.spec
+    spec, point = jobs.vllm_spec(plan), item.point
+    if not isinstance(point, SweepPoint):
+        raise TypeError(f"{point.id} is a steady-state point: steady_plan runs it")
     jobs.check_point_environment(spec, settings.environ())
     if spec.preset.model_digest is not None:
         found = local_checkpoint(spec.preset, spec.preset.model).model_digest
@@ -93,7 +95,7 @@ def _point(args: Any) -> int:
     doc = run_benchmark(
         preset,
         arms,
-        (item.point,),
+        (point,),
         sweep=spec.sweep.id,
         reps=spec.reps,
         warmups=spec.warmups,
