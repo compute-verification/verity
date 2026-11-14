@@ -384,8 +384,9 @@ end Example
   let root (port r : String) : Json :=
     Json.mkObj [("domain", .str ("d" ++ r)), ("leaves", num 2), ("port", .str port), ("root", .str r)]
   let dockets := #[Json.mkObj [("roots", .arr #[root "A/y" "a0"])], Json.mkObj [("roots", .arr #[root "B/o0" "b1"])]]
-  let ws : Array Spot.Wires.Wire := #[{ reader := "A", port := "x", writer := "B", out := "o0", start := 0,
-    radix := [2], base := 2, step := [1], cut0 := 0, cuts := 1 }]
+  let ws : Array Spot.Wires.Wire :=
+    #[{ reader := "A", port := "x", writer := "B", out := "o0", start := 0, radix := [2], base := 2, step := [1],
+        cut0 := 0, cuts := 1 }]
   let own := ownFor { dockets } #[] ⟨0, "A", 0, 0, 2⟩ #[0] #[⟨"A", "x", "B", "o0"⟩]
   let e (v r : String) (reads : List Nat) : Json := Json.mkObj [("domain", .str ("d" ++ r)), ("leaves", num 2),
     ("reads", .arr (reads.map num).toArray), ("root", .str r), ("value", .str v)]
