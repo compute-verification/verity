@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any
 
 from verity.circuits.refs import Affine, Refs
+
 from verity_vllm.observe.events import StepStart, ViewDesc
 from verity_vllm.observe.fold.views import same_element
 from verity_vllm.program import sampling_event as SE

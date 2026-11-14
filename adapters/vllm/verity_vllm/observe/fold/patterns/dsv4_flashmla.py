@@ -10,18 +10,45 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import re
 from dataclasses import dataclass
 
+from verity.definitions.numerics.flashmla_twin import (
+    num_sm_parts,
+    request_splits,
+    sched_meta,
+)
+from verity.definitions.registry import dsv4_compressor as C
+
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.observe.fold.patterns.dsv4_cache import _entry_slots, _is, _module, _row, _weights, block_bytes, fp8_rows, runs, state_row, swa_block
+from verity_vllm.observe.fold.patterns.dsv4_cache import (
+    _entry_slots,
+    _is,
+    _module,
+    _row,
+    _weights,
+    block_bytes,
+    fp8_rows,
+    runs,
+    state_row,
+    swa_block,
+)
 from verity_vllm.observe.fold.patterns.geometry import GeometryError, sub_rows
 from verity_vllm.observe.fold.patterns.ops import as_float, base_op, bound_args
 from verity_vllm.observe.fold.patterns.resolutions import unsupported
 from verity_vllm.observe.fold.patterns.target import target_of, vocab_kind
-from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Group, PerRow, Pieces, Resolution, Shared, StepContext, Unsupported
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    Gather,
+    Group,
+    PerRow,
+    Pieces,
+    Resolution,
+    Shared,
+    StepContext,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.program.frontend.dsv4_leaves import FP8_DS_MLA_QB
 from verity_vllm.program.frontend.rules.vllm_dsv4 import COMPRESSORS, FLASHMLA_GEOMETRY
-from verity.definitions.numerics.flashmla_twin import num_sm_parts, request_splits, sched_meta
-from verity.definitions.registry import dsv4_compressor as C
 
 SPARSE_DECODE_OP = "_flashmla_C.sparse_decode_fwd"
 SPARSE_PREFILL_OP = "_flashmla_C.sparse_prefill_fwd"
@@ -113,7 +140,7 @@ def mla_compress(node: TreeNode, ctx: StepContext, sl: SparseLayer) -> list[Comp
     if isinstance(dst := _entry_slots(node, ctx, sl.layer, req, [p // R for _, p in ends], kc.shape[1] if kc.rank > 1 else 0, ratio=R),
                   Unsupported):
         return dst
-    src, n, parts = dict(zip(need, src)), kc.shape[1], []
+    slot_of, n, parts = dict(zip(need, src)), kc.shape[1], []
     for (b, rows_n), lo, hi in runs([(d // n, len(taken[p])) for d, (_, p) in zip(dst, ends)]):
         try:
             nope, scale, rope = swa_block(block_bytes(kc), b, n, D - QB, QB, QB)
@@ -122,7 +149,7 @@ def mla_compress(node: TreeNode, ctx: StepContext, sl: SparseLayer) -> list[Comp
         ps = [p for _, p in ends[lo:hi]]
         spec = (vocab_kind(ctx, COMPRESSORS[4], ROWS=rows_n, D=D, QB=QB, EPS=eps) if R == 4 else
                 vocab_kind(ctx, COMPRESSORS[128], W=C.DSV4_COMPRESSOR["W"], R=R // C.DSV4_COMPRESSOR["W"], D=D, QB=QB, EPS=eps))
-        kv, score = (Pieces(tuple(tuple(state_row(state, src[s], k, W, r // R * D, D) for r, s in taken[p]) for p in ps)) for k in (0, 1))
+        kv, score = (Pieces(tuple(tuple(state_row(state, slot_of[s], k, W, r // R * D, D) for r, s in taken[p]) for p in ps)) for k in (0, 1))
         idx = tuple(d % n for d in dst[lo:hi])
         parts.append(Compute(spec, hi - lo, (kv, score, ws[0], Gather(cs, tuple(p - R + 1 for p in ps))),
                              (Gather(nope, idx), Gather(rope, idx), Gather(scale, idx)), (), hint=f"{sl.layer}.compressor/compress",
@@ -147,7 +174,7 @@ class SparseDecode:
         q, kv, xkv, out = (a.get(k) for k in ("q", "kv", "extra_kv", "out_"))
         if len(rows) != 1:
             return unsupported(node, "a launch of more than one decode token: the batch's FlashMLA schedule is not folded yet", T=len(rows))
-        if not all(isinstance(v, ViewDesc) for v in (q, kv, out)) or q.rank != 4 or q.shape[:2] != (1, 1) or q.dtype != "bfloat16" \
+        if not (isinstance(q, ViewDesc) and isinstance(kv, ViewDesc) and isinstance(out, ViewDesc)) or q.rank != 4 or q.shape[:2] != (1, 1) or q.dtype != "bfloat16" \
                 or q.strides[-1] != 1 or not _is(out, q.shape, "bfloat16") or out.strides[-1] != 1:
             return unsupported(node, "q and out are not bf16 [1,1,NHP,D] over one token, or the window cache is no view", q=repr(q), out=repr(out))
         (req, p), D = rows[0], q.shape[3]
@@ -163,12 +190,13 @@ class SparseDecode:
         if isinstance(wslots := _entry_slots(node, ctx, f"{sl.layer}.swa_cache", req, range(s0, p + 1), kv.shape[1] if kv.rank > 1 else 0),
                       Unsupported):
             return wslots
-        xslots = _entry_slots(node, ctx, sl.layer, req, range(nc), xkv.shape[1] if xkv.rank > 1 else 0, ratio=sl.R) if nc else ()
+        xslots = _entry_slots(node, ctx, sl.layer, req, range(nc), xkv.shape[1] if xkv.rank > 1 else 0, ratio=sl.R) \
+            if nc and isinstance(xkv, ViewDesc) else ()
         if isinstance(xslots, Unsupported):
             return xslots
         try:
             win = fp8_rows(block_bytes(kv), wslots, kv.shape[1], DN, sl.DR, sl.QT)
-            comp = fp8_rows(block_bytes(xkv), xslots, xkv.shape[1], DN, sl.DR, sl.QT) if nc else []
+            comp = fp8_rows(block_bytes(xkv), xslots, xkv.shape[1], DN, sl.DR, sl.QT) if nc and isinstance(xkv, ViewDesc) else []
         except GeometryError as e:
             return unsupported(node, str(e))
         if isinstance(made := mla_compress(node, ctx, sl) if sl.R > 1 else [], Unsupported):
@@ -206,7 +234,7 @@ class SparsePrefill:
         a, rows = bound_args(node), tuple(ctx.start.rows)
         q, wsv, out = (a.get(k) for k in ("q", "kv", "out_"))
         T, req, pos = len(rows), rows[0][0], [p for _, p in rows]
-        if not all(isinstance(v, ViewDesc) for v in (q, wsv, out)) or q.rank != 3 or q.shape[0] != T or q.dtype != "bfloat16" \
+        if not (isinstance(q, ViewDesc) and isinstance(wsv, ViewDesc) and isinstance(out, ViewDesc)) or q.rank != 3 or q.shape[0] != T or q.dtype != "bfloat16" \
                 or q.strides[-1] != 1 or not _is(out, q.shape, "bfloat16") or out.strides[-1] != 1:
             return unsupported(node, "q and out are not bf16 [T,NHP,D] over the step's tokens, or the workspace is no view", q=repr(q), out=repr(out))
         if any(r != req for r, _ in rows) or pos != list(range(pos[0], pos[0] + T)):
@@ -223,10 +251,11 @@ class SparsePrefill:
                                kv=repr(wsv), chunk_N=N, gather_len=gather, q=repr(q))
         caches = [(ctx.buffers.get(f"kv_cache[{sl.layer}.swa_cache_layer]"), f"{sl.layer}.swa_cache", range(seq - gather, seq), 1)] \
             + ([(ctx.buffers.get(f"kv_cache[{sl.layer}]"), sl.layer, range(N), sl.R)] if N else [])
-        if not all(isinstance(c, ViewDesc) and c.rank > 1 for c, *_ in caches):
+        named = [(c, group, entries, ratio) for c, group, entries, ratio in caches if isinstance(c, ViewDesc) and c.rank > 1]
+        if len(named) != len(caches):
             return unsupported(node, "the capture's external buffers name no window or compressed cache for the layer", layer=sl.layer)
         src = []
-        for cache, group, entries, ratio in caches:
+        for cache, group, entries, ratio in named:
             if isinstance(slots := _entry_slots(node, ctx, group, req, entries, cache.shape[1], ratio=ratio), Unsupported):
                 return slots
             try:
@@ -235,10 +264,10 @@ class SparsePrefill:
                 return unsupported(node, str(e))
         if isinstance(made := mla_compress(node, ctx, sl) if sl.R > 1 else [], Unsupported):
             return made
-        src = (src[1] if N else []) + src[0]
+        rows_src = (src[1] if N else []) + src[0]
         ws = ViewDesc(wsv.alloc, wsv.offset, (N + gather, D), (wsv.strides[0], 1), wsv.dtype, wsv.device)
-        made.append(Compute(vocab_kind(ctx, "flashmla_gather_row", DN=DN, DR=sl.DR, QT=sl.QT), len(src),
-                            tuple(Pieces(tuple((r[k],) for r in src)) for k in range(3)), (PerRow(ws),), (), hint=f"{sl.layer}/gather",
+        made.append(Compute(vocab_kind(ctx, "flashmla_gather_row", DN=DN, DR=sl.DR, QT=sl.QT), len(rows_src),
+                            tuple(Pieces(tuple((r[k],) for r in rows_src)) for k in range(3)), (PerRow(ws),), (), hint=f"{sl.layer}/gather",
                             attribution=tuple((req, (j + 1) * sl.R - 1) for j in range(N)) + tuple((req, s) for s in range(seq - gather, seq)),
                             pattern=self.name))
         toks = []

@@ -25,7 +25,9 @@ An op outside torch's own namespaces (a `torch.library` custom op, whose body ru
 `foreign_ops`) or an aten op whose name says it computes products but that has no formula here (an RNN kernel,
 `_trilinear`, a packed matmul, `unknown_ops`) would count as zero; run.py makes such a run invalid. So does token data
 read out of torch (`numpy`, `tolist`, DLPack: `guard_exits`) at one value or more per token of its step (`exited`), since
-what is computed on it outside torch isn't counted.
+what is computed on it outside torch isn't counted. So does torch's fused CPU attention kernel run while the process
+holds more than one thread (`CPU_FUSED_ATTENTION`, `unrepeatable_ops`): there a call can return a wrong tile of its
+result, so one step run twice need not give one result.
 
 |C| is their sum (`macs`). A step's op log (`Counter.record`) holds each counted op by its operands' shapes and the
 dtype it computed in, its result's (`dtype_of`), and training_slowdown.gates prices its MACs in that dtype: an
@@ -151,6 +153,11 @@ SHAPE_OPS = _ops("mm", "_int_mm", "addmm", "addmm_", "_addmm_activation", "bmm",
 FUSED_ATTENTION = _ops(*(f"_scaled_dot_product_{kernel}{part}" for part in ("", "_backward")
                          for kernel in ("flash_attention", "flash_attention_for_cpu", "efficient_attention",
                                         "cudnn_attention")))
+#: torch's fused CPU attention kernel, forward and backward: at more than one thread a call can return a wrong tile of
+#: its result, so a run in which it runs there is invalid (`unrepeatable_ops`); a job on a CPU runs attention under the
+#: math kernel (`run.cpu_attention`)
+CPU_FUSED_ATTENTION = _ops("_scaled_dot_product_flash_attention_for_cpu",
+                           "_scaled_dot_product_flash_attention_for_cpu_backward")
 #: torch's FLOP formulas, for the ops priced neither by shape nor as a fused attention kernel: convolutions
 FLOP_FORMULAS = {p: f for p, f in flop_counter.flop_registry.items() if p not in FUSED_ATTENTION}
 #: the op namespaces whose kernels the counter knows; any other (a `torch.library` custom op, whose body it can't see)
@@ -498,6 +505,7 @@ class Counter(TorchDispatchMode):
         self.unseen_writes: list[tuple[int, str]] = []
         self.unknown_ops: dict[str, int] = {}
         self.foreign_ops: dict[str, int] = {}
+        self.unrepeatable_ops: dict[str, int] = {}
         self.batches = WeakTensorKeyDictionary()
         self.n_batches = 0
         self.blank: dict[tuple, torch.Tensor] = {}
@@ -807,6 +815,9 @@ class Counter(TorchDispatchMode):
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         kwargs = kwargs or {}
         out = func(*args, **kwargs)
+        if func.overloadpacket in CPU_FUSED_ATTENTION and (n := torch.get_num_threads()) > 1:
+            key = f"{func} at {n} threads"
+            self.unrepeatable_ops[key] = self.unrepeatable_ops.get(key, 0) + 1
         if self.paused:
             for t in _written(func, args, kwargs):
                 self.epoch[_ptr(t)] = self.epoch.get(_ptr(t), 0) + 1
@@ -1035,6 +1046,7 @@ class Counter(TorchDispatchMode):
         return {"totals": totals, "setup": steps[0], "steps": steps[1:-1], "tail": steps[-1], "structures": structures,
                 "unseen_writes": self.unseen_writes, "new_weights": sorted(self.new_tensors),
                 "unknown_ops": dict(sorted(self.unknown_ops.items())), "foreign_ops": dict(sorted(self.foreign_ops.items())),
+                "unrepeatable_ops": dict(sorted(self.unrepeatable_ops.items())),
                 "digest_key": self.wdigest.key.hex() if self.wdigest else None}
 
 

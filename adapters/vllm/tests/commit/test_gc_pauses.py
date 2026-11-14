@@ -36,17 +36,18 @@ def test_a_collection_while_installed_is_a_pause_on_its_thread_and_none_after_un
     try:
         assert gc.callbacks.count(g) == 1 and len(g.freeze_s) == 1
         gc.collect()
+        g.uninstall()
+        assert g not in gc.callbacks
+        n = len(g.pauses)
+        gc.collect()                 # while the heap is still frozen: a collection over what the test made, not the process's heap
+        assert len(g.pauses) == n
     finally:
         g.uninstall()
         gc.unfreeze()
-    assert g not in gc.callbacks
     gen, _, seconds, thread = g.pauses[-1]
     assert (gen, thread) == (2, "MainThread") and seconds >= 0.0
     rec = g.record()
     assert rec["min_s"] == 0.0 and rec["total_s"] == sum(p[2] for p in g.pauses) and rec["pauses"] == g.pauses
-    n = len(g.pauses)
-    gc.collect()
-    assert len(g.pauses) == n
 
 
 def test_collections_shorter_than_the_floor_are_not_pauses():
