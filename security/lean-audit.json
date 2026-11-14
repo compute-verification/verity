@@ -55,6 +55,10 @@
    "digest": "937bce3d120eb67c95c25010a046778163f84256a3da9ae4111bf840c669b50b",
    "why": "The layer below's guarantee at each execution phase: the leak relation (LeakAt) at the incorrect set of the witness computed before the sample, which a live sampled leak guarantee would give, as PooledLeakAccepted takes it."
   },
+  "Accounting.RecordsWithin": {
+   "owner": "@network-accounting",
+   "why": "What K is: a cap on each device's record over the window whatever the developer's hardware sends: across the strategy, device y's record cells placed in the window take at most 2 ^ K y values; a record of a stated format has it at its size in bits. The same c at a memory challenger that is a trusted device."
+  },
   "Claims.Complete": {
    "owner": "@proofs",
    "digest": "36546a7c38e65c525a4f4b8db6da802965f6664707603f801b0c17145ff31f16",
@@ -469,6 +473,10 @@
    "owner": "@lean",
    "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
    "why": "The recursion's interface: each session's witness is in the outer system's relation unless the stop fired, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
+  },
+  "Verity.Registration.Valid": {
+   "owner": "@network-accounting",
+   "why": "A scope: the registration log the auditor accepted, whose Site the subtree, its auditor's devices and its links are read off."
   },
   "Verity.Sound": {
    "owner": "@proofs",
@@ -8329,6 +8337,12 @@
    },
    "type_hash": "fd29b937301f7e15c35e5f75741a436e4d352970128213b20320c38ea8c02146",
    "unfolded_hash": "0b9ec73f5f55a42306b2d8baa2bd08550850ea8f84c584a233f487c9d1c9fcb5"
+  },
+  "Accounting.SecurityProofs.LeakParts": {
+   "owner": "@network-accounting"
+  },
+  "Accounting.SecurityProofs.LeakPartsRegistered": {
+   "owner": "@network-accounting"
   },
   "Accounting.SecurityProofs.Localization": {
    "owner": "@memory-accounting",
