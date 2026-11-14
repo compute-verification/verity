@@ -127,7 +127,7 @@ def test_a_shard_of_lean_alone_asks_a_train_slot_and_neither_takes_nor_twins_on_
     assert CHECK.placement(beside, True)[0] is True and CHECK.placement(beside, True, ask)[0] is False
     got, why, skipped = CHECK.choose([N1, N2, "m3"], {N1: small, N2: beside, "m3": busy}, True, ask)
     assert got == N2 and why.startswith("the fewest waiting ahead") and skipped[0].startswith(f"{N1}: no slot")
-    assert CHECK.twins([N1, N2, "m3"], {N1: small, N2: beside, "m3": busy}, got, True, ask) == [N2, "m3"]
+    assert CHECK.twins([N1, N2, "m3"], {N1: small, N2: beside, "m3": busy}, got, True, ask) == ([N2, "m3"], 0)
     assert CHECK.choose([N1, N2], {N1: small, N2: beside}, True)[0] == N1           # a light run takes the free small one
 
 
@@ -152,7 +152,7 @@ def test_a_machine_whose_deadline_is_nearer_than_a_full_check_is_skipped_by_name
     n2 = {**machine([slot("d")]), "deadline_in_s": CHECK.FULL_CHECK_S - 60}
     got, _, skipped = CHECK.choose([N1, N2], {N1: n1, N2: n2})
     assert got == N1 and skipped == [f"{N2}: its deadline is 149 min away, under the 150 min a full check takes"]
-    assert CHECK.twins([N1, N2], {N1: n1, N2: n2}, N1) == []                      # and it gets no twin
+    assert CHECK.twins([N1, N2], {N1: n1, N2: n2}, N1) == ([], 0)                 # and it gets no twin
     assert CHECK.choose([N1, N2], {N1: n1, N2: {**n2, "deadline_in_s": CHECK.FULL_CHECK_S + 60}})[0] == N2
     assert CHECK.choose([N1, N2], {N1: n1, N2: {**n2, "deadline_in_s": None}})[0] == N2      # no deadline file
 
@@ -176,15 +176,23 @@ def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, ca
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
     calls = []
     monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
+    class Popen:
+        def __init__(self, cmd, **kw):
+            calls.append(cmd)
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(CHECK.subprocess, "Popen", Popen)
     assert CHECK.record(["--on", "auto", "--priority"]) == 0
-    cmd = calls[-1]
+    cmd = calls[-2]                                                                # the pick's, then its delayed twin's
     assert asked[-1] == [N1, N2] and cmd[cmd.index("--on") + 1] == N2 and cmd.count("--on") == 1
-    assert cmd[cmd.index("--") + 1:][:3] == ["python3", "tools/verity/check/slot.py", "--priority"]
+    assert cmd[cmd.index("--") + 1:][:4] == ["python3", "tools/verity/check/slot.py", "--priority", "--twin"]
     assert f"check: --on auto: {N2}: a check slot and a Lean check slot are free (check slots: d free" in capsys.readouterr().out
     assert CHECK.record(["--on", f"{N1},{N2}"]) == 0 and asked[-1] == [N1, N2]
-    assert calls[-1][calls[-1].index("--on") + 1] == N2
+    assert calls[-2][calls[-2].index("--on") + 1] == N2
     assert CHECK.record(["--on", N1]) == 0 and len(asked) == 2                     # one machine named: no reading
-    assert calls[-1][calls[-1].index("--on") + 1] == N1
+    assert calls[-1][calls[-1].index("--on") + 1] == N1 and "--twin" not in calls[-1]
 
 
 def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_can_run_it(monkeypatch, capsys):
@@ -212,17 +220,71 @@ def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_ca
     assert [c[c.index("--on") + 1] for c in launched] == [N2, N1]                  # choose's pick (fewest ahead) holds the claims
     pair = launched[0][launched[0].index("--twin") + 1]
     assert [c[c.index("--") + 1:][:5] for c in launched] == [["python3", "tools/verity/check/slot.py", "--twin", t, "--"]
-                                                             for t in (pair, f"{pair}@{N2}")]
-    assert f"check: --on: twins {pair} on {N2}, {N1}: the first to take a check slot runs" in capsys.readouterr().out
+                                                             for t in (pair, f"{pair}@{N2}")]   # both join their lines at once
+    out = capsys.readouterr().out
+    assert f"check: --on: twins {pair} on {N2}, {N1}: the first to take a check slot runs" in out and "join their lines after" not in out
     launched.clear()
     rcs[:] = [1, CHECK.SLOT.NOT_STARTED]
     assert CHECK.record(["--on", "auto"]) == 1                                    # it ran and failed
     launched.clear()
     docs[N1] = "exit 255: no route to host"                                       # one machine left: it waits there alone
     assert CHECK.record(["--on", "auto"]) == 0 and launched == [] and "--twin" not in calls[-1]
-    docs[N1], docs[N2] = machine([slot("c")], pools=lean()), machine([slot("d", HOLDER)])
-    assert CHECK.record(["--on", "auto"]) == 0 and launched == []                 # a slot free: no twins
-    assert calls[-1][calls[-1].index("--on") + 1] == N1
+
+
+def test_with_a_slot_free_on_its_pick_a_check_twins_on_every_other_machine_that_join_their_lines_only_after_a_delay(
+        monkeypatch, capsys):
+    """A shard placed beside a free slot that a check or memory takes before it does would wait out that machine's line alone
+    while another machine's slot stood free. It twins on every machine that can run it; the twins off its pick join their lines
+    only after TWIN_AFTER_S (`slot.py --twin-after`), so a shard that took its place costs no other line a waiter."""
+    docs = {N1: machine([slot("c")], pools=lean()), N2: machine([slot("d", HOLDER)])}
+    monkeypatch.setattr(CHECK, "read_slots", lambda names: {n: docs[n] for n in names})
+    monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
+    monkeypatch.delenv("RESEARCH_LANE", raising=False)
+    monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
+    launched = []
+    monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", ""))
+
+    class Popen:
+        def __init__(self, cmd, **kw):
+            launched.append(cmd)
+            self.rc = 0 if len(launched) == 1 else CHECK.SLOT.NOT_STARTED       # home ran; the delayed twin left unstarted
+
+        def wait(self):
+            return self.rc
+
+    monkeypatch.setattr(CHECK.subprocess, "Popen", Popen)
+    assert CHECK.record(["--on", f"{N2},{N1}"]) == 0
+    assert [c[c.index("--on") + 1] for c in launched] == [N1, N2]                  # its pick, with the slot free, holds the claims
+    pair = launched[0][launched[0].index("--twin") + 1]
+    wraps = [c[c.index("--") + 1:] for c in launched]
+    assert [w[:w.index("--") + 1] for w in wraps] == [
+        ["python3", "tools/verity/check/slot.py", "--twin", pair, "--"],
+        ["python3", "tools/verity/check/slot.py", "--twin", f"{pair}@{N1}", "--twin-after", str(CHECK.TWIN_AFTER_S), "--"]]
+    assert (f"check: --on: twins {pair} on {N1}, {N2}: the first to take a check slot runs, and the others leave their line "
+            f"(exit 75, not started); {N1} has a slot free, so the others join their lines after {CHECK.TWIN_AFTER_S} s, and "
+            "only if none has started by then") in capsys.readouterr().out
+    assert CHECK.slot_wrap(False, "p1") == ["python3", "tools/verity/check/slot.py", "--twin", "p1", "--"]
+
+
+def test_with_a_slot_free_at_home_late_twins_go_to_the_two_machines_with_most_slots_free_and_with_none_to_every_machine():
+    """Each delayed twin ships its tree and makes its clone at the launch, though it mostly never joins a line, on machines
+    whose inodes run short: a check with a free slot at home twins on LATE_TWINS others at most, those with the most slots free
+    for it (free, less the waiters ahead), ties in its list's order. A check with none free at home twins on every machine at
+    once, as before."""
+    assert CHECK.LATE_TWINS == 2
+    m = ["m0", "m1", "m2", "m3", "m4", "m5"]
+    docs = {"m0": machine([slot("a")]),                                            # home: a slot free
+            "m1": machine([slot("a", HOLDER)]),                                     # 0 free
+            "m2": machine([slot("a"), slot("b")], [waiter(priority=True)]),         # 2 free, 1 ahead: 1
+            "m3": machine([slot("a"), slot("b"), slot("c", HOLDER)]),               # 2 free
+            "m4": machine([slot("a")]),                                            # 1 free, after m2 in the list
+            "m5": machine([slot("a", HOLDER)], [waiter(priority=True), waiter()])}   # 0 free, 1 ahead (a train's): -1
+    assert [CHECK.spare(docs[n], True) for n in m] == [1, 0, 1, 2, 1, -1]
+    assert CHECK.twins(m, docs, "m0", True) == (["m0", "m3", "m2"], CHECK.TWIN_AFTER_S)
+    assert CHECK.twins(["m0", "m1"], docs, "m0", True) == (["m0", "m1"], CHECK.TWIN_AFTER_S)
+    docs["m0"] = machine([slot("a", HOLDER)])                                       # home full: every machine, at once
+    assert CHECK.twins(m, docs, "m0", True) == (m, 0)
 
 
 def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
@@ -372,7 +434,7 @@ def test_checks_placed_at_once_go_to_different_machines_until_each_shows_in_its_
     docs[N1] = machine([slot("a", HOLDER | {"tree": "/workspace/research/src/" + "a" * 40})])
     docs[N2] = machine([slot("b")])
     got = CHECK.place([N1, N2], "c" * 40, True, read=read, path=path, now=lambda: t[0])  # a runs; b's claim holds N2:
-    assert got[1] == N1 and CHECK.twins([N1, N2], got[0], N1, True) == [N1, N2]                       # no room, so twins
+    assert got[1] == N1 and CHECK.twins([N1, N2], got[0], N1, True) == ([N1, N2], 0)                  # no room: twins at once
     t[0] += CHECK.PLACED_S                                                                              # until b's claim expires
     assert CHECK.place([N1, N2], "d" * 40, True, read=read, path=path, now=lambda: t[0])[1] == N2
 
@@ -386,17 +448,20 @@ def test_a_candidates_shards_launched_together_each_take_a_free_slot_and_never_o
     s1, s2 = ["m1", "m3", "m2", "m4"], ["m2", "m4", "m3", "m1"]
     sha, t = "e" * 40, [1000.0]
 
-    def placed(free: set[str], tag: str) -> tuple[tuple[str | None, list[str]], tuple[str | None, list[str]]]:
+    def placed(free: set[str], tag: str) -> tuple[tuple[str | None, int], tuple[str | None, int]]:
         docs = {m: machine([slot(m, None if m in free else HOLDER)]) for m in on}
         path = tmp_path / f"placed-{tag}.json"
         out = []
         for spec, names in (("1/2", s1), ("2/2", s2)):
             got = CHECK.place(names, sha, True, read=lambda ns: json.loads(json.dumps({n: docs[n] for n in ns})), path=path,
                               now=lambda: t[0], min_mem=CHECK.TRAIN_GB, shard=spec)
-            out.append((got[1], CHECK.twins(names, got[0], got[1], True, CHECK.TRAIN_GB)))
+            both, after = CHECK.twins(names, got[0], got[1], True, CHECK.TRAIN_GB)
+            assert both[0] == got[1] and len(both) == (1 + CHECK.LATE_TWINS if after else len(names))   # its pick first
+            out.append((got[1], after))
         return out[0], out[1]
 
-    assert placed({"m1", "m2"}, "own") == (("m1", []), ("m2", []))                 # each on its own free slot
-    assert placed({"m1", "m3"}, "fallback") == (("m1", []), ("m3", []))            # shard 2's own busy: shard 1's free m3
-    first, second = placed({"m1"}, "sibling")                                        # one free slot, shard 1's
-    assert first == ("m1", []) and second == ("m2", ["m2", "m4", "m3", "m1"])       # shard 2 twins over every machine
+    late = CHECK.TWIN_AFTER_S
+    assert placed({"m1", "m2"}, "own") == (("m1", late), ("m2", late))             # each on its own free slot
+    assert placed({"m1", "m3"}, "fallback") == (("m1", late), ("m3", late))        # shard 2's own busy: shard 1's free m3
+    assert placed({"m1"}, "sibling") == (("m1", late), ("m2", 0))                  # one free slot, shard 1's: shard 2's twins
+                                                                                     # join every line at once
