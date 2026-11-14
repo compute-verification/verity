@@ -6,8 +6,9 @@
 #   probe  read-only requests: the challenger host's `pubkey` (its public key's SHA-512 must be PIN), `pins` and `ledger`
 #          (PERIOD unused, no period of LANE open), and the verifier host's `status` (pinned at COMMIT, no unit running);
 #          the circuit, `verity/remote-bandwidth/v0 verifier tree <tree>` of COMMIT's remote_bandwidth tree (auditor_line's
-#          `descriptor`). COMMIT, and so the verifier host's pin, must be on origin/main's first-parent line, fetched as
-#          auditor.sh does (main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
+#          `descriptor`). COMMIT, and so the verifier host's pin, must be on main's first-parent line, fetched from the
+#          repository main is pushed to (in a run's clone, the node's bare repository behind the source root, never the
+#          source root's copy; main.probe.txt; a fetch that fails refuses), since a session credits only under a verifier
 #          there. Writes probe.json; exit 3 on any mismatch, before anything is written to either host.
 #   open   `period-open --name PERIOD --cap CAP --circuit CIRCUIT --model MODEL`, the ledger read before and after;
 #          with BIND=0 no `--model`, so the period signs no model and the auditor's line finds none to bind the store to.
@@ -86,12 +87,19 @@ circuit() {
 }
 
 main_line() {
-  # origin/main's first-parent history into $OUT/main.probe.txt, fetched as auditor.sh fetches it
+  # main's first-parent history into $OUT/main.probe.txt, from MAIN_FROM: origin where origin is a repository main is
+  # pushed to (GitHub, a bare repository), else, where origin is a checkout, that checkout's own origin. A run's clone
+  # (--cwd clone) has its source root as origin, a checkout whose origin/main stood still when it was made; the node's
+  # bare repository behind it holds main as the newest launch pushed it. Nothing falls back to a checkout's copy.
   local unshallow=()
   [ "$(git rev-parse --is-shallow-repository)" = true ] && unshallow=(--unshallow)
-  { git fetch -q "${unshallow[@]}" origin +refs/heads/main:refs/remotes/origin/main \
-      || git fetch -q "${unshallow[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main; } \
-    >> "$OUT/fetch.probe.log" 2>&1 && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
+  MAIN_FROM=$(git remote get-url origin 2> /dev/null) || { MAIN_FROM="(no origin)"; return 3; }
+  if [ "$(git -C "$MAIN_FROM" rev-parse --is-bare-repository 2> /dev/null)" = false ]; then
+    MAIN_FROM=$(git -C "$MAIN_FROM" remote get-url origin 2> /dev/null) \
+      || { MAIN_FROM="(the checkout $MAIN_FROM has no origin)"; return 3; }
+  fi
+  git fetch -q "${unshallow[@]}" "$MAIN_FROM" +refs/heads/main:refs/remotes/origin/main >> "$OUT/fetch.probe.log" 2>&1 \
+    && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.probe.txt"
 }
 
 probe() {
@@ -101,9 +109,15 @@ probe() {
   [ -z "${CIRCUIT:-}" ] || [ "$CIRCUIT" = "$c" ] || { echo "CIRCUIT $CIRCUIT is not COMMIT's $c"; exit 3; }
   CIRCUIT=$c
   main_line || {
-    echo "can't read origin/main's first-parent history (fetch.probe.log), so COMMIT can't be checked on it"; exit 3; }
+    echo "can't fetch main's first-parent history from $MAIN_FROM (fetch.probe.log), so COMMIT can't be checked on it:" \
+      "nothing was sent. In a run's clone main is read from the node's bare repository behind the source root, never the" \
+      "source root's own copy: if the bare can't be reached or holds no main, relaunch from a checkout fetched just" \
+      "before (git fetch origin main), whose launch pushes its origin/main there, and tell infra if it still fails"
+    exit 3; }
+  echo "main from $MAIN_FROM at $(head -n 1 "$OUT/main.probe.txt")"
   grep -qxF "$COMMIT" "$OUT/main.probe.txt" || {
-    echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it"; exit 3; }
+    echo "COMMIT $COMMIT is not on main's first-parent line, so no session would credit: pick a commit on it, or" \
+      "relaunch from a checkout fetched just before (git fetch origin main) if main has moved past it since"; exit 3; }
   if [ -n "${DRY:-}" ]; then
     [ -f "$GATE_KEY" ] && echo "DRY: the gate key $GATE_KEY is here" || echo "DRY: no gate key at $GATE_KEY"
     ssh-keygen -F "${AUDITOR#*@}" -l 2>&1 | grep -q -F "$AUDITOR_FP" \
