@@ -1524,6 +1524,12 @@ def test_a_points_numbers_are_measurements_of_its_result(tmp_path, monkeypatch):
     assert len(got) == sum(len(a["metrics"]) * (1 if arm == doc["baseline"] else 2) for arm, a in row["arms"].items())
 
 
+def test_every_metric_a_point_measures_has_a_unit():
+    """`record` reads each metric's unit from `UNITS`, so a metric the runner measures without one would fail the
+    record mid-write, after the run."""
+    assert set(result_format.UNITS) == {*METRICS, *OPTIONAL_METRICS}
+
+
 def test_ratio_table_puts_the_headline_cell_first():
     preset, points, arms = inputs()
     points = (replace(points[0], batch=8), points[0])
