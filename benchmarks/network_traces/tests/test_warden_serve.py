@@ -724,7 +724,8 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         from benchmarks.network_traces import warden_serve  # by name, so that the spawned process finds its functions
 
         ws.ck.load_key(key, height)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0,
+                                                  ordinal=0)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
                  "lengths": publisher.lengths}
         public, start = publisher.key, publisher.start
@@ -734,7 +735,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
         hooks, public = {"publish": publisher, "withhold": publisher.withhold,
                          "lengths": rp.Keeper(out, issuer, params, RC.LINK).keep}, signer.public_key()
-        start = ws.start_json(ws.certify_start(issuer, 0, params))
+        start = ws.start_json(ws.certify_start(issuer, 0, 0, params))
     answers = iter(responses)
 
     async def connect():
@@ -1412,3 +1413,11 @@ def test_reserve_fds_grows_the_descriptor_table_and_leaves_every_descriptor_as_i
     held = sorted(os.listdir("/proc/self/fd"))
     n = ws.reserve_fds(table() + 1)
     assert table() >= n and sorted(os.listdir("/proc/self/fd")) == held
+
+
+def test_a_usage_record_holds_its_cpus_as_one_string_of_ranges():
+    """`cpu_ranges` writes CPU indices in the kernel's list form, and a process's usage record holds its affinity so:
+    a string, never a list of integers."""
+    assert [rp.cpu_ranges(c) for c in ([], [5], [3, 0, 1, 2, 8, 10, 11], range(120))] == ["", "5", "0-3,8,10-11", "0-119"]
+    usage = rp._usage()
+    assert isinstance(usage["cpus"], str) and usage["cpus"] == rp.cpu_ranges(os.sched_getaffinity(0))

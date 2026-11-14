@@ -125,7 +125,8 @@ def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, li
 
 
 def start_from_json(doc: dict) -> CertifiedStart:
-    return CertifiedStart(doc["base_ms"], bytes.fromhex(doc["schedule"]), RF.certificate_from_json(doc["certificate"]))
+    return CertifiedStart(doc["base_ms"], doc["ordinal"], bytes.fromhex(doc["schedule"]),
+                          RF.certificate_from_json(doc["certificate"]))
 
 
 def check_start(dep: dict, key: LmsKey, session: bytes, params: WardenParams) -> tuple[dict, list[str]]:

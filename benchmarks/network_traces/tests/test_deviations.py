@@ -113,7 +113,7 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
     signer = ws.ck.signer(key, 4)
     public = signer.public_key()
     publisher = ws.Publisher(out, Issuer(signer, SESSION), params, WR.Cells.of)
-    start = ws.start_json(ws.certify_start(publisher.issuer, 0, params))
+    start = ws.start_json(ws.certify_start(publisher.issuer, 0, 0, params))
     servers: list[_Side] = []
     streams: list[_Side] = []
 

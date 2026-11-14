@@ -108,27 +108,30 @@ signer refuses (`SignerRefused`), and then the execution phase has no certificat
 So does a signer asked to start a session its state has already started (`Signer.start`): the issuer starts its session
 before its first signature, and a refused start leaves every execution phase of the run without a certificate.
 
-**The device state** (`DeviceState`): what the network certifier keeps for its registered key across sessions, in a
-file of its own beside the key and apart from the key's leaf state: the key's life so far, in milliseconds on the
-network certifier's clock, and the ids of the sessions started under the key. A session's start takes the key's life
-as it stands as the session's base and moves it on by the session's whole span, its execution phases of T ticks each,
-written and synced to disk before the base is returned: a run that ends early loses the rest of its span, and no later
-session is given a millisecond an earlier one was. The state is held, under a lock, by one run of the network certifier
-from before its first tick to after its last, so no two sessions under a key run at once, and it refuses a session id
-it has started (`StartRefused`). It is keyed by the registered key, which today is the key that signs.
+**The device state** (`DeviceState`): what the network certifier keeps for its registered key across sessions, in a file
+of its own beside the key and apart from the key's leaf state: the key's life so far, in milliseconds on the network
+certifier's clock, and the ids of the sessions started under the key. A session's start takes the key's life as it
+stands as the session's base, and the number of sessions started under the key before it as its ordinal, and moves the
+life on by the session's whole span, its execution phases of T ticks each, written and synced to disk before the base is
+returned: a run that ends early loses the rest of its span, no later session is given a millisecond an earlier one was,
+and no two sessions of the key have one ordinal. The state is held, under a lock, by one run of the network certifier
+from before its first tick to after its last, so no two sessions under a key run at once, and it refuses a session id it
+has started (`StartRefused`). It is keyed by the registered key, which today is the key that signs.
 
 **The start's certificate** (`CertifiedStart`, `Issuer.certify_start`): once a session, before its first tick, the
-network certifier signs where the session starts on its key's life, under the message every certificate signs, for
-the link's name with ``-origin`` (`start_link`), ``egress``, window 0:
+network certifier signs where the session starts on its key's life, and which of the key's sessions it is, under the
+message every certificate signs, for the link's name with ``-origin`` (`start_link`), ``egress``, window 0:
 
-    signed digest = tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖ schedule)       (`start_digest`)
+    signed digest = tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖ u64be ordinal ‖ schedule)
+                                                                                                        (`start_digest`)
 
-`base_ms` is the session's base and `schedule` the schedule's parameters digest (64 bytes), so tick t of the session is
-millisecond `base_ms` + t·τ_b of the key's life. Both are public, so the digest carries no salt, and a verifier that
-holds them checks the certificate alone (`CertifiedStart.verify`). The tag and the link name are the start's own, so
-a start's certificate opens as no record's or clock's.
+`base_ms` is the session's base, `ordinal` its ordinal and `schedule` the schedule's parameters digest (64 bytes), so
+tick t of the session is millisecond `base_ms` + t·τ_b of the key's life, and two of the key's sessions whose ordinals
+are n and n + 1 have no session of the key between them. All three are public, so the digest carries no salt, and a
+verifier that holds them checks the certificate alone (`CertifiedStart.verify`). The tag and the link name are the
+start's own, so a start's certificate opens as no record's or clock's.
 
-The tag says which clock the session's ticks are read on: ``verity-network-certifier/start/v1`` means the host's raw
+The tag says which clock the session's ticks are read on: ``verity-network-certifier/start/v2`` means the host's raw
 clock, and a device whose ticks read any other clock signs its starts under another tag. The digest names no clock:
 the base is a sum of spans, not a reading, and that a device's ticks read the clock its tag means rests on
 `trusted-host`. A device that signs no start has no session a check of the start accepts.
@@ -159,7 +162,7 @@ from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, S
 RECORD_TAG = "verity-network-certifier/record/v2"
 PARAMETERS_TAG = "verity-network-certifier/parameters/v1"
 CLOCK_TAG = "verity-network-certifier/clock/v1"
-START_TAG = "verity-network-certifier/start/v1"
+START_TAG = "verity-network-certifier/start/v2"
 FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
@@ -385,13 +388,14 @@ def start_link(link: str) -> str:
     return f"{link}-origin"
 
 
-def start_digest(base_ms: int, schedule: bytes) -> bytes:
-    """The digest a start's certificate signs: tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖
-    schedule), `base_ms` the key's life at the session's start, in milliseconds on the network certifier's clock, and
-    `schedule` the schedule's parameters digest. Both are public, so it carries no salt."""
+def start_digest(base_ms: int, ordinal: int, schedule: bytes) -> bytes:
+    """The digest a start's certificate signs: tagged_sha512("verity-network-certifier/start/v2", u64be base_ms ‖
+    u64be ordinal ‖ schedule), `base_ms` the key's life at the session's start, in milliseconds on the network
+    certifier's clock, `ordinal` the number of the key's sessions started before it, and `schedule` the schedule's
+    parameters digest. All are public, so it carries no salt."""
     if type(schedule) is not bytes or len(schedule) != DIGEST_BYTES:
         raise ValueError(f"a schedule's parameters digest is {DIGEST_BYTES} bytes")
-    return tagged_sha512(START_TAG, _u(base_ms, 8, "base_ms") + schedule)
+    return tagged_sha512(START_TAG, _u(base_ms, 8, "base_ms") + _u(ordinal, 8, "ordinal") + schedule)
 
 
 class StartRefused(Exception):
@@ -416,8 +420,8 @@ class DeviceState:
     key (in hex), and ``check``, the first 16 bytes of SHA-512 over the rest. Opening takes ``path.lock`` exclusively
     for the object's life and refuses a state another run holds, so a run that opens it before its first tick and
     closes it after its last is the key's only one. It refuses a state that is missing, unreadable or another key's.
-    `start` gives a session its base. A restore of the file from an earlier copy is past what a file can see: that
-    rests on its host never restoring one."""
+    `start` gives a session its base and its ordinal. A restore of the file from an earlier copy is past what a file can
+    see: that rests on its host never restoring one."""
 
     def __init__(self, path: str | os.PathLike, public: bytes) -> None:
         self.path, self.public = Path(path), bytes(public)
@@ -484,11 +488,12 @@ class DeviceState:
         it."""
         return self._count
 
-    def start(self, session: bytes, span_ms: int) -> int:
-        """The base of this run's one session, ``session``: the key's life as it stands, in milliseconds, after the
-        state on disk records the session as started and the key's life as ``span_ms`` further on, the session's whole
-        span. Refused when the state has started the session, when this object has started one, and when the span
-        would take the key's life past a u64."""
+    def start(self, session: bytes, span_ms: int) -> tuple[int, int]:
+        """The base and the ordinal of this run's one session, ``session``: the key's life as it stands, in
+        milliseconds, and the number of sessions started under the key before it, after the state on disk records the
+        session as started and the key's life as ``span_ms`` further on, the session's whole span. Refused when the
+        state has started the session, when this object has started one, and when the span would take the key's life
+        past a u64."""
         session = bytes(session)
         if len(session) != lms.SESSION_BYTES:
             raise ValueError(f"a certifier session id is {lms.SESSION_BYTES} bytes, not {len(session)}")
@@ -505,9 +510,10 @@ class DeviceState:
         base = self._count
         if base + span_ms >= 1 << 64:
             raise StartRefused(f"{self.path}: the key's life, {base} ms, has no room for {span_ms} ms more")
+        ordinal = len(self._sessions)
         self._write(self.path, self.public, base + span_ms, self._sessions + (session,))
         self._count, self._sessions, self._session = base + span_ms, self._sessions + (session,), session
-        return base
+        return base, ordinal
 
     def close(self) -> None:
         if not self._lock.closed:
@@ -813,11 +819,12 @@ class CertifiedClock:
 @dataclass(frozen=True, slots=True)
 class CertifiedStart:
     """What the network certifier hands over once a session, before its first tick: the session's base on its key's
-    life (`base_ms`, milliseconds on the network certifier's clock), the schedule's parameters digest it runs under,
-    and the certificate, which signs their start digest (`start_digest`) for the link's start name (`start_link`),
-    ``egress``, window 0. All of it is public."""
+    life (`base_ms`, milliseconds on the network certifier's clock), its ordinal among the key's sessions (`ordinal`),
+    the schedule's parameters digest it runs under, and the certificate, which signs their start digest
+    (`start_digest`) for the link's start name (`start_link`), ``egress``, window 0. All of it is public."""
 
     base_ms: int
+    ordinal: int
     schedule: bytes
     certificate: Certificate
 
@@ -825,8 +832,8 @@ class CertifiedStart:
         """Why the start's certificate fails under `key` in certifier session `session` for `link` under the schedule
         whose parameters digest is `schedule`, or None when it holds: ``start`` unless it is an egress certificate of
         window 0 under `link`'s start name, ``key`` unless it is `key`'s, ``schedule`` unless it names `schedule`,
-        ``opening`` unless its base and schedule give the digest it signs, and ``signature`` unless its signature
-        verifies over its message in the session (`Certificate.verify`)."""
+        ``opening`` unless its base, ordinal and schedule give the digest it signs, and ``signature`` unless its
+        signature verifies over its message in the session (`Certificate.verify`)."""
         c = self.certificate
         if (type(c) is not Certificate or c.direction is not Direction.EGRESS or c.window != 0
                 or c.link != start_link(link)):
@@ -835,9 +842,10 @@ class CertifiedStart:
             return "key"
         if self.schedule != schedule:
             return "schedule"
-        base, named = self.base_ms, self.schedule
-        if (type(base) is not int or not 0 <= base < 1 << 64 or type(named) is not bytes
-                or len(named) != DIGEST_BYTES or c.digest != start_digest(base, named)):
+        base, ordinal, named = self.base_ms, self.ordinal, self.schedule
+        if (type(base) is not int or not 0 <= base < 1 << 64 or type(ordinal) is not int or not 0 <= ordinal < 1 << 64
+                or type(named) is not bytes or len(named) != DIGEST_BYTES
+                or c.digest != start_digest(base, ordinal, named)):
             return "opening"
         if not c.verify(key, session):
             return "signature"
@@ -1027,13 +1035,14 @@ class Issuer:
         self.clock_salts.add(salt)
         return CertifiedClock(sync, salt, certificate)
 
-    def certify_start(self, link: str, base_ms: int, schedule: bytes) -> CertifiedStart | None:
-        """The start's certificate of this session on `link`: its base on the key's life, `base_ms`, under the
-        schedule whose parameters digest is `schedule` (`start_digest`), or None when the signer refuses. The network
-        certifier signs it before its first tick, with the base its device state gave the session
-        (`DeviceState.start`), and does not start without it."""
-        certificate = self.sign(start_link(link), Direction.EGRESS, 0, start_digest(base_ms, schedule))
-        return None if certificate is None else CertifiedStart(base_ms, schedule, certificate)
+    def certify_start(self, link: str, base_ms: int, ordinal: int, schedule: bytes) -> CertifiedStart | None:
+        """The start's certificate of this session on `link`: its base on the key's life, `base_ms`, and its ordinal
+        among the key's sessions, `ordinal`, under the schedule whose parameters digest is `schedule`
+        (`start_digest`), or None when the signer refuses. The network certifier signs it before its first tick, with
+        the base and the ordinal its device state gave the session (`DeviceState.start`), and does not start without
+        it."""
+        certificate = self.sign(start_link(link), Direction.EGRESS, 0, start_digest(base_ms, ordinal, schedule))
+        return None if certificate is None else CertifiedStart(base_ms, ordinal, schedule, certificate)
 
     def mark(self, link: str, window: int, mark: bytes) -> CertifiedMark | None:
         """The mark certificate of the 64-byte `mark` for `link` at the execution phase `window`, which is the

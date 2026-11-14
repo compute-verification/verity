@@ -1,6 +1,7 @@
 """The network certifier's device state and the start's certificate: a session's base on its key's life is taken once,
-written before it is returned and never given again; one run holds the state at a time; the start's certificate
-binds the base, the schedule, the link, the session and the key; and its tag is no other separator's."""
+written before it is returned and never given again, and its ordinal is the number of the key's sessions before it; one
+run holds the state at a time; the start's certificate binds the base, the ordinal, the schedule, the link, the session
+and the key; and its tag is no other separator's."""
 
 import dataclasses
 import json
@@ -37,15 +38,16 @@ def on_disk(path) -> tuple[int, list[str]]:
 
 
 def test_a_session_starts_at_the_keys_life_and_moves_it_on_by_its_span(tmp_path):
-    """The base is the count before the start, and the file holds the count after it before `start` returns: a run
-    that ends at once has still used its whole span."""
+    """The base is the count before the start and the ordinal the number of sessions started before it, and the file
+    holds the count and the session after it before `start` returns: a run that ends at once has still used its whole
+    span."""
     path = state(tmp_path)
     assert on_disk(path) == (0, [])
     with DeviceState(path, PUBLIC) as first:
-        assert first.count_ms == 0 and first.start(SESSION, 1200) == 0
+        assert first.count_ms == 0 and first.start(SESSION, 1200) == (0, 0)
         assert first.count_ms == 1200 and on_disk(path) == (1200, [SESSION.hex()])
     with DeviceState(path, PUBLIC) as second:
-        assert second.count_ms == 1200 and second.start(OTHER_SESSION, 600) == 1200
+        assert second.count_ms == 1200 and second.start(OTHER_SESSION, 600) == (1200, 1)
         assert on_disk(path) == (1800, [SESSION.hex(), OTHER_SESSION.hex()])
     assert not list(tmp_path.glob("*.tmp"))
 
@@ -55,7 +57,7 @@ def test_a_held_state_refuses_a_second_run_until_the_first_closes(tmp_path):
     first = DeviceState(path, PUBLIC)
     with pytest.raises(StartRefused, match="held by another run"):
         DeviceState(path, PUBLIC)
-    assert first.start(SESSION, 600) == 0
+    assert first.start(SESSION, 600) == (0, 0)
     with pytest.raises(StartRefused, match="held by another run"):
         DeviceState(path, PUBLIC)
     first.close()
@@ -63,7 +65,7 @@ def test_a_held_state_refuses_a_second_run_until_the_first_closes(tmp_path):
     with pytest.raises(StartRefused, match="closed"):
         first.start(OTHER_SESSION, 600)
     with DeviceState(path, PUBLIC) as second:
-        assert second.start(OTHER_SESSION, 600) == 600
+        assert second.start(OTHER_SESSION, 600) == (600, 1)
 
 
 def test_a_session_already_started_is_refused_and_takes_no_time(tmp_path):
@@ -74,7 +76,7 @@ def test_a_session_already_started_is_refused_and_takes_no_time(tmp_path):
         with pytest.raises(StartRefused, match=f"session {SESSION.hex()} is already started"):
             again.start(SESSION, 600)
         assert again.count_ms == 600 and on_disk(path) == (600, [SESSION.hex()])
-        assert again.start(OTHER_SESSION, 600) == 600
+        assert again.start(OTHER_SESSION, 600) == (600, 1)  # the refused start took no ordinal
         with pytest.raises(StartRefused, match="this run has already started a session"):
             again.start(THIRD_SESSION, 600)
     assert on_disk(path) == (1200, [SESSION.hex(), OTHER_SESSION.hex()])
@@ -113,7 +115,7 @@ def test_a_state_rolled_back_under_its_run_is_refused(tmp_path):
         with pytest.raises(StartRefused, match="changed under this run"):
             run.start(OTHER_SESSION, 600)
         path.write_text(later)
-        assert run.start(OTHER_SESSION, 600) == 600
+        assert run.start(OTHER_SESSION, 600) == (600, 1)
 
 
 def test_a_span_or_session_that_is_no_span_or_session_and_a_life_with_no_room(tmp_path):
@@ -127,34 +129,35 @@ def test_a_span_or_session_that_is_no_span_or_session_and_a_life_with_no_room(tm
         with pytest.raises(StartRefused, match="no room"):
             run.start(SESSION, 1 << 64)
         assert on_disk(path) == (0, [])
-        assert run.start(SESSION, (1 << 64) - 1) == 0
+        assert run.start(SESSION, (1 << 64) - 1) == (0, 0)
     with DeviceState(path, PUBLIC) as full:
         with pytest.raises(StartRefused, match="no room"):
             full.start(OTHER_SESSION, 1)
 
 
 def test_the_start_digest_is_the_documented_bytes():
-    want = tagged_sha512("verity-network-certifier/start/v1", struct.pack(">Q", 86_400_000) + SCHEDULE)
-    assert start_digest(86_400_000, SCHEDULE) == want and len(want) == 64
+    want = tagged_sha512("verity-network-certifier/start/v2", struct.pack(">QQ", 86_400_000, 3) + SCHEDULE)
+    assert start_digest(86_400_000, 3, SCHEDULE) == want and len(want) == 64
     assert start_link("uplink") == "uplink-origin"
-    assert len({start_digest(0, SCHEDULE), start_digest(1, SCHEDULE), start_digest(0, OTHER_SCHEDULE)}) == 3
-    for base in (-1, 1 << 64):
+    assert len({start_digest(0, 0, SCHEDULE), start_digest(1, 0, SCHEDULE), start_digest(0, 1, SCHEDULE),
+                start_digest(0, 0, OTHER_SCHEDULE)}) == 4
+    for base, ordinal in ((-1, 0), (1 << 64, 0), (0, -1), (0, 1 << 64)):
         with pytest.raises(ValueError):
-            start_digest(base, SCHEDULE)
+            start_digest(base, ordinal, SCHEDULE)
     for schedule in (SCHEDULE[:63], SCHEDULE + b"\0", bytearray(SCHEDULE)):
         with pytest.raises(ValueError, match="64 bytes"):
-            start_digest(0, schedule)
+            start_digest(0, 0, schedule)
 
 
-def test_the_starts_certificate_binds_base_schedule_link_session_and_key(tmp_path):
+def test_the_starts_certificate_binds_base_ordinal_schedule_link_session_and_key(tmp_path):
     signer = signers.signer(tmp_path)
     key = signer.public_key()
     issuer = Issuer(signer, SESSION)
-    start = issuer.certify_start("uplink", 1200, SCHEDULE)
+    start = issuer.certify_start("uplink", 1200, 3, SCHEDULE)
     c = start.certificate
     assert issuer.started and signers.used(signer) == [0]
     assert (c.link, c.direction, c.window, c.digest) == ("uplink-origin", Direction.EGRESS, 0,
-                                                          start_digest(1200, SCHEDULE))
+                                                          start_digest(1200, 3, SCHEDULE))
     assert start.refusal(key, SESSION, "uplink", SCHEDULE) is None and start.verify(key, SESSION, "uplink", SCHEDULE)
 
     def refusal(s, *, key=key, session=SESSION, link="uplink", schedule=SCHEDULE):
@@ -170,24 +173,27 @@ def test_the_starts_certificate_binds_base_schedule_link_session_and_key(tmp_pat
     assert refusal(start, schedule=OTHER_SCHEDULE) == "schedule"
     assert refusal(replace(start, base_ms=1201)) == "opening"
     assert refusal(replace(start, base_ms=-1)) == refusal(replace(start, base_ms=1 << 64)) == "opening"
+    assert refusal(replace(start, ordinal=4)) == refusal(replace(start, ordinal=2)) == "opening"
+    assert refusal(replace(start, ordinal=-1)) == refusal(replace(start, ordinal=1 << 64)) == "opening"
+    assert refusal(replace(start, ordinal=True)) == "opening"
     assert refusal(replace(start, schedule=OTHER_SCHEDULE), schedule=OTHER_SCHEDULE) == "opening"
     assert refusal(replace(start, schedule=SCHEDULE[:-1]), schedule=SCHEDULE[:-1]) == "opening"
     assert refusal(start, session=OTHER_SESSION) == "signature"
-    moved = replace(c, digest=start_digest(0, SCHEDULE))
-    assert refusal(CertifiedStart(0, SCHEDULE, moved)) == "signature"
+    moved = replace(c, digest=start_digest(0, 3, SCHEDULE))
+    assert refusal(CertifiedStart(0, 3, SCHEDULE, moved)) == "signature"
     # a record's or a clock's certificate signs a salted digest under another tag: none opens as a start
     record = issuer.sign("uplink-origin", Direction.EGRESS, 0,
-                         certificate_digest(bytes(64), start_digest(1200, SCHEDULE)))
-    assert refusal(CertifiedStart(1200, SCHEDULE, record)) == "opening"
+                         certificate_digest(bytes(64), start_digest(1200, 3, SCHEDULE)))
+    assert refusal(CertifiedStart(1200, 3, SCHEDULE, record)) == "opening"
 
 
 def test_a_refused_signer_gives_no_starts_certificate(tmp_path):
     """A session its leaf state has started is refused at the start's certificate, the session's first signature."""
     first = signers.signer(tmp_path)
-    assert Issuer(first, SESSION).certify_start("uplink", 0, SCHEDULE) is not None
+    assert Issuer(first, SESSION).certify_start("uplink", 0, 0, SCHEDULE) is not None
     first.close()
     again = Issuer(LmsSigner(first.key, first.state), SESSION)
-    assert again.certify_start("uplink", 600, SCHEDULE) is None
+    assert again.certify_start("uplink", 600, 1, SCHEDULE) is None
     assert again.refused == [("uplink-origin", Direction.EGRESS, 0)] and not again.started
     assert signers.used(first) == [0]
 

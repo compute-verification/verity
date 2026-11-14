@@ -427,4 +427,73 @@ def AnswersVerified : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → AnswersVerifiedAt e
 
+/-! ## A key's listed sessions: the list is complete, unproved
+
+In the rows form a key may be listed in several sessions, each entry held to its session's signed start
+(`startChecks`). `RowsSessionsComplete` states what the check holds of those starts: the listed sessions under one key
+are consecutive among its sessions, and each starts on the key's life at or after the end of the stretch the list gives
+the one before it. It and its witnesses are unproved, and no guarantee reads them. -/
+
+/-- The listed entries `i < j` of `p` are consecutive under one key identifier: both name keys with one first 16 bytes
+(an identifier names one key in the rows form, `certifierEntriesOf`), and no entry listed between them does. -/
+def ConsecutiveUnderKey (p : Params) (i j : ℕ) : Prop :=
+  i < j ∧ ∃ a b : Entry, p.entries[i]? = some a ∧ p.entries[j]? = some b ∧
+    a.key.extract 0 16 = b.key.extract 0 16 ∧
+    ∀ (k : ℕ) (x : Entry), i < k → k < j → p.entries[k]? = some x → x.key.extract 0 16 ≠ a.key.extract 0 16
+
+/-- What `RowsSessionsComplete` says of a period its check accepted: in the rows form, the evidence shows one signed
+start for each listed entry; each start's certificate signs the start digest of its base, its ordinal and its schedule
+(`startDigest`) and verifies under its entry's key in its entry's session; and of two entries `a` (listed `i`-th) and
+`b` (`j`-th) consecutive under one key identifier (`ConsecutiveUnderKey`), `b`'s start's ordinal is `a`'s plus one, and
+`b`'s start's base is not before `a`'s base plus `a`'s stretch, which runs up to the start of the entry listed `i + 1`-th
+(`n`), in execution phases of `L = window · bucket_ms` milliseconds: `xa.baseMs + (n.start − a.start) · L ≤ xb.baseMs`,
+written without subtraction. -/
+def RowsSessionsCompleteAt (p : Params) (e : Evidence) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    e.starts.size = p.entries.size ∧
+    (∀ (i : ℕ) (a : Entry) (x : Start), p.entries[i]? = some a → e.starts[i]? = some x →
+      startDigest x.baseMs x.ordinal x.schedule = some x.certificate.digest ∧
+        x.certificate.signs p.lms a.key a.session = true) ∧
+    ∀ (i j : ℕ) (a n : Entry) (xa xb : Start), ConsecutiveUnderKey p i j → p.entries[i]? = some a →
+      p.entries[i + 1]? = some n → e.starts[i]? = some xa → e.starts[j]? = some xb →
+      xb.ordinal = xa.ordinal + 1 ∧ xa.baseMs + n.start * s.windowMs ≤ xb.baseMs + a.start * s.windowMs
+
+/-- `RowsSessionsComplete` of the period check `chk`: `RowsSessionsCompleteAt` of every period `chk` accepts. -/
+def RowsSessionsCompleteOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → RowsSessionsCompleteAt p e
+
+/-- **A key's listed sessions are complete from its first listed entry on.** If the check accepts a period in the rows
+form, each listed entry's session's start is shown, its certificate signed over its base, its ordinal and its schedule
+under the entry's key in the entry's session; the listed sessions under one key identifier carry consecutive ordinals
+in the entries' order; and each such session's signed base is not before its predecessor's signed base plus the
+predecessor's stretch (`RowsSessionsCompleteAt`). The network certifier's device state gives each session it starts the
+next ordinal and none twice, and moves the key's life on by the session's whole span (`certificate.DeviceState`, on
+`trusted-host`), so no session of the key started between two such entries' sessions, and the later one's ticks are
+milliseconds of the key's life after every tick the list credits to the earlier one.
+
+The base condition is read off the certificates: `heldTo` puts each of a key's entries where its first listed entry
+puts it, and the entries' starts increase, so it needs no device state. It is of the earlier entry's stretch, not its
+session's whole span: the start signs the session's base, its ordinal and the schedule's parameters digest, and no
+certificate signs the span's length. It says nothing of how long the earlier session ran on its stretch, or whether
+the period's execution phases after its last certificate have any: those are the execution phases' own checks'.
+
+The list is complete from its first entry on and no further: the check reads no log of an earlier period, so nothing
+here holds a key's first listed entry's ordinal to the last one of the period before, or says anything of a session
+of the key before its first listed entry or after its last. -/
+def RowsSessionsComplete : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsSessionsCompleteAt p e
+
+/-- `RowsSessionsComplete`'s honest witness, unproved: `check` accepts a rows-form period at the deployed LMS
+parameters that lists one key in two sessions. -/
+def RowsSessionsCompleteHonest : Prop :=
+  ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile) (s : Schedule) (sd : ByteArray)
+    (scan : Scan) (a b : Entry),
+    p.lms = Lms.deployed ∧ p.form = .rows s sd scan ∧ p.entries[0]? = some a ∧ p.entries[1]? = some b ∧
+      a.key = b.key ∧ a.session ≠ b.session ∧ check p c e = .accept pub prof
+
+/-- `RowsSessionsComplete`'s nontrivial witness, unproved: `RowsSessionsCompleteOf` fails at `acceptAllRows`. -/
+def RowsSessionsCompleteNontrivial : Prop := ¬ RowsSessionsCompleteOf acceptAllRows
+
 end Properties.NetworkPeriod
