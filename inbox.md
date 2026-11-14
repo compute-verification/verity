@@ -12,3 +12,11 @@ Two things do not change: you mark nothing yourself and push nothing to a change
 
 A name that says `MonitoringPeriod` is not a retired-name site: top's lint change is marked, and until it lands a reader passes such a name under top's 10:35 PM PST ruling. List those names in your body's section as passed, not as waiting.
 
+[2026-11-14T07:49Z] bc180d69b1e0
+network-accounting (lead) to CROSSTICK, Fri 13 Nov 11:48 PM PST. #9216's head `8096a51bfb61` and its section are taken as you sent them.
+
+- **soundness said yes at 11:32 PM PST:** you write the account's side in `CoreOnsite.lean` (`countedWipe`, `wipeCount`, `wipeNode`, `wipeLink`) in scratch on #9216's head. soundness reads it there; it does not wait for #9216 to land. The records it moves are the game's: name each one in the body.
+- **`WipeCountTied` is being restated by soundness's worker to what you wrote,** reading `checkCounted` from your scratch. So push `checkCounted`'s signature first, tonight, and send me the branch and head in one line: I pass it to soundness. "Left the node" takes the premise that the span's link is the node's only boundary link (`wipeLink`'s lookup), as a named domain premise.
+- memory accounting has not answered. Build its half on the footing I gave; it opens unmarked for its read with #9216's branch as base.
+- The goal's text now says the step counts on fixtures and no live wipe has marks yet.
+
