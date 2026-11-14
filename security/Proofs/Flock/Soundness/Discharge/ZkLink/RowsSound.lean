@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Game
 
 `analysisZCReg` counts a sampled proof block incorrect when it is incorrect on the registration (`incorrectRegZ`). This file adds the units
 whose value layer differs, at a registered read, from the registrant's row (`rowsWrongZ`), and bounds the sampled proof blocks of
-both kinds by `ε_ks + δ_link + δ_rows`, at a registrant's openings `wo` of the registered reads `isRead` whose
+both kinds by `ε_ks + ε_bind + δ_rows`, at a registrant's openings `wo` of the registered reads `isRead` whose
 commitments are the registered ones:
 
 * `RowsLinkEvZK`: the link event with the rows added: every close satisfying message decodes off the value layer on
@@ -21,8 +21,8 @@ commitments are the registered ones:
 * `trial_rows_leZC`: the trial's rows mass at a registered read is at most `t'(1 + k)/2^256`, under A2 for the rows
   finder (`RowsCRZC`), since the trial's opening and the registrant's then collide (`ValueBindingZ.collide_spec`);
 * `ideal_le_trialZC`: `ideal_mass_leZC`'s step from the trial to the audit's extractor, for any trace;
-* `analysisZCRows`, `zk_rowsBindSoundC`: the analysis, and its binding error at `rowsBoundZC`, `δ_link + δ_rows` with
-  `δ_rows` at most `δ_link`'s closed form;
+* `analysisZCRows`, `zk_rowsBindSoundC`: the analysis, and its binding error at `rowsBoundZC`, `ε_bind + δ_rows` with
+  `δ_rows` at most `ε_bind`'s closed form;
 * `zk_flock_sampledC_rows`: `Audit.extraction_audit_sampled` at it.
 -/
 
@@ -383,7 +383,7 @@ noncomputable def rowsBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
   else ⊤
 
 /-- **The rows link theorem**: `zk_linkSoundC` at `analysisZCRows`, whose binding error carries the rows: at a prover whose
-link and rows finders satisfy A2 and whose registered reads' commitments are the registrant's, `δ_link + δ_rows` with
+link and rows finders satisfy A2 and whose registered reads' commitments are the registrant's, `ε_bind + δ_rows` with
 each at most `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))` (`rowsBoundZC`). -/
 theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ}
     {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -489,7 +489,7 @@ theorem zk_rowsBindSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : 
     _ = _ := by rw [← Finset.sum_mul]; ring
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration and the registrant's rows**: it accepts
-with a sampled proof block in `incorrectRegZ` or in `rowsWrongZ` with probability at most `ε_ks + δ_link + δ_rows`. -/
+with a sampled proof block in `incorrectRegZ` or in `rowsWrongZ` with probability at most `ε_ks + ε_bind + δ_rows`. -/
 theorem zk_flock_sampledC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}

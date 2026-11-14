@@ -13,7 +13,7 @@ import Proofs.Flock.Soundness.CROnly.Link
 
 `Registered.flock_e2e_sampled_hm96_reads` and `Registered.flock_e2e_count_hm96_reads` restated with `hCRs : LinkCRStrict …`
 for `hCR : LinkCR …`, as `CROnly.E2E` restates the forms they extend: the bound is the original's at the per-run cost
-`strictRunCost t' q` in place of `t'`, and every other hypothesis is the original's, unchanged. So `ε_ks`, `δ_link`,
+`strictRunCost t' q` in place of `t'`, and every other hypothesis is the original's, unchanged. So `ε_ks`, `ε_bind`,
 `δ_tree` and `δ_reg` are all under `SHA512CRStrict` (`hKS`, `hCRs`, `hT`, `hR`).
 -/
 

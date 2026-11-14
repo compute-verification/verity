@@ -345,7 +345,7 @@ def test_publish_holds_pearlpluss_exclusion_tiles_count_and_ids_and_leaves_its_o
             "pieces/pearlplus/pearlplus-lean.json": {"verdict": "accept", "drawn": 2, "verdicts": tiles, "work": work,
                                                      "tie": answer["public"]["tie"]},
             "pieces/pearlplus/verify.json": {"answer": answer, "verdicts": tiles, "accepted": True},
-            "record/record.json": {"verdicts": {"pouw": "accept", "sampled_proofs": "accept"}, "tiles": 4,
+            "record/record.json": {"verdicts": {"pouw": "accept", "spot": "accept"}, "tiles": 4,
                                    "rows": [{"protocol": "pouw", "answer": answer}]}}
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     for rel, doc in docs.items():
@@ -2100,7 +2100,7 @@ def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_it
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, "class held")
-    row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+    row = S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
     assert row["verdict"] == "accept" and "development" not in row
     assert row["answer"]["public"]["work"] == {**PEARL_LEAN_WORK, "give_up": 96}
     assert "exact_work" not in json.dumps(row)
@@ -2970,7 +2970,7 @@ else:
         sys.exit(2)
     out.mkdir(parents=True)
     (out / "circuit.json").write_text(json.dumps({{"run": "ab", **tables}}))
-    open(os.environ["ORDER"] + ".law", "w").write(a[a.index("--law") + 1] if "--law" in a else "")
+    open(os.environ["ORDER"] + ".law", "w").write(a[a.index("--sampling-design") + 1] if "--sampling-design" in a else "")
     if "--window-registration" in a:
         tail = a[a.index("--window-registration"):]
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))

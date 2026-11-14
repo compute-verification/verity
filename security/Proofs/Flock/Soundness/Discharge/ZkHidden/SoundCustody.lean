@@ -28,7 +28,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 `hDraw` (`SampleOkZKH` at each of `SamplingDesign.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
 (`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points verity-verify-proof sets up at each of the sampling design's samples
 (`sampleOkZKH_of_exec`), as `Composed.zk_session_sound_custody` is `zk_session_sound`'s. It rests on five: `cr/sha-512`
-(`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and `live-verifier` (`hCust`).
+(`hCR`), `ecr/sha-512` (A2, inside `ε_bind`), A3 (`hA3`), A6 and `live-verifier` (`hCust`).
 -/
 
 @[expose] public section

@@ -7,7 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
 /-!
-# `δ_link` for the compiled `--zk` session, under expected-time collision resistance
+# `ε_bind` for the compiled `--zk` session, under expected-time collision resistance
 
 `Discharge/Exec/FlockLinkL.lean`'s link theorem for the compiled `--zk` session (`batchedSessionZC`), whose extractor
 fills each sampled proof block's level-0 oracle (68 lanes: the witness lanes and both reps' extra lanes) from the verifying
@@ -723,7 +723,7 @@ theorem zk_linkSoundC_at
         ring
     _ ≤ _ := div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
 
-/-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** For the batched audit
+/-- **The link theorem: `ε_bind` under expected-time collision resistance, prover by prover.** For the batched audit
 with the expected-time extractor (`analysisZC`, at any knowledge bound) and the plurality value layer (`XplurZC`), given
 the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRZC`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$

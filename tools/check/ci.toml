@@ -18,7 +18,6 @@ name = "flock-circuit-build"
 owner = "proofs"
 part = "circuits"
 group = 2
-halts_on = "error: could not compile"
 
 # Before circuit-check: a group stops at its first failed job, and circuit-check is off the merge gate, so its red must not keep
 # this job, which is on it, from running.

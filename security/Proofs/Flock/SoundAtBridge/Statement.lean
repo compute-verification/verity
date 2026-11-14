@@ -51,7 +51,7 @@ with outcome `out x w i`. It closes the three gaps between the two as follows:
 3. **the per-unit link** is proved: each session carries one registrant's opening per unit, and a union bound over its
    `n` units gives `n` times `EndToEndRegisteredRows`' bound (`RowsSession.prob_badU_le`).
 
-So `δ_ZK = δo + δ`, where `δ` bounds `n · (ε_ks + δ_link + δ_rows + q_R²/2^513)` at every session a path runs: the
+So `δ_ZK = δo + δ`, where `δ` bounds `n · (ε_ks + ε_bind + δ_rows + q_R²/2^513)` at every session a path runs: the
 whole of `EndToEndRegisteredRows`' bound, its rewinding terms `1/(e·M) + k/(e·Rw)` included, times the session's `n`.
 
 Importing this module makes `X` a token (ArkLib's global `notation3 "X"`, `ArkLib.Data.Polynomial.Trivariate`), so a
