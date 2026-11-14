@@ -13,8 +13,9 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.tile_debit`, rev1's
-  `laterZeroPromos`), whose adds the debit already holds, and P3's forming elements (``forming_elements``, each
-  fs·|cols|/n of inert work).  Under a format with the row cap (-h3) the rule also caps each
+  `laterZeroPromos`), whose adds the debit already holds, P3's forming elements (``forming_elements``, each
+  fs·|cols|/n of inert work), and the words' products that no salt makes count (``mends``, one MAC each:
+  `pearl_c_debit.word_mend`).  Under a format with the row cap (-h3) the rule also caps each
   credited A row (`clear_work.row_cap`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
   its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
@@ -156,7 +157,7 @@ class TileIndex:
 
 def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -> dict:
     """The pass as `verify_run.verify` reads it: the epoch from its salt coin under `coins` (the epoch's published coin
-    commitment), or a recorded pass's beacon (`pouw_pearl_c_device.manifest_epoch`), and the weights' roots, the records
+    commitment), or a recorded pass's beacon (`pouw_pearl_c_device.manifest_epoch`), and the fixed operands' roots, the records
     held to their published root, the transcript's roots and the verifier's tile enumeration.  `light`: the manifest alone (no verifier,
     no file of the pass is opened), for reading recorded lines back (``--resumed-only``)."""
     raw = path.read_bytes()
@@ -306,7 +307,7 @@ def _measure(item) -> dict:
         tile, chains = _SEEN[0] if _SEEN else (_DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols), len(_CHAINS))
         out.update(tile_numbers(scheme, *tile))
         if chains:
-            out["atoms"], out["later_zero_promotions"], out["forming_elements"] = _CHAINS[chains - 1]
+            out["atoms"], out["later_zero_promotions"], out["forming_elements"], out["mends"] = _CHAINS[chains - 1]
         if len(_SEEN) > 1:
             widen = CW.row_cap_multiple(scheme, u.shape.k)
             out["row_ratio_max"] = max(float(d / (c * widen)) for (d, c), _ in _SEEN[1:])
@@ -359,6 +360,8 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
             "worst": {k: worst[k] for k in ("tile", "matmul", "m", "k", "n", "row0", "col0", "share", "ratio")} if worst else None,
             "later_zero_promotions": sum(t.get("later_zero_promotions", 0) for t in measured),
             "tiles_with_later_zero_promotions": sum(t.get("later_zero_promotions", 0) > 0 for t in measured),
+            "mends": sum(t.get("mends", 0) for t in measured),
+            "tiles_with_mends": sum(t.get("mends", 0) > 0 for t in measured),
             "share_median": statistics.median(t["share"] for t in measured) if measured else None,
             "share_p99": float(np.quantile([t["share"] for t in measured], 0.99)) if measured else None,
             "cpu_seconds": round(sum(t["seconds"] for t in tiles), 1), "strata": out_strata}
@@ -404,7 +407,7 @@ def resumed(paths: list[str], sha256: str) -> dict:
 def _run_tiles(label: str, job: dict, picks, jobs: int, path: Path, opts: dict) -> dict:
     """Every picked item's line (a tile id, or a fresh trial: `_measure`), by `line_key`: a resumed one as recorded (its
     geometry held to this pass's enumeration, a fresh trial's salt to its own), the others measured over `jobs` forked
-    workers, a matmul's tiles in runs of a few so that a worker's per-weight noise caches hit.  Every line is written to
+    workers, a matmul's tiles in runs of a few so that a worker's per-fixed-operand noise caches hit.  Every line is written to
     `path` as it is known.  Raises if a cross-checked tile's batch and scalar replays differ."""
     tile, records = job["tile"], job["records"]
     prior = resumed(opts.get("resume") or [], job["sha256"])
@@ -618,7 +621,7 @@ def write_inputs(rows: list[dict], seed: int, census_max: int, draws: int, out_d
                      f"{len(rows)} inputs, {sum(r['failures'] for r in rows)} rejected tiles; the worst input's 95% "
                      f"simultaneous upper limit {worst['upper']:.4g} ({worst['bound_method']})",
                      [("inputs", len(rows), "count"), ("failures", sum(r["failures"] for r in rows), "count"),
-                      ("cited_upper", worst["upper"], "share")])
+                      ("compute-accounting/served-inert-work.cited-upper", worst["upper"], "share")])
     return 0 if ok else 1
 
 

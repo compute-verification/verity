@@ -1,12 +1,13 @@
-/-
-The verifier as one total function of its inputs, `Accept` or `Reject reason`.
-`verifyRep` is `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` on one rep's replay transcript; `verify` adds the session checks S1–S18.
--/
 module
 
 public import Flock.Statement
 public import Flock.Ligerito
 public import Flock.Opening
+
+/-!
+The verifier as one total function of its inputs, `Accept` or `Reject reason`.
+`verifyRep` is `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle` on one rep's replay transcript; `verify` adds the session checks S1–S18.
+-/
 
 @[expose] public section
 
@@ -29,11 +30,13 @@ structure Setup where
   /-- every opening carries `opened_salts`, empty for an unsalted scheme, as the circuit prover writes it from `2908d078` on
   (`Tags.withPlainLeaves`); its earlier unsalted openings carry none -/
   openedSalts : Bool := false
+  /-- the statement is a wide-leaf one (`Tags.wideLeaf`): the `--zk` schedule its proofs follow (`Zk.schedule`) -/
+  wideLeaf : Bool := false
   deriving Inhabited
 
 def Setup.ofCircuit (st : Stmt) : Setup :=
   { m := st.m, kLog := st.c.kLog, digest := st.digest.extract 0 32, fold := st.circuitFold,
-    extra := st.extraClaims, merkle := st.merkle, openedSalts := st.tags.hm96Rows,
+    extra := st.extraClaims, merkle := st.merkle, openedSalts := st.tags.hm96Rows, wideLeaf := st.tags.wideLeaf,
     publics := fun p => if p.size == 0 then pure () else throw "S8: the circuit statement commits no public words" }
 
 def pcsParams (ms : MerkleScheme) (sch : Schedule) : PcsParams := ⟨sch.m.toUInt64, 1, sch.k0.toUInt64, 1, none, ms.pcsIndex⟩

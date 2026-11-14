@@ -130,8 +130,8 @@ def test_function_in_a_bundle_that_no_node_calls_is_still_resolved():
 
 def test_uncalled_role_of_the_program_function_itself_is_a_definition():
     """The program function is inlined into the root, so no node names it; its binding record (`program_fn`)
-    is still the program's identity and every function it references is resolved — FE2's authored `Row{ops=
-    {add, spare}}` where `spare` is bound but never called (test_frontend_rulings: "DC: nested-static discovery")."""
+    is still the program's identity and every function it references is resolved: `RowUncalled{ops=
+    {dot, spare}}`, where `spare` is bound but never called."""
     @composite("RowUncalled", 1, ["ops"], lambda S: ((("x", A2), ("w", A2)), V16))
     def RowUncalled(B, S, x, w):
         return B.call(S.ops["dot"], x, w)

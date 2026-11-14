@@ -249,16 +249,16 @@ ISSUE_ID = re.compile(r"\b(?!SHA-)[A-Z]+-[0-9]+\b")
 #: the audit's GPU time on a served two-stage run, by part, which the share of compute it measures sums: what each part
 #: is, and why a run's record lacks it where it does
 SERVED_PARTS = {
-    "prove": ("the sessions' proving", "the two-stage audit's record keeps each session's proving seconds "
-              "(`audit.timing`) and not the GPUs it held"),
-    "staging": ("staging the sampled proof blocks for their sessions", "the one-stage audit times its staging "
-                "(`staged_s`) and its summary leaves the seconds out"),
+    "prove": ("the sessions' proving", ("the two-stage audit's record keeps each session's proving seconds "
+              "(`audit.timing`) and not the GPUs it held")),
+    "staging": ("staging the sampled proof blocks for their sessions", ("the one-stage audit times its staging "
+                "(`staged_s`) and its summary leaves the seconds out")),
     "replay": ("the replay of the sampled spans", "the two-stage audit reads no clock over its replay"),
     "interior": ("the interior commitment of the sampled spans' proof blocks",
                  "the two-stage audit reads no clock over its interior commitment"),
-    "serving_charge": ("serving under Verity over stock vLLM serving the same load", "no stock serve of the window's "
+    "serving_charge": ("serving under Verity over stock vLLM serving the same load", ("no stock serve of the window's "
                        "load (`stock`) and no serving cost of the served arm over stock (`serving_cost`, "
-                       "`verity bench serve_tax`)"),
+                       "`verity bench serve_tax`)")),
 }
 #: the record's field that says which seconds a session's proving is (`prove`): ``busy``, the proof server's busy
 #: seconds on a card, measured; or ``session``, a session's seconds, its wait behind the others of its prover included,
@@ -376,9 +376,10 @@ def rows_of_record(store: Any, *, row: str = ROW, step: str = STEP, world: str =
     plans: dict[str, tuple[str, dict]] = {}
     runs, refused = [], []
     for run in sorted({run for run, _ in labelled}, reverse=True):
-        found, plan = [], None
+        found: list[dict] = []
+        plan: dict | None = None
         if superseded := [str(lab.value) for lab in store.labels(run, key=SUPERSEDED_BY)]:
-            why = f"superseded by {', '.join(superseded)}"
+            why: str | None = f"superseded by {', '.join(superseded)}"
         else:
             found, plan, why = read_run(store, run)
             found = [r for r in found if not r.get("error") and _case(r, row, step, world)
@@ -529,8 +530,9 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
     if len(kinds := sorted({str(r[VARIANT]) for r in rows if r.get(VARIANT) is not None})) > 1:
         raise ValueError(f"{run}'s {scope} rows are {len(kinds)} variants of the row ({', '.join(kinds)}), each on its "
                          "own premises: a run of record holds one, or --variant names the one meant")
-    counts = [_requests(r) for r in rows]
-    if None in counts:
+    asked = [_requests(r) for r in rows]
+    counts = [c for c in asked if c is not None]
+    if len(counts) < len(asked):
         raise ValueError(f"{run}'s {scope} rows don't say what requests they are priced over (`replay_sample / q`)")
     fixed = {"lambda": {r["weights_bits"] / r["target_bits"] for r in rows}, "delta": {r["delta_seen"] for r in rows},
              "output_bits": {r["S"] for r in rows}, "gpu_seconds": {r["gpu_seconds"] for r in rows},
@@ -608,8 +610,8 @@ def verdict(x: Any, where: str) -> dict:
                     (x["verdict"] != "withheld" or text("open"),
                      "`open` states what the verifier withheld its accept for, on a `withheld` verdict"),
                     (not (isinstance(x["open"], str) and ISSUE_ID.search(x["open"])),
-                     "`open` names an issue, and the print carries no issue's id: state what is open in words (e.g. "
-                     "`the two-round form's soundness is not proved`), and put the issue on the board")):
+                     ("`open` names an issue, and the print carries no issue's id: state what is open in words (e.g. "
+                     "`the two-round form's soundness is not proved`), and put the issue on the board"))):
         if not ok:
             raise ValueError(f"{where} holds {', '.join(f'`{k}` {x[k]!r}' for k in VERDICT_FIELDS if k != 'verifier')}: "
                              f"{why}")
@@ -652,7 +654,7 @@ def stop_verdicts(store: Any) -> tuple[list[dict], list[str], list[dict]] | None
         else:
             at, _, why = _run_files(store, run, (VERDICTS_FILE,))
             why = why or (None if at else f"holds no verdicts (`{VERDICTS_FILE}`)")
-        if why:
+        if why or at is None:
             refused.append({"target": run, "record": VERDICTS, "why": why})
             continue
         for n, line in enumerate((at / VERDICTS_FILE).read_text().splitlines(), 1):
@@ -815,7 +817,7 @@ def _gpu_s(entries: Any, field: str, run: str) -> tuple[float | None, list[str]]
     for e in [entries] if isinstance(entries, Mapping) else entries:
         seconds, gpus = e.get("seconds"), e.get("gpus")
         lacks += [f"{field}.{k}" for k, v in (("seconds", seconds), ("gpus", gpus)) if v is None]
-        if None not in (seconds, gpus):
+        if seconds is not None and gpus is not None:
             if not (seconds >= 0 and isinstance(gpus, int) and not isinstance(gpus, bool) and gpus >= 0):
                 raise ValueError(f"{run}'s record holds {field} at {seconds!r} seconds on {gpus!r} GPUs: an entry is "
                                  "seconds of 0 or more on a whole count of GPUs, 0 or more")
@@ -872,7 +874,7 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
             stock, lacks = _gpu_s(record.get("stock"), "stock", run)
             cost = record.get("serving_cost")
             if record.get("stock") is not None or cost is None:
-                gpu_s, mark = (None if None in (stock, serving) else serving - stock), "measured"
+                gpu_s, mark = (None if stock is None or serving is None else serving - stock), "measured"
                 source = "the served GPU-seconds less those of stock vLLM serving the same load (`stock`)"
             else:
                 if not (isinstance(cost, (int, float)) and cost > -1):
@@ -895,7 +897,7 @@ def served_share(record: Mapping[str, Any] | None) -> dict:
             gaps.append({"field": name, "lacks": lacks, "why": why})
         parts[name] = {"what": what, "gpu_s": gpu_s, "mark": "missing" if gpu_s is None or lacks else mark,
                        "source": source,
-                       "share": None if None in (gpu_s, serving) or not serving else gpu_s / serving,
+                       "share": None if gpu_s is None or not serving else gpu_s / serving,
                        "on_cpus": name != "serving_charge" and gpu_s is not None and _on_cpus(record.get(name))}
     if serving is not None and not serving > 0:
         raise ValueError(f"{run}'s record holds the window's serving at {serving!r} GPU-seconds: the share is of more "
@@ -1052,7 +1054,8 @@ def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, varian
         scopes, plans, _, _ = rows_of_record(store, row=ASSUMED_ROW, step=step, variant=variant)
         if "world year" not in scopes:
             return out | {"why": f"no run of record holds its world year's rows (they hold {', '.join(sorted(scopes))})"}
-        p = at_share("world year", *scopes["world year"], share, plans.get("world year"))
+        run, rows = scopes["world year"]
+        p = at_share("world year", run, rows, share, plans.get("world year"))
     except ValueError as e:
         return out | {"why": str(e)}
     if moved := [k for k in ("gpu_seconds", "requests", "weights_bits") if not _same(p[k], head[k])]:
@@ -1117,13 +1120,14 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
         raise ValueError(f"no run of record holds the world year's rows ({', '.join(held)} hold{'s' * (len(held) == 1)} "
                          f"{', '.join(sorted(points))}): label the run that does ({_label()})")
     head = points["world year"]
-    less = at_share("world year", *scopes["world year"], share - network_check)
+    world_run, world_rows = scopes["world year"]
+    less = at_share("world year", world_run, world_rows, share - network_check)
     assumed = None if row == ASSUMED_ROW else at_assumed_prices(completion.store, head, share, step, variant)
     measured["given"] = {"share": share, "mark": "assumed", "GB": head["GB"]}
     measured.update(GB=None, beta=None, inside=None, no_GB=None)
     if measured["value"] is not None:
         try:
-            there = at_share("world year", *scopes["world year"], measured["value"])
+            there = at_share("world year", world_run, world_rows, measured["value"])
             measured.update(GB=there["GB"], beta=there["beta"], inside=there["inside"])
         except ValueError as e:
             measured["no_GB"] = str(e)
@@ -1140,8 +1144,8 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     for (compute, period), at in seen.items():
         scope = f"{compute} {period}"
         point = points.get(scope)
-        for name, mine, theirs in (("GPU-seconds", point and point["gpu_seconds"], at["gpu_seconds"]),
-                                   ("requests", point and point["requests"], at["requests"])):
+        for name, mine, theirs in (("GPU-seconds", None if point is None else point["gpu_seconds"], at["gpu_seconds"]),
+                                   ("requests", None if point is None else point["requests"], at["requests"])):
             if mine is not None and not _same(mine, theirs):
                 raise ValueError(f"the two parts cover different compute over the {scope}: {mine:.6g} {name} on the compute "
                                  f"audit's side and {theirs:.6g} on the network certifier's")
@@ -1162,9 +1166,10 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
             entries = r["entries"] and r["entries"]["bits"]
             mine = None if audit is None else audit["bits"] if entries is None else min(entries, audit["bits"])
 
-            def summed(dj: str) -> dict:
+            def summed(dj: str, r: Mapping = r, mine: float | None = mine, eps: float = eps,
+                       error: float | None = error) -> dict:
                 return {"certifier_GB": r["term"][dj]["GB"] if eps < 1 else None,
-                        "GB": (r["term"][dj]["bits"] + mine) / GB if mine is not None and error < 1 else None}
+                        "GB": (r["term"][dj]["bits"] + mine) / GB if mine is not None and error is not None and error < 1 else None}
 
             together[name] = {**summed(of), "label": r["with_set_time_card"],
                               "with_set_time_card": {**summed(set_time), "label": card}}
@@ -1272,7 +1277,7 @@ def _how(priced: Mapping | None) -> str:
     plan = "its own plan at the pinned budget nearest" if priced["of"] == "rows" else "its plan"
     alone = "measured" in priced["ways"] and _timed_alone(priced, priced["ways"]["measured"]["share"])[1]
     return (f"of the row's proving time, by {plan}, β = {_part(priced['beta'])} ({priced['run']}), "
-            + "the share in block families priced each way is "
+             "the share in block families priced each way is "
             + ", ".join(f"{_pct(p['share'])} {way}" for way, p in priced["ways"].items())
             + ": the largest families are " + ", ".join(f"{family} ({_pct(s)}, {way})" for s, family, way in largest)
             + (f". Of the families priced measured, {alone}" if alone else ""))
@@ -1314,7 +1319,7 @@ def _labelled(year: Mapping, key: str, set_time: str) -> list[str]:
             other.setdefault(t["with_set_time_card"]["label"], []).append(f"{_n(t['with_set_time_card'][key])} GB {what}")
     return [f"{label}: " + "; and ".join(filter(None, (
                 "; ".join(own.get(label, ())),
-                label in other and f"at D_j = {set_time}, " + "; ".join(other[label]))))
+                f"at D_j = {set_time}, " + "; ".join(other[label]) if label in other else "")))
             for label in dict.fromkeys((*own, *other))]
 
 
@@ -1338,12 +1343,12 @@ def _security(bound: Mapping | None) -> list[str]:
     rows hold none."""
 
     if bound is None:
-        return [f"- **the {SECURITY}**: not read. The rows of record hold no binding bound (`verification_phase.binding`): "
-                f"the planner wrote them before it computed one. Run it again and label its run ({_label()})."]
+        return [(f"- **the {SECURITY}**: not read. The rows of record hold no binding bound (`verification_phase.binding`): "
+                f"the planner wrote them before it computed one. Run it again and label its run ({_label()}).")]
     design, (calls, compressions) = bound["design"], (bound["counted"][c] for c in ("calls", "compressions"))
     scope = bound["scope"].replace(" ", "-")
     return [
-        f"- **the {SECURITY}** (modeled): the probability that an accepted run opens a value off the committed trace, by "
+        (f"- **the {SECURITY}** (modeled): the probability that an accepted run opens a value off the committed trace, by "
         f"the bound Lean states of a two-stage sample counted by classes of gates (`{LEAN_BOUND}`), every run at "
         f"{design['calls_a_run']} calls of SHA-512, at the row's own design at the pinned budget nearest, β = {_part(bound['beta'])} ({bound['run']}). "
         f"**Over one verification phase: at most {calls['phase']['bound']}** counted in calls, as the Lean counts, and "
@@ -1352,13 +1357,13 @@ def _security(bound: Mapping | None) -> list[str]:
         f"A verification phase is a {bound['name']}'s {_n(bound['seconds'])} s on {_n(bound['machines'])} machines: its "
         f"first stage samples {_n(bound['sampled'])} replay blocks, and its second {_n(bound['proof_blocks'])} of their "
         f"proof blocks in {_n(design['sessions'])} sessions, the largest of {_n(bound['tables'])} "
-        f"table{'s' * (bound['tables'] != 1)}.",
+        f"table{'s' * (bound['tables'] != 1)}."),
         f"- the {SECURITY} assumes: "
         + "; ".join(i["input"] if i["value"] is None else f"{_n(i['value'])} {i['input']}" for i in bound["assumed"])
         + ". It counts each session's knowledge error and the run's own opening checks as 0.",
-        f"- what Lean proves of the {SECURITY}: over one verification phase counted in calls, {_lean(calls['lean'])}. "
+        (f"- what Lean proves of the {SECURITY}: over one verification phase counted in calls, {_lean(calls['lean'])}. "
         f"Counted in compressions, {_lean(compressions['lean'])}. Over a {scope} of phases, {NOT_PROVED}: no theorem "
-        "sums a monitoring period's verification phases."]
+        "sums a monitoring period's verification phases.")]
 
 
 def _share(cs: Mapping) -> tuple[list[str], list[str]]:
@@ -1374,10 +1379,10 @@ def _share(cs: Mapping) -> tuple[list[str], list[str]]:
         there = (f"its part has no figure at that share: {cs['no_GB']}" if cs["GB"] is None else
                  f"at that share, β = {_part(cs['beta'])}{'' if cs['inside'] else ' (extrapolated)'}, the compute "
                  f"audit's part over the world's year is {_n(cs['GB'])} GB")
-        lines = [f"**The audit's share of compute: {_part(cs['value'])} ({cs['mark']})**, on {cs['run']}: the audit's "
+        lines = [(f"**The audit's share of compute: {_part(cs['value'])} ({cs['mark']})**, on {cs['run']}: the audit's "
                  f"GPU-seconds over the window's serving, {_n(cs['serving_gpu_s'])} GPU-seconds, in parts {parts}. "
                  f"{there[0].upper()}{there[1:]}, beside {_n(cs['given']['GB'])} GB at {given}, which every figure "
-                 "below is read at.", ""]
+                 "below is read at."), ""]
     if cs["run"] is None:
         return lines, []
     gaps = {g["field"]: g for g in cs["missing"]}
@@ -1387,9 +1392,9 @@ def _share(cs: Mapping) -> tuple[list[str], list[str]]:
                        if name in gaps else "")
 
     return lines, [f"## The audit's share of compute on {cs['run']}", "",
-            "Each part of the audit's GPU time on the served run, and the window's serving it is a share of, read from "
+            ("Each part of the audit's GPU time on the served run, and the window's serving it is a share of, read from "
             "the run's record. A part the record lacks is marked missing with its gap, and the share is not claimed "
-            "without it.", "",
+            "without it."), "",
             *_table(("part", "what", "GPU-seconds", "share of the window's serving", "mark", "source"),
                     [("serving", "the window's serving", _n(cs["serving_gpu_s"]), "",
                       "missing" if "serving" in gaps else "measured", source("serving", "`serving`")),
@@ -1446,8 +1451,8 @@ def render(doc: Mapping[str, Any]) -> str:
             *(f"- the network certifier's part {clause}; ε = {_p(eps)}."
               for clause in _labelled(year, "certifier_GB", set_time))]
     else:
-        certifier = [f"- **the network certifier's part: {NO_BOUND}** ({on}). Its ε over the world's year is {_n(eps)}, "
-                     "and at 1 or more it bounds nothing, so no amount is printed under any of its rows."]
+        certifier = [(f"- **the network certifier's part: {NO_BOUND}** ({on}). Its ε over the world's year is {_n(eps)}, "
+                     "and at 1 or more it bounds nothing, so no amount is printed under any of its rows.")]
     if error < 1:
         together = [
             "- **together**, a link's execution phase carrying K = schedules + cells + jitter + min(entries, advice + "
@@ -1457,19 +1462,19 @@ def render(doc: Mapping[str, Any]) -> str:
             + f"; each failing with at most {_n(error)}, the two parts' errors summed.",
             *(f"- together, {clause}; error {_n(error)}." for clause in _labelled(year, "GB", set_time))]
     else:
-        together = [f"- **together: {NO_BOUND}**. The two parts' errors over the world's year sum to {_n(error)}, and at "
-                    "1 or more the sum bounds nothing, so no amount is printed for the two together."]
+        together = [(f"- **together: {NO_BOUND}**. The two parts' errors over the world's year sum to {_n(error)}, and at "
+                    "1 or more the sum bounds nothing, so no amount is printed for the two together.")]
     lines = [
-        f"# verity bench exfiltration: {doc['model']}'s exfiltration capacity over a monitoring period, at "
-        f"{_pct(share)} of total compute", "",
+        (f"# verity bench exfiltration: {doc['model']}'s exfiltration capacity over a monitoring period, at "
+        f"{_pct(share)} of total compute"), "",
         *measured,
         f"Over the world's year, at {_pct(share)} of total compute, in two parts:", "",
-        f"- **the compute audit's part{label}: {_n(head['GB'])} GB** (modeled), {_n(head['GB'] / w['GB'])} copies of the weights "
+        (f"- **the compute audit's part{label}: {_n(head['GB'])} GB** (modeled), {_n(head['GB'] / w['GB'])} copies of the weights "
         f"({w['label']}, {_n(w['GB'])} GB) and {_n(year['compute_audit']['bits_a_request'])} bits a request. It is the "
         f"planner's row `{doc['row']}`{what}, read at the audit budget where its total is {_pct(share)} of the compute, "
         f"β = {_part(head['beta'])}{outside}: its bound, "
         f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}. The row is priced over "
-        f"{_n(head['requests'])} requests, the count the network certifier's part is over.",
+        f"{_n(head['requests'])} requests, the count the network certifier's part is over."),
         f"- {_readers(share)}",
         f"- {_how(head['priced'])}.",
         f"- what prices the row's proving time, as its rows record it{plan}: {_by_source(sources)}.",
@@ -1503,38 +1508,38 @@ def render(doc: Mapping[str, Any]) -> str:
         f"{len(doc['compute_audit'])} scopes"
         + "".join(f", and the {p['scope']}'s plan ({p['priced']['run']})" for p in planned if p["priced"]["of"] == "plan"),
         *([] if stop is None else [
-            f"- the stop class: {', '.join(stop['runs']) or 'no run read'} (`{stop['record']}`): "
-            f"{len(stop['verdicts'])} verdicts, {stop['said']}"]),
-        "- the network certifier's part and the requests both parts count over (modeled or assumed, read from the tree, "
+            (f"- the stop class: {', '.join(stop['runs']) or 'no run read'} (`{stop['record']}`): "
+            f"{len(stop['verdicts'])} verdicts, {stop['said']}")]),
+        ("- the network certifier's part and the requests both parts count over (modeled or assumed, read from the tree, "
         "not records): `verity bench certifier_term`'s inputs, among them the request it counts and what that request "
-        "is, in the table below", "",
+        "is, in the table below"), "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
                 [(i["part"], i["input"], _n(i["value"]), i["unit"], PRINTED.get(i["mark"], i["mark"]), i["source"])
                  for i in doc["inputs"]]), "",
         *parts,
         f"## The compute audit's part at {_pct(share)} of total compute", "",
-        "Each scope's rows of record, read at the audit budget β where their total is the share. The requests are the "
-        "count the rows are priced over. The parts are shares of total compute; the wait is part of serving.", "",
+        ("Each scope's rows of record, read at the audit budget β where their total is the share. The requests are the "
+        "count the rows are priced over. The parts are shares of total compute; the wait is part of serving."), "",
         *_table(("scope", "run", "β", "bound at λ = 1, GB", "GB", "x weights", "requests", *PARTS),
                 [(p["scope"], p["run"], _part(p["beta"]) + ("" if p["inside"] else " (extrapolated)"), _n(p["bound"]["GB"]),
                   _n(p["GB"]), _n(p["bits"] / w["bits"]), _n(p["requests"]), *(_part(p["parts"].get(part)) for part in PARTS))
                  for p in doc["compute_audit"]]), "",
         *(planned and (
-            "Each scope's proving time by how its block families are priced, by its plan: the rows' own at the pinned "
-            "budget nearest β, or a plan of record at its own budget. How each family is priced is the rows' account.", "",
+            ("Each scope's proving time by how its block families are priced, by its plan: the rows' own at the pinned "
+            "budget nearest β, or a plan of record at its own budget. How each family is priced is the rows' account."), "",
             *_table(("scope", "plan", "at β", "priced", "share of proving time", "block families", "the largest"),
                     [(p["scope"], p["priced"]["run"] + (" (rows)" if p["priced"]["of"] == "rows" else ""),
                       _part(p["priced"]["beta"]), way, _part(x["share"]), str(len(x["families"])),
                       ", ".join(f"{family} {_part(s)}" for family, s in list(x["families"].items())[:3]))
                      for p in planned for way, x in p["priced"]["ways"].items()]), "")),
         "## The network certifier's part over the world's year", "",
-        f"`verity bench certifier_term`'s rows (`{cert['schema']}`) at its request count `{cert['request_count']}`, for a "
+        (f"`verity bench certifier_term`'s rows (`{cert['schema']}`) at its request count `{cert['request_count']}`, for a "
         f"class of at most {_n(cert['response_ids'])} ids a response. The term is the schedules, the fail cells and the "
         f"jitter, and the term of record is the one at D_j = {of}. The term at D_j = {set_time}, and every figure of a "
         f"row whose name carries it, is printed only under the network certifier's label, \"{card}\". The entries are "
         "the compute side's. Each row carries the δ of its scans and its ε over the world's year, their sum over every "
-        "link's execution phases; a row whose ε is 1 or more has no amount.", "",
+        "link's execution phases; a row whose ε is 1 or more has no amount."), "",
         *(f"- {name} ({'; '.join(filter(None, (k['standing'], k.get('mark'))))}): {k['counts']}"
           for name, k in cert["legend"].items()), "",
         *_table(("row", "schedules, GB", "cells, GB", f"term at D_j = {of}, GB", "x weights",
@@ -1616,7 +1621,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
         scope, span, eps = f"{p['compute']} {p['period']}", f"{p['compute']}'s {p['period']}", p["eps"]
         error = (f"its error: ε = {_p(eps)} over the {span}, at a scan's δ of {_p(cert['scan_delta']['value'])} "
                  f"({cert['scan_delta']['mark']})")
-        figures = {"network_certifier": (p["together"]["scan"]["certifier_GB"], "modeled",
+        figures: dict[str, tuple[Any, str, list[str], str | None]] = {
+            "network_certifier": (p["together"]["scan"]["certifier_GB"], "modeled",
                                          [f"modeled{f' ({scan})' if scan else ''}: {term}", error],
                                          f"{NO_BOUND}: ε = {_n(eps)} over the {span}")}
         head = next((x for x in doc["compute_audit"] if x["scope"] == scope), None)
@@ -1629,8 +1635,8 @@ def measurements(doc: Mapping[str, Any], metrics: Mapping[str, str]) -> list[dic
                      f"{_pct(share)} of compute, β = {_part(head['beta'])}{'' if head['inside'] else ' (extrapolated)'}: "
                      f"λ = {_n(head['lambda'])} times its bound, {_n(head['bound']['GB'])} GB")
             figures[figure] = (head["GB"], mark, [f"{mark}: {what}, {audit}",
-                                                  f"its error: δ = {_n(head['delta'])} over the {span}, the compute "
-                                                  "audit's", *runs], None)
+                                                  (f"its error: δ = {_n(head['delta'])} over the {span}, the compute "
+                                                  "audit's"), *runs], None)
         for name, figure in metrics.items():
             value, mark, inputs, why = figures.get(figure, (None,) * 4)
             if value is None and scope != "world year":
@@ -1713,7 +1719,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
         return 2
     shown = None
     if served is not None and importlib.util.find_spec("verity_bench.served_row") is not None:
-        from verity_bench import served_row  # it reads this module's names
+        from verity_bench import served_row  # type: ignore[attr-defined]  # optional; it reads this module's names
 
         shown = served_row.account(served)
     if shown is not None:

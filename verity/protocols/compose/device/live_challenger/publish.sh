@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Publish the auditor host's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
+# Publish the auditor device's pins log, its ledger and every ended session to the store (auditor.py's "The ledger"). The control pod runs it as
 # the watchers loop `challenger-publish` (infra/control/watchers.toml), so no agent VM has to be up for it:
 #
-#   verity/protocols/compose/device/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor host's gate, USER@HOST
+#   verity/protocols/compose/device/live_challenger/publish.sh [--every SECONDS] [DEST]     # DEST: the auditor device's gate, USER@HOST
 #
 # Without DEST the gate is research@ the address $VY_CHALLENGER_1_HOST holds; with neither, it ends at once and says so.
 # It reads both through the gate's `ledger` and `fetch SESSION` verbs: as research, with a key the host forces to the gate (the
@@ -21,7 +21,7 @@
 # the last put one extended refused, exit 4), so no published open seals lines the store lacks; `pinned_session` reads it.
 # The model registry (the gate's `models`) follows it the same way (`--kind challenger-models/v1`, `challenger-models head`).
 set -euo pipefail
-need="the auditor host's address, or DEST as an argument"
+need="the auditor device's address, or DEST as an argument"
 if [ "${1:-}" = --every ]; then
   every=$2
   shift 2

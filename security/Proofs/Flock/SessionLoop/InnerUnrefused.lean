@@ -213,7 +213,7 @@ theorem innerAt_unrefused
   have hs0 : 1 ≤ s ∧ s + (i - rsched.size) = ops.length := by
     obtain ⟨s0', spec', hsx⟩ := Masked.setupOf_of_pos (show 0 < (Masked.stsOf x).size by omega)
     obtain ⟨y⟩ := hx.2 jf.val hj
-    have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * jf.val + rf.val) / 2]!.m = .ok (y.sch, y.tPad) := by
+    have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * jf.val + rf.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * jf.val + rf.val) / 2]!.m = .ok (y.sch, y.tPad) := by
       rw [show (2 * jf.val + rf.val) / 2 = jf.val by omega, getElem!_pos _ jf.val hj]
       exact y.hz
     rw [hq1, hslot, hsd, Masked.repSlot_eq hsx hz, Masked.repSlot_eq hsx hz]

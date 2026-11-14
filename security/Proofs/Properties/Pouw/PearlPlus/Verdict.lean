@@ -434,11 +434,11 @@ theorem forIn_tasks {α σ τ : Type} (V : α → τ) (I : σ → Prop)
     rw [forIn_tasks V I f hf l n' _ hn']
     simp
 
-/-- The units of one weight have one k. -/
+/-- The units of one fixed operand have one k. -/
 def KConsistent (p : Pass) : Prop :=
   ∀ r ∈ p.records, ∀ r' ∈ p.records, r.matmul.weight = r'.matmul.weight → r.matmul.k = r'.matmul.k
 
-/-- One tile's verdict as `replay` computes it, on the fixed operand's noise of its weight. -/
+/-- One tile's verdict as `replay` computes it, on its fixed operand's noise. -/
 def verdictOf (pl : Plan) (opener : Nat → Nat → Except String TileOpening) (x : Nat × Nat) : TileVerdict :=
   let p := pl.passes[x.1]!
   match p.tile? x.2 with
@@ -482,7 +482,7 @@ theorem tile?_pos {p : Pass} {tid pos : Nat} {rows cols : List Nat} (h : p.tile?
     exact (List.getElem?_eq_some_iff.1 (List.mem_zipIdx_iff_getElem?.1 hm)).1
   · cases h
 
-/-- What the replay's noise cache holds: each pass and weight's noise at a unit of that weight. -/
+/-- What the replay's noise cache holds: each pass and fixed operand's noise at a unit of that fixed operand. -/
 def NoiseHeld (pl : Plan) (noise : List ((Nat × Nat) × Task (Except String FixedNoise))) : Prop :=
   ∀ e ∈ noise, ∃ r ∈ (pl.passes[e.1.1]!).records, r.matmul.weight = e.1.2 ∧
     e.2.get = fixedNoise (pl.passes[e.1.1]!).salt (((pl.passes[e.1.1]!).weightRoots.lookup e.1.2).getD .empty) r.matmul.k
@@ -695,11 +695,13 @@ theorem tileKeepsTheCap : TileKeepsTheCap := by
   rename_i rowDebit hrd
   obtain ⟨words, hw, hrd⟩ := bind_ok hrd
   obtain ⟨elems, he, hrd⟩ := bind_ok hrd
+  obtain ⟨endsA, hea, hrd⟩ := bind_ok hrd
+  obtain ⟨endsB, heb, hrd⟩ := bind_ok hrd
   obtain rfl := (Except.ok.inj hrd).symm
   split at hc
   · cases hc
   rename_i hcap
-  refine ⟨words, elems, hw, he, Nat.not_lt.mp hcap, ?_⟩
+  refine ⟨words, elems, endsA, endsB, hw, he, hea, heb, Nat.not_lt.mp hcap, ?_⟩
   obtain ⟨st, hst, hc⟩ := bind_ok hc
   have hall := forIn_ok_all (fun x : Nat × Nat => x.2 * Rule.CAP_DEN ≤
       Rule.CAP_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)) _
@@ -714,14 +716,16 @@ theorem tileKeepsTheCap : TileKeepsTheCap := by
       cases hc)
   have hlw : words.length = cr.length := mapM_ok_length hw
   have hle : elems.length = cr.length := by rw [mapM_ok_length he, List.length_zip, hlw, Nat.min_self]
+  have hla : endsA.length = cr.length := mapM_ok_length hea
   intro d hd
   obtain ⟨i, hi⟩ := mem_zip_snd (l := cr)
-    (Nat.le_of_eq (by rw [List.length_map, List.length_zip, hlw, hle, Nat.min_self])) d hd
+    (Nat.le_of_eq (by rw [List.length_map, List.length_zip, List.length_zip, hlw, hle, hla, Nat.min_self,
+      Nat.min_self])) d hd
   exact hall (i, d) hi
 
 /-! ## The run's acceptance -/
 
-/-- A loaded pass's units of one weight have one k: its split's `k_unit` (`checkRecords`). -/
+/-- A loaded pass's units of one fixed operand have one k: its split's `k_unit` (`checkRecords`). -/
 theorem load_kconsistent {coins : EpochCoins} {man : Lean.Json} {p : Pass} (h : load coins man = .ok p) :
     KConsistent p := by
   obtain ⟨-, splits, hc, -⟩ := load_facts h
@@ -748,7 +752,7 @@ theorem verdictOf_key (pl : Plan) (opener : Nat → Nat → Except String TileOp
 
 theorem default_tile? (tid : Nat) : (default : Pass).tile? tid = none := rfl
 
-/-- A tile whose verdict is ok under `m` is a pass's, opened, and passed `checkTile` on its weight's noise, or was over its
+/-- A tile whose verdict is ok under `m` is a pass's, opened, and passed `checkTile` on its fixed operand's noise, or was over its
 inert-work bound with `m` crediting it nothing. -/
 theorem verdictOf_ok {pl : Plan} {opener : Nat → Nat → Except String TileOpening} {m : OverCap} {pi tid : Nat}
     (h : (verdictOf pl opener (pi, tid)).ok m = true) :

@@ -34,8 +34,9 @@ from verity.protocols.accounting.poub.verifier import codec as rcodec
 from verity.protocols.accounting.poub.verifier import receipts as rb
 from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
-from verity_vllm.protocols.remote_bandwidth import binder, remote
+from verity_vllm.errors import Refused
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
+from verity_vllm.protocols.remote_bandwidth import remote
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, NodeMemory
 
@@ -817,9 +818,11 @@ def test_a_registration_cut_off_is_a_refusal_only_when_the_verifier_refused(monk
     with pytest.raises(Wire.Closed, match="the peer closed the connection"):
         remote.prove(object(), "10.0.0.7:7781", log=lambda m: None)
     closing("refused: a live registration")
-    with pytest.raises(remote.Refused, match="at 10.0.0.7:7781 refused the store's registration") as refused:
+    with pytest.raises(Refused, match="at 10.0.0.7:7781 refused the store's registration") as refused:
         remote.prove(object(), "10.0.0.7:7781", log=lambda m: None)
-    assert (refused.value.verifier, refused.value.why) == ("10.0.0.7:7781", "refused: a live registration")
+    assert type(refused.value) is Refused and refused.value.reasons == (
+        "the verifier at 10.0.0.7:7781 refused the store's registration: refused: a live registration",)
+    assert str(refused.value) == refused.value.reasons[0]
     assert done == ["shutdown", "close"] * 2
 
 
@@ -926,7 +929,7 @@ def test_the_commits_session_installs_a_binder_of_its_store_before_the_build(mon
     """`CommitSession.install` makes the store's binder with no passes of its own and the KV outside the store, over
     the session's store and its ``weight_blocks``, and keeps what its `install` returns; `before_build` sets the engine
     arguments, checks the target and installs, in that order, and installs nothing for a target it refuses."""
-    monkeypatch.setattr(binder, "Binder", Binding)
+    monkeypatch.setattr(remote, "Binder", Binding)
     cs = remote.CommitSession("127.0.0.1:7781", kv_pages=8, weight_blocks=5)
     assert cs.binder is None
     cs.install()
@@ -989,6 +992,22 @@ def test_the_commits_session_checks_the_built_engine_and_registers_its_filler():
         cs.check(built(), runner)
     assert str(e.value) == head + "a KV pool registered (served writes stay outside the registration)"
     assert cs.binder.calls == ["stats"] and len(said) == 2
+
+
+def test_the_commits_session_names_the_step_that_comes_first():
+    """`CommitSession.check` before `install`, and `end` before `begin`, each raise a `RuntimeError` naming the step
+    that comes first; an engine the session doesn't serve is refused before `check` asks for its binder."""
+    cs = remote.CommitSession("127.0.0.1:7781", log=lambda m: None)
+    runner = type("Runner", (), {"device": "cuda:0"})()
+    with pytest.raises(RuntimeError) as early:
+        cs.check(built(), runner)
+    assert str(early.value) == "the Commit's session checks its engine once its binder is installed (`install`)"
+    with pytest.raises(SystemExit, match="^--remote-verifier: the engine is not one the session serves: prefix caching on$"):
+        cs.check(built(prefix=True), runner)
+    with pytest.raises(RuntimeError) as early:
+        cs.end()
+    assert str(early.value) == "the Commit's session ends once it has begun (`begin`)"
+    assert cs.binder is None and cs.lockstep is None and cs.record is None
 
 
 class Stats:
@@ -1192,6 +1211,35 @@ def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_u
         cs.begin()
 
 
+@pytest.mark.parametrize(("result", "steps"), [(None, []), ({"accepted": True}, []), ({"accepted": True, "pass_steps": None}, []),
+                                               ({"accepted": True, "pass_steps": []}, []),
+                                               ({"accepted": True, "pass_steps": [[0, 0, 5]]}, [[0, 0, 5]])])
+def test_a_session_whose_result_leaves_its_pass_steps_out_records_none(monkeypatch, tmp_path, result, steps):
+    """The audit run's record of a session whose trace began: its map's ``pass_steps`` are the prover's result's, and the
+    empty list where the result leaves the field out, holds None there, or was never returned (the prover raised:
+    ``result`` None here); with no step in the map, none of them is mapped."""
+    def proves(backend, *a, **kw):
+        reg = audit.register(bytes(32), b"n", backend.blocks, backend.payload_root(b"n"), P512, nonce=bytes(32))
+        backend.encode(reg)
+        backend.begin_session()
+        backend.serving(reg, 2)
+        if result is None:
+            raise ConnectionResetError("the verifier went away")
+        return [result]
+
+    monkeypatch.setattr(remote, "prove", proves)
+    cs = remote.CommitSession("127.0.0.1:7781", out=tmp_path, codec=P512, log=lambda m: None)
+    cs.store, cs.binder = store(), Stats()
+    cs.begin()
+    rec = cs.end()
+    mm = rec["memory_map"]
+    assert mm["pass_steps"] == steps and mm["pass_steps_mapped"] is False and mm["first_step"] is None and mm["steps"] == 0
+    assert rec["prover"] == ({} if result is None else result) and rec["run"] == {"steps": 0, "audited": 0, "unaudited": 0}
+    assert rec["error"] == ("ConnectionResetError: the verifier went away" if result is None else None)
+    assert rec["accepted"] is (result is not None) and mm.get("agrees") is (None if result is None else True)
+    assert json.loads((tmp_path / "remote_session.json").read_text())["memory_map"]["pass_steps"] == steps
+
+
 @pytest.mark.slow
 def test_a_store_session_whose_prover_seeds_without_the_appends_head_is_rejected():
     r, p, _, backend = run("serve", backend=HeadlessBackend)
@@ -1262,7 +1310,7 @@ def test_a_verifier_address_is_host_port_and_a_store_serves_one_session():
 
 def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reason():
     """One live registration a node (`audit.Registry`): a hello for a node whose registration the verifier holds live
-    is answered `bye`, and `prove` raises `remote.Refused` with the verifier's reason."""
+    is answered `bye`, and `prove` raises `Refused` with the verifier's reason."""
     registry, s = audit.Registry(), store()
     b = remote.StoreBackend(s, engine(s))
     registry.register(os.urandom(32), b"test-node", b.blocks, b.payload_root(b"test-node"), P512)
@@ -1273,7 +1321,7 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
     def prover() -> None:
         try:
             remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
-        except remote.Refused as e:
+        except Refused as e:
             raised.append(e)
 
     th = Prover(prover)
@@ -1283,7 +1331,8 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
             v.register()
         th.outcome()
     (e,) = raised
-    assert e.why == f"refused: {refused.value}" and address in str(e) and e.why in str(e)
+    assert e.reasons == (f"the verifier at {address} refused the store's registration: refused: {refused.value}",)
+    assert str(e) == e.reasons[0]
     assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
 
 
@@ -1300,17 +1349,18 @@ def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused
     def prover() -> None:
         try:
             remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
-        except remote.Refused as e:
+        except Refused as e:
             raised.append(e)
 
     th = Prover(prover)
     sock = th.accept(lsock)
     with verifying(sock, PassClock(), windows=1, window_ns=5, samples=64, registry=registry, lifetime=1) as v:
-        with pytest.raises(ValueError, match="at least 2 windows"):
+        with pytest.raises(ValueError, match="at least 2 windows") as short:
             v.register()
         th.outcome()
     (e,) = raised
-    assert "at least 2 windows" in e.why and registry.drawn(b"test-node") == 0
+    assert e.reasons == (f"the verifier at {address} refused the store's registration: refused: {short.value}",)
+    assert registry.drawn(b"test-node") == 0
 
 
 FAILING = '''

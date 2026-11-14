@@ -123,7 +123,7 @@ theorem afterLinkPZk_sendsJ (resp : ℕ → Claims.Msg) (h : ByteArray → ByteA
     (sts : Array Stmt) (words : Array (List ℕ)) (schs : Array (Schedule × ℕ)) (trs : Array Trace) (tape : TapeZk)
     (tbls : Array (Array F128)) (cms : Array Commit) (c1 : ℕ → F128) (hspec : spec.tables.size = sts.size)
     (hm : ∀ j (hj : j < sts.size), 6 ≤ sts[j].m)
-    (hschs : ∀ j (hj : j < sts.size), Zk.schedule sts[j].m = .ok schs[j]!) :
+    (hschs : ∀ j (hj : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok schs[j]!) :
     sendsC.P (afterLinkPZk (asksS resp) (Hashes.ofSha512 h) spec (tabsOf sts) words trs tape schs tbls cms c1)
       (rounds true spec sts) := by
   unfold afterLinkPZk
@@ -173,7 +173,7 @@ theorem sessionPZk_sends (resp : ℕ → Claims.Msg) (h : ByteArray → ByteArra
   refine sendsC_quiet_bind (schedsPZk_quiet _) fun schs hs => ?_
   unfold schedsPZk at hs
   obtain ⟨hs1, hs2⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hs
-  have hschs : ∀ j (hj : j < sts.size), Zk.schedule sts[j].m = .ok schs[j]! := by
+  have hschs : ∀ j (hj : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok schs[j]! := by
     intro j hj
     have hv := hs2 j (by simpa [tabsOf] using hj) (by rw [hs1]; simpa [tabsOf] using hj)
     simp only [tabsOf, Array.getElem_map, Setup.ofCircuit, monadLift_self] at hv

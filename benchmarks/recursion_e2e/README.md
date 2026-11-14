@@ -15,8 +15,9 @@ time it yet.
 ~~~text
 verity bench recursion_e2e plan  [POINT]                          the steps, each statement's lease, the launch command
 verity bench recursion_e2e run   [POINT] [--e2e] [--release] [--dry-run] [--here]
-                                                                   one recorded run of job.sh (a firewalled or --cpu run: a
-                                                                   plain run on a CPU node; a GPU run: a GPU node's queue)
+                                                                   one recorded run of job.sh (a run behind the ZK server
+                                                                   or a --cpu run: a plain run on a CPU node; a GPU run: a
+                                                                   GPU node's queue)
 verity bench recursion_e2e result --dir OUT [--out F] [--md F]    the result from a job's out/ (the job runs it last)
 verity bench recursion_e2e table RESULT... [--merge] [--json]     the table from results (a file, or a run id whose
                                                                    records `research fetch --all RUN` fetched, read with
@@ -31,17 +32,20 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   CPU node (`CPU_NODE` in `run.py`): `job.sh` with `GPU=0 FLOCK_WORK=/workspace/cache/rec-bench`, pinned to `--cores`
   (`taskset -c 0-31`), under `--mem-gb` and a timeout of `--max-min`; `run --dry-run` prints the launch. `--on` picks
   another of the CPU nodes that take plain runs (`PLAIN_CPU_NODES`), and `--cores` its cores. The nodes that take runs
-  only through their slots (`SLOT_ONLY`) refuse a CPU run. A GPU run (`--oprove-gpu 1`, or modes without the ZK server)
+  only through their slots (`SLOT_ONLY`) refuse a CPU run. `--on auto` hands the run to `research run`'s queue, which
+  places it itself: the queue's options without `--queue`, and for a CPU run no `--gpu-host` and the CPU node's
+  `GPU=0 FLOCK_WORK=...`, since it may land on one. A GPU run (`--oprove-gpu 1`, or modes without the ZK server)
   is a GPU host job on a GPU node's queue (`NODE`), and `--preemptible` queues it as a guest on a node that admits guests
   only so.
 
-- **ZK server on by default.** `--modes firewall`: AGENTS.md has outer proofs go through the ZK server one at a time.
+- **ZK server on by default.** `--modes firewall`, the pod script's name for the mode through the ZK server: AGENTS.md
+  has outer proofs go through the ZK server one at a time.
   `dev` and `host` are there to compare against, never the default. A run never proves two of its V* statements at once:
   the pod script proves 4 at once by default, so `job.sh` sets its `OPROVE_JOBS=1` and records it in `params.txt` (the table's header
   says "V* statements 1 at a time").
 - **The lease, per statement.** A V* release at K = 4096 takes minutes, and its time is the Lean session
   loop's, not the prover's. Each statement's lease (`stmt_lease_min` in `run.py`, printed by `plan`) is 1.5 times its
-  measured release on the CPU prover, one at a time, end to end (`FW_S` in `run.py`). No one ratio to the
+  measured release on the CPU prover, one at a time, end to end (`RELEASE_S` in `run.py`). No one ratio to the
   dev run fits, so each statement has its own. The pod script takes one `GPU_MAX_MIN` for every prove of an invocation, so
   `--lease-min` defaults to the largest lease among the statements `LEVELS` selects.
   `--max-min` defaults to the sum of those statements' leases, plus each other step's minutes per repeat and 5 minutes
@@ -49,7 +53,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   measurement.
 - **Memory.** `--mem-gb` defaults to 128 with an oprove behind the ZK server, else 64. It is the run's memory reservation, and a queued node makes it the run's MemoryMax.
   L0's release needs the most: the Lean session loop and the prover together.
-- **The CPU prover under the ZK server** (`--oprove-gpu auto`, which is 0 with `--modes firewall`). A lease pool stops a
+- **The CPU prover under the ZK server** (`--oprove-gpu auto`, which is 0 when oprove runs through the ZK server). A lease pool stops a
   lease whose GPU computes nothing for about 10 minutes, and the GPU computes nothing while the Lean session loop works. So V*'s statements are
   proved by the pod script's CPU prover (`GPU=0`, built once beside the GPU one), and no lease is needed. The release's time is then
   the ZK server's, plus a CPU prove where a GPU prove would take about a second. `--oprove-gpu 1` puts the GPU prover back
@@ -64,7 +68,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   server's state (`rec_live --firewall`) on a stream whose failure budget is `RELEASE_BUDGET` (1 unless `--env
   RELEASE_BUDGET=b`: the ZK server opens no recursive session on a stream without one). oprove then proves each part once,
   in order, through
-  `flock-circuit prove --zk --firewall-state DIR --session ID --part NAME`: the Lean session loop (`flock-firewall`) behind
+  `flock-circuit prove --zk --firewall-state DIR --session ID --part NAME`: the ZK server's Lean session loop behind
   the release side's own Lean loop (`core-firewall session`), which holds each verdict to its release time and stops the
   session at a part that is late or refused. `rec_inner.py release-report` reads the ZK server's record against the
   schedule and the Lean loop's `FIREWALL-TIMES` lines (when it decided each part) into `out/oprove/release.json`; the step
@@ -157,7 +161,7 @@ with `GPU=0`. The inner statement is `N` template instances of `GemmCoordinate_v
 | 4 | `oprove` | V*'s own inputs fixed before any session (`flock-verify rec-inner`, `rec-statements`, the shared rows, each statement's flags and bindings); per V* statement, one at a time: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu` in each mode (`firewall`: `FC_FIREWALL=1`, the Lean session loop `flock-firewall`, live PROTOCOL.md §10.4, and the run's record `v-sess/rec-run.jsonl`: staged first, each Hello logged by `serve --rec-run`, closed last); `RELEASE=1`: each part once, in order, through `prove --firewall-state` (`core-firewall session` in front of the loop), then `rec_inner.py release-report` | `v/`, `inner/`, `fw/` | `v-sess/`, `fw/` | GPU |
 | 5 | `oreplay` | `flock-circuit replay --zk` of each V* release (upstream's verifier) | `v-sess/` | records only | CPU |
 | 6 | `lean` | `flock-verify verify --zk` on each V* release with the V* inputs oprove fixed (`--rec-inner-*`, `--rec-rows`, `--rec-bindings`), `flock-verify statement` on the inner statement (not Lean's plain verify of the inner run itself, whose `--coins tree` is a tree of the statement's own streams, not the inner session's); `lean_verdicts.py` fails closed, and composes every V* part with `flock-verify rec-compose` over the run's record | `v-sess/`, `stage/`, `inner/` | records only | CPU |
-| 6b | `forge-after` | `forge_after.py`: coef, dirs and message forged after proving on copies of the honest L0 and alg-p0 statements, each `flock-verify verify --zk` with step 6's flags beside its honest control (not a STEP of the pod script) | `v-sess/`, `v/`, step 6's `own-<stmt>.txt` (step 4's) | records only | CPU |
+| 6b | `forge-after` | `forge_after.py`: coef, dirs and message forged after proving on copies of the honest L0 and alg-p0 statements, each the Lean verifier's `verify --zk` with step 6's flags beside its honest control (not a STEP of the pod script) | `v-sess/`, `v/`, step 6's `own-<stmt>.txt` (step 4's) | records only | CPU |
 | 7 | `negative` | step 6 with `NEG_INNER`: each V* release again over each flipped copy of the inner run | as 6 | records only | CPU |
 
 What the recursive audit has that the pod script doesn't run, so no number here covers it:
@@ -184,8 +188,8 @@ them, so a cancelled run's rows are still read.
   one's, divided by the timed runs. It needs a warm run.
 - **Dominant phase**: the largest part of the median run's `e2e_s`. The candidates are the prover's own phase buckets
   (`t.*`), the host witness (`h.witness`) and `wait.verifier`, which is what is left of `e2e_s` (the run waiting on
-  its verifier: the `rec_live` proxy, or `serve`, whose `verify_s` and `handle_s` are in the row's `extra`). Under
-  `firewall`, the prover's buckets also hold its waits on the Lean session loop, and the two reps overlap. So there the
+  its verifier: the `rec_live` proxy, or `serve`, whose `verify_s` and `handle_s` are in the row's `extra`). Behind
+  the ZK server, the prover's buckets also hold its waits on the Lean session loop, and the two reps overlap. So there the
   cost is read from the loop's own process: `flock-firewall`'s CPU seconds, peak RSS and lifetime, from the run's process
   samples (`resources.jsonl`, the run's telemetry beside `out/`).
 - **Peak memory**: the prover process's peak RSS (`/usr/bin/time -v` over the invocation) and the leased GPU's memory in

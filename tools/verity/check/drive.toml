@@ -66,8 +66,8 @@ lowrisk_per_tick = 20
 # Lean, its locks and Lake files, the trusted hashes, the verifiers and the trusted places of tests/import_order.toml with
 # their tests, and the soundness-path Python (AGENTS.md's soundness path); the data sheets the Site and the accounting
 # read (hardware/: a changed figure changes a device's assumed capacity bound); the auditor's devices (every `device/`: the
-# network certifier, the memory challenger, the challenger service and the verifier's auditor host) and what both auditor
-# hosts pin beside them and run or read as `auditor`: the challenger's (benchmarks/network_traces/, the network certifier's
+# network certifier, the memory challenger, the challenger service and the verifier's auditor device) and what both auditor
+# devices pin beside them and run or read as `auditor`: the challenger's (benchmarks/network_traces/, the network certifier's
 # rehearsals; the checkpoint manifest its model registry reads) and the verifier's (benchmarks/one_stage/, which its compose
 # gate's `served_verdicts.sh compose` runs with that directory on sys.path; the fixture registration `bw_party --fixture`
 # holds), with the memory line of record computed from the verifier's runs (auditor_line.py); and the guards that hold
@@ -79,7 +79,7 @@ lowrisk_per_tick = 20
 # the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks
 # (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-                    "verity/claims/", "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "verity/protocols/interface/world/", "record.py", "registration.py", "verity/protocols/accounting/certifier/device/", "verity/protocols/accounting/certifier/verifier/", "verity/protocols/proofs/flock/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/policy/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/accounting/poub/verifier/", "verity/protocols/accounting/pous/device/", "tools/pous_grader/", "verity/protocols/accounting/pous/verifier/", "verity/protocols/accounting/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/tests/",
+                    "verity/claims/", "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "verity/protocols/interface/world/", "record.py", "registration.py", "verity/protocols/accounting/certifier/device/", "verity/protocols/accounting/certifier/verifier/", "verity/protocols/proofs/flock/verifier/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/policy/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/accounting/poub/verifier/", "verity/protocols/accounting/pous/device/", "tools/pous_grader/", "verity/protocols/accounting/pous/verifier/", "verity/protocols/accounting/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/tests/",
                     "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/tests/", "hardware/",
                     "verity/protocols/compose/device/", "verity/protocols/accounting/poub/device/", "benchmarks/network_traces/", "adapters/vllm/manifests/checkpoints-int8.json",
                     "benchmarks/one_stage/", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "benchmarks/remote_session/auditor_line.py",
