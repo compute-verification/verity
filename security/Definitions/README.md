@@ -30,7 +30,7 @@ path: `research msg owners PATH`.
 | `Core` | The model every area states its guarantees in: circuits, partitions, coins |
 | `Flock` | The vocabulary Flock's guarantees are stated in, extracted from `Proofs/Flock` |
 | `Hash` | Messages, digests and collisions; frame-v3 trees; the served row leaf; the keyed leaf |
-| `Nci` | The inference-only policy: `Complies c k`, `CompliesRate c α` |
+| `InferenceOnly` | The inference-only policy: `Complies c k`, `CompliesRate c α` |
 | `NetworkCertifier` | The network certifier's protocol: grids, the interaction, the Program |
 | `Pous` | PoUS: its game, its models and the requirement `Pous.Meets` |
 | `Pouw` | PoUW's protocol: the definitions its statements read |
