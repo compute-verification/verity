@@ -20,14 +20,14 @@ Files:
 - `gpu.sh`: the pod job (builds and reference cases outside the lease; selftest, check, rate, e2e, both leaf-size sweeps,
   the tile sweep and an nsys trace under one GPU lease). `summary.py`: one line a measurement, or (`table`) the Results
   table, (`tiles`) the R table, or (`formats`) the leaf-format table.
-- `run.sh`: the directory's runner, which `verity bench pouw commit_gpu` runs. It starts `gpu.sh` as it is, with the
+- `run.sh`: the directory's runner, the command of a `research run`. It starts `gpu.sh` as it is, with the
   caller's arguments and environment.
 
 On an RTX PRO 6000 node (MACHINE):
 
 ~~~text
 research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  [--env BUILDS="a0r0l a0r0 a1r0 a0r3"] -- bash benchmarks/pouw/commit_gpu/gpu.sh
+  [--env BUILDS="a0r0l a0r0 a1r0 a0r3"] -- bash verity/commitments/cuda/commit_gpu/gpu.sh
 ~~~
 
 `BUILDS` defaults to `a0r0l`, the fastest form; the other tags rebuild the forms the measurements below compare.

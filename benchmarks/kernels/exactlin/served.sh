@@ -6,7 +6,7 @@
 # overheads are against stock.  DITHER_NSYS=1 runs it under nsys with the prof op's per-step kernels (steps.py).
 # SERVED_SCRIPT (a path from the repository root) runs another script in sbench.py's place, e.g. values.py; SERVED_KGATE=1|0
 # forces the gate on or off.  Inside the lease everything runs on the leased GPU's NUMA node, as dither's sbench.sh runs it
-# (benchmarks/hash/dither/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
+# (benchmarks/kernels/numabind/numabind.py, DITHER_NUMA=0 unbound; env/numa.json and summary.json's "numa" say which).
 # On an H200 under a GPU lease:
 #   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/kernels/exactlin/served.sh \
 #     --arms stock-cutlass,stock,exact,exact-fused --gate --ops decode --reps 3 --t 64 --gpu-mem 0.2
@@ -45,7 +45,7 @@ SCRIPT=$ROOT/${SERVED_SCRIPT:-benchmarks/hash/dither/sbench.py}
 [ -f "$SCRIPT" ] || { echo "served.sh: no $SCRIPT (set SERVED_SCRIPT)" >&2; exit 2; }
 export KGATE KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/kernels/exactlin/kgate.py
 echo "served: asking for one GPU at $(date -u +%H:%M:%SZ)"
-gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- "$PY" "$DITHER/numabind.py" "$OUT/env/numa.json" bash -c '
+gpu-lease 1 --wait --preemptible --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/kernels/numabind/numabind.py" "$OUT/env/numa.json" bash -c '
   q=clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu,power.draw,name,uuid
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=$q --format=csv > "$0/clocks.before.csv"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu \

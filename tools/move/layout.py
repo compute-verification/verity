@@ -1892,6 +1892,8 @@ class Run:
         keep = []
         for it in items:
             pp = f"{it}/pyproject.toml"
+            if self.new_of.get(pp, pp) != pp:
+                it = posixpath.dirname(pp := self.new_of[pp])   # the member follows its pyproject, also moved by a file's row
             body = self.texts.get(pp) or self._read(pp)
             if body is None:
                 continue

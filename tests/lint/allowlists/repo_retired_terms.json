@@ -3860,7 +3860,7 @@
     {"file": "verity/protocols/proofs/flock/verifier/Flock/DeriveCheck.lean", "count": 2},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/Draw.lean", "count": 1},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/HmRow.lean", "count": 214},
-    {"file": "verity/protocols/proofs/flock/verifier/Flock/KsScope.lean", "count": 40},
+    {"file": "verity/protocols/proofs/flock/verifier/Flock/KsScope.lean", "count": 26},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/Layout.lean", "count": 1},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/Proof.lean", "count": 2},
     {"file": "verity/protocols/proofs/flock/verifier/Flock/ProvedScope.lean", "count": 23},

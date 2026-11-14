@@ -1655,7 +1655,7 @@ def test_deliver_rings_explicit_names_in_place_of_the_rule_and_a_reminder_once_p
 def test_a_persons_doorbell_says_how_long_they_have_waited_and_still_rings_once(fake, registry, routes_dirs, people_d, capsys,
                                                                                  monkeypatch):
     """A doorbell for a person's post leads with them and how long they have waited since posting; a lane's doesn't.  The
-    once-per-post check, the hourly cap's count and `read --as`'s urgent-first order read it as any other doorbell."""
+    once-per-post check, the hourly limit's count and `read --as`'s urgent-first order read it as any other doorbell."""
     chat_users(fake)
     assert run(capsys, "chat", "open", "luke", "--user", LUKE)[0] == 0
     now = [1700001090.0]                                                                  # 18 min 10 s after the post
@@ -3185,20 +3185,20 @@ def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_
     assert bells(fake, circuits) == [] and len(bells(fake, lean)) == 1
 
 
-def test_one_author_rings_one_inbox_from_a_thread_at_most_cap_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
+def test_one_author_rings_one_inbox_from_a_thread_at_most_limit_times_an_hour_then_says_so_once(fake, registry, routes_dirs, capsys, monkeypatch):
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
-    for i in range(slack.CAP_PER_HOUR + 2):
+    for i in range(slack.LIMIT_PER_HOUR + 2):
         assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", f"point {i}")[0] == 0
     rung = bells(fake, box)
-    assert sum(m["text"].startswith("from infra,") for m in rung) == slack.CAP_PER_HOUR and sum("paused" in m["text"] for m in rung) == 1
+    assert sum(m["text"].startswith("from infra,") for m in rung) == slack.LIMIT_PER_HOUR and sum("paused" in m["text"] for m in rung) == 1
     notices = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"] and m["username"] == "router"]
     assert len(notices) == 1 and notices[0]["text"].startswith("routing @infra to circuits paused here for the hour")
     assert slack.QUIET in notices[0]["text"]
     for who in ("proofs", "lean", "network-accounting", "comms", "top", "ci", "memory-accounting"):    # a roll call is not a loop
         assert run(capsys, "reply", "--as", who, "--thread", root["ts"], "--text", "subscribed")[0] == 0
-    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.CAP_PER_HOUR + 7
+    assert sum(m["text"].startswith("from ") and "paused" not in m["text"] for m in bells(fake, box)) == slack.LIMIT_PER_HOUR + 7
 
 
 def test_a_long_multi_line_merge_thread_reply_rings_only_the_names_it_starts_with(fake, registry, routes_dirs, capsys, monkeypatch):
@@ -4034,7 +4034,7 @@ def test_slack_py_runs_as_a_single_file_from_any_checkout(tmp_path, registry):
     assert "@circuits" in out.stdout
 
 
-def test_a_single_file_carries_the_wait_cap_research_waitcap_states():
+def test_a_single_file_carries_the_wait_limit_research_waitcap_states():
     import importlib.util
 
     from research import waitcap
@@ -4210,7 +4210,7 @@ def test_a_doorbell_shaped_reply_the_router_didnt_post_does_not_stop_a_doorbell(
 
 def test_deliver_reads_all_of_the_inboxs_last_hour_so_a_busy_inbox_is_not_rung_twice(fake, registry, routes_dirs, capsys, monkeypatch):
     """`deliver` read one page of the inbox's last hour: past it, the post's own earlier doorbell went unseen (rung again
-    on each `deliver`), and so did an author's earlier doorbells (the loop cap never tripped)."""
+    on each `deliver`), and so did an author's earlier doorbells (the loop limit never tripped)."""
     monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     box = inbox(fake, routes_dirs, "circuits")
     for i in range(4):
