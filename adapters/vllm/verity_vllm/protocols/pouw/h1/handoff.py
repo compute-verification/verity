@@ -11,7 +11,7 @@ GPU lease ends only when it exits.
   digest isn't the one its tables were registered under.
   It drops the run's listeners (the resuming process adds its own) and its opener (the salt is open). A window with the
   Commit in its engine (`pouw_h1_commit`) doesn't hand off.
-* **The session's stream.** The window's coins come from one session on the auditor host's challenger, one TCP stream
+* **The session's stream.** The window's coins come from one session on the auditor device's challenger, one TCP stream
   that its hello opened (`remote`), and a stream is never opened twice for a session. The serving process hands the
   stream's descriptor (SCM_RIGHTS) to a holder outside its lease (`send_stream`, `Holder`), which passes it on to the
   resuming process; its client (`Resumed`) is the session past its hello, its commitment the one the hello was answered
@@ -108,7 +108,7 @@ class _HostOnly(pickle.Pickler):
 
 
 def client_of(run: PH.H1Run) -> remote.RemoteChallenger:
-    """The window's session on the auditor host's challenger: refused (ValueError) unless its coins are that session's and
+    """The window's session on the auditor device's challenger: refused (ValueError) unless its coins are that session's and
     the window is open and unclosed."""
     client = getattr(run.rounds, "challenger", None)
     if run.coin_source != PH.CHALLENGER or not isinstance(client, remote.RemoteChallenger):

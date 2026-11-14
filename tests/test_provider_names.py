@@ -1,5 +1,5 @@
 """No hosting provider's name in a security assumption, claim, guarantee, property or protocol document:
-what the auditor trusts is a role, the trusted host (`trusted-host`), and which provider runs it is implementation,
+what the auditor trusts is a role, the trusted device (`trusted-host`), and which provider runs it is implementation,
 named only in infra and run tooling (machine names such as a node's host name included).
 
 Scanned: every tracked file under `security/` and `verity/claims/`, and every `PROTOCOL.md`. A name matches case-insensitively as a word or as one part of an identifier (`trusted-x-host`,
