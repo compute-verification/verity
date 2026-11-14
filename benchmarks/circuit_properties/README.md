@@ -105,7 +105,7 @@ m = measure(layer(configs()["qwen25-1b5"][0]), GEMM_PRODUCTS)
 m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 ```
 
-## Reference circuits
+## Reference layers
 
 `references.layer(C, T)` is one b1 layer (σ(`LayerPre_v1`), the Boolean `Attention_v3`, σ(`LayerPost_v1`)) at T
 positions; `references.configs()` lists the served configurations and two shapes with no served workload (Qwen2.5-7B,

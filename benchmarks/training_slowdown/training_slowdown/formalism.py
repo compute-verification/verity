@@ -396,7 +396,7 @@ def rests_on_products(count: dict | None = None) -> str:
             "in its m blocks, α = F·½·√(k³/(β_w·β_x·b_y)), so the record's slowdown ≥ c/|C| times the least m that count "
             "allows, floored at 1, O M's output wires; given these premises "
             "on M, each refuted by a single counterexample: (H) operands are hard: every set of M's words "
-            "with a cut of at most k bits from the unregistered inputs has a cut of at least each word's β, "
+            "with a cut of at most k bits from the fresh inputs has a cut of at least each word's β, "
             "the casts of one value counting as one word: a weight's (an operand no token indexes) its "
             "width as the circuit passes it, at most the run record's code bits a trained weight (β_w "
             "from the run record's code size), an activation's at most a uniform β(k) (β(k) per "
