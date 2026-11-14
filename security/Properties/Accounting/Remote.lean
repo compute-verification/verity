@@ -1,21 +1,21 @@
 module
 
-public import RemoteAudit
-public import RemoteAudit.Session
+public import Poub
+public import Poub.Session
 
 /-!
-# PoUB's verifier: what its Lean verdicts mean (`RemoteAudit`)
+# PoUB's verifier: what its Lean verdicts mean (`Poub`)
 
-The properties of `RemoteAudit` (`verity/protocols/accounting/poub/verifier/lean/`, the verifier's definition, which
-`audit.py` is held to by the difftest `remote-audit-difftest`), stated against its functions as they run, for every input of their types. They
+The properties of `Poub` (`verity/protocols/accounting/poub/verifier/lean/`, the verifier's definition, which
+`audit.py` is held to by the difftest `poub-difftest`), stated against its functions as they run, for every input of their types. They
 are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedRun`, and the
 composed statement `Accounting.Guarantees.RegisteredCircuitRequirement` that reads it): each says what an acceptance
 establishes about the bytes the verifier holds. They take no premise. What the code cannot see (the coins' uniformity,
 the receipts' and the store's meaning as the game's oracle and words, the window's wall time) is not here: it is a
 premise or a proofs unit of the bridge, named in each docstring.
 
-The memory line of record (`RemoteAudit.Line.line`, its W from `RemoteAudit.Pooled`) is one statement over what this
-verifier accepts: `Properties.RemoteAudit.Line.LineHeld`, the bits its credited passes read
+The memory line of record (`Poub.Line.line`, its W from `Poub.Pooled`) is one statement over what this
+verifier accepts: `Properties.Poub.Line.LineHeld`, the bits its credited passes read
 (`Properties/Accounting/Remote/Line.lean`, proved in `Proofs/Accounting/RemoteHeld/Line.lean`, where `heldAt_of_read` derives
 memory held from it under the device model), with no code-to-model premise (the trace of record is over the
 registration's blocks by definition, `Properties/Accounting/Remote/Line/Premises.lean`, and the verifier refuses a record not
@@ -59,18 +59,18 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
 
 When the session reads a window's openings coin, and what its draw fixes (the code's half of the opening draw's
-`Refused` and `Live`), is `Properties.RemoteAudit.Coins`, and at one openings coin over `g` windows
-(`groups_per_coin`, `Shared.run g`) `Properties.RemoteAudit.Shared`. That the verifier's process, which takes the events
+`Refused` and `Live`), is `Properties.Poub.Coins`, and at one openings coin over `g` windows
+(`groups_per_coin`, `Shared.run g`) `Properties.Poub.Shared`. That the verifier's process, which takes the events
 one request at a time on the coins the challenger sent and settles each window's check later, accepts what
 `Shared.run g` (`Session.run` at g = 1) accepts on the events its transcript records, at two windows in flight, is
-`Properties.RemoteAudit.Live` (`LiveIsRun`).
+`Properties.Poub.Live` (`LiveIsRun`).
 -/
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## The window -/
 
@@ -278,4 +278,4 @@ def LifetimeCapped : Prop :=
         s.windows[t].plans[i].block p < s.appends[k].first + s.appends[k].count →
           j ≤ t ∧ t < j + params.lifetime
 
-end Properties.RemoteAudit
+end Properties.Poub

@@ -24,11 +24,11 @@ with window `t` unsampled never drew a window from `t` on, so it read only coins
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-open private RemoteAudit.Session.live from RemoteAudit.Session
+open private Poub.Session.live from Poub.Session
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## The window -/
 
@@ -54,7 +54,7 @@ theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
 /-- The session `s` with the coins `c`. -/
 abbrev C (c : Array ByteArray) (s : State) : State := { s with coins := c }
 
-theorem live_C (c : Array ByteArray) (s : State) : RemoteAudit.Session.live (C c s) = RemoteAudit.Session.live s := rfl
+theorem live_C (c : Array ByteArray) (s : State) : Poub.Session.live (C c s) = Poub.Session.live s := rfl
 theorem record_C (c : Array ByteArray) (s : State) (t : Nat) : (C c s).record t = s.record t := rfl
 theorem deadline_C (c : Array ByteArray) (s : State) (t : Nat) : (C c s).deadline t = s.deadline t := rfl
 theorem isReleased_C (c : Array ByteArray) (s : State) (a b : Nat) : (C c s).isReleased a b = s.isReleased a b := rfl
@@ -529,4 +529,4 @@ theorem openingsUnreadUntilSampled : OpeningsUnreadUntilSampled := by
   exact fold_coins t coins' _ (#[], State.init params reg coins appendCoins notBeforeNs) (rs, s) hrun
     (inv_init ..) hW hag hlt
 
-end Properties.RemoteAudit
+end Properties.Poub

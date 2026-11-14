@@ -577,7 +577,7 @@ theorem accepted_parts {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} (hD 
 
 open FlockSoundness.Discharge.Recursion.Witness (toExec) in
 /-- **The session's inputs, descriptor, public file and population on an accepted play** (`accepted_parts`): the inputs
-v2 hands `flock-verify` on the committed files, whose tags are untyped and hidden-output with retained rounds and
+v2 hands `verity-verify-proof` on the committed files, whose tags are untyped and hidden-output with retained rounds and
 `hm96-sha512/v1` leaves (`FailClosed.check_ok` at v2's statement check under `--zk`), the descriptor and public file
 its ports check reads (`desc_of_ports`), in `Layout.scopeOkH` (`scopeH_of_form`), with the record's population, which the program's proof blocks under the
 verifier's query are in order (`popMatches_of_popOk`). -/

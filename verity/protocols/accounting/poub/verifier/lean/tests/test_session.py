@@ -1,5 +1,5 @@
-"""`audit.AuditRun` held to PoUB's verifier in Lean (`RemoteAudit.Session`, the definition, served by
-`remote-audit-difftest`), a whole session at a time: every event's result (the coin released, the append's index and
+"""`audit.AuditRun` held to PoUB's verifier in Lean (`Poub.Session`, the definition, served by
+`poub-difftest`), a whole session at a time: every event's result (the coin released, the append's index and
 coin, the window's samples, the verdict, or the rejection with its failure and the sample it failed at), the outcome
 and the record. Recorded sessions (`ra_cases.SCENARIOS`) are honest ones and ones that each reach one of
 `audit.FAILURES` in the Lean; sampled ones are those with their events, fields and parameters edited, which reach the

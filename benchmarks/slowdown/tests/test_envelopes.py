@@ -105,7 +105,7 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
         multiple_bound(0.4, s, (1 - s) * u), rel=1e-12)
     ctx = tiers_context()
     s, u = ctx.fleet.eps_unreg, envelopes.regime(REG, "remote").uncertified(ctx)
-    # the inference blocks hold a little weight too, under their caps
+    # the inference blocks hold a little weight too, under their yields
     pad = evaluate_named(REG, "remote-tiers-kimi").families[0].combined.padded
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 

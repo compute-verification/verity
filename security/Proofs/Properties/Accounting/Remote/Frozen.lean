@@ -20,9 +20,9 @@ every append after starts at that extent or above (`firsts_big`), so `appendOf` 
 
 @[expose] public section
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## Each window -/
 
@@ -542,4 +542,4 @@ theorem recordKeptAfterSample : RecordKeptAfterSample := by
   · rintro ⟨i, p, o, hi, hp, hu, hc⟩; exact ⟨i, p, o, hi, hp, hu, (key i p o hi hp) ▸ hc⟩
   · rintro ⟨i, p, o, hi, hp, hu, hc⟩; exact ⟨i, p, o, hi, hp, hu, (key i p o hi hp).symm ▸ hc⟩
 
-end Properties.RemoteAudit
+end Properties.Poub

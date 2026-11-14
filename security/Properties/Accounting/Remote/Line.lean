@@ -39,9 +39,9 @@ import Mathlib.Topology.Sheaves.Init
 public import Definitions.Pouw.Basic.Prob
 
 /-!
-# The memory line of record, over what the Lean verifier accepts (`RemoteAudit.Line.lineOfRecordAt`)
+# The memory line of record, over what the Lean verifier accepts (`Poub.Line.lineOfRecordAt`)
 
-The line a gate run publishes (`RemoteAudit.Line.lineOfRecordAt`, `line.py`'s `line_of_record`) reads a paced session's
+The line a gate run publishes (`Poub.Line.lineOfRecordAt`, `line.py`'s `line_of_record`) reads a paced session's
 groups and its wrong receipts' bound W off the Lean verifier's record of it. What it says of the bandwidth audit's
 claim, bits read (`Accounting.PeriodRun.Holds` at `.poub`), is that its passes, `P` of them over its groups, read every
 one of the `N` registered blocks but the W wrong: `8·b·(P·N − W)` bits read on the node (`ReadAt`, `Trace.reads`).
@@ -79,13 +79,13 @@ blocks held over each stretch's span and `max(0, w − lost)` weights bytes a ti
 the bits read under the device model (the links' ceiling `Links` or `Identity`, `SquaringCeiling`, `Disks`,
 `ChipCeiling`, `Routed`, at the node's rates in the model's units, a tick a nanosecond, `Node.squarings` …
 `Node.chipBlocks`), by the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`, in a lemma of
-the proofs (`Properties.RemoteAudit.Line.SecurityProofs.heldAt_of_read`).
+the proofs (`Properties.Poub.Line.SecurityProofs.heldAt_of_read`).
 
-The bound follows from the line's W covering the session's pooled bound (`Properties.RemoteAudit.LineCoversRun`,
+The bound follows from the line's W covering the session's pooled bound (`Properties.Poub.LineCoversRun`,
 at the record's draws, whose draws the line holds to `min(s, U_c)` and whose receipts on an accepted record are
 `recordSample`'s sizes: the reached state is the run's, a window's receipts are below `RECEIPT_LIMIT`,
-`Properties.RemoteAudit.ReceiptsBelowLimit`, and the line refuses a draw of `g` > 1 windows with `RECEIPT_LIMIT` or
-more, `RemoteAudit.Line.ofSummaryAt`), the line's groups being one for each of the session's windows on an accepted
+`Properties.Poub.ReceiptsBelowLimit`, and the line refuses a draw of `g` > 1 windows with `RECEIPT_LIMIT` or
+more, `Poub.Line.ofSummaryAt`), the line's groups being one for each of the session's windows on an accepted
 record (its parameters' `windows`, `Session.State.outcome`, which `Shared.run` keeps at every g). The held lemma also
 reads two properties of the line's code, proved of it:
 
@@ -114,10 +114,10 @@ holds from any start in `[s_0, e_0]`, which the held lemma uses.
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.Line
+namespace Properties.Poub.Line
 
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions _root_.RemoteAudit.Line
+  Accounting.Remote.Draw.Assumptions _root_.Poub.Line
 
 /-- **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more
 squarings, nonnegative rates and bursts, and read a nonnegative wrong receipts' bound. -/
@@ -134,8 +134,8 @@ sampled `g` windows a coin (`lineOfRegistered`), is of a record of the registrat
 registration's digest, its registered blocks, which the line credits, are the registration's, and the line is the
 record's (`lineOfRecordOn`). -/
 def LineRegistered : Prop :=
-  ∀ (onRecord : Bool) (g : ℕ) (reg : RemoteAudit.Registration) (digest : ByteArray)
-    (sm : RemoteAudit.Session.Summary) (samples : ℕ) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : ℕ)
+  ∀ (onRecord : Bool) (g : ℕ) (reg : Poub.Registration) (digest : ByteArray)
+    (sm : Poub.Session.Summary) (samples : ℕ) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : ℕ)
     (δ : ℚ) (rates : Rates) (l : Line),
     lineOfRegistered onRecord g reg digest sm samples seen per blockBytes chipBytes nodeBytes δ rates = .ok l →
     digest = reg.digest ∧ sm.blocks = reg.blocks ∧
@@ -227,4 +227,4 @@ def LineHeld : Prop :=
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
-end Properties.RemoteAudit.Line
+end Properties.Poub.Line
