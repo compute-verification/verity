@@ -1140,7 +1140,7 @@ def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays
             "295.7, not sent)\n"
             "  the kept count over the pass, as the scheduler replay's loader gives it: K 5, rows 5,143, counts [665, 553, "
             "442, 257, 150, 3076], entropy 1.840, max 2.585, alone 9,463.489, charged 6,997, ideal 6,995.721, derived 0\n"
-            "  the kept count is 0 where the audited block derives it, and no Definition holds the accept test yet\n"
+            "  the kept count is 0 where the audited block derives it, and no served Program calls the accept test yet\n"
             "  no request was sampled, so no seed is read\n"
             "  the pass: record's burst rep 1, the one the replay re-ran; 2,040 steps, each reproduced by the scheduler "
             "replay\n") in txt
