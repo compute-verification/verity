@@ -7,7 +7,7 @@ from pathlib import Path
 from verity.protocols.accounting.pouw.prover.circuit import h1device as D
 from verity.protocols.accounting.pouw.prover.circuit import h1zy as Z
 
-H1U = Path(__file__).resolve().parents[1] / "h1u.cu"
+H1U = Path(__file__).resolve().parents[1] / "prover" / "kernels" / "h1u.cu"
 
 
 def test_sm90s_domain_is_h1us_refusal() -> None:
