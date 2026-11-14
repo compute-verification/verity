@@ -2,7 +2,8 @@
 """The fleet's usage record, daily compute report and quota watch: every Nebius VM recorded, the H200s included.
 
     fleet.py sample              one pass: each RUNNING VM's state from the API, and over ssh its GPUs' utilization, its load
-                                 and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl
+                                 and memory; one JSON line per VM in $FLEET_DIR/samples-YYYYMMDD.jsonl, and the pass's time
+                                 and rows (none when no VM runs) in $FLEET_DIR/last-sample.json, replaced whole
     fleet.py report [--hours 24] [--now ISO]   per VM over the window: $ (rate x hours seen RUNNING), GPU busy %, CPU load, peak
                                  memory, idle hours (no GPU at >= 5%, load under a tenth of its cores and memory in use
                                  under 15%)
@@ -80,6 +81,8 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 #: the site refuses a body over this (its MAX_BODY_BYTES): a panel that doesn't fit drops its oldest slots and says so
 PANEL_MAX_BYTES = 64 * 1024
 PANELS_NOTE = "Nebius VMs only: RunPod pods aren't sampled."
+#: each pass's time and rows, none when no VM runs, replaced whole (infra/control/loop_metrics.py reads it)
+LAST_SAMPLE = "last-sample.json"
 #: a platform's GPU, for the machine class the usage tab groups by; any other `gpu-` platform is named from its own name
 GPU_CLASS = {"gpu-h200-sxm": "H200", "gpu-h100-sxm": "H100", "gpu-b200-sxm": "B200", "gpu-l40s-a": "L40S", "gpu-l40s-d": "L40S",
              "gpu-rtx6000": "RTX PRO 6000", "gpu-rtx6000-a": "RTX PRO 6000"}
@@ -164,6 +167,9 @@ def sample(now: float | None = None) -> list[dict]:
     with open(FLEET_DIR / f"samples-{utc(now)[:10].replace('-', '')}.jsonl", "a") as f:
         for r in rows:
             f.write(json.dumps(r) + "\n")
+    tmp = FLEET_DIR / f".{LAST_SAMPLE}.{os.getpid()}"
+    tmp.write_text(json.dumps({"t": utc(now), "rows": rows}) + "\n")
+    os.replace(tmp, FLEET_DIR / LAST_SAMPLE)
     record_deadlines(rows, reg)
     return rows
 

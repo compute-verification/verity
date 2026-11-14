@@ -145,6 +145,28 @@ def test_a_sample_copies_each_vms_deadline_into_its_registry_entry_once(tmp_path
     assert F.record_deadlines(rows, F.registry()) == [] and len(synced) == 1
 
 
+def test_each_sample_pass_replaces_its_last_sample_whole_with_no_vm_running_too(tmp_path, monkeypatch):
+    """infra/control/loop_metrics.py reads the last pass: a pass with no RUNNING VM is an empty one, not a missing one, and the
+    file is replaced, never appended to."""
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path / "fleet")
+    monkeypatch.setattr(F, "MACHINES_D", tmp_path / "machines.d")
+    monkeypatch.setattr(F, "sync_registry", lambda m: None)
+    vms = [{"name": "vy-nebius-cpu-1", "id": "i1", "state": "RUNNING", "platform": "cpu-d3", "preset": "p", "region": "r"},
+           {"name": "vy-nebius-cpu-2", "id": "i2", "state": "STOPPED", "platform": "cpu-d3", "preset": "p", "region": "r"}]
+    monkeypatch.setattr(F, "instances", lambda: vms)
+    t = int(datetime(2026, 11, 14, 5, tzinfo=UTC).timestamp())
+    F.sample(t)
+    last = F.FLEET_DIR / F.LAST_SAMPLE
+    got = json.loads(last.read_text())
+    assert got["t"] == F.utc(t) and [r["name"] for r in got["rows"]] == ["vy-nebius-cpu-1"]
+    os.link(last, before := tmp_path / "before")
+    vms[0]["state"] = "STOPPED"
+    F.sample(t + 300)
+    assert json.loads(last.read_text()) == {"t": F.utc(t + 300), "rows": []}
+    assert json.loads(before.read_text())["t"] == F.utc(t), "replaced, not written in place"
+    assert [p.name for p in F.FLEET_DIR.iterdir() if p.name.startswith(".")] == []
+
+
 def test_the_card_alerts_at_80_percent_of_its_daily_limit_only_when_one_is_set(monkeypatch):
     rows = [{"rate_usd_per_hour": 120.0}] * 100                                  # 100 samples of 5 min at $120/h: $1,000
     monkeypatch.delenv("FLEET_CARD_DAILY_USD", raising=False)
