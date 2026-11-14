@@ -753,11 +753,11 @@ KNOWN: dict[str, str] = {
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
     "adapters/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
-    "adapters/vllm/verity_vllm/protocols/pouw/credit_gate.py::Trace":
+    "verity/protocols/accounting/pouw/prover/serving/credit_gate.py::Trace":
         "homonym, one linear call's recorded ops and their writers: rename (vllm)",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
+    "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py::Ledger":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes it (deleted) (vllm)",
-    "adapters/vllm/verity_vllm/protocols/pouw/h1/window.py::Window":
+    "verity/protocols/accounting/pouw/prover/serving/h1/window.py::Window":
         "duplicate of the execution block (no canonical yet): becomes a client of it (vllm)",
     "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes its memory leaves by tier (vllm)",
