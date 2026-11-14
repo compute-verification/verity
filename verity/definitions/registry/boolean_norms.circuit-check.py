@@ -10,7 +10,7 @@ def _boolean_roots() -> list[Any]:
     switch's binding, `verity.definitions.boolean`), the fused norm's lanes at two elements per thread, and the word
     Definitions of its constant steps; then the same norms and steps with eps an input."""
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import mufu as BM
+    from verity.circuits.ops.boolean import mufu as BM
     from verity.definitions.registry import boolean_norms as BN
 
     return [

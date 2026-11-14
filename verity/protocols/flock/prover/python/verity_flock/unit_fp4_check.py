@@ -1,10 +1,10 @@
-"""unit_fp4 against verity.definitions.silicon BLACKWELL_SM120_NVF4.step_scaled on random and directed units (bit-sliced)."""
+"""unit_fp4 against verity.circuits.silicon BLACKWELL_SM120_NVF4.step_scaled on random and directed units (bit-sliced)."""
 from __future__ import annotations
 
 import random
 import sys
 
-from verity.definitions.silicon.models import BLACKWELL_SM120_NVF4 as M
+from verity.circuits.silicon.models import BLACKWELL_SM120_NVF4 as M
 
 from . import unit_fp4
 
