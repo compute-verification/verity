@@ -89,6 +89,9 @@ LIVE = {
     "IR": "an acronym the code uses for other things (an alias, a cut); \"Verity IR\" and \"IR evaluator\" are retired",
     "reference run": "a run whose output another is compared with is live; the training-cost reference is retired",
 }
+#: words the narrower senses say carry two senses that this lint tells apart itself, so they stay enforced alone: each
+#: kept sense is in ``OTHER_SENSES`` or ``OWN_CAPS``, and the retired one counts everywhere else
+SENSED = {"cap": "SPOT's served cap and the certifier's response cap (``max_tokens_cap``) are ``CAP_SENSES``; Pearl's is retired"}
 #: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
 #: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, the stacking property's caps as its Lean names
 #: them (``Gates.Caps``, ``FoolingCap``), a kernel's bound on its launch grid (``grid_cap``), the public length ℓ a
@@ -105,7 +108,8 @@ OTHER_NAMES = (r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Littl
                r"|(?<![^\W_])(?:sw_power_cap|soft_cap|isa_cap(?:_check)?|cap_(?:get|list))(?![^\W_])|(?<!\w)ISA-CAP"
                r"|cublasLt\w*Cap\w*|CUBLASLT_\w*CAP\w*"
                r"|(?i:(?<!\w)cap_(?:sys_ptrace|sys_admin|dac_read_search|dac_override|chown|fowner|ipc_lock)(?!\w))")
-#: other senses of "cap" that name none of Pearl's, each by its names: a request's length cap, its ``max_tokens``; a soft
+#: other senses of "cap" that name none of Pearl's, each by its names: a request's length cap, its ``max_tokens`` (the
+#: certifier's registered response cap); SPOT's served cap S, in prose; a soft
 #: cap in prose (a logit's, or a resource limit's); a cap counted in bytes, MiB, GiB or words, as its name says (a memory
 #: or buffer cap); a CUDA compute capability as the tests name one (``cap80``, ``cap90_fa2``); the served-commit
 #: profile's cap on the CTAs one launch hashes; FA3's cap on its number of splits
@@ -118,6 +122,7 @@ CAP_SENSES = {
     "a launch's rows cap": r"(?<![^\W_])(?:rows_cap_(?:blocks|free)|(?:PROF|SERVED_COMMIT)_ROWS(?:_RING8|_4K|_LAYER)?_CAP)"
                            r"(?![^\W_])|(?<!\w)Rows(?:Ring8|4k|Layer)?CapArm(?!\w)",
     "FA3's split cap": r"(?<![^\W_])(?:split_cap|SPLIT_CAP)(?![^\W_])",
+    "SPOT's served cap": r"(?<!\w)served cap(?!\w)",
 }
 OTHER_SENSES = re.compile("|".join((OTHER_NAMES, *CAP_SENSES.values())))
 #: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table
@@ -279,7 +284,7 @@ def terms_of(glossary: str) -> list[Term]:
     """The retired terms of ``glossary`` (a ``GLOSSARY.md``'s text), longest first."""
     table = glossary.split("## Older names", 1)[-1].split("\n## ", 1)[0]
     two = glossary.split("still carry two senses", 1)[-1].split("\n## ", 1)[0] if "still carry two senses" in glossary else ""
-    narrow = {w.lower() for w in re.findall(r"^\s*- \*\*([^*]+)\*\*", two, re.M)}
+    narrow = {w.lower() for w in re.findall(r"^\s*- \*\*([^*]+)\*\*", two, re.M)} - SENSED.keys()
     live = {w.lower() for w in LIVE}
     out: dict[str, Term] = {}
     for row in table.splitlines():
@@ -834,21 +839,34 @@ def test_pearl_s_debit_cap_still_counts_against_the_real_table() -> None:
     assert [w.split("'")[1] for _, w in sites(line, "benchmarks/one_stage/README.md")] == ["debit", "cap", "over-cap"]
 
 
+def test_a_word_of_two_kept_senses_the_lint_tells_apart_still_counts_in_its_retired_one() -> None:
+    """A word the narrower senses list is enforced only in the phrases that retire it, but one in ``SENSED`` stays
+    enforced alone: "cap" keeps SPOT's served cap and the certifier's response cap, by their names, and Pearl's counts."""
+    two = "\n## Narrower senses\n\n- Two words still carry two senses in the code:\n  - **Cap**: SPOT's, the certifier's.\n"
+    assert "cap" in {t.old for t in terms_of(SENSES_EXAMPLE + two)}
+    assert "draw" not in {t.old for t in terms_of(SENSES_EXAMPLE + two.replace("Cap", "Draw"))}
+    assert "cap" in {t.old for t in terms()[0]}, "GLOSSARY.md's two-senses list no longer stops Pearl's cap from counting"
+    kept = "a served cap S charges each replay block at most F S; `WardenParams.max_tokens_cap`\n"
+    assert said(kept, "verity/protocols/proofs/spot/prover/plancheck.py") == []
+    assert said(kept + "Pearl's cap, a tile over the cap\n", "verity/protocols/proofs/spot/prover/plancheck.py") == [
+        (2, "cap"), (2, "cap")]
+
+
 def test_a_cap_of_flock_s_claims_is_another_sense_and_pearl_s_beside_it_is_not() -> None:
     """The bound on an extractor's reruns and a commitment's Merkle cap: any "cap" where Lean states Flock's claims and
-    proves its knowledge soundness and sampling over it. Pearl's spellings count there too, against the real table as
-    well, and so does every "cap" in the rest of Flock's Lean, beside a kept directory and in PoUW's proofs."""
+    proves its knowledge soundness and sampling over it, and anywhere in Flock's proofs. Pearl's spellings count there
+    too, against the real table as well, and so does every "cap" beside those directories and in PoUW's proofs."""
     theirs = "the cap: `D.cap`, `Numbers.cap`, cap₀, `Model.Cap D`, `IsCapTauZ`, recursiveCaps, capOfRoot, cap_pos; its caps"
     pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
     pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
     for path in ("security/Definitions/Claims/SamplingTable.lean", "security/Proofs/Flock/Claims/KS/KSTable.lean",
                  "security/Proofs/Flock/Claims/Numbers.lean", "security/Proofs/Flock/Claims/NumbersDeploy.lean",
-                 "security/Proofs/Flock/SamplingGeneric/KSTable.lean"):
+                 "security/Proofs/Flock/SamplingGeneric/KSTable.lean", "security/Proofs/Flock/Claims/Aggregate.lean",
+                 "security/Proofs/Flock/Masked.lean"):
         assert said(theirs + pearls, path) == pearl, path
         assert [w.split("'")[1] for _, w in sites(pearls, path)] == [o for _, o in pearl], path
     counted = [(1, o) for o in ("cap", "cap", "cap", "cap", "Cap", "Cap", "Caps", "cap", "cap", "caps")]
     for path in ("security/Definitions/Flock/Compiled.lean", "security/Definitions/ClaimsOf.lean",
-                 "security/Proofs/Flock/Claims/Aggregate.lean", "security/Proofs/Flock/Masked.lean",
                  "security/Proofs/Pouw/Claims/KS/Bound.lean", "verity/protocols/flock/verifier/Flock/Merkle.lean"):
         assert said(theirs + pearls, path) == counted + pearl, path
 
