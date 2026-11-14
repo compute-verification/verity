@@ -50,6 +50,10 @@
   }
  },
  "domain": {
+  "Accounting.AtLinkEnds": {
+   "owner": "@network-accounting",
+   "why": "A scope: the strategies placed at the places a registered link may end at, a host with everything in it one leaf; a run with a gate at a device or at a memory leaf is outside it, and the leak limit is not stated of one."
+  },
   "Accounting.JointBridge.PhaseLeaks": {
    "owner": "@lean",
    "digest": "937bce3d120eb67c95c25010a046778163f84256a3da9ae4111bf840c669b50b",

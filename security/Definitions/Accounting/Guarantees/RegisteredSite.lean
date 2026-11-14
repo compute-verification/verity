@@ -11,6 +11,7 @@ public import Mathlib.Data.String.Basic
 Stated in the actual-circuit model, the first and third at the Site's own places and links; not proved here.
 
 * `Placed.onto`: an actual circuit's image under a map of leaves, as `Annotation.map` is an annotation's.
+* `AtLinkEnds`: a strategy whose gates are all at places a link may end at, a host one leaf.
 * `EgressRegistered`: what leaves a subtree of the Site over any ticks is at most the capacity of the registered links
   with exactly one end in the subtree, a tick. The limit is the model's `β_X` (`linkCapacity`) at the Site's links
   (`Site.placeEnds`, `Site.linkβ`) and the subtree's places (`Site.under`), so the boundary has one definition.
@@ -19,7 +20,7 @@ Stated in the actual-circuit model, the first and third at the Site's own places
   of the links no such device is on. A memory challenger is a sealed sink, which adds nothing, or a trusted device,
   which adds its record limit and a jitter share.
 * `LeakPartsRegistered`: the same at a subtree of a valid registration's Site, where the sealing of the sinks is
-  concluded from the registration.
+  concluded from the registration, for a strategy placed at the places a link may end at.
 -/
 
 @[expose] public section
@@ -38,6 +39,13 @@ def Placed.onto {L L' : Type*} (A : Placed L) (f : L → L') : Placed L' :=
     cell_inj := fun g h e => by
       simp only [Prod.mk.injEq] at e
       exact Fin.ext e.2.1 }
+
+/-- **A strategy placed at the places a link may end at**: in every run, every gate is at a place that is the one a
+link may end at for itself (`Site.linkPlace`). On a valid registration's Site that is a host, a certifier, a
+challenger, a site or the outside, and never a device or a memory leaf: a host with everything in it is one leaf of
+the model, and a run with a gate at a device or at a memory leaf is not placed so. -/
+def AtLinkEnds (S : Verity.Site) {Ω : Type*} (R : Ω → Actual.Run S.Place) : Prop :=
+  ∀ r g, S.linkPlace ((R r).A.x g) = (R r).A.x g
 
 end Accounting
 
@@ -111,7 +119,13 @@ That the sinks are sealed is no premise: a valid log's links join kinds a link m
 places, so a challenger outside `units`, linked only into the subtree, is linked only to the subtree's hosts. A
 challenger outside `units` adds nothing and nothing is asked of what it does; one of `units` adds its record limit and
 a jitter share. `pinned`, `units` above the shared challengers, and `K` are parameters: this gives no device's record
-limit a value, and reads no protocol's check or output. -/
+limit a value, and reads no protocol's check or output.
+
+**A host is one leaf.** The strategy is placed at the places a link may end at (`AtLinkEnds`): a host's own work, its
+devices' and its memory leaves' are all gates at the host. The links premise (`DeclaredLinks`) asks a registered link
+between the two leaves of every wire, and a registered link ends at a host, a certifier, a challenger or the
+outside, so a run with a wire into or out of a device's own leaf meets it at no valid Site. A run with a gate at a
+device or at a memory leaf is outside this statement: the leak limit is not stated of it. -/
 def LeakPartsRegistered : Prop :=
   ∀ (D : Verity.Registration.Digests) (A : Verity.Registration.Auditor) (c : Verity.Registration.Composite)
     (l : Verity.Registration),
@@ -120,7 +134,7 @@ def LeakPartsRegistered : Prop :=
       (ℓ : S.Place → S.Place → ℕ) (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length)
       (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec) (record : S.Place → Set ℕ) (bucket : ℕ → ℕ)
       (jitter a b : ℕ) (K : S.Place → ℕ),
-      Verity.Registration.Valid D A c l →
+      Verity.Registration.Valid D A c l → AtLinkEnds S R →
       units ⊆ S.challengersOf pinned i → S.sharedOf pinned i ⊆ units →
       CausalStrategy R ℓ → DeclaredLinks R S.placeEnds S.linkβ link →
       TrustedUnits R 𝒱 (S.placesIn (S.certifiersOf i ∪ units)) spec record bucket jitter →
