@@ -64,3 +64,6 @@ c616 cancelled too: it had waited 67 min for a slot and never started. Relaunche
 ## 2026-11-14T18:44:36Z
 
 TOP-424: I cancelled every run that served a mark on main (7860, fd54, 1fdd, 0603, ee58, b806, 315f, 22e5). #9835, #10032 and #10140 are carried across the architecture branch's moves with tools/move/restack.py (clean) and merged into architecture, now at 0b695681cf387d0ba6ea46d524afefd6782c05e1. The changed .py files compile. Change 5 (mypy-cures, e06f2a98) has no PR and is not merged. Next: renames in circuits' adapter directories.
+
+## 2026-11-14T18:49Z renames
+program/ (my only directory since the lead cut it at 18:49Z) done: architecture commit afba5ef592b0, pushed in 8300f551a1e3. 14 files, 27 uses removed, 49 left (25 RNG draws, 13 the production interface, 4 compute capability, 3 descriptor_record cap, 2 sampled-proofs:, 1 record string, 1 warden_rows). 17 line files (96 uses) skipped. CIR-278 line posted.
