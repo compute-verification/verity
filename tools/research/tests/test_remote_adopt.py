@@ -128,7 +128,7 @@ def test_a_cancel_asks_every_machine_and_refuses_a_run_two_hold(machines):
 
 
 def test_a_search_without_on_never_logs_in_to_an_auditor_host_and_says_so(machines, monkeypatch, capsys):
-    """The auditor hosts refuse lanes' keys by design, so `status|inspect|fetch|cancel RUN` without --on left a refused login in
+    """The auditor devices refuse lanes' keys by design, so `status|inspect|fetch|cancel RUN` without --on left a refused login in
     each one's auth log. Both marks leave one out before any ssh: deploy.toml's `admin = true` (vy-auditor-1, the real manifest's)
     and an entry naming its gate (`auditor`). The search says which it didn't ask, and --on still asks one."""
     tmp, here, held = machines["tmp"], machines["local"], "r20261002-091500-a0d1"
@@ -139,7 +139,7 @@ def test_a_search_without_on_never_logs_in_to_an_auditor_host_and_says_so(machin
     _run_on(tmp / "aud1", held, "done")
     hosts: list[str] = []
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **kw: hosts.append(host) or ["sh", "-c"])
-    note = "not asked: the auditor hosts gate-c, vy-auditor-1, which refuse lanes' keys (--on NAME asks one)"
+    note = "not asked: the auditor devices gate-c, vy-auditor-1, which refuse lanes' keys (--on NAME asks one)"
 
     assert cli.main(["inspect", RUN, "--runs-dir", str(here)]) == 0
     assert f"research: looking for {RUN} on 2 machines (--on NAME skips this); {note}" in capsys.readouterr().err
@@ -147,7 +147,7 @@ def test_a_search_without_on_never_logs_in_to_an_auditor_host_and_says_so(machin
         assert cli.main([*argv, "--runs-dir", str(here)]) != 0, argv
         err = capsys.readouterr().err
         assert f"no machine holds run {held}" in err and note in err, argv
-    assert set(machines["probed"]) == set(hosts) == {"a", "b"}, "no ssh to an auditor host without --on"
+    assert set(machines["probed"]) == set(hosts) == {"a", "b"}, "no ssh to an auditor device without --on"
 
     assert cli.main(["status", held, "--on", "vy-auditor-1", "--runs-dir", str(here), "--json"]) == 0
     (s,) = json.loads(capsys.readouterr().out)["runs"]

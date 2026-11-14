@@ -37,6 +37,34 @@ every product, is a reference, not an answer.
 
   The rest of what is proved, what is open and every named assumption: Security assumptions and guarantees, below.
 
+## Parties
+
+PoUW, the compute accounting protocol, has three parties (`parties.PROTOCOL`, on the deployment layer
+`verity.runtime`). Each execution phase runs the same rounds between them:
+
+- **The prover** is the developer's: its GPU serving and the PoUW prover (`verity/protocols/accounting/pouw/prover/`,
+  Pearl-C and Pearl+ among its schemes), proving through Flock `--zk` behind the ZK server. It holds the weights and
+  their committed rows, the values it commits under hiding leaves and their salts, and the noise each salt gives. It
+  sends the verifier the root the salt follows (the weights' root a credit period's open signs), then the phase's
+  registration once it has served on the salt, then the sampled proof blocks' proofs. It trusts nothing: it checks that
+  the salt it is sent opens against the challenger's commitment, after the root it sent. Nothing it runs or hosts is
+  trusted, and neither is the audited hardware or its vendor.
+- **The challenger** is on the auditor's devices, a machine the developer doesn't control. It holds each phase's
+  challenges, a salt challenge and a sampling challenge with their hm96 salts (`coins.Challenger`), sampled from its own
+  randomness and committed before the phase begins; a served challenger also holds its LMS key and its signed log. It
+  sends the verifier the commitment, and opens each challenge once, only after the verifier has recorded what it
+  follows: the salt after the prover's root, the sampling challenge after the registration. It trusts nothing it
+  receives. It is the one auditor-trusted device PoUW relies on (`trusted-device`); the auditor-party assumptions
+  (`Accounting.Assumptions.Parties`) state no PoUW challenger yet.
+- **The verifier** is the auditor's own check, the Lean `pouw-check` (`PouwCheck.check`, with the Python of the same
+  names as its reference). It holds the phase's commitment, records the prover's root and registration, forwards each
+  challenge to the prover once it opens against the commitment (`coins.coin_reason`), and decides the phase on the
+  proofs: one output line a phase, which credits only that phase. It trusts its challenger, so an outcome convinces the
+  auditor and no third party.
+
+A certified execution phase's salt is the network certifier's instead (`salt.py`), a layer of its own that these parties
+don't hold, and a live phase's round challenges aren't in them yet.
+
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
@@ -134,7 +162,7 @@ sparse noise with row tags and three certifier-streamed coin lanes, every k32 wo
 - ShaWrites (rank 4a) counts as milder than SAK, with "honest is best" for hashing's credit;
 - the copy model is tile grain;
 - hiding is the keyed leaf, d = SHA-512(ks_w ‖ salt_w ‖ M_top);
-- the certifier is the coin source, on a trusted host;
+- the certifier is the coin source, on a trusted device;
 - the network term and whole-step coverage are reported beside T1;
 - the fold is exact on |A·Bᵀ| ≤ 2^22;
 - stock's decode price is reported both ways.
@@ -195,7 +223,7 @@ The guarantees rest on named assumptions, each a hypothesis of the statement: th
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
 `Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1`; Pearl-C4's `Pouw.PearlC.Assumptions.TTOutFp4Sm120W1`), the seeded noise's forms
 (`Pouw.PearlC.RowSeedNoise`, `Pouw.PearlC.CodeSeedNoise`), the receipt clock (`Pouw.Assumptions.HonestClock`), the sampled
-tile's proof (`Pouw.PearlC.Assumptions.TileProofSoundAll`), and the claims `trusted-host`, `live-verifier`, `cr/sha-512`
+tile's proof (`Pouw.PearlC.Assumptions.TileProofSoundAll`), and the claims `trusted-device`, `live-verifier`, `cr/sha-512`
 and `prf/sha-512` (`verity.claims`).
 
 ## Core API
@@ -216,6 +244,8 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 ## Where things are
 
 - `protocol`: the `PoUWScheme` interface.
+- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `PROTOCOL`), each machine's work
+  a capability it is given.
 - `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`,
   `live_reads`: the Python references the Lean is held to, and the reference rules not yet ported.
 - `verity/protocols/accounting/pouw/prover/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,

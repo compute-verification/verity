@@ -446,10 +446,10 @@ def test_an_ask_under_a_parent_lands_on_its_project_and_milestone_and_under_the_
         "title": "One auditor-only host", "parentId": "P1", "projectId": "PJ1", "projectMilestoneId": "MS3"}
     assert capsys.readouterr().err == ""
     fake.refuse_project = True
-    lin.file("infra", "top", "the brief", parent="CMP-92", title=" The auditor's host ")
+    lin.file("infra", "top", "the brief", parent="CMP-92", title=" The auditor's device ")
     refused, filed = (c[1]["i"] for c in fake.sent("issueCreate")[1:])
     assert refused["projectId"] == "PJ1" and filed["parentId"] == "P1" and "projectId" not in filed and "projectMilestoneId" not in filed
-    assert filed["title"] == "The auditor's host"
+    assert filed["title"] == "The auditor's device"
     assert "Linear refused CMP-92's project for this issue (Linear: Argument Validation Error" in capsys.readouterr().err
     fake.parent = {"id": "P2", "project": None, "projectMilestone": None}                       # a parent on no board
     lin.file("infra", "top", "the brief", parent="CMP-93")
@@ -656,11 +656,11 @@ def test_an_issue_that_waits_only_on_landing_is_neither_overdue_nor_slipped_and_
     found = lin.audit({"INF": "infra"}, now=AUDIT_NOW, waiting=lambda nums: asks.append(nums) or set(nums) <= {20})
     assert [(f["issue"], f["kind"]) for f in found] == [
         ("INF-51", "overdue"), ("INF-51", "slipped"), ("INF-52", "overdue"), ("INF-53", "overdue"), ("INF-54", "overdue")]
-    assert lin.landing == [{"issue": "INF-50", "lane": "infra", "due": "2026-10-18", "late_h": 20.0}]
+    assert lin.landing == [{"issue": "INF-50", "lane": "infra", "due": "2026-10-18", "late_h": 13.0}]   # since the 18th ended, PDT
     assert asks == [[20], [21]]                                     # asked only of an In Review issue whose PRs are all open
     assert ("INF-50", "overdue") in [(f["issue"], f["kind"]) for f in lin.audit({"INF": "infra"}, now=AUDIT_NOW)]   # no `waiting`
     assert slack.render_landing(lin.audit({"INF": "infra"}, now=AUDIT_NOW, waiting=lambda n: True) and lin.landing) == (
-        "\nwaiting on landing: 2 issue(s), not findings; ci and top see the total (2 past their date, the oldest by 20 h)")
+        "\nwaiting on landing: 2 issue(s), not findings; ci and top see the total (2 past their date, the oldest by 13 h)")
     assert slack.render_landing([]) == ""
 
 
@@ -699,8 +699,27 @@ def test_a_persons_new_issue_with_no_answer_after_2_h_is_unheard_and_an_apps_nev
         issue("INF-103", "Backlog", createdAt=ago(3), **app),                                             # an agent's
         issue("INF-104", "Todo", createdAt=ago(3), **person),                                             # Todo, unanswered
         issue("INF-105", createdAt=ago(3), **person),                                                     # started
+        issue("INF-106", "Backlog", createdAt=ago(3), assignee={"name": "Daniel Reuter"}, **person),     # a note to himself
+        issue("INF-107", "Backlog", createdAt=ago(3), assignee={"name": "Someone Else"}, **person),      # filed for another
+        issue("INF-108", "Backlog", createdAt=ago(3), assignee=None, **person),                           # filed for nobody
     ])
-    assert [x for x in found if x[1] == "unheard"] == [("INF-100", "unheard"), ("INF-104", "unheard")]
+    assert [x for x in found if x[1] == "unheard"] == [("INF-100", "unheard"), ("INF-104", "unheard"), ("INF-107", "unheard"),
+                                                      ("INF-108", "unheard")]
+
+
+def test_due_and_target_dates_are_pacific_days_so_nothing_is_overdue_or_lapsed_before_its_day_ends_there(tmp_path):
+    """The team sets every date as a Pacific day: an issue due Fri 13 Nov is not overdue at 4:30 PM PST that day, when UTC
+    already reads the 14th, and is at 12:30 AM PST the next day."""
+    def found_at(stamp: str) -> list[tuple[str, str]]:
+        fake = FakeLinear()
+        fake.open = [issue("INF-110", dueDate="2026-11-13", startedAt=stamp, updatedAt=stamp,
+                           projectMilestone={"id": "MS3", "name": "M3 · composed", "targetDate": "2026-11-13"})]
+        now = datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+        return [(f["issue"], f["kind"]) for f in linear.Linear(KEY, fake, cache=tmp_path / "t").audit({"INF": "infra"}, now=now)]
+    assert found_at("2026-11-14T00:30:00Z") == []                                                  # 4:30 PM PST on the 13th
+    assert found_at("2026-11-14T08:30:00Z") == [("INF-110", "lapsed"), ("INF-110", "overdue")]    # 12:30 AM PST on the 14th
+    assert linear.team_day(datetime(2026, 11, 14, 0, 30, tzinfo=UTC).timestamp()) == "2026-11-13"
+    assert linear.day_end("2026-11-13") == datetime(2026, 11, 14, 8, 0, tzinfo=UTC).timestamp()
 
 
 def test_an_open_issue_on_a_milestone_dated_before_today_is_lapsed_and_one_dated_today_is_not(tmp_path):
@@ -1008,8 +1027,8 @@ def test_create_files_an_issue_into_your_own_team_with_its_brief_title_and_due_d
 def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_date_or_nothing_to_set(tmp_path):
     fake = FakeLinear()
     lin = linear.Linear(KEY, fake, cache=tmp_path / "t")
-    sent = lin.edit("INF-1", " The auditor's host ", "2026-10-30", "## Done when\n- one host", "CMP-92")
-    assert sent == {"title": "The auditor's host", "dueDate": "2026-10-30", "description": "## Done when\n- one host", "parentId": "P1"}
+    sent = lin.edit("INF-1", " The auditor's device ", "2026-10-30", "## Done when\n- one host", "CMP-92")
+    assert sent == {"title": "The auditor's device", "dueDate": "2026-10-30", "description": "## Done when\n- one host", "parentId": "P1"}
     assert fake.updated == [("I1", sent)]
     assert lin.edit("INF-1", due="none") == {"dueDate": None} and fake.updated[-1] == ("I1", {"dueDate": None})
     assert lin.edit("INF-1", parent="CMP-92", send=False) == {"parentId": "CMP-92"}                 # built, not sent
@@ -1024,10 +1043,10 @@ def test_edit_sets_the_title_due_date_description_and_parent_and_refuses_a_bad_d
 def test_edit_from_the_cli_replaces_the_description_with_the_file_and_a_dry_run_sends_nothing(fake, registry, capsys, lin, tmp_path):
     brief = tmp_path / "BRIEF.md"
     brief.write_text("# The host\n\n- [ ] one auditor-only host\n")
-    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--title", "The auditor's host", "--file", str(brief), "--due", "2026-10-30",
+    rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--title", "The auditor's device", "--file", str(brief), "--due", "2026-10-30",
                      "--parent", "CMP-92")
-    assert rc == 0 and out.strip() == "INF-1 set title The auditor's host, dueDate 2026-10-30, description 40 characters, parentId P1"
-    assert lin.updated == [("I1", {"title": "The auditor's host", "dueDate": "2026-10-30",
+    assert rc == 0 and out.strip() == "INF-1 set title The auditor's device, dueDate 2026-10-30, description 40 characters, parentId P1"
+    assert lin.updated == [("I1", {"title": "The auditor's device", "dueDate": "2026-10-30",
                                    "description": "# The host\n\n- [ ] one auditor-only host\n", "parentId": "P1"})]
     rc, out, _ = run(capsys, "linear", "edit", "INF-1", "--due", "none", "--dry-run")
     assert rc == 0 and out.strip() == "dry-run: would set dueDate None" and len(lin.updated) == 1

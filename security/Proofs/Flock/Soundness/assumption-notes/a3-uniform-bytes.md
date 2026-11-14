@@ -20,7 +20,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   flips from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). The theorems are about
   `drawWith`, and `drawOS_def` states that `Flock.Draw.drawOS` is `drawWith` with every stream's bytes from
   `IO.getRandomBytes`. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
-  That the challenger releases the coins only after the registration they sample is recorded rests on `trusted-host`,
+  That the challenger releases the coins only after the registration they sample is recorded rests on `trusted-device`,
   not on A3.
 - **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
   `execOS_escape_le` and `execOS_subset_escape_le` (`ExecDrawOS.lean`). They hold for every number of

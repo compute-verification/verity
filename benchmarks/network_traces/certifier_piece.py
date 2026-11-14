@@ -50,14 +50,15 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
-     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
-     reject with its why.
+     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on, and so does
+     ``accepted on the period check`` (`chain_record.RESTS`: the scan's acceptance rests on step 5's check, which
+     then decides); any other is a reject with its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/protocols/accounting/certifier/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
-     their proofs' coins in this piece on the developer's node, so `trusted-host` is assumed with the auditor's devices
+     their proofs' coins in this piece on the developer's node, so `trusted-device` is assumed with the auditor's devices
      not placed.
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ; never the scan's answers, the
   endpoint's report, the report's counts or a step's summary, which are private) and the link-window's five
@@ -129,7 +130,7 @@ PRIVATE = Path("private") / "certifier"
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
 PROTOCOL = "verity/certifier/v0"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
-PREMISE = "trusted-host"
+PREMISE = "trusted-device"
 #: the front's public outcome, copied beside the kept fetch
 SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
@@ -298,7 +299,7 @@ def kept_run(serve_dir: Path) -> str:
 
 
 def placement(serve_dir: Path, run: str) -> dict:
-    """Which host ran each party, and what `trusted-host`'s premise rests on: the network certifier ran on the gate's
+    """Which host ran each party, and what `trusted-device`'s premise rests on: the network certifier ran on the gate's
     host (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and the chain's checks and samples, the period
     check and their proofs' coins ran in this piece on the developer's node, the kept run's peer. No device of the
     auditor's is on the node's links, so the premise is assumed of both hosts; ``links`` are the node's to the gate,
@@ -557,6 +558,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows, or is None to read the report
     of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
     chain step). `NotRun` when a step can't run."""
+    import chain_record as CR
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
@@ -583,7 +585,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
             if not report.is_file():
                 raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
         doc = json.loads(report.read_text())
-        if doc.get("verdict") != "accepted":
+        if doc.get("verdict") not in ("accepted", CR.RESTS):
             raise Rejected(f"the chain {doc.get('verdict')}: {json.dumps(doc.get('why'), default=str)}"[:1800])
         try:
             (w,) = [x["window"] for x in json.loads((out / "scan" / "answers.json").read_text())["windows"]]

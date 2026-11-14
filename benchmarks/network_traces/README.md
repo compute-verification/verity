@@ -75,7 +75,7 @@ two gate verbs on the auditor's machine:
 
 ## The wipe's egress
 
-Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over
+Memory accounting's streamed wipe signs no egress count; its check takes the count as evidence. The count over
 its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
@@ -131,7 +131,7 @@ published beside the answer as `certificates.json`, each certificate with its ow
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
-on the developer's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
+on the developer's node, so `trusted-device` is assumed with the auditor's devices not placed. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
 other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's

@@ -22,8 +22,8 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
 (`watermark`).
 
 **What it can't enforce here.**
-- Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
-  gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
+- Run directly, the network certifier runs on the server's host (`trusted-device` stands for the auditor's device). The
+  gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs it on the auditor's device instead, the server
   reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
@@ -109,7 +109,9 @@ session (`check_load`) at the relay's roots.
 
 **The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1|2 [--content P,O[,ROWS] ...]`,
 the schedule's lengths rows and its content rows' classes (`P,O,ROWS` under `--lengths 1`, `P,O` under `--lengths 2`,
-where a class's tables hold a row a release filed in it), which `rehearse` passes to its `serve`; without them a
+where a class's tables hold a row a release filed in it), and with `--lengths 2`, `--content` and `--max-tokens-cap`
+`--request-words`, a fourth table a class of what the network certifier reads of each released request (its
+`max_tokens` and count of prompt ids), which `rehearse` passes to its `serve`; without them a
 run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
 are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
 `rows.jsonl` (the registration and the cost) and `rows.salts` (witness). `check` holds every execution phase that has

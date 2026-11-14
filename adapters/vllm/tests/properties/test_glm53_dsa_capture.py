@@ -27,7 +27,7 @@ from verity.definitions.registry import sparse_mla as M
 from tests import fake_vllm
 from tests.properties import glm53_dsa_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 PAIRS = [(a, b) for fs in (X.L_FORMS, X.H_FORMS) for i, a in enumerate(fs) for b in fs[i + 1:]]
 
