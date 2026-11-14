@@ -21,8 +21,8 @@ records are the workload's (the device adapter's), reached through the H1 device
   `salt_session`, and three names for a window's sample session: the session, its reserve at the gate, and the tests'
   sampling coin held in process. Those six names and that module are spelled with a word the Glossary retires, so this
   file describes them and their modules' `__all__` spells them.
-- **Loaded by:** the serving package, whose exports are how an adapter reaches these names (the vLLM adapter's H1
-  hooks, ranks and settings stay in `verity_vllm.protocols.pouw`); PoUW's prover tests; and the benchmarks under
+- **Loaded by:** the serving package, whose exports are how an adapter reaches these names (the serving engine's adapter
+  keeps its own H1 hooks, ranks and settings); PoUW's prover tests; and the benchmarks under
   `benchmarks/pouw/`, `benchmarks/one_stage/` and `benchmarks/hash/`.
 - **Loads:** `verity.circuits`, `verity.commitments`, `verity.errors`, `verity.protocols.accounting.pouw` and
   `verity.protocols.proofs.spot`; numpy; and `verity_flock`, inside the functions that use it. It loads no tensor library
