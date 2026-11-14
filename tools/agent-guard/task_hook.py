@@ -61,14 +61,11 @@ COORDINATORS = uuid.uuid5(uuid.NAMESPACE_URL, "https://github.com/compute-verifi
 LEAD_GENERATIONS = range(1, 51)
 
 
-def leads() -> set[str] | None:
+def leads() -> set[str]:
     """Every lead's agent id: each `holder` of the registry, and the id `launch_coordinator.py` gives each handle it
-    registers at each generation in LEAD_GENERATIONS; None when the registry can't be read."""
-    try:
-        text = REGISTRY.read_text()
-        handles = [h.get("handle") for h in json.loads(text).get("handles") or []]
-    except (OSError, ValueError, AttributeError):
-        return None
+    registers at each generation in LEAD_GENERATIONS. A registry that can't be read raises: the caller decides."""
+    text = REGISTRY.read_text()
+    handles = [h.get("handle") for h in json.loads(text).get("handles") or []]
     return set(holders(text)) | {f"bc-{uuid.uuid5(COORDINATORS, f'{h}/{g}')}" for h in handles if isinstance(h, str) and h
                                  for g in LEAD_GENERATIONS}
 

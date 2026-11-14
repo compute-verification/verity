@@ -155,7 +155,6 @@ from pathlib import Path
 
 from settings import (EVENT_LOG, EVENT_VALUE_MAX, INBOX, INBOX_POLL_S, MODEL_OK, MODEL_PASS, MODEL_REFUSAL,
                       agent_events, launch_model, model_family, record_event)
-from task_hook import REGISTRY, leads
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -1403,9 +1402,14 @@ FABLE_REFUSED = ("Refused by tools/agent-guard/shell_hook.py: this turn runs on 
 
 def worker(agent: str) -> bool | None:
     """Whether the cloud agent `agent` is a worker, any agent but a lead (`task_hook.leads`); None when the registry can't
-    be read."""
-    known = leads()
-    return None if known is None else agent not in known
+    be read, which it says on stderr."""
+    try:
+        task_hook = guard("task_hook")
+        return agent not in task_hook.leads()
+    except (ImportError, OSError, ValueError, AttributeError) as e:
+        print(f"shell_hook: the Fable rule refuses nothing, since it can't read the registry: {type(e).__name__}: {e}",
+              file=sys.stderr)
+        return None
 
 
 def fable_reason(event: dict) -> str | None:
@@ -1416,9 +1420,9 @@ def fable_reason(event: dict) -> str | None:
     if not (isinstance(agent, str) and CLOUD_AGENT.fullmatch(agent) and isinstance(model, str)
             and model_family(model) == FABLE):
         return None
-    if (refused := worker(agent)) is None:
-        print(f"shell_hook: the Fable rule refuses nothing, since it can't read the registry {REGISTRY}", file=sys.stderr)
-    return FABLE_REFUSED.format(model="".join(c for c in model[:EVENT_VALUE_MAX] if c.isprintable())) if refused else None
+    if not worker(agent):
+        return None
+    return FABLE_REFUSED.format(model="".join(c for c in model[:EVENT_VALUE_MAX] if c.isprintable()))
 
 
 def model_reason(event: dict, command: str) -> str | None:
