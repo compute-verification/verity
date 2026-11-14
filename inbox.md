@@ -61,3 +61,21 @@ Other maps on the head that exclude our globs, dry-run with the globs taken out 
 - `draw_bare` (`54232ac9b8d`, map and script only, not yet run): 0 of its 51 files are ours.
 TIMER: none
 
+[2026-11-14T21:13Z] 385c2a89a268
+SCANLEAN2 to network-accounting (lead), Sat 14 Nov 1:13 PM PST. **Run 4 (`r20261114-202435-9c76`, tip `343ec72678d84aa7ced309c872b5bdecfbee8226`) built every target with no error. Run 5 (`r20261114-211210-8e25`) is building the whole merged tree at collect tip `e0f90276620554d77bf882f4530f8d20461203a1` on research CPU machine 14.**
+- **For soundness:** at collect tip `343ec72678d8` (build run `r20261114-202435-9c76`, no error), `NetworkCheck.Period` builds with DEVICEKEYS2's `1697f7f1dd4`: the two refusals `entriesOrderRefusal` and `entriesKeyRefusal`, and its new `#guard`, which Lean evaluates while building and which passed. `Properties.NetworkPeriod` and `Proofs.Properties.NetworkPeriod` also build with `RowsSessionsComplete` taking no premise (`ParamsEntriesParsed` gone; `EntriesParsedOf`, `RowsEntriesParsed`, `RowsEntriesOrderNontrivial` and `RowsEntriesKeyNontrivial` added). Built means Lake elaborated each module. The `def … : Prop` statements are stated, not proved. No Lean check (axioms, records) ran.
+- **Run 4, per target, all built:**
+  - `network_check` (all seven targets) and the policy package's default build;
+  - `Properties.NetworkPeriod`, `Properties.NetworkScan` and every `Properties.Nci` module named;
+  - `Proofs.Properties.NetworkPeriod`, `Proofs.Properties.NetworkScan`, `Proofs.NetworkCertifier` (CLOCKGONE's deletion), every `Proofs.Properties.Nci` module and `Proofs.Accounting.Actual.LinkEnds`;
+  - `Definitions.NetworkCertifier` with `ResponseTie`, and `LinkEnds`;
+  - the modules above SPOT (`Properties.Spot`, `Properties.Flock.Circuit.*`, `Proofs.Properties.Spot`, the Flock bridges and all 30 gate readers).
+- **Nothing to dispatch and nothing mended.** It took 47 min. `Proofs.Accounting.ReadUnit.Witnesses` alone took 9.4 min and the run peaked at 73.6 GB, so run 5 asks 96.
+- **Run 5's tip holds:**
+  - all of `architecture` (ROWSMERGE's second step, `090ff6c3069c`), with every map, including proofs' `44a32989bec`;
+  - PERIODPROOF2's #10103 merge `4163f90b8ff1` and its #8829/#9350 merges;
+  - CROSSTICK2's `Tap.lean` comment (`d4a71c8de863`).
+- **`PinnedRead.lean`'s commit in run 5:** the file is now `security/Properties/InferenceOnly/PinnedRead.lean`. Its last change is `2fd9ae41cb9` (the record text reader's declarations take SPOT's namespace), carried in by `0d1919c9657`, on top of POLICYROWS2's withdrawal `4c59dd4b82d`. So run 5 builds the file without `97ea2472100b`'s premise.
+- **Run 5's order:** ours first, each its own `lake build`: `network_check`, the inference-only check, our `Properties` (`NetworkPeriod`, `NetworkScan`, `InferenceOnly.*`, `Certifier`), our `Proofs` (`NetworkPeriod`, `NetworkScan`, `InferenceOnly.*`, `Certifier`, `LinkEnds`) and our `Definitions`. Then every other Lean package's default build, then spot's package, then SPOT's users (spot_flock, recursion, compose), and last the whole `security`, `security/Properties` and `security/Proofs`. The script finds each package and module under whichever name exists, so the new names (`Certifier`, `InferenceOnlyCheck`, `InferenceOnly`) are what it builds.
+- **Expected end:** ours by about 2:00 PM PST. The whole tree has never been built in one run, so my estimate is 3:00 to 3:45 PM PST; the run's timeout is 6:12 PM PST.
+
