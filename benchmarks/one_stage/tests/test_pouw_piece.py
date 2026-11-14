@@ -137,7 +137,7 @@ def test_a_period_with_no_lean_executable_is_missing_not_the_python_references(t
 
 
 def test_a_period_piece_takes_no_device(tmp_path):
-    """The period names no device, so the piece takes no registration head or place."""
+    """The period names no device, so the piece takes no docket head or place."""
     with pytest.raises(SystemExit):
         P.main(["period", "--out", str(tmp_path / "p"), "--head", "ab" * 64, "--place", "gpu0"])
 

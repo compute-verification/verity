@@ -25,7 +25,7 @@ reproduce; its roots and digests are those of the commit `REFERENCE` pins.
 `GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`
 resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two cards apart. A `live` sample carries
 `draw.receipt`, the challenger's live-coin receipt; `check` and `build` refuse one without it. Against the window's
-registration, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the
+docket, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the
 prover can't pick it), a subset sample of other than its k units, and a `draw.record` that isn't a sample of the
 bundle's units under that sampling design over the registered population (Lean's `verity-verify-proof draw --registration F`
 refuses to sample one).
@@ -36,7 +36,7 @@ python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.j
 
 `build` writes a bundle from a window and the prover's step records, given where each port's row is in the step layout
 (`locate`), a unit's coordinates (`coords`) and its registered reads (`reads`). The fixture,
-`tests/fixtures/drawn-unit-bundle.{json,bin}` with its window's registration, is four sampled proof blocks of a W8A8 MLP's window
+`tests/fixtures/drawn-unit-bundle.{json,bin}` with its window's docket, is four sampled proof blocks of a W8A8 MLP's window
 (two requests, one step, both linears, width 128: 512 units, registered `subset:4`), its weights registered as core's
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows. The
