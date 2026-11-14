@@ -1,4 +1,4 @@
-"""The dashboard's runner (`benchmarks/dashboard/run.py`): `running` counts a top goal only when its own number, the first
+"""The dashboard's runner (`infra/dashboard/run.py`): `running` counts a top goal only when its own number, the first
 metric the dashboard lists under it, has a target, a fresh value and a mark, and names each other goal with the first of
 those it lacks."""
 from __future__ import annotations
