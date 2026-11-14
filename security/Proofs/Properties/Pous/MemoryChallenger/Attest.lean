@@ -3,6 +3,8 @@ module
 public import Lms.Sign
 public import Proofs.Flock.Claims.Finder
 public import Proofs.Properties.Certifier.Device.Lms
+public import Proofs.Properties.Hash.Lms
+public import Proofs.Flock.Be64
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
 public import Properties.Attest
 import all Init.Data.String.Defs

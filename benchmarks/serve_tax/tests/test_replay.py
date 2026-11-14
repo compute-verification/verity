@@ -283,6 +283,22 @@ def test_replay_json_holds_the_value_settings_in_force_in_the_environment_the_re
     assert "a credential's value" not in json.dumps(out)
 
 
+@pytest.mark.parametrize("tp", [1, 2])
+def test_replay_json_holds_the_cards_the_replays_engine_held(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tp: int):
+    """``gpus`` is the replay's tensor-parallel width, beside its wall time and its engine's load: what a reader that
+    prices the replay multiplies its seconds by."""
+    d = arm(tmp_path)
+    (d / "meta.json").write_text(json.dumps({"plan": str(tmp_path / "plan.jsonl"), "checkpoint": "ck", "server_argv": []}))
+    monkeypatch.setattr(R, "replay", lambda w, *args: {"wall_s": 1.0, "ready_s": 0.5, "steps": [dict(s) for s in w["steps"]],
+                                                       "tokens": {r["engine_id"]: list(r["served"]) for r in w["requests"]}})
+    monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
+    for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
+        monkeypatch.setenv(name, "the job's")                      # `main` sets both in this process: put back after the test
+    assert R.main(["--arm-dir", str(d), "--load", "sat", "--out", str(tmp_path / "out"), "--tp", str(tp)]) == 0
+    out = json.loads((tmp_path / "out" / "replay.json").read_text())
+    assert (out["gpus"], out["replay_wall_s"], out["engine_ready_s"]) == (tp, 1.0, 0.5)
+
+
 def test_the_replay_puts_a_request_back_after_the_empty_schedules_its_arrival_names(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """Serving held ``a`` back from one schedule, which ran nothing, and ``b`` arrived after it: the next step ran both.
     The replay adds ``b`` after that empty schedule; added before it, as an arrival that names none is, ``b`` runs alone
@@ -389,6 +405,18 @@ def test_the_replay_takes_the_step_in_flight_when_the_last_request_finishes(tmp_
     assert len(R.replay(w, tmp_path, eager=True)["steps"]) == 2
 
 
+def test_a_capture_is_of_the_check_the_serve_committed_under_unless_told():
+    """The capture's rows are units of the check the served arm's boundary commitment names (its meta.json's, the
+    launch line's ``check`` in place of the model's), else of the model's check; one given wins, and an arm with neither
+    is refused by name before anything is replayed."""
+    served = {"model_id": "glm53", "boundary_rows": {"check": "GreedySelect_v1{V=154880,N=7744}", "inline": True}}
+    assert R.capture_template(served) == "GreedySelect_v1{V=154880,N=7744}"
+    assert R.capture_template({"model_id": "glm53", "boundary_rows": None}) == R.S.MODELS["glm53"].check
+    assert R.capture_template(served, "TokenSelect_v4{V=154880}") == "TokenSelect_v4{V=154880}"
+    with pytest.raises(SystemExit, match="--capture-template T"):
+        R.capture_template({"model_id": "qwen3-30b"})
+
+
 def test_the_replays_engine_takes_the_headers_cache_format_and_draft(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     """A serve with an FP8 cache or speculative decoding is replayed on an engine with them; a header without them builds
     the engine it did."""
@@ -490,3 +518,26 @@ def test_replay_tokens_round_trip(tmp_path: Path):
     tokens = {rid("sat1", 1): [7, 9], rid("sat1", 0): [7, 0]}
     R.write_tokens(tmp_path, tokens)
     assert R.read_tokens(tmp_path) == tokens
+
+
+def test_glm53s_two_stage_launch_settings_say_what_the_arm_and_the_model_say(tmp_path):
+    """The two-stage serve's launch settings for GLM-5.3, the boundary object as ``BOUNDARY_ROWS`` (the greedy select in
+    units as its check, ``ids``, the logits they were selected from, the arm's tables) and the capture's template as
+    ``--capture-template``, say what the ``two-stage`` arm and the model's check say by default: the plugin is handed
+    the same boundary object either way, and a capture is labelled with the same check whether given it, reading the
+    serve's meta, or the model's. An object handed as ``BOUNDARY_ROWS`` replaces the arm's whole, so one that leaves
+    ``logits`` out serves a class whose select's inputs are not committed."""
+    S, glm, two = R.S, R.S.MODELS["glm53"], R.S.ARMS["two-stage"]
+    check = "GreedySelect_v1{V=154880,N=7744}"
+    setting = {"check": check, "inline": True, "per_prompt": 0, "per_output": 1, "drained": True, "ids": True,
+               "logits": {"private": S.PRIVATE}, "tables": {"layers": 1, "private": S.PRIVATE}}
+
+    def handed(rows: dict | None) -> dict:
+        env = S.server_env(two, tmp_path, tmp_path / "site", None, 3600.0, 600.0, boundary_rows=rows, check=glm.check,
+                           private=tmp_path / "private")
+        return json.loads(env[S.PLUGIN_ENV])["boundary_rows"]
+
+    assert handed(json.loads(json.dumps(setting))) == handed(None)
+    assert "logits" in handed(None) and "logits" not in handed({k: v for k, v in setting.items() if k != "logits"})
+    assert {R.capture_template({"model_id": "glm53", "boundary_rows": handed(None)}),
+            R.capture_template({"model_id": "glm53"}), R.capture_template({}, check)} == {check}
