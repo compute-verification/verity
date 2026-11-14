@@ -25,7 +25,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 pytestmark = pytest.mark.slow
 N = 8
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 STATEMENT = "verity/flock-circuit+plain-leaves"
 
 
@@ -161,7 +161,7 @@ def test_claim_writes_another_description_with_the_registered_paths(staged):
 def verifier():
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return BIN
 
 

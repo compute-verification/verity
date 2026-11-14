@@ -565,7 +565,7 @@ def unit_draw(j: Any) -> dict:
 
 
 def law_name(d: dict) -> str:
-    """`parse_design`'s spelling of a sample's law."""
+    """`parse_design`'s spelling of a sampling design."""
     return f"bernoulli:{d['p']}" if d["law"] == "bernoulli" else f"{d['law']}:{d['k']}"
 
 
@@ -1307,7 +1307,7 @@ def _uniform(n: int, src: bytes, pos: int) -> tuple[int, int] | None:
 
 
 def stream_subset(k: int, n: int, src: bytes) -> list[int] | None:
-    """Lean's ``Draw.subset`` on one stream (``flock-verify draw --stream``): partial Fisher-Yates, each step an exact
+    """Lean's ``Draw.subset`` on one stream (``verity-verify-proof draw --stream``): partial Fisher-Yates, each step an exact
     uniform word of `width` bytes; None when the stream runs out."""
     swapped: dict[int, int] = {}
     pos = 0

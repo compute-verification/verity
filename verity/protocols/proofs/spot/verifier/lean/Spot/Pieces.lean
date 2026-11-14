@@ -26,7 +26,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   instances of template `t`), from given bytes of the challenger's coins, with the number of bytes it read
   (`Select.selectSecond`);
 * `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
-  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
+  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.checkAny`);
 * `second_interior_reads`: of that check's input, the statements' reads that rest on the interior's own values
   (`SecondStage.interiorReads`);
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
@@ -49,6 +49,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`FilePart.why`);
 * `tables_held`: v2's refusal of blobs whose pinned MUFU tables are not a circuit's lookups, on a META's `lookups` and
   the blobs' digests (`OneStageZk.tablesHeld`);
+* `own_tables`: a member's own lookup tables among the blobs' and their refusal, on the same (`OneStageZk.ownTables`,
+  `OneStageZk.tablesMatch`);
 * `bound`: the exact bounds on incorrect proof blocks at δ;
 * `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
 * `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
@@ -97,6 +99,12 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`sample_link_first`).
 * `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s live-coin part
   records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
+* `period_windows`: a lane's sessions of a monitoring period as the auditor's ledger opens them, and which of them
+  are SPOT's windows (`MonitoringPeriod.read`, `MonitoringPeriod.windowsIn`).
+* `period_asked`, `period_check`, `period_check_stub`: what the period's check asks one-stage v2 at a case
+  (`MonitoringPeriod.paramsAt`, `MonitoringPeriod.evidenceAt`), the period's check's answer on a ledger and its evidence
+  (`MonitoringPeriod.checkBlobs`), and that answer with a stand-in for one-stage v2 that accepts when told to
+  (`MonitoringPeriod.checkWith`, `MonitoringPeriod.stubInner`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
@@ -135,6 +143,8 @@ public import Spot.ChallengerSession
 public import Spot.ChallengerCoins
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
+public import Spot.MonitoringPeriod
+public import Spot.MonitoringPeriodAudit
 public import Spot.Produced
 public import Spot.HiddenDraw
 public import Spot.PartitionRef
@@ -873,10 +883,10 @@ private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array J
       verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns, supplied, fixed, reads }
   return (allow, own, stmts)
 
-/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.check`). -/
+/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.checkAny`). -/
 def secondStatements (j : Json) : V Json := do
   let (allow, own, stmts) ← secondOwn j
-  return (SecondStage.check allow own stmts).toJson
+  return (SecondStage.checkAny allow own stmts).toJson
 
 /-- `second_stage.check`'s input (`secondOwn`) to the reads that rest on the interior's own values
 (`SecondStage.interiorReads`), each `{"template", "port", "value"}`. -/
@@ -988,6 +998,7 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut),
    ("select", select), ("design", design), ("slots", slots),
    ("file_population", FilePart.piece), ("tables_held", OneStageZk.tablesPiece),
+   ("own_tables", OneStageZk.ownTablesPiece),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements),
    ("second_interior_reads", secondInteriorReads), ("replay_links", replayLinks),
@@ -1014,7 +1025,9 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
-   ("challenger_inner_trees", Challenger.innerTreesPiece),
+   ("challenger_inner_trees", Challenger.innerTreesPiece), ("period_windows", MonitoringPeriod.windowsPiece),
+   ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
+   ("period_check_stub", MonitoringPeriod.checkStubPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
    ("public_units", PublicUnits.piece),

@@ -239,7 +239,7 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None,
             seed_salt: str | None = None, pool: Mapping[str, Any] | None = None,
             tied: Sequence[str] | None = None, history: Mapping[str, Any] | None = None,
-            certified: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
+            compiler: Any = R.UNREAD, certified: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself. The program function's parameters go with
     `registered` or `tied`, which name them; the certified entries name none."""
@@ -275,6 +275,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["pool"] = dict(pool)
     if history is not None:
         p["history"] = dict(history)
+    if compiler is not R.UNREAD:
+        p["compiler"] = None if compiler is None else dict(compiler)
     if certified:
         p["certified"] = {v: dict(e) for v, e in certified.items()}
     return p
@@ -290,11 +292,12 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
-          history: Mapping[str, Any] | None = None,
+          history: Mapping[str, Any] | None = None, compiler: Any = R.UNREAD,
           certified: Mapping[str, Mapping[str, Any]] | None = None) -> Verdict:
     """`registration.check` (R1-R8) by the verifier, with R2's declared day when it passes `day` and `declarations`,
-    R6's seed salt when it passes `seed_salt`, R6's pool reset, week and spent mark, a reset at most once a week,
-    and R7's pool chain when it passes `pool`, R8's tied values when it passes `tied`, the roots of the history
+    R6's seed salt when it passes `seed_salt`, R6's registered compiler when it passes `compiler`, R6's pool reset,
+    week and spent mark, a reset at most once a week, and R7's pool chain when it passes `pool`, R8's tied values when
+    it passes `tied`, the roots of the history
     tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the
     supplied values' `history` sources, and R7's certified entries when it passes `certified`
     (``{value: {"root", "leaves", "words", "domain"}}``, `registration.check`'s). History tables both verifiers refuse
@@ -304,14 +307,15 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         py: Verdict | None = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                      work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
                                      window_root=window_root, held=held, day=day, declarations=declarations,
-                                     seed_salt=seed_salt, pool=pool, tied=tied, history=history, certified=certified)
+                                     seed_salt=seed_salt, pool=pool, tied=tied, history=history, compiler=compiler,
+                                     certified=certified)
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
                                                   window_root, held, outputs, day, declarations, seed_salt, pool, tied,
-                                                  history, certified),
+                                                  history, compiler, certified),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"],

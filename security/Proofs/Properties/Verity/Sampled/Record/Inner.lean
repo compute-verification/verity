@@ -13,13 +13,13 @@ public import Proofs.Flock.Claims.KS.Range
 Every session the record shows is at the reference statement `xS₀` (a refused sample file) or at a kept sample file's
 statement, and `SessionsIn` holds wherever a reference sample file exists (`∃ d, RefOk A o d`):
 
-* **A session statement that sets up is in scope** (`inScope_sess`): flock-verify `--zk`'s own setup (`Ins.setup`)
+* **A session statement that sets up is in scope** (`inScope_sess`): verity-verify-proof `--zk`'s own setup (`Ins.setup`)
   passes every table's `Zk.shapeOk` (`25 ≤ m ≤ 35`, `queries0_range`) and `Read.setup`'s range check (`read_setup_in`:
   `k_log`, regions and `m_pts` in `InRange`, two link points), and the session's statement sets up one table
   (`shape_sess`). So no session needs a scope beyond what its setup refuses.
 * **A kept sample file's statement sets up** (`kept_in`): its session has the statement's `N₀` (`numsOk`), which is
   positive at the reference (`N₀_pos`) and `0` where nothing sets up, and its statement fits its length words (`Fits`),
-  so flock-verify reads it as `baseRaw` with the sample file (`ins_of_setupOf`).
+  so verity-verify-proof reads it as `baseRaw` with the sample file (`ins_of_setupOf`).
 
 Then `InnerNumbers` at the record is `innerNumbers_deploy` (`innerNumbers`): every unit of the record's code has the
 reference's `N₀`, so `SessionsIn` holds at `Code.atInnerN₀` too (`sessionsIn_atInnerN₀`).

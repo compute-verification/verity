@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Game
 /-!
 # One hidden-output `--zk` sampled session of `J` tables with registered reads
 
-`zk_session_soundHJR`: `ZkHidden.zk_session_soundHJ` for `flock-verify verify --zk --registered F` sessions over hidden
+`zk_session_soundHJR`: `ZkHidden.zk_session_soundHJ` for `verity-verify-proof verify --zk --registered F` sessions over hidden
 outputs at `--session-tables J` (`J = nTab I`), the production configuration, `own` F's ports, over a public file with
 or without shared-row tables (no `pub.tables = none`, which would make the event empty: `Registered.check` refuses a
 registered port outside a shared-row file's tables). Its first conjunct is `zk_session_soundHJ`'s bound at the event

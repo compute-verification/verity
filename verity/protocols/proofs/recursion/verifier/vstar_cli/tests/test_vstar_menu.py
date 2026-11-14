@@ -1,6 +1,6 @@
-"""`Menu.Staged` at F6's pinned menus, checked by running V*: `vstar menu` runs compiled `VStar.statements` over every
-pinned menu's inner session (`VStar.Menu.sessions`, each shape's largest entry at its entries' most claims), which is
-the premise `FlockSampled.Menu.ofEntries_staged` takes. The proof, a bound on `VStar.parts`, is deferred.
+"""V* stages every shape of F6's pinned menus, checked by running V*: `vstar menu` runs compiled `VStar.statements` over every
+pinned menu's inner session (`VStar.Menu.sessions`, each shape's largest entry at its entries' most claims). The
+proof, a bound on `VStar.parts`, is deferred.
 
 These run V* at the deployed sizes, which nothing cheaper does: the kernel cannot evaluate `statements` there, and the
 difftest compares Lean with Python on sampled small shapes, not on the pinned ones. A menu or a parts limit that leaves a

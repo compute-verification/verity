@@ -198,19 +198,19 @@ def tasks(root: Path, files: list[str]) -> list[dict]:
                 "vars": {"builds": " ".join([LEAN, *(d.rstrip("/") for d in required(root, files))])},
                 "inputs": package(root, files), "outputs": [*({"name": e, "path": f"{bin_}/{e}"} for e in exes),
                                                             {"name": TREE, "path": TREE_PATH}]})
-    if "flock-verify" in exes and UNIT_CUT in files:
+    if "verity-verify-proof" in exes and UNIT_CUT in files:
         out.append({"id": f"lean-unit-cut:{UNIT_CUT}", "kind": "lean-unit-cut", "env": "py",
                     "about": "the Lean partition check's codes against verity.circuits.partition's on random cuts",
-                    "vars": {"verify": f"{bin_}/flock-verify"}, "inputs": unit_cut_inputs(root, files),
-                    "reads": [{"task": build, "output": "flock-verify"}],
+                    "vars": {"verify": f"{bin_}/verity-verify-proof"}, "inputs": unit_cut_inputs(root, files),
+                    "reads": [{"task": build, "output": "verity-verify-proof"}],
                     "outputs": [{"name": "result", "path": "lean-unit-cut/result.json"}],
                     "resources": {"cores": 1, "mem_gb": 4, "disk_gb": 1}, "timeout_s": 900})
-    if "flock-verify" in exes and f"{VERIFIER}/upstream.json" in files:
+    if "verity-verify-proof" in exes and f"{VERIFIER}/upstream.json" in files:
         out.append({"id": f"lean-agreement:{VERIFIER}", "kind": "lean-agreement", "env": "py",
                     "about": "agree with upstream's Rust verifier on the pinned upstream build and inputs (ci.py)",
-                    "vars": {"verify": f"{bin_}/flock-verify"},
+                    "vars": {"verify": f"{bin_}/verity-verify-proof"},
                     "inputs": sorted({*(f for f in files if f.startswith(VERIFIER + "/") and not f.endswith(".md")),
                                       *(f for f in CHECK_READS if f in files)}),
-                    "reads": [{"task": build, "output": "flock-verify"}],
+                    "reads": [{"task": build, "output": "verity-verify-proof"}],
                     "outputs": [{"name": "sets", "path": "flock-agreement/ci/sets.json"}]})
     return out + suite_tasks(root, files, build, bin_, exes)
