@@ -9,6 +9,7 @@ The two-stage form's check (`VStar.Recursive.SampledTwo.checkBlobsAtWith`) accep
 accepts at the switch `form` (`accepted_steps`):
 
 * the switch is on;
+* every second-stage session's statement is under `2^64` bytes (`stmtsBytesFit`, by `accepted_stmtsBytesFit`);
 * the run of record's input is `inputAt`'s (`inputAt_ok`): the interior registration's commitment is its record's, its
   sample read the bytes `ξ₂` (`OneStageZk.coinsOf`), every session `OneStageZk.membersRun` ran accepted (`r.all`), and
   the input is `inputOf` at those sessions' verdicts stamped (`stamped`), each registration's record the one the
@@ -186,7 +187,8 @@ theorem accepted_steps {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ 
     simp only [hp] at h
     obtain ⟨hf, hj, htwo⟩ := finishWith_accept h
     subst hf
-    unfold prepare at hp
+    replace hp := (prepare_ok hp).1
+    unfold prepareRun at hp
     obtain ⟨⟨c₂, ξ₂, r, i⟩, hi, hp⟩ := bind_ok hp
     obtain ⟨u₀, -, hp⟩ := bind_ok hp
     obtain ⟨run', hr, hp⟩ := bind_ok hp
@@ -208,7 +210,8 @@ theorem accepted_ordered {form : Bool} {p : Params} {c : OneStage.Commitment} {�
   cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
-    unfold prepare at hp
+    replace hp := (prepare_ok hp).1
+    unfold prepareRun at hp
     obtain ⟨⟨_, _, _, _⟩, -, hp⟩ := bind_ok hp
     obtain ⟨_, -, hp⟩ := bind_ok hp
     obtain ⟨_, -, hp⟩ := bind_ok hp
@@ -226,7 +229,8 @@ theorem accepted_treeless {form : Bool} {p : Params} {c : OneStage.Commitment} {
   cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
-    unfold prepare at hp
+    replace hp := (prepare_ok hp).1
+    unfold prepareRun at hp
     obtain ⟨⟨_, _, _, _⟩, -, hp⟩ := bind_ok hp
     obtain ⟨_, -, hp⟩ := bind_ok hp
     obtain ⟨_, -, hp⟩ := bind_ok hp
@@ -245,7 +249,8 @@ theorem accepted_repOrdered {form : Bool} {p : Params} {c : OneStage.Commitment}
   cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
-    unfold prepare at hp
+    replace hp := (prepare_ok hp).1
+    unfold prepareRun at hp
     obtain ⟨⟨_, _, _, _⟩, -, hp⟩ := bind_ok hp
     obtain ⟨_, -, hp⟩ := bind_ok hp
     obtain ⟨_, -, hp⟩ := bind_ok hp
@@ -256,6 +261,16 @@ theorem accepted_repOrdered {form : Bool} {p : Params} {c : OneStage.Commitment}
     obtain ⟨u, ho, -⟩ := bind_ok hp
     cases u
     exact ho
+
+/-- **An accepted two-stage check found every second-stage session's statement under `2^64` bytes**
+(`stmtsBytesFit`). -/
+theorem accepted_stmtsBytesFit {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+    {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
+    (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) : stmtsBytesFit p e bs = .ok () := by
+  unfold checkBlobsAtWith at h
+  cases hp : prepare form p c ξ e bs with
+  | error err => simp [hp] at h
+  | ok v => exact (prepare_ok hp).2
 
 /-- **A round that comes before one that comes before a third comes before the third** (`Challenger.roundBefore`). -/
 theorem roundBefore_trans {a b c : Nat × Nat} (hab : Challenger.roundBefore a b = true)
@@ -392,7 +407,8 @@ theorem accepted_fits {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ :
   cases hp : prepare form p c ξ e bs with
   | error err => simp [hp] at h
   | ok v =>
-    unfold prepare at hp
+    replace hp := (prepare_ok hp).1
+    unfold prepareRun at hp
     obtain ⟨⟨c₂', ξ₂', r', i'⟩, hi', hp⟩ := bind_ok hp
     obtain ⟨u, hfit, -⟩ := bind_ok hp
     rw [hi] at hi'

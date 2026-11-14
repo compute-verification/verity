@@ -19,7 +19,8 @@ step before it returned, so no step holds the evidence to anything the listed on
 * `inputAt_of_steps`: `inputAt` returns where the interior registration's commitment reads, its sample's bytes are
   read, every session's verifier accepts, the verdicts are stamped, the interior's receipt names its place and each
   registration's record reads back (`readBack`), the boundary's with the commitment's digest.
-* `accepts_of_steps`: the check accepts where `inputAt` returned, neither stage's bytes run past one coin's
+* `accepts_of_steps`: the check accepts where every second-stage session's statement is under `2^64` bytes
+  (`stmtsBytesFit`), `inputAt` returned, neither stage's bytes run past one coin's
   (`stagesFit`), the run of record ran and its symbol is `accept`, the first stage's bytes are the ones it read
   (`sourceRead`), the first session shows none of the second stage's coins (`interiorUnshown`), the stages' sessions
   are in order (`stagesOrdered`), the first session's log holds no coin tree's line (`firstTreeless`), the second
@@ -134,10 +135,11 @@ theorem inputAt_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     | (simp [h1, h2, h3, h4, h5, h6, h7, h8, h9, hd, hd₂, bind, Except.bind, pure, Except.pure]
        done)
 
-/-- **Steps 1 to 5 return where each does**: `prepare`, at the switch on, returns the interior audit's verdict at the
+/-- **Steps 0 to 5 return where each does**: `prepare`, at the switch on, returns the interior audit's verdict at the
 second stage's law and the run of record. -/
 theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run law : Json}
+    (hb : stmtsBytesFit p e bs = .ok ())
     (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) (hfit : stagesFit ξ ξ₂ = .ok ())
     (hr : Spot.Run.run i true = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
     (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
@@ -146,6 +148,8 @@ theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
       .ok (secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂
         { e.interior.base with verdicts := r.out }, run) := by
   unfold prepare
+  simp only [hb]
+  unfold prepareRun
   first
     | (simp only [hi, hfit, hr, hs, hu, ho, ht, hq, hl, bind, Except.bind, pure, Except.pure]
        first | done | rfl)
@@ -161,6 +165,7 @@ theorem prepare_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
 theorem accepts_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {c₂ : OneStage.Commitment} {ξ₂ : ByteArray} {r : OneStageZk.Run} {i : Spot.Run.Input} {run law : Json}
     {pub : OneStage.Public} {prof : Core.Integrity}
+    (hb : stmtsBytesFit p e bs = .ok ())
     (hi : inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)) (hfit : stagesFit ξ ξ₂ = .ok ())
     (hr : Spot.Run.run i true = .ok run) (hs : sourceRead ξ run = .ok ()) (hu : interiorUnshown p e = .ok ())
     (ho : stagesOrdered p e = .ok ()) (ht : firstTreeless p e = .ok ()) (hq : repStreamsOrdered p e = .ok ())
@@ -169,7 +174,7 @@ theorem accepts_of_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray}
     (htwo : secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂
       { e.interior.base with verdicts := r.out } = .accept pub prof) :
     checkBlobsAtWith true p c ξ e bs = .accept pub prof := by
-  have hp := prepare_of_steps hi hfit hr hs hu ho ht hq hl
+  have hp := prepare_of_steps hb hi hfit hr hs hu ho ht hq hl
   unfold checkBlobsAtWith
   first
     | (rw [hp]
@@ -189,6 +194,7 @@ its converse, the steps on the values the step before returned. -/
 theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
     {pub : OneStage.Public} {prof : Core.Integrity} :
     checkBlobsAtWith true p c ξ e bs = .accept pub prof ↔
+      stmtsBytesFit p e bs = .ok () ∧
       ∃ c₂ ξ₂ r i run law, inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ stagesFit ξ ξ₂ = .ok () ∧
         Spot.Run.run i true = .ok run ∧ sourceRead ξ run = .ok () ∧ interiorUnshown p e = .ok () ∧
         stagesOrdered p e = .ok () ∧ firstTreeless p e = .ok () ∧ repStreamsOrdered p e = .ok () ∧
@@ -205,7 +211,8 @@ theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray
       obtain ⟨two, run⟩ := v
       simp only [hp] at h
       obtain ⟨-, hj, htwo⟩ := finishWith_accept h
-      unfold prepare at hp
+      obtain ⟨hp, hb⟩ := prepare_ok hp
+      unfold prepareRun at hp
       obtain ⟨⟨c₂, ξ₂, r, i⟩, hi, hp⟩ := bind_ok hp
       obtain ⟨u₀, hfit, hp⟩ := bind_ok hp
       obtain ⟨run', hr, hp⟩ := bind_ok hp
@@ -217,8 +224,8 @@ theorem accepts_iff_steps {p : Params} {c : OneStage.Commitment} {ξ : ByteArray
       obtain ⟨law, hl, hp⟩ := bind_ok hp
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
       obtain ⟨rfl, rfl⟩ := hp
-      exact ⟨c₂, ξ₂, r, i, run', law, hi, hfit, hr, hs, hu, ho, ht, hq, hl, hj, htwo⟩
-  · rintro ⟨c₂, ξ₂, r, i, run, law, hi, hfit, hr, hs, hu, ho, ht, hq, hl, hj, htwo⟩
-    exact accepts_of_steps hi hfit hr hs hu ho ht hq hl hj htwo
+      exact ⟨hb, c₂, ξ₂, r, i, run', law, hi, hfit, hr, hs, hu, ho, ht, hq, hl, hj, htwo⟩
+  · rintro ⟨hb, c₂, ξ₂, r, i, run, law, hi, hfit, hr, hs, hu, ho, ht, hq, hl, hj, htwo⟩
+    exact accepts_of_steps hb hi hfit hr hs hu ho ht hq hl hj htwo
 
 end VStar.Recursive.SampledTwo
