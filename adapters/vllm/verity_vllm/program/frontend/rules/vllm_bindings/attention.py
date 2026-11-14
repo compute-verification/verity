@@ -88,7 +88,7 @@ class KvCacheUpdateRule(StateRule):
             refuse("side_input", node, ctx.module_path(node), f"two KV writes to {layer_name!r} without an attention read between them")
         pending[layer_name] = _KvWrite(layer_name, k, v, node)
         ctx.env[node] = pending[layer_name]
-        ctx.record(self, node, {"layer_name": layer_name, "rows": shape(ctx, k)[0]}, emitted="(pending KV write; no gates)")
+        ctx.record(self, node, {"layer_name": layer_name, "rows": known(shape(ctx, k))[0]}, emitted="(pending KV write; no gates)")
 
 
 class UnifiedAttentionWithOutputRule(StateRule):
