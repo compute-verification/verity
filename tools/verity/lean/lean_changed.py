@@ -1803,7 +1803,13 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     """`--try`: on the tree of the `build` slot it takes (as `--records` does), with the closure of the package that owns
     ``file`` synced from this checkout and its fetched dependencies taken, `lake build +MODULE:deps` (its imports, of which
     Lake rebuilds only what changed) then `lake env lean` with the package's Lean options (`SIBLINGS.options`) on FILE's
-    probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build; lean's exit
+    probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling
+    check (`siblings.py`) on that copy's build, for which Lake first says, after the build and before `lean` reads FILE,
+    which of the modules that could be siblings it holds as their inputs are now (`lake` with `SIBLINGS.WORD`, which
+    compiles nothing, in the build's sandbox and at its fixed path (`bound`), where a write it is refused (`refused_write`) is taken as exit 2, and so
+    leaves every build Lake took unchecked; the plan's `word` is a line, with the seconds), and once more after a rebuild
+    (`SIBLINGS.check`'s ``again``); a build Lake took and doesn't hold is looked up in the node's artifact index, read
+    and never written (`SIBLINGS.in_index`); lean's exit
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
     the tree's dependencies can't be had, or Lake wanted to write in them (`refused_write`: its line names the path and the
     records run that builds them writable). Never check.py. What the build compiled in the sandbox goes into the node's
@@ -1880,9 +1886,22 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox, at=bind)
             if storing:                                 # before `lean` reads the file itself, whose code then runs
                 put_built(artifacts, {tree / pkg: built_report(bind, text)}, since, log, f"lean-try: {pkg}")
-            plan = SIBLINGS.plan(tree / pkg, rel) if siblings and rc == 0 else None
+
+            def ask(args: list[str]) -> tuple[int, str, float, int]:
+                argv = [lake, *args]
+                status, said, seconds, peak = SIBLINGS.run(in_sandbox(pkg, tree, argv, bind) if sandbox else argv,
+                                                           tree / pkg)
+                if path := refused_write(said, pkg, tree):
+                    log(f"lean-try: {file}: Lake's pass for the sibling check wanted to write {path}, in the dependencies "
+                        "this tree fetched, which a try mounts read-only: taken as exit 2")
+                    status = 2
+                return status, said, seconds, peak
+
+            plan = SIBLINGS.plan(tree / pkg, rel, ask, artifacts.store) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
+            elif plan is not None and plan.word:
+                log(f"lean-try: {file}: {plan.word}")
             checked, said = isinstance(plan, SIBLINGS.Plan), ""
             with SIBLINGS.scratch(tree / pkg) if checked else contextlib.nullcontext() as work:
                 args = opts + (SIBLINGS.lean_args(tree / pkg, plan, work) if checked else [])
@@ -1915,7 +1934,8 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                                               at=bind)
                         return status, built, time.monotonic() - began
 
-                    rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild)
+                    rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild,
+                                                       lambda: SIBLINGS.plan(tree / pkg, rel, ask, artifacts.store))
                     if output:
                         log(output.rstrip("\n"))
                     for line in lines.splitlines():
