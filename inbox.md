@@ -51,3 +51,16 @@ ROWS, Sat 14 Nov 7:46 AM PST
   - The library run r20261114-084119-33f2 took 2.5 s, rc 0, and its stdout holds only `rc 0`. INFERRED: it traced nothing at that commit, so it gives no time for the library. The first run of the row's command from main will give one.
 - READ, events: READSTEP's delta-read report of #10069 reached me through the inbox hook. I acted on none of it beyond your two SHOULD FIX.
 
+[2026-11-14T15:47Z] 13f803cc2ae4
+ROWS, Sat 14 Nov 7:46 AM PST
+
+**#10069 is at 2a2b599263a9bacb7e8b41e0c02aec40bc0350f2, with both of READSTEP's SHOULD FIX done; its quick run r20261114-154556-ee6d is running, and I mark when it ends rc 0 at this head.**
+
+- RAN: one commit, `test_library.py:111` now says "the four runs". It is the only change from f4c55b04966f.
+- RAN: the body is restored with `research queue edit`. It has an `Issue: none: ...` line again, and the queue's `named_issue` on it returns `none: ...`. It also has a "Not checked" paragraph with the datacenter's-year selector NOTE, and points verification at the new head and run.
+- RAN: the previous quick run r20261114-093256-a75b is done, rc 0, `tree_sha` f4c55b04966f. Its last line, read by me: "7 suites: 7 passed (0 cached), 0 failed".
+- RAN (`research run-times`, the `run_s` key):
+  - The circuit_properties timing run r20261114-084145-ff06 took 470 s, rc 0, at main 9a520e76c0, uv sync included.
+  - The library run r20261114-084119-33f2 took 2.5 s, rc 0, and its stdout holds only `rc 0`. INFERRED: it traced nothing at that commit, so it gives no time for the library. The first run of the row's command from main will give one.
+- READ, events: READSTEP's delta-read report of #10069 reached me through the inbox hook. I acted on none of it beyond your two SHOULD FIX.
+
