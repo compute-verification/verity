@@ -28,6 +28,7 @@ says. These are the directories that have one:
 | `verity bench inference_only` | the inference-only policy of Llama 3.2 1B as served, and its one number: the least slowdown of training run inside the policy's inference blocks |
 | `verity bench int8_class_rate` | one card's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 |
 | `verity bench landing` | mark to `main` over the last 7 days, plain and Lean: each class's p90, median, count and share within 2 h, as a local research run (its README) |
+| `verity bench lean_unread_gate` | the unread landing gate on one change, timed by stage with its git calls counted, and with `--against REV` its guard: the same verdict as the gate at REV |
 | `verity bench memory` | the memory audit's number: the share of a node's memory read rate one accepted PoUB session leaves uncertified, from a gate run on the whole node, a recorded run or a loopback |
 | `verity bench moe_align` | the canonical `moe_align_block_size` on one GPU: its outputs run to run, the plugin as vLLM loads it, and its cost |
 | `verity bench network_e2e` | network certification end to end on a served model, as one report with its negatives |
@@ -277,6 +278,7 @@ How long the team's own changes take to reach `main`: measured on the verified q
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `landing/` | mark to `main`: for each PR the verified queue landed in the last 7 days, the hours from its ready mark at the head that landed to the move of `main` that holds it, split as the queue batches (plain, Lean), each class's p90, median, count and share within 2 h | maintained |
+| `lean_unread_gate/` | the unread gate a ready mark's preflight runs (`tools/verity/lean/unread_gate.py`) on one change: its time by stage and its git calls, from an empty gate cache, and its guard, the same verdict and `--json` as the gate at another revision | maintained |
 
 ### Census data
 
