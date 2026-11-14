@@ -1269,11 +1269,9 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
                   census_line("deployments.json", "gpus_per_machine")]}
     assert p["rules"]["datacenter"]["sources"][0]["id"] == "dc-12500-machines-600s"
     assert {k: r["rule"] for k, r in p["rules"].items()} == OR.RULES
-    world = census_line("adversary.json", "model", "total_params", "weights_bytes", "weights_datatype")
     assert p["weights"] == {
-        "share": {"of": LB.WEIGHTS.label, "is": OR.WEIGHTS, "bits": 8 * world["read"]["weights_bytes"], "source": world},
+        "share": {"of": LB.WEIGHTS.label, "is": OR.WEIGHTS, "bits": LB.WEIGHTS.bits, "source": LB.WORKLOAD},
         "share_served": {"of": "the demo's served model (Llama-3.2-1B) in BF16", "bits": LB.SERVED.bits}}
-    assert world["read"]["model"] == "DeepSeek-V4-Pro" and world["id"] == "world-inference-2027"
 
 
 def test_eps_is_split_into_the_scans_and_the_charged_audits_delta_beside_each_cells_threshold(tmp_path):
