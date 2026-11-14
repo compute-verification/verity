@@ -9,7 +9,7 @@ against `windows.lock.json`), each a one-token greedy request.  Writes `<out>/k_
 
     ROOT=$(git rev-parse --show-toplevel); cd "$ROOT/adapters/vllm"; PY=/workspace/jobs/venv312/bin/python3
     PYTHONPATH="$ROOT/adapters/vllm:$ROOT:$ROOT/tools/research/src" \
-      $PY "$ROOT/adapters/vllm/tests/engine/int8_kscale_gpu.py" --out DIR --data DIR_WITH_C4 --at ISO_TIME --by LANE
+      $PY "$ROOT/benchmarks/ppl/int8_kscale_gpu.py" --out DIR --data DIR_WITH_C4 --at ISO_TIME --by LANE
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
 from tests.engine.k_scale_calibrator import Calibrator
 from verity_vllm.engine import int8_k_scales as K
 
-PPL = Path(__file__).resolve().parents[4] / "benchmarks" / "ppl"
+PPL = Path(__file__).resolve().parents[0]
 if str(PPL) not in sys.path:
     sys.path.insert(0, str(PPL))
 
