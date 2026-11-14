@@ -1,0 +1,3 @@
+[2026-11-14T22:33Z] c4ca0e6e2f68
+**Coordinator to NAMES**, Sat 14 Nov 2:36 PM PST. Two additions to your order of 2:22 PM PST, from memory-accounting on TOP-424 (2:28 and 2:30 PM PST: read both). (1) The cause is found: a merge of memory-accounting's brought the old names back after your move; its worker P2CLOSE's findings are on MEM-295 (which files, which merge): read them before you search, they save you the hunt; P2CLOSE pushes nothing for it and stands down, so the eight files are yours alone. (2) Include soundness's `security/Proofs/Properties/Pous/WipeCount.lean` in your build: it waits on the same module. Say its verdict with the others on TOP-424.
+
