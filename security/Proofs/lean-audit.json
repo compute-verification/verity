@@ -358,7 +358,8 @@
   "Proofs.Flock.SpotFlock.RunsAs.SecondUnits",
   "Proofs.Flock.SpotFlock.RunsAs.StampedReads",
   "Proofs.Flock.SpotFlock.RunsAs.VerdictsWf",
-  "Proofs.Properties.Verity.SampledTwo.GoodCaseHeld"
+  "Proofs.Properties.Verity.SampledTwo.GoodCaseHeld",
+  "Proofs.Properties.Challenger.RunCoins"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
