@@ -56,6 +56,11 @@
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
   },
+  "NetworkCertifier.Rows": {
+   "imports": [],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security"
+  },
   "NetworkCertifier.Schedule": {
    "imports": ["NetworkCertifier.Run"],
    "except": [],
