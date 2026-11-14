@@ -1,9 +1,9 @@
 """PoUB's session (`period.session`) from the prover's side: its party of the deployment layer (`verity.runtime`), on
 its node. The messages, the manifest and the verifier's party are `verity.protocols.accounting.poub.verifier.session_parties`'s.
 
-The developer's machine gives it its store (`capabilities["store"]`, a `period.Prover`: `period_prover.Local` is the
+The developer's machine gives it its store (`capabilities["store"]`, a `period.Peer`: `period_prover.Local` is the
 reference); it finishes on `End`, refused `coins` when a challenge it was sent doesn't open against the coins disclosed
-(`period.Prover.end`). `PROTOCOL` declares its one role.
+(`period.Peer.end`). `PROTOCOL` declares its one role.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from verity.protocols.accounting.poub.verifier.session_parties import DRAW, MANI
 
 
 class Prover:
-    """The prover: its store (`capabilities["store"]`, a `period.Prover`) registered, held to the registration and the
+    """The prover: its store (`capabilities["store"]`, a `period.Peer`) registered, held to the registration and the
     session's coin commitment it is sent, and read for each pass and each window's openings."""
 
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:

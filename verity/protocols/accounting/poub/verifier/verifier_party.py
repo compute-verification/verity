@@ -54,7 +54,7 @@ def _recv(f: BinaryIO) -> dict[str, Any]:
 
 
 class Remote:
-    """The prover across the connection `f`, as the verifier's side sees it (`period.Prover`)."""
+    """The prover across the connection `f`, as the verifier's side sees it (`period.Peer`)."""
 
     def __init__(self, f: BinaryIO) -> None:
         self.f, self.ended = f, False

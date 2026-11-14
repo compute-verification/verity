@@ -2,7 +2,7 @@
 prover's passes over its store, and the answer of the bandwidth component of onsite Verity (`verity/remote-bandwidth/v0`,
 `RemoteAudit.Protocol` in `lean/`).
 
-`session` is the verifier's side, against a prover in its process or across a socket (`Prover`), in the protocol's
+`session` is the verifier's side, against a prover in its process or across a socket (`Peer`), in the protocol's
 order; `verity/protocols/accounting/poub/prover/period_prover.py`'s `run` plays every party in one process:
 
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
@@ -15,7 +15,7 @@ order; `verity/protocols/accounting/poub/prover/period_prover.py`'s `run` plays 
    (`window_ns`) and each last deadline (`deadline_ns`) before it closes the window;
 3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them;
 4. once the session has its outcome, the verifier sends the prover the coin commitment and every released coin's
-   opening (`audit.AuditRun.disclose`), and the prover checks each challenge it was sent against them (`Prover.end`).
+   opening (`audit.AuditRun.disclose`), and the prover checks each challenge it was sent against them (`Peer.end`).
 
 Every call to the session is an event of the verifier's log with the clock reading it took, and the log, its coins and
 the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
@@ -154,8 +154,8 @@ def _sleep_until(clock: Callable[[], int], t: int) -> None:
         time.sleep((t - now) / 1e9)
 
 
-class Prover(Protocol):
-    """The prover as the verifier's side of a session sees it: in its process (`Local`) or across a socket
+class Peer(Protocol):
+    """The prover as the verifier's side of a session sees it: in its process (`period_prover.Local`) or across a socket
     (`verifier_party`)."""
 
     def register(self) -> tuple[int, bytes]:
@@ -200,7 +200,7 @@ def case_of(s: audit.AuditRun, events: Sequence[dict[str, Any]]) -> dict[str, An
             "evidence": canonical_json_bytes(evidence).hex(), "params": {"not_before_ns": s.not_before_ns, "params": p}}
 
 
-def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
+def session(node: str, prover: Peer, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
             window_ns: int = 100_000_000, deadline_ns: int = 500_000_000, codec_: codec.Codec = codec.DEFAULT,
             verify: int | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = _sleep_until) -> Period:
@@ -251,5 +251,5 @@ def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str,
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 
-__all__ = ["DELTA", "PROTOCOL", "Period", "Prover", "Run", "answer", "case_of", "certified", "opened", "payloads",
+__all__ = ["DELTA", "PROTOCOL", "Peer", "Period", "Run", "answer", "case_of", "certified", "opened", "payloads",
            "registration_json", "registration_of", "serve", "session"]
