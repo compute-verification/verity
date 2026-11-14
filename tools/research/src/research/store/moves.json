@@ -2584,6 +2584,12 @@
         "benchmarks/pouw/pearl_c_sm90/h200.sh": "benchmarks/pouw/pearl_c_sm90/h200.sh",
         "benchmarks/pouw/harness/ieee_pin.cu": "verity/protocols/accounting/pouw/prover/ieee_pin.cu"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/interface/CoreProtocol/Registration.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean",
+        "verity/protocols/interface/CoreProtocol/RegistrationMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/Main.lean"
+      }
     }
   ]
 }

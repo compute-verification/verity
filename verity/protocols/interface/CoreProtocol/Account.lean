@@ -3,12 +3,12 @@ module
 public import CoreProtocol.Example
 public import CoreProtocol.Protocol
 public import CoreProtocol.Ratio
-public import CoreProtocol.Registration
+public import CoreProtocol.SiteExample
 public import CoreProtocol.Site
 meta import CoreProtocol.Example
 meta import CoreProtocol.Protocol
 meta import CoreProtocol.Ratio
-meta import CoreProtocol.Registration
+meta import CoreProtocol.SiteExample
 meta import CoreProtocol.Site
 
 /-!
@@ -755,7 +755,7 @@ def Row.toJson (r : Row) : Json :=
 
 namespace Example
 
-open Core.Registration.Example (sheet links auditor fig rated)
+open Core.Site.Example (sheet links auditor fig rated)
 
 /-- **The example protocol's account** (`Core.Example.protocol`): the units it reports passed, each counted as one
 tensor-core MAC of the site's devices, verified from below, with the error its profile states, once a period. It

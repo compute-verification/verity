@@ -33,7 +33,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
   seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
   `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form; and it may
-  add `compiler`: the registration log's registered compiler as its view publishes it (`CoreProtocol.Registration`'s
+  add `compiler`: the registration log's registered compiler as its view publishes it (`RegistrationLog`'s
   item), null when the log registers none, the digest lowercase hex of 64 bytes and the length ℓ a natural, whose digest
   R6 holds the record's window's compiler to and ℓ its advice's bits (`Registration.compilerOk`,
   `Registration.adviceOk`), refused in any other form; and it may add `pool`, `{"genesis", "lag", "pin", "pout", "reset", "verdicts", "week"}`: the two registered values a window
