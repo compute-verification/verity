@@ -89,7 +89,7 @@ def test_a_plain_leaf_opening_carries_an_empty_salt_vector():
 
 def test_the_plain_leaf_statement_is_the_default_one_by_name():
     assert f'{{ circuit.withPlainLeaves with name := "{STATEMENT}" }}' in _lean_def("circuitPlainLeaves")
-    assert "circuitPlainLeaves]" in _lean_def("all")
+    assert "circuitPlainLeaves" in re.findall(r"\w+", _lean_def("all").split(":=", 1)[1])
 
 
 def _verify(*args: str) -> subprocess.CompletedProcess:

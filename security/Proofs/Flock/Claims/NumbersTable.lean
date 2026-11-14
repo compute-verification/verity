@@ -41,6 +41,8 @@ namespace Claims.Flock.Numbers
 open FlockSoundness FlockSoundness.Accounting FlockSoundness.Discharge.ZkSession
 open scoped ENNReal NNReal
 
+variable {wideLeaf : Bool}
+
 /-! ## Without `--zk` -/
 
 /-- **`ε_table ≤ 2^{−205}` without `--zk`**: at every `fast100` schedule and every shape of a planned table. -/
@@ -86,21 +88,21 @@ theorem εInner_le_innerUp {F : Type} [Fintype F] {N : ℕ} (hF : Fintype.card F
 
 /-- The rational check with the inner proof's error inside the square, for `25 ≤ m ≤ 33`. -/
 theorem m1_check_zk_le_33 : ∀ m, 25 ≤ m → m ≤ 33 →
-    padLinkUp (m1Schedule m) (m1Pad m) + (padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) + innerUp) ^ 2 ≤
+    padLinkUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) + (padRepUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) + innerUp) ^ 2 ≤
       (1 / 2) ^ 205 := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- The rational check with the inner proof's error inside the square, for `m = 34, 35`. -/
 theorem m1_check_zk_34_35 : ∀ m, 34 ≤ m → m ≤ 35 →
-    padLinkUp (m1Schedule m) (m1Pad m) + (padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) + innerUp) ^ 2 ≤
+    padLinkUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) + (padRepUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) + innerUp) ^ 2 ≤
       (1 / 2) ^ 205 := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- The rational check with the inner proof's error inside the square, at `25 ≤ m ≤ 35`. -/
 theorem m1_check_zk (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) :
-    padLinkUp (m1Schedule m) (m1Pad m) + (padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) + innerUp) ^ 2 ≤
+    padLinkUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) + (padRepUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) + innerUp) ^ 2 ≤
       (1 / 2) ^ 205 := by
   rcases le_or_gt m 33 with h | h
   · exact m1_check_zk_le_33 m h1 h
@@ -120,23 +122,23 @@ theorem padRepError_le_of (s : Schedule) (st : FlockSoundness.Accounting.Stmt) (
 /-- **`ε_table ≤ 2^{−205}` with `--zk`**: a `--zk` table's bound at Flock ZK's parameters. -/
 theorem εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ} (hF : Fintype.card F = 2 ^ 128)
     (T : TabZK F mPts) (hT : T.M1) : T.bound ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) := by
-  obtain ⟨m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
-  have hf := m1Facts_spec (m1Facts_all m h1 h2)
+  obtain ⟨wideLeaf, m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
+  have hf := m1Facts_spec (m1Facts_all (wide := wideLeaf) m h1 h2)
   have hl0 : 0 ≤ padLinkError T.sch (T.S.shape mPts) T.t := by unfold padLinkError; positivity
-  have hl : padLinkError T.sch (T.S.shape mPts) T.t ≤ (padLinkUp (m1Schedule m) (m1Pad m) : ℝ) := by
+  have hl : padLinkError T.sch (T.S.shape mPts) T.t ≤ (padLinkUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) : ℝ) := by
     rw [hsch, ht]
     exact padLinkError_le _ _ _ hst
   have hr0 : 0 ≤ padRepError T.sch (T.S.shape mPts) T.t T.e := by
     rw [hsch, ht, he]
     exact m1_rep_nonneg m h1 h2 _
   have hr : padRepError T.sch (T.S.shape mPts) T.t T.e ≤
-      (padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) : ℝ) := by
+      (padRepUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) : ℝ) := by
     rw [hsch, ht, he]
     exact padRepError_le_of _ _ hst _ _ _ hf.1 hf.2.2.1 hf.2.2.2.2
   have hb : εInner T.N F T.q T.δ ≤ ENNReal.ofReal (innerUp : ℝ) := by
     rw [hq]
     exact εInner_le_innerUp hF hN hδ
-  have hc := Rat.cast_le (K := ℝ) |>.2 (m1_check_zk m h1 h2)
+  have hc := Rat.cast_le (K := ℝ) |>.2 (m1_check_zk (wideLeaf := wideLeaf) m h1 h2)
   push_cast at hc
   have hi := innerUp_nonneg
   unfold TabZK.bound
@@ -152,7 +154,7 @@ theorem εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
     _ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) := by
         refine ENNReal.ofReal_le_ofReal (le_trans ?_ half_pow_205_le)
         have hsq : (padRepError T.sch (T.S.shape mPts) T.t T.e + (innerUp : ℝ)) ^ 2 ≤
-            ((padRepUp (m1Schedule m) (m1Pad m) 2 (m1SqrtUp m) : ℝ) + innerUp) ^ 2 := by
+            ((padRepUp (m1Schedule wideLeaf m) (m1Pad wideLeaf m) 2 (m1SqrtUp wideLeaf m) : ℝ) + innerUp) ^ 2 := by
           gcongr
         linarith
 

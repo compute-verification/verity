@@ -663,8 +663,8 @@ def parseRep (t : Tab) (draws : Frame.Draws) (hiSalts : Array ByteArray) (b : By
 /-- **A table's state** from a table's request bytes (`Link.parse`) at the statement `st`. -/
 def tabOf (st : Setup) (b : ByteArray) : V Tab := do
   if st.merkle.id != MerkleScheme.hm96Sha512.id then throw s!"finish: a {st.merkle.id} statement: --zk commits hm96-sha512/v1"
-  let (sch, tPad) ← Zk.schedule st.m
-  let i ← Link.parse st.m b
+  let (sch, tPad) ← Zk.schedule st.wideLeaf st.m
+  let i ← Link.parse st.wideLeaf st.m b
   return { st, sch, tPad, g := i.g, extra := i.extra, lanePad := i.lanePad
            cm0 := commit0 (sch.levels.getD 0 default) tPad i }
 
@@ -673,7 +673,8 @@ witness, hiding and commitment (`commitOf`), at level 0 of `st`'s `--zk` schedul
 def tabOfLevel0 (st : Setup) (l : Level0.Level0) : V Tab := do
   if st.merkle.id != MerkleScheme.hm96Sha512.id then throw s!"finish: a {st.merkle.id} statement: --zk commits hm96-sha512/v1"
   if l.m != st.m then throw s!"finish: a level 0 drawn at m = {l.m} for a table at m = {st.m}"
-  let (sch, tPad) ← Zk.schedule st.m
+  if l.wideLeaf != st.wideLeaf then throw "finish: a level 0 sampled for the other statement version's schedule"
+  let (sch, tPad) ← Zk.schedule st.wideLeaf st.m
   if l.tPad != tPad then throw s!"finish: a level 0 with t_pad {l.tPad} for a table whose schedule's is {tPad}"
   let i := l.toIn
   return { st, sch, tPad, g := l.g, extra := i.extra, lanePad := i.lanePad, cm0 := commitOf l }

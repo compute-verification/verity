@@ -64,7 +64,7 @@ compiled rep on `repMsgsZ` that the `RepRun` is at. -/
 theorem zk_rep_run_plays {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray)
-    (tr : Flock.Transcript) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hdl : st.merkle.digestLen = 64)
+    (tr : Flock.Transcript) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hdl : st.merkle.digestLen = 64)
     (hseam : ZkTabSeam T st sch tPad) (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
       ClaimRel T.S.m extras[j]! (Model.extraClaims T.S T.ptLocal mPts pts)[j])
@@ -121,7 +121,7 @@ theorem runsZC_live : RunsZCLive := by
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall 0 (by simp)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  change Zk.schedule (Setup.ofCircuit y.x.st).m = .ok schs[0] at hz0
+  change Zk.schedule (Setup.ofCircuit y.x.st).wideLeaf (Setup.ofCircuit y.x.st).m = .ok schs[0] at hz0
   change Zk.verifyRep y.x.st.spec (Setup.ofCircuit y.x.st) schs[0].1 schs[0].2 sess 0 0 _ = .ok c at hv0
   change Zk.verifyRep y.x.st.spec (Setup.ofCircuit y.x.st) schs[0].1 schs[0].2 sess 0 1 _ = .ok c at hv1
   have hsc : schs[0] = (y.sch, y.tPad) := Except.ok.inj (hz0.symm.trans hz)

@@ -81,7 +81,7 @@ structure DrawSetupZJ (I' : Inputs) (mPts : ℕ) (S : Finset (Fin n)) (d : Lean.
   x : DrawSetup I' mPts S d
   sch : Flock.Schedule
   tPad : ℕ
-  hz : Zk.schedule x.st.m = .ok (sch, tPad)
+  hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)
   hshape : 2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
     (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
     levelsChained (schedOf sch).levels (schedOf sch).ext = true
@@ -576,7 +576,7 @@ noncomputable def opnAtZJ (planZ : Finset (Fin n) → Reg → List (TabZK 𝔽 m
     (j : Fin (planZ S R).length) : OpensZ 𝔽 Dig (List UInt8) :=
   match Stmt.setupH (tagsAt (zkTags I) I.count j.val) I.circuitFile I.publicFile (zkCoins I) I.tables
       (some (drawJ I (dj S) j.val)) I.partition I.program with
-  | .ok st => match Zk.schedule st.m with
+  | .ok st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZJ ((planZ S R).get j))
         #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
     | .error _ => default
@@ -590,7 +590,7 @@ variable {I' : Inputs} {S : Finset (Fin n)} {d : Lean.Json}
 
 /-- A `DrawSetup` with `Zk.schedule`'s schedule at its `m` is a `DrawSetupZJ` (`drawSetupZK_of`). -/
 theorem drawSetupZJ_of (ht' : I'.tags.typed = false) (x : DrawSetup I' mPts S d) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
+    (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZJ I' mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
@@ -695,7 +695,7 @@ theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin
   obtain ⟨-, sess, schs, hdecS, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c, hz0, hv0, hv1⟩ := hall j.val (by simpa using hj)
   simp only [Array.getElem_map] at hz0 hv0 hv1
-  have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
+  have hz' : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ _ht j.val
   obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst

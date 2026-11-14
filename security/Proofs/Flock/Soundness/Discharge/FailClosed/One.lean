@@ -1740,7 +1740,7 @@ theorem setupZ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (h
   rw [hd] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs, c, hz, -⟩ := hall 0 (by simp)
-  have hz' : Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := hz
+  have hz' : Zk.schedule st.wideLeaf st.m = .ok (schs[0].1, schs[0].2) := hz
   generalize schs[0].1 = sch at hz'
   generalize schs[0].2 = tPad at hz'
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
@@ -1765,7 +1765,7 @@ theorem setupZJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) {
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c0, hz0, -⟩ := hall 0 (by simpa using hj)
   simp only [Array.getElem_map] at hz0
-  have hz' : Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
+  have hz' : Zk.schedule sts[0].wideLeaf sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'
   have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
   obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
@@ -2292,7 +2292,7 @@ theorem setupZHJ_of_verifiesZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) {
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := zk_verify_ok _ _ _ _ hv
   obtain ⟨hs0, c0, hz0, -⟩ := hall 0 (by simpa using hj)
   simp only [Array.getElem_map] at hz0
-  have hz' : Zk.schedule sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
+  have hz' : Zk.schedule sts[0].wideLeaf sts[0].m = .ok (schs[0].1, schs[0].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I 0).tags.typed = false := typedJ h.2.typed 0
   obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst

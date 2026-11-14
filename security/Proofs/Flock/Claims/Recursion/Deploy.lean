@@ -753,7 +753,7 @@ def outerSlotsO (x : Claims.Msg) : List (ℕ × ℕ) :=
 def rhoSlotsO (x : Claims.Msg) : List ℕ :=
   match setupO x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
+      match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
       | .ok (sch, _) =>
         [FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! + (sch.k0 + 2)]
       | .error _ => []
@@ -763,7 +763,7 @@ def rhoSlotsO (x : Claims.Msg) : List ℕ :=
 def betaSlotsO (x : Claims.Msg) : List ℕ :=
   match setupO x with
   | some (_, spec, sts) => (List.range (2 * sts.size)).flatMap fun q =>
-      match Zk.schedule sts[q / 2]!.m with
+      match Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m with
       | .ok (sch, _) =>
         [FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! +
           (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 2]

@@ -58,6 +58,8 @@ open Flock Refine Exec Game Model DecodeZL
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
+variable {wideLeaf : Bool}
+
 /-! ## The frames -/
 
 /-- Round 0 of a `--zk` rep after its domain (live PROTOCOL.md §1, §4): §9.1's binding, the zerocheck's label, the pads'
@@ -198,7 +200,7 @@ def shapeZE (m kLog n : ℕ) (s : Accounting.Schedule) (t np : ℕ) : List Exec.
 coin (`ceilLog2 q ≠ 1`), and per level fewer than 64 columns, 1 to 511 queries and a cap of at most 8 (level 0's at
 `m = 25`, `q_0 = 277`, is 8). -/
 def ZkScheduleSeams : Prop :=
-  ∀ (m : ℕ) (sch : Flock.Schedule) (tPad : ℕ), Zk.schedule m = .ok (sch, tPad) →
+  ∀ (wideLeaf : Bool) (m : ℕ) (sch : Flock.Schedule) (tPad : ℕ), Zk.schedule wideLeaf m = .ok (sch, tPad) →
     25 ≤ m ∧ m ≤ 35 ∧ sch.m = m ∧ 1 ≤ sch.k0 ∧ tPad = 2 * (sch.levels.getD 0 default).q ∧ DimSeam sch ∧
       (∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default)) ∧
       (∀ i < sch.levels.size, Accounting.ceilLog2 (sch.levels.getD i default).q ≠ 1) ∧
@@ -210,7 +212,7 @@ round per chunk of `repFramesZ` (at the ring switch's batched value `T`), and ro
 def ZkRepFrames : Prop :=
   ∀ (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript),
-    Zk.schedule st.m = .ok (sch, tPad) →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) →
     (repProg st sch tPad r extras zp).run (Flock.Transcript.init rounds dom) = .ok ((), tr) →
     tr.k = rounds.size → AllRetained rounds →
     ∃ T : F128, (chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.length = rounds.size ∧
@@ -228,7 +230,7 @@ layout's `len + K_PAD` words, the frames after round 0, read by `wRestZ`, are th
 `shapeZE`'s coins after the root and the first coin, with no tail. -/
 def ZkCarries : Prop :=
   ∀ (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof) (T : F128),
-    Zk.schedule st.m = .ok (sch, tPad) → st.merkle.digestLen = 64 → ProofSizes (shapeZK st sch extras) zp.proof →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → st.merkle.digestLen = 64 → ProofSizes (shapeZK st sch extras) zp.proof →
     zp.inner.y.size < 2 ^ 64 → zp.level0.ybar.size = tPad → zp.inner.tauCommit.size = 64 →
     zp.inner.y.size = (layZ st sch).len + Zk.K_PAD →
     Carries (wRestZ st.m st.kLog (2 + extras.size) (schedOf sch) tPad (layZ st sch).len)
@@ -242,7 +244,7 @@ on rounds that retained the encodings of `repFramesZ`'s chunks, one round per ch
 def ZkCut : Prop :=
   ∀ (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray)
     (zp : Zk.ZkProof) (T : F128) (dom : ByteArray) (rds : Array Round),
-    Zk.schedule st.m = .ok (sch, tPad) → st.merkle.digestLen = 64 →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → st.merkle.digestLen = 64 →
     Zk.decode (shapeZK st sch extras) bytes = .ok zp → zp.inner.root.size = 64 → zp.level0.ybar.size = tPad →
     zp.inner.tauCommit.size = 64 → zp.inner.y.size = (layZ st sch).len + Zk.K_PAD →
     (chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.length = rds.size →

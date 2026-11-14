@@ -63,7 +63,7 @@ def innerSetup (cf pf : ByteArray) (partition : Option Json) (program : Option B
 def acceptsStmtAt (r : V (SessionSpec × Array Stmt)) : V Stmt := do
   let r ← r
   let st ← one r.2
-  let _ ← Zk.schedule st.m
+  let _ ← Zk.schedule st.wideLeaf st.m
   pure st
 
 /-- **Lean's verifier accepts `st` as the inner statement** (`AcceptsStmt`), from the inner statement's files, partition
@@ -121,7 +121,7 @@ def vstarOf (args : List String) :
 def scheduleOf (s : V (SessionSpec × Array Stmt)) : List (String × Json) :=
   match s with
   | .ok (_, sts) => match sts[0]? with
-    | some st => match Zk.schedule st.m with
+    | some st => match Zk.schedule st.wideLeaf st.m with
       | .ok (sch, _) => match sch.levels[0]? with
         | some l => [("m", Lean.toJson st.m), ("level0", Json.mkObj [("n", Lean.toJson sch.n), ("rate", Lean.toJson l.rate),
             ("q", Lean.toJson l.q), ("cols", Lean.toJson l.cols), ("d", Lean.toJson l.d), ("lanes", Lean.toJson l.lanes)])]

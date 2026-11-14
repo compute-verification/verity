@@ -719,7 +719,7 @@ theorem verifyRep_of_accepted {spec : SessionSpec} {tabs : Array Flock.Setup} {r
     {proofs : Array ByteArray} {sess : RunRecord} (hv : Flock.Zk.verify spec tabs record proofs = .ok ())
     (hd : Flock.Record.decode spec record = .ok sess) (r : Fin 2) :
     ∃ (h0 : 0 < tabs.size) (sch : Flock.Schedule) (tPad : ℕ) (c : ByteArray),
-      Flock.Zk.schedule tabs[0].m = .ok (sch, tPad) ∧
+      Flock.Zk.schedule tabs[0].wideLeaf tabs[0].m = .ok (sch, tPad) ∧
       Flock.Zk.verifyRep spec tabs[0] sch tPad sess 0 r.val proofs[r.val]! = .ok c := by
   obtain ⟨-, sess', schs, hd', -, h0, -, -, hall⟩ :=
     FlockSoundness.Discharge.ZkExec.zk_verify_ok spec tabs record proofs hv
@@ -738,7 +738,7 @@ run consumed every round, so each retained round ends with the header of a squee
 theorem rep_tailCount {spec : SessionSpec} {record : String} {sess : RunRecord} {st : Flock.Setup}
     {sch : Flock.Schedule} {tPad i r : ℕ} {bytes cap : ByteArray} {y : StreamRec} {k : ℕ} {m : Claims.Msg}
     (hv : Flock.Zk.verifyRep spec st sch tPad sess i r bytes = .ok cap)
-    (hsch : Flock.Zk.schedule st.m = .ok (sch, tPad))
+    (hsch : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hd : Flock.Record.decode spec record = .ok sess) (hret : spec.retainRounds = true)
     (hy : sess.streams.find? (·.name == repStreamName spec.tables[i]! r) = some y) (hk : k < y.rounds.size)
     (hm : roundMsg record (repStreamName spec.tables[i]! r) k = some m) : tailCount m = y.rounds[k].n := by

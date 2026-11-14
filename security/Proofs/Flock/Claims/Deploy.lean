@@ -294,7 +294,7 @@ def repRounds (zk : Bool) (spec : SessionSpec) (st : Stmt) : ℕ :=
   let claims := 2 + spec.points * st.regions.size
   let kLog := st.c.kLog
   if zk then
-    match Zk.schedule st.m with
+    match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => (st.m + (kLog - 6)) + (claims + 1) + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) + 4
     | .error _ => 0
   else

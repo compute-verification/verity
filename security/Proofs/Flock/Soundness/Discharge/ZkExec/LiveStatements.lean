@@ -58,7 +58,7 @@ noncomputable def decAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (S : F
 noncomputable def opnAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
     (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : ZkLink.OpensZ 𝔽 Dig (List UInt8) :=
   match Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition I.program with
-  | .ok st => match Zk.schedule st.m with
+  | .ok st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZ T S R) #[proofs[0]!, proofs[1]!]
     | .error _ => default
   | .error _ => default

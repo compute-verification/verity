@@ -30,9 +30,10 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
 * The opening: `carries_switch` and `carries_switches` from the ring switches' decoded lengths (`op_carries_sizes`).
 * Ligerito with level 0's hiding (`zk_lig_carries`): the non-ZK session's rounds (`carriesP_f`, `carriesP_fold'`,
   `carriesP_mid`), with level 0's pair's sums (`carriesP_ev`), the second `ρ` coin's empty round and the round of `T'`,
-  `ybar`, the last lane message and the level-1 cap (`carriesP_tcap`). The `--zk` schedule is fast100's with level 0
-  restratified (`zk_schedule_fast100`), so the level loop is `carriesP_levels` at fast100's schedule, whose levels fit
-  its bounds (`fast100_small`; level 0 at `--zk` does not).
+  `ybar`, the last lane message and the level-1 cap (`carriesP_tcap`). The `--zk` schedule is its statement version's
+  (`fast100At`: fast100's, or the wide-leaf schedule) with level 0 restratified (`zk_schedule_fast100`), so the level
+  loop is `carriesP_levels` at that schedule, whose levels fit its bounds (`fast100_small`; level 0 at `--zk` does
+  not).
 * The inner proof's four rounds (`carriesP_inner`).
 
 `ligPadShape_pat` is level 0 masked's coin pattern, the rounds' (`isCoin_rec` for the level loop).
@@ -47,15 +48,17 @@ open Flock Refine Exec Game Model DecodeZL
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-theorem zk_schedule_fast100 {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule m = .ok (sch, tPad)) :
-    ∃ sch₀ : Flock.Schedule, Flock.fast100 m = some sch₀ ∧ sch.k0 = sch₀.k0 ∧ sch.ext = sch₀.ext ∧
+variable {wideLeaf : Bool}
+
+theorem zk_schedule_fast100 {m : ℕ} {sch : Flock.Schedule} {tPad : ℕ} (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
+    ∃ sch₀ : Flock.Schedule, Flock.fast100At wideLeaf m = some sch₀ ∧ sch.k0 = sch₀.k0 ∧ sch.ext = sch₀.ext ∧
       sch.levels.size = sch₀.levels.size ∧ ∀ i, 1 ≤ i → sch.levels.getD i default = sch₀.levels.getD i default := by
   unfold Zk.schedule at h
-  cases hq : Zk.queries0 m with
+  cases hq : Zk.queries0 wideLeaf m with
   | error e => rw [hq] at h; cases h
   | ok q0 =>
     rw [hq] at h
-    cases hf : Flock.fast100 m with
+    cases hf : Flock.fast100At wideLeaf m with
     | none => simp only [hf] at h; cases h
     | some sch₀ =>
       simp only [hf] at h
@@ -314,16 +317,16 @@ pieces), with the pair's sums' round, the second `ρ` coin's and the round of `T
 level-1 cap between the lane rounds and level 0's queries. The level loop is the non-ZK session's at fast100's schedule,
 which differs from the `--zk` one only at level 0. -/
 theorem zk_lig_carries (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (zp : Zk.ZkProof)
-    (T : F128) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (h64 : st.merkle.digestLen = 64)
+    (T : F128) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (h64 : st.merkle.digestLen = 64)
     (hs : ProofSizes (shapeZK st sch extras) zp.proof) (hyb : zp.level0.ybar.size = tPad) :
     CarriesP (wLIGZ (schedOf sch) tPad) ([true] ++ ([false, true] ++
       ((List.replicate (sch.k0 - 1) [false, true]).flatten ++ ([false, true] ++ ([false, true] ++ ([true] ++
         ([false, false, false, false, true] ++ (pMid ++ pLev (sch.levels.size - 1)))))))))
       (ligFramesZ sch T zp.proof.cap zp.proof.ligerito zp.level0)
       (ligMsgsZ zp.proof.ligerito capDig sch tPad zp.level0) [] := by
-  obtain ⟨h25, h35, hsm, hk0, ht, hdim, -, -, hsmall⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, h35, hsm, hk0, ht, hdim, -, -, hsmall⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨sch₀, hf, ek0, eext, esz, eget⟩ := zk_schedule_fast100 hsch
-  obtain ⟨-, -, hsm₀⟩ := fast100_small _ _ hf
+  obtain ⟨-, -, hsm₀⟩ := fast100At_small _ _ _ hf
   obtain ⟨hn, h2, -, -, -, -, -⟩ := hdim
   have hrc₀ : zp.proof.ligerito.recursiveCaps.size = sch₀.levels.size - 1 := by
     rw [← esz]; simpa [shapeZK] using hs.rcaps
@@ -373,7 +376,7 @@ theorem carriesP_of_carries {W : List (List DecodeZL.Wire)} {σ : List Exec.Kind
 
 theorem zk_carries : ZkCarries := by
   intro st sch tPad extras zp T hsch h64 hs hy hyb htau hyl
-  obtain ⟨h25, -, -, hk0, -, hdim, -, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, -, hk0, -, hdim, -, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have h1 := zl_tail_carries st.m st.kLog zp.proof.zerocheck zp.proof.lincheck (by omega) hs.r1ab hs.r1c hs.zPartial
   have h2 := op_carries_sizes zp.proof.ringSwitches (2 + extras.size) (by simpa [shapeZK] using hs.rs) (by omega)
     hs.rsEach
