@@ -7,7 +7,7 @@
 current = "VF3r-16"
 # The design whose cheapest attack is a vector's margin.
 adopted = "U±64, F±1"
-# The card file (hardware/cards/) θ and the opcode table read this device's ceilings from.
+# The card file (hardware/cards/) θ, the opcode table and the Lean headline read this device's ceilings from.
 card = "rtx-pro-6000-server"
 # The card file of the host the device sits in, which θ's host rates read (`host:PATH`).
 host = "xeon-6776p-2s"
