@@ -6,9 +6,10 @@
 #   WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'   # bash -c "$WIPE_CMD" _ SERVE_DIR WINDOW DIR
 #
 # Inside the serve's gpu-lease (GPU_LEASE_UUID set) it wipes that card, the one the engine then loads on; outside one it
-# takes a card of its own (`gpu-lease 1 --wait`) and gives it back after. It refuses (exit 3, no answer, the reason in
-# DIR/refused.txt) a card that isn't idle, any process on it or more than WIPE_IDLE_MIB (1024) of its memory in use, a
-# challenger command whose ssh key (-i) isn't on this node, and a run with no challenger key pinned; it kills nothing.
+# takes a card of its own (`gpu-lease 1 --wait`, the node's, else the tree's own gpu_lease.sh) and gives it back after.
+# It refuses (exit 3, no answer, the reason in DIR/refused.txt) a card that isn't idle, any process on it or more than
+# WIPE_IDLE_MIB (1024) of its memory in use, a challenger command whose ssh key (-i) isn't on this node, and a run with
+# no challenger key pinned; it kills nothing.
 # The memory challenger is vy-auditor-2's, through infra's wipe gate, as in Demo B:
 #   WIPE_CHALLENGER  its host (vy-auditor-2)
 #   WIPE_ADDRESS     where the prover connects to it (10.96.0.36:47611)
@@ -27,11 +28,13 @@
 # this tree's .lake, which served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
 # summary.json, which names the program that decided and its host under `decided_by`, the SHA-512 of the challenger key
 # the session was signed under, `key_sha512`, and whether it is the pinned one, `key_pinned`), lake-build.log,
-# answer.json (wipe.json's answer, whatever its verdict) and served.json (the serve dir and window the wipe precedes,
-# the server, the card, the lease, the run). The leg's case, which holds the challenger's signed session, goes to
+# answer.json (wipe.json's answer, whatever its verdict), served.json (the serve dir and window the wipe precedes,
+# the server, the card, the lease, the run) and stamps.txt (the piece's timeline, a line `UTC EVENT` each: its start,
+# the Lean build's end, the card asked for and leased, a refusal, the wipe's exit and the piece's). The leg's case, which holds the challenger's signed session, goes to
 # SERVE_DIR/private/wipe (0700) instead, and there served_case.py (with PY, default python3) writes the composite's
 # piece beside it: case.json and the leg's own answer.json. Its last line is `WIPE {...}`.
-# Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build.
+# Exit: demo.sh's (0 on accept, 1 on another verdict), 3 on a refusal, 7 when wipe-protocol doesn't build or verity/
+# doesn't copy for its build.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 SELF=$HERE/$(basename "$0")
@@ -47,11 +50,13 @@ NODE=${WIPE_NODE:-$(hostname)} IDLE_MIB=${WIPE_IDLE_MIB:-1024} DEMO=${WIPE_DEMO:
 # the SHA-512 of the public key of vy-auditor-2's wipe party as its host made it (the gate's `party_key wipe`)
 TRUSTED_SHA512=c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb4198fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252
 PIN=${WIPE_KEY_SHA512-$TRUSTED_SHA512}
-refuse() { echo "WIPE REFUSED: $*" | tee "$DIR/refused.txt"; exit 3; }
+stamp() { echo "$(date -u +%FT%TZ) $*" >> "$DIR/stamps.txt"; }
+refuse() { echo "WIPE REFUSED: $*" | tee "$DIR/refused.txt"; stamp refused; exit 3; }
 
 if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key, the gate's key, the Lean judge
-  rm -f "$DIR"/{answer,served,summary,wipe,wipe.case}.json "$DIR/refused.txt" \
+  rm -f "$DIR"/{answer,served,summary,wipe,wipe.case}.json "$DIR/refused.txt" "$DIR/stamps.txt" \
     "$SERVE_DIR"/private/wipe/{answer,case,wipe.case}.json
+  stamp start
   [ -n "$PIN" ] || refuse "no challenger key is pinned: set WIPE_KEY_SHA512, the SHA-512 of the public key of $CH's" \
     "wipe party (its gate's party_key wipe), the one key the wipe trusts"
   [[ $PIN =~ ^[0-9a-f]{128}$ ]] || refuse "WIPE_KEY_SHA512 is a key's SHA-512 in 128 lowercase hex digits, not $PIN"
@@ -64,23 +69,30 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
     L=verity/protocols/accounting/pous/device/lean
-    tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
+    # tar's exit 1 is only a file that changed as it read it: a process importing the tree's Python writes __pycache__
+    # beside it meanwhile, as a check's other suites do; 2 or more is a copy that failed
+    { tar -C "$ROOT" -c --exclude=.lake --exclude=__pycache__ --warning=no-file-changed verity || [ $? = 1 ]; } \
+      | tar -C "$S" -x || { echo "WIPE FAILED: verity/ doesn't copy for wipe-protocol's build"; exit 7; }
     export PATH="$HOME/.elan/bin:$PATH"
     command -v lake >/dev/null 2>&1 || bash "$ROOT/tools/verity/lean/setup.sh" "$S/$L" > "$DIR/lake-setup.log" 2>&1
     (cd "$S/$L" && lake build wipe-protocol) > "$DIR/lake-build.log" 2>&1 \
       || { tail -20 "$DIR/lake-build.log"; echo "WIPE FAILED: wipe-protocol doesn't build ($DIR/lake-build.log)"; exit 7; }
     export WIPE_PROTOCOL_EXE=$S/$L/.lake/build/bin/wipe-protocol
+    stamp "built wipe-protocol"
   fi
   if [ -z "${GPU_LEASE_UUID:-}" ]; then
-    command -v gpu-lease >/dev/null 2>&1 || refuse "no gpu-lease on $NODE to hold the card by"
+    LEASE=(gpu-lease)
+    command -v gpu-lease >/dev/null 2>&1 || LEASE=(bash "$ROOT/tools/research/src/research/pods/sh/gpu_lease.sh")
     rc=0
-    WIPE_OWN_LEASE=1 GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min 30 -- \
+    stamp "asked for the card"
+    WIPE_OWN_LEASE=1 GPU_LEASE_WHO=memory-accounting "${LEASE[@]}" 1 --wait --max-min 30 -- \
       bash "$SELF" "$SERVE_DIR" "$WINDOW" "$DIR" "$@" || rc=$?
     exit "$rc"
   fi
 fi
 
 # under the lease: the card idle, then the wipe, then its answer
+[ -z "${WIPE_OWN_LEASE:-}" ] || stamp "leased the card"
 CARD=${GPU_LEASE_UUID%%,*}
 APPS=$(nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader -i "$CARD" 2>&1) \
   || refuse "nvidia-smi can't read the card $CARD: $APPS"
@@ -94,6 +106,7 @@ unset PYTHONPATH VIRTUAL_ENV
 rc=0
 OUT=$DIR bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
   --trusted-sha512 "$PIN" --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} "$@" || rc=$?
+stamp "the wipe exit $rc"
 HEADLINE=$(python3 - "$DIR" "$SERVE_DIR" "$WINDOW" "$NODE" "$CARD" "${WIPE_OWN_LEASE:+own}" "$rc" <<'EOF'
 import json, os, sys
 from pathlib import Path
@@ -129,5 +142,6 @@ if [ -f "$DIR/answer.json" ] && [ -f "$P/wipe.case.json" ]; then
   PYTHONPATH=$ROOT "${PY:-python3}" "$ROOT/benchmarks/pous/served_case.py" --window "$DIR" --private "$P" \
     || echo "WIPE CASE: served_case.py exited $?: the composite has no wipe piece"
 fi
+stamp "exit $rc"
 echo "$HEADLINE"
 exit "$rc"

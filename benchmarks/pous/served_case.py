@@ -174,6 +174,20 @@ def _dump(f: Any, doc: Mapping[str, Any]) -> None:
     f.write(("}" if doc else "{}") + "\n")
 
 
+class _Count:
+    n = 0
+
+    def write(self, s: str) -> None:
+        self.n += len(s)
+
+
+def line_bytes(case: Mapping[str, Any]) -> int:
+    """The bytes of ``case``'s line as `write` writes it, the line its Lean reads."""
+    count = _Count()
+    _dump(count, case)
+    return count.n
+
+
 def write(private: Path, case: Mapping[str, Any], answer: Mapping[str, Any]) -> Path:
     """``case.json`` and ``answer.json`` into ``private`` (0700, each file 0600): the piece composite.py reads."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -188,7 +202,8 @@ def write(private: Path, case: Mapping[str, Any], answer: Mapping[str, Any]) -> 
 
 
 def reencode(repo: str, rev: str, published: R.Setup, point: R.Point, digests: bytes, *, hf_home: Path,
-             device: str = "cuda", p2_lib: str | None = None, pins: Path | None = None) -> period.SetupInputs:
+             device: str = "cuda", p2_lib: str | None = None,
+             pins: Sequence[Path] | None = None) -> period.SetupInputs:
     """Setup's own inputs encoded again as the piece encoded them (`served_piece.py`): the linears of ``repo``'s snapshot
     at ``rev`` held to the pin, committed (the vLLM adapter's ``W``), and ``C*`` encoded at the kept salt; refused unless
     they give the kept commitment to ``W``, point, root and table."""

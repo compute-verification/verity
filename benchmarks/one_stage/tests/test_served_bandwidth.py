@@ -93,7 +93,7 @@ HELD = {"commitment": "ab" * 64, "protocol": p2_party.PROTOCOL, "reason": None, 
 
 
 def _held(tmp: Path, window: int, answer: dict = HELD) -> Path:
-    """What the PoUS piece's bandwidth session leaves in the bandwidth piece's directory (`held_bandwidth.session`)."""
+    """What the PoUS piece's bandwidth session leaves in the bandwidth piece's directory (`held_bandwidth.decide`)."""
     d = tmp / "held"
     d.mkdir(exist_ok=True)
     (d / "answer.json").write_text(json.dumps(answer))
