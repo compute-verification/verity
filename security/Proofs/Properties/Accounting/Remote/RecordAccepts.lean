@@ -11,7 +11,7 @@ import all Init.Data.Range.Basic
 /-!
 # An accepted session of the remote audit, without evaluating SHA-512
 
-`record_verified`: the Lean verifier accepts a record (`Properties.RemoteAudit.Line.Verified`). The node stores one
+`record_verified`: the Lean verifier accepts a record (`Properties.Poub.Line.Verified`). The node stores one
 registered block under the deployed codec, and runs one window of one pass under one draw, at one window a draw. The
 session starts, receives the pass's root over the whole store, ends the window, draws its one receipt and verifies its
 opening. The draw of one receipt among one is position 0 whatever the coin (`receiptSample_one`). The opening is
@@ -20,18 +20,18 @@ each have one leaf, so their roots are the leaves' digests (`zeroRoot`). The ses
 only through their sizes (`run_accepts`, over any registration of one block, any coins and any root of 64 bytes), so no
 SHA-512 is evaluated.
 
-`lineHeld_accepted`: `Properties.RemoteAudit.Line.LineHeld`'s premises hold together with an accepted play. The record's
+`lineHeld_accepted`: `Properties.Poub.Line.LineHeld`'s premises hold together with an accepted play. The record's
 one window is one group, its coin released at 0 and its root arriving at 1 (`groups_one`), so pass 0 runs over `[0, 1)`
 inside its span (`honestSchedule_one`), and `Subprotocol.lineHeldAtSubprotocol_honest` gives every premise.
 -/
 
 @[expose] public section
 
-open _root_.RemoteAudit
+open _root_.Poub
 
-open private RemoteAudit.Session.live RemoteAudit.Session.cover from RemoteAudit.Session
+open private Poub.Session.live Poub.Session.cover from Poub.Session
 
-namespace Properties.RemoteAudit.Line.Honest
+namespace Properties.Poub.Line.Honest
 
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
   Accounting.Remote.Draw.Assumptions
@@ -201,12 +201,12 @@ theorem checkWindow_one (reg : Registration) (c : ByteArray) (hB : reg.blocks = 
 /-! ## The session -/
 
 /-- One window of one pass, one draw of one receipt; no deadline, no stated length, no pace. -/
-def params1 : _root_.RemoteAudit.Session.Params :=
+def params1 : _root_.Poub.Session.Params :=
   { deadlineNs := 0, windows := 1, samples := 1, minPasses := 1, windowNs := 0, lifetime := 1 }
 
 /-- Start at 0; receive window 0's one root, over the whole store at step 0, at 1; end window 0 at 1; draw it at 2;
 verify its opening. -/
-def events1 (root : ByteArray) (o : Opening) : Array _root_.RemoteAudit.Session.Event :=
+def events1 (root : ByteArray) (o : Opening) : Array _root_.Poub.Session.Event :=
   #[.start 0, .receive 0 0 root none none (some 0) 1, .boundary 1, .close 0 2, .verify 0 #[o]]
 
 /-- The session's run accepts, over any registration of one block, any two coins and any root of 64 bytes whose
@@ -214,25 +214,25 @@ window's openings `checkWindow` accepts, and its record has one window, of one p
 receipt. -/
 theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : ByteArray) (hroot : root.size = 64)
     (o : Opening) (hcheck : checkWindow reg reg.digest #[] (window1 reg c0 root) #[(0, 0)] #[o] = .accept) :
-    ∃ rs s, _root_.RemoteAudit.Session.run (_root_.RemoteAudit.Session.State.init params1 reg #[c0, c1] #[] 0)
+    ∃ rs s, _root_.Poub.Session.run (_root_.Poub.Session.State.init params1 reg #[c0, c1] #[] 0)
       (events1 root o) = .ok (rs, s) ∧ s.outcome = some "accepted" ∧
       s.summary.map (fun sm => sm.windows.map fun w => (w.lengths, w.drawn)) = some #[(#[1], 1)] := by
   have hdraw := receiptSample_one reg.digest c1
   have hr1 : Array.range 1 = #[0] := rfl
   simp only [window1] at hcheck
-  simp [hr1, _root_.RemoteAudit.Session.run, events1, _root_.RemoteAudit.Session.step, _root_.RemoteAudit.Session.start,
-    _root_.RemoteAudit.Session.boundary, _root_.RemoteAudit.Session.receive, _root_.RemoteAudit.Session.close,
-    _root_.RemoteAudit.Session.verify, _root_.RemoteAudit.Session.State.init,
-    _root_.RemoteAudit.Session.State.releaseCoin, _root_.RemoteAudit.Session.State.deadline,
-    _root_.RemoteAudit.Session.State.staleBelow, _root_.RemoteAudit.Session.State.record,
-    _root_.RemoteAudit.Session.State.outcome, _root_.RemoteAudit.Session.Win.receipts, RemoteAudit.Session.live,
-    RemoteAudit.Session.cover, params1, hB,
-    hroot, plan_length, hdraw, hcheck, _root_.RemoteAudit.Session.RECEIPT_LIMIT,
-    _root_.RemoteAudit.Session.STEP_LIMIT, DIGEST_BYTES]
+  simp [hr1, _root_.Poub.Session.run, events1, _root_.Poub.Session.step, _root_.Poub.Session.start,
+    _root_.Poub.Session.boundary, _root_.Poub.Session.receive, _root_.Poub.Session.close,
+    _root_.Poub.Session.verify, _root_.Poub.Session.State.init,
+    _root_.Poub.Session.State.releaseCoin, _root_.Poub.Session.State.deadline,
+    _root_.Poub.Session.State.staleBelow, _root_.Poub.Session.State.record,
+    _root_.Poub.Session.State.outcome, _root_.Poub.Session.Win.receipts, Poub.Session.live,
+    Poub.Session.cover, params1, hB,
+    hroot, plan_length, hdraw, hcheck, _root_.Poub.Session.RECEIPT_LIMIT,
+    _root_.Poub.Session.STEP_LIMIT, DIGEST_BYTES]
   refine ⟨_, _, rfl, ?_, ?_⟩
   · simp
     rfl
-  · simp [_root_.RemoteAudit.Session.State.summary, _root_.RemoteAudit.Session.State.outcome, hr1, plan_length]
+  · simp [_root_.Poub.Session.State.summary, _root_.Poub.Session.State.outcome, hr1, plan_length]
     rfl
 
 /-! ## The instance -/
@@ -241,7 +241,7 @@ theorem run_accepts (reg : Registration) (hB : reg.blocks = 1) (c0 c1 root : Byt
 receipts of 16 rows, its payload tree holding `zeroPayload` at block 0. -/
 def reg1 : Registration :=
   let key := Codec.key (zeros Codec.SEED_BYTES) honestCodec
-  let pd := Flock.FV3.Sha512.Domain.make (RemoteAudit.sha512 (PAYLOAD_DOMAIN ++ frameBytes (zeros 1))) 0 0 1
+  let pd := Flock.FV3.Sha512.Domain.make (Poub.sha512 (PAYLOAD_DOMAIN ++ frameBytes (zeros 1))) 0 0 1
   { node := zeros 1, blocks := 1, payloadRoot := zeroRoot pd 0 (hidden (zeroPayload key) (zeros SALT_BYTES)),
     codecSeed := zeros Codec.SEED_BYTES, codec := honestCodec, receipt := .sketch, rows := 16, key }
 
@@ -251,7 +251,7 @@ def node1 : Node :=
     rates := ⟨0, 0, 0, 0, 0, 0, 0⟩, delta := 0 }
 
 /-- What the auditor saw of window 0: its coin released at 0 and its last root at 1. -/
-def seen1 : Array _root_.RemoteAudit.Line.Seen := #[⟨0, 1, 1, 0, 1, 0⟩]
+def seen1 : Array _root_.Poub.Line.Seen := #[⟨0, 1, 1, 0, 1, 0⟩]
 
 /-- The record: both coins zero, no appends, `events1` with `root1` and `opening1`, and `seen1`. -/
 def record1 : Record :=
@@ -282,7 +282,7 @@ theorem record_run : ∃ rs s, record1.run node1 = .ok (rs, s) ∧ s.outcome = s
   have hpay : reg1.payloadRoot = zeroRoot reg1.payloadDomain 0 (hidden (zeroPayload reg1.key) (zeros SALT_BYTES)) :=
     rfl
   have hcheck := checkWindow_one reg1 (zeros 64) rfl rfl hpay
-  simp only [Record.run, node1, record1, _root_.RemoteAudit.Shared.run_one]
+  simp only [Record.run, node1, record1, _root_.Poub.Shared.run_one]
   exact run_accepts reg1 rfl (zeros 64) (zeros 64) _ hroot _ hcheck
 
 theorem record_verified : Verified node1 record1 := by
@@ -295,18 +295,18 @@ theorem record_accepts : ∃ (node : Node) (r : Record), Verified node r := ⟨n
 /-! ## `LineHeld`'s premises at the record -/
 
 /-- Window 0 as one group: coin at 0, last root at 1, one pass. -/
-def group1 : _root_.RemoteAudit.Line.Group := ⟨0, 1, 1, 1, 0, 1, 0⟩
+def group1 : _root_.Poub.Line.Group := ⟨0, 1, 1, 1, 0, 1, 0⟩
 
-theorem ofSummary_one (sm : _root_.RemoteAudit.Session.Summary)
+theorem ofSummary_one (sm : _root_.Poub.Session.Summary)
     (h : sm.windows.map (fun w => (w.lengths, w.drawn)) = #[(#[1], 1)]) :
-    _root_.RemoteAudit.Line.ofSummaryAt 1 sm 1 seen1 = .ok (#[group1], #[(1, 1)]) := by
+    _root_.Poub.Line.ofSummaryAt 1 sm 1 seen1 = .ok (#[group1], #[(1, 1)]) := by
   obtain ⟨⟨ws⟩, blocks, appended, released, lifetime, pace, appends⟩ := sm
   rcases ws with _ | ⟨w, _ | ⟨w', ws⟩⟩
   · simp at h
   · simp only [List.map_toArray, List.map_cons, List.map_nil, Array.mk.injEq, List.cons.injEq, Prod.mk.injEq,
       and_true] at h
     obtain ⟨hl, hd⟩ := h
-    simp [_root_.RemoteAudit.Line.ofSummaryAt, _root_.RemoteAudit.Line.ofSummary, _root_.RemoteAudit.Line.receipts,
+    simp [_root_.Poub.Line.ofSummaryAt, _root_.Poub.Line.ofSummary, _root_.Poub.Line.receipts,
       hl, hd, seen1, group1]
     refine ⟨0, rfl, rfl, rfl, ?_, rfl, rfl, rfl, rfl⟩
     simp [hl]
@@ -356,7 +356,7 @@ def receipts1 : Receipts node1.samples 0 Unit :=
 codec, one window of one pass, one draw), the play `record1` at every commitment and coin, the honest trace on
 `[p, p + 1)` for pass `p` (the whole store in node memory, every receipt correct), no outside device, nothing but the
 verifier's messages entering it as its certifiers count, every receipt correct and the sampler's fallbacks 0, every
-premise of `Properties.RemoteAudit.Line.LineHeld` holds at `δs = δnet = 0`, and the Lean verifier accepts the play at
+premise of `Properties.Poub.Line.LineHeld` holds at `δs = δnet = 0`, and the Lean verifier accepts the play at
 every coin. -/
 theorem lineHeld_accepted :
     ∃ (node : Node) (κ : ℕ) (X Cm : Type) (_ : Fintype X)
@@ -383,4 +383,4 @@ theorem lineHeld_accepted :
     fun _ _ _ => Finset.range (receiptMax + 1), fun _ => (), _, receipts1, 0, 0, _, _, hP, hCv, hSk, hCov, hIc,
     hLive, hRef, hCnt, ⟨(), fun _ _ => false⟩, record_verified⟩
 
-end Properties.RemoteAudit.Line.Honest
+end Properties.Poub.Line.Honest
