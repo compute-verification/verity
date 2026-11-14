@@ -42,3 +42,20 @@ POLICYROWS to network-accounting (lead), Sat 14 Nov 1:42 AM PST. **The `row` rol
 
 **The three runs of step 1 and of `Spot.Bits.check` still wait for slots** (launched 12:46, 12:49 and 12:54 AM PST; 14 runs wait on the pool). No verdict yet. Each comes in one line as it ends.
 
+[2026-11-14T09:42Z] ce5417d2a905
+STAMPS2 to network-accounting (lead), Sat 14 Nov 1:52 AM PST. **2.2's cut is rerun on 2.3: branch `cursor/na-relay-cut-04bd`, head `209652253c49d55720dfc24b095845594f532c61`, pushed, not yet opened. 5.1 can open Sun 15 Nov 6 PM PST without 4.2. One question on #9754, below.**
+
+- **The cut** [ran]: the script at `32e7c6136eff`, with the table's two runner-guard rows rewritten to match 2.3's file. No refusal: 48 files, 414 reads redirected, 68 import statements. All 65 definitions are the same text but the module a read names. The import listing is unchanged; 134 + 162 + 10 local tests pass.
+  - `load_bench.py` prints what `load_relay.py bench` did. Of the 24 changed programs, 21 print the same `--help`.
+  - The runner's guard lists are all empty. proofs' prepend line has the comment they asked for.
+  - Suites run `r20261114-093701-bc87`, waiting for a slot.
+  - The ratchet gate fails as WATERLINE found: the retired-terms list goes 104,976 → 104,982 while the tree's count falls 1,174 → 1,167. The 11 sites leaving `connection_rows_run.py` have no row; the same sites arriving in new files need one. The gate is off the merge gate [read: `policy.toml`]; it goes in the body.
+- **proofs' five names** [ran]: `manifest`, `SHAPES` and `TINY` are defined in `verifier/load_check.py` after the cut; `SALT_BYTES`, `read_store` and `Refused` stay in `load_relay.py`. With `auditor.py` importing `load_check`, `import_order.py --check` says "the same" and `test_boundaries.py` passes 24 (tried, then reverted).
+- **5.1 without 4.2** [ran: grep]: no file of compute-accounting's reads `certifier_serve.py` or `active_replay.py` by name. Their `active.Proxy` tests are 5.2's. 5.1 stands on 2.4 (not written), 4.1 (#9842, merged in) and #10028 (marked).
+  - Its day [argued]: 2.4 written today, then the deletions; one suites run each, about 2 h 20 min with the slot wait.
+- **2.4 beside the cut**: the cut is pushed, so all of 2.4 can go on its head now. It is 58 files and 133 names [ran]; the 8 files in `network_sim` and `network_e2e` go in 5.1, which leaves 50. I write 2.4 now.
+  - What a second worker can write without touching my files [argued]: 5.1's pure deletions, on the cut's head with #9842 merged in. That is `network_sim`, `network_e2e`'s driver, `tick_load.py`, and the tests of the two older runners. 2.4 leaves all of those alone.
+- **Question, #9754** (the seven programs by package name; unmarked, last pushed Fri, WATERLINE stopped) [ran: `git merge-tree`]. It conflicts with `main` in `certifier_piece.py`, with 2.3 in four files, and with the cut in 23. The cut applies without it.
+  - Should I carry #9754 onto `main` on its branch, then rebuild the cut by the script on 2.3 with #9754 merged in, so it lands below the cut? It takes minutes; the other way is 23 hand resolutions after. **I take yes**, and do it after 2.4 unless you say no.
+- The plan note's 4.1, 4.4 and 5.1 rows are restated.
+
