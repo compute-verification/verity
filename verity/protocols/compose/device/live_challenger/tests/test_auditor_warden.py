@@ -265,7 +265,7 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
 #: each file a warden run publishes to `out/` (`WARDEN_PUBLIC`, and `warden_outcome`'s `certificates.jsonl`) by the
 #: certifier's message that carries it to the verifier, None for one no message declares yet
 PUBLISHED = {"deployment.json": NC.DEPLOYMENT, "cells.jsonl": NC.REGISTRATION, "load.json": NC.LOAD,
-             "certificates.jsonl": NC.CERTIFICATE, "groups.json": None, "load-relay.json": None}
+             "certificates.jsonl": NC.CERTIFICATE, "groups.json": NC.GROUPS, "load-relay.json": None}
 
 
 def test_the_certifiers_manifest_declares_exactly_the_files_a_warden_run_publishes():

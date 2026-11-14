@@ -173,8 +173,8 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
 
 #: The onsite configuration's hash before the network certifier's response cap and its lengths rows' form were
 #: parameters: a configuration that sets neither keeps it.
-UNCAPPED_ONSITE = ("08fe70eb745513d2c36b193fb032ada6383cd3e221224b41baec09ab9feedb57"
-                   "343090eea951a1cb12d39b32689b476546ec1bba475c9d4e6e848ec5de77956b")
+UNCAPPED_ONSITE = ("9899a2d20fcdbe342ba9d409518eb0c9a2547676ffb637c5ab15d61361e5835f"
+                   "a579dc6e804080dd1aa28b9b3fc82dfbba6bb122dc5e2a764742155895a104a3")
 
 
 def capped(cap):
