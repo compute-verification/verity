@@ -3,15 +3,19 @@ run among them unless `--tier-b-steps` names others.  `--no-verify-weights`, `--
 command, the census's and the manifest.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
 realized shape of its capture.  What the driver says of a run goes to the log: a stage's command and status, and each record it
 could not write.  The phase's last word on the realized shape, the shape or that it was not written, is a line on stderr as it is
-written, which a pod's script shows."""
+written, which a pod's script shows.  A run directory with no run.json, and a recorded workload this checkout lacks, are refused
+by name.  A re-run takes its checkpoint, its family and its engine arguments from run.json unless they are given.  A
+checkpoint's configuration is the file `--hf-config` names, else its directory's, else the hub's newest snapshot's."""
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import sys
 
 import pytest
 
+from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import match as RC
 
@@ -294,5 +298,74 @@ def test_an_hf_config_that_is_no_checkpoint_s_reads_as_none_and_the_log_warns(tm
     a = cli.parse("match", ["--hf-config", str(tmp_path / "config.json")], {})
     assert RC._hf_config_of(a, None) is None
     (said,) = _said(caplog, "WARNING")
-    assert said.startswith(f"{tmp_path / 'config.json'}: no configuration read, so provenance falls back to \"hand\" (")
+    assert re.fullmatch(re.escape(f"{tmp_path / 'config.json'}: no configuration read, so provenance falls back to \"hand\" (") + r"\w+: .+\)", said)
     assert RC._hf_config_of(cli.parse("match", [], {}), None) is None and len(_said(caplog)) == 1      # none named: nothing to say
+
+
+def test_a_run_dir_with_no_run_json_and_a_recorded_workload_this_checkout_lacks_are_refused_by_name(tmp_path, monkeypatch):
+    (tmp_path / "empty").mkdir()
+    refusal = f"--run-dir {tmp_path / 'empty'}: no run.json (the GPU phase writes it)"
+    with pytest.raises(UsageError, match=f"^{re.escape(refusal)}$"):
+        RC._defaults_from_run_dir(cli.parse("match", ["--run-dir", str(tmp_path / "empty")], {}))
+    run = _run_dir(tmp_path, workload_path="workloads/gone.json")               # as the GPU phase's checkout named it
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(UsageError, match="^workload workloads/gone.json not found in this checkout$"):
+        RC._defaults_from_run_dir(cli.parse("match", ["--run-dir", str(run)], {}))
+    (tmp_path / "workloads").mkdir()
+    (tmp_path / "workloads" / "gone.json").write_text("{}")
+    a = cli.parse("match", ["--run-dir", str(run)], {})
+    RC._defaults_from_run_dir(a)
+    assert (a.workload, a.out) == ("workloads/gone.json", str(run))
+    (tmp_path / "unnamed").mkdir()
+    a = cli.parse("match", ["--run-dir", str(_run_dir(tmp_path / "unnamed", workload_path=None))], {})
+    RC._defaults_from_run_dir(a)                                                # a run.json that names no workload: `main` asks for one
+    assert a.workload is None
+
+
+def test_a_run_dir_rerun_takes_its_checkpoint_its_family_and_its_engine_arguments_from_run_json_unless_they_are_given(tmp_path):
+    engine = {"max_num_seqs": 2, "enforce_eager": True, "seed": 7, "name": "x"}
+    run = _run_dir(tmp_path, checkpoint_dir="/ck/snap", checkpoints="ck.json", family="fam", engine_args_requested=engine)
+    a = cli.parse("match", ["--run-dir", str(run)], {})
+    RC._defaults_from_run_dir(a)
+    assert (a.checkpoint_dir, a.checkpoints, a.family) == ("/ck/snap", "ck.json", "fam")
+    assert (a.max_num_seqs, a.engine_arg) == (2, ["seed=7", 'name="x"'])       # but for the two the driver has options of its own for
+    given = ["--checkpoint-dir", "/ck/other", "--checkpoints", "other.json", "--family", "f2", "--max-num-seqs", "4", "--engine-arg", "seed=1"]
+    b = cli.parse("match", ["--run-dir", str(run), *given], {})
+    RC._defaults_from_run_dir(b)
+    assert (b.checkpoint_dir, b.checkpoints, b.family, b.max_num_seqs, b.engine_arg) == ("/ck/other", "other.json", "f2", 4, ["seed=1"])
+    (tmp_path / "plain").mkdir()
+    c = cli.parse("match", ["--run-dir", str(_run_dir(tmp_path / "plain"))], {})
+    RC._defaults_from_run_dir(c)                                                # a run.json that records none of them
+    assert (c.checkpoint_dir, c.checkpoints, c.family, c.max_num_seqs, c.engine_arg) == (None, RC.DEFAULT_CHECKPOINTS, None, 8, [])
+
+
+HF_CONFIG = {"model_type": "llama", "hidden_size": 2048, "num_hidden_layers": 16, "num_attention_heads": 32, "num_key_value_heads": 8,
+             "head_dim": 64, "intermediate_size": 8192, "vocab_size": 128256, "rms_norm_eps": 1e-5, "rope_theta": 500000.0,
+             "max_position_embeddings": 131072}
+
+
+def test_a_checkpoint_s_configuration_is_the_named_file_s_then_its_directory_s_then_the_hub_s_newest_snapshot_s(tmp_path, monkeypatch):
+    def config(directory, hidden):
+        directory.mkdir(parents=True)
+        (directory / "config.json").write_text(json.dumps({**HF_CONFIG, "hidden_size": hidden}))
+        return str(directory / "config.json")
+
+    def hidden(*given, C):
+        read = RC._hf_config_of(cli.parse("match", [*given], {}), C)
+        return read and read["H"]
+
+    named, held, model = config(tmp_path / "named", 64), tmp_path / "held", {"model": "org/x"}
+    config(held, 128)
+    for home, sizes in ((tmp_path / "hf", (256, 512)), (tmp_path / "home" / ".cache" / "huggingface", (1024,))):
+        for name, size in zip("ab", sizes):
+            config(home / "hub" / "models--org--x" / "snapshots" / (name * 40), size)
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    assert hidden("--hf-config", named, "--checkpoint-dir", str(held), C=model) == 64
+    assert hidden("--checkpoint-dir", str(held), C=model) == hidden("--checkpoint-dir", str(held), C=None) == 128
+    # no file named and no directory that holds one: the profile's repository under the hub, the last snapshot by name
+    assert hidden(C=model) == hidden("--checkpoint-dir", str(tmp_path / "none"), C=model) == hidden("--checkpoint-dir", named, C=model) == 512
+    assert [hidden(C=C) for C in (None, {}, {"model": "org/y"})] == [None] * 3
+    assert hidden("--hf-config", str(tmp_path / "none.json"), "--checkpoint-dir", str(held), C=model) is None     # the named file or none
+    monkeypatch.delenv("HF_HOME")
+    assert hidden(C=model) == 1024                                              # the cache under the home directory

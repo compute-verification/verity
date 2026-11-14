@@ -164,6 +164,25 @@ def test_an_abort_from_outside_the_scheduler_is_recorded_as_a_finish(tmp_path):
     assert fin == [{"kind": "finish", "request": "a", "after_step": 2, "reason": "abort", "stop_reason": None, "outside": True}]
 
 
+def _three(a: str, b: str, c: str, **kw) -> list[dict]:
+    """The records of one plan of three requests: ``c`` starts from ``a``'s cached blocks, ``a`` is preempted and resumed, ``b`` and
+    ``a`` finish in a step, and ``c`` is aborted from outside the scheduler."""
+    sched = FakeScheduler(budget=16, max_seqs=4, preempt_at={2: a}, prefix_block=4)
+    trace = ST.StepTrace(**kw).install(sched)
+    drive(sched, {0: [_req(a, 9, [5, 6, 7, 8], 4), _req(b, 4, [5, 6, 7, 2], 4)], 1: [_req(c, 9, [5] * 9, 9)]}, abort_at={5: c})
+    return trace.records
+
+
+def test_every_request_a_record_names_is_named_by_the_traces_request_id():
+    """serve-openai's trace is given a ``request_id`` that takes vLLM's suffix off an id (`serve_commit.advice_trace`): its records
+    are those of a scheduler whose ids carry no suffix, in every place a record names a request."""
+    plain = _three("a", "b", "c")
+    fields = ("rows", "new", "resumed", "cache_hit", "preempted", "emitted", "finished")
+    assert {k for s in ST.steps(plain) for k in fields if s[k]} == set(fields), "the plan names a request in each field of a step"
+    assert {r["kind"] for r in plain} == {"header", "arrive", "step", "finish"}
+    assert _three("a-0", "b-1", "c-2", request_id=lambda rid: rid.split("-")[0]) == plain
+
+
 def test_uninstall_leaves_the_scheduler_as_it_was():
     sched = FakeScheduler()
     before = {n: getattr(sched, n) for n in ("add_request", "schedule", "update_from_output", "finish_requests")}

@@ -56,7 +56,7 @@ def test_a_views_byte_range_is_its_storage_span_and_none_where_it_has_no_storage
 
 
 @pytest.mark.parametrize("field", ["alloc", "offset"])
-@pytest.mark.parametrize("stated", ["", [], {}, "third", [1], {"a": 1}, "2.5", float("nan")])
+@pytest.mark.parametrize("stated", ["", [], {}, "third", [1], {"a": 1}, "2.5", float("nan"), float("inf"), float("-inf")])
 def test_a_view_whose_allocation_or_offset_is_no_number_is_refused_by_name(field, stated):
     with pytest.raises(RecordError) as e:
         OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), field: stated})
@@ -65,7 +65,7 @@ def test_a_view_whose_allocation_or_offset_is_no_number_is_refused_by_name(field
 
 
 @pytest.mark.parametrize("field", ["shape", "strides"])
-@pytest.mark.parametrize("stated", [1, 2.5, True, -1, "24", {"a": 1}, ["two"], [None], [[2]]])
+@pytest.mark.parametrize("stated", [1, 2.5, True, -1, "24", {"a": 1}, ["two"], [None], [[2]], [float("inf")], [2, float("-inf")]])
 def test_a_view_whose_shape_or_strides_is_no_list_of_numbers_is_refused_by_name(field, stated):
     with pytest.raises(RecordError) as e:
         OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), "strides": [1], field: stated})

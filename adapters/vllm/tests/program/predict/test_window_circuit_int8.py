@@ -124,10 +124,10 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
 def test_a_word_is_whole_leaves_of_one_byte_width():
     """Weight and node-output reads are u16 words: s8 leaves two a word, f32 two words a leaf; a read starting inside a word,
     and a field whose leaves don't fill whole words, are refused."""
-    spans = WC._spans("w", [("a", _arr((4,), 8)), ("b", _arr((2,), 32))])
+    spans = WB._spans("w", [("a", _arr((4,), 8)), ("b", _arr((2,), 32))])
     assert spans == [(0, 0, 8), (4, 2, 32), (6, 6, 0)]
-    assert [WC._word(spans, leaf, "r") for leaf in (0, 2, 4, 5, 6)] == [0, 1, 2, 4, 6]
+    assert [WB._word(spans, leaf, "r") for leaf in (0, 2, 4, 5, 6)] == [0, 1, 2, 4, 6]
     with pytest.raises(Unexpressible, match="r: leaf 1 starts inside a u16 word of 8-bit leaves"):
-        WC._word(spans, 1, "r")
+        WB._word(spans, 1, "r")
     with pytest.raises(Unexpressible, match=r"w a's 3 leaves are \[8\] bits, not one byte width filling whole u16 words"):
-        WC._spans("w", [("a", _arr((3,), 8))])
+        WB._spans("w", [("a", _arr((3,), 8))])
