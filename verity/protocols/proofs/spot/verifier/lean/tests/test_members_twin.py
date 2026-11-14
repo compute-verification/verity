@@ -202,7 +202,7 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_per_member_run(tmp
 def test_the_members_wiring_is_a_parameter_its_check_refuses_and_is_read_after_the_members_files(tmp_path):
     """Parameters naming the members' wiring: one SPOT's check refuses is refused with the parameters (a wire of no
     template), and one it passes (`TRIPLE`'s rows of ``x``, cut one a word, each `PAIR`'s unit 1's ``o0``) leaves Lean's
-    reason the audit's without it, the first member's circuit, since the sampled units' wires are read after every
+    reason the audit's without it, the first member's circuit, since the wires of the sample's units are read after every
     member's files (`OneStageZk.wiresHeld`). The twin leaves a wiring `Outside`."""
     a = Audit("members-twin-wiring")
     wire = {"reader": TRIPLE.id, "port": "x", "writer": PAIR.id, "out": "o0", "at": 0, "radix": [3, 3], "base": 1,

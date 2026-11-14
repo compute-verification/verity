@@ -194,7 +194,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`). The parameters may name the members' wiring beside them
   (`proofs.wiring`, SPOT's `Spot.Wires.Wiring`, refused where `Spot.Wires.check` refuses it), and the check then holds
-  every wired row of every sampled unit to its writer's output row in the members' public files
+  every wired row of every unit of the sample to its writer's output row in the members' public files
   (`OneStageZk.wiresHeld`, the `members_wires` piece); `one_stage.members` leaves a wiring `Outside`.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's

@@ -560,11 +560,11 @@ def test_the_drawn_check_reads_only_drawn_units(pieces):
         assert pieces.call(fn, j) == ("output", D.canonical(want))
 
 
-#: `OneStageZk.WIRES_TEMPLATE` and `OneStageZk.WIRES_DRAWN`
+#: `OneStageZk.WIRES_TEMPLATE` and `OneStageZk.WIRES_SAMPLED`
 WIRES_TEMPLATE = ("wiring: a template of the wiring is not one range of the verifier's partition holding exactly its "
                   "units: a template's unit u is the population's unit first + u")
-WIRES_DRAWN = ("wiring: a sampled unit's wired row is not its writer's output row: its b || c in its member's public "
-               "file is not the writer's row's in the writer's member's")
+WIRES_SAMPLED = ("wiring: a wired row of a unit of the sample is not its writer's output row: its b || c in its "
+                 "member's public file is not the writer's row's in the writer's member's")
 
 
 def _window(**change) -> dict:
@@ -579,7 +579,7 @@ def _window(**change) -> dict:
             "A/c0": [[f"s{3 * u + c}" for c in range(3)] + [f"a{u}"] for u in range(2)]}
     ports |= change.pop("ports", {})
     rows |= change.pop("rows", {})
-    return {"wiring": wiring, "ranges": [["G", 0, 6], ["A", 6, 2]], "drawn": [0, 6, 7],
+    return {"wiring": wiring, "ranges": [["G", 0, 6], ["A", 6, 2]], "sample": [0, 6, 7],
             "members": [{"name": n, "first": f, "count": c, "ports": ports[n], "rows": rows[n]}
                         for n, (f, c) in members.items()]} | change
 
@@ -593,20 +593,20 @@ def _tampered(unit: int, row: int, s: str) -> dict:
 
 @pytest.mark.parametrize("name, j, want", [
     ("an honest window", _window(), None),
-    ("a sampled unit's wired row that is not its writer's", _window(rows=_tampered(1, 2, "bad"), drawn=[7]),
-     WIRES_DRAWN),
-    ("an unsampled unit's wired row that is not its writer's", _window(rows=_tampered(1, 2, "bad"), drawn=[0, 6]), None),
+    ("a wired row of a unit of the sample that is not its writer's", _window(rows=_tampered(1, 2, "bad"), sample=[7]),
+     WIRES_SAMPLED),
+    ("an unsampled unit's wired row that is not its writer's", _window(rows=_tampered(1, 2, "bad"), sample=[0, 6]), None),
     ("a wired row and its writer's both empty", _window(rows=_tampered(1, 2, "") | {
-        "G/c1": [["x4", "s4"], ["x5", ""]]}, drawn=[7]), WIRES_DRAWN),
-    ("a member with no port of the row's name", _window(ports={"A/c0": ["k#0", "k#1", "k#9", "o0"]}, drawn=[7]),
-     WIRES_DRAWN),
+        "G/c1": [["x4", "s4"], ["x5", ""]]}, sample=[7]), WIRES_SAMPLED),
+    ("a member with no port of the row's name", _window(ports={"A/c0": ["k#0", "k#1", "k#9", "o0"]}, sample=[7]),
+     WIRES_SAMPLED),
     ("a template whose range is not its units", _window(ranges=[["G", 0, 5], ["A", 5, 2]]), WIRES_TEMPLATE),
     ("a template in two ranges", _window(ranges=[["G", 0, 3], ["G", 3, 3], ["A", 6, 2]]), WIRES_TEMPLATE),
     ("a wiring SPOT refuses", _window(wiring={**_window()["wiring"], "wires": [
         {**_gather()["wires"][0], "writer": "H"}]}), "proofs: wiring: SPOT's check refuses it (template, wire 0)"),
 ], ids=lambda x: x if isinstance(x, str) else "")
 def test_the_per_member_forms_wires(pieces, name, j, want):
-    """The per-member form's wires check (`OneStageZk.wiresOn`): each wired row of a sampled unit is its writer's output
+    """The per-member form's wires check (`OneStageZk.wiresOn`): each wired row of a unit of the sample is its writer's output
     row in the members' rows, by its port's name in its member (a cut row ``port#r``) and its writer's ``out``, neither
     empty; an unsampled unit is not read; each template of the wiring is one range of the partition of its units; and
     a wiring SPOT's check refuses is refused as the parameters' parser refuses it."""

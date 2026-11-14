@@ -90,8 +90,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   evidence's `proved_units` (`membersRun_proved`). Then, where the parameters name a wiring, every wired row of every
   unit of `proved_units` is its writer's output row (`wiresHeld`, `membersRun_wires`): each template of the wiring is
   one range of the verifier's partition holding exactly its units, and the row's `b ‖ c` in its member's public file
-  is the writer's row's in the writer's member's (`Spot.Wires.Summary.drawnOk`). The registration is held to the members before any statement's
-  session: the members' units are its population, each member one range of it (`laidHeld`), and each of its roots is
+  is the writer's row's in the writer's member's (`wiresOn`). The registration is held to the members before any
+  statement's session: the members' units are its population, each member one range of it (`laidHeld`), and each of its roots is
   exactly one member's, the member whose name, then `/`, the root's port begins with (`rootsOf`; a root that is no
   member's or two members' refuses, and so does a window's row tables' root, `ROW_TABLES`). A member's public file is
   held to its slice of the
@@ -1386,10 +1386,10 @@ def WIRES_TEMPLATE : String :=
   "wiring: a template of the wiring is not one range of the verifier's partition holding exactly its units: a " ++
     "template's unit u is the population's unit first + u"
 
-/-- The refusal of a sampled unit's wired row that is not its writer's output row (`wiresHeld`). -/
-def WIRES_DRAWN : String :=
-  "wiring: a sampled unit's wired row is not its writer's output row: its b || c in its member's public file is " ++
-    "not the writer's row's in the writer's member's"
+/-- The refusal of a wired row of a unit of the sample that is not its writer's output row (`wiresHeld`). -/
+def WIRES_SAMPLED : String :=
+  "wiring: a wired row of a unit of the sample is not its writer's output row: its b || c in its member's " ++
+    "public file is not the writer's row's in the writer's member's"
 
 /-- Row `r` of a port cut into `k` rows, by its name among the circuit's ports: the port's own name uncut, else
 `port#r`. -/
@@ -1405,16 +1405,16 @@ def memberAt (ms : Array (String × Nat × Nat)) (g : Nat) : Option (String × N
 `k` in its public file. -/
 abbrev Rows := Array String × (Nat → Nat → ByteArray)
 
-/-- **The sampled units' wires held to the members' rows**, on the wiring `W` with SPOT's summary `S`, the partition's
-ranges `rs` (each its template, first unit and count), the members `ms` (each its name, first unit and count), the
-sampled units `drawn` and each member's rows (`load`, by name): each template of the wiring is one range of `rs` of
-exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and every wired row
-of every sampled unit is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's check on the sampled
-units by `Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's slot and the port the
-row names (`rowName`), is the writer's output row's in the writer's member's, neither empty (else `WIRES_DRAWN`). It
-loads the members a sampled unit with a wired row, or one of its writers, is in. -/
+/-- **The wires of the sample's units held to the members' rows**, on the wiring `W` with SPOT's summary `S`, the
+partition's ranges `rs` (each its template, first unit and count), the members `ms` (each its name, first unit and
+count), the units of the sample `sample` and each member's rows (`load`, by name): each template of the wiring is one
+range of `rs` of exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and
+every wired row of every unit of the sample is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's
+check on the sample's units by `Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
+slot and the port the row names (`rowName`), is the writer's output row's in the writer's member's, neither empty
+(else `WIRES_SAMPLED`). It loads the members a unit of the sample with a wired row, or one of its writers, is in. -/
 def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String × Nat × Nat))
-    (ms : Array (String × Nat × Nat)) (drawn : Array Nat) (load : String → V Rows) : V Unit := do
+    (ms : Array (String × Nat × Nat)) (sample : Array Nat) (load : String → V Rows) : V Unit := do
   let spans ← W.templates.mapM fun (tid, t) =>
     match (rs.filter (·.1 == tid)).toList with
     | [(_, first, count)] => if count == t.units then pure (tid, first, count) else throw WIRES_TEMPLATE
@@ -1422,7 +1422,7 @@ def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String
   let at? : String → Int → Option (String × Nat) := fun tid u => do
     let (_, lo, n) ← spans.find? (·.1 == tid)
     if decide (0 ≤ u) && decide (u < (n : Int)) then memberAt ms (lo + u.toNat) else none
-  let sampled := drawn.toList.filterMap fun g =>
+  let sampled := sample.toList.filterMap fun g =>
     (spans.find? fun (_, lo, n) => decide (lo ≤ g) && decide (g < lo + n)).map fun (tid, lo, _) => (tid, g - lo)
   let need := sampled.flatMap fun (tid, u) => match S.rowsAt tid u with
     | [] => []
@@ -1438,7 +1438,7 @@ def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String
     match bc tid u (rowName port r (W.cutsOf tid port)), bc wt wu out with
     | some a, some b => a == b
     | _, _ => false
-  if !S.drawnOk same sampled then throw WIRES_DRAWN
+  if !S.drawnOk same sampled then throw WIRES_SAMPLED
 
 /-- A member's rows as its sessions' verdicts parse its files (`Flock.ProvedScope.circuitOf`,
 `Flock.ProvedScope.publicOf`), from the blobs its parameters name: its circuit's ports' names and its public file's
@@ -1450,25 +1450,25 @@ def Member.rows (m : Member) (bs : Core.Blobs) : V Rows := do
   let pub ← Flock.ProvedScope.publicOf tags c a.I.publicFile
   pure (c.ports.map (·.name), fun i k => pub.digest i k c.ports.size)
 
-/-- **The sampled units' wires held to the members' public files**, where the parameters name a wiring (`wiringOf`):
-`wiresOn` at the ranges of the verifier's partition (`Partition.evaluate` on the verifier's program and query), the
-sampled units `drawn` (the evidence's `proved_units`, which v1's check holds to the sample) and each member's rows read
-off its files on the blobs (`Member.rows`). It reads no session. -/
-def wiresHeld (p : Params) (ms : Array Member) (drawn : Array Nat) (bs : Core.Blobs) : V Unit := do
+/-- **The wires of the sample's units held to the members' public files**, where the parameters name a wiring
+(`wiringOf`): `wiresOn` at the ranges of the verifier's partition (`Partition.evaluate` on the verifier's program and
+query), the units of the sample `sample` (the evidence's `proved_units`, which v1's check holds to the sample) and
+each member's rows read off its files on the blobs (`Member.rows`). It reads no session. -/
+def wiresHeld (p : Params) (ms : Array Member) (sample : Array Nat) (bs : Core.Blobs) : V Unit := do
   let some (W, S) := p.wiring | pure ()
   let rs ← Partition.evaluate (← Program.parse p.own.program) (getD p.own.partition "query")
-  wiresOn W S (rs.map fun r => (r.template, r.first, r.count)) (ms.map fun m => (m.name, m.first, m.count)) drawn
+  wiresOn W S (rs.map fun r => (r.template, r.first, r.count)) (ms.map fun m => (m.name, m.first, m.count)) sample
     fun name => match ms.find? (·.name == name) with
       | some m => m.rows bs
       | none => throw "the parameters name no such member"
 
-/-- **The `members_wires` piece**: `wiresOn` on an instance `{"drawn", "members", "ranges", "wiring"}`: `wiring` as
+/-- **The `members_wires` piece**: `wiresOn` on an instance `{"members", "ranges", "sample", "wiring"}`: `wiring` as
 the parameters' (`wiringOf`), `ranges` the partition's `[template, first, count]`, `members` each exactly
 `{"count", "first", "name", "ports", "rows"}` (its ports' names, and per slot its ports' strings, each string's UTF-8
-bytes a `b ‖ c`, the empty string none), `drawn` the sampled units. The output is `{"refusal"}`: null, or the
+bytes a `b ‖ c`, the empty string none), `sample` the units of the sample. The output is `{"refusal"}`: null, or the
 refusal of `wiringOf` or `wiresOn`. -/
 def membersWiresPiece (j : Json) : V Json := do
-  exactly j #["drawn", "members", "ranges", "wiring"] "an instance"
+  exactly j #["members", "ranges", "sample", "wiring"] "an instance"
   let .arr rs := getD j "ranges" | throw "ranges is not a list"
   let rs ← rs.mapM fun
     | .arr #[.str t, a, n] => match nat? a, nat? n with
@@ -1486,10 +1486,10 @@ def membersWiresPiece (j : Json) : V Json := do
       | .arr r => r.mapM fun | .str s => pure s.toUTF8 | _ => throw "a row's string is a string"
       | _ => throw "a slot's rows are a list"
     pure (name, first, count, ports, rows)
-  let .arr ds := getD j "drawn" | throw "drawn is not a list"
-  let drawn ← ds.mapM fun d => match nat? d with | some n => pure n | none => throw "a drawn unit is a natural"
+  let .arr ds := getD j "sample" | throw "sample is not a list"
+  let sample ← ds.mapM fun d => match nat? d with | some n => pure n | none => throw "a unit of the sample is a natural"
   let out := wiringOf (getD j "wiring") >>= fun (W, S) =>
-    wiresOn W S rs (ms.map fun (n, f, c, _, _) => (n, f, c)) drawn fun name =>
+    wiresOn W S rs (ms.map fun (n, f, c, _, _) => (n, f, c)) sample fun name =>
       match ms.find? (·.1 == name) with
       | some (_, _, _, ports, rows) => pure (ports, fun i k => (rows.getD i #[]).getD k ByteArray.empty)
       | none => throw "no such member"
@@ -1498,7 +1498,7 @@ def membersWiresPiece (j : Json) : V Json := do
 /-- **The per-member form's sessions' verdicts** on the parameters `p`, its members `ms`, the registration `c`, the
 evidence `e` and its statements `sts`: the form's structure (`membersStructure`), the registration's roots each one
 member's (`rootsOf`), then every member's files and each statement's session on the blobs, at its member's slice of
-the registration (`Member.slice`, `runMembers`), then the sampled units' wires (`wiresHeld`). -/
+the registration (`Member.slice`, `runMembers`), then the wires of the sample's units (`wiresHeld`). -/
 def membersRun (p : Params) (ms : Array Member) (c : OneStage.Commitment) (e : Evidence) (sts : Array StatementFiles)
     (bs : Core.Blobs) : V Run :=
   membersStructure p ms c e sts bs >>= fun _ =>
@@ -1533,9 +1533,9 @@ theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitm
   cases h
   exact runMembers_proved hrun hall
 
-/-- **Where the per-member form's run returns, the sampled units' wires held** (`wiresHeld`): with a wiring, each of
-its templates is one range of the verifier's partition and every wired row of a sampled unit is its writer's output
-row in the members' public files. -/
+/-- **Where the per-member form's run returns, the wires of the sample's units held** (`wiresHeld`): with a wiring,
+each of its templates is one range of the verifier's partition and every wired row of a unit of the sample is its
+writer's output row in the members' public files. -/
 theorem membersRun_wires {p : Params} {ms : Array Member} {c : OneStage.Commitment} {e : Evidence}
     {sts : Array StatementFiles} {bs : Core.Blobs} {r : Run} (h : membersRun p ms c e sts bs = .ok r) :
     wiresHeld p ms e.base.provedUnits bs = .ok () := by
