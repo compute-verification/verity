@@ -10,7 +10,7 @@ sys.path.insert(0, str(NCI))
 import catalog  # noqa: E402
 import kappa  # noqa: E402
 import render  # noqa: E402
-import slowdown  # noqa: E402
+import bracket  # noqa: E402
 
 LOCK = Path(__file__).resolve().parents[3] / "security" / "lean-audit.json"
 
@@ -66,7 +66,7 @@ def test_kimi_k2_fanout_covers_every_activation_but_the_lm_head():
 
 def test_cited_theorems_are_guarantees_in_the_lock():
     guarantees = json.loads(LOCK.read_text())["guarantees"]
-    assert slowdown.THREAD_THEOREM in guarantees
+    assert bracket.THREAD_THEOREM in guarantees
 
 
 def test_index_renders_every_source_and_estimate():
