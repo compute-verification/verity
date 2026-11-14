@@ -26068,9 +26068,9 @@
    }
   },
   "RemoteAudit.Protocol": {
-   "digest": "147f3643c503b7a1b3d650abb2ecf624fbc594ce3ffcf87065d302ce2f35e27c",
+   "digest": "336c9159eb47946ca6e69f8611594183eafbc5f7e8ceec4f76e0b129bbfa964b",
    "definitions": {
-    "RemoteAudit.Protocol.DELTA": "ebf9a44a7dd92b1cf379f2a61b40202693a821d055fff22fb0fd693aad616177",
+    "RemoteAudit.Protocol.DELTA": "668f6cf3703c5fa1fac6d5dca8e0320f5ecf6a63012b59ecbe49cd394bd99f35",
     "RemoteAudit.Protocol.Evidence": "8f1e577fa67565d95c78100ad54ccab0f0f435a936e773610b1066ce5805a8d9",
     "RemoteAudit.Protocol.Evidence.appendCoins": "6008c3d4107d1c095a04071c82482027cd921e8cd7111d1ded1167cb9200e003",
     "RemoteAudit.Protocol.Evidence.coins": "95679a98f56076b0535c53a8e37265eee6461ba6515898c414a605b69e05231e",
