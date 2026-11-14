@@ -29,9 +29,9 @@ from functools import cache
 import numpy as np
 
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.definitions.ops.fp32 import F32AddFtz
-from verity.definitions.ops.prims import Bf16ToF32
-from verity.definitions.ops.scalar import BF16, F32, I32
+from verity.circuits.ops.fp32 import F32AddFtz
+from verity.circuits.ops.prims import Bf16ToF32
+from verity.circuits.ops.scalar import BF16, F32, I32
 from verity.circuits.refs import Coll, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.definitions.registry import topp_keep_builder as K
