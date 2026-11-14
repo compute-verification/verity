@@ -70,9 +70,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      (``--lean``, else built in verity/protocols/accounting/certifier/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the machine the network certifier ran on, and the machine that ran each of
      the piece's own steps, the chain and the period check, each read from the machine as it runs the step (`ran_on`).
-     Its `trusted-host` reads ``holds`` only where the SHA-512 of the public key the session is signed under is one
-     the auditor pinned for the certifier's machine and role (`AUDITOR_KEYS`), whatever the names say; the table is
-     empty, since the gate makes the key afresh for each rehearsal, so every run reads ``rehearsal``, with no bound.
+     The names are labels: the piece establishes no `trusted-host` and gives no bound on that ground (`UNMET`).
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ; never the scan's answers, the
   endpoint's report, the report's counts or a step's summary, which are private) and the link-window's five
   certificates (`CERTIFICATES`, `certificates`: the three records' certificates and the two row registrations' of the
@@ -118,7 +116,6 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -152,16 +149,8 @@ PROTOCOL = "verity/certifier/v0"
 ROWS = "verity/network-rows/v1"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
 PREMISE = "trusted-host"
-#: What a placement says of it, word for word, each followed by ``; `` and the names: `HOLDS` (at the certifier's
-#: machine) only where the session is signed under a key `AUDITOR_KEYS` pins, and `REHEARSAL` under any other.
-HOLDS = "holds: the session is signed under {host}'s pinned key"
-REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
-#: the role the network certifier's session key is pinned under
-ROLE = "network_certifier"
-#: The auditor's pinned keys: for each machine, by the role it runs, the SHA-512s of the public keys the auditor pinned
-#: for it in that role, 128 lowercase hex digits each. Empty: the gate makes the network certifier's key afresh for
-#: each rehearsal and keeps none, so no session is signed under a pinned key and every placement reads `REHEARSAL`.
-AUDITOR_KEYS: dict[str, dict[str, frozenset[str]]] = {}
+#: What a placement says of it, word for word, followed by ``; `` and the names
+UNMET = "unmet: this piece establishes no trusted-host and gives no bound on that ground"
 #: the machine of a chain step whose `CHAINED` names none
 UNNAMED = "a machine the chain step did not name"
 #: the front's public outcome, copied beside the kept fetch
@@ -332,16 +321,6 @@ def kept_run(serve_dir: Path) -> str:
     return runs[0]
 
 
-def session_key(run: Path) -> str:
-    """The SHA-512, in hex, of the public key the network certifier's run ``run`` signed its session under: its
-    ``deployment.json``'s, the key the period check holds the certificates to (`scan_period.rows_case`)."""
-    import warden_chain as WC
-    try:
-        return hashlib.sha512(bytes.fromhex(json.loads(WC.found(run, "deployment.json").read_text())["key"]["public"])).hexdigest()
-    except (SystemExit, OSError, KeyError, TypeError, ValueError) as e:
-        raise NotRun(f"{run}: its deployment.json names no public key: {type(e).__name__}: {e}") from None
-
-
 def ran_on(chained: Path | None = None) -> dict[str, str]:
     """Which machine ran each of the piece's own steps, by the name each machine gives itself as it runs the step:
     this one for the period check and its proofs' challenges, and for the chain's checks and samples too unless
@@ -352,18 +331,14 @@ def ran_on(chained: Path | None = None) -> dict[str, str]:
     return {"chain": json.loads(chained.read_text()).get("ran_on") or UNNAMED, "period": here}
 
 
-def placement(serve_dir: Path, run: str, key_sha512: str | None = None, steps: dict[str, str] | None = None) -> dict:
-    """Which machine ran each party and each of the piece's own steps, and whether `trusted-host`'s premise holds: that
-    the network certifier is the auditor's device. It holds (`HOLDS`) only when ``key_sha512``, the SHA-512 of the
-    public key the session is signed under (`session_key`), is one `AUDITOR_KEYS` pins for the machine the certifier
-    ran on, in the certifier's role; under any other key, one pinned for another machine or another role included, it
-    reads `REHEARSAL`, whatever the names say. A key a run names for itself decides which session that run accepts and
-    pins nothing here. The names are a label and never the reason: the network certifier ran on the gate's machine
-    (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and ``steps`` (`ran_on`, this machine by
-    default) names the machine that ran the chain's checks and samples and the one that ran the period check and its
-    proofs' challenges. ``kind`` is ``prover-node`` where the certifier ran on the developer's node, else ``placed``
-    under a pinned key and ``not-placed`` under any other. ``links`` are the node's to the gate, and K counts the
-    certified one alone."""
+def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) -> dict:
+    """Which machine ran each party and each of the piece's own steps, as labels read from the run: the network
+    certifier ran on the gate's machine (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and
+    ``steps`` (`ran_on`, this machine by default) names the machine that ran the chain's checks and samples and the one
+    that ran the period check and its proofs' challenges. This piece establishes no `trusted-host` and gives no bound
+    on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the certifier ran on the
+    developer's node, else ``not-placed``. ``links`` are the node's to the gate, and K counts the certified one
+    alone."""
     kept = serve_dir / PRIVATE / run
     if not (kept / SESSION).is_file():
         raise NotRun(f"{kept} has no {SESSION}, which names the gate the certifier ran on: keep the run with this "
@@ -376,12 +351,11 @@ def placement(serve_dir: Path, run: str, key_sha512: str | None = None, steps: d
               else f"the network certifier ran on {host}, not the developer's {node}")
              + f"; the chain's checks and samples ran on {steps['chain']}, and the period check and its proofs' "
                f"challenges on {steps['period']}")
-    pinned = key_sha512 is not None and key_sha512 in AUDITOR_KEYS.get(host, {}).get(ROLE, ())
     where = {"parties": {"network_certifier": host, "prover": node, "verifier": steps["period"]}, "steps": dict(steps),
-             PREMISE: f"{HOLDS.format(host=host) if pinned else REHEARSAL}; {names}"}
+             PREMISE: f"{UNMET}; {names}"}
     if gate == "local":
         return {"kind": "prover-node", **where, "links": [], "uncounted": f"every link of {node}'s"}
-    return {"kind": "placed" if pinned else "not-placed", **where,
+    return {"kind": "not-placed", **where,
             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
                        "via": "the warden's tunnel to the endpoint's port"},
                       {"name": "gate", "from": node, "to": host, "counted": False,
@@ -823,9 +797,9 @@ def said(got: dict) -> int:
 def settle(serve_dir: Path, window: int, d: Path, limit: str,
            step: Callable[[Path], tuple[dict | None, Path | None]], chained: Path | None = None) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
-    accept's profile with its `placement` (under the kept run's session key, `session_key`, with the machines that ran
-    the piece's steps, `ran_on` of ``chained``), the hold's period files made the case under SERVE_DIR/`CASES` and the
-    hold's certificates (`write_case`), and the hold then released to DIR by the leak guard; None where the split's
+    accept's profile with its `placement` (with the machines that ran the piece's steps, `ran_on` of ``chained``), the
+    hold's period files made the case under SERVE_DIR/`CASES` and the hold's certificates (`write_case`), and the
+    hold then released to DIR by the leak guard; None where the split's
     chain step accepted. The case is this step's: one an earlier step left goes first, and one written here goes
     unless the step ends with its files released. `NotRun` (SIGTERM included, naming ``limit``) for a step that can't
     run."""
@@ -841,9 +815,7 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
         got, unpacked = step(hold)
         if got is not None:
             if isinstance(got.get("profile"), dict):
-                signed = certifier_run(unpacked) if unpacked is not None else None
-                where = placement(serve_dir, kept_run(serve_dir), None if signed is None else session_key(signed),
-                                  ran_on(chained))
+                where = placement(serve_dir, kept_run(serve_dir), ran_on(chained))
                 got = got | {"profile": got["profile"] | {"placement": where}}
             (hold / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
         write_case(hold, case)
