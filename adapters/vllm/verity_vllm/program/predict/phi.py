@@ -179,7 +179,8 @@ def engine_of(meta: Mapping[str, Any], rank: int, hf_config: Mapping[str, Any] |
     layout = None
     if kw is not None:
         model_type = str(hf_config.get("model_type", "")).lower() if hf_config else None
-        cc = (meta.get("target") or {}).get("compute_capability")   # a target that states none is on no capability φ states a layout at
+        target = meta.get("target")
+        cc = None if target is None else target.get("compute_capability")   # a target that states none: no capability φ states a layout at
         layout = _refuse_unstated(kw, model_type, None if cc is None else tuple(int(x) for x in cc))
     world = 1 if kw is None else int(kw.get("tensor_parallel_size") or 1)
     if not 0 <= rank < world:
