@@ -128,7 +128,7 @@ def test_every_hand_fact_cites_where_vllm_hard_codes_it():
     for fam, f in FF.FAMILY_FACTS.items():
         for key, fact in f["facts"].items():
             assert fact.get("provenance"), (fam, key)
-            assert FF.VLLM in fact["provenance"] or "vllm/" in fact["provenance"] or "csrc/" in fact["provenance"], (fam, key, fact["provenance"])
+            assert "vllm/" in fact["provenance"] or "csrc/" in fact["provenance"], (fam, key, fact["provenance"])
             assert sum(k in fact for k in ("const", "key", "derive")) == 1, (fam, key, "exactly one of const / key / derive")
         for p in ("params",):
             if f.get(p):
