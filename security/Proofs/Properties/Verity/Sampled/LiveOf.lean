@@ -24,7 +24,7 @@ derives them:
 * **The parameters** (`program_of_paramsAt`): the verifier's program is the one a descriptor parses to, as v2's
   parameters decode it (`Spot.OneStage.paramsParsed`).
 * **The sampling design** (`lawAt_designAt`): where v2 samples, the design `lawAt` reads off its parameters is
-  `designAt`'s at the verifier's descriptor, query, law object and work table.
+  `designAt`'s at the verifier's descriptor, query, sampling design object and work table.
 * **The lookup tables** (`pinnedTables_eq`): on blobs that hold the registered circuit's lookup tables and no other
   pinned table (`HoldsRegisteredTables`), each at its registered file (`TablesSent`), where the deployment registers a
   file for each pinned table the blobs hold (`TablesRegistered`), the tables v2 reads are the ones the circuit file
@@ -81,7 +81,7 @@ theorem program_of_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params}
   obtain ⟨b, hb⟩ := oneStageZk_paramsOfJson_program hr
   exact ⟨b.data.toList, hb⟩
 
-/-- **v2's parameters in `θ` sample by a law object of kind `subset`** (`paramsOfJson_subset`). -/
+/-- **v2's parameters in `θ` sample by a sampling design object of kind `subset`** (`paramsOfJson_subset`). -/
 theorem kindOf_paramsAt {θ : ByteArray} {p : _root_.Spot.OneStageZk.Params} (hp : ParamsAt θ p) :
     Properties.Spot.SecurityProofs.kindOf p.base.verifier.law = "subset" := by
   obtain ⟨_, -, x, -, hj⟩ := hp
@@ -654,7 +654,7 @@ theorem hr_planZHJP {n mPts : ℕ} {I : FlockSoundness.Discharge.Exec.Inputs} {o
 /-! ## The session at an accepted play -/
 
 /-- **The registration samples by a subset design**: at v2's parameters in `θ`, every descriptor of the verifier's
-program reads a subset sampling design off the verifier's query, law and work table (`designAt`), at every
+program reads a subset sampling design off the verifier's query, sampling design and work table (`designAt`), at every
 population. -/
 def SubsetDesign (θ : ByteArray) : Prop :=
   ∀ p, ParamsAt θ p → ∀ (desc : Claims.Msg) n,
@@ -663,7 +663,7 @@ def SubsetDesign (θ : ByteArray) : Prop :=
       .subset (Flock.Bridge.lawK
         (Flock.Bridge.designAt desc p.base.verifier.query p.base.verifier.law p.base.verifier.workTable n))
 
-/-- **v2's registration samples by a subset design**: its parameters' law object is of kind `subset`
+/-- **v2's registration samples by a subset design**: its parameters' sampling design object is of kind `subset`
 (`kindOf_paramsAt`), under which `designAt` is a subset design (`designAt_subset`). -/
 theorem subsetDesign (θ : ByteArray) : SubsetDesign θ :=
   fun _ hp _ n _ => Flock.Bridge.designAt_subset n (kindOf_paramsAt hp)

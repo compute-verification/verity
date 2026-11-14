@@ -296,7 +296,7 @@ theorem designAt_cases (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.
   | ok samplingDesign => exact Or.inl ⟨h, rfl⟩
   | error _ => exact Or.inr rfl
 
-/-- **Under a law object of kind `subset`, `sampledLaw` is a subset sampling design**: `deriveLaw` expands none
+/-- **Under a sampling design object of kind `subset`, `sampledLaw` is a subset sampling design**: `deriveLaw` expands none
 (`deriveLaw_none`), so it is the one `flockLaw` parses from the object itself, which is neither stratified nor work, and
 `coveredDesign` refuses a Bernoulli one. -/
 theorem sampledLaw_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {law : Flock.Draw.Law}
@@ -312,7 +312,7 @@ theorem sampledLaw_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Le
     rw [show SecurityProofs.lawObj lj none = lj from rfl, hs] at hk
     exact absurd hk (by decide)
 
-/-- **Under a law object of kind `subset`, `designAt` is the subset sampling design of its own `lawK`**
+/-- **Under a sampling design object of kind `subset`, `designAt` is the subset sampling design of its own `lawK`**
 (`sampledLaw_subset`, and `subset 0` where `sampledLaw` refuses). -/
 theorem designAt_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} (n : ℕ)
     (hs : SecurityProofs.kindOf lj = "subset") : designAt desc q lj tb n = .subset (lawK (designAt desc q lj tb n)) := by
