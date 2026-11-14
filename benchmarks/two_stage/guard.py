@@ -195,7 +195,7 @@ def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q:
     the run: `tests/TwoGuard.lean`'s ``files`` reads these alone. -> ``held.json``'s object."""
     from verity.protocols.proofs.spot.verifier import second_stage as SS
     from verity.circuits.codec import canonical_json, descriptor_id, encode_program
-    from verity.commitments.windows.rows import expected_ports
+    from verity.commitments.periods.rows import expected_ports
 
     out.mkdir(parents=True, exist_ok=True)
     entry = stream._entries[order]

@@ -35,7 +35,7 @@ from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa
 from tests.pipeline import test_row_tables as TR  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 from verity_vllm.commit import index as IX, row_tables as RTB  # noqa: E402
-from verity.commitments.windows import rows as CS  # noqa: E402
+from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root

@@ -238,7 +238,7 @@ def test_a_disagreement_is_refused_naming_both(monkeypatch):
     assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["verifiers"]
 
 
-def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
+def test_the_sample_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatch):
     seen = []
     real = V.lean
     monkeypatch.setattr(V, "lean", lambda f, value: (seen.append(value) if f == "select" else None) or real(f, value))
@@ -393,7 +393,7 @@ def test_a_stream_rules_disagreement_stops_the_stream(monkeypatch):
     decides otherwise, or holds another state after it, the op is refused (`disagree`, naming both), and so is every op
     after it."""
     stream, reg, draw = _drawn()
-    assert stream._rule_entries == [{"order": 0, "registration": S._registration_token(reg), "draw": S._draw_token(draw),
+    assert stream._rule_entries == [{"order": 0, "registration": S._docket_token(reg), "draw": S._draw_token(draw),
                                      "proved": len(draw.proved), "drawn_at": stream._entries[0].drawn_at,
                                      "delivered": False, "session": None, "final": False}]
     _lean_answering(monkeypatch, "stream", lambda got: {**got, "decision": {"ok": "late"}})

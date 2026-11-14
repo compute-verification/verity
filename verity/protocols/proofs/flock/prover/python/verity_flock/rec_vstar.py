@@ -22,7 +22,7 @@ top. Its hashing part, which this module states over plain Python:
 * **Message rows**: each round's free message rows open the ``b || c`` the challenger recorded for them before it flipped the
   round's coins (`verity_flock.rec_live.commit_rows`).
 
-`check` runs all three over a finished inner session (``public.json``, ``private.json`` and the proofs); `queries` lists the
+`check_twin` runs all three over a finished inner session (``public.json``, ``private.json`` and the proofs); `queries` lists the
 openings in the order the RecOpen gadgets take them, each with its public part (level, position, depth) and the top's node
 it climbs to.
 """
@@ -321,8 +321,8 @@ def opens(q: Query) -> bool:
     return len(q.sibs) == q.depth - q.c and climb(leaf(q.row, q.salt), q.pos, q.sibs) == q.cap_node
 
 
-def check(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> dict:
-    """V*'s hashing over a finished inner session: every top (`tops`, refused by name when one does not open), every
+def check_twin(public: dict, private: dict, proofs: dict[int, bytes], table: str = "circuit") -> dict:
+    """The Python twin of V*'s hashing over a finished inner session: every top (`tops`, refused by name when one does not open), every
     opening (`opens`) and every message row's commitment."""
     qs = queries(public, private, proofs, table)
     bad_q = [(q.rep, q.level, q.j) for q in qs if not opens(q)]
@@ -351,31 +351,36 @@ def load(d: Path, table: str = "circuit") -> tuple[dict, dict, dict[int, bytes]]
     return json.loads((d / "public.json").read_text()), json.loads((d / "private.json").read_text()), proofs
 
 
-def main(argv=None) -> int:
-    import argparse
-    import sys
+#: the goal under which V*'s verdict on an inner session gets an entry of record
+GOAL = "proofs/recursion-vstar-of-record"
 
-    ap = argparse.ArgumentParser()
-    ap.add_argument("inner", help="an inner session directory (public.json, private.json, session/)")
-    ap.add_argument("--circuit", help="the inner statement's circuit.txt, whose META binds the circuit registration (a "
-                    "session with the stacked table R is refused without it)")
-    a = ap.parse_args(argv)
+
+def session_twin(inner: Path, circuit: Path | None = None) -> dict:
+    """`check_twin` over the inner session directory ``inner`` and, where it has the stacked table R, R's, with the
+    registration ``circuit``'s META binds held to the staged top (`registered`); a ZK server refusal is a refusal. The
+    Python twin of V*'s verdict on the session, for tests only."""
     try:
-        public, private, proofs = load(Path(a.inner))
-        res = check(public, private, proofs)
+        public, private, proofs = load(Path(inner))
+        res = check_twin(public, private, proofs)
         if f"{RL.STACKED}/rep0" in public["streams"]:
-            reg = Path(a.inner) / RL.REGISTRATION
-            meta = json.loads(Path(a.circuit).read_text().split("\n", 2)[1][5:]) if a.circuit else {}
+            reg = Path(inner) / RL.REGISTRATION
+            meta = json.loads(Path(circuit).read_text().split("\n", 2)[1][5:]) if circuit else {}
             registered(public, json.loads(reg.read_text()) if reg.exists() else None, meta.get("registration"))
-            res["stacked"] = check(public, private, load(Path(a.inner), RL.STACKED)[2], RL.STACKED)
+            res["stacked"] = check_twin(public, private, load(Path(inner), RL.STACKED)[2], RL.STACKED)
             res["accepted"] = res["accepted"] and res["stacked"]["accepted"]
     except ValueError as e:
         if not str(e).startswith("ZK-SERVER-REFUSED"):
             raise
         res = {"accepted": False, "refused": str(e)}
-    json.dump(res, sys.stdout, sort_keys=True)
-    print()
-    return 0 if res["accepted"] else 1
+    return res
+
+
+def main(argv=None) -> int:
+    """V*'s verdict on an inner session: the Lean's, V*'s statements (`VStar`) proved and checked by
+    ``verity-verify-proof verify --zk --rec-part J`` and composed by ``verity-verify-proof rec-compose``
+    (`Flock.RecCompose.check`); no entry answers it on a session directory alone, so this raises. `session_twin` is its
+    Python twin."""
+    raise NotImplementedError(GOAL)
 
 
 if __name__ == "__main__":

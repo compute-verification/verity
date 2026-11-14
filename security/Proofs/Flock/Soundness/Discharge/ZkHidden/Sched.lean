@@ -86,7 +86,7 @@ theorem schedule_ok_of_range (w : Bool) {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35
   | ok p => exact ⟨p, rfl⟩
   | error e => simp [hs] at hk
 
-/-- The schedule facts `DrawSetupZK` records, with `PadOK`'s decidable parts and `k0 ≤ 10`, as one check per version
+/-- The schedule facts `SampleSetupZK` records, with `PadOK`'s decidable parts and `k0 ≤ 10`, as one check per version
 and `m`. -/
 def zkSchedFacts (wideLeaf : Bool) (m : ℕ) : Bool :=
   match Zk.schedule wideLeaf m with

@@ -164,13 +164,13 @@ theorem swSrcE_repCut {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
     (q : _root_.Flock.ZkServer.Finish.RepIn) (hA : A j r = q.vals)
     (hB : B j r = FlockComplete.LigLock.l0Clear (ligCoin c) (ligP0 x j r) (zkTab x j).sch (ligTab x w τ j)
       (ligBasis x c w τ j r extras) (layE x j) ((UE.tapeZk τ).extra j.val) r.val)
-    (hq : q.draws = Lr.drawsAt x ρ (frep j.val r.val)) (hlayR : Lr.lay x (frep j.val r.val) = layE x j)
+    (hq : q.draws = Lr.samplesAt x ρ (frep j.val r.val)) (hlayR : Lr.lay x (frep j.val r.val) = layE x j)
     (hz : (Lr.draws ρ (frep j.val r.val)).size =
-      _root_.Flock.ZkServer.Frame.drawBytes (Lr.lay x (frep j.val r.val)))
+      _root_.Flock.ZkServer.Frame.sampleBytes (Lr.lay x (frep j.val r.val)))
     (htape : ∀ k < (layE x j).hab, (UE.tapeZk τ).h j.val r.val k =
-      (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep).h j.val r.val k)
+      (Claims.ZKServer.tapeOfSamples tz (Lr.lay x) (Lr.draws ρ) frep).h j.val r.val k)
     (hpads : FlockComplete.padsOf (UE.tapeZk τ) j.val r.val (layE x j) =
-      FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
+      FlockComplete.padsOf (Claims.ZKServer.tapeOfSamples tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)

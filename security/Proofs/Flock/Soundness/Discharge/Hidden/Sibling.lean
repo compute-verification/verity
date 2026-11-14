@@ -131,9 +131,9 @@ set_option maxHeartbeats 2000000 in
 /-- **A sample over a loaded public file returns**, with the header, count, population and tables `HmRow.drawn`
 gives it: the sample decodes at the population's size, the header's unit indices were read, and `canonUtf8` prints the
 header and the sample. -/
-theorem sampled_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitDraw} {u : Json} {a : Array Json}
+theorem sampled_okWith {c : Circuit} {pop : Public} {d : Json} {D : Draw.UnitSample} {u : Json} {a : Array Json}
     {idx : Array Nat} {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hn : D.population = pop.n) (hpn : pop.population = none)
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hn : D.population = pop.n) (hpn : pop.population = none)
     (hu : J.get pop.header "units" "public file" = .ok u) (ha : J.arr u "indices" "public file" = .ok a)
     (hi : a.mapM (fun x => J.asNat x "a unit index") = .ok idx)
     (hh : (canonUtf8 pop.header).isOk = true) (hd : (canonUtf8 d).isOk = true) :
@@ -185,9 +185,9 @@ set_option maxHeartbeats 2000000 in
 /-- **`HmOut.checkPublic` on a sample over a loaded public file** is the check on the file: the sample keeps the
 header's `frame_v3`, the tables' counts and starts and the population the roots are over, and its count is the
 sample's. -/
-theorem checkPublic_sampled {c c' : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitDraw} {idx : Array Nat}
+theorem checkPublic_sampled {c c' : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitSample} {idx : Array Nat}
     {r : Tables → Array Nat} {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hpn : pop.population = none) (hnd : J.has pop.header "unit_draw" = false)
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hpn : pop.population = none) (hnd : J.has pop.header "unit_draw" = false)
     (hh : pub.header = sampledHeader c' pop d D.proved.size idx) (hn : pub.n = D.proved.size)
     (hpop : pub.population = some (pop.n, pop.digests, pop.outputs))
     (ht : pub.tables = pop.tables.map fun t => { t with refs := r t })
@@ -253,7 +253,7 @@ theorem inRegions_noPorts {c : Circuit} {pi : HmIn.Ports} {pub : Public} (he : p
   rfl
 
 /-- The units a sample that proves none names: none. -/
-theorem readersOf_noUnit {d : Json} {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hpr : D.proved = #[]) :
+theorem readersOf_noUnit {d : Json} {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson d = .ok D) (hpr : D.proved = #[]) :
     HmLinks.readersOf (some d) = some #[] := by
   simp only [HmLinks.readersOf, Option.bind_some, hD, Except.toOption, Option.map_some, hpr]
 
@@ -287,9 +287,9 @@ theorem qwordFinding_congr {c : Circuit} {pub pub' : Public} {obj : Json} {prog 
 -- `walk_step` down `HmRow.drawn`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A sample that proves no unit has the header `units` of no index.** -/
-theorem units_noUnit {c : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitDraw}
+theorem units_noUnit {c : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitSample}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pop.header = .obj m)
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hpr : D.proved = #[]) (h : HmRow.drawn c pop d = .ok pub) :
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hpr : D.proved = #[]) (h : HmRow.drawn c pop d = .ok pub) :
     J.get pub.header "units" "public file" = .ok (HmRow.unitsEntry c #[]) := by
   unfold HmRow.drawn at h
   dsimp only at h
@@ -298,7 +298,7 @@ theorem units_noUnit {c : Circuit} {pop pub : Public} {d : Json} {D : Draw.UnitD
   all_goals
     simp only [pure, Except.pure, Except.ok.injEq] at h
     subst h
-    obtain rfl := Except.ok.inj (hD.symm.trans ‹Draw.UnitDraw.ofJson d = Except.ok _›)
+    obtain rfl := Except.ok.inj (hD.symm.trans ‹Draw.UnitSample.ofJson d = Except.ok _›)
     have hr := (sampledHeader_reads (c := c) (d := d) (k := D.proved.size)
       (indices := D.proved.map fun u => (‹Array Nat› : Array Nat).getD u 0) hm hp).1
     unfold sampledHeader at hr
@@ -327,7 +327,7 @@ theorem sibling_core {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins} 
     (hpop : HmOut.loadPublic tags c pf₂ = .ok pop)
     (hkey : (pop.header.getObjVal? "public_inputs").toOption = none)
     (hpub : HmOut.checkPublic c pop = .ok ())
-    (hd₂ : Draw.UnitDraw.ofJson d₂ = .ok ⟨.subset 0, pop.n, #[], #[]⟩) (hcan : (canonUtf8 d₂).isOk = true) :
+    (hd₂ : Draw.UnitSample.ofJson d₂ = .ok ⟨.subset 0, pop.n, #[], #[]⟩) (hcan : (canonUtf8 d₂).isOk = true) :
     OkWith (Stmt.setupHidden tags cf pf₂ coins tables (some d₂) partition program none) (Stmt.Sibling st₁) := by
   unfold Stmt.setupHidden at h
   dsimp only at h
@@ -346,8 +346,8 @@ theorem sibling_core {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins} 
     obtain ⟨-, ⟨m₁, hp₁, hm₁⟩, -⟩ := loadPublic_reads hl₁
     have hdr₁ : HmRow.drawn { c with outPorts := #[] } pop₁ d₁ = .ok pub₁ := by
       have := ‹HmIn.drawn c pi pop₁ d₁ = Except.ok pub₁›
-      rwa [drawn_noPorts he] at this
-    obtain ⟨D₁, hD₁, -, hsz₁, -⟩ := Layout.drawn_spec hdr₁
+      rwa [sampled_noPorts he] at this
+    obtain ⟨D₁, hD₁, -, hsz₁, -⟩ := Layout.sampled_spec hdr₁
     have hn₁ : pub₁.n = 0 := hn₁
     have hpr₁ : D₁.proved = #[] := Array.eq_empty_of_size_eq_zero (hsz₁ ▸ hn₁)
     have hw₁ : ∀ w, J.get pub₁.header "units" "public file" = .ok w → HmRow.unitsEntry _ #[] = w := fun w hw =>
@@ -356,7 +356,7 @@ theorem sibling_core {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins} 
     have hu₁ := units_noUnit hm₁ hp₁ hD₁ hpr₁ hdr₁
     have hl₂ := loadPublic_nil hpop
     obtain ⟨hpn, ⟨m, hp, hm⟩, ⟨u, a, idx, hu, ha, hi⟩, hnd, hh⟩ := loadPublic_reads hl₂
-    have hpr₂ : (⟨.subset 0, pop.n, #[], #[]⟩ : Draw.UnitDraw).proved = #[] := rfl
+    have hpr₂ : (⟨.subset 0, pop.n, #[], #[]⟩ : Draw.UnitSample).proved = #[] := rfl
     obtain ⟨pub₂, hdr₂, hh₂, hn₂, hpop₂, ht₂⟩ :=
       sampled_okWith (c := { c with outPorts := #[] }) hm hp hd₂ rfl hpn hu ha hi hh hcan
     have hu₂ := units_noUnit hm hp hd₂ hpr₂ hdr₂
@@ -364,7 +364,7 @@ theorem sibling_core {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins} 
     have hn₂ : pub₂.n = 0 := hn₂
     have hlp₂ := loadPublic_in (pi := pi) he hkey hpop
     have hown₂ := checkOwn_noPorts (pop := pop) he
-    have hsampled₂ : HmIn.drawn c pi pop d₂ = .ok pub₂ := by rw [drawn_noPorts he]; exact hdr₂
+    have hsampled₂ : HmIn.drawn c pi pop d₂ = .ok pub₂ := by rw [sampled_noPorts he]; exact hdr₂
     obtain rfl := regions_noPorts he ‹HmIn.regions c pi pub₁ = Except.ok _›
     have hir₂ := inRegions_noPorts (c := c) (pub := pub₂) he
     have hro₂ := (regions_noUnit (c := c) hn₂ hn₁).trans ‹HmOut.regions c pub₁ = Except.ok _›
@@ -405,7 +405,7 @@ theorem setupHidden_sibling {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : 
     (hpop : HmOut.loadPublic tags st₁.c pf₂ = .ok pop)
     (hkey : (pop.header.getObjVal? "public_inputs").toOption = none)
     (hpub : HmOut.checkPublic st₁.c pop = .ok ())
-    (hd₂ : Draw.UnitDraw.ofJson d₂ = .ok ⟨.subset 0, pop.n, #[], #[]⟩) (hcan : (canonUtf8 d₂).isOk = true) :
+    (hd₂ : Draw.UnitSample.ofJson d₂ = .ok ⟨.subset 0, pop.n, #[], #[]⟩) (hcan : (canonUtf8 d₂).isOk = true) :
     ∃ st₂, Stmt.setupHidden tags cf pf₂ coins tables (some d₂) partition program none = .ok st₂ ∧
       Stmt.Sibling st₁ st₂ ∧ Zk.shapeOk st₂ = Zk.shapeOk st₁ := by
   obtain ⟨st₂, h₂, hs⟩ := sibling_core (setupHidden_spec' h).parse h hn₁ hpop hkey hpub hd₂ hcan

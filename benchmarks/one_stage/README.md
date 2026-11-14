@@ -15,7 +15,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it. A0's and A5's are SPOT's
   `template_audit.py` and `window_audit.py` (`verity/protocols/proofs/spot/prover/audit/`, its README).
 - `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`), as SPOT's
-  `verifier/one_stage/compose_circuit.py` does.
+  `prover/audit/compose_circuit.py` does.
 - `pod.sh`: the entry point on a CPU pod.
 - `a5_llama1b_h200.sh`: A5 over a GPU-served window, in one job on an H200 node, from a clone of the tree
   (`bash benchmarks/one_stage/a5_llama1b_h200.sh`). Llama-3.2-1B int8's B4 row on one H200 under `gpu-lease`: its Build and
@@ -178,7 +178,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   staged in statements of 1 to 512 units, and sessions of 1 to 512 sampled proof blocks are proved by `flock-circuit prove --zk
   --gpu` in three arms: `dev`, as SPOT[Flock]'s proof server proves (no ZK server, the witness built on the device), and the
   ZK server's send check on (`fw`) and off (`nofw`) over the host's witness. The Lean verifier checks them, and the job fits the per-session,
-  per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
+  per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_SAMPLES=c` proves every
   staged unit: the cost of c sampled proof blocks in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
 - `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of

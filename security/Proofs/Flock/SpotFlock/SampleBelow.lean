@@ -16,11 +16,11 @@ the replay sample is (`RegTwo.sample_lt`).
 namespace Flock.Bridge
 
 open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
-/-- **A `subset` sample that ends holds units below the population**: `drawUnits`' units are `Draw.subset`'s, the
+/-- **A `subset` sample that ends holds units below the population**: `sampleUnits`' units are `Draw.subset`'s, the
 values of a permutation that keeps `[0, n)` on `[0, k)`, and `k ≤ n` (`subset_spec`). -/
-theorem drawUnits_subset_lt {k n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
-    (h : Spot.Draw.drawUnits (.subset k) n src = .ok (units, read)) : ∀ x ∈ units, x < n := by
-  unfold Spot.Draw.drawUnits at h
+theorem sampleUnits_subset_lt {k n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
+    (h : Spot.Draw.sampleUnits (.subset k) n src = .ok (units, read)) : ∀ x ∈ units, x < n := by
+  unfold Spot.Draw.sampleUnits at h
   cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) (.subset k) n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok y =>
@@ -56,7 +56,7 @@ end Flock.Bridge
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
-open Properties.Spot.SecurityProofs (flockLaw_subset deriveLaw_subset)
+open Properties.Spot.SecurityProofs (flockSamplingDesign_subset deriveSamplingDesign_subset)
 open Lean (Json)
 
 /-- **A first stage of count `K` proves units below its population**: with no closure map it proves the units it
@@ -72,15 +72,15 @@ theorem select_subset_lt {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : Byt
   obtain rfl := Except.ok.inj hn'
   rw [hl] at hl'
   obtain rfl := Except.ok.inj hl'
-  obtain rfl : derived = none := deriveLaw_subset _ _ _ _ _ (flockLaw_subset _ _ _ hf).1 hder
+  obtain rfl : derived = none := deriveSamplingDesign_subset _ _ _ _ _ (flockSamplingDesign_subset _ _ _ hf).1 hder
   rw [hpu hc]
   rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
   · exact absurd hall hne
-  · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
+  · have hp' : Spot.Draw.flockSamplingDesign named n = .ok parsed := hp
     rw [hf] at hp'
     obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
-    have hu' : Spot.Draw.drawUnits (.subset K) n src = .ok (units, read') := hu
-    exact _root_.Flock.Bridge.drawUnits_subset_lt hu'
+    have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu
+    exact _root_.Flock.Bridge.sampleUnits_subset_lt hu'
 
 end SpotFlock
 

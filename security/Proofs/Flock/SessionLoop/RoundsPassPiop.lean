@@ -130,12 +130,12 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
     try rfl
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hjjT : a + 1 < piopNR tb.st.m tb.st.fold.kLog := by rw [htm, htk']; exact hjj
   have hjjT' : a < piopNR tb.st.m tb.st.fold.kLog := by omega
   have hb : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.ZkServer.Finish.flat tb.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) (a + 1)).length ≤ c'.order.size := by
-    rw [hc', Loop.ofDraws_order, absorbed_size]
+    rw [hc', Loop.ofSamples_order, absorbed_size]
     exact le_trans (piopV_length_le lay (by omega) (by omega) hnM hnL hjjT.le) (by omega)
   have hdg : tb.st.digest.size < 2 ^ 64 := by
     rw [hts']
@@ -219,7 +219,7 @@ theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)
         (_root_.Flock.Zk.PadLayout.new tr.st.m tr.st.kLog tr.sch.k0) (fun _ => 0) (a + 1)) ≤
       ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops)).order.size := by
     show m.pos + _ ≤ _
-    rw [nAbs_fvals, hFl, hCA.order, hc', Loop.ofDraws_order, absorbed_size]
+    rw [nAbs_fvals, hFl, hCA.order, hc', Loop.ofSamples_order, absorbed_size]
     omega
   obtain ⟨out, fr, hrf, -⟩ := roundFree_on ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops))
     { m with stopped := false } _ (piopK (a + 1)) (piopN tr.st.m (a + 1)) (order_lt_of_alike hCA hcc) hon hin

@@ -282,7 +282,7 @@ theorem rho_words_unrefused (T : ZKMal.CoinLayer.TableData)
   have hlayT : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0 := by
     rw [hlay0, hts', ← hz'.1, htsch]
     all_goals rfl
-  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofDraws_order _ _ _
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofSamples_order _ _ _
   have hlay' : ((ofLoop T L₀ real).cfgAt x ρ (s + 1)).lay = lay := by
     rw [hlay]
     unfold startOf
@@ -533,11 +533,11 @@ theorem realOf_ok {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × B
   obtain ⟨⟨sch, tPad⟩, -, hph⟩ := bok hph
   obtain ⟨l0, hl0, hph⟩ := bok hph
   obtain ⟨t0, ht0, -⟩ := bok hph
-  obtain ⟨sg, tpg, hsg, hg⟩ := Count.ofDraws_gsize hl'
-  obtain ⟨sg', tpg', hsg', hg'⟩ := Count.ofDraws_gsize hl0
+  obtain ⟨sg, tpg, hsg, hg⟩ := Count.ofSamples_gsize hl'
+  obtain ⟨sg', tpg', hsg', hg'⟩ := Count.ofSamples_gsize hl0
   rw [hsg] at hsg'
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hsg')
-  obtain ⟨-, -, ⟨s1, hs1, hlv⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl'
+  obtain ⟨-, -, ⟨s1, hs1, hlv⟩, -⟩ := _root_.Flock.ZkServer.Level0.ofSamples_ok hl'
   rw [hsg] at hs1
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Except.ok.inj hs1)
   have hd : 64 * 2 ^ l.lv.d < 2 ^ 64 := by

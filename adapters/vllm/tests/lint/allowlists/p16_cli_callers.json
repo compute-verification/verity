@@ -26,7 +26,7 @@
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "program-graph"},
     {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "topp-split-probe"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "gemm-correspondence"},
-    {"file": "verity_vllm/program/mla_capture.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "mla-capture"},
+    {"file": "tests/program/mla_inputs.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "mla-capture"},
     {"file": "verity_vllm/engine/meta_inventory.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "meta-inventory"}
   ]
 }

@@ -55,7 +55,7 @@ def OutputsCommittedSeg : Prop :=
     tags.typed = false → tags.isTmpl = false →
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    ∀ {D : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
     0 < st.c.upv →
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).segs = none) →
     st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
@@ -79,8 +79,8 @@ def OutputsBindingSeg : Prop :=
     Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st →
     Stmt.setupHidden tags cf pf coins' tables (some d') partition' program' = .ok st' →
     ∀ {pop : Public}, HmOut.loadPublic tags st.c pf = .ok pop → pop.tables = none →
-    ∀ {D D' : Draw.UnitDraw}, Draw.UnitDraw.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
-    Draw.UnitDraw.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
+    ∀ {D D' : Draw.UnitSample}, Draw.UnitSample.ofJson d = .ok D → (∀ u ∈ D.proved, u < D.population) →
+    Draw.UnitSample.ofJson d' = .ok D' → (∀ u ∈ D'.proved, u < D'.population) →
     0 < st.c.upv →
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).segs = none) →
     st.c.outRowPorts = Array.replicate st.c.outPorts.size 1 →
@@ -488,7 +488,7 @@ theorem outputs_committed_seg' : OutputsCommittedSeg := by
     rw [getElem!_eq_getD'] at this
     exact this
   rw [← msg_bytesAll L L0 F0 hda hrows hz o hzero hg hj, ← hbc, ← bytesAt_bc L R regs z o hg hpl]
-  exact (bc_drawnH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
+  exact (bc_sampledH h hpop hpt hD hlt L regs hregs hz o hg hg2 hpl hr).symm
 
 /-- **`OutputsBindingSeg` from `OutputsCommittedSeg`**. -/
 theorem outputs_binding_seg_of (hC : OutputsCommittedSeg) : OutputsBindingSeg := by
