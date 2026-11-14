@@ -108,7 +108,7 @@ def test_a_plan_that_fails_defers_nothing_and_the_replay_runs_in_process(tmp_pat
 def test_a_store_over_its_bound_defers_nothing_and_the_replay_runs_in_process(tmp_path: Path, logged: Lines) -> None:
     site = Site(tmp_path, replay_deferred="full", replay_bundle_cap_gb=0)
     assert site.defer() is False and site.nothing_deferred()
-    assert logged() == [("[delta] REPLAY BUNDLE (pair 1): REFUSED -- 0.0 GB is over the 0 GB cap (--replay-bundle-cap-gb); the C2 replay runs "
+    assert logged() == [("[delta] REPLAY BUNDLE (pair 1): REFUSED -- 0.0 GB is over the 0 GB bound (--replay-bundle-cap-gb); the C2 replay runs "
                           "in this process")]
 
 

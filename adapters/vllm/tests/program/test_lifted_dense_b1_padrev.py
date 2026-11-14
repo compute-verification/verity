@@ -120,7 +120,7 @@ def test_lifted_request_refusals_and_population_on_tiny():
 
 def test_exact_count_arithmetic_equals_the_programs_step_arity_for_every_a_r():
     """T-3(ii) closed form vs the Program: for EVERY admissible `a_r ∈ [1, cap]`, the ⊥ leaf count is the sum of the return arities of
-    the steps `s ≥ a_r` — and the arithmetic refuses `a_r` outside `[1, cap]` (no negative or over-cap 'activity')."""
+    the steps `s ≥ a_r` — and the arithmetic refuses `a_r` outside `[1, cap]` (no negative 'activity', none past the cap)."""
     prog = Program(L.lifted_request(TINY, LP, CAP, (17,), lag=0))
     steps = {int(c.node.name.split("=")[1].split("/")[0]): c for c in prog.circuit.root_calls() if c.node.name and c.node.name.endswith("/step")}
     assert sorted(steps) == list(range(1, CAP))

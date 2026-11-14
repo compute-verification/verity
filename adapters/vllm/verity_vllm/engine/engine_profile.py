@@ -106,12 +106,12 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
                   max_num_batched_tokens: int | None = None,
                   tensor_parallel_size: int | None = 1, quantization: str | None = None) -> dict[str, Any]:
     """LLM(...) kwargs: stock defaults (``enforce_eager`` is a declared flag for the
-    eager-production profile row, §15.5; ``custom_ops`` = ``"all"`` keeps vLLM's CUDA custom ops
+    eager serving profile row, §15.5; ``custom_ops`` = ``"all"`` keeps vLLM's CUDA custom ops
     inside the compiled forward instead of inductor-generated kernels, another declared flag / new
     profile row; ``max_num_batched_tokens`` is a declared scheduler flag, used by the varied-batch
     cases (M2) to change batch composition).
     ``tensor_parallel_size`` > 1 (a profile port's
-    ``parallelism.tensor_parallel_size``) is a declared production flag: the model is sharded over that
+    ``parallelism.tensor_parallel_size``) is a declared serving flag: the model is sharded over that
     many GPUs (vLLM's multiprocess executor; the engine core stays in-process). The key is absent at 1 so
     earlier profile ids are unchanged.
     ``replay`` is False at every call and True is refused: there is no replay engine, the replay
@@ -132,7 +132,7 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
         kw["tensor_parallel_size"] = int(tensor_parallel_size)
     if quantization:
         # `--quantization fp8` (the b1-fp8 port) is a declared
-        # production flag (LLM(quantization=...)); the key is absent when unset so earlier profile ids are unchanged.
+        # serving flag (LLM(quantization=...)); the key is absent when unset so earlier profile ids are unchanged.
         kw["quantization"] = str(quantization)
     if max_num_batched_tokens is not None:
         kw["max_num_batched_tokens"] = int(max_num_batched_tokens)
@@ -276,7 +276,7 @@ def effective_compilation(llm: Any) -> dict[str, Any]:
 
 def cache_info(llm: Any) -> dict[str, Any]:
     """Effective KV-cache flags (§15.8: 'prefix caching enabled' is recorded as the effective
-    value, and whether the recorded workload hit it is in production/workload_exercised.json)."""
+    value, and whether the recorded workload hit it is the served run's `workload_exercised.json`)."""
     vc = handle.engine_of(llm).vllm_config
     cc = vc.cache_config
     return {

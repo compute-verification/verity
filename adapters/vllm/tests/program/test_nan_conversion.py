@@ -1,8 +1,8 @@
-"""The registered f32 -> bf16 conversions of the library and the serving configuration's binding.
+"""The registered f32 -> bf16 conversions of the library and the served configuration's binding.
 
 `F2fpBf16_v1` (NaN -> 0x7FFF, the measured `cvt.rn.bf16.f32` word) is the conversion B0/B1 bind; it is the same
 function as `veritor.core.tc.f32_to_bf16_hw_word` (`veritor.tc-ampere-bf16@2`).  `F32ToBf16Rn_v1` (NaN -> 0x7FC0)
-stays registered, byte for byte, as the software canonicalisation (`veritor.tc-ampere-bf16@1`); the serving
+stays registered, byte for byte, as the software canonicalisation (`veritor.tc-ampere-bf16@1`); the served
 program never binds it, so it is in neither B0/B1 program digest.
 """
 

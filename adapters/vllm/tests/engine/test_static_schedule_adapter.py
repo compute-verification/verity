@@ -59,8 +59,8 @@ def _engine(va, prefix_caching=False):
     return eng, core
 
 
-def _reqs(p0s, cap=6):
-    return [{"request_id": f"r{i}", "prompt_token_ids": [p, 9, 9], "max_tokens": cap, "arrive_step": i} for i, p in enumerate(p0s)]
+def _reqs(p0s, max_tokens=6):
+    return [{"request_id": f"r{i}", "prompt_token_ids": [p, 9, 9], "max_tokens": max_tokens, "arrive_step": i} for i, p in enumerate(p0s)]
 
 
 def test_load_workload_carries_ignore_eos_only_when_declared(tmp_path):
