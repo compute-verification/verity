@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 import mc_cases
+import pytest
 
 
 @pytest.fixture(autouse=True, scope="session")

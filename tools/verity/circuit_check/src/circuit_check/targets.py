@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import ast
 import importlib
-import pkgutil
 import re
 import sys
 import zlib
@@ -68,9 +67,10 @@ def _authored(d: Any) -> bool:
 
 def load_registries() -> None:
     """Register every Definition and kernel: each module with a circuit-check sidecar (`sidecars.discover`: a Definition module
-    has its bindings, or its pins, beside it), each module of the vLLM registry, and the kernel modules.  The modules with a
-    sidecar are in the task list's key, and a target holds whether a module whose import registered what its check read is one
-    of them (`cache.registries`)."""
+    has its bindings, or its pins, beside it), and the catalog, as the sidecar that loads it hands it (`HOOKS`: its
+    ``enumerators`` are read, and its ``load_catalog`` is, before any module is imported).  The modules with a sidecar are in
+    the task list's key, and a target holds whether a module whose import registered what its check read is one of them
+    (`cache.registries`)."""
     global _LOADED
     if _LOADED:
         return
@@ -78,13 +78,11 @@ def load_registries() -> None:
 
     from . import sidecars as SC
 
+    CC.enumerators(_handed("enumerators")())
+    load_catalog = _handed("load_catalog")
     for mod in SC.discover():
         importlib.import_module(mod)
-    import verity.definitions.registry as R
-    for m in pkgutil.iter_modules(R.__path__):
-        if m.name != "quarantine":
-            importlib.import_module(f"{R.__name__}.{m.name}")
-    from verity.definitions.numerics import rows, twins  # noqa: F401  (their kernels register with core)
+    load_catalog()
     CC.registries(SC.discover())
     REGISTERED[:] = sorted(i for i, d in REGISTRY.defs.items() if _authored(d))
     _LOADED = True
@@ -323,6 +321,41 @@ def kind_of(spec: str) -> str:
 ROW_READER = "request_program"
 #: the reader of a struct-slots split (`structural_slots`), which the sidecar of the module that writes one defines
 SPLIT_READER = "struct_slots_split"
+#: what circuit-check reads of the catalog it checks, each a function the one sidecar that defines it at its top level hands
+#: (`_handed`), by its name, with what it returns: circuit-check names no module of the catalog's
+HOOKS = {
+    "enumerators": "the functions (module, qualified name) that list a package only to import its modules "
+                   "(`cache.enumerators`)",
+    "load_catalog": "nothing, having imported every module of the catalog",
+    "preload": "every C++ model of the catalog's fast evaluators, built: {model: what built it}",
+    "kernels": "the catalog's registered kernels, each with its ``check_targets(rng)``",
+    "tanh_rn": "`tanh_rn`'s table as a function of no arguments, its regions and its LO word",
+    "row_families": "the replay's row families, word Call families (`word_call_families`)",
+    "boolean_table": "the Boolean table's two lookups and its import errors (exact, by_name, errors)",
+    "made_on_demand": "the Boolean version of a word Definition made on demand, by its id, or None",
+    "boolean_version": "the Boolean version of a word Definition, and the error it raises for one that has none",
+    "lift_composite": "the lift of a registered composite Definition",
+}
+_HANDS: dict[str, Any] = {}
+
+
+def _handed(name: str) -> Any:
+    """`HOOKS`' ``name`` as the one sidecar that defines it hands it, read without importing any module (`sidecars.handing`);
+    refused by name when none or several do."""
+    if name not in _HANDS:
+        from . import sidecars as SC
+
+        found = {f"{mod}{SC.SUFFIX}#": vars(m)[name] for mod, m in SC.handing(name)}
+        if len(found) != 1:
+            raise ValueError(f"{HOOKS[name]}: handed by the one sidecar that defines `{name}`, and {len(found)} that "
+                             f"`sidecars.discover` finds do: {', '.join(found) or 'none'}")
+        _HANDS[name] = next(iter(found.values()))
+    return _HANDS[name]
+
+
+def preload() -> dict[str, Any]:
+    """`HOOKS`' ``preload``: every C++ model the catalog's fast evaluators run, built before the registries are loaded."""
+    return _handed("preload")()
 
 
 def _read_by(reader: str, what: str, path: str) -> Any:
@@ -471,28 +504,24 @@ def templates() -> list[tuple[str, Any, list[dict]]]:
 
 
 def _kernel_roots() -> list[Any]:
-    from verity.definitions.numerics import kernel_registry as KR
-
     out = []
-    for r in KR.registered():
+    for r in _handed("kernels")():
         out += list(r.check_targets(np.random.default_rng(zlib.crc32(f"{r.key}/{r.kernel}".encode()))))
     return out
 
 
 def _tanh_rn_probe(reads: Callable[[int], Any]) -> Any:
     """`tanh_rn` (2^27 entries of two words) as parameter 1, probed at its ends and its regions' edges (`TANH_RN_REGIONS`)."""
-    from verity.definitions.registry import tables
-
     from .vectors import TableProbe
 
-    return TableProbe(1, tables.tanh_rn_table(), 2, tables.TANH_RN_REGIONS, reads)
+    table, regions, _lo = _handed("tanh_rn")()
+    return TableProbe(1, table(), 2, regions, reads)
 
 
 def _tanh_rn_word(i: int) -> int:
     """The word of `tanh_rn`'s region whose low 27 bits are entry ``i`` (past HI where no region word has them)."""
-    from verity.definitions.registry import tables
-
-    return 0x38000000 | i if (0x38000000 | i) >= tables.TANH_RN_LO else 0x40000000 | i
+    lo = _handed("tanh_rn")()[2]
+    return 0x38000000 | i if (0x38000000 | i) >= lo else 0x40000000 | i
 
 
 #: the registered tables the correspondence probes rather than flattens (`vectors.TableProbe`), by the id of the Definition that
@@ -625,14 +654,12 @@ def _kinds_and_templates() -> list[Any]:
 
 
 def word_call_families() -> set[str]:
-    """The word Call families of a served Program: the replay's row families (`verity.definitions.numerics.rows.ROWS`), every
-    frontend vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
-    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a path no binding file
-    binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would be left out."""
+    """The word Call families of a served Program: the replay's row families (`HOOKS`' ``row_families``), every frontend
+    vocabulary kind's Definition and every template's.  Their bindings build in seconds, without the catalog.  A kind that
+    doesn't bind is refused by name: left out, its family's partition would be judged as no Call's.  So is a path no binding
+    file binds a vocabulary on (``_vocabulary_roots``, in a sidecar of the frontend's package): every kind would be left out."""
     if "words" not in _SHORT:
         load_registries()
-        from verity.definitions.numerics import rows
-
         made = _kinds_and_templates()
         if _BOUND["unbound"]:
             raise RuntimeError(f"the Call families are unknown while a vocabulary kind doesn't bind: {_BOUND['unbound']}")
@@ -640,7 +667,7 @@ def word_call_families() -> set[str]:
             raise RuntimeError("the Call families are unknown where no binding file binds a frontend vocabulary: none that "
                                "`sidecars.discover` finds defines `_vocabulary_roots` (the frontend's package, whose sidecar "
                                "binds it, isn't on this path)")
-        _SHORT["words"] = set(rows.ROWS) | {family(fn) for fn in made}
+        _SHORT["words"] = set(_handed("row_families")()) | {family(fn) for fn in made}
     return _SHORT["words"]
 
 
@@ -675,6 +702,11 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "DsaMqaLogit_v3": ("DsaMqaLogits_v3",),
     "DsaMqaLogitsKey_v1": ("DsaMqaLogits_v4",),
     "DsaMqaLogitsQ_v1": ("DsaMqaLogits_v4",),
+    "DsaRMSNormMeanRsqrt_v1": ("DsaRMSNorm_v3",),
+    "DsaRMSNormOut_v1": ("DsaRMSNorm_v3",),
+    "DsaRMSNormScale_v1": ("DsaRMSNorm_v3",),
+    "DsaRMSNormSquareFma_v1": ("DsaRMSNorm_v3",),
+    "DsaRMSNormSquares_v1": ("DsaRMSNorm_v3",),
     "DsaRadixPass_v1": ("DsaTopKMaskCounted_v2", "DsaTopKMask_v2"),
     "DsaRadixTies_v1": ("DsaTopKMaskCounted_v2", "DsaTopKMask_v2"),
     "DsaRowValid_v1": ("DsaTopKMaskCounted_v2",),
@@ -686,12 +718,12 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "F2fpBf16_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
     "F32AddFtz_v3": ("AttnBlockFirst_v3",),
     "F32AddFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
-    "F32Add_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32Add_v3": ("DsaRMSNorm_v3", "RMSNormFusedCudaVector8_v4"),
     "F32Div_v3": ("RMSNormFusedCudaVector8_v4",),
     "F32Max_v2": ("AttnBlockFirst_v3",),
     "F32MulFtzConst_v1": ("AttnBlockFirst_v3",),
     "F32MulFtz_v4": ("AllReduceRmsNormMnnvl_v2",),
-    "F32Mul_v3": ("RMSNormFusedCudaVector8_v4",),
+    "F32Mul_v3": ("RMSNormFusedCudaVector8_v4", "ScaledMmFp8BlockSharedScale_v2"),
     "FmaSubRowF32FtzConstElement_v1": ("AttnBlockFirst_v3",),
     "FmaSubRowF32FtzConstScalar_v1": ("AttnBlockFirst_v3",),
     "GuardNegInfZero_v2": ("AttnBlockFirst_v3",),
@@ -706,6 +738,7 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "RMSNormPairSumCuda_v2": ("RMSNormFusedCudaVector8_v4",),
     "RMSNormSumInOrderCuda_v2": ("RMSNormFusedCudaVector8_v4",),
     "RsqrtApprox_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
+    "ScaledMmFp8BlockCoordinateGivenScale_v2": ("ScaledMmFp8BlockSharedScale_v2",),
     "Xor2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
 }
 
@@ -759,9 +792,7 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
     such a family's name and whose statics a binding of that family could give (each one of the family's statics or one its word
     computes, ``word_statics``: the by-name lookup reads no other).  Each candidate it returns is one of those Definitions, bound."""
     from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
-    from verity.definitions.boolean import _load
-
-    exact, by_name, _errors = _load()
+    exact, by_name, _errors = _handed("boolean_table")()
     statics: dict[str, list[set[str] | None]] = {}
     for f in word_calls:
         if m := re.fullmatch(r"(.+)_v(\d+)", f):
@@ -775,12 +806,11 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
 
 
 def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
-    """The Boolean version's family of each word Call family made on demand, by its id (`verity.definitions.boolean.
-    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
+    """The Boolean version's family of each word Call family made on demand, by its id (`HOOKS`' ``made_on_demand``:
+    `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
     so these come from the families' own patterns, not from the catalog.  Made in sorted order: making one registers it, and
     the registry's order is then the same in every process, whatever its hash seed or what it did before."""
-    from verity.definitions.boolean import made_on_demand
-
+    made_on_demand = _handed("made_on_demand")
     return {family(d) for f in sorted(word_calls) if (d := made_on_demand(f)) is not None}
 
 
@@ -807,8 +837,7 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
     Call family, so its body (most of the catalog's build) never is.  With them, `on_demand_boolean_families` (in ``only``)."""
     from verity.circuits import boolean as BL
     from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    from verity.definitions.boolean import boolean_version
-
+    boolean_version, _none = _handed("boolean_version")()
     linked: dict[str, list[Any]] = {}
     for fn in binding_roots():
         if not isinstance(fn, (PrimitiveDefinition, SpecializedDefinition)) or family(fn) not in word_calls:
@@ -832,9 +861,9 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
 
 
 def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = None) -> set[str]:
-    """Sigma's image of the word Call families ``word_calls``: the family of `verity.definitions.boolean.boolean_version` (the
-    switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word Call
-    family made on demand (`on_demand_boolean_families`)."""
+    """Sigma's image of the word Call families ``word_calls``: the family of the Boolean version (`HOOKS`' ``boolean_version``:
+    the switch's table of `word=` links) of each catalog specialization of a word Call family that has one, and of each word
+    Call family made on demand (`on_demand_boolean_families`)."""
     from verity.circuits.evaluation import ScalarReference
     from verity.circuits import boolean as BL
     out: set[str] = on_demand_boolean_families(word_calls)
@@ -847,22 +876,19 @@ def boolean_call_families(word_calls: set[str], found: dict[str, Any] | None = N
 
 
 def boolean_family(fn: Any) -> str | None:
-    """The family of ``fn``'s Boolean version (`verity.definitions.boolean.boolean_version`), or None when it has none."""
-    from verity.definitions.boolean import NoBooleanVersion, boolean_version
-
+    """The family of ``fn``'s Boolean version (`HOOKS`' ``boolean_version``), or None when it has none."""
+    boolean_version, none = _handed("boolean_version")()
     try:
         return family(boolean_version(fn))
-    except NoBooleanVersion:
+    except none:
         return None
 
 
 def boolean_links() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
-    """The Boolean table's two lookups (`verity.definitions.boolean._load`) as families: each word Definition's descriptor id
+    """The Boolean table's two lookups (`HOOKS`' ``boolean_table``) as families: each word Definition's descriptor id
     with the Boolean families linked to it exactly, and each name with the Boolean families whose word is a function of their
     bindings.  `boolean_family` of a Definition is among those of its descriptor id and of its name, or None."""
-    from verity.definitions.boolean import _load
-
-    exact, by_name, _errors = _load()
+    exact, by_name, _errors = _handed("boolean_table")()
     return ({k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in exact.items()},
             {k: {f"{d.name}_v{d.version}" for d in ds} for k, ds in by_name.items()})
 
@@ -1067,8 +1093,8 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
 
 
 __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
-           "ROOT_FUNCTIONS", "ROW_READER", "SPLIT_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
+           "HOOKS", "ROOT_FUNCTIONS", "ROW_READER", "SPLIT_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
            "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
-           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "struct_slots_split", "subcircuit", "suite",
+           "kind_of", "load_registries", "pinned", "preload", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "struct_slots_split", "subcircuit", "suite",
            "table_probe", "template_of", "template_params", "templates", "word_call_families"]
