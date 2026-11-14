@@ -87,7 +87,7 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
         (Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
       rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
-      ¬(!(Registration.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
+      ¬(!(Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
       ∃ derived, Draw.derive i.params.verifier.program i.params.verifier.query samplingDesign workTable = .ok derived ∧
         ∃ resolved, Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
         ∃ draw rest read, Select.select resolved i.params.verifier.program i.params.verifier.query

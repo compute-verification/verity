@@ -215,7 +215,7 @@ def namesEq (got : Option (List String)) (want : List String) : Bool :=
 
 /-- **A record names its registration's names** (`n`): its roots' ports are the registration's ports and its registered
 values the registration's registered values, each a string named once (`namesEq`). `Run.run`'s registration check
-(`Registration.check`) holds a record to this at its registration's verifier, whose ports and registered values, the
+(`Docket.check`) holds a record to this at its registration's verifier, whose ports and registered values, the
 values it holds a certified entry for among them, are each listed once: `R3-ports` of the ports, and of the registered
 values `R7-values` where the registration registers some and the record's keys, which then have no `registered`,
 where it registers none. -/

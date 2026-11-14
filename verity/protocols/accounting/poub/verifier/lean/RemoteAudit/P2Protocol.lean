@@ -1,5 +1,6 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Protocol
 public import CoreProtocol.Ratio
@@ -7,6 +8,7 @@ public import Lms.Sign
 public import MemoryChallenger.Verdict
 public import RemoteAudit.P2Close
 public import RemoteAudit.Verifier
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import Lms.Sign
@@ -287,6 +289,19 @@ def protocol : Core.Protocol where
   publicJson := Public.toJson
   profileJson := id
 
+/-- **What a session over P2's store accounts for** (`Core.Account`): the credited reads of PoUS's `C*` (`q_bytes`),
+from the GPUs' memory where `C*` is kept (`.hbm`), verified from below at `eps`, over the session's span (`span_ns`, in
+nanoseconds). A session that credits nothing publishes 0 reads, a true lower bound, so nothing is flagged.
+
+Its answers name no auditor's device's key, so they are of the whole site (`witness`), and the span's length but not
+its steps, so where in the period it lies is not stated. The bytes the node held through the span are the ledger's
+line, not this answer. -/
+def account : Core.Account :=
+  { protocol := ID, witness := none
+    amounts := [{ metric := "reads", part := .read [.hbm], key := .published "q_bytes", unit := Core.Account.bytes,
+                  side := .verified, time := .span (.published "span_ns") ⟨1, 1000000000⟩,
+                  error := .published "eps", uncertified := .safe }] }
+
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
   some "params: params: the keys must be [not_before_ns, request, session, trusted], not []"
 
@@ -348,5 +363,6 @@ private def coinLog (n : Nat) : Evidence :=
 
 #guard coinRefusal (coinLog COIN_BYTES) == none
 #guard coinRefusal (coinLog Codec.COIN_BYTES) == some "log entry 0: a coin is the challenger's 64 bytes, not 32"
+#guard account.Formed ∧ account.protocol = protocol.id
 
 end RemoteAudit.P2Protocol
