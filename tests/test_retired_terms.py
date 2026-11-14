@@ -158,7 +158,7 @@ DOC_TERMS = {
     "leg": "the subprotocol's name (SPOT, PoUW, PoUS, PoUB, network certification), the bandwidth audit's or the "
            "memory wipe's, or run",
     "remote bandwidth audit, remote bandwidth, remote audit, proof of useful bandwidth":
-        "PoUB (`RemoteAudit`, `remote_bandwidth` and the `verity/remote-bandwidth/` ids stay in backticks until renamed)",
+        "PoUB (the `verity/remote-bandwidth/` ids are bytes and stay, in backticks, until PoUB's next version)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -619,9 +619,9 @@ def test_the_doc_scan_reads_the_protocol_terms():
 
 
 def test_the_doc_scan_reads_poub_s_older_names():
-    """PoUB's older names, on a toy file: its ids, its Lean package and the bandwidth audit over PoUS's store stay."""
+    """PoUB's older names, on a toy file: its ids and the bandwidth audit over PoUS's store stay."""
     docs = {"a.md": "The remote bandwidth audit, a remote-bandwidth session, the remote\naudit, the proof of useful bandwidth.\n"
-                    "`verity/remote-bandwidth/v0`, `RemoteAudit` and the bandwidth audit over PoUS's store stay.\n"}
+                    "`verity/remote-bandwidth/v0` and the bandwidth audit over PoUS's store stay.\n"}
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "remote bandwidth audit"), ("a.md", 1, "remote-bandwidth"), ("a.md", 1, "remote audit"),
         ("a.md", 2, "proof of useful bandwidth")]
