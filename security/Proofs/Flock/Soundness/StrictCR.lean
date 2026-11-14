@@ -106,6 +106,17 @@ instance Positions.unit : Positions Unit := ⟨[()], fun _ => List.mem_singleton
 /-- No position. -/
 instance Positions.empty : Positions Empty := ⟨[], fun e => e.elim⟩
 
+/-- Pairs of positions: the first's in order, and under each the second's in order. -/
+instance Positions.prod {P Q : Type} [Positions P] [Positions Q] : Positions (P × Q) :=
+  ⟨(Positions.list : List P).flatMap fun p => (Positions.list : List Q).map fun q => (p, q), fun ⟨p, q⟩ =>
+    List.mem_flatMap.2 ⟨p, Positions.mem p, List.mem_map.2 ⟨q, Positions.mem q, rfl⟩⟩⟩
+
+/-- Positions of either kind: the left's in order, then the right's. -/
+instance Positions.sum {P Q : Type} [Positions P] [Positions Q] : Positions (P ⊕ Q) :=
+  ⟨(Positions.list : List P).map Sum.inl ++ (Positions.list : List Q).map Sum.inr, fun
+    | .inl p => List.mem_append_left _ (List.mem_map.2 ⟨p, Positions.mem p, rfl⟩)
+    | .inr q => List.mem_append_right _ (List.mem_map.2 ⟨q, Positions.mem q, rfl⟩)⟩
+
 @[simp] theorem Positions.list_empty : (Positions.list : List Empty) = [] := rfl
 
 /-- **Two runs' conflict at some position, as a finder's output**: the pair `pr` gives at the first position, in

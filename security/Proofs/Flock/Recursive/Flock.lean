@@ -106,6 +106,21 @@ structure ZkOuterD (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
   hown : ∀ ω R' o, LiveAcceptsZKR I own (R', Lv.draw ω, wr (Lv.draw ω) R' o) →
     OwnReadsHJ I own c pub (wr (Lv.draw ω) R' o) (rd.restrict (rowIn (Lv.draw ω))).isRead rd.port rd.readAt
 
+/-- **A session's commit strings, written out**: each unit's row ports in order, then the single gates
+(`Positions.list` at `Readers.ofRows`' positions, which `layShHJ`'s are). The searches over a session's registered
+reads run through this list, so their order is computed. -/
+noncomputable def ZkOuterD.posList {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (z : ZkOuterD mPts nv J Reg' c hU hscope Lv) :
+    List (layShHJ (Reg := Reg') z.dj z.y₀ z.ht z.hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := z.pub)).Pos :=
+  (Positions.list : List ((Fin nv × Fin c.ports.size) ⊕ Fin _))
+
+/-- The list holds every commit string. -/
+theorem ZkOuterD.mem_posList {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
+    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (z : ZkOuterD mPts nv J Reg' c hU hscope Lv)
+    (p : (layShHJ (Reg := Reg') z.dj z.y₀ z.ht z.hcH (Layout.scopeOkH_of_scopeOk hscope) hU (pub := z.pub)).Pos) :
+    p ∈ z.posList :=
+  Positions.mem (P := (Fin nv × Fin c.ports.size) ⊕ Fin _) p
+
 set_option genSizeOfSpec false in
 set_option genInjectivity false in
 /-- **V*'s `--zk --registered` session at one history**: `ZkOuterD`'s, with the record's custody `hRec` (the record
