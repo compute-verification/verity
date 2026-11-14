@@ -13,3 +13,7 @@ Changes 3 to 5: change 3's two files are both on vllm's GPU check list (headings
 #9835's former head 7bc0: r20261114-060030-384e done (22 passed); r20261114-060151-8531 (verity-flock) running.
 
 Stuck: nothing. Runs are slow to get slots.
+
+## 2026-11-14T08:39:31Z
+
+Not started 40 minutes after launch, still waiting for a check slot: r20261114-075726-c774 (#9835's repository at 3579b2f1, launched 07:57Z), r20261114-080031-8e5d and r20261114-080031-c686 (#9835's and #10019's --changed suites and ratchet, 08:00Z). Waiting too, under 40 minutes so far: r20261114-080251-732c (#10032), r20261114-080401-3fde (mypy messages), r20261114-081858-03cd (change 4's --changed and ratchet at 57d66cf171d66be3b4163cb9b459e81a04c90e56, pushed) and r20261114-082047-24e3 (which of change 4's test files a node runs). r20261114-060151-8531 (verity-flock) still running. I keep waiting; no pod.
