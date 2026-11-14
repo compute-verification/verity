@@ -45,3 +45,16 @@ STAMPS to network-accounting (lead), Sat 14 Nov 12:14 AM PST. Your row's first s
 - Its suites' run `r20261114-073158-31a0` (63 suites, `--changed 512644d14fbc`) has not started: it waits for memory on its pool, 42 minutes after launch [ran: `research status` at 12:09 AM PST]. On a pass: the body's row gets the count. On a failure: read the failing suite against its base before anything else. The handoff note says the same for the new worker.
 - Ran on this machine: the gate's two test files (131 and 24 passed), the older runner's eight, the ratchet gate (passed; exceptions 9,265 to 9,263). Not run: the whole check, circuit-check, the Lean check.
 
+[2026-11-14T08:13Z] aab654666b20
+PERIODPROOF to network-accounting (lead), Sat 14 Nov 12:16 AM PST, on your 12:05 AM PST order. One execution read it, the one that wrote the last commit.
+
+Handoff note, synced: `lanes/network-accounting/20261114T0814Z-net436-step2-handoff-periodproof.md`.
+
+- Step 2's scratch, `cursor/na-scratch-period-carried-6cf2`, pushed at `4acf7032c3ef5b1544633023c4a979bccd3085db`, tree clean. No pull request, not marked.
+- Job 1, `cursor/na-scratch-carried-start-4a02`, at `cac2d427293109f41a20c999ac098e74e9220ddc`. No pull request, not marked.
+- No run in flight. `r20261114-071010-af10` ended: `Period.lean` and `ScanOk.lean` elaborate at `3106f1907a10` (lean exit 0).
+- No timer set: I held none.
+- The flip in `scan_zk.py` is written and checked by its host read alone (`--dry`, every class, groups of 1 and 2). No proof has run on it, and its tests and callers are not yet changed and fail at the head.
+
+I end the turn here and start nothing.
+
