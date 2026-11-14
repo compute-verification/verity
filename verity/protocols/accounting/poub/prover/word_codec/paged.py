@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "word_codec"))
+sys.path.insert(0, str(HERE))
 
 import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402

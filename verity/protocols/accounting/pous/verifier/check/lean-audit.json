@@ -8,7 +8,8 @@
   "PousCheck.RunMain": "the pous-run executable's entry point: with four files (the verifier's trusted keys, the setup, the table, the session) and the designated id, PousCheck.Run.run, the composed check of a recorded run, audited under PousCheck; with `serve`, Difftest.serve of PousCheck.Run.runFn, which tests/test_run.py drives against run.check_at, and of PousCheck.RunProtocol.certifyFn, which tests/test_run_protocol.py drives against period.certify and period.profile",
   "PousCheck.DifftestMain": "the difftest against the Python verifier, under `runs`: compiled evaluation of PousCheck.Difftest.main, audited under PousCheck, a test and not a proof; with `serve`, Difftest.serve of PousCheck.Difftest.transcript, which interop.py drives against wire.py",
   "PousCheck.VerdictDifftestMain": "the pous-verdict-difftest server's entry point, one line: Difftest.serve of PousCheck.VerdictDifftest's gates and eval, which tests/test_verdict_difftest.py drives against the Definition verdict_circuit.PousVerdict, compiled; audited under PousCheck",
-  "PousCheck.RunProtocolMain": "the pous-run-protocol executable's entry point, one line: Core.Protocol.main of PousCheck.RunProtocol.protocol (testProtocol under --test), audited under PousCheck and CoreProtocol; tests/test_run_protocol.py drives its serve against the Python reference"
+  "PousCheck.RunProtocolMain": "the pous-run-protocol executable's entry point, one line: Core.Protocol.main of PousCheck.RunProtocol.protocol (testProtocol under --test), audited under PousCheck and CoreProtocol; tests/test_run_protocol.py drives its serve against the Python reference",
+  "PousCheck.SignedRunMain": "the pous-signed-run executable's entry point, one line: Core.Protocol.main of PousCheck.SignedRun.protocol (testProtocol under --test), audited under PousCheck and CoreProtocol; tests/test_signed_run.py drives its serve against the Python reference"
  },
  "runs": {
   "PousCheck.DifftestMain": {
