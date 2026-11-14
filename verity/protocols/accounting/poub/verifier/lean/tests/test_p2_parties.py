@@ -1,7 +1,8 @@
 """The P2 session's two parties (`p2_parties.Verifier`, `p2_party_prover.Prover`) run by the deployment layer in
 simulated time, the verifier's sources seeded: an honest prover is accepted, its outcome the verifier's answer, and the
-verifier's case is signed by the memory challenger; a prover whose receipts skip a unit's reads is rejected; and the
-verifier's transcript replays it to the same outcome."""
+verifier's case is signed by the memory challenger; a prover whose receipts skip a unit's reads is rejected; and a replay
+of the verifier from its transcript makes the recorded entries until the prover's openings, a frame past the transcript's
+bound that it keeps as its digest and a replay can't feed."""
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import json
 import pytest
 from test_p2_party import TOY, Clock, Prover, closer, exe, request, store  # noqa: F401
 
+from verity.channel import Refused
 from verity.protocol import ProtocolDef
 from verity.protocols.accounting.poub.prover import p2_party_prover
 from verity.protocols.accounting.poub.verifier import p2_lean, p2_parties
@@ -49,15 +51,15 @@ def test_the_runtime_rejects_a_prover_that_skips_a_units_reads(exe, store, tmp_p
 
 
 @pytest.mark.parametrize("skip", [None, 1], ids=["honest", "skipping"])
-def test_the_verifier_replays_from_its_transcript(exe, store, tmp_path, skip) -> None:
-    first = simulated(exe, store, tmp_path, skip=skip)
+def test_a_replay_of_the_verifier_matches_its_transcript_until_the_openings_kept_as_a_digest(exe, store, tmp_path,
+                                                                                              skip) -> None:
+    simulated(exe, store, tmp_path, skip=skip)
     data = json.dumps(p2_parties.registration_json(store.registration)).encode()
     with p2_lean.Lean(exe) as lean:
         reg, plan = p2_parties.hold(lean, data, auditor=TOY)
         verifier = {"lean": lean, "registration": reg, "plan": plan, "auditor": TOY, "closer": closer(),
                     "host": "auditor-under-test"}
-        again = run({"protocol": p2_parties.ID, "params": request(store)}, [p2_parties.VERIFIER], "replay", None,
-                    protocols=PROTOCOLS, replay_dir=tmp_path / "runs" / "1",
-                    capabilities={p2_parties.VERIFIER: verifier})
-    assert (again.status, again.divergence) == ("completed", None)
-    assert again.outcomes[p2_parties.VERIFIER] == first.outcomes[p2_parties.VERIFIER]
+        with pytest.raises(Refused) as err:
+            run({"protocol": p2_parties.ID, "params": request(store)}, [p2_parties.VERIFIER], "replay", None,
+                protocols=PROTOCOLS, replay_dir=tmp_path / "runs" / "1", capabilities={p2_parties.VERIFIER: verifier})
+    assert err.value.name == "elided" and "of verifier's transcript" in str(err.value), err.value
