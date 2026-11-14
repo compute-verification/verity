@@ -2075,6 +2075,29 @@ def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_reco
         I.input_count(listed_embedding(("salt", "o0", (5, 6))), pins=pins, roots=pins)
 
 
+def test_an_opening_may_declare_the_output_that_returns_its_row():
+    """An opening may declare its ``row``, the output that returns the row opened. It is an output of the reader, as the
+    verdict is, and nothing is filled or counted by it: the count is the one without it, stated and listed. Its record
+    names it only where it is declared, so a record that declares none is the bytes it was, and it is read back as
+    written. One that is no output of the reader is refused, by the circuit, by the count and by the reading."""
+    c, pins = embedding(), {"embed": "ab" * 64}
+    reg = c.registered
+    opening = reg.openings[0]
+    assert opening.row is None and "row" not in opening.doc()
+    rowed = replace(reg, openings=(replace(opening, row="o0"),))
+    assert rowed.doc()["openings"] == [{**opening.doc(), "row": "o0"}]
+    assert I.Registered.of(rowed.doc()) == rowed and I.Registered.of(reg.doc()) == reg
+    stated = I.input_count(c.description(), pins=pins, roots=pins)
+    assert I.input_count(embedding(registered=rowed).description(), pins=pins, roots=pins) == stated
+    assert I.input_count(listed_embedding(registered=rowed), pins=pins, roots=pins) == {**stated, I.WINDOW_INGRESS: 0}
+    for row in ("o2", "row"):
+        bad = replace(reg, openings=(replace(opening, row=row),))
+        with pytest.raises(ValueError, match="the row it declares is an output of its reader"):
+            embedding(registered=bad)
+        with pytest.raises(ValueError, match=f"no output {row}; the row an opening declares is an output"):
+            I.input_count(listed_embedding(registered=bad), pins=pins, roots=pins)
+
+
 @pytest.mark.slow
 def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
     """A table's registered reads committed: each table read and verdict a registered read of its supplied value, the opening's row,
