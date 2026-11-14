@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from verity_vllm.config import workload_file
 from verity_vllm.pipeline import coverage_workloads as gw
 
 REPO = Path(__file__).resolve().parents[2]
@@ -251,7 +252,7 @@ def test_declaring_the_realized_arrivals_serves_the_same_forwards():
     va = _load_adapter()
     caps = [2, 7, 23, 3, 11, 29, 32, 13]
     gapped, declared = [0, 9, 13, 13, 15, 16, 18, 18], [0, 2, 9, 13, 15, 16, 18, 18]
-    wl = json.loads((REPO / "workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager.json").read_text())
+    wl = json.loads(workload_file(REPO / "workloads/glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager.json").read_text())
     assert [r["arrive_step"] for r in wl["requests"]] == declared and [r["max_tokens"] for r in wl["requests"]] == caps
     R = lambda i, n, a: types.SimpleNamespace(request_id=f"r{i}", prompt_token_ids=[1] * 9, max_tokens=n, arrive_step=a, _order=0)  # noqa: E731
     for make, source in ((_LaggedStubEngine, "measured"), (lambda: _ChunkedStubEngine(budget=4096, scheduler=False), "measured"),

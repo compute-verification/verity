@@ -38,7 +38,7 @@ from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
 
-__all__ = ["of_record"]
+__all__ = ["of_record", "premises"]
 
 SHOWN = 5
 #: the instances of each check specialisation a row kernel is sampled on, against its Definition and against a Boolean row's gates
