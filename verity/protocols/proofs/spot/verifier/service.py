@@ -175,7 +175,14 @@ from verity.circuits.program import Program
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityProfile, Subset
 
 from . import second_stage as SS, window_place as WP
-from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit as A,
+    draw as D,
+    partition as P,
+    registered as G,
+    docket as R,
+    verifier as V,
+)
 from .one_stage.verdict import Verdict, _Collect
 from verity.protocols.proofs.spot.device.challenger import ChallengerKey
 from verity.protocols.proofs.spot.device.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
@@ -876,19 +883,31 @@ def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]
     "registered": <the registered reads it reads, null for none>}, ...]}`, as (template, circuit, header,
     registered) in the order the check's template query `query` names the templates, which is REPLAY_c's first-instance
     order (`replay_cells`). An entry may also record its template as a table read, ``"read": {"V": <rows>, "H":
-    <words a row>}`` (`template_reads`). None names no file and gives none. Raises `ValueError` for any other form, a
+    <words a row>}`` (`template_reads`), and the params may add ``"tables": {<parameter>: <entry>, ...}``, the
+    registered tables the auditor pinned before any coin, each the entry the tables' registration names for it
+    (`_table_entry`, `pinned_tables`). None names no file and gives none. Raises `ValueError` for any other form, a
     circuit that isn't 128 lowercase hex digits, a header that isn't an object, registered reads neither an object nor
-    null, a read that isn't two positive counts, and a list that doesn't name each of the check's templates once, in
-    its order. The Lean verifier's `Run.templateCircuits` is this."""
+    null, a read that isn't two positive counts, a pinned table that isn't such an entry, and a list that doesn't name
+    each of the check's templates once, in its order. The Lean verifier's `Run.templateCircuits` is this."""
     if proofs is None:
         return ()
     ids = _check_ids(query)
     if ids is None:
         raise ValueError("a two-stage design's check is a template query")
     form = ('the params\' proofs are {"templates": [{"template": <descriptor id>, "circuit": <SHA-512>, '
-            '"header": <object>, "registered": <object or null>}, ...]}, an entry\'s "read" {"V": <rows>, "H": <words>}')
-    if not isinstance(proofs, Mapping) or set(proofs) != {"templates"} or not isinstance(proofs["templates"], (list, tuple)):
+            '"header": <object>, "registered": <object or null>}, ...]}, an entry\'s "read" {"V": <rows>, "H": <words>}, '
+            'and "tables" {<parameter>: <the tables\' registration\'s entry>}')
+    if not (isinstance(proofs, Mapping) and set(proofs) in ({"templates"}, {"tables", "templates"})
+            and isinstance(proofs["templates"], (list, tuple))):
         raise ValueError(form)
+    if "tables" in proofs:
+        if not isinstance(proofs["tables"], Mapping):
+            raise ValueError(form)
+        for p, e in sorted(proofs["tables"].items()):
+            if not _table_entry(p, e):
+                raise ValueError(f"{form}: a pinned table's entry is exactly value (its parameter), root, leaves, words "
+                                 "and domain, and word_bits where its words are not 16-bit, root and domain SHA-512s in "
+                                 f"lowercase hex and the counts positive integers: {p} {e!r}")
     named = []
     for e in proofs["templates"]:
         if not (isinstance(e, Mapping) and set(e) - {"read"} == {"template", "circuit", "header", "registered"}
@@ -911,6 +930,27 @@ def _read_of(j: Any) -> tuple[int, int] | None:
             and all(isinstance(j[k], int) and not isinstance(j[k], bool) and j[k] > 0 for k in ("V", "H"))):
         return None
     return int(j["V"]), int(j["H"])
+
+
+def _table_entry(p: str, e: Any) -> bool:
+    """A pinned table's entry under parameter `p`, the entry the tables' registration names for it: exactly `value`,
+    `root`, `leaves`, `words` and `domain`, and `word_bits` where its words are not 16-bit; `value` is `p`, `root` and
+    `domain` 128 lowercase hex digits, and `leaves`, `words` and `word_bits` positive integers. The Lean verifier's
+    `Run.tableEntry?` is this."""
+    pos = lambda x: type(x) is int and x > 0  # noqa: E731
+    hexed = lambda x: isinstance(x, str) and _DIGEST.fullmatch(x) is not None  # noqa: E731
+    return (isinstance(e, Mapping) and set(e) - {"word_bits"} == {"value", "root", "leaves", "words", "domain"}
+            and ("word_bits" not in e or pos(e["word_bits"])) and e["value"] == p and hexed(e["root"])
+            and hexed(e["domain"]) and pos(e["leaves"]) and pos(e["words"]))
+
+
+def pinned_tables(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, Any], ...]:
+    """The registered tables the auditor's params ``proofs`` pin, ``(parameter, entry)`` each, in the parameters' order,
+    for params `template_circuits` accepted: the entries the tables' registration names, which the auditor pinned
+    before any coin and round 2 takes a read's table from beside round 1's record (`second_stage.Own.tables`,
+    `second_stage._one_table`). The Lean verifier's `Run.pinnedTables` is this."""
+    ts = (proofs or {}).get("tables")
+    return tuple(sorted(ts.items())) if isinstance(ts, Mapping) else ()
 
 
 def template_reads(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, int], ...]:
@@ -2391,8 +2431,8 @@ class Stream:
         circuit file and the reference header and registered reads round 2 holds its statements to (`template_circuits`;
         without them every statement fails ``second-header`` and ``second-values``), which the run of record reads from
         its interior params. The outcome accepts
-        when the registration's audit record (over the replay sample) and the interior registration's (over the sample)
-        both do, and the run of record checks both. Raises `Refused` for `statements` on a one-stage outcome, and
+        when the run of record (`Run.run`) accepts, which the registration's audit record (over the replay sample) and
+        the interior registration's (over the sample) are held to; no Python joins them into a verdict (`_audit_two`). Raises `Refused` for `statements` on a one-stage outcome, and
         (`proofs`) for `proofs` on a one-stage stream or in any form `template_circuits` refuses, before anything is
         decided."""
         if statements is not None and self.n_rho is None:
@@ -2422,10 +2462,10 @@ class Stream:
             if not v.ok:
                 return list(v.codes)
             if self.n_rho is not None:
-                got.update(zip(("audit", "public", "replay"), self._audit_two(e, verdicts, statement, proved_units,
-                                                                              instances, served, session_roots, coins,
-                                                                              interior_coins, statements, proofs)))
-                op["accepted"] = got["audit"]["accepted"] and got["replay"]["accepted"]
+                got.update(zip(("audit", "public", "replay", "accepted"),
+                               self._audit_two(e, verdicts, statement, proved_units, instances, served, session_roots,
+                                               coins, interior_coins, statements, proofs)))
+                op["accepted"] = got["accepted"]
                 return None
             got.update(zip(("audit", "public"), self._audit(e, draw, verdicts, statement, proved_units, instances, served,
                                                             session_roots, coins)))
@@ -2495,20 +2535,24 @@ class Stream:
                    session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None,
                    interior_coins: Mapping[str, Any] | None, statements: Sequence[Mapping[str, Any]] | None,
                    proofs: Mapping[str, Any] | None = None
-                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], bool]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
-        the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
+        the second stage's sample, with round 2's check of `statements` (`second_stage.check_twin`, over the parts the
         interior program's strata make, the design's links and wires and their rows, which it derives from the replay
         block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`), the
         reads the verdicts report, what they name of each session they accepted (`second_stage.verified_of`), the
         reference header and registered reads the params `proofs` give each template, `template_circuits`, and its
         own copies of the interior registration's values it holds without the prover: those it fills, with their
         sources as the registration's check read them (`registration.resolved`: a history table's root and domain
-        id as bytes), and those it pinned or holds to an earlier record, and the templates the params record as table
-        reads, `template_reads`), and the registration's over the replay sample,
+        id as bytes), and those it pinned or holds to an earlier record, the templates the params record as table
+        reads, `template_reads`, and the registered tables they pin, `pinned_tables`), and the registration's over the
+        replay sample,
         each taking the sessions' reads of its own ports at their own roots (`audit.less_own_reads`), both failing `run`
         where the whole run isn't the verifier's, the registration's holding each value its certified entries name to
-        have a reported read; and the public outputs."""
+        have a reported read; the public outputs; and whether the outcome accepts, which is `Run.run`'s symbol alone
+        (`verifier.run`, held whole to the records above, their join the Python side it is compared with). A run whose
+        stages read no coin bytes gives `Run.run` nothing to read, so it raises (`verifier.not_written`): no Python
+        decides a two-stage outcome."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
         reg, first, ireg, second = e.registration, e.draw, e.interior, e.second
         outputs = self.spec.check.public_outputs
@@ -2536,18 +2580,20 @@ class Stream:
                      returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record),
                      supplied=SS.supplied_of(R.resolved(e.interior_copies[5], e.interior_history)),
                      fixed=(*(e.interior_copies[6] or ()), *(e.interior_copies[10] or ())),
-                     reads=template_reads(proofs))
-        rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
+                     reads=template_reads(proofs), tables=pinned_tables(proofs))
+        rec = SS.attach(rec, SS.check_twin(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots,
                                   certified=sorted(e.certified or ()))
-        accepted = rec["accepted"] and boundary["accepted"]
-        if e.read is not None and e.second_read is not None and rec["verifiers"]["agree"] and \
-                boundary["verifiers"]["agree"]:
+        joined = rec["accepted"] and boundary["accepted"]
+        if e.read is None or e.second_read is None:
+            V.not_written("_audit_two", "Spot.Run.run")
+        accepted = False
+        if rec["verifiers"]["agree"] and boundary["verifiers"]["agree"]:
             ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held, given = e.copies
             within = {k: x for k, x in rec.items() if k != "verifiers"}
             v = V.run({"receipt": dict(reg.receipt), "draw": dict(first.draw), "read": len(e.read),
-                       "symbol": ACCEPT if accepted else REJECT, "public": public if accepted else {},
+                       "symbol": ACCEPT if joined else REJECT, "public": public if joined else {},
                        "audit": {k: x for k, x in boundary.items() if k != "verifiers"},
                        "interior": {"receipt": dict(ireg.receipt), "draw": dict(second.draw),
                                     "read": len(e.second_read), "audit": within}},
@@ -2574,7 +2620,8 @@ class Stream:
                                 "proofs": proofs})
             if not v.ok:
                 rec, boundary = _run_failed(rec, v), _run_failed(boundary, v)
-        return rec, public, boundary
+            accepted = v.ok and v.verifiers["lean"].get("symbol") == ACCEPT
+        return rec, public, boundary, accepted
 
     def _finish(self, e: _Entry, symbol: str, audit: Mapping[str, Any] | None, public: Mapping[str, Any], *,
                 halt: Mapping[str, Any] | None = None, replay_audit: Mapping[str, Any] | None = None) -> Outcome:

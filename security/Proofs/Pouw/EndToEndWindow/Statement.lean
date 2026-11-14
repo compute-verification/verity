@@ -270,7 +270,7 @@ up to the registration, the commitments' oracle calls that `calls` counts, and d
 the queries whose answers are its nodes, a lookup at cost `T_ext`, with no rewinding (a rewinding extractor's cost can't
 sit inside `T`). It reads no session query: `Ccom` is a function of the registration, so what the sessions query, and
 what they open the registered roots to, can't change the transcript it must match. A session that opens a root to
-anything but `Ccom` is a link failure, charged in `WindowBound`'s `β` (`δ_link` at the prover's state). Its
+anything but `Ccom` is a link failure, charged in `WindowBound`'s `β` (`ε_bind` at the prover's state). Its
 random-oracle content is the probability: over a uniform `H`, which stands for SHA-512 domain-separated for commitments
 and the noise, the registration's transcript differs from the decoded one only if the `q` queries before the
 registration hold a collision or the registration holds a node that none of them answered, so
@@ -388,9 +388,9 @@ the recheck's probe 2):
   (`b ≥ 1`);
 * where `K′ < N`, it is at most the binomial `(1 − ε·W/(N·w_max))^{K′}`, which `k_prime` makes at most its `δ`, since
   `W` is at least the credited work.
-A session that opens the registered roots to anything but `Ccom` is in `δ_link`.
+A session that opens the registered roots to anything but `Ccom` is in `ε_bind`.
 
-The service's sample is one sampling design for the whole window; the window's `ε_ks` and `δ_link` composed from its sessions' are
+The service's sample is one sampling design for the whole window; the window's `ε_ks` and `ε_bind` composed from its sessions' are
 gap (6)'s (`WindowDelta`). -/
 def WindowBoundOfService : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (U : Workload)

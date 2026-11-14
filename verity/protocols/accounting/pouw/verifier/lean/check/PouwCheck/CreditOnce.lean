@@ -1,7 +1,7 @@
 module
 
 public import PouwCheck.Credit
-import all Spot.ChallengerSession
+public import Spot.ChallengerSession
 
 /-!
 # A period's credit with one replay of the auditor's ledger (`Credit.periodCredit`, compiled)
@@ -29,6 +29,17 @@ open Flock (V)
 
 /-- What `checked ledger` returns for a key: a ledger's replay. -/
 abbrev Replay := ChallengerKey → V (Array Win × Array MonitoringPeriod)
+
+/-! `auditedOpen`'s private helpers, as `Spot.ChallengerSession` writes them: its private part stays its own. -/
+
+private def strOf (j : Json) : String := match j with | .str s => s | _ => ""
+
+private def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
+
+private def isDigest (j : Json) (n : Nat := 128) : Bool :=
+  match j with
+  | .str s => s.length == n && (Flock.unhex s).toOption.isSome
+  | _ => false
 
 /-- `auditedOpen` with `replay` its ledger's replay. -/
 def auditedOpenWith (replay : Replay) (window : Json) (key : ChallengerKey) : V (Audited × Json) := do

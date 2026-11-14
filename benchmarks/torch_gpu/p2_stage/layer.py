@@ -50,7 +50,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s8_linear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "s8_linear"))
 import int_mm as IM
 
 import gemm as G

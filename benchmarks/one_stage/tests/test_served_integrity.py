@@ -32,11 +32,11 @@ import pytest
 
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.device import challenger as Ch
-from verity.protocols.proofs.spot.verifier.one_stage import audit as A, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import audit as A, docket as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-import served_integrity as I  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as I  # noqa: E402
 from served_verdicts import check_answer, epsilon  # noqa: E402
 
 REG = {"format": R.FORMAT, "protocol": R.PROTOCOL, "program": "aa" * 64, "partition": "bb" * 64, "population": 1024,

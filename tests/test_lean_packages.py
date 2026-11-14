@@ -179,13 +179,13 @@ def test_every_lock_is_owned():
 
 def test_every_record_merges_with_the_driver():
     """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and the unread ratchet's caps to its
-    `--caps` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
+    `--limits` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
     spec = importlib.util.spec_from_file_location("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     merge = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(merge)
     attributes = (ROOT / ".gitattributes").read_text().splitlines()
     assert f"lean-audit.json merge={merge.NAME}" in attributes
-    assert f"tools/verity/lean/{merge.UNREAD_CAPS} merge={merge.CAPS}" in attributes
+    assert f"tools/verity/lean/{merge.UNREAD_CAPS} merge={merge.LIMITS}" in attributes
     stale = [f"{p.relative_to(ROOT)}: {m}" for p in lake_packages()
              for m, g in json.loads((p / "lean-audit.json").read_text()).get("reads", {}).items()
              if g["digest"] != merge.A.module_digest(merge.A.definitions(g))]
@@ -373,8 +373,8 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     """``got``, a count by key, held to the cap ``caps`` (this file's ``name``), which equals it: a count above its cap
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
-    the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap three-way: one side's change alone stands, and two
+    the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-limits` merge driver
+    (`tools/verity/lean/merge.py --limits`) merges two changes to a cap three-way: one side's change alone stands, and two
     changes add, except two lowerings, which take the larger."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
     assert not over, (f"{what} grew in {over}: {fix} (where a merged change lowered the cap while the other took room "
@@ -686,7 +686,7 @@ def test_an_entry_of_the_replay_list_that_matches_no_audited_module_is_named():
 
 
 def test_every_cap_merges_key_by_key():
-    """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
+    """Each cap here is one line the `lean-limits` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
     three-way, key by key, instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
