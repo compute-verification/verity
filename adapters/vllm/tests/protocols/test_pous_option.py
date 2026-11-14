@@ -165,7 +165,7 @@ def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
         c = opt.commitment()
         w = lay.pack({"q": toy.plain["q"].numpy().tobytes(), "k": toy.plain["k"].numpy().tobytes()})
         assert c["commitment"] == setup.commit(q, w).hex()
-        assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
+        assert bytes.fromhex(c["salt"]) == setup.sample_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
         held = s.held()                                                                     # the verifier's setup check of C*
         period.tie(held.point, held.published, period.setup_inputs(held.setup_case))
         assert held.published.root.hex() == c["storage_root"]
@@ -369,7 +369,7 @@ def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monk
         assert (tag, x) == ("pouw", "x") and torch.equal(w, toy.plain["k"])
         c = comp.get("pous").commitment()
         assert comp.info()[ENTRY]["salt_source"] == "command"
-        assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(c["commitment"][:64]), bytes.fromhex(c["commitment"]))
+        assert bytes.fromhex(c["salt"]) == setup.sample_salt(bytes.fromhex(c["commitment"][:64]), bytes.fromhex(c["commitment"]))
     assert hooks.live() == before and torch.equal(toy.layers["k"].weight, toy.plain["k"])
 
 

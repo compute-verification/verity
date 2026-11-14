@@ -70,11 +70,11 @@ def test_label_format():
         sw.label(key, 1 << 64)
 
 
-def test_draws_are_uniform_indices_from_the_coin_secret():
-    idx = sw.draw_indices(b"coins", SERVER, SESSION, N, K)
+def test_samples_are_uniform_indices_from_the_coin_secret():
+    idx = sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     key = derive(b"coins", sw.COIN_DOMAIN, {"server": SERVER, "session": SESSION, "n": N})
     assert idx == tuple(key.uniform(N, j) for j in range(K))
-    assert all(0 <= i < N for i in idx) and idx != sw.draw_indices(b"other", SERVER, SESSION, N, K)
+    assert all(0 <= i < N for i in idx) and idx != sw.sample_indices(b"other", SERVER, SESSION, N, K)
 
 
 @pytest.mark.parametrize("batch", [1, 2, 8, K])
@@ -91,7 +91,7 @@ def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
     uncovered = f"batch size {batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
     assert v.reasons == (() if batch == 1 else (uncovered,))
     assert v.public() == {"accepted": batch == 1}
-    assert c.coins() == sw.draw_indices(b"coins", SERVER, SESSION, N, K)
+    assert c.coins() == sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     assert c.params.covered == (batch == 1)
 
 

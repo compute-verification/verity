@@ -1575,7 +1575,7 @@ receipt of one block would leave sectors half read, and `SketchBoundRun`'s guess
 from \(Q/2^{96}\) to \(Q/2^{64}\).
 
 **Registration** (`p2.Registration`, `p2.register`). PoUS's setup: the prover commits to `W` (`setup.commit`), the
-verifier derives the salt from its own secret after the commitment (`setup.draw_salt`), and builds `vk` from the `C*` it
+verifier derives the salt from its own secret after the commitment (`setup.sample_salt`), and builds `vk` from the `C*` it
 decodes to the committed `W` (`setup.verifier_key_from_encoding`). The registration is the node, P2's parameters, the
 commitment, the salt, `vk`'s root and \(k_s\); its digest is `p2.py`'s table, and it is the session's
 \(\text{root}_{(0,-1)}\) as in §4. The setup of record is commitment `9aaaf192…` and its salt.

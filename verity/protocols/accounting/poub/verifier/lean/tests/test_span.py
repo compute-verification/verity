@@ -150,7 +150,7 @@ def test_the_verifiers_rows_are_the_ones_the_prover_commits(server, world) -> No
     assert kind == "output" and len(json.loads(out)["draws"]) == 12
 
 
-def test_a_window_with_no_draws_awaiting_has_no_rows(server) -> None:
+def test_a_window_with_no_samples_awaiting_has_no_rows(server) -> None:
     r = M.Run(WORLD, windows=1)
     r.start()
     r.run()
@@ -172,7 +172,7 @@ def test_a_unit_that_says_it_failed_rejects_the_window_there(server) -> None:
     assert held(server, s.case(s.held(words=words))) == rejected(tuple(s.r.draws[0][3]))
 
 
-def test_a_verdict_word_or_a_salt_changed_is_malformed_at_its_draw(server) -> None:
+def test_a_verdict_word_or_a_salt_changed_is_malformed_at_its_sample(server) -> None:
     s = Span(drawn(WORLD))
     words = list(s.words)
     words[2] = CODEC
@@ -183,7 +183,7 @@ def test_a_verdict_word_or_a_salt_changed_is_malformed_at_its_draw(server) -> No
     assert held(server, s.case(s.held(ss=ss))) == rejected(tuple(s.r.draws[0][4]))
 
 
-def test_a_span_of_other_draws_is_malformed(server) -> None:
+def test_a_span_of_other_samples_is_malformed(server) -> None:
     """This window's units in another order, or a unit of the same position in another window (its pass's seed
     another)."""
     s = Span(drawn(WORLD))
@@ -207,7 +207,7 @@ def test_a_span_of_another_store_is_malformed(server) -> None:
     assert held(server, s.case(s.held(rows=rows))) == rejected(tuple(s.r.draws[0][0]))
 
 
-def test_a_missing_unit_or_statement_is_malformed_at_no_draw(server) -> None:
+def test_a_missing_unit_or_statement_is_malformed_at_no_sample(server) -> None:
     s = Span(drawn(WORLD))
     statements = s.held(cut=(6,))
     assert held(server, s.case(statements[:1])) == rejected(None)
