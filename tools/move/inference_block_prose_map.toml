@@ -1,0 +1,76 @@
+# The inference block in prose: what `tools/move/rename.py --map tools/move/inference_block_prose_map.toml` renames, a
+# block of the inference-only policy's partition under its older names, "isolation unit" (IU) and "isolation block",
+# where a comment, a docstring or Markdown's text says them (GLOSSARY.md, Older names).
+#
+# This move renames prose only (`scope = "prose"`): never code, a string, backticks or a data file, so it moves no path,
+# renames no declaration and leaves every lock and pin as it is. Under that scope a word in capitals alone is a constant's
+# name and stays, so IU is renamed with a word beside it ("an IU", "IU condition"), in the plural and in the possessive.
+# What it leaves, each for a hand edit: IU where no row's phrase holds it (after a name in backticks, in a data file's
+# comment or a string); the verdict's key `ius` and the names built on it, which are the check's format; and the sentence
+# of the check's README that says the older names stay ([keep]).
+scope = "prose"
+
+[words]
+# --- the name in full, with its abbreviation where a sentence introduces it
+"isolation units (IUs)" = "inference blocks"
+"isolation unit (IU)" = "inference block"
+"isolation units" = "inference blocks"
+"isolation unit" = "inference block"
+"isolation blocks" = "inference blocks"
+"isolation block" = "inference block"
+# --- IU in the plural and the possessive
+"IUs" = "inference blocks"
+"IU's" = "inference block's"
+# --- IU after the word that introduces it
+"an IU" = "an inference block"
+"An IU" = "An inference block"
+"one IU" = "one inference block"
+"One IU" = "One inference block"
+"per IU" = "per inference block"
+"Per IU" = "Per inference block"
+"the IU" = "the inference block"
+"The IU" = "The inference block"
+"its IU" = "its inference block"
+"no IU" = "no inference block"
+"No IU" = "No inference block"
+"each IU" = "each inference block"
+"Each IU" = "Each inference block"
+"every IU" = "every inference block"
+"Every IU" = "Every inference block"
+"any IU" = "any inference block"
+"another IU" = "another inference block"
+"that IU" = "that inference block"
+"same IU" = "same inference block"
+"first IU" = "first inference block"
+"largest IU" = "largest inference block"
+"maximum IU" = "maximum inference block"
+"small IU" = "small inference block"
+"failing IU" = "failing inference block"
+"complying IU" = "complying inference block"
+"in IU" = "in inference block"
+"of IU" = "of inference block"
+"for IU" = "for inference block"
+"to IU" = "to inference block"
+"with IU" = "with inference block"
+# --- IU before the word it qualifies, and after a possessive
+"per-IU" = "per-inference-block"
+"IU condition" = "inference-block condition"
+"IU assignments" = "inference-block assignments"
+"IU of each" = "inference block of each"
+"image's IU" = "image's inference block"
+"gate's IU" = "gate's inference block"
+"node's IU" = "node's inference block"
+
+[rewrite]
+# Never rewritten: the term source and the lints and tables that spell the old words on purpose, records of what was
+# (the earlier moves and their maps, changelogs, the rulings), the move tools' own tests, the frozen backends, replicated
+# fixtures, files whose bytes a digest pins and lock files.
+exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
+           "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+']
+strings = ['"isolation unit" and "IU" for an inference block']
