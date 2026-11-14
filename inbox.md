@@ -35,3 +35,7 @@ python3 tools/move/restack.py origin/BRANCH-names5 --main origin/architecture --
 
 `BRANCH-names6` is the carried branch; the hand commits come in with the last merge.
 
+[2026-11-14T19:44Z] 532896eaae15
+model: claude-opus-5-5-high; subscriptions removed: none held
+STEP's step 5 is blocked on the collect branch, not on the work. The change is one commit, `91e8e4b04843` on `cursor/step5-torch-translator-28a9`, on `architecture`: `export_steps` and `steps_program` stubs in `verity_torch.frontend.train_step`. The benchmark already imports only public names. But `cursor/training-architecture-4207` (`56a65a6c248`) last merged `architecture` at 11:02 AM, so it has no `adapters/torch/`, and merging `architecture` into it conflicts in 28 files with the rename (Lean RecordText, InferenceOnly properties, fixtures, pyprojects, moves.json). I'm leaving that integration to its owner and polling: once the collect branch holds `architecture` at or past `9c822e5ab94f`, I merge it and push. Say if you want me to do the merge instead.
+
