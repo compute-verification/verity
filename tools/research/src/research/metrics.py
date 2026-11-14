@@ -58,10 +58,8 @@ def send_json(method: str, url: str, body: object, key: str, what: str) -> str |
 def deployed_commit(start: Path) -> str | None:
     """The commit a deployed copy runs: the `COMMIT` file the deploy writes at its tree's root, found from ``start`` upward."""
     for d in (start, *start.parents):
-        try:
+        if (d / "COMMIT").is_file():
             return (d / "COMMIT").read_text().strip() or None
-        except OSError:
-            continue
     return None
 
 

@@ -12,6 +12,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 CONTROL = ROOT / "infra" / "control"
 spec = importlib.util.spec_from_file_location("loop_metrics", CONTROL / "loop_metrics.py")
@@ -19,6 +21,12 @@ M = sys.modules["loop_metrics"] = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(M)
 
 T0 = 1_800_000_000
+
+
+@pytest.fixture(autouse=True)
+def _no_deployed_commit(monkeypatch):
+    """A checkout has no COMMIT; the walk up from infra/control would read the tree's parents, outside the suite's inputs."""
+    monkeypatch.setattr(M.metrics, "deployed_commit", lambda start: None)
 
 
 def _guard(tmp_path, monkeypatch, polled: float | None, rate: float = 42.32) -> Path:
@@ -115,7 +123,7 @@ def test_a_pass_is_its_length_at_its_end_or_null_with_its_exit_codes_meaning():
         "the pass was killed by signal 15 (exit 143)"]
 
 
-def test_store_index_sh_records_each_pass_for_the_script_and_never_waits_on_its_send(tmp_path):
+def test_store_index_sh_records_each_pass_for_the_script_and_never_waits_on_its_send(tmp_path, monkeypatch):
     """The loop's record and the script's reader agree, and a send that hangs leaves the loop free: the stand-in send blocks on a
     FIFO the test opens only after the loop's pass has ended (its `sleep 300`, here `exit 0`)."""
     text = (CONTROL / "store_index.sh").read_text()
@@ -135,8 +143,8 @@ def test_store_index_sh_records_each_pass_for_the_script_and_never_waits_on_its_
                   f'  *loop_metrics.py*) echo "send started: $*"; cat {fifo} > /dev/null; exit 0 ;;\nesac\nexit 99\n')
     py.chmod(0o755)
     (script := tmp_path / "store_index.sh").write_text(text)
-    env = {**os.environ, "PATH": f"{tmp_path / 'bin'}:{os.environ['PATH']}"}
-    p = subprocess.run(["sh", str(script)], env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    monkeypatch.setenv("PATH", str(tmp_path / "bin"), prepend=os.pathsep)
+    p = subprocess.run(["sh", str(script)], stdin=subprocess.DEVNULL, capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-500:]
     rec = json.loads((tmp_path / "infra" / "store-index-pass.json").read_text())
     assert rec["rc"] == 3 and rec["commit"] == "c1" and rec["end"] >= rec["start"]
