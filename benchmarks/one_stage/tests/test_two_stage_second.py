@@ -56,7 +56,8 @@ def run(served) -> dict:
     """The first stage under the class's own rule (`two_stage.rule_of`), ``stage1.json`` read again, and the replay
     side's half (`two_stage.replayed`)."""
     check, tmp = served["check"], served["tmp"]
-    got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    got = TS.first(served["pub"], check, TS.rule_of(_layout(), f"rate:{Q}/{N}", K, 60.0),
+                   FC.Challenger("first", label=TS.family_of(served["class"].layout)))
     stage1 = json.loads(json.dumps(got.stage1()))
     again = TS.resume(stage1, check, FC.Challenger("second"))
     r = TS.replayed(again, served["class"], served["capture"], tmp / "interior")
@@ -254,7 +255,8 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     v = 4096
     got, check = SM.serve(tmp_path, v, O, N, inline=True), BR.check_template(SM.template(v))
     c, pub = BR.reopen(got["class"], check), json.loads((got["class"] / BR.COMMIT).read_text())
-    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0), FC.Challenger("first"))
+    first = TS.first(pub, check, TS.rule_of(c.layout, f"rate:{Q}/{N}", K, 60.0),
+                     FC.Challenger("first", label=TS.family_of(c.layout)))
     again = TS.resume(json.loads(json.dumps(first.stage1())), check, FC.Challenger("second"))
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")
