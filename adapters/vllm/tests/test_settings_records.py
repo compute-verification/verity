@@ -6,15 +6,16 @@ engine's records the environment fills (the replay's engine facts, the engine pr
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
-import sys
 import types
 from collections.abc import Iterator
 from unittest import mock
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.check.match import global_match as GM
 from verity_vllm.check.match import global_match_fast as GMF
 from verity_vllm.pipeline import cli
@@ -114,12 +115,11 @@ def engine():
     """The engine's modules, and Inductor's config imported before `env` clears the environment: torch reads the engine's fixed
     switches (`engine.env.FIXED`) when that module is first imported, and the rest of the process keeps what it read."""
     pytest.importorskip("torch")
-    import torch._inductor.config  # noqa: F401
+    importlib.import_module("torch._inductor.config")
     from verity_vllm.acquire.sources import compiled_source
     from verity_vllm.check import fold_compare
-    from verity_vllm.engine import kernel_identity
     from verity_vllm.check.replay import driver
-    from verity_vllm.engine import build, code_identity, engine_profile
+    from verity_vllm.engine import build, code_identity, engine_profile, kernel_identity
     from verity_vllm.engine.profiles import dense_generic
 
     return types.SimpleNamespace(compiled_source=compiled_source, fold_compare=fold_compare, kernel_identity=kernel_identity, driver=driver,
@@ -152,12 +152,8 @@ def test_an_engine_record_takes_the_environment_as_before(engine, env: pytest.Mo
     ns = types.SimpleNamespace
     runner = ns(get_model=lambda: ns(named_modules=lambda: []), sampler=None)
     comm = ns(ca_comm=None, symm_mem_comm=None, qr_comm=None, fi_allreduce_fusion=None, pynccl_comm=None)
-    ps = types.ModuleType("vllm.distributed.parallel_state")
-    ps.get_tp_group = lambda: ns(rank_in_group=0, world_size=2, device_communicator=comm)
-    dist = types.ModuleType("vllm.distributed")
-    dist.parallel_state = ps
-    for name, mod in {"vllm": types.ModuleType("vllm"), "vllm.distributed": dist, "vllm.distributed.parallel_state": ps}.items():
-        env.setitem(sys.modules, name, mod)
+    fake_vllm.install(env).set("vllm.distributed.parallel_state:get_tp_group",
+                               lambda: ns(rank_in_group=0, world_size=2, device_communicator=comm))
     env.setattr(torch.cuda, "get_device_properties", lambda i: ns(name="F", major=8, minor=9, total_memory=1 << 30, multi_processor_count=8))
     env.setattr(torch.cuda, "device_count", lambda: 1)
     env.setattr(engine.engine_profile, "_run", lambda argv: "1")
@@ -212,12 +208,8 @@ def test_a_builds_target_facts_take_the_environment_as_before(build_target, env:
     export_compat, vllm_meta = build_target
     for k, v in values.items():
         env.setenv(k, v)
-    envs = types.ModuleType("vllm.envs")
-    envs.environment_variables = dict.fromkeys(("VLLM_BATCH_INVARIANT", "VLLM_USE_LAYERNAME", "VLLM_LOGGING_LEVEL", "VLLM_USE_DEEP_GEMM"))
-    vllm = types.ModuleType("vllm")
-    vllm.envs = envs
-    for name, mod in {"vllm": vllm, "vllm.envs": envs}.items():
-        env.setitem(sys.modules, name, mod)
+    fake_vllm.install(env)["vllm.envs"].environment_variables = dict.fromkeys(
+        ("VLLM_BATCH_INVARIANT", "VLLM_USE_LAYERNAME", "VLLM_LOGGING_LEVEL", "VLLM_USE_DEEP_GEMM"))
     env.setattr(socket, "gethostname", lambda: "host-a")
     env.setattr(torch.cuda, "is_available", lambda: False)
     doc = {"consulted": vllm_meta.consulted_facts(types.SimpleNamespace()), "host": export_compat.host_facts()}

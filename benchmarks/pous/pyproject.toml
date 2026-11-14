@@ -42,13 +42,15 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "adapters/vllm/verity_vllm/records/fields.py", "adapters/vllm/verity_vllm/records/workload.py",
           "adapters/vllm/verity_vllm/protocols/__init__.py", "adapters/vllm/verity_vllm/protocols/interface.py",
           "adapters/vllm/verity_vllm/protocols/pous.py", "adapters/vllm/verity_vllm/engine/__init__.py",
-          "adapters/vllm/verity_vllm/engine/hooks.py",
+          "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/errors.py",
+          "adapters/vllm/verity_vllm/records/schema_ids.py",
           # its test reads the answer back as the composed run does: its row (and the core answer's decoder, with what
           # that module imports) and the block record's leg
           "benchmarks/one_stage/served_verdicts.py", "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",
           "benchmarks/census/deployments.json",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/audit.py",
           "verity/protocols/accounting/pouw/verifier/coins.py", "verity/protocols/accounting/pouw/verifier/core_check.py",
+          "verity/protocols/accounting/pouw/verifier/verifier.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registration.py",
           "verity/protocols/proofs/spot/verifier/one_stage/draw.py",
           "verity/protocols/proofs/spot/verifier/one_stage/verdict.py",
