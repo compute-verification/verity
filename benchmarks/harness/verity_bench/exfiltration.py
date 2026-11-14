@@ -1719,7 +1719,7 @@ def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = 
         return 2
     shown = None
     if served is not None and importlib.util.find_spec("verity_bench.served_row") is not None:
-        served_row = importlib.import_module("verity_bench.served_row")  # it reads this module's names
+        from verity_bench import served_row  # type: ignore[attr-defined]  # optional; it reads this module's names
 
         shown = served_row.account(served)
     if shown is not None:
