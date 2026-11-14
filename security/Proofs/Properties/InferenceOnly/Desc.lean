@@ -6,12 +6,12 @@ public import Mathlib.Tactic
 /-!
 # The description-sized inference-only check against the unrolled one
 
-`InferenceOnlyCheck.Desc.evaluate` (`verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Desc.lean`) computes per IU its size and
+`InferenceOnlyCheck.Desc.evaluate` (`verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Desc.lean`) computes per inference block its size and
 its novel reads from one summary per Definition, where `InferenceOnlyCheck.evaluate` walks the circuit gate by gate. What is
 proved here is the summaries' arithmetic, each step stated against the function that computes it:
 
-* `sizes_eq_count`: an IU's size as `Desc.sizes` sums it, root node by root node, is the number of gates the expanded
-  division puts in it (each gate in its root node's IU), which is what `InferenceOnlyCheck.tally` counts gate by gate
+* `sizes_eq_count`: an inference block's size as `Desc.sizes` sums it, root node by root node, is the number of gates the expanded
+  division puts in it (each gate in its root node's inference block), which is what `InferenceOnlyCheck.tally` counts gate by gate
   (`sizes_eq_tally` in `Proofs.Properties.InferenceOnly`).
 * `affine_resolves`: the batch fast path's gate for leaf `e` of a batch output (`Piece.affine`) is the gate §7's
   resolution reaches member by member (`Flock.Program.resolveStep`: member `e / L`, its return leaf `e % L`).
@@ -37,7 +37,7 @@ private theorem getElem!_modify' {α : Type} [Inhabited α] (xs : Array α) (j :
     (hi : i < xs.size) : (xs.modify j f)[i]! = if j = i then f xs[i]! else xs[i]! := by
   rw [getElem!_pos _ i (by simpa using hi), Array.getElem_modify, getElem!_pos xs i hi]
 
-/-- `sizes`' first `m` root nodes: per IU, the gates of its nodes among them. -/
+/-- `sizes`' first `m` root nodes: per inference block, the gates of its nodes among them. -/
 theorem sizes_inv (offs : Array ℕ) (own : Array (Option ℕ)) (n : ℕ) : ∀ m,
     let s := (List.range m).foldl (fun s k => match own[k]! with
       | some u => s.modify u (· + (offs[k + 1]! - offs[k]!))
@@ -79,9 +79,9 @@ theorem card_filter_blocks (offs : Array ℕ) (K : ℕ) (h0 : offs[0]! = 0) (hmo
       Finset.range_eq_Ico, ← Finset.Ico_union_Ico_eq_Ico (Nat.zero_le _) (hmono m (by omega)), Finset.filter_union,
       Finset.card_union_of_disjoint (Finset.disjoint_filter_filter (Finset.Ico_disjoint_Ico_consecutive _ _ _))]
 
-/-- **An IU's size is its number of gates.** On a division that is `own`'s expansion, root node `k` holding gates
+/-- **An inference block's size is its number of gates.** On a division that is `own`'s expansion, root node `k` holding gates
 `[offs[k], offs[k + 1])` (`offs` from `0` to the circuit's `N`, as the canonical layout lays the root's nodes out) and
-each of them in IU `own[k]`, `Desc.sizes` gives per IU `u` the number of gates the division puts in `u`. -/
+each of them in inference block `own[k]`, `Desc.sizes` gives per inference block `u` the number of gates the division puts in `u`. -/
 theorem sizes_eq_count (offs : Array ℕ) (own : Array (Option ℕ)) (n N : ℕ) (owner : ℕ → Option ℕ)
     (h0 : offs[0]! = 0) (hN : offs[own.size]! = N) (hmono : ∀ k < own.size, offs[k]! ≤ offs[k + 1]!)
     (hexp : ∀ k < own.size, ∀ g, offs[k]! ≤ g → g < offs[k + 1]! → owner g = own[k]!) (u : ℕ) (hu : u < n) :

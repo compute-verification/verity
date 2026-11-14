@@ -101,7 +101,7 @@ def aff(s, i, b, c):
 
 
 def finish(P: Program, root: Body, ret_node: int) -> dict:
-    """The instance: every other root node in IU 0, θ empty."""
+    """The instance: every other root node in inference block 0, θ empty."""
     P.composite("R_v1", root, V(8), aff("n", ret_node, 0, 1))
     owner = ["input" if k in root.inputs else 0 for k in range(len(root.nodes))]
     return {"program": P.text(), "theta": [], "owner": owner, "gamma": 10, "alpha": [8, 1]}

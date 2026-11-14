@@ -149,7 +149,7 @@ def FirstFault (ok : ℕ → Prop) (fault : ℕ → String → Prop) (n : ℕ) (
 
 /-- `j` is refused with `k`: the first condition it fails, in the order the check reads them, is `k`'s. First the
 fields (`instance`), `Γ` and `α` (`params`) and the program's decoding (`program`), then gate by gate (`GateFault`), then
-θ entry by entry (`ThetaFault`), then one owner per gate (`owner-length`), then gate by gate (`OwnerFault`), then the IUs
+θ entry by entry (`ThetaFault`), then one owner per gate (`owner-length`), then gate by gate (`OwnerFault`), then the inference blocks
 (`empty-iu`). -/
 def Malformed (j : Json) (k : String) : Prop :=
   (¬ Shaped j ∧ k = "instance") ∨
@@ -167,7 +167,7 @@ def Malformed (j : Json) (k : String) : Prop :=
              (∀ g < gates P, OwnerOk P i.owner g) ∧ EmptyIU i.owner ∧ k = "empty-iu")))))
 
 /-- `j` is well-formed: its fields parse, its program decodes, and every gate, every entry of θ and every owner is as
-stated, with no IU empty. -/
+stated, with no inference block empty. -/
 def WellFormed (j : Json) : Prop :=
   ∃ i P, Parses j i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧ (∀ g < gates P, GateOk P g) ∧
     (∀ t < i.theta.size, ThetaOk P i.theta t) ∧ i.owner.size = gates P ∧ (∀ g < gates P, OwnerOk P i.owner g) ∧
