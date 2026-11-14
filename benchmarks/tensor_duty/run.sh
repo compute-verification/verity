@@ -18,7 +18,8 @@
 # exits nonzero unless every reading is decided (BASE_MHZ and BASE_SOURCE: the cautious reading's base clock).
 # --no-lock (LOCK=0): no sudo; the clock and power limit stay as found and CLOCKS is `default`.
 #
-# Env: CLOCKS ("1980 default"); ARMS ("wg_s8 wg_e4m3 sync_s8"); each arm's classes and bursts (SM-cycles of tensor work
+# Env: CLOCKS (required unless --no-lock, which sets it to `default`: the SM clocks to lock in MHz, the H200 card's
+# clock.sm, then `default`); ARMS ("wg_s8 wg_e4m3 sync_s8"); each arm's classes and bursts (SM-cycles of tensor work
 # a period): WG_S8_CLASSES ("zero const uniform s2 u2 u4"), WG_S8_BURSTS ("1024 65536 2097152"), WG_E4M3_CLASSES
 # ("zero const uniform"), WG_E4M3_BURSTS ("4096 65536"), SYNC_S8_CLASSES ("zero uniform"), SYNC_S8_BURSTS ("65536");
 # FILLS ("idle alu"); DUTIES (50 to 90 by 5, then 91 to 100, in percent); SECS (1.2, each point's kernel); WARM_S (20:
@@ -43,10 +44,11 @@ export ARMS=${ARMS:-wg_s8 wg_e4m3 sync_s8} FILLS=${FILLS:-idle alu} SECS=${SECS:
 export WG_S8_CLASSES=${WG_S8_CLASSES:-zero const uniform s2 u2 u4} WG_S8_BURSTS=${WG_S8_BURSTS:-1024 65536 2097152}
 export WG_E4M3_CLASSES=${WG_E4M3_CLASSES:-zero const uniform} WG_E4M3_BURSTS=${WG_E4M3_BURSTS:-4096 65536}
 export SYNC_S8_CLASSES=${SYNC_S8_CLASSES:-zero uniform} SYNC_S8_BURSTS=${SYNC_S8_BURSTS:-65536}
-export DUTIES=${DUTIES:-50 55 60 65 70 75 80 85 90 91 92 93 94 95 96 97 98 99 100} CLOCKS=${CLOCKS:-1980 default} O
+export DUTIES=${DUTIES:-50 55 60 65 70 75 80 85 90 91 92 93 94 95 96 97 98 99 100} O
 export BESIDE_CLASSES=${BESIDE_CLASSES:-zero const uniform} RATIOS=${RATIOS:-128 32 8} PHASES_MS=${PHASES_MS:-1 10 100}
 export LOCK=${LOCK:-1}
 [ "$LOCK" = 1 ] || CLOCKS=default
+export CLOCKS=${CLOCKS:?set the SM clocks to lock in MHz then default, clock.sm of the H200 card, or pass --no-lock}
 [ "$ARMS" = fp32-beside ] && SMI_MS=${SMI_MS:-10}
 export SMI_MS=${SMI_MS:-200}
 
