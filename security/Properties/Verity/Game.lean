@@ -298,10 +298,11 @@ def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : NciCheck.Prot
       (canonicalJson x.2.1.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
       NciCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
 
-/-- **The inference-only policy's clause where composite `k` lists no v0** (remote's plain sibling, which lists the rows
-check): the clause in rows on the record's circuit, which the rows check's guarantee states. Nothing here says what it
-is (`opaque`). v0's clause there would read no case and hold of every play, so the policy's target at such a
-composite is neither empty nor proved by computing it. -/
+/-- **The inference-only policy's clause where v0 doesn't decide it in composite `k`**: `k` lists no v0 (remote's plain
+sibling, which lists the rows check) or lists the rows check, whose verdict decides there (`Subprotocol.protocolAt`).
+It is the clause in rows on the record's circuit, which the rows check's guarantee states. Nothing here says what it
+is (`opaque`). v0's clause there would read a case no check of `k` accepted, or none, and hold of every play, so the
+policy's target at such a composite is neither empty nor proved by computing it. -/
 opaque rowsHeld : Verity.Registration.Composite → Sent → Prop
 
 /-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
@@ -911,15 +912,16 @@ its passes credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss ta
 landed on tiles over their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run
 `reject` accepts).
 
-The inference-only policy's, where `k` lists no v0 (remote's plain sibling), is `rowsHeld`, the clause in rows that the
-rows check's guarantee states; v0's clause there would read no case. Where `k` lists v0 (onsite, remote), it is on the
-Program v0's compiled check judges: every case of the policy in the play's messages (`PolicyCase`) is
-`Properties.Remote.PolicyHeld`. The record names, by its SHA-512, the Program the parameters
-carry; θ holds what the log's first record registers; and that Program lays out a registered circuit whose inference
-blocks each have at most `Γ` gates and read at most `α` fresh input bits per gate, on every parse and layout, with
+The inference-only policy's, where v0 doesn't decide it (`k` lists no v0, as remote's plain sibling, or lists the rows
+check, whose verdict decides there), is `rowsHeld`, the clause in rows that the rows check's guarantee states; v0's
+clause there would read a case no check of `k` accepted, or none. Where `k` lists v0 and not the rows check (onsite,
+remote), it is on the Program v0's compiled check judges: every case of the policy in the play's messages
+(`PolicyCase`) is `Properties.Remote.PolicyHeld`. The record names, by its SHA-512, the Program the parameters carry;
+θ holds what the log's first record registers; and that Program lays out a registered circuit whose inference blocks
+each have at most `Γ` gates and read at most `α` fresh input bits per gate, on every parse and layout, with
 `Γ` and `α` the parameters the composite names for the policy. It reads no field of the vocabulary.
 
-v0's clause is proved of the case as sent, at the composites that list v0 (`Vocab.inferenceOnlySound`), and of
+v0's clause is proved of the case as sent, at the composites where v0 decides (`Vocab.inferenceOnlySound`), and of
 nothing more: what links that case to the committed files is two checks the verifier lacks, which no code enforces, so
 the clause says nothing of the committed files until both exist. Neither is a premise of the claim.
 
@@ -952,7 +954,8 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .poub, o => (V.live k θ F c).Holds (V.certOf θ) σ .poub o
   | .network, o => (V.live k θ F c).Holds (V.certOf θ) σ .network o
   | .inferenceOnly, o =>
-    if NciCheck.Protocol.protocolId ∈ k then ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
+    if NciCheck.Protocol.protocolId ∈ k ∧ rowsId ∉ k then
+      ∀ p r e, PolicyCase k o.sent p r e → Properties.Remote.PolicyHeld p r e
     else rowsHeld k o.sent
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 

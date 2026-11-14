@@ -1106,7 +1106,7 @@
  ],
  "escapes": {
   "Verity.rowsUnbuilt": "the behavior of the inference-only policy's rows check (verity/inference-only/rows/v1), which no compiled check carries yet: the game reads the check under that id (Verity.rowsCheck) and states nothing of what it does, so its target at a composite that lists it (Verity.Vocab.InferenceOnlySound at Verity.Registration.Composite.plain) is proved only from the compiled check that replaces this, never by computing a placeholder; the code refuses every list naming the id (Core.Composites.ofIds)",
-  "Verity.rowsHeld": "the inference-only policy's clause where a composite lists no v0 (remote's plain sibling): the clause in rows on the record's circuit, which the rows check's guarantee states; until then nothing says what it is, so v0's clause, which would hold of every play where no v0 case exists, doesn't decide the plain sibling's inference-only target"
+  "Verity.rowsHeld": "the inference-only policy's clause where v0 doesn't decide it, a composite listing no v0 (remote's plain sibling) or listing the rows check: the clause in rows on the record's circuit, which the rows check's guarantee states; until then nothing says what it is, so v0's clause, which would hold of every play where no v0 case is accepted, doesn't decide the plain sibling's inference-only target (Verity.Vocab.inferenceOnlySound takes v0 listed and the rows check not)"
  },
  "claims": {
   "modules": ["Properties.Accounting.Remote.Subprotocol"],

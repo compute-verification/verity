@@ -47,7 +47,8 @@ refuses the plain sibling's list by name until its soundness is proved (`Verity.
 the rows check's id yet: the game reads it as `Verity.rowsCheck`, whose behavior nothing states (`rowsUnbuilt`, an
 `escapes` entry of the lock), so its target there is proved only from the compiled check that replaces it. Its claim
 there is `Verity.rowsHeld`, which nothing states either: v0's clause, which `Vocab.inferenceOnlySound` proves at a
-composite that lists v0, would read no case at the plain sibling (`Verity.v0_not_mem_plain`, `Vocab.holds_plain`).
+composite that lists v0 and not the rows check, would read no case at the plain sibling (`Verity.v0_not_mem_plain`,
+`Vocab.holds_plain`, `Verity.not_inferenceOnlySound_hyp_plain`).
 
 | Subprotocol | Target | Compiled check | Remote | Plain | Onsite |
 |---|---|---|---|---|---|
