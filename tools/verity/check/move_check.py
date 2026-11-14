@@ -30,6 +30,8 @@ Every path git sees changed must be one of:
   member (or its `tool.uv.sources` entry) for a directory that is new at HEAD, a `tests/test_lean_packages.py` entry for a
   new Lake package with its `lean-audit.json`; and in any `pyproject.toml`, an added line of a new Lake package's own
   files (its lakefile, manifest, lock or toolchain), as a suite's inputs list what Lake reads;
+- in `WORKSPACE_FILES` (the root `pyproject.toml`, `uv.lock`), a quoted distribution's directory rewritten to where its
+  `pyproject.toml` went, also out of a directory the range split (`rules`'s `members`);
 - an edit to a `*.lean` file whose changed lines only rewrite an `import M` to the new module of a `.lean` file renamed in
   the range (a module is its path below its Lake package, `/` as `.`, without `.lean`), as when a Lean split gives the
   proof modules a root of their own while their declarations keep their namespace, or a moved path from the root (a doc
@@ -146,6 +148,8 @@ from pathlib import Path
 MOVES = "tools/research/src/research/store/moves.json"
 #: the files where a new package is registered by an added line (`registration`)
 REGISTRIES = {"pyproject.toml": "workspace", "tests/test_lean_packages.py": "lean"}
+#: the workspace's own files, which name each distribution by the directory its `pyproject.toml` is in
+WORKSPACE_FILES = ("pyproject.toml", "uv.lock")
 #: files whose quoted relative paths name another directory of the tree (a Lake `require`, a manifest's `dir`, a uv source)
 RELATIVE_NAMES = {"pyproject.toml", "lakefile.lean", "lakefile.toml", "lake-manifest.json"}
 LAKEFILES = ("lakefile.toml", "lakefile.lean")
@@ -1814,6 +1818,15 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
         reg = REGISTRIES.get(path)
         return bool(reg) and list_addition(x, y, new_dir if reg == "workspace" else new_lake)
 
+    dists = {posixpath.dirname(o): posixpath.dirname(n) for o, n in renamed
+             if posixpath.basename(o) == posixpath.basename(n) == "pyproject.toml" and posixpath.dirname(o) != posixpath.dirname(n)}
+
+    def member_pair(path: str, x: str, y: str) -> bool:
+        """Whether, in the workspace's own files, `y` is `x` with each quoted distribution's directory (a member, a lock's
+        package source) named where its `pyproject.toml` went, also from a directory the range split."""
+        return bool(dists) and path in WORKSPACE_FILES and x != y and \
+            re.sub(r'"([^"]+)"', lambda m: f'"{dists.get(m[1], m[1])}"', x) == y
+
     def registered(path: str, y: str) -> bool:
         """Whether an added line registers exactly a package the range created: a workspace member or its uv source, or a
         Lake package with its lock; or, in any `pyproject.toml`, a line of quoted paths each a Lake file at the root of a new
@@ -1947,6 +1960,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                            or (sh and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap))
                            or (sh_here and sh_anchor_rewrite(z, y, old, new, *sh_names, pmap, sh_here) and not took.add("anchor"))
                            or dotted_rewrite(z, y, modules) or registry_pair(new, z, y)
+                           or (member_pair(new, z, y) and not took.add("members"))
                            for z in dict.fromkeys((x, substitute(x, short))))
 
             def block(xs: list[str], ys: list[str]) -> bool:
