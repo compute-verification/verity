@@ -55,11 +55,6 @@
    "imports": ["CoreProtocol.Period", "Difftest", "Lean.Data.Json", "Base.Canon"],
    "except": [],
    "why": "the difftest's functions reach Lean only through the code's periods and the harness"
-  },
-  "CoreProtocol.Registration": {
-   "imports": ["CoreProtocol.Protocol", "CoreProtocol.Site", "Base.Hash"],
-   "except": [],
-   "why": "the registration log in code is spec: its property (`Properties.Accounting.Registration.Code`) is stated over its check, entries and view, so it imports only the interface's `Protocol`, for its command, the Site it folds site entries into, and C-Flock's SHA-512, for its entries' digests"
   }
  },
  "guarantees": {},
