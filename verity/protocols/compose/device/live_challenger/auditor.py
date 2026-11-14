@@ -318,13 +318,12 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
-  a rehearsal makes one, which
-  `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its session's start
-  (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures a link-window, and its signer refuses
-  every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the least
-  height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal samples
-  each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger here
-  samples none, since a rehearsal is none of its windows.
+  a rehearsal makes one, which `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its
+  session's start (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures a link-window, and its signer
+  refuses every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the
+  least height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal
+  samples each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger
+  here samples none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,

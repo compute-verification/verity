@@ -78,9 +78,9 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   `serve` then writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters
   and their digest, the start's certificate, the origin) and beside it `endpoints.json` (the listener and the
   endpoint, which a client reads and nothing publishes). The origin is there on the network certifier's clock
-  (`origin_raw`) and as wall time: `origin_unix` is one reading of the host's wall time at the origin, and wall time
-  minus it is not the network certifier's bucket, since the host steers its wall time and not the raw clock. `serve`
-  runs the network certifier for `--windows` windows, each bucket released by its
+  (`origin_raw`) and as wall time: `origin_unix` is one reading of the host's wall time at the origin, and wall
+  time minus it is not the network certifier's bucket, since the host steers its wall time and not the raw clock.
+  `serve` runs the network certifier for `--windows` windows, each bucket released by its
   pacer `--paced-ms` after its boundary (`warden`'s "The pacer"; 0: written on the network certifier's loop), and writes
   `warden.json` (each connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their
   windows, each bucket's pacer report, `paced`, and how far the host's wall time parted from the network
@@ -1047,8 +1047,8 @@ def connection_log(index: int, at: float, sent: float, request: bytes, shim: Shi
 async def client(deployment: dict, endpoints: dict, traffic: list[dict], out: Path, clock=raw_clock) -> dict:
     """Each request of `traffic` on a connection of its own at its time after the deployment's origin, through the
     shim, to the listener `endpoints` names; returns what `client.json` holds. An item with ``ids`` (`id_traffic`) is
-    sent as its network-certifier-form id request (`active.id_request`, offset 0) and its response read as id-form.
-    It runs on the network certifier's host and reads that host's raw clock, the one the origin is a reading of
+    sent as its network-certifier-form id request (`active.id_request`, offset 0) and its response read as id-form. It
+    runs on the network certifier's host and reads that host's raw clock, the one the origin is a reading of
     (`origin_raw`), so that a cell's arrival is laid against the grid on the grid's own clock however long the run."""
     params = WardenParams(**deployment["params"])
     origin, listen = deployment["origin_raw"], tuple(endpoints["listen"])

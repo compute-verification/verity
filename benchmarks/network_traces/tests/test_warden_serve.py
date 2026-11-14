@@ -876,7 +876,8 @@ def test_the_client_connects_where_the_endpoints_file_says_and_names_its_upstrea
         server = await asyncio.start_server(take, "127.0.0.1", 0)
         ends = ws.endpoints_record(server.sockets[0].getsockname()[:2], ("127.0.0.1", 2))
         (tmp_path / ws.ENDPOINTS).write_text(json.dumps(ends))
-        (tmp_path / "deployment.json").write_text(json.dumps({"params": dataclasses.asdict(PARAMS), "origin_unix": 0.0}))
+        (tmp_path / "deployment.json").write_text(json.dumps({"params": dataclasses.asdict(PARAMS), "origin_unix": 0.0,
+                                                              "origin_raw": 0.0}))
         dep = json.loads((tmp_path / "deployment.json").read_text())
         async with server:
             return await ws.client(dep, ws.read_endpoints(tmp_path / "deployment.json"), [{"at": 0.0, "body": body}],
