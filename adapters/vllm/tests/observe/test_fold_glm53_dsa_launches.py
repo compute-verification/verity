@@ -20,7 +20,8 @@
   layer's index copy wrote, to its split count, to the record target's 132 SMs and to the step's block tables, in that order; it folds
   as one `SparseMlaSplit_v1` a row over the request's latent rows, at the split count the launch's heuristic gives the row;
 * a logits allocation the indexer cannot fill, a gather with no keys destination and a top-k of another width or past the short row
-  are refused.
+  are refused;
+* a refusal of several conditions has a case off each of them alone, and each argument the FA3 call may not carry has its own.
 """
 from __future__ import annotations
 
@@ -645,13 +646,39 @@ def test_a_sparse_mla_of_a_long_row_is_split_and_its_splits_are_combined():
      {"observed": repr(view(88, (128, 576), "bfloat16")), "established": repr(LATENT)}),
     ({"page_table": view(53, (2, 2048), "int32")}, "FA3 page table is not the shared top-k allocation",
      {"page_table": repr(view(53, (2, 2048), "int32")), "established": (52, 0, 2048, (2048, 1))}),
+    ({"page_table": view(52, (2048,), "int32")}, "FA3 page table is not the shared top-k allocation",
+     {"page_table": repr(view(52, (2048,), "int32")), "established": (52, 0, 2048, (2048, 1))}),
+    ({"page_table": None}, "FA3 page table is not the shared top-k allocation", {"page_table": "None", "established": (52, 0, 2048, (2048, 1))}),
     ({"num_splits": -1}, "FA3 num_splits is not a nonnegative integer", {"num_splits": -1}),
     (_halves(slots=64), "a selected latent-cache slot is outside the cache", {"T": 10, "cache_slots": 64}),
-], ids=["argument", "halves", "latent-cache", "page-table", "splits", "slot-range"])
+], ids=["argument", "halves", "latent-cache", "page-table", "page-table-rank", "page-table-absent", "splits", "slot-range"])
 def test_a_sparse_mla_on_the_default_path_off_its_layer_s_caches_is_refused_with_what_differs(kw, reason, detail):
     off = D.DsaSparseMla().match(_mla(**{**MLA_DEFAULT, **_halves(), **kw})[0], _before_its_mla())
     assert isinstance(off, Unsupported) and off.reason == reason and off.consumed == (40,)
     assert {k: off.detail[k] for k in detail} == detail
+
+
+@pytest.mark.parametrize("name", ["k_new", "v_new", "out", "scheduler_metadata", "pack_gqa", "s_aux", "cp_tot_seqused_k"])
+def test_a_sparse_mla_that_carries_an_argument_the_default_path_leaves_out_is_refused_with_it(name):
+    off = D.DsaSparseMla().match(_mla(**MLA_DEFAULT, **_halves(), **{name: 7})[0], _before_its_mla())
+    assert isinstance(off, Unsupported) and off.reason == "FA3 sparse MLA arguments differ from the GLM-5.3 default path"
+    assert off.detail["mismatches"] == {name: (7, None)}
+
+
+@pytest.mark.parametrize("name", ["cu_seqlens_k", "cu_seqlens_k_new", "seqused_q", "kv_batch_idx", "leftpad_k", "rotary_cos", "rotary_sin",
+                                  "seqlens_rotary", "q_descale", "k_descale", "v_descale"])
+def test_a_sparse_mla_that_carries_an_argument_the_fold_does_not_read_is_refused_with_its_name_and_value(name):
+    off = D.DsaSparseMla().match(_mla(**MLA_DEFAULT, **_halves(), **{name: 7})[0], _before_its_mla())
+    assert isinstance(off, Unsupported) and off.reason == f"FA3 sparse MLA has unsupported argument {name}" and off.detail["value"] == "7"
+
+
+def test_a_sparse_mla_of_a_row_one_key_past_a_block_is_two_splits_and_is_combined():
+    ctx = _before_its_mla([("a", [64])], [64])
+    r = D.DsaSparseMla().match(_mla(rows=1, **MLA_DEFAULT, **_halves())[0], ctx)
+    assert isinstance(r, Group) and len(r.parts) == 1
+    assert spec_label(r.parts[0].spec) == (
+        "SparseMlaSplit_v1{T=65,NS=2,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,SCALE=0.0625}")
+    assert (r.parts[0].hint, r.parts[0].kernels) == (f"{LAYER}/sparse_mla[t=64,splits=2]", ("FlashAttnFwdSm90", "FlashAttnFwdCombine"))
 
 
 @pytest.mark.parametrize("half,off", [
