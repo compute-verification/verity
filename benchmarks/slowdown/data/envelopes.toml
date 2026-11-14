@@ -7,8 +7,8 @@
 [policy.kimi-k2-1m-raw]
 inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeholder for the honest inference workload's overhead under this partition; this package models no honest inference circuit to partition" }
 
-[regime.unmonitored]
-kind = "unmonitored"
+[regime.unregistered]
+kind = "unregistered"
 
 # InferenceOnly.Guarantees.SlowdownRemote's terms, each at benchmarks/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
 # PoUW: residual, clock_share, host, eps_w, eps_agg, window_delta_*; detection: identities, lag_s (and, sampled, the rest).

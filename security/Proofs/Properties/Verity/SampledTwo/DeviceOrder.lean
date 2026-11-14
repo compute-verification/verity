@@ -100,7 +100,7 @@ theorem printsInOrder_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Rel
     exact h
   · rw [if_neg hww]
     intro pk a b ha hb hab
-    have h2 := oneWindow_false hw hww
+    have h2 := oneExecutionPhase_false hw hww
     obtain ⟨once, own, order⟩ := hL hww
     have hsub := ledger_two S₁ S₂ cut h2
     have ha' := ledgerOpens_mono ha (hsub pk)

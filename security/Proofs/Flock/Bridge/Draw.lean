@@ -253,7 +253,7 @@ def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
 theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) {samplingDesign : Flock.Draw.SamplingDesign}
     {ns : List ℕ} {kd : ℕ} (hlaw : SamplingDesignOn samplingDesign ns kd) (hns : ns.sum = n) (W : Finset (Fin n)) :
-    (execSel (n := n) t samplingDesign n).escape W ≤
+    (execSel (n := n) t samplingDesign n).missProb W ≤
       ENNReal.ofReal ((Properties.Spot.oneStageOf samplingDesign).Pa ns (W.map Fin.valEmbedding)) := by
   classical
   rcases W.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
@@ -266,7 +266,7 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
     Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf g) = .ok (units, read) ∧
       ∀ u ∈ W.map Fin.valEmbedding, u ∉ units
   have hfin : prCoin (E 0) ≠ ⊤ := ne_top_of_le_ne_top ENNReal.one_ne_top (Audit.SampleExec.prCoin_le_one _)
-  calc (execSel (n := n) t samplingDesign n).escape W ≤ prCoin (fun ω => E 0 (t ω 0)) := by
+  calc (execSel (n := n) t samplingDesign n).missProb W ≤ prCoin (fun ω => E 0 (t ω 0)) := by
         refine prCoin_mono fun ω hd => ?_
         change Disjoint (match Spot.Draw.sampleUnits samplingDesign n (Properties.Spot.bytesOf (t ω 0)) with
           | .ok r => univ.filter fun u => u.val ∈ r.1

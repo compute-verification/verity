@@ -116,7 +116,7 @@ theorem any_one (f : Json → Bool) (x : Json) (h : f x = true) : (#[x] : Array 
   rw [show (#[x] : Array Json) = [x].toArray from rfl, List.any_toArray, List.any_cons, h]
   rfl
 
-theorem find_window (w : Win) (root : String) (h : w.root = root) :
+theorem find_executionPhase (w : Win) (root : String) (h : w.root = root) :
     (#[w] : Array Win).find? (·.root == root) = some w := by
   rw [show (#[w] : Array Win) = [w].toArray from rfl, List.find?_toArray, List.find?_cons_of_pos (by simp [h])]
 
@@ -580,7 +580,7 @@ theorem trusted (h : p.Honest I) :
     simp only [SEALED_FILES, List.all_cons, List.all_nil, field_some e7, field_some e8, field_some e3, field_some e4,
       Bool.and_self]
   have hao := Steps.auditedOpen_ok_of_steps (recordLeaf := 1) (refusedHellos := 0) hwin hck
-    (find_window _ _ (by
+    (find_executionPhase _ _ (by
       show Flock.hexOf p.window = strOf (getD (Json.mkObj [("root", Json.str (Flock.hexOf p.window))]) "root")
       rfl)) rfl rfl hcl hrl hrh hcm hfl
   -- the pins log and main

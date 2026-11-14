@@ -9,29 +9,29 @@ import Proofs.Flock.Claims.Sampling.Extract
 # A footprint in `M̄_δ` marks fewer than `K` replay blocks incorrect
 
 The cap a two-stage audit puts on what one accepted run can hide. A footprint marks a replay block incorrect when one of
-its cells holds an incorrect proof block (`Design.Two.wrongBlocks`). The second stage samples each cell `(ρ, t)` of
+its cells holds an incorrect proof block (`Design.Two.incorrectBlocks`). The second stage samples each cell `(ρ, t)` of
 `n_{ρ,t}` proof blocks at `min(k_t, n_{ρ,t})`; when that is at least `r₂·n_{ρ,t}` in every cell, an incorrect replay
 block escapes with probability at most `1 − r₂`, since a cell with one incorrect proof block escapes with probability
 `1 − min(k, n)/n` (`escCell_one`) and more incorrect ones only lower it (`escCell_anti`).
 
 * `Design.Two.Pa_le_pow`: at a first stage below independent catches at rates `q_ρ ≥ r₁` (`Design.Two.Pa_le_prod`),
-  `P̄_a ≤ (1 − r₁·r₂)^{|wrongBlocks|}`.
+  `P̄_a ≤ (1 − r₁·r₂)^{|incorrectBlocks|}`.
 * `Claims.SecurityProofs.CapTwo`: the same at the two rates as the lock states them, `Claims.Guarantees.CapTwo`.
-* `Design.Two.card_wrongBlocks_lt`: so a footprint in `M̄_δ` marks fewer than every `K` with `(1 − r₁·r₂)^K ≤ δ`.
-* `Design.Two.card_wrongBlocks_lt_subsetInputs`: the same at the deployed first stage, a uniform `Q`-subset of the
+* `Design.Two.card_incorrectBlocks_lt`: so a footprint in `M̄_δ` marks fewer than every `K` with `(1 − r₁·r₂)^K ≤ δ`.
+* `Design.Two.card_incorrectBlocks_lt_subsetInputs`: the same at the deployed first stage, a uniform `Q`-subset of the
   population's `N` replay blocks and every input replay block (`Design.Two.subsetInputs_Pa_le`), at `r₁ = Q/N`.
 * `Design.Two.firstRate_subsetInputs`: that first stage catches each replay block at rate `Q/N`, the `FirstRate` the
   cap reads.
 * `footprint_le_card`: a footprint counts at most its cell, as the cap reads it.
-* `wrongAtBoundary`: the replay blocks wrong at their boundary, which hold an incorrect proof block at every interior.
-  They read only the boundary trace, which serving commits before any coin. Every interior's `wrongBlocks` holds them
-  (`wrongAtBoundary_subset`), and some interior's are exactly them (`exists_wrongBlocks_eq`), so they are the fewest
+* `incorrectAtBoundary`: the replay blocks wrong at their boundary, which hold an incorrect proof block at every interior.
+  They read only the boundary trace, which serving commits before any coin. Every interior's `incorrectBlocks` holds them
+  (`incorrectAtBoundary_subset`), and some interior's are exactly them (`exists_incorrectBlocks_eq`), so they are the fewest
   replay blocks any interior marks incorrect.
 * `sum_lt_of_le_prod`: the period's joint cap. Windows whose misses `≤ x^{m}` multiply to at least `δ` mark fewer than
   `K` replay blocks incorrect in all whenever `x^K < δ`, however many windows the period has (`prod_le_pow_sum`).
-* `wrongAllAt`: at boundary values, over the grid of replay blocks and strata, each cell's incorrect proof blocks at its
-  replay block's interior; its share of a cell is that cell's `wrongInAt` (`inter_cell_wrongAllAt`). The committed
-  form's incorrect set is `wrongAllAt` at the committed traces (`CompiledTwo.FregTwo_eq`), and reads no second-stage
+* `incorrectAllAt`: at boundary values, over the grid of replay blocks and strata, each cell's incorrect proof blocks at its
+  replay block's interior; its share of a cell is that cell's `incorrectInAt` (`inter_cell_incorrectAllAt`). The committed
+  form's incorrect set is `incorrectAllAt` at the committed traces (`CompiledTwo.FregTwo_eq`), and reads no second-stage
   coin, since the committed interior doesn't (`CompiledTwo.FregTwo_forkOn`, `CompiledTwo.iregVal_forkOn`).
 -/
 
@@ -99,11 +99,11 @@ theorem Design.Two.Pa_le_pow (d : Design.Two) (Pt : Partition) (q : ℕ → ℝ)
     (hrate : ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, 0 < (cell Pt d.part ρ t).card →
       r₂ * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ))
     {fp : ℕ → ℕ → ℕ} (hcell : ∀ ρ t, fp ρ t ≤ (cell Pt d.part ρ t).card) :
-    d.Pa Pt fp ≤ (1 - r₁ * r₂) ^ (d.wrongBlocks Pt fp).card := by
-  have hsub : d.wrongBlocks Pt fp ⊆ range d.part.blocks.length := filter_subset _ _
+    d.Pa Pt fp ≤ (1 - r₁ * r₂) ^ (d.incorrectBlocks Pt fp).card := by
+  have hsub : d.incorrectBlocks Pt fp ⊆ range d.part.blocks.length := filter_subset _ _
   refine (d.Pa_le_prod Pt fp q hT).trans ?_
   calc ∏ ρ ∈ range d.part.blocks.length, (1 - q ρ + q ρ * d.esc Pt fp ρ)
-      ≤ ∏ ρ ∈ range d.part.blocks.length, (if ρ ∈ d.wrongBlocks Pt fp then 1 - r₁ * r₂ else 1) := by
+      ≤ ∏ ρ ∈ range d.part.blocks.length, (if ρ ∈ d.incorrectBlocks Pt fp then 1 - r₁ * r₂ else 1) := by
         refine prod_le_prod₀ (fun ρ hρ => ?_) fun ρ hρ => ?_
         · obtain ⟨h1, h2⟩ := hq ρ (mem_range.1 hρ)
           nlinarith [d.esc_nonneg Pt fp ρ, mul_nonneg (le_trans hr₁ h1) (d.esc_nonneg Pt fp ρ)]
@@ -112,14 +112,14 @@ theorem Design.Two.Pa_le_pow (d : Design.Two) (Pt : Partition) (q : ℕ → ℝ)
           · exact d.factor_le Pt fp h1 (le_trans hr₁ h1) hr₂ (hcell ρ) (hrate ρ (mem_range.1 hρ))
               (mem_filter.1 hw).2
           · nlinarith [mul_le_mul_of_nonneg_left (d.esc_le_one Pt fp ρ) (le_trans hr₁ h1)]
-    _ = (1 - r₁ * r₂) ^ (d.wrongBlocks Pt fp).card := by
+    _ = (1 - r₁ * r₂) ^ (d.incorrectBlocks Pt fp).card := by
         rw [prod_ite_mem, inter_eq_right.2 hsub, prod_const]
 
 /-- **A footprint in `M̄_δ` marks fewer than `K` replay blocks incorrect**: at a first stage that misses each set `T`
 of replay blocks with probability at most `∏_{ρ∈T} (1 − q_ρ)`, each `q_ρ` in `[r₁, 1]`, and a second stage sampling
 each cell `(ρ, t)` at `min(k_t, n_{ρ,t}) ≥ r₂·n_{ρ,t}`, a footprint with `P̄_a > δ` that counts at most each cell
 marks fewer than `K` replay blocks incorrect whenever `(1 − r₁·r₂)^K ≤ δ`. -/
-theorem Design.Two.card_wrongBlocks_lt (d : Design.Two) (Pt : Partition) (q : ℕ → ℝ) {r₁ r₂ δ : ℝ} {K : ℕ}
+theorem Design.Two.card_incorrectBlocks_lt (d : Design.Two) (Pt : Partition) (q : ℕ → ℝ) {r₁ r₂ δ : ℝ} {K : ℕ}
     (hT : ∀ T ⊆ range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ ρ ∈ T, (1 - q ρ))
     (hq : ∀ ρ < d.part.blocks.length, r₁ ≤ q ρ ∧ q ρ ≤ 1) (hr₁ : 0 ≤ r₁) (hr₁' : r₁ ≤ 1) (hr₂ : 0 ≤ r₂)
     (hr₂' : r₂ ≤ 1)
@@ -127,28 +127,28 @@ theorem Design.Two.card_wrongBlocks_lt (d : Design.Two) (Pt : Partition) (q : �
       r₂ * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ))
     (hK : (1 - r₁ * r₂) ^ K ≤ δ) {fp : ℕ → ℕ → ℕ} (hfp : fp ∈ d.M Pt δ)
     (hcell : ∀ ρ t, fp ρ t ≤ (cell Pt d.part ρ t).card) :
-    (d.wrongBlocks Pt fp).card < K := by
+    (d.incorrectBlocks Pt fp).card < K := by
   refine Nat.lt_of_not_le fun hge => ?_
   have hδ : δ < d.Pa Pt fp := hfp
   have hx0 : 0 ≤ 1 - r₁ * r₂ := by nlinarith [mul_nonneg (sub_nonneg.2 hr₁') hr₂]
   have hx1 : 1 - r₁ * r₂ ≤ 1 := by nlinarith [mul_nonneg hr₁ hr₂]
-  have hpow : (1 - r₁ * r₂) ^ (d.wrongBlocks Pt fp).card ≤ (1 - r₁ * r₂) ^ K := pow_le_pow_of_le_one hx0 hx1 hge
+  have hpow : (1 - r₁ * r₂) ^ (d.incorrectBlocks Pt fp).card ≤ (1 - r₁ * r₂) ^ K := pow_le_pow_of_le_one hx0 hx1 hge
   linarith [d.Pa_le_pow Pt q hT hq hr₁ hr₂ hrate hcell]
 
 /-- **The cap at the deployed first stage**: a uniform `Q`-subset of the population's `N` replay blocks and every input
 replay block, with each cell sampled at `min(k_t, n_{ρ,t}) ≥ r₂·n_{ρ,t}`: a footprint in `M̄_δ` that counts at most
 each cell marks fewer than `K` replay blocks incorrect whenever `(1 − (Q/N)·r₂)^K ≤ δ`. -/
-theorem Design.Two.card_wrongBlocks_lt_subsetInputs (d : Design.Two) (Pt : Partition) {Q : ℕ}
+theorem Design.Two.card_incorrectBlocks_lt_subsetInputs (d : Design.Two) (Pt : Partition) {Q : ℕ}
     (hd : SubsetInputsDesign d.replay Q) {c ic : List (List (List ℕ))} (hP : d.part.classes = [c, ic])
     (hQ : Q ≤ c.flatten.length) {r₂ δ : ℝ} {K : ℕ} (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1)
     (hrate : ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, 0 < (cell Pt d.part ρ t).card →
       r₂ * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ))
     (hK : (1 - (Q : ℝ) / c.flatten.length * r₂) ^ K ≤ δ) {fp : ℕ → ℕ → ℕ} (hfp : fp ∈ d.M Pt δ)
     (hcell : ∀ ρ t, fp ρ t ≤ (cell Pt d.part ρ t).card) :
-    (d.wrongBlocks Pt fp).card < K := by
+    (d.incorrectBlocks Pt fp).card < K := by
   have hr₁ : (0 : ℝ) ≤ (Q : ℝ) / c.flatten.length := by positivity
   have hr₁' : (Q : ℝ) / c.flatten.length ≤ 1 := div_le_one_of_le₀ (by exact_mod_cast hQ) (Nat.cast_nonneg _)
-  refine d.card_wrongBlocks_lt Pt _ (d.subsetInputs_Pa_le hd hP hQ) (fun ρ _ => ?_) hr₁ hr₁' hr₂ hr₂' hrate hK hfp
+  refine d.card_incorrectBlocks_lt Pt _ (d.subsetInputs_Pa_le hd hP hQ) (fun ρ _ => ?_) hr₁ hr₁' hr₂ hr₂' hrate hK hfp
     hcell
   split_ifs
   · exact ⟨le_rfl, hr₁'⟩
@@ -174,44 +174,44 @@ open Classical in
 /-- **The replay blocks wrong at their boundary** under the boundary trace `w`: each holds an incorrect proof block at
 every interior, so an interior committed after the first stage's coins can't hide it from the second stage. It reads
 only `w`'s boundary values. -/
-noncomputable def wrongAtBoundary (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+noncomputable def incorrectAtBoundary (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
     (w : Wit) : Finset ℕ :=
   (range Pρ.blocks.length).filter fun ρ =>
-    ∀ i : ℕ → Bool, ∃ t < Pt.strata.length, (wrongIn H Cm s Pt Pρ w ρ t i).Nonempty
+    ∀ i : ℕ → Bool, ∃ t < Pt.strata.length, (incorrectIn H Cm s Pt Pρ w ρ t i).Nonempty
 
 /-- **Every interior marks the replay blocks wrong at their boundary**: at any interior values, each is among the
-footprint's `wrongBlocks`. -/
-theorem wrongAtBoundary_subset (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
+footprint's `incorrectBlocks`. -/
+theorem incorrectAtBoundary_subset (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
     (d : Design.Two) (w : Wit) (ι : ℕ → ℕ → Bool) :
-    wrongAtBoundary H Cm s Pt d.part w ⊆ d.wrongBlocks Pt (footprint H Cm s Pt d.part w ι) := by
+    incorrectAtBoundary H Cm s Pt d.part w ⊆ d.incorrectBlocks Pt (footprint H Cm s Pt d.part w ι) := by
   intro ρ hρ
-  simp only [wrongAtBoundary, mem_filter] at hρ
+  simp only [incorrectAtBoundary, mem_filter] at hρ
   obtain ⟨t, ht, hne⟩ := hρ.2 (ι ρ)
-  simp only [Design.Two.wrongBlocks, mem_filter]
+  simp only [Design.Two.incorrectBlocks, mem_filter]
   exact ⟨hρ.1, t, ht, card_pos.2 hne⟩
 
 /-- **Some interior marks only them**: at each replay block not wrong at its boundary, an interior with no incorrect
-proof block makes the footprint's `wrongBlocks` exactly the replay blocks wrong at their boundary. -/
-theorem exists_wrongBlocks_eq (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
+proof block makes the footprint's `incorrectBlocks` exactly the replay blocks wrong at their boundary. -/
+theorem exists_incorrectBlocks_eq (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
     (d : Design.Two) (w : Wit) :
-    ∃ ι : ℕ → ℕ → Bool, d.wrongBlocks Pt (footprint H Cm s Pt d.part w ι) = wrongAtBoundary H Cm s Pt d.part w := by
-  have key : ∀ ρ, ∃ i : ℕ → Bool, ρ ∉ wrongAtBoundary H Cm s Pt d.part w → ρ < d.part.blocks.length →
-      ∀ t < Pt.strata.length, ¬ (wrongIn H Cm s Pt d.part w ρ t i).Nonempty := by
+    ∃ ι : ℕ → ℕ → Bool, d.incorrectBlocks Pt (footprint H Cm s Pt d.part w ι) = incorrectAtBoundary H Cm s Pt d.part w := by
+  have key : ∀ ρ, ∃ i : ℕ → Bool, ρ ∉ incorrectAtBoundary H Cm s Pt d.part w → ρ < d.part.blocks.length →
+      ∀ t < Pt.strata.length, ¬ (incorrectIn H Cm s Pt d.part w ρ t i).Nonempty := by
     intro ρ
-    by_cases h : ∃ i : ℕ → Bool, ∀ t < Pt.strata.length, ¬ (wrongIn H Cm s Pt d.part w ρ t i).Nonempty
+    by_cases h : ∃ i : ℕ → Bool, ∀ t < Pt.strata.length, ¬ (incorrectIn H Cm s Pt d.part w ρ t i).Nonempty
     · obtain ⟨i, hi⟩ := h
       exact ⟨i, fun _ _ => hi⟩
     · refine ⟨fun _ => false, fun hn hlt => absurd ?_ hn⟩
-      simp only [wrongAtBoundary, mem_filter, mem_range]
+      simp only [incorrectAtBoundary, mem_filter, mem_range]
       refine ⟨hlt, fun i => ?_⟩
       by_contra hc
       exact h ⟨i, fun t ht hne => hc ⟨t, ht, hne⟩⟩
   choose ι hι using key
   refine ⟨ι, ?_⟩
   ext ρ
-  refine ⟨fun hρ => ?_, fun hρ => wrongAtBoundary_subset H Cm s Pt d w ι hρ⟩
+  refine ⟨fun hρ => ?_, fun hρ => incorrectAtBoundary_subset H Cm s Pt d w ι hρ⟩
   by_contra hn
-  simp only [Design.Two.wrongBlocks, mem_filter, mem_range] at hρ
+  simp only [Design.Two.incorrectBlocks, mem_filter, mem_range] at hρ
   obtain ⟨hlt, t, ht, hpos⟩ := hρ
   exact hι ρ hn hlt t ht (card_pos.1 hpos)
 
@@ -239,42 +239,42 @@ theorem sum_lt_of_le_prod {α : Type} (l : List α) (pa : α → ENNReal) (m : �
   exact absurd (hin.trans (prod_le_pow_sum l pa m hx hpa)) (not_le.2 hlt)
 
 open Classical in
-theorem wrongInAt_subset_cell (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ρ t : ℕ)
-    (ι : ℕ → Bool) : wrongInAt s Pt Pρ val ρ t ι ⊆ cell Pt Pρ ρ t :=
+theorem incorrectInAt_subset_cell (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ρ t : ℕ)
+    (ι : ℕ → Bool) : incorrectInAt s Pt Pρ val ρ t ι ⊆ cell Pt Pρ ρ t :=
   filter_subset _ _
 
 theorem footprintAt_le_card (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool)
     (ρ t : ℕ) : footprintAt s Pt Pρ val ι ρ t ≤ (cell Pt Pρ ρ t).card :=
-  card_le_card (wrongInAt_subset_cell s Pt Pρ val ρ t (ι ρ))
+  card_le_card (incorrectInAt_subset_cell s Pt Pρ val ρ t (ι ρ))
 
 /-- **The incorrect proof blocks at boundary values `val` and interior values `ι`** over the grid of replay blocks and
 strata: each cell's at its replay block's interior. -/
-noncomputable def wrongAllAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool) :
+noncomputable def incorrectAllAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool) :
     Finset ℕ :=
-  (range Pρ.blocks.length ×ˢ range Pt.strata.length).biUnion fun p => wrongInAt s Pt Pρ val p.1 p.2 (ι p.1)
+  (range Pρ.blocks.length ×ˢ range Pt.strata.length).biUnion fun p => incorrectInAt s Pt Pρ val p.1 p.2 (ι p.1)
 
-theorem wrongAllAt_subset (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool) :
-    wrongAllAt s Pt Pρ val ι ⊆ range Pt.blocks.length := by
+theorem incorrectAllAt_subset (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool) :
+    incorrectAllAt s Pt Pρ val ι ⊆ range Pt.blocks.length := by
   intro v hv
   obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
-  exact cell_subset Pt Pρ p.1 p.2 (wrongInAt_subset_cell s Pt Pρ val p.1 p.2 _ hvp)
+  exact cell_subset Pt Pρ p.1 p.2 (incorrectInAt_subset_cell s Pt Pρ val p.1 p.2 _ hvp)
 
-/-- On the grid, a cell's share of `wrongAllAt` is its incorrect proof blocks at its replay block's interior. -/
-theorem inter_cell_wrongAllAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool)
+/-- On the grid, a cell's share of `incorrectAllAt` is its incorrect proof blocks at its replay block's interior. -/
+theorem inter_cell_incorrectAllAt (s : AuditStatement) (Pt Pρ : Partition) (val : ℕ → Option Bool) (ι : ℕ → ℕ → Bool)
     {ρ t : ℕ} (hρ : ρ < Pρ.blocks.length) (ht : t < Pt.strata.length) :
-    wrongAllAt s Pt Pρ val ι ∩ cell Pt Pρ ρ t = wrongInAt s Pt Pρ val ρ t (ι ρ) := by
+    incorrectAllAt s Pt Pρ val ι ∩ cell Pt Pρ ρ t = incorrectInAt s Pt Pρ val ρ t (ι ρ) := by
   ext v
   rw [mem_inter]
   constructor
   · rintro ⟨hv, hvc⟩
     obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
-    obtain ⟨h1, h2⟩ := cell_disj (wrongInAt_subset_cell s Pt Pρ val p.1 p.2 _ hvp) hvc
+    obtain ⟨h1, h2⟩ := cell_disj (incorrectInAt_subset_cell s Pt Pρ val p.1 p.2 _ hvp) hvc
     subst h1
     subst h2
     exact hvp
   · intro hv
     exact ⟨mem_biUnion.2 ⟨(ρ, t), mem_product.2 ⟨mem_range.2 hρ, mem_range.2 ht⟩, hv⟩,
-      wrongInAt_subset_cell s Pt Pρ val ρ t _ hv⟩
+      incorrectInAt_subset_cell s Pt Pρ val ρ t _ hv⟩
 
 end Claims.Sampling
 
@@ -290,19 +290,19 @@ theorem Claims.SecurityProofs.CapTwo : Claims.Guarantees.CapTwo := by
 namespace Claims.SamplingGeneric
 
 open Claims
-open Claims.Sampling (AuditStatement Partition InScopeTwo forkOn forkOn_forkOn wrongAllAt)
+open Claims.Sampling (AuditStatement Partition InScopeTwo forkOn forkOn_forkOn incorrectAllAt)
 
 namespace CompiledTwo
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- On a statement that parses and whose partitions evaluate, the committed incorrect set is `wrongAllAt` at the
+/-- On a statement that parses and whose partitions evaluate, the committed incorrect set is `incorrectAllAt` at the
 committed boundary trace and interiors. -/
 theorem FregTwo_eq (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) {x : Msg}
     {s : AuditStatement} {Pt : Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (ω : Ω) (r : Fin (L.V.k x) → Coin) :
-    L.FregTwo H P x ω r = wrongAllAt s Pt d.part (L.regVal H P x ω) (L.iregVal H P x ω r) := by
-  simp only [FregTwo, hs, hPt, hd, wrongAllAt]
+    L.FregTwo H P x ω r = incorrectAllAt s Pt d.part (L.regVal H P x ω) (L.iregVal H P x ω r) := by
+  simp only [FregTwo, hs, hPt, hd, incorrectAllAt]
 
 /-- **The committed interior reads no second-stage coin.** -/
 theorem iregVal_forkOn (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)

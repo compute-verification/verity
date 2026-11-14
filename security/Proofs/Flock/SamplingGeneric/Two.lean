@@ -66,7 +66,7 @@ set at its own interior values does when `Y` is the incorrect set at each replay
   counts, by `above`, which the projection keeps), and the outer wait's over `above`'s values on `S₁Two` (at most
   `2^M`), each within its wait's slack: `|sampleBlocks S| ≤ n_in` and `M ≤ n_out` (`Sessions.unions`). An outer run
   no second-stage fork of which is accepted adds nothing, so the inner union needs its bits only where one is.
-* `wrongAll`, `inter_cell_wrongAll`, `exists_best_interior`: the incorrect proof blocks at interiors, cell by cell,
+* `incorrectAll`, `inter_cell_incorrectAll`, `exists_best_interior`: the incorrect proof blocks at interiors, cell by cell,
   and a replay block's best interior, at which it escapes the most (its escape takes finitely many values).
 * `splitTwo`: **the deterministic half**. At an accepted run whose extraction fails, without an own-call collision the
   kept openings assemble a witness whose footprint is refused at `δ` at every interior; `Y`, its incorrect set at each
@@ -175,38 +175,38 @@ theorem Ex_esc_le {R : Type} [Fintype R] (d : Design.Two) (Pt : Partition) (fp :
           (hreplay T (mem_powerset.1 hT))
 
 open Classical in
-theorem wrongIn_subset_cell (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
-    (w : Wit) (ρ t : ℕ) (ι : ℕ → Bool) : wrongIn H Cm s Pt Pρ w ρ t ι ⊆ cell Pt Pρ ρ t :=
+theorem incorrectIn_subset_cell (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+    (w : Wit) (ρ t : ℕ) (ι : ℕ → Bool) : incorrectIn H Cm s Pt Pρ w ρ t ι ⊆ cell Pt Pρ ρ t :=
   filter_subset _ _
 
 /-- **The incorrect proof blocks at interior values `ι`** over the grid of replay blocks and strata: each cell's at its
 replay block's interior. -/
-noncomputable def wrongAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+noncomputable def incorrectAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
     (w : Wit) (ι : ℕ → ℕ → Bool) : Finset ℕ :=
-  (range Pρ.blocks.length ×ˢ range Pt.strata.length).biUnion fun p => wrongIn H Cm s Pt Pρ w p.1 p.2 (ι p.1)
+  (range Pρ.blocks.length ×ˢ range Pt.strata.length).biUnion fun p => incorrectIn H Cm s Pt Pρ w p.1 p.2 (ι p.1)
 
-theorem wrongAll_subset (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
-    (w : Wit) (ι : ℕ → ℕ → Bool) : wrongAll H Cm s Pt Pρ w ι ⊆ range Pt.blocks.length := by
+theorem incorrectAll_subset (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+    (w : Wit) (ι : ℕ → ℕ → Bool) : incorrectAll H Cm s Pt Pρ w ι ⊆ range Pt.blocks.length := by
   intro v hv
   obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
-  exact cell_subset Pt Pρ p.1 p.2 (wrongIn_subset_cell H Cm s Pt Pρ w p.1 p.2 _ hvp)
+  exact cell_subset Pt Pρ p.1 p.2 (incorrectIn_subset_cell H Cm s Pt Pρ w p.1 p.2 _ hvp)
 
-/-- On the grid, a cell's share of `wrongAll` is its incorrect proof blocks at its replay block's interior. -/
-theorem inter_cell_wrongAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
+/-- On the grid, a cell's share of `incorrectAll` is its incorrect proof blocks at its replay block's interior. -/
+theorem inter_cell_incorrectAll (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
     (w : Wit) (ι : ℕ → ℕ → Bool) {ρ t : ℕ} (hρ : ρ < Pρ.blocks.length) (ht : t < Pt.strata.length) :
-    wrongAll H Cm s Pt Pρ w ι ∩ cell Pt Pρ ρ t = wrongIn H Cm s Pt Pρ w ρ t (ι ρ) := by
+    incorrectAll H Cm s Pt Pρ w ι ∩ cell Pt Pρ ρ t = incorrectIn H Cm s Pt Pρ w ρ t (ι ρ) := by
   ext v
   rw [mem_inter]
   constructor
   · rintro ⟨hv, hvc⟩
     obtain ⟨p, _, hvp⟩ := mem_biUnion.1 hv
-    obtain ⟨h1, h2⟩ := cell_disj (wrongIn_subset_cell H Cm s Pt Pρ w p.1 p.2 _ hvp) hvc
+    obtain ⟨h1, h2⟩ := cell_disj (incorrectIn_subset_cell H Cm s Pt Pρ w p.1 p.2 _ hvp) hvc
     subst h1
     subst h2
     exact hvp
   · intro hv
     exact ⟨mem_biUnion.2 ⟨(ρ, t), mem_product.2 ⟨mem_range.2 hρ, mem_range.2 ht⟩, hv⟩,
-      wrongIn_subset_cell H Cm s Pt Pρ w ρ t _ hv⟩
+      incorrectIn_subset_cell H Cm s Pt Pρ w ρ t _ hv⟩
 
 open Classical in
 /-- **A best interior** of replay block `ρ`: one at which `ρ` escapes the second stage at least as often as at any
@@ -216,17 +216,17 @@ theorem exists_best_interior (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s :
     ∃ ι : ℕ → Bool, ∀ ι' : ℕ → Bool,
       d.esc Pt (footprint H Cm s Pt d.part w fun _ => ι') ρ ≤ d.esc Pt (footprint H Cm s Pt d.part w fun _ => ι) ρ := by
   have hf : ∀ ι' : ℕ → Bool, d.esc Pt (footprint H Cm s Pt d.part w fun _ => ι') ρ =
-      d.esc Pt (fun ρ t => ((wrongAll H Cm s Pt d.part w fun _ => ι') ∩ cell Pt d.part ρ t).card) ρ := by
+      d.esc Pt (fun ρ t => ((incorrectAll H Cm s Pt d.part w fun _ => ι') ∩ cell Pt d.part ρ t).card) ρ := by
     intro ι'
     refine prod_congr rfl fun t ht => ?_
-    show escCell _ _ (wrongIn H Cm s Pt d.part w ρ t ι').card =
-      escCell _ _ ((wrongAll H Cm s Pt d.part w fun _ => ι') ∩ cell Pt d.part ρ t).card
-    rw [inter_cell_wrongAll H Cm s Pt d.part w _ hρ (mem_range.1 ht)]
-  have hA : ∀ ι' : ℕ → Bool, (wrongAll H Cm s Pt d.part w fun _ => ι') ∈
-      (range Pt.blocks.length).powerset.filter fun Z => ∃ ι'' : ℕ → Bool, (wrongAll H Cm s Pt d.part w fun _ => ι'') = Z :=
-    fun ι' => mem_filter.2 ⟨mem_powerset.2 (wrongAll_subset H Cm s Pt d.part w _), ι', rfl⟩
+    show escCell _ _ (incorrectIn H Cm s Pt d.part w ρ t ι').card =
+      escCell _ _ ((incorrectAll H Cm s Pt d.part w fun _ => ι') ∩ cell Pt d.part ρ t).card
+    rw [inter_cell_incorrectAll H Cm s Pt d.part w _ hρ (mem_range.1 ht)]
+  have hA : ∀ ι' : ℕ → Bool, (incorrectAll H Cm s Pt d.part w fun _ => ι') ∈
+      (range Pt.blocks.length).powerset.filter fun Z => ∃ ι'' : ℕ → Bool, (incorrectAll H Cm s Pt d.part w fun _ => ι'') = Z :=
+    fun ι' => mem_filter.2 ⟨mem_powerset.2 (incorrectAll_subset H Cm s Pt d.part w _), ι', rfl⟩
   obtain ⟨Z, hZ, hmax⟩ := ((range Pt.blocks.length).powerset.filter fun Z =>
-      ∃ ι'' : ℕ → Bool, (wrongAll H Cm s Pt d.part w fun _ => ι'') = Z).exists_max_image
+      ∃ ι'' : ℕ → Bool, (incorrectAll H Cm s Pt d.part w fun _ => ι'') = Z).exists_max_image
     (fun Z => d.esc Pt (fun ρ t => (Z ∩ cell Pt d.part ρ t).card) ρ) ⟨_, hA fun _ => false⟩
   obtain ⟨ι, hι⟩ := (mem_filter.1 hZ).2
   refine ⟨ι, fun ι' => ?_⟩
@@ -238,10 +238,10 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo cell counts escCell replayOf footprint wrongIn forkOn
+open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo cell counts escCell replayOf footprint incorrectIn forkOn
   forkOn_forkOn' accList AllBad wait_bad_le Pr_or_le slack slack_pos Pr_acc_forkOn Opening OwnColl agree_of_passes
   val_assemble ιOf ιOf_eq acc_of_accList accList_length_eq assemble escCell_anti Ex_esc_le cell_subset cell_disj
-  replayOf_of_mem_cell wrongAll wrongAll_subset inter_cell_wrongAll exists_best_interior footBits sampleBlocks
+  replayOf_of_mem_cell incorrectAll incorrectAll_subset inter_cell_incorrectAll exists_best_interior footBits sampleBlocks
   card_image_le_of_counts prod_cell_le_footBits footBits_le inter_sampleBlocks_cell card_sampleBlocks_le
   card_image_inter_le)
 open Claims.Recursion (serve viewing)
@@ -622,17 +622,17 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
     · exact ⟨fun _ => false, fun h => absurd h hρ⟩
   choose ιs hιs using hbest
   have hesc : ∀ (ι : ℕ → ℕ → Bool) ρ, ρ < d.part.blocks.length →
-      d.esc Pt (counts Pt d.part (wrongAll H L.commit s Pt d.part w ι)) ρ =
+      d.esc Pt (counts Pt d.part (incorrectAll H L.commit s Pt d.part w ι)) ρ =
         d.esc Pt (footprint H L.commit s Pt d.part w fun _ => ι ρ) ρ := fun ι ρ hρ =>
     prod_congr rfl fun t ht => by
-      show escCell _ _ ((wrongAll H L.commit s Pt d.part w ι) ∩ cell Pt d.part ρ t).card =
-        escCell _ _ (wrongIn H L.commit s Pt d.part w ρ t (ι ρ)).card
-      rw [inter_cell_wrongAll H L.commit s Pt d.part w ι hρ (mem_range.1 ht)]
-  have hYS : wrongAll H L.commit s Pt d.part w ιs ∈ S₁Two Pt d δ := by
-    refine mem_filter.2 ⟨mem_powerset.2 (wrongAll_subset H L.commit s Pt d.part w ιs), ?_⟩
-    exact (d.Pa_congr Pt (f := counts Pt d.part (wrongAll H L.commit s Pt d.part w ιs))
+      show escCell _ _ ((incorrectAll H L.commit s Pt d.part w ι) ∩ cell Pt d.part ρ t).card =
+        escCell _ _ (incorrectIn H L.commit s Pt d.part w ρ t (ι ρ)).card
+      rw [inter_cell_incorrectAll H L.commit s Pt d.part w ι hρ (mem_range.1 ht)]
+  have hYS : incorrectAll H L.commit s Pt d.part w ιs ∈ S₁Two Pt d δ := by
+    refine mem_filter.2 ⟨mem_powerset.2 (incorrectAll_subset H L.commit s Pt d.part w ιs), ?_⟩
+    exact (d.Pa_congr Pt (f := counts Pt d.part (incorrectAll H L.commit s Pt d.part w ιs))
       (g := footprint H L.commit s Pt d.part w ιs)
-      fun ρ hρ t ht => congrArg card (inter_cell_wrongAll H L.commit s Pt d.part w ιs hρ ht)).trans_le (hPa ιs)
+      fun ρ hρ t ht => congrArg card (inter_cell_incorrectAll H L.commit s Pt d.part w ιs hρ ht)).trans_le (hPa ιs)
   by_cases hshort : (accList (fun r => (run' r).out = .acc) (L.kOut x)
     ((List.finRange (L.capOut x)).map c.1)).length < L.kOut x
   · exact Or.inl hshort
@@ -642,8 +642,8 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
     ((List.finRange (L.capIn x)).map (c.2.1 j))).length < L.kIn x
   · exact Or.inl hshort2
   let ιr : ℕ → ℕ → Bool := fun ρ => ιOf fd (L.iroots x (run' r).seen ρ)
-  have hXr : wrongAll H L.commit s Pt d.part w ιr ∈ above Pt d (wrongAll H L.commit s Pt d.part w ιs) := by
-    refine mem_filter.2 ⟨mem_powerset.2 (wrongAll_subset H L.commit s Pt d.part w ιr), fun ρ hρ => ?_⟩
+  have hXr : incorrectAll H L.commit s Pt d.part w ιr ∈ above Pt d (incorrectAll H L.commit s Pt d.part w ιs) := by
+    refine mem_filter.2 ⟨mem_powerset.2 (incorrectAll_subset H L.commit s Pt d.part w ιr), fun ρ hρ => ?_⟩
     rw [hesc ιr ρ hρ, hesc ιs ρ hρ]
     exact hιs ρ hρ (ιr ρ)
   refine Or.inr ⟨_, hXr, accList_length_eq hshort2, fun l e hl v hv hgood => ?_⟩

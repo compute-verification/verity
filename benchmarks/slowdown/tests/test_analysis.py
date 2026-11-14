@@ -226,7 +226,7 @@ def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_
 
 
 def test_run_lists_omega_max_and_mu_where_the_serving_cut_sets_the_bound(tmp_path, monkeypatch, capsys):
-    """A lower bound the serving cut sets (`onsite-h200-kimi`, with `bounds.lock_only` off: the classes whose cap the
+    """A lower bound the serving cut sets (`onsite-h200-kimi`, with `bounds.lock_only` off: the classes whose yield the
     serving cut sets, `fanout-priced` and `fanout-split`, each cite a `draft:` statement of their own) rests on its
     structure's `ω_max` and `μ`, its boundary term's: `slowdown.md` names both declarations and `slowdown.json`'s structure record
     holds both values. A remote bound has no serving cut, so its text names neither."""
@@ -271,7 +271,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     assert record["reference-remote-h200"]["certified"] is None
     certified = record["onsite-w63"]["certified"]
     assert certified["r_in"] == pytest.approx(91_075) and certified["window_buckets"] == 32
-    assert certified["faulty_unit_bits"] == 356_592
+    assert certified["incorrect_block_bits"] == 356_592
     reference = run.certified(build(REG, "reference-onsite-h200"))
     assert not reference["declared"] and reference["intake"] == 1
     assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "

@@ -156,6 +156,8 @@ BENCHMARKS_IMPORTERS = {
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
     "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py": "memory-accounting: the harness's control "
                                                                       "responder (`benchmarks/pous/band_gpu/harness.py`)",
+    "verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py": "memory-accounting: P2's reference and wire "
+                                                                        "(`benchmarks/pous/p2_v1`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
