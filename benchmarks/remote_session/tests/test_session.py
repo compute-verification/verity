@@ -986,7 +986,7 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
     assert r["accepted"] and r["verdict"] == "lean" and r["lean_record"]["registration"] == got["reg"]["digest"]
     old = {k: v for k, v in r.items() if k != "lean_record"}
     assert verifier.lean_record(old) == r["lean_record"]
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
     mem = r["ledger"]["memory"]
     windows = [(sum(w["lengths"]), w["drawn"]) for w in r["lean_record"]["windows"]]
     given = line.inputs_json(
@@ -1020,7 +1020,7 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
     mem = r["ledger"]["memory"]
     b, short = mem["block_bytes"], 3_045_746_688
     assert mem["chip_bytes"] == timing.CHIP_BYTES > short
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
 
     def at(chip: int) -> dict:
         return {**r, "ledger": {**r["ledger"], "memory": {**mem, "chip_bytes": chip}}}
@@ -1122,10 +1122,12 @@ def test_held_over_time_charges_what_a_burst_frees_in_one_groups_slack_and_the_s
 
 def test_a_paced_lines_ingress_charge_brings_the_bursts_the_ledger_states_for_its_routes():
     """`ingress_bursts` is `ledger.Node.stated`'s B: the rebuild batch in flight always, one second at the disks'
-    ceiling for the charge up to it, and a link window once the charge passes the disks (the link-charged line)."""
+    measured rate for the charge up to it, and a link window once the charge passes the disks (the link-charged
+    line)."""
+    assert FIGURES.disk_bytes_per_s == 4.311e9
     assert verifier.ingress_bursts(0.0, FIGURES) == timing.CHIP_BYTES
-    assert verifier.ingress_bursts(4.4e9, FIGURES) == timing.CHIP_BYTES + 4.4e9
-    assert verifier.ingress_bursts(54.4e9, FIGURES) == timing.CHIP_BYTES + 4.4e9 + timing.LINK_WINDOW_BYTES
+    assert verifier.ingress_bursts(4.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9
+    assert verifier.ingress_bursts(54.311e9, FIGURES) == timing.CHIP_BYTES + 4.311e9 + timing.LINK_WINDOW_BYTES
 
 
 def test_the_paced_line_refuses_a_session_any_of_whose_passes_leaves_a_registered_block_out():
@@ -1426,7 +1428,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
                   then=lambda v: got.update(reg=wire.registration_json(v.registration)))
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
     inputs = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     want = verifier.line.record_run_json(inputs)
     assert "refused" not in want and inputs["clock"] == "record"
@@ -1478,7 +1480,7 @@ def test_the_leans_line_of_a_transcript_drawn_four_windows_a_coin_reads_the_draw
     assert r["accepted"] and pr["accepted"] and r["windows"] == 12 and r["record"]["public"]["groups_per_coin"] == 4
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
     assert case["params"]["groups_per_coin"] == 4 and len(case["coins"]) == 12 + 3
-    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=timing.DISK_BYTES_PER_S, link_bytes_per_s=5e10)
     inputs = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     record = inputs["record"]
     assert record["groups_per_coin"] == 4 and len(record["windows"]) == 12

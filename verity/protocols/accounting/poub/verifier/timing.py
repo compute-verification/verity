@@ -134,16 +134,18 @@ SQUARINGS_PER_S = {width: GPUS * rate for width, rate in GPU_SQUARINGS_PER_S.ite
 the host at s·h times the 8 GPUs' reference, above its IFMA bound h."""
 GPU_HBM_BYTES = 96 * 2 ** 30
 """One RTX PRO 6000's memory, 96 GiB (the card's `store.dram`)."""
-DISK_BYTES_PER_S = 4.4e9
-"""The node's disks' read ceiling, each disk's highest second summed (4.311e9) and rounded up: how much of a paced
-line's ingress charge is its disks (`session.verifier.ingress_bursts`)."""
+DISK_BYTES_PER_S = 4.311e9
+"""The node's disks' measured read rate, the host card's `disk.read`: each disk's highest second under reads made to
+exhaust it, summed.  It is β of the premise `Accounting.Remote.Held.Assumptions.Disks`, not a ceiling: the disks'
+ceiling, the server's PCIe lanes, would charge more than any store.  How much of a paced line's ingress charge is its
+disks (`session.verifier.ingress_bursts`)."""
 
 
 @dataclass(frozen=True, slots=True)
 class Figures:
     """A node's device figures, the parameters a session's ledger reads, which its caller hands in: how many GPUs, one
     GPU's and the host's read rates (measured and specified) and on-chip storage, one GPU's memory, SHA-512 rate and
-    squaring ceiling per width, the disks' read ceiling and one link burst.  Each unprefixed property is the node's, the
+    squaring ceiling per width, the disks' measured read rate and one link burst.  Each unprefixed property is the node's, the
     sum over its devices; a write ceiling is its tier's specified rate (`GPU_WRITE_BYTES_PER_S`'s reason)."""
     gpus: int
     gpu_read_bytes_per_s: float

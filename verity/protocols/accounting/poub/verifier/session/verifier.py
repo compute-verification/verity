@@ -473,7 +473,7 @@ def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.
 def ingress_bursts(ingress_bytes_per_s: float, figures: timing.Figures) -> float:
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
     `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts on the node of `figures`: one rebuild batch in flight (S_chip),
-    one second at the disks' ceiling (the charge up to `figures.disk_bytes_per_s`), and one link burst
+    one second at the disks' measured rate (the charge up to `figures.disk_bytes_per_s`), and one link burst
     (`figures.link_window_bytes`) when the charge is above that, the boundary links charged too."""
     disk = min(ingress_bytes_per_s, figures.disk_bytes_per_s)
     n = ledger.Node.stated(figures, disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
@@ -1570,7 +1570,7 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                     help="the node's host DRAM: with it the memory line is also by kind against HBM and DRAM "
                          "(`node_line`)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=0.0,
-                    help="the node's disks' read ceiling, charged in the memory line (`ledger.Node`)")
+                    help="the node's disks' measured read rate (`Disks`' β), charged in the memory line (`ledger.Node`)")
     ap.add_argument("--link-bytes-per-s", type=float, default=0.0,
                     help="the node's boundary links' read ceiling, charged in the link-charged memory line")
     ap.add_argument("--disk-burst-bytes", type=float,

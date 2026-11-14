@@ -10,7 +10,7 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 - N, the registered blocks; P, the credited passes; `planned`, their registered receipts (each pass's `lengths` less
   its post-seed reads); W, the most of them wrong (`audit.pooled`'s, at the record's δ); S, S_chip/b rounded up;
 - X = s/E + β, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's
-  squarings a block (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links' β_l;
+  squarings a block (`audit.Rebuild`), plus its disks' measured read rate (`Disks`' β), plus, link-charged, its boundary links' β_l;
 - B = B_r + B_d, what can come back at once beyond that rate, in blocks: one maximal rebuild batch and one maximal
   disk read (plus, link-charged, one link burst B_l), `Node`'s bursts (X and B: `line.charges_of`);
 - snapshot: `planned − W − (X·span + B) − P·S` blocks over the passes, `span` the record's;
@@ -94,8 +94,8 @@ class Node:
     read bandwidth R at spec, the headline, and measured (every GPU's HBM and the host's DRAM, bytes a second), its
     on-chip storage S_chip (bytes), its squaring ceiling at each codec width (squarings a second), its SHA-512
     compressions a second and the outside-compute factor F over them (the sketch's term, `timing.SKETCH_OUTSIDE`: the
-    prover's compressions over a session at most F times the node's), and the read ceilings of its own disks and of
-    its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
+    prover's compressions over a session at most F times the node's), and the read rates of its own disks (`Disks`' β) and
+    of its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
     beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
     maximal rebuild batch, one maximal disk read and one link burst.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
@@ -146,7 +146,7 @@ class Node:
         """The node of `figures`: R measured is the larger of its `read_bytes_per_s` and the prover's reported read, R
         at spec the larger of its `spec_bytes_per_s` and that, so a prover reporting a slower read can't shrink a term.
         Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one second at the disks'
-        ceiling, which is a one-second peak; its link burst `figures.link_window_bytes` when the links are charged.  Its
+        rate, which is a highest second; its link burst `figures.link_window_bytes` when the links are charged.  Its
         tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
         f = figures
         measured = max(f.read_bytes_per_s, _rate(reported_read_bytes_per_s, "a reported read"))
