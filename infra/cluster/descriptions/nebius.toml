@@ -71,7 +71,7 @@ gpus = [
 ]
 
 # Verity on node 2 (decision 1, at its default): idle capacity only, preemptible, never in a window, GPUs included.
-# CPUs, memory and job caps are pous infra's interim terms (research-notes, 20260930T1629Z).
+# CPUs, memory and job limits are pous infra's interim terms (research-notes, 20260930T1629Z).
 # Its CPUs sit inside check slots a (0-63) and b (64-119), so no core of it is outside a check's. A guest's CPU job claims
 # `cpus` of them in whole cores of its own (`research cpu-hold`, waiting while none are free) at nice 0; nice never made it
 # yield to a check, which runs in a session scope beside user@.service (every queued run and fill job), weighted the same. A
@@ -104,7 +104,7 @@ owner = "infra"
 direct-gpus = "none"            # /etc/vy/direct-gpus: gpu-lease's direct runs get no GPU
 direct-cpus = "0-95,128-159"    # /etc/vy/direct-cpus: a direct run's CPUs, the non-benchmark ones (96-127 are the --queue GPU jobs')
 user-cpuset = { delegate = "cpu cpuset memory pids" }   # user@.service.d/vy-cpuset.conf, so a user scope's AllowedCPUs holds
-# /workspace/research/locks/lean-slots (lean_slot.py): the cap of 4, split by infra and proofs (16:25Z)
+# /workspace/research/locks/lean-slots (lean_slot.py): the limit of 4, split by infra and proofs (16:25Z)
 lean-slots = { check = 2, audit = 2 }
 # /workspace/research/locks/slots (slot.py): the merge-check slots, the `checks` pool
 check-slots = { c = "8-31", a = "32-63 only=trains", b = "64-95", d = "128-159" }
