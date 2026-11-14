@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Poub.RemoteHeld.Sample
-public import Proofs.Poub.RemoteHeld.Draw
+public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld.Outside
 public import Proofs.Poub.RemoteHeld.Window
 public import Proofs.Properties.Poub.Remote.Line

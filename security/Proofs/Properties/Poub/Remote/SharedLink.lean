@@ -2,7 +2,7 @@ module
 
 import Proofs.Properties.Poub.Remote.Sample
 public import Proofs.Properties.Poub.Remote.Shared
-import Proofs.Properties.Poub.Remote.Draw
+import Proofs.Properties.Poub.Remote.Sample
 import Proofs.Properties.Poub.Remote.Window
 
 /-!
