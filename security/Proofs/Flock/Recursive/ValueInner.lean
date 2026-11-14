@@ -37,7 +37,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit
 
-variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
 
 theorem valueSrcAll_eq {src : List (Cm × I.Coin) → Option Flock.RecCoins.Source}
     {c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂}

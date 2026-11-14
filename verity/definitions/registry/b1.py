@@ -930,7 +930,7 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
 # re-instantiating the same code over a substituted module environment (`hopper.py`): correct, but the selection
 # lived in the Python environment, not in the program. Below the selections are static parameters, so the two
 # serving programs are two binding records of ONE definition. The bodies are `Serve_v1`'s line for line (the correspondence
-# `verity_vllm.program.frontend.correspond.correspond_rebound` shows node-for-node identity against `Serve_v1` and against
+# `verity_torch.frontend.correspond.correspond_rebound` shows node-for-node identity against `Serve_v1` and against
 # `hopper.ServeHopper_v1`); only the callee/constant names are read from `S`. New *versions* because the identity
 # (the statics) changed; every v1 definition stays registered and untouched (registry version discipline).
 #

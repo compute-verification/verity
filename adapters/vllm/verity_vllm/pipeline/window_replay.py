@@ -45,7 +45,7 @@ from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bin
 from verity.circuits.refs import Coll, Refs, concat, strided_view
 from verity.circuits.types import Array, Tuple, Type
 from verity.commitments.layout import UNIT_MAX_BITS
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 NAME, VERSION = "WindowReplay", 1
 

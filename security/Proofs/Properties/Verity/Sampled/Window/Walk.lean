@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Window
 public import Proofs.Properties.Verity.Sampled.Project
 
 /-!
-# Sampled proofs' coupling over a window: the projection through several sessions, in order
+# SPOT's coupling over a window: the projection through several sessions, in order
 
 The projection of `Proofs.Properties.Verity.Sampled.Project`, from one live session to a window's sessions in the
 members' order (`JointAuditV5.sessions`, `seqG`): a strategy `σ` of the period's game is read as a strategy of the

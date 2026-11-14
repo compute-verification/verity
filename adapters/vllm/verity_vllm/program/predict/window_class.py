@@ -36,10 +36,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.schemes import SCHEMES
+from verity.protocols.accounting.pouw.prover.serving import (
+    a_value,
+    b_value,
+    NCP_SCHEMES as SCHEMES,
+    PEARL_C_ROW_ALIGN as ROW_ALIGN,
+    y_value,
+)
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import ROW_ALIGN
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -174,17 +178,17 @@ class PearlTables(FixedLoad):
     @staticmethod
     def a(s: int, c: int) -> str:
         """Round ``s``'s call ``c``'s A rows, by the name Pearl+'s window record registers them under."""
-        return PWR.a_value(s, c)
+        return a_value(s, c)
 
     @staticmethod
     def y(s: int, c: int) -> str:
         """Round ``s``'s call ``c``'s y, by the name Pearl+'s window record registers it under."""
-        return PWR.y_value(s, c)
+        return y_value(s, c)
 
     @staticmethod
     def b(w: int) -> str:
         """Weight ``w``'s B rows, by the name Pearl+'s window record registers them under."""
-        return PWR.b_value(w)
+        return b_value(w)
 
     @staticmethod
     def rows(cls: WindowClass, s: int) -> int:

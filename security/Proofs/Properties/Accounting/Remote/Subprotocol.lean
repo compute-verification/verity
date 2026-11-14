@@ -8,7 +8,9 @@ public import Properties.Accounting.Remote.SubprotocolDeployed
 `check` matches on `replay`, which binds `sessionOf` and then `Shared.run g` (`replay_ok`), and accepts only at a state
 that ended accepted with a record, publishing `certify` of it at the session's parameters and g (`acceptIsVerified`).
 `plays_verified` reads `Plays` as `Verified`: the session `sessionOf` decodes is the one it decodes, so it is the
-record's at the node, at the node's windows a draw. `publishedEps` reads `certify`'s `eps` at the node's parameters
+record's at the node, at the node's windows a draw; `plays_iff_publishes` reads it as `Publishes` at some public
+outputs, and `publishes_publishedQBytes_iff` reads `PublishedQBytes`, which spells the acceptance out, as its statement
+at `Publishes`. `publishedEps` reads `certify`'s `eps` at the node's parameters
 and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.samples`.
 -/
 
@@ -68,6 +70,28 @@ theorem plays_verified {node : Node} {rec : Record} {a b e : ByteArray} (h : Pla
   simp only [Except.ok.injEq, Prod.mk.injEq] at hs'
   obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := hs'
   exact ⟨rs, s, hrun, hout⟩
+
+/-- `Plays` is `Publishes` at some public outputs. -/
+theorem plays_iff_publishes {node : Node} {rec : Record} {a b e : ByteArray} :
+    Plays node rec a b e ↔ ∃ pub, Publishes node rec a b e pub :=
+  ⟨fun ⟨p, ev, ha, hb, he, hs, pub, prof, hc⟩ => ⟨pub, p, ev, ha, hb, he, hs, prof, hc⟩,
+    fun ⟨pub, p, ev, ha, hb, he, hs, prof, hc⟩ => ⟨p, ev, ha, hb, he, hs, pub, prof, hc⟩⟩
+
+/-- `PublishedQBytes`, which spells the acceptance out, is the same proposition as its statement at `Publishes`. -/
+theorem publishes_publishedQBytes_iff : PublishedQBytes ↔
+    ∀ (node : Node) (rec : Record) (a b e : ByteArray) (pub : RemoteAudit.Protocol.Public),
+      Publishes node rec a b e pub →
+      (pub.qBytes : ℝ) + (RemoteAudit.Codec.BLOCK_BYTES : ℝ) *
+          Accounting.Remote.Draw.pooled node.samples (fun c => min (rec.sampleReceiptsAt node c) receiptMax)
+            (fun c => min node.params.samples (min (rec.sampleReceiptsAt node c) receiptMax))
+            (RemoteAudit.Protocol.DELTA : ℝ) ≤
+        (RemoteAudit.Codec.BLOCK_BYTES : ℝ) * ((rec.receipts node).toList.sum : ℕ) := by
+  unfold PublishedQBytes Publishes
+  constructor
+  · rintro h node rec a b e pub ⟨p, ev, ha, hb, he, hs, prof, hc⟩
+    exact h node rec a b e pub p ev prof ha hb he hs hc
+  · intro h node rec a b e pub p ev prof ha hb he hs hc
+    exact h node rec a b e pub ⟨p, ev, ha, hb, he, hs, prof, hc⟩
 
 /-- The ratio the component publishes of a nonnegative rational is that rational. -/
 theorem ratio_val {q : ℚ} (hq : 0 ≤ q) :

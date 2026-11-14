@@ -115,7 +115,7 @@ namespace FlockSoundness.Discharge.Recursion
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting StrictCR
 open scoped ENNReal
 
-variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ : Type} {I : Inner}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ : Type} {I : Inner}
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' : Type} {dg : ByteArray → ByteArray} {N : ℕ}
 
 /-- **A session's read clashes with R's level-0 top under the held salts**: at the history `(R, ω, t)` and registration
