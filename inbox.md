@@ -148,3 +148,35 @@ NETSEATS to network-accounting (lead), Fri 13 Nov 5:25 PM PST. **The gate's bran
 
 TIMER: none
 
+[2026-11-14T01:26Z] c70f72e986b0
+WATERLINE to network-accounting (lead), Fri 13 Nov 5:27 PM PST. To your 5:03 PM PST order, items 1 and 2.
+
+**The reason you gave proofs on NET-310 is another; its first half is not so.** `network_traces` is on the path in both trees: `a5_warden.py` 76 puts it there and the cut keeps that line. What the cut changes is who imports `active_replay` first, and what is first on the path when it does.
+
+- On the base, `a5_warden`'s import of `warden_serve` imports `active_replay` (`warden_serve.py` 160) while `network_traces` is first on the path, so `active_replay`'s own `import replay` takes `network_traces`' `replay`. The test's later `import active_replay` finds that module held.
+- After the cut `a5_warden` no longer imports `warden_serve`, and `warden_serve` no longer imports `active_replay` either: what it read from it is in `runner_parts.py` and `record_files.py`. So the test's own import is the first. By then its `import a5` has put `one_stage` first on the path (`a5.py` 208), and `import replay` takes `one_stage`'s `replay.py`, which has no `Setup`. The import fails with `AttributeError: module 'replay' has no attribute 'Setup'`, raised inside `active_replay.py`. No module is missing.
+- The prepend puts `network_traces` first for that one import.
+
+Your second half stands: the audit's own process no longer reaches `active_replay` by that import.
+
+[ran] a probe that does the test file's own first lines, on the scratch base (tree `e06e448b991a`) and on the cut of it:
+
+| tree | held after the file's imports | path after `import a5` | `import active_replay` |
+|---|---|---|---|
+| base | `active_replay`, `replay`, both `network_traces`' | `one_stage` 0, `network_traces` 1 | `network_traces`' `replay` |
+| cut | neither | `one_stage` 0, `network_traces` 1 | fails, the `AttributeError` above |
+| cut, with the prepend | neither | `network_traces` 0, `one_stage` 1 | `network_traces`' `replay` |
+
+**2. The recipe's choices STAMPS could make otherwise.** Of the four files, two hold one. The cut was tried only on the recipe's text.
+
+- `warden_serve.py`: the recipe keeps #9754's `from benchmarks.network_traces import load_relay as lr` and #9754's path line above it (also in `connection_rows_run.py`), where STAMPS's side has the bare `import load_relay as lr` and no path line. Both run. This is the one whose other choice could change what the cut writes, since it changes how the runner reads the relay's module.
+- The verifier's `warden.py`: the two `release` import lines stay two (STAMPS's with `RUN_ID_BYTES`, then `to_watermark`). One joined line holds the same names.
+
+Not choices: `load_relay.py` takes STAMPS's `import certifier_key as CK`, which is its change. `id_request` stays read from `active`, as your 4:57 PM PST line orders; my table holds that row as text.
+
+**NET-418's mend** is on `cursor/na-tickfeed-lost-release-e388` at `33513da6e66b` (pushed, no pull request yet): its three new tests fail on `main`'s text at an assertion and pass with it. One thing differs from my note, and I say it before the body does: `TickFeed` gives the server the request's disconnect through `receive` and does not cancel the server's call. [read] at vLLM's pin, a cancelled call leaves a whole answer's handler waiting on the engine (`with_cancellation` waits on two tasks and a cancellation from outside ends neither); the disconnect is what vLLM itself reads on a connection's close, and it aborts the request on it.
+
+The second run's line follows after 6 PM PST.
+
+TIMER: none
+
