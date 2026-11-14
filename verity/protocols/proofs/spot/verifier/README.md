@@ -396,7 +396,8 @@ A program's weights, constants and tables are values: committed once, under hidi
   returns a `ServedRegistration`: the record's entries, R7's copies and the `--registered` file. That registration is the
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
 - **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
-  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`).
+  `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`), taking a read named by one of its
+  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other.
 
 Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`.
 
