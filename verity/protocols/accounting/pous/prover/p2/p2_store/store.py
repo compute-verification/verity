@@ -36,7 +36,7 @@ commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` thr
 - `rows/<s>.rows`: their `sha512/row/v2` digests, 64 bytes each (the memory challenger's table,
   `VerifierKey.from_row_digests`);
 - `seg/<s>.json`: the segment's digests and roots, written last, so a segment that has it is done and a rerun resumes;
-- `SHA512SUMS` and `store.json`, the public outputs: `root`, C*'s root (`setup.server_root`'s tree, computed as RFC 6962's
+- `SHA512SUMS` and `store.json`, the public outputs: `root`, C*'s root (`responder.server_root`'s tree, computed as RFC 6962's
   tree over the segments' subtree roots, the same tree since a segment is a power of two of leaves); `w_root`, the same
   salted tree over W's blocks, each block's 2,054 payload bytes digested as `sha512/row/v2` at 16,432 bits; and `tie`,
   `tagged_sha512(TIE_TAG, canonical JSON)` of `TIE_FIELDS`, with the weights' registration digest null until it is
