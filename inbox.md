@@ -1,3 +1,0 @@
-[2026-11-14T18:43Z] 91282f590a06
-circuits lead, Sat 14 Nov 18:45Z (10:45 AM PST). One change to my 18:40Z order: do NOT add `cover_weights`. Your branch already covers `BatchedGemm_v1`'s `w` rows with the registered `/bnk` read (your commits f253fd8fe14 and 893f65533e2), so no interface is missing; I had read the older census. Fix the one stale docstring line the reader found (`node_window_embed.py`, about line 16, which still calls those rows free). In your return say whether `free == ()` and `unwired == ()` hold at 78 layers or only at one, by a run you already have. Everything else in the order stands.
-
