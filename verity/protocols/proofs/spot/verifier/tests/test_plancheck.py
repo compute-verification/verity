@@ -1,4 +1,4 @@
-"""Lean's check of the planner's designs (`plancheck`, the `sampled-proofs-plancheck` executable): it accepts the
+"""Lean's check of the planner's designs (`plancheck`, the `spot-plancheck` executable): it accepts the
 planner's one-stage leak and work designs at Figure 1's scales, certifying a little more than the planner's
 `b K + loc_bits(n, K)` in exact arithmetic, and refuses each design with its rate a hair below the planner's rule, so
 its acceptance is not vacuous; a two-stage point's bits bound its count by enumeration on a small design; a design it
@@ -133,7 +133,7 @@ def test_a_two_stage_points_bits_bound_its_count(cells, k, served, union):
 def test_a_capped_point_reads_the_fan_out_as_its_classes_n():
     """A replay grain of fan-out F (`partition.fanout`) is a capped point whose class's N is F: Lean certifies it as the
     point capped at F S with N = 1, at least log2 of that capped count by enumeration and more than at F = 1.  The
-    sets' form reads no N.  A served cap has no default fan-out: without the registration verdict's, the point is
+    sets' form reads no N.  A served cap has no default fan-out: without the docket verdict's, the point is
     refused."""
     cells, k = SMALL[1]
     one, three = (P.two(cells, k, 2, .9, .3, 3, theta=1.0, fanout=f, returned=3) for f in (1, 3))
@@ -176,7 +176,7 @@ def test_a_patterns_point_reads_the_replay_blocks_of_a_group_as_one_request(cell
 
 
 def test_a_served_cap_is_held_to_what_a_replay_block_returns():
-    """A served cap is held to the bits a replay block of the registered Program returns, as its registration publishes
+    """A served cap is held to the bits a replay block of the registered Program returns, as its docket publishes
     them (`WindowCommitmentRecord.returned`): the capped form takes a cap of at least them, the patterns' form, which
     reads each request as serving exactly S, only the cap that is them, at any fan-out, and either is refused otherwise
     (``served-cover``).  The count has no default under a cap, and the sets' form reads neither."""

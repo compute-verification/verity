@@ -40,8 +40,7 @@ elif cmd.startswith("status "):
         open(os.environ["STUB_FIFO"], "w")
         signal.pause()
     print(json.dumps({"run": "%(run)s", "note": os.environ.get("STUB_NOTE"),
-                      "end": {"run": "%(run)s", "rc": 0, "ended_utc": "2026-10-27T17:05:00Z",
-                              "verdict": {"accepted": True}}}))
+                      "end": {"run": "%(run)s", "rc": 0, "ended": "ended", "verdict": {"accepted": True}}}))
 elif cmd == "fetch %(run)s":
     files = {"end.json": b"{}", "request.json": b"{}", "out/certificates.jsonl": b"",
              "out/deployment.json": json.dumps({"windows": 3, "origin_unix": 1.5,
@@ -118,7 +117,8 @@ def test_record_keeps_no_witness(tmp_path):
     assert not [n for n in names if "witness" in n.split("/")]
     assert f"{RUN}/out/deployment.json" in names and f"{RUN}/request.json" in names
     sys.path.insert(0, str(HERE))
-    import wipe_egress
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
+    from benchmarks.network_traces import wipe_egress
     assert sorted(wipe_egress.read_run(tmp_path / "run" / "out" / "bundle.tgz")) == sorted(wipe_egress.FILES)
 
 
@@ -138,7 +138,7 @@ def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_
     published, q = tmp_path / "published", tmp_path / "q"
     published.mkdir()
     shutil.copyfile(reply, published / "start.json")
-    held = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(published), str(q), "--gates",
+    held = subprocess.run([sys.executable, "-m", "verity.protocols.accounting.certifier.device.leak_guard", str(published), str(q), "--gates",
                            str(keep / RUN / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
                           capture_output=True, text=True)
     assert held.returncode == 3, held.stdout + held.stderr

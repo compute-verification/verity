@@ -74,7 +74,7 @@ prof.apply_env()
 import torch  # noqa: E402
 
 from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va  # noqa: E402
-from verity_vllm.engine.handle import scheduler_or_none  # noqa: E402
+from verity_vllm.engine.handle import Steps, scheduler_or_none  # noqa: E402
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
 from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
@@ -97,14 +97,8 @@ def _rid_of(order: dict, rid) -> str:
     r = str(rid)
     if r in order:
         return order[r]
-    try:
-        from verity_vllm.engine.engine_driver import external_id
-        e = external_id(r)
-        if e in order:
-            return order[e]
-    except Exception:  # noqa: BLE001
-        pass
-    return r
+    from verity_vllm.engine.engine_driver import external_id
+    return order.get(external_id(r), r)
 
 
 def git_head() -> str | None:
@@ -112,11 +106,11 @@ def git_head() -> str | None:
         if p.exists():
             try:
                 return json.loads(p.read_text()).get("commit")
-            except Exception:  # noqa: BLE001
+            except (OSError, ValueError, AttributeError):   # unreadable, not JSON, or not an object: git's head instead
                 pass
     try:
         return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10).stdout.strip() or None
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError):
         return None
 
 
@@ -200,7 +194,7 @@ def nvidia_smi_used_mib() -> int | None:
         out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"], capture_output=True, text=True,
                              timeout=20).stdout.strip().splitlines()
         return int(out[0]) if out else None
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError, ValueError):
         return None
 
 
@@ -208,7 +202,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict, step: 
     """The serving loop (identical for both arms): admit requests at their arrive_step, step until done, time every step() return.
     ``step(eng.step)``, if given, runs each engine step (the remote session's `Lockstep.step`)."""
     va.fresh_prefix_cache(engine)
-    eng = engine.llm.llm_engine
+    eng: Steps = engine.llm.llm_engine
     pending = sorted(range(len(requests)), key=lambda i: (int(requests[i].get("arrive_step") or 0), i))
     tokens: dict[str, list[int]] = {}
     finish: dict[str, str | None] = {}
@@ -881,6 +875,14 @@ def staging_environ(args: Options) -> None:
         print(f"[delta] LATE-READ NEGATIVE TEST: gather flush points {sorted(_nc.GATHER_FLUSH_LEAVES)} (dropped {args.late_read!r}); roots must NOT match arm 2", flush=True)
 
 
+def committer_arg(s: str) -> str:
+    """``--committer``'s value, refused when empty: a treatment arm always has a committer, so `main`'s is never None."""
+    if not s:
+        raise UsageError("--committer is empty: name the treatment arm's committer (native_collect_v2b, the default; hooks_only; or "
+                         "plugin:MODULE:FACTORY), or run the control alone with --only-arm control")
+    return s
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload", type=workload_arg, default="workloads/workload_cov_b0_b1_c256.json")
@@ -888,7 +890,7 @@ class Options:
     case: str | None = option("--case", default=None)
     out: str = option("--out")
     pairs: int = option("--pairs", type=int, default=5)
-    committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | hooks_only (an ablation, not a commitment) | plugin:<module>:<factory>")
+    committer: str = option("--committer", type=committer_arg, default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | hooks_only (an ablation, not a commitment) | plugin:<module>:<factory>")
     commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME,), help="the commitment scheme, rows-sha512 (hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), the windowed worker's (native_collect_v2b with --window-mb > 0)")
     chunk: int = option("--chunk", type=int, default=65536, help="hooks_only: the leaf, in bytes of the packed step stream, it reports (it hashes nothing); a rows-sha512 row is step_rows.ROW_BYTES")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
@@ -905,7 +907,7 @@ class Options:
     label: str = option("--label", default="")
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
-    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 (VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, which OOMs)")
+    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 (VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers, which a long batch grows past the device's memory")
     tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
@@ -915,7 +917,7 @@ class Options:
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (a substituted weight input): <served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed (--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
     window_mb: int | None = option("--window-mb", type=int, default=None, help="windowed staging -- lay the packed step stream over a ring of device windows of this size (MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); omitted = the collector's (native_collect.window_mb_default: 256 on native_collect_v2b unless --retain device, else per-step blocks); 0 = per-step blocks")
     window_slots: int | None = option("--window-slots", type=int, default=None, help="P0: number of ring slots (default 8; raised automatically so the largest tensor fits)")
-    retain: str = option("--retain", default="none", choices=["device", "host", "none"], help="retention policy for absorbed raw staging (sets VERITY_RETAIN): device = a compact device copy per step (the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none (default) = keep only the authentication state, openings by deterministic replay (--open-after-release)")
+    retain: str = option("--retain", default="none", choices=["device", "host", "none"], help="retention policy for absorbed raw staging (sets VERITY_RETAIN): device = a compact device copy per step (the largest collector footprint, which can exceed the device's memory); host = copy to host memory, arena block recycled; none (default) = keep only the authentication state, openings by deterministic replay (--open-after-release)")
     footprint: str | None = option("--footprint", default=None, help="write the per-step device-memory timeline (JSONL) to this path (sets VERITY_FOOTPRINT)")
     bounded_staging: bool | None = option("--bounded-staging", default=None, action="boolean_optional", help="bounded host staging (sets VERITY_STAGING_BOUNDED; windowed path only; omitted = on whenever staging is windowed): a learning step's transient host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named FAIL); roots identical to the unbounded path (same headers, leaf order, padding). --no-bounded-staging: the hedge copies")
     learn_budget_mb: int = option("--learn-budget-mb", type=int, default=4096, help="bounded staging: transient pinned-host budget for a learning step (MiB; default 4096)")
@@ -942,13 +944,13 @@ class Options:
     replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
-    vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark instance sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
+    vu_export_dir: str | None = option("--vu-export-dir", env="VERITY_VU_EXPORT_DIR", default=None, help="opt-in, not on the record: after pair 0's replay PASSes, export a stratified sample of its VUs as benchmark input sets into this directory (verity_vllm.pipeline.vu_export; limits.json / provenance.json there are read)")
     serving_rows: str | None = option("--serving-rows", default=None, metavar="REQUEST_JSON", help="opt-in, not on the record: after pair 0's roots are final and before its seed, commit every unit of the verifier's partition in M0's serving row format (verity_vllm.pipeline.serving_rows; the row stage writes the request: dir, partition, run, committer); with --replay-deferred (not slim) at the C2 site, before the bundle is sealed (c2_replay.serving_rows)")
-    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the PoUB session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.remote_bandwidth.remote.CommitSession); a rejected session fails the Commit")
+    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT", help="the PoUB session's verifier: the store binder goes on the engine at its build, and the Commit proves its store to it in lockstep with its first instrumented run, a pass an engine step of that run (verity_vllm.protocols.poub.remote.CommitSession); a rejected session fails the Commit")
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve, or servedrop:K (negative: the first K blocks appended withheld)")
     remote_node: str | None = option("--remote-node", default=None, metavar="HOST", help="the session's node, the id the verifier registers the store under (against a verifier holding a Site, this machine's host id there); default verity-vllm/<hostname>")
     remote_kv_pages: int = option("--remote-kv-pages", type=int, default=32, help="the KV pool's pages under the session (num_gpu_blocks_override; outside the registered store); 0: the engine's own pool, at the row's gpu_memory_utilization")
-    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.remote_bandwidth.binder.Binder.register_filler)")
+    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0, help="GiB of zeros on the engine's GPU registered after the build as the session's filler, beside the weights (the KV pool is never registered: verity_vllm.protocols.poub.binder.Binder.register_filler)")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None, help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None, help="kv.cu built at the codec's field and mask: the store's encode on the GPU (default: the CPU reference)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
@@ -1225,7 +1227,7 @@ def main(args: Options) -> None:
         com = make_committer(kind, eng, args, run_id)
         if served is not None:
             served.attach(com)                               # the committer wraps nothing: the source acquires every value of the Build
-            com.program_digest = SR.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
+            com.program_digest = SR.program_field(served.build["program_digest"])   # the served Build's digest binds the roots
         _att = attach_of_record(com, eng, args, required_manifest, out, kind=kind, required_classes=required_classes,
                                 required_classes_cli=required_classes_cli, hidden_family=hidden_family if not required_classes_cli else None,
                                 fa_version=fa_version, cb_plan=cb_plan, served=served)
@@ -1233,13 +1235,12 @@ def main(args: Options) -> None:
         flip_weight_rec, _live_wd, _wor_rec = committer_setup(cfg, eng, com, kind=kind, reqs=reqs, sampling=sampling, base=base,
                                                               flip_weight_rec=flip_weight_rec, _hidden_required=_hidden_required)
         coms[kind] = com
-    com = coms[kinds[0]] if kinds else None
     if served is not None:
         _rb = served.rebuild(json.loads(Path(args.workload).read_text()), str(out))   # every kernel has launched in the warm-ups
         print(f"[delta] served Build of this process: program {str(_rb['program_digest'])[:16]} complete {_rb['complete']}, equal to the Build "
-              f"of record {_rb['program_digest'] == required_manifest['program_digest']}", flush=True)
+              f"of record {_rb['program_digest'] == served.build['program_digest']}", flush=True)
     protocols = PO.at_commit(_ekw["target"], eng.model, versions, _settings)   # after every committer registered the weights
-    if args.value_check and com is not None and hasattr(com, "_layouts"):
+    if args.value_check and kinds and hasattr(com := coms[kinds[0]], "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
         from verity_vllm.check.value_check import run_value_check
         vres = run_value_check(com, lambda: run_workload(eng, reqs, sampling), lambda: assert_pristine(eng, base))
@@ -1281,12 +1282,12 @@ def main(args: Options) -> None:
             torch.cuda.reset_peak_memory_stats()
             rss0, _ = rss_kb()
             rc = None
-            com = coms[arm] if multi and arm != "control" else (coms[kinds[0]] if kinds else None)
             _wstage = f"work.pair{pair}.{arm}"
             TL.start(_wstage, pair=pair, arm=arm)
             # the remote session audits the first instrumented run, a pass an engine step of it; the control arm is never audited
             _lock = _rs.begin() if _rs is not None and arm != "control" and _rs.lockstep is None else None
             if arm != "control":
+                com = coms[arm if multi else kinds[0]]
                 com.reset()
                 if served is not None:
                     served.src.begin_run()
@@ -1801,8 +1802,8 @@ def staging_host_limit(asz: dict[str, Any]) -> tuple[int | None, str | None]:
     """The host memory limit a committer's staging is admitted against and where it was read: the cgroup's limit, else the
     machine's ``MemTotal``, else None.  It records both in `asz`, the staging's sizing."""
     # `--retain host` pins the whole run's raw bytes (+ ~1/4 for levels) in HOST memory; inside a container the
-    # bound is the cgroup limit, not `free`. Over it the kernel OOM-killer SIGKILLs the process mid-warm-up with no Python error
-    # (B=32 Llama 1024/128 on a 125 GB cp-dA container). Say so up front; the sound alternative is `--retain none` + replay openings.
+    # bound is the cgroup limit, not `free`. Over it the kernel OOM-killer SIGKILLs the process mid-warm-up with no Python error.
+    # Say so up front; the sound alternative is `--retain none` + replay openings.
     host_limit = None
     host_limit_src = None
     for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
@@ -1932,12 +1933,12 @@ def bounded_admission(com: Any, asz: dict[str, Any], *, args: Options, reqs: lis
     print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
     (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
     (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
-    if getattr(args, "host_admit", None) is not None:
+    if (host_admit := getattr(args, "host_admit", None)) is not None:
         if host_limit is None:
             print("[delta] REFUSE (--host-admit): no cgroup memory limit readable to admit against", flush=True)
             sys.exit(3)
-        if _bound > host_limit * (1.0 - float(args.host_admit)):
-            print(f"[delta] REFUSE (--host-admit {args.host_admit}): host peak bound {_bound >> 20} MiB > {(1.0 - float(args.host_admit)):.2f} x cgroup "
+        if _bound > host_limit * (1.0 - float(host_admit)):
+            print(f"[delta] REFUSE (--host-admit {host_admit}): host peak bound {_bound >> 20} MiB > {(1.0 - float(host_admit)):.2f} x cgroup "
                   f"{host_limit >> 20} MiB -- predicted OOM, not launched; dominant contributor: "
                   f"{(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
             sys.exit(3)
@@ -2077,9 +2078,9 @@ def weights_of_record_digests(args: Options, eng: va.Engine, *, engine_args: dic
         from verity_vllm.check import weights_of_record as WR
         TL.start("validate.weights_of_record_digests", kind=kind)
         try:
-            if getattr(args, "weights_of_record", None):
-                _wor_rec = json.loads(Path(args.weights_of_record).read_text())
-                _wor_rec["source"] = str(args.weights_of_record)
+            if wor := getattr(args, "weights_of_record", None):
+                _wor_rec = json.loads(Path(wor).read_text())
+                _wor_rec["source"] = str(wor)
             elif served is not None:
                 _wor_rec = WR.served_record(required_manifest, args.checkpoint_dir, checkpoints_manifest=args.checkpoints,
                                             kv_cache_dtype=str(engine_args.get("kv_cache_dtype") or "auto"))
@@ -2087,11 +2088,11 @@ def weights_of_record_digests(args: Options, eng: va.Engine, *, engine_args: dic
                 (Path(args.out) / "weights_of_record.json").write_text(json.dumps(_wor_rec, indent=1) + "\n")
             else:
                 _pd = args.program_dir
-                if not _pd and getattr(args, "programs_root", None):
+                if not _pd and (programs_root := getattr(args, "programs_root", None)):
                     # prefer a COMPONENT Program (build_request_LP*_T*) over the default wrapper shape build_request: at
                     # B>=2 only the components are of record (the record binds to the manifest's component digests)
-                    _cands = sorted(p for p in Path(args.programs_root).glob("build_request_LP*_T*") if (p / "instances.json.gz").exists()) or \
-                             sorted(p for p in Path(args.programs_root).glob("build_request*") if (p / "instances.json.gz").exists())
+                    _cands = sorted(p for p in Path(programs_root).glob("build_request_LP*_T*") if (p / "instances.json.gz").exists()) or \
+                             sorted(p for p in Path(programs_root).glob("build_request*") if (p / "instances.json.gz").exists())
                     _pd = str(_cands[0]) if _cands else None
                 if not _pd:
                     raise RuntimeError("--checkpoint-dir needs the Program of record (--program-dir / --programs-root)")

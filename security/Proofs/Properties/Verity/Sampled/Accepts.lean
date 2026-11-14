@@ -10,9 +10,9 @@ public import Proofs.Properties.Certifier.Check.Bytes
 public import Proofs.Properties.Spot.Tables
 
 /-!
-# Sampled proofs' acceptance: v2's verdict is verity-verify-proof `--zk`'s on the session's files
+# SPOT's acceptance: v2's verdict is verity-verify-proof `--zk`'s on the session's files
 
-The decoders' premise of the logged coupling (`Decodes`) asks that on the joint law's support, off the events at the
+The decoders' premise of the logged coupling (`Decodes`) asks that on the joint distribution's support, off the events at the
 stops it is held off, an accepted play is beside an outcome verity-verify-proof `--zk` accepts (`LiveAcceptsZKP`), which
 judges the writer's transcript with `AcceptsZKP`.
 v2 judges the session's files on the blobs sent with `verity-verify-proof --zk` as `Spot.OneStageZk.run` runs it. They
@@ -44,7 +44,7 @@ are one check on one pair of byte strings, and the writer carries the acceptance
 * **The pointwise acceptance** (`play_ends`, `MovesReach`, `decodes_of`, `filesOn_play`, `decodes_of_digests`): a
   play of the period's game ends at its parameters and committed files, so `Decodes` holds wherever v2 reads `A`'s
   files on the accepted plays `P` holds of (at the vocabulary's digests, and at the registered tables where `P` holds
-  them) and the outcomes on the joint law's support off
+  them) and the outcomes on the joint distribution's support off
   the held-off events are the writer's at moves v2's files decode to (`MovesReach`, the decoders' and the coin map's).
 -/
 
@@ -305,15 +305,15 @@ theorem tables_registered {V : Vocab d α} {k : Verity.Registration.Composite} {
 /-- **The tables the blobs sent hold extend the ones a circuit file registers**, where the circuit file looks up
 exactly the pinned tables the blobs hold (`Spot.OneStageZk.lookupsOf`) and each the blobs hold is its
 registered file (`TablesSent`). -/
-theorem pinnedTables_extend {s : Verity.Sent} {circuitB : ByteArray} {names : List String}
+theorem pinnedTables_extend {T : PinnedTables} {s : Verity.Sent} {circuitB : ByteArray} {names : List String}
     (hl : _root_.Spot.OneStageZk.lookupsOf circuitB = .ok names)
     (hn : names = (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs)).map (·.1))
-    (ht : TablesSent s) :
-    TablesExtend (pinnedTables circuitB)
+    (ht : TablesSent T s) :
+    TablesExtend (pinnedTables T circuitB)
       (_root_.Spot.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray s.blobs)) := by
   classical
-  have hp : pinnedTables circuitB = Flock.MUFU_TABLES.filterMap fun t =>
-      if t ∈ Flock.MUFU_TABLES ∧ names.contains t.name = true then (pinnedFile t.sha512).map (fun b => (t.name, b))
+  have hp : pinnedTables T circuitB = Flock.MUFU_TABLES.filterMap fun t =>
+      if t ∈ Flock.MUFU_TABLES ∧ names.contains t.name = true then (T.file t.sha512).map (fun b => (t.name, b))
       else none := by
     simp only [pinnedTables, hl]
     refine List.filterMap_congr fun t ht => ?_
@@ -402,11 +402,11 @@ theorem pinnedTables_among {s : Verity.Sent} {circuitB : ByteArray} {names : Lis
 the circuit file registers, the committed files are registered, the blobs sent are the committed files, then the
 evidence's, the blobs sent hold the circuit file's lookup tables (`HoldsRegisteredTables`, which v2's acceptance gives,
 `tables_registered`), and each pinned table they hold is its registered file (`TablesSent`). -/
-theorem filesOn_of {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray} {A : Live} {s : Verity.Sent}
-    (hA : SetsUp V θ F A) (hD : DigestsAt V θ) (hreg : V.Registered θ F) (hθ : s.params = θ)
+theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : Array ByteArray} {A : Live}
+    {s : Verity.Sent} (hA : SetsUp V θ F A) (hD : DigestsAt V T θ) (hreg : V.Registered θ F) (hθ : s.params = θ)
     (hs : s.blobs = F ++ B) {p₀ : _root_.Spot.OneStageZk.Params} (hp₀ : ParamsAt s.params p₀)
     (hheld : Properties.Spot.HoldsRegisteredTables p₀.own (_root_.Core.Blobs.ofArray s.blobs))
-    (ht : TablesSent s) : FilesOn A s := by
+    (ht : TablesSent T s) : FilesOn A s := by
   have hc : ∀ p, ParamsAt s.params p → ∀ b,
       (_root_.Core.Blobs.ofArray s.blobs).get p.own.circuit "circuit" = .ok b → b = A.I.circuitFile := by
     intro p hp b hg
@@ -418,9 +418,9 @@ theorem filesOn_of {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray} {A 
     rw [hA.publicFile]
     exact get_named (hD.publicFile p (hθ ▸ hp)) hreg.2 hg
   · obtain ⟨circuitB, hg, hl⟩ := hheld
-    have h : A.I.tables = pinnedTables A.I.circuitFile := by
+    have h : A.I.tables = pinnedTables T A.I.circuitFile := by
       rw [hA.circuit]
-      exact (congrArg (fun r : Verity.WindowFiles => r.first.tables) hA.read).symm.trans (hD.tables F)
+      exact (congrArg (fun r : Verity.ExecutionPhaseFiles => r.first.tables) hA.read).symm.trans (hD.tables F)
     rw [h, ← hc p₀ hp₀ circuitB hg]
     exact pinnedTables_extend hl rfl ht
 
@@ -505,8 +505,8 @@ theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
   rw [ho]
   exact ⟨rfl, rfl⟩
 
-/-- **The outcomes on the joint law's support are the writer's at moves v2's files decode to** (the decoders' and the
-coin map's premise): on the joint law's support off the held-off events `BL` and `B`, beside a tape whose play's sampled
+/-- **The outcomes on the joint distribution's support are the writer's at moves v2's files decode to** (the decoders' and the
+coin map's premise): on the joint distribution's support off the held-off events `BL` and `B`, beside a tape whose play's sampled
 verdict at `k` accepts, that misses at no round and not at the record, and whose play `P` holds of, the outcome is the
 writer's at a sample `S`, a registration `R` and an outcome `out` of the live session whose moves are those v2's files
 decode to in what the prover sent (`MovesOf`). -/
@@ -522,7 +522,7 @@ def MovesReach (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : Byte
 
 /-- **The decoders' premise, pointwise** (`Decodes`): where `A` is the session v2 sets up on the parameters and the
 committed files, v2 reads `A`'s files on the blobs of each accepted play,
-the session's writer keeps an accepted transcript's view (`WritesView`) and the outcomes on the joint law's support off
+the session's writer keeps an accepted transcript's view (`WritesView`) and the outcomes on the joint distribution's support off
 `BL` and `B` are the writer's at moves v2's files decode to (`MovesReach`), every accepted play there that misses
 nowhere and that `P` holds of is beside an outcome verity-verify-proof `--zk` accepts at `A.own`. -/
 theorem decodes_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
@@ -540,11 +540,11 @@ theorem decodes_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
 /-- **v2 reads `A`'s files on an accepted play that reads the registered tables**: the play ends at its parameters
 and committed files, the verdict holds the files registered and the blobs sent to the circuit file's lookup tables
 (`tables_registered`), and the blobs sent are the committed files, then the evidence's. -/
-theorem filesOn_play {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+theorem filesOn_play {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} {σ : Verity.Game.Strategy (V.game θ F c)}
-    (hA : SetsUp V θ F A) (hD : DigestsAt V θ) {x : Verity.Game.CoinTape (V.game θ F c) σ}
+    (hA : SetsUp V θ F A) (hD : DigestsAt V T θ) {x : Verity.Game.CoinTape (V.game θ F c) σ}
     (hv : V.Verdict k .sampled (Verity.Game.CoinTape.run (V.game θ F c) σ x))
-    (ht : TablesSent (Verity.Game.CoinTape.run (V.game θ F c) σ x).sent) :
+    (ht : TablesSent T (Verity.Game.CoinTape.run (V.game θ F c) σ x).sent) :
     FilesOn A (Verity.Game.CoinTape.run (V.game θ F c) σ x).sent := by
   obtain ⟨hp, hf⟩ := play_ends V θ F c σ x
   have hreg : V.Registered θ F := by
@@ -559,13 +559,13 @@ theorem filesOn_play {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c 
 /-- **The decoders' premise, pointwise, at the vocabulary's digests** (`decodes_of` with `filesOn_play`): where v2's
 parameters name the vocabulary's digests and the vocabulary reads the lookup tables the circuit file registers
 (`DigestsAt`), `Decodes` at a `P` that holds v2 to the registered tables (`TablesSent`) holds wherever the writer keeps
-an accepted transcript's view and the outcomes on the joint law's support off the held-off events are the writer's at
+an accepted transcript's view and the outcomes on the joint distribution's support off the held-off events are the writer's at
 moves v2's files decode to. -/
-theorem decodes_of_digests {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+theorem decodes_of_digests {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {BL : LinkHold A.mP} {B : RoundHold} (hA : SetsUp V θ F A)
-    (hD : DigestsAt V θ) (hP : ∀ o, P o → TablesSent o.sent) (hW : WritesView A)
+    (hD : DigestsAt V T θ) (hP : ∀ o, P o → TablesSent T o.sent) (hW : WritesView A)
     (hM : MovesReach V θ F c k P A rd σ D M BL B) : Decodes V θ F c k P A rd σ D M BL B :=
   decodes_of hA (fun _ hv hp => filesOn_play hA hD hv (hP _ hp)) hW hM
 

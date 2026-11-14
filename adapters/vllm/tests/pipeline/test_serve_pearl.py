@@ -1,5 +1,5 @@
 """serve-openai's Pearl+ arm (`serve_pearl`) on CPU, over test_serve_openai's stand-in engine and committer: one Pearl+
-epoch a Commit window, its composition Pearl-C beside sampled proofs cut at Pearl-C's sites, each engine step's forward
+epoch a Commit window, its composition Pearl-C beside SPOT cut at Pearl-C's sites, each engine step's forward
 one pass ended at the model runner the committer patched first (`pearl_c.passes.hook_steps`' ``runner``; the class's
 wrapper, under the committer's patch, never runs), and each window's ``pearl/w<k>/served.json`` and ``coins.json``, from
 which Pearl+'s window record W is written (`pearl_c.window.write`).
@@ -25,9 +25,18 @@ import pytest
 import torch
 from verity.protocols.accounting.pouw.verifier import verifier
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import HM96, Workload, activation_binding, commit_rows, weights_root
+from verity.protocols.accounting.pouw.verifier.audit import (
+    HM96,
+    Workload,
+    activation_binding,
+    commit_rows,
+    weights_root,
+)
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
+
+from tests.pipeline import predicted
+from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
 from verity_vllm.engine import hooks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_openai as so
@@ -35,14 +44,12 @@ from verity_vllm.pipeline import serve_pearl as SPL
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
 from verity_vllm.protocols import pouw
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity_torch.pouw.pearl_c import run_device as PPDR
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
+from verity_torch.pouw.pearl_c import passes as PP
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import PassEnds, _Pass
-
-from tests.pipeline import predicted
-from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Runner, Serving, records
+from verity_torch.pouw.pearl_c.ends import PassEnds, _Pass
 
 CLASS, PEARL = WindowClass(1, 27, 2), PearlTables(SPL.SCHEME, words=64)
 #: a round's calls: the layer's q/k/v, o, gate/up and down
@@ -175,9 +182,11 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(PP, "model_runners", lambda: (Forward,))
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
-    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
+    monkeypatch.setattr(PPDR, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
         w: bytes([w + 1]) * 32 + salt_key for w in weights})
-    monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPDR.weight_roots)
+    monkeypatch.setattr(PPDR, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(verifier, "coins", random.Random(0).randbytes)
     monkeypatch.setattr(verifier, "executable", lambda: Path("lean"))

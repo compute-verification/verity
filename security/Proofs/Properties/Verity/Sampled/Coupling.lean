@@ -3,9 +3,9 @@ module
 public import Proofs.Properties.Verity.Sampled.Messages
 
 /-!
-# Sampled proofs' coupling: the target off the binding and the logged coupling
+# SPOT's coupling: the target off the binding and the logged coupling
 
-`CouplingTarget` at the leg's constructions with the messages' two-continuation finders (`Constructions.withMessages`,
+`CouplingTarget` at the subprotocol's constructions with the messages' two-continuation finders (`Constructions.withMessages`,
 whose finders are `msgFinder` and `recordFinder`, so `couplingTarget_of_noMiss` applies by `rfl`), from three bounds on
 the plays the sampled verdict accepts, cut by a property `P` of the play, the one the check's read of the device's log
 is held to (the binding's `Logged`: the log the check read is the device's), and by a property `Q` of the play at each
@@ -36,7 +36,7 @@ open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The leg's constructions with the messages' two-continuation finders at the readings `rd`** (`msgFinder`,
+/-- **The subprotocol's constructions with the messages' two-continuation finders at the readings `rd`** (`msgFinder`,
 `recordFinder`): `K`'s coins, projection, read finder, forger and bound digests' finder. -/
 noncomputable def Constructions.withMessages {V : Vocab d α} (K : Constructions V) (rd : Readings) :
     Constructions V :=

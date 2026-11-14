@@ -17,19 +17,19 @@ from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.requirement import from_census
 from verity.circuits.types import Array, RecordType, Value
-from verity.definitions.replay import replayer
+from verity_torch import prune as P
 
 from tests.program import test_dsa_derive as DSA
 from tests.program.predict.test_predict import TINY, _phi
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity_vllm.commit import memory_map as MM
-from verity_vllm.program import prune as P
-from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.definitions.replay import replayer
 from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vocab import PROFILES
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.predict.build import BF16, I32, build_program, decoder
 from verity_vllm.program.predict.common import _Peers
 

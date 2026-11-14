@@ -1,0 +1,43 @@
+# The ZK server's release side in Lean (live PROTOCOL.md §10.5): the record `firewall/v0`, one outer session's decision
+# over Flock.ZkServer.Contract, the decision as a core protocol (`core-zk-server`), and the release side around Flock's
+# session loop on the record's files (`core-zk-server session`, which flock-circuit's `--zk-server-state` runs). Code, not
+# analysis: Lean core, Flock's verifier library, the core protocol interface, and the difftest server for
+# `core-zk-server-difftest` and for the port of the honest worker's requests.
+name = "core_zk_server"
+defaultTargets = ["ZkServer", "ZkServerHonestDifftest", "core-zk-server", "core-zk-server-difftest",
+  "zk-server-honest-difftest"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+backward.proofsInPublic = true
+
+[[require]]
+name = "flock_verifier"
+path = "../../../flock/verifier"
+
+[[require]]
+name = "core_protocol"
+path = "../../../../interface"
+
+[[require]]
+name = "verity_difftest"
+path = "../../../../../circuits/difftest"
+
+[[lean_lib]]
+name = "ZkServer"
+
+[[lean_lib]]
+name = "ZkServerHonestDifftest"
+
+[[lean_exe]]
+name = "core-zk-server"
+root = "ZkServerMain"
+
+[[lean_exe]]
+name = "core-zk-server-difftest"
+root = "ZkServerDifftest"
+
+[[lean_exe]]
+name = "zk-server-honest-difftest"
+root = "ZkServerHonestDifftestMain"

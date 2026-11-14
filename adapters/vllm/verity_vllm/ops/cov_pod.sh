@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The coverage campaign's pod-side runner.  One configuration = one cell of the coverage table:
+# The coverage campaign's pod-side runner.  One configuration = one cell of the campaign's table:
 # GPU phase (capture / control) then the CPU phase (resolve … tier A k=3 … gates + card) of
 # verity_vllm.pipeline.match, all on the pod's container disk (/workspace: /vol can be over quota, and the laptop stays a thin
 # client), then a SMALL bundle (json reports, cards, logs, tokens -- no snapshots, no instances.jsonl) at

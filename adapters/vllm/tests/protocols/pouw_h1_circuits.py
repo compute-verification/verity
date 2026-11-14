@@ -41,6 +41,7 @@ rest:
 from __future__ import annotations
 
 import argparse
+import functools
 import gzip
 import hashlib
 import importlib.util
@@ -141,6 +142,16 @@ def _h1_live():
     return module
 
 
+@functools.cache
+def stagers():
+    """``h1_prove/stagers.py``: the stagers ``h1_prove/drawn.py`` hands drawn's ``stage`` (``recomposed``, ``file_stager``)."""
+    spec = importlib.util.spec_from_file_location("h1_prove_stagers", H1_PROVE / "stagers.py")
+    assert spec is not None and spec.loader is not None, f"{H1_PROVE / 'stagers.py'} is no module"
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def live_part(T: int, S: int, prefix: str) -> dict:
     """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on: v2's, or past
     `live.PIECE_ROWS` rows the pieced one (``h1_prove/live.py``'s `program_of`)."""
@@ -208,7 +219,7 @@ def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
     `drawn_rows.LEAF_OUT_ROWS`, lowered under ``HZ_STAGE`` (``fast`` by default) and written to `path`."""
     from verity_flock import class_statement as CS
 
-    from verity.protocols.accounting.pouw.prover.serving.h1 import drawn_rows as D
+    from verity.protocols.accounting.pouw.prover.serving.h1 import sampled_rows as D
     if os.environ.get("HZ_STAGE", "fast") == "fast":
         sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))
         import fast_stage
@@ -231,7 +242,7 @@ def leaf_files(program_dir: Path, out: Path, descriptor: bytes, ks: Sequence[int
     from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 
     from tests.protocols.pouw_h1_rehearsal import PROGRAM
-    from verity.protocols.accounting.pouw.prover.serving.h1 import drawn_rows as D
+    from verity.protocols.accounting.pouw.prover.serving.h1 import sampled_rows as D
     layout, _why = CR.layout_of(descriptor)
     shape, win = CR.shape_of(descriptor), rebuilt(descriptor)
     files: dict[str, Any] = {CR.LEAF_PROGRAMS: {}}

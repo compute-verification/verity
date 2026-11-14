@@ -1,15 +1,15 @@
 module
 
-public import Definitions.Accounting.Assumptions.TS
-public import Definitions.Accounting.Assumptions.TS.Fixed
+public import Definitions.Pouw.Assumptions.TS
+public import Definitions.Pouw.Assumptions.TS.Fixed
 
 /-!
 # `UnitFixed` from a fixed word: lemmas
 
 These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
-Option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is proved as `Accounting.SecurityProofs.TS.G`
-(`Proofs.Accounting.TS.Fixed`), with its non-vacuity witness in `Proofs.Accounting.TS.FixedMeets`.
+Option A (`Definitions.Pouw.TS.Fixed`). Each `def G : Prop` is proved as `Accounting.SecurityProofs.TS.G`
+(`Proofs.Pouw.TS.Fixed`), with its non-vacuity witness in `Proofs.Pouw.TS.FixedMeets`.
 
 * `UnitFixedOfWords`: `UnitFixed` (E1(c) per unit, with its fold clause) on a word layer whose credited units are fixed
   under option A, from `ModesRun` and `CountsFixed`. A good unit (`SampledLayer.Good`: the run paid for its late cone) is

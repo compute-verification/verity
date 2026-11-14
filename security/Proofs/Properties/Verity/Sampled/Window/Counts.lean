@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Writes
 public import Proofs.Properties.Verity.Sampled.CountsLayout
 
 /-!
-# Sampled proofs' coupling over a window: a session's stops' frames and counts
+# SPOT's coupling over a window: a session's stops' frames and counts
 
 What the members' steps (`MemberSteps`) read at a stop of a member's session, beside `Window/Record.lean`'s moves:
 
@@ -159,13 +159,13 @@ end Weaken
 section WeakenMember
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → PosDecoders g σ R Reg}
-  {M : WindowCoinMap g σ Ω R} {BL : WindowLinkHold} {B : WindowRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
+  {M : ExecutionPhaseCoinMap g σ Ω R} {BL : ExecutionPhaseLinkHold} {B : ExecutionPhaseRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
 
 /-- **A member's session's trace off `BL` and `B` is one off `BL'` and `B'`** wherever its link points, the trace's
 end a later position than its first stop with them written in and consumed, are off `BL'` there, and each stop the
 trace answers at a position `Q` holds of is off `B'`, `Q` holding past the first stop and of each answered stop's
 next position. -/
-theorem MemberReach.weaken {BL' : WindowLinkHold} {B' : WindowRoundHold} {i : ℕ}
+theorem MemberReach.weaken {BL' : ExecutionPhaseLinkHold} {B' : ExecutionPhaseRoundHold} {i : ℕ}
     {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (Q : Pos g σ Claims.Msg (Fin R) → Prop)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
@@ -296,13 +296,13 @@ theorem Member.spec_at {nJ : ℕ} (m : Member nJ) (hc : m.I.count = 1) (hr : m.I
 
 /-- **The session `--zk` sets up at a member's part of a sample has the member's link points' count**: its one
 statement is set up at the record's sample, the member's printed part, where it has the link points of as many proof
-blocks as the part (`drawOkZKHJP_of_count`), the member's at a part of its session's size (`Window.hcls`). -/
+blocks as the part (`sampleOkZKHJP_of_count`), the member's at a part of its session's size (`Window.hcls`). -/
 theorem Member.mPts_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) {record : String} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} (hs : Exec.setupOfP (ZkExec.zkInputs m.I) m.own record = .ok (spec, sts))
     {S : Finset (Fin nJ)} (hdr : Exec.recordDraw record = some (printedPart (m.part S)))
     (hcls : Exec.mPtsOf m.D.unroll.g (m.part S).card = Exec.mPtsOf m.D.unroll.g (m.kd / Composed.nTab m.I)) :
     spec.mPts = memberPts (m.toV5 t) := by
-  have hpin := ZkHidden.drawOkZKHJP_of_count m.I m.own m.ht (m.toV5 t).hcS m.hcount (fun S => .subset S.card) m.n
+  have hpin := ZkHidden.sampleOkZKHJP_of_count m.I m.own m.ht (m.toV5 t).hcS m.hcount (fun S => .subset S.card) m.n
     printedPart (m.toV5 t).hCust.2 (m.part S)
   have h1 : m.I.count ≤ 1 := m.hcount
   unfold Exec.setupOfP at hs
@@ -345,7 +345,7 @@ the frame's count to the record's round's (`SessionRead.roundCount`), `tailCount
 theorem session_stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
     {tb : String} (per : ℕ) (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {rd : Reading R}
-    (hrd : rd = windowReadingAt #[tb] per (sessionReveal #[tb] ev) record₀ recordDigest)
+    (hrd : rd = executionPhaseReadingAt #[tb] per (sessionReveal #[tb] ev) record₀ recordDigest)
     {σ : Strategy (V.game θ F c)} {q : Pos (V.game θ F c) σ Claims.Msg (Fin R)}
     (hq : q.Inv (roundCuts V θ F c rd)) {z : CoinTape (V.game θ F c) σ} (hz : ∃ y, z = q.back y)
     (hn : NoMiss V θ F c rd σ z) {j : Fin R} {u : ℕ} {ρ : Fin 2} {k : ℕ}

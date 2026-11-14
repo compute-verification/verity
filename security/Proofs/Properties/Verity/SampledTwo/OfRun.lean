@@ -56,6 +56,13 @@ parameters' parser refuses any other rule. -/
 def RuleIsTwo (C : CaseOf) : Prop :=
   ∀ o k p c e, C o = some k → Decoded k p c e → ∃ grain replay n, p.rule = .twoStage grain replay n
 
+/-- **No accepted play's run has a statement of only its part's sampled proof blocks** (`RunsAs.NoSampledOnly`): where
+it holds, round 2's check the run makes (`SecondStage.checkAny`) is the `SecondStage.check` the join reads
+(`SecondStage.checkAny_eq_check`). Taken as an instance (`Fact`), so the theorems over the form's accept carry it
+without naming it. -/
+def SampledNoneAt (C : CaseOf) : Prop :=
+  ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it → SpotFlock.RunsAs.NoSampledOnly i it
+
 /-- **The held copies agree with what an accepted play's run reads** (`RunsAs.HeldMatches`). -/
 def HeldAt (A : Live₂) (C : CaseOf) : Prop :=
   ∀ o i it, FormAccepts C o → inputOn C o = some i → i.interior = some it → HeldMatches i it A.h
@@ -140,22 +147,27 @@ theorem playCoins_of_starts {h : SpotFlock.Held} {i : Spot.Run.Input} {it : Spot
 /-- **An accepted play's run of record is an accepted two-stage run** (`RunsAs.acceptedTwo_of_check` at a play): where
 the form's check accepts the play at a two-stage rule, `Spot.Run.run` with the form allowed accepted the run of
 record's input `i`, with its interior `it`. -/
-theorem acceptedTwo_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input}
-    {it : Spot.Run.Interior} (hrule : RuleIsTwo C) (hA : FormAccepts C o) (hi : inputOn C o = some i)
-    (hit : i.interior = some it) : ∃ run, AcceptedTwo i it run := by
+theorem acceptedTwo_of_formAccepts {C : CaseOf} [hsn : Fact (SampledNoneAt C)] {o : Verity.Exchange}
+    {i : Spot.Run.Input} {it : Spot.Run.Interior} (hrule : RuleIsTwo C) (hA : FormAccepts C o)
+    (hi : inputOn C o = some i) (hit : i.interior = some it) : ∃ run, AcceptedTwo i it run := by
+  have hA₀ := hA
   obtain ⟨k, hk, p, cm, e, pub, prof, hdec, hacc⟩ := hA
-  obtain ⟨-, c₂, ξ₂, r, i', it', run, hin, hat, -⟩ :=
-    SpotFlock.RunsAs.acceptedTwo_of_check (hrule o k p cm e hk hdec) hacc
-  have hik : inputOfCase k = some i' := by
-    obtain ⟨h1, h2, h3⟩ := hdec
-    unfold inputOfCase
-    rw [h1, h2, h3]
-    simp only [bind, Except.bind, hin]
-    rfl
-  have hi' : inputOn C o = some i' := by
+  have hon : ∀ {c₂ ξ₂ r i'}, VStar.Recursive.SampledTwo.inputAt p cm e.source e k.blobs = .ok (c₂, ξ₂, r, i') →
+      inputOn C o = some i' := by
+    intro c₂ ξ₂ r i' hin
+    have hik : inputOfCase k = some i' := by
+      obtain ⟨h1, h2, h3⟩ := hdec
+      unfold inputOfCase
+      rw [h1, h2, h3]
+      simp only [bind, Except.bind, hin]
+      rfl
     unfold inputOn
     rw [hk]
     exact hik
+  obtain ⟨-, c₂, ξ₂, r, i', it', run, hin, hat, -⟩ :=
+    SpotFlock.RunsAs.acceptedTwo_of_check (hrule o k p cm e hk hdec)
+      (fun _ _ _ i'' _ hin'' hit'' => hsn.out o i'' _ hA₀ (hon hin'') hit'') hacc
+  have hi' : inputOn C o = some i' := hon hin
   obtain rfl : i = i' := Option.some.inj (hi.symm.trans hi')
   obtain rfl : it = it' := Option.some.inj (hit.symm.trans hat.interior)
   exact ⟨run, hat⟩
@@ -165,7 +177,7 @@ theorem acceptedTwo_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.
 /-- **The form's accept is a play SPOT[Flock] accepts** (`PlayAccepts`), from the run's accept
 (`RunsAs.spotRunAcceptsPlay`) at the run the form's check made (`acceptedTwo_of_formAccepts`), under the premises this
 file names. -/
-theorem playAccepts_of_run (A : Live₂) (C : CaseOf) (S : SessionReading)
+theorem playAccepts_of_run (A : Live₂) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hrule : RuleIsTwo C) (hheld : HeldAt A C)
     (htwo : TwoHolds A.h) (hnd : NamesDistinct A.h) (hrec : RecordsAt A C) (hread : RecordsRead C)
     (hr2 : RoundTwo A.h) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)
@@ -187,7 +199,7 @@ theorem playAccepts_of_run (A : Live₂) (C : CaseOf) (S : SessionReading)
 /-- **The form's accept is the run's accept, from the run's accept theorem**: `acceptsRun_of'` with `PlayAccepts`
 from `playAccepts_of_run`. What remains of `acceptsRun_of'`'s own premises: an accepted run read at most the coins it
 has (`SourcesFit`) and the sessions' messages are those the check read (`SessionMsgs`). -/
-theorem acceptsRun_of_run (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem acceptsRun_of_run (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hfit : SourcesFit A C) (hsm : SessionMsgs A C S P') (hrule : RuleIsTwo C) (hheld : HeldAt A C)
     (htwo : TwoHolds A.h) (hnd : NamesDistinct A.h) (hrec : RecordsAt A C) (hread : RecordsRead C)

@@ -64,8 +64,8 @@ its registration's seconds a step (``registered_s``), the part of them inside `p
 declared once before any window (`period_program`), as the period's.
 
 ``--receipts SO`` (fill, ``--served``, no ``--handoff``) registers each call's ``receipt@<c>`` too (BRIDGE2), computed on the
-serving GPU by `pouw_h1_receipts.Receipts` (`receipts_producer`) on kernels' units
-(``benchmarks/pouw/served_h1/producer.py``): h1u.cu's proof-block kernel of the -hbc build SO (``producer_gpu.sh``'s
+serving GPU by `pouw_h1_receipts.Receipts` (`receipts_producer`) on kernels' units (their producer module, which
+``main`` is handed by ``benchmarks/pouw/served_h1/h1_gpu.py``, the way this run is started with ``--receipts``): h1u.cu's proof-block kernel of the -hbc build SO (``producer_gpu.sh``'s
 ``h1u_hbc.so``) over each linear's own int8 weight, its seeds taking the registered roots of the call's step's ``a/<K>@<s>`` and ``b/<K>``. The first layer's linears' calls at step 0 and at the
 window's last step are kept, and their first proof block of each row block is held to `h1tile.reference` word for word
 (`receipts_check`: live row blocks at step 0, dead at the last step). A ``.cubin`` SO (``pouw_cuda/noise.cu``'s) computes
@@ -96,7 +96,7 @@ window twice more with an honest Commit, H1 handed all-zero A codes or one A row
 (`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 Without ``--challenger`` its windows' coins are this process's, so every call's credit gate verdict is
 `pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window samples its salt, round and flip coins from a
-challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, challenge phase and credit gate,
+challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coins' origin, challenge phase and credit gate,
 ``ok`` only when every window's coins are the challenger's and the honest Commit window's gate refuses none of its calls.
 
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
@@ -109,11 +109,9 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
-import functools
 import gc
 import gzip
 import hashlib
-import importlib.util
 import json
 import os
 import resource
@@ -787,7 +785,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             for m in layers:
                 lie.wrap(m.quant_method, "observe", lambda orig: edited(orig, ed))
         h1 = pouw.h1_run(entry_name)
-        made = receipts_producer(a.receipts, served, h1, layers, decl.steps) if a.receipts and served is not None else None
+        made = receipts_producer(a.receipts, served, h1, layers, decl.steps, a.producer) if a.receipts and served is not None else None
         if served is not None:
             out["period_is_runs"] = list(h1.shapes_) == period[2]["shapes"] and dict(h1.modules) == period[2]["modules"]
         bad: list[str] = []
@@ -845,7 +843,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
                     out["ok"] = bool(out["ok"] and out["call_ks"] == list(a.ks))
                 if made is not None:
                     t1 = time.monotonic()
-                    out["receipts"] = {**receipts_check(made), "check_s": round(time.monotonic() - t1, 1)}
+                    out["receipts"] = {**receipts_check(made, a.producer), "check_s": round(time.monotonic() - t1, 1)}
                     print(f"[fill] {name} receipts {json.dumps(out['receipts'])}", flush=True)
                     out["ok"] = bool(out["ok"] and out["receipts"]["ok"])
                 if tap is not None:
@@ -1251,7 +1249,7 @@ def negative_verdict(out: dict[str, Any]) -> dict[str, Any]:
 
 
 def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
-    """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coin source,
+    """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coins' origin,
     its challenge phase and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
     with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
     when every window's coins are the auditor device's from a challenge phase of its own that ended closed and complete,
@@ -1346,43 +1344,30 @@ def served_check(h1: Any, served: Any, tdir: Path, register: bool = True) -> dic
     return doc
 
 
-PRODUCER = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "served_h1" / "producer.py"
-
-
-@functools.cache
-def producer() -> Any:
-    """Kernels' producer module (`PRODUCER`), loaded by path: it is a benchmark's, outside this package."""
-    spec = importlib.util.spec_from_file_location("served_h1_producer", PRODUCER)
-    assert spec is not None and spec.loader is not None, f"{PRODUCER} is not a file Python loads as a module"
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int) -> Any:
+def receipts_producer(so: str, served: Any, h1: Any, layers: Any, steps: int, producer: Any) -> Any:
     """``--receipts SO``: `served`'s receipts (`Served.receipts`) from the producer (`pouw_h1_receipts.Receipts`) for the
-    window `h1`, h1u.cu's proof-block kernel of the -hbc build `so` (`producer().Units`) over each linear's int8 weight in
+    window `h1`, h1u.cu's proof-block kernel of the -hbc build `so` (kernels' `producer.Units`) over each linear's int8 weight in
     `layers` in place (no second copy on the GPU), or with a ``.cubin`` SO (noise.cu's) the torch chain over noise.cu's
     noise, keeping the first layer's linears' calls at step 0 and at step `steps` - 1 for `receipts_check`. The noise is the
     window Program's form, v1's or J10-R's (``--j10r``)."""
-    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
+    from verity_torch.pouw.h1 import receipts as RC
 
-    kernel = {"cubin": RC.Cubin(so)} if so.endswith(".cubin") else {"units": producer().Units(so)}
+    kernel = {"cubin": RC.Cubin(so)} if so.endswith(".cubin") else {"units": producer.Units(so)}
     made = RC.Receipts(served, h1, weight=lambda c: layers[c.layer].weight,
                        keep=lambda c: c.layer < 4 and c.step in (0, steps - 1), **kernel)
     served.receipts = made
     return made
 
 
-def receipts_check(made: Any) -> dict[str, Any]:
+def receipts_check(made: Any, producer: Any) -> dict[str, Any]:
     """The kept calls' receipts (`receipts_producer`) at the first proof block of each row block against `h1tile.reference`
-    seeded from the proof block's public row as the verifier builds it, word for word (`producer().check`; a proof block is bad unless
+    seeded from the proof block's public row as the verifier builds it, word for word (kernels' `producer.check`; a proof block is bad unless
     that row is also the producer's salt, position and roots); ``ok`` needs live and dead row blocks both."""
     rows = []
     for c, kept in sorted(made.kept.items()):
         ncb = kept["b"].shape[0] // 32
         rows += [(c, u, v["live"], v["ok"] and v["pub"])
-                 for u, v in producer().check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
+                 for u, v in producer.check(kept, list(range(0, len(kept["receipts"]), ncb))).items()]
     live = sum(r[2] for r in rows)
     return {"calls": sorted(made.kept), "units": len(rows), "live": live, "dead": len(rows) - live,
             "bad": [[c, u] for c, u, _live, ok in rows if not ok][:20],
@@ -1542,7 +1527,9 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     return doc
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, producer: Any = None) -> int:
+    """`producer` is kernels' producer module, which ``--receipts`` needs (``benchmarks/pouw/served_h1/h1_gpu.py`` hands
+    it in)."""
     ap = argparse.ArgumentParser(description="int8 Llama served with PoUW's H1 + fx1 on the eager int8_exact row, checked on the host")
     ap.add_argument("--out", required=True)
     ap.add_argument("--checkpoints", default="manifests/checkpoints.json")
@@ -1675,7 +1662,7 @@ def main(argv: list[str] | None = None) -> int:
                          "ROOTS1 steps (core_verdict)")
     ap.add_argument("--credit", action="store_true",
                     help="with --commit and --receipts: core credit's statement steps over the honest Commit window "
-                         "(pouw_h1_credit: registered_file, _verified on a stand-in verifier of record, _proved, "
+                         "(pouw_h1_credit: registered_file, _verified on a stand-in for the verifier, _proved, "
                          "_registration), accepting it, and refusing a receipt word flipped, a public table under another "
                          "step's A root and an ok row 0")
     ap.add_argument("--profile-register", action="store_true",
@@ -1684,6 +1671,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--core-from", metavar="DIR", help="no GPU: core's ROOTS1 steps (core_verdict) over each window's "
                                                        f"saved evidence, DIR/*/{CORE_EVIDENCE}")
     a = ap.parse_args(argv)
+    a.producer = producer
     from verity_vllm.engine.build import parse_engine_args
     a.engine_arg = parse_engine_args(a.engine_arg)
     if a.core_from:
@@ -1691,6 +1679,9 @@ def main(argv: list[str] | None = None) -> int:
     if a.receipts and not (a.served and a.workload == "fill" and not a.handoff):
         ap.error("--receipts is the fill workload's, with --served, without --handoff (the close stage has no GPU for "
                  "the units kernel)")
+    if a.receipts and producer is None:
+        ap.error("--receipts needs kernels' producer: start this run with benchmarks/pouw/served_h1/h1_gpu.py, which "
+                 "hands it in")
     if a.j10r and not (a.served and a.workload == "fill"):
         ap.error("--j10r is the fill workload's, with --served (the period's declared Program)")
     if a.ks and not (a.served and a.workload == "fill"):

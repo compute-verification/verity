@@ -1,4 +1,4 @@
-"""ROOTS1 on vllm's side: the Commit in H1's serving engine, whose record registers each step's A table of K
+"""ROOTS1 on the serving side: the Commit in H1's serving engine, whose record registers each step's A table of K
 ``a/<K>@<s>`` as its AROW of the step's calls of K and each round's input-ids table ``ids@<s>`` as its step's
 input token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
 
@@ -50,15 +50,14 @@ from verity.circuits.codec import canonical_json
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import weights as Wt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
-from verity_vllm.commit import step_rows
 from verity.protocols.accounting.pouw.prover.serving.h1 import names as NM
 from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
 from verity.protocols.accounting.pouw.prover.serving.h1.words import ids_words
 
-#: the scheme H1's own Commit commits under, and its run root's bytes
-SCHEME, ROOT_BYTES = step_rows.NAME, 64
+#: the scheme H1's own Commit commits under (the workload's Commit names it so), and its run root's bytes
+SCHEME, ROOT_BYTES = "rows-sha512", 64
 
 #: the credit refusal of every call of a window whose tables aren't the Commit's values (``details.roots1``)
 UNTIED = ("credit: a-not-the-commits: a call's A table or a round's input-ids table is not the Commit's value of its "
@@ -86,7 +85,9 @@ class Sites(dict):
         return site(key[1]) if key[1] in self.modules else default
 
 
-def _host(t: Any) -> np.ndarray:
+def to_host(t: Any) -> np.ndarray:
+    """``t``'s values on the host as a numpy array of its own dtype: a tensor copied off its device, anything else as
+    `numpy.asarray` reads it."""
     return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
 
 
@@ -162,7 +163,7 @@ class CommitTap:
             if n is None:
                 self.refused.append(f"engine step {step}: the port's input ids with no count of the step's scheduled tokens")
                 return
-            self._ids[step] = _host(t).reshape(-1)[:n].astype(np.int64)
+            self._ids[step] = to_host(t).reshape(-1)[:n].astype(np.int64)
             return
         op, _, port = name.rpartition("/")
         op = self.ops.get(op, op)
@@ -170,10 +171,10 @@ class CommitTap:
             return
         self.acquired[(step, op, port)] = name
         if port == "0":
-            x = _host(t)
+            x = to_host(t)
             self._x[op] = [step, x.reshape(len(x), int(np.prod(x.shape[1:]))).astype(np.int8), None]
         elif op in self._x and self._x[op][0] == step:
-            self._x[op][2] = _host(t).reshape(-1).astype("<f4")
+            self._x[op][2] = to_host(t).reshape(-1).astype("<f4")
         else:
             self.refused.append(f"{op}: an s_a at engine step {step} with no x_q")
 
@@ -538,4 +539,4 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
 
 __all__ = ["DAY_KEYS", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind",
            "calls_root", "committed", "day_of", "digest", "ids_reason", "named", "record_of", "registration", "reuse",
-           "reused", "roots1", "shape", "site", "untied"]
+           "reused", "roots1", "shape", "site", "to_host", "untied"]

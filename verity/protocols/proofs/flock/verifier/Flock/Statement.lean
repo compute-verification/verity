@@ -172,7 +172,7 @@ theorem checkRegionBytes_ok (nbl : Nat) (regions : Array Region) :
     simp only [throw, throwThe, MonadExceptOf.throw, reduceCtorEq, false_iff]
     exact fun h' => h (hall.2 h')
 
-/-- The coin source named in `Hello` (`Flock.Draw`). -/
+/-- The coins' origin named in `Hello` (`Flock.Draw`). -/
 inductive Coins where
   /-- upstream's committed seed: a plain session without a challenger, which `verify` refuses once every check has passed
   (`ProvedScope.servedForm`) -/
@@ -264,7 +264,7 @@ namespace Stmt
 /-- A one-table session of the statement. -/
 def spec (st : Stmt) : SessionSpec :=
   { tables := #[st.tags.table], domain := fun _ r => st.tags.domain r, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
-    retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
+    retainRounds := st.tags.retainRounds, unitSample := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
     sha512Digests := st.tags.hm96Rows, coinTree := st.coinTree }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/

@@ -4,7 +4,7 @@ import Proofs.Flock.SamplingGeneric.TwoAt
 /-!
 # SPOT[Flock]'s two-stage model on a run of the two-stage toy
 
-`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `Security/Proofs`, with Flock's and
+`lake env lean --threads=1 --tstack=KB --run TwoGuard.lean DIR MODE [M2]` in `security/Proofs`, with Flock's and
 SPOT's code loaded native (`--load-dynlib`; `guard_node.py` links it and writes the command): the model's
 round-2 check (`SpotFlock.stmtOk`) on the run `guard.export` wrote to `DIR`, at the auditor's copies (`Held`) built from
 `DIR/held.json`, the reference statements `DIR/ref-<t>.bin` and their templates' reference reads
@@ -51,7 +51,7 @@ namespace TwoGuard
 open SpotFlock
 
 /-- `SpotFlock.secondDraw` at the stages' bytes `s₀` and `s₁`. -/
-def secondDrawAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
+def secondSampleAt (h : Held) (s₀ s₁ : ByteArray) : Option Json :=
   match Spot.Select.selectSecond (h.reg.sample s₀) h.reg.ns h.reg.ks s₁ with
   | .ok (draw, _) => some draw
   | .error _ => none
@@ -64,7 +64,7 @@ def ownOfAt (h : Held) (st : Roots) (rec draw : Json) (s₀ : ByteArray) : Spot.
 
 /-- `SpotFlock.readsOk` at the stages' bytes. -/
 def readsOkAt (h : Held) (t : ℕ) (x m₁ xS : Claims.Msg) (s₀ s₁ : ByteArray) : Bool :=
-  match decode x, jsonMsg m₁, secondDrawAt h s₀ s₁, FlockDeploy.decode xS with
+  match decode x, jsonMsg m₁, secondSampleAt h s₀ s₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
     let own := ownOfAt h st rec draw s₀
     Spot.SecondStage.interiorOrderOk own && Spot.SecondStage.namesOk own &&
@@ -374,7 +374,7 @@ scope (`refAt_ok`); none where one isn't. The boundary and interior registration
 (`boundary_names`, `interior_names`: the design's ports, `expected_ports`, and no registered values). The first stage's
 registration
 is the boundary registration's program, query and work table with the stream's rule over them (`Select.resolve`, as
-the `select` piece takes it), the fields of `Registration.Verifier` the model doesn't read empty; `blockOf` is
+the `select` piece takes it), the fields of `Docket.Verifier` the model doesn't read empty; `blockOf` is
 `filesBlockOf` at the members (`Held.ms`), and no proof block is checked whatever the stages sample (`always`): every
 slot of the toy's boundary layout is a request's. -/
 def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Option Held) := do
@@ -400,8 +400,8 @@ def heldOf (held : Json) (refs : Array Claims.Msg) (reads : Array Json) : IO (Op
   let boundaryNames ← namesOf held "boundary_names"
   let interiorNames ← namesOf held "interior_names"
   if hz : 0 < refs.size ∧ (List.range refs.size).all (fun t => zkOk (refs.getD t [])) = true then
-    let verifier : Spot.Registration.Verifier :=
-      { program := P, query := queryJ, law := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
+    let verifier : Spot.Docket.Verifier :=
+      { program := P, query := queryJ, samplingDesign := .null, workTable := table, scheme := "", ports := #[], leafLayer := none,
         anchors := #[], log := #[], partition := none }
     let h₀ : Held :=
       { desc, vus, query, k, names, links, wires, rows, boundaryNames, interiorNames, xS₀ := refAt refs,
@@ -525,7 +525,7 @@ def diag (h : Held) (ms : Spot.Bits.Members) (x m₁ m₂ : Claims.Msg) (s₀ s�
   let xs := xs?.getD []
   let (rec?, _) ← timed "jsonMsg m₁" (fun _ => jsonMsg m₁) (fun r => b r.isSome)
   let _ ← timed "recordsOk" (fun _ => recordsOk h x m₁) b
-  let (sd, _) ← timed "secondDraw" (fun _ => secondDrawAt h s₀ s₁) fun d => (d.map (·.compress)).getD "none"
+  let (sd, _) ← timed "secondDraw" (fun _ => secondSampleAt h s₀ s₁) fun d => (d.map (·.compress)).getD "none"
   let _ ← timed "replay sample" (fun _ => h.reg.sample s₀) toString
   let (refs, _) ← timed "refsOf" (fun _ => refsOf h) (fun r => toString r.size)
   let (refReads, _) ← timed "refRegisteredOf" (fun _ => refRegisteredOf h) fun r =>

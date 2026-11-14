@@ -15,10 +15,10 @@ public import Evaluate.Act
 
 Each gate's value is the Python evaluator's, transcribed on `Nat`, its operands taken unmasked as the Python takes them:
 
-- E0, the Boolean profile (`verity/ml/circuits/PROTOCOL.md` §9, `verity.ml.circuits.boolean`): `And<n>_v1` and `Xor<n>_v1`
+- E0, the Boolean profile (`verity/circuits/PROTOCOL.md` §9, `verity.circuits.boolean`): `And<n>_v1` and `Xor<n>_v1`
   for every n ≥ 2, `Not_v1`; and the input primitives `Input<w>_v1` and `RegisteredInput<w>_v1` (§5.2), whose gates take the
   values bound per run (a registered table's are read where a gate reads them, `Evaluate.Walk`).
-- E1: the constant family `Const<w>[0x<hex>]_v1` (`verity.ml.circuits.ops.prims.const`, of which the constant bits are the
+- E1: the constant family `Const<w>[0x<hex>]_v1` (`verity.circuits.ops.prims.const`, of which the constant bits are the
   1-bit members), and the scalar primitives of `Evaluate.Scalar`.
 - E2: the FP32 and BF16 arithmetic of `Evaluate.Fp32` and the casts of `Evaluate.Casts`.
 - E3: the tensor-core dot steps of `Evaluate.TC.Dots`, an array operand's words in leaf order.
@@ -67,7 +67,7 @@ private def hexDigit? (c : Char) : Option Nat :=
   else none
 
 /-- `(w, bits)` of the constant family's id in the one spelling `prims.const(w, bits)` gives it and the decoder takes
-(`verity/ml/circuits/PROTOCOL.md` §9, `prims.CONST_ID`): `Const<w>[0x<h>]_v1` with `w ≥ 1` in decimal without a leading
+(`verity/circuits/PROTOCOL.md` §9, `prims.CONST_ID`): `Const<w>[0x<h>]_v1` with `w ≥ 1` in decimal without a leading
 zero, `bits < 2^w`, and `h` the lowercase hex of `bits` zero-padded to `w / 4` digits, at least one
 (`f"{bits:0{w // 4}x}"`). -/
 def constId? (id : String) : Option (Nat × Nat) := do
@@ -90,7 +90,7 @@ private def unary (f : Nat → Nat) : Array Nat → Nat := fun xs => f xs[0]!
 private def binary (f : Nat → Nat → Nat) : Array Nat → Nat := fun xs => f xs[0]! xs[1]!
 private def ternary (f : Nat → Nat → Nat → Nat) : Array Nat → Nat := fun xs => f xs[0]! xs[1]! xs[2]!
 
-/-- The scalar primitives by id, with the signatures the registry holds for them (`verity.ml.circuits.ops.scalar`, and the
+/-- The scalar primitives by id, with the signatures the registry holds for them (`verity.circuits.ops.scalar`, and the
 vLLM integration's `dsa.U32And` / `I32Sub`, `topp_word_gates.BitXor` / `U32Xor` / `SelectBit`, `ref_prims.I64ToI32`). -/
 def scalars : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Scalar in
@@ -123,7 +123,7 @@ private def e4m3 := Ty.value 8
 private def e2m1 := Ty.value 4
 
 /-- The FP32 and BF16 arithmetic and the casts by id, with the signatures the registry holds for them
-(`verity.ml.circuits.ops.fp32`, `prims` and `mufu`, and the vLLM integration's `prims`, `ref_prims`, `moe`, `dsa` and
+(`verity.circuits.ops.fp32`, `prims` and `mufu`, and the vLLM integration's `prims`, `ref_prims`, `moe`, `dsa` and
 `topp_word_gates`). -/
 def floats : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Fp32 Casts in
@@ -162,7 +162,7 @@ def floats : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) 
 /-- `n` operand words from index `i`: one array operand's leaves. -/
 private def seg (xs : Array Nat) (i n : Nat) : List Nat := (xs.extract i (i + n)).toList
 
-/-- The tensor-core dot steps by id (`verity.ml.circuits.ops.prims`), with the signatures the registry holds for them. -/
+/-- The tensor-core dot steps by id (`verity.circuits.ops.prims`), with the signatures the registry holds for them. -/
 def dots : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open TC in
   let bf := #[("acc", f32), ("a", .array 16 bf16), ("b", .array 16 bf16)]
@@ -181,7 +181,7 @@ def dots : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
 
 private def quaternary (f : Nat → Nat → Nat → Nat → Nat) : Array Nat → Nat := fun xs => f xs[0]! xs[1]! xs[2]! xs[3]!
 
-/-- PoUW's and NCP's word primitives by id (`verity.ml.protocols.pouw.circuit.words`, the vLLM integration's
+/-- PoUW's and NCP's word primitives by id (`verity.protocols.accounting.pouw.prover.circuit.words`, the vLLM integration's
 `pouw_rows`), with the signatures the registry holds for them. -/
 def words : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Words in
@@ -239,7 +239,7 @@ def sampler : List (String × Array (String × Ty) × Ty × (Array Nat → Nat))
    ("GumbelNoiseLane_v1", lane, f32, binary noiseLane), ("GumbelNoiseLane_v2", lane, f32, binary noiseLaneGpu),
    ("TopPNumkeep_v1", #[("numdup", f32), ("q", f32)], f32, binary toppNumkeep)]
 
-/-- The MUFU primitives by id (`verity.ml.circuits.ops.mufu`, the vLLM integration's `hopper.Fa3InvSum`), with the
+/-- The MUFU primitives by id (`verity.circuits.ops.mufu`, the vLLM integration's `hopper.Fa3InvSum`), with the
 signatures the registry holds for them. -/
 def mufu : List (String × Array (String × Ty) × Ty × (Array Nat → Nat)) :=
   open Mufu in

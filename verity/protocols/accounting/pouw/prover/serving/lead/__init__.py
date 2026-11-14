@@ -41,7 +41,7 @@ from verity.protocols.accounting.pouw.verifier.serving import PassCommitment
 from verity.commitments.merkle import CommitmentDomain
 
 from verity.protocols.accounting.pouw.prover.serving.lead import rows as L
-from verity_vllm.errors import Refused
+from verity.errors import Refused
 from verity.protocols.accounting.pouw.prover.serving.lead import feed as F
 from verity.protocols.accounting.pouw.prover.serving.lead import record as R
 
@@ -69,11 +69,11 @@ class LeadBackend(Protocol):
         [m, N] bf16 in the plain arm's place, the plain arm's y bit for bit (`engine.int8_exact.dequantize` of the exact
         product), whatever the coins. Its export's chunks become the next leaves of the window's words instance under
         ``dom`` (`lead_rows.WindowKeying.words_domain`, one domain for each of a window's calls) at once: added to the
-        `lead_rows.DeviceWords` over ``dom`` that the backend makes at the window's first call, so no export outlives
+        device adapter's `DeviceWords` over ``dom`` that the backend makes at the window's first call, so no export outlives
         its hashing."""
 
     def words(self) -> bytes:
-        """The top of the window's words instance (`lead_rows.DeviceWords.top`), the root's two children or the one
+        """The top of the window's words instance (the device adapter's `DeviceWords.top`), the root's two children or the one
         chunk, once at the window's end, after which the backend holds none of the window."""
 
 
@@ -152,6 +152,13 @@ class LeadRun:
         self.dom = window.words_domain(FORWARD, leaves)
         self.record, self.window, self.m, self.leaves = record, window, m, leaves
         return record, window
+
+    def gemm(self, site: int, x: Any, weight: Any, bias: Any = None, /) -> Any:
+        """`serving.run_matmul` on the lead: ``x`` the arm's `serving.QuantizedRows` and ``weight`` the linear as the
+        backend loaded it (`LeadBackend.load`), its y the arm's pre-bias y (`call`), so ``bias`` is None."""
+        if bias is not None:
+            raise Refused(f"linear {site}: the lead serves the arm's pre-bias y, and the arm adds the bias after it")
+        return self.call(site, weight, x.rows, x.scales)
 
     def call(self, w: int, layer: Any, xq: Any, s_a: Any) -> Any:
         """Linear ``w``'s call on the s8 rows ``xq`` [m, K] and their scales ``s_a``: the served y. A call off linear

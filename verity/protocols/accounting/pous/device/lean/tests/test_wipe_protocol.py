@@ -14,13 +14,13 @@ from __future__ import annotations
 import json
 import shutil
 
-import pytest
-from hypothesis import strategies as st
-
 import mc_cases as M
+import pytest
 import verity_difftest as D
 import wipe_cases as WC
 import wipe_protocol_case as C
+from hypothesis import strategies as st
+
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_period as WP
 
@@ -70,28 +70,28 @@ CASE_EDITS = [
 
 
 @st.composite
-def drawn(draw) -> dict:
-    s = draw(WC.sessions())
-    x = draw(st.integers(0, 2 ** 16))
-    how = draw(st.sampled_from(["as-is", "as-is", "mutated", "mutated", "unsigned", "unsigned", "json", "case", "other"]))
+def sampled(sample) -> dict:
+    s = sample(WC.sessions())
+    x = sample(st.integers(0, 2 ** 16))
+    how = sample(st.sampled_from(["as-is", "as-is", "mutated", "mutated", "unsigned", "unsigned", "json", "case", "other"]))
     if how == "mutated":
-        s = draw(st.sampled_from(WC.MUTATIONS))(s, x)
+        s = sample(st.sampled_from(WC.MUTATIONS))(s, x)
     signed = None if how == "unsigned" else s.signed
-    egress = draw(WC.EGRESS)
+    egress = sample(WC.EGRESS)
     if how == "other":
-        server, session = draw(st.sampled_from([(s.commitment.server + b"x", None), (None, M._flip(s.commitment.session, x))]))
+        server, session = sample(st.sampled_from([(s.commitment.server + b"x", None), (None, M._flip(s.commitment.session, x))]))
         return C.wipe_case(s.commitment, signed, s.trusted, server=server, session=session, egress_mib=egress)
     c = C.wipe_case(s.commitment, signed, s.trusted, egress_mib=egress)
     if how == "json":
-        return _json_edit(c, draw(st.sampled_from(WC.JSON_MUTATIONS)), x)
+        return _json_edit(c, sample(st.sampled_from(WC.JSON_MUTATIONS)), x)
     if how == "case":
-        return draw(st.sampled_from(CASE_EDITS))(c, x)
+        return sample(st.sampled_from(CASE_EDITS))(c, x)
     return c
 
 
 @pytest.mark.slow
 def test_the_test_protocol_agrees(signers_server):
-    stats = D.run(signers_port(drawn()), examples=400, server=signers_server)
+    stats = D.run(signers_port(sampled()), examples=400, server=signers_server)
     assert stats.counts.get("accept", 0) > 20 and stats.counts.get("undecided", 0) > 10 and stats.rejects > 150, stats
 
 
@@ -121,8 +121,8 @@ def test_the_named_wipes(deployed_server):
         params = WC.commitment_of(json.loads(bytes.fromhex(C.build(name)["commitment"]))).params
         assert seen[name]["public"] == WP.uncounted(params), name
         assert seen[name]["profile"]["gaps"] == WP.writer_gap(evidence["egress_mib"]) == [
-            f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network certifier "
-            "signed: no wipe is certified on it until the check that composes the wipe with the network certifier"], name
+            (f"the egress count is {evidence['egress_mib']} MiB, the evidence writer's, which no network certifier "
+             "signed: no wipe is certified on it until the check that composes the wipe with the network certifier")], name
     assert json.loads(bytes.fromhex(C.build("zero-egress")["evidence"]))["egress_mib"] == 0
     assert not seen["zero-egress"]["public"]["certified"]
     none = seen["uncounted"]
@@ -131,8 +131,8 @@ def test_the_named_wipes(deployed_server):
                                         sw.EGRESS_MAX_UNITS)
     assert not none["public"]["certified"] and none["public"]["egress_mib"] == sw.EGRESS_MAX_UNITS
     assert none["public"]["foreign_bits"] == none["public"]["memory_bits"] and none["public"]["eps"] == "0"
-    assert none["profile"]["gaps"] == [f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
-                                       f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
+    assert none["profile"]["gaps"] == [(f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
+                                        f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing")]
     outside = json.loads(bytes.fromhex(C.build("egress-range")["evidence"]))["egress_mib"]
     assert not 0 <= outside <= sw.EGRESS_MAX_UNITS
     assert seen["egress-range"]["reason"] == WP.EGRESS_RANGE.format(outside, sw.EGRESS_MAX_UNITS)

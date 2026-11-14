@@ -1,8 +1,8 @@
-"""PoUW's `ncp-v2` under sampled proofs: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
+"""PoUW's `ncp-v2` under SPOT: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
 executed linear call as its own `NcpLinear_v1` Program call reading it.
 
 `verity.protocols.accounting.pouw.prover.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served
-count and the closure-sampling layout; P is the scheme's). Here is what the vLLM integration does with it:
+count and the closure-sampling layout; P is the scheme's). Here is what the serving engine's adapter does with it:
 
 - **Build.** A model Program's row at a PoUW site is lowered to `ROW_FAMILY` (`lower`): the served output of one row of
   that site's `NcpLinear` call, which the replay checks against the call rather than as a bf16 GEMM.
@@ -40,7 +40,6 @@ from verity.protocols.accounting.pouw.prover.circuit.ncp2 import D, Shape
 from verity.protocols.accounting.pouw.verifier.audit import commit_rows
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
-from verity_vllm.query.manifest.format import spec_family
 
 #: The model Program's families for one row of a PoUW site: its served output, checked by the replay against the call; the
 #: second is a biased linear's row whose bias add was the pre-bias output's only reader (`program.registry.pouw_rows`)
@@ -461,9 +460,10 @@ def lower(inst: dict[str, Any], sites: Mapping[str, str]) -> dict[str, Any]:
     for r in inst["rows"]:
         spec, name = r.get("spec", ""), r.get("name", "")
         site = next((p for p in sites if name.startswith(p + "/")), None)
-        if site is not None and spec_family(spec) in LOWERED:
+        family = spec.split("{", 1)[0]
+        if site is not None and family in LOWERED:
             statics = spec[spec.index("{") + 1:-1]
-            r = dict(r, spec=f"{LOWERED[spec_family(spec)]}{{{statics}}}")
+            r = dict(r, spec=f"{LOWERED[family]}{{{statics}}}")
         rows.append(r)
     return dict(inst, rows=rows)
 

@@ -7,7 +7,7 @@ public import Properties.Pouw.Commit
 /-!
 # Pearl+'s run verdict: what its Lean code (`PouwCheck.PearlPlus.check`) does
 
-The properties of the executable verdict (`verity/protocols/pouw/verifier/lean/pearlplus/`, the port of
+The properties of the executable verdict (`verity/protocols/accounting/pouw/verifier/lean/pearlplus/`, the port of
 `benchmarks/pouw/pearl_c_vllm/verify_run.verify_passes`), stated against `check` and the functions it runs, for every input:
 the epoch's coin commitment, the retained passes' manifests, the number of samples, the verifier's coin (a source, or its
 record of the coin) and the prover's openings. Each has one shape, the input, the acceptance, then what it establishes.
@@ -48,8 +48,8 @@ that record the premise reads is the H200's, so the properties are stated at it 
   serves the one scheme, `pearl-c-h100-v1-h3`;
 * the prices (`Prices.h100`: an FP32 add 32, a BF16 MAC 2, `Costs.adopted`) and W1's (`W1Prices.h100`: an E4M3 or S8 MAC 1,
   a BF16 MAC 2, FP32 32, a conversion 64, INT32 64), per tensor-core clock: the H200 is the same GH100 at sm_90a, the same
-  4,096 E4M3 MACs per SM a clock and half that in BF16 (`Core.Accel.H200`), and its data sheet's FP8 and BF16 rates are the
-  H100 SXM's;
+  4,096 E4M3 MACs per SM a clock and half that in BF16 (`hardware/cards/h200-sxm-141gb.toml`), and its data sheet's
+  FP8 and BF16 rates are the H100 SXM's;
 * the steps (`hopperE4m3K32` at G = 4, the BF16 k16 peel, `PeelExact`, `Skip.unitFlags`, `SaltDead`) and W1's fragments
   (`h100Frags`: wgmma E4M3 m64nNk32 and BF16 m64nNk16, N = 64 to 256, each priced whole): the same wgmma on the same die,
   and the verifier recomputes an H200 run's sampled tiles bit for bit at `HOPPER_E4M3_K32`;
@@ -93,19 +93,19 @@ operand's noise, or found over its inert-work bound with every other check passe
 `over_cap` is `uncredited`; the verdicts are those tiles', in the plan's order, each ok under that rule. -/
 def AcceptMeans : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening), (check i opener).accept = true →
-    ∃ pl, plan i = .ok pl ∧ (check i opener).plan = some pl ∧ (check i opener).overCap = i.overCap ∧
+    ∃ pl, plan i = .ok pl ∧ (check i opener).plan = some pl ∧ (check i opener).overInertBound = i.overInertBound ∧
       (check i opener).verdicts.map (fun v => (v.pass, v.tile)) = pl.todo ∧
-      (∀ v ∈ (check i opener).verdicts, v.ok i.overCap = true) ∧
+      (∀ v ∈ (check i opener).verdicts, v.ok i.overInertBound = true) ∧
       ∀ pi tid, (pi, tid) ∈ pl.todo → ∃ p o, pl.passes[pi]? = some p ∧ opener pi tid = .ok o ∧
         (checkTile p (noiseOf p tid) tid o = .pass ∨
-          i.overCap = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overCap why)
+          i.overInertBound = .uncredited ∧ ∃ why, checkTile p (noiseOf p tid) tid o = .overInertBound why)
 
 /-- **A run the verdict refuses before any tile is opened carries no commitment**: a refusal of `plan` (`after-coin`, a
 pass that doesn't load, passes that share a call) answers with no plan and no verdicts, under the run's `over_cap` rule and
 with the tie where the refusal came after it. -/
 def RefusedBeforeTheCoin : Prop :=
   ∀ (i : Input) (opener : Nat → Nat → Except String TileOpening) (r : Refusal), plan i = .error r →
-    check i opener = { accept := false, reason := some r.reason, refused := r.refused, overCap := i.overCap, tie := r.tie }
+    check i opener = { accept := false, reason := some r.reason, refused := r.refused, overInertBound := i.overInertBound, tie := r.tie }
 
 /-! ## A pass's records and give-up (V-EX) -/
 
@@ -132,11 +132,11 @@ def formed (p : Pass) (wn : Reject FixedNoise) (rows cols : List Nat) (u : Matmu
 the pass's transcript root (hm96 under SHA-512); its words formed from those rows under the pass's salt and the fixed
 operand's noise are checked and hash to the opened leaf; its rows keep the per-row rules (`Rule.rowsFailure`); its
 credited cells' replayed inert work is within the bound where it passes and over it, with that reason, where it is
-`overCap` (`Rule.capCheck`); and on a call with y, the tile's real rows open against the y root and each word is the
+`overInertBound` (`Rule.inertBoundCheck`); and on a call with y, the tile's real rows open against the y root and each word is the
 unscale of the tile's U (`Rule.yReason`). -/
 def TileAcceptMeans : Prop :=
   ∀ (p : Pass) (wn : Reject FixedNoise) (tid : Nat) (o : TileOpening) (bound : Option String),
-    checkTile p wn tid o = (match bound with | none => .pass | some why => .overCap why) →
+    checkTile p wn tid o = (match bound with | none => .pass | some why => .overInertBound why) →
     ∃ pos rows cols ops ch, p.tile? tid = some (pos, rows, cols) ∧
       let r := p.records[pos]!
       let u := r.matmul
@@ -146,21 +146,21 @@ def TileAcceptMeans : Prop :=
         ((p.weightRoots.lookup u.weight).getD ByteArray.empty) ROW_SCHEMA) ∧
       opens (transcriptDomain p.salt p.weightsRoot p.count HM96) p.transcriptRoot TILE_SCHEMA o.leaf ∧
       formed p wn rows cols u o = .ok (ops, ch) ∧ leaf ch = openedValue o.leaf.value ∧
-      Rule.rowsFailure r rows cols ops = none ∧ Rule.capCheck p.scheme r rows cols ops = .ok bound ∧
+      Rule.rowsFailure r rows cols ops = none ∧ Rule.inertBoundCheck p.scheme r rows cols ops = .ok bound ∧
       ∀ yRoot, p.yRoots[pos]! = some yRoot → ∃ ys, o.y = .ok ys ∧
         ys.map (·.position) = rows.filter (· < r.realRows) ∧
         ys.all (opens (rowsDomain (yBinding p.salt u.index) u.index r.realRows HM96 false) yRoot ROW_SCHEMA) ∧
         Rule.yReason rows cols ops ch (ys.map fun y => words32 (openedValue y.value)) = none
 
-/-- **The inert-work bound a passed tile keeps** (`Rule.checkOpened`'s `capFailure`): on its credited rows `cr` and
+/-- **The inert-work bound a passed tile keeps** (`Rule.checkOpened`'s `inertBoundFailure`): on its credited rows `cr` and
 columns `cc`, the replayed inert work, 40 per flagged atom-word, 32 per later +0 promotion and fs·|cc|/n per forming
 element of a credited row (`Rule.rowElements`: salt-dead, or in an atom block every word of its row flags;
-`tileDebitDev`'s elems) and one per product of a word that no salt makes count (`Rule.wordMend`: a dead pair or a
+`tileInertWorkDev`'s elems) and one per product of a word that no salt makes count (`Rule.wordMend`: a dead pair or a
 forced zero, from both rows' ends, `Rule.rowEnds`; rev1's `wordMend`), is at most the inert-work share ρ = 1/400 of
 `creditOf(1, |K|, n)/n` per credited cell, as a tile and on each credited A row (four times that at a census width).
-`Rule.debitUnits` is n times the chain's and the forming's inert work, so with M the mends the tile's test is
+`Rule.inertWorkUnits` is n times the chain's and the forming's inert work, so with M the mends the tile's test is
 400·(n·(D + M) + fs·|cc|·E) ≤ creditOf(1, |K|, n)·|cr|·|cc|. -/
-def TileKeepsTheCap : Prop :=
+def TileKeepsTheInertBound : Prop :=
   ∀ (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops), Rule.checkOpened s r rows cols ops = none →
     let (cr, cc) := r.credited rows cols
     cr ≠ [] → cc ≠ [] →
@@ -175,13 +175,13 @@ def TileKeepsTheCap : Prop :=
       cc.mapM (fun j => Rule.rowEnds ops.b.alpha[cols.idxOf j]! ops.b.beta[cols.idxOf j]! ops.b.x[cols.idxOf j]!) =
         .ok endsB ∧
       let credit := creditOf 1 r.kKept r.matmul.n
-      let rowDebit := ((words.zip elems).zip endsA).map
+      let rowInertWork := ((words.zip elems).zip endsA).map
         fun (we : (List (Array Bool × Nat) × Nat) × (Array Nat × Array Nat × Array Bool)) =>
-          Rule.debitUnits r.matmul.n cc.length (we.1.1.foldl (fun t w => t + (w.1.filter id).size) 0)
+          Rule.inertWorkUnits r.matmul.n cc.length (we.1.1.foldl (fun t w => t + (w.1.filter id).size) 0)
             (we.1.1.foldl (fun t w => t + w.2) 0) we.1.2 + r.matmul.n * endsB.foldl (fun t eb => t + Rule.wordMend we.2 eb) 0
-      rowDebit.foldl (· + ·) 0 * Rule.CAP_DEN ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
-      ∀ d ∈ rowDebit, d * Rule.CAP_DEN ≤
-        Rule.CAP_NUM * credit * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
+      rowInertWork.foldl (· + ·) 0 * Rule.INERT_BOUND_DEN ≤ Rule.INERT_BOUND_NUM * credit * cr.length * cc.length ∧
+      ∀ d ∈ rowInertWork, d * Rule.INERT_BOUND_DEN ≤
+        Rule.INERT_BOUND_NUM * credit * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
 
 /-! ## The served y and the work -/
 
@@ -193,13 +193,13 @@ def YIsTheUnscale : Prop :=
   ∀ u alphaA alphaB y, Rule.yOf u alphaA alphaB = some y → y = Pouw.PearlC.unscale u alphaA alphaB
 
 /-- **The work an accepted run publishes is its credit at Pearl's assumption**: over the plan's passes, at the run's samples,
-X_O (how many of them landed on a tile over its inert-work bound, `overCapDraws`) and δ = 1/100 (`creditAtAssumption`),
+X_O (how many of them landed on a tile over its inert-work bound, `overInertBoundDraws`) and δ = 1/100 (`creditAtAssumption`),
 crediting nothing on a test instance's input (`testCredit`); a refused or rejected run publishes none. -/
 def WorkIsTheCredit : Prop :=
   (∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
     (check i opener).accept = true → ∃ pl, plan i = .ok pl ∧
       (check i opener).work =
-        some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overCapDraws pl (check i opener).verdicts) DELTA))) ∧
+        some (testCredit i.testInstance (creditAtAssumption pl.passes i.draws (overInertBoundDraws pl (check i opener).verdicts) DELTA))) ∧
   (∀ (i : Input) (opener : Nat → Nat → Except String TileOpening),
     (check i opener).accept = false → (check i opener).work = none)
 

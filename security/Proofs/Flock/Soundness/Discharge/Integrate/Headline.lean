@@ -7,13 +7,13 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 /-!
 # The headline at the executable, with every open guarantee named
 
-`Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
+`Prog.flock_headline` is about the unsalted batched session. At the proving statements (`hm96-sha512/v1` leaves) an
 honest transcript fails its openings check, so the headline the executable instantiates is the salted, one-table
 form at verity-verify-proof's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
 `hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with the refinement discharged up to the decoder (`hdec`, the
 decoder right at the sampling design's samples, `DecodesOn`).
 
-`flock_headline_exec` instantiates it at the production program `Placed.keyProg c hU n` (the circuit's program on Δ's
+`flock_headline_exec` instantiates it at the proving program `Placed.keyProg c hU n` (the circuit's program on Δ's
 source keys), its returned outputs' bits for the program's outputs (`Layout.outsOf`), and the one-table plan of the
 session's inputs (`planAt`, `Sites.lean`), with:
 * `pp := Placed.Sites.progPlaces_keyProg` at `sitesAt` (W6 and `Layout.Aliased` at keyProg's places);
@@ -38,7 +38,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
   (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-  {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {pub : Public}
+  {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀)) {pub : Public}
   (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
   (hscope : Layout.scopeOk c = true) {Reg : Type}
 
@@ -77,7 +77,7 @@ the circuit prover's per-instance public files load, under `@967b8d06` too, whos
 challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up). Let the units be sampled with
 `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and let each sample's
 session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, verity-verify-proof
-accepts with at least `K` incorrect proof blocks of the production program `Placed.keyProg c hU n`, at the simulated prover's
+accepts with at least `K` incorrect proof blocks of the proving program `Placed.keyProg c hU n`, at the simulated prover's
 committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
 at most `miss(K) + ε_ks + δ_link`.
 
@@ -91,14 +91,14 @@ Its hypotheses, past the session's inputs:
   proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
   `model_eq_stmtOf`), the statement the executable's acceptance plays. At an accepted sample whose link points are not `mPts`
   the table is unsatisfiable and `hdec` fails there, so `hdec` also needs every accepted sample of the sampling design to set up at
-  `mPts`; setupH's link points are `mPtsOf c.g |D.proved|` (`Exec.setupH_mPts_drawn`, `Exec.setupH_mPts_eq`);
+  `mPts`; setupH's link points are `mPtsOf c.g |D.proved|` (`Exec.setupH_mPts_sampled`, `Exec.setupH_mPts_eq`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
   `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
 * numeric conditions and the strata's match (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht'`).
 
 Scope. W6 is definitional on the untyped path: the unit's rows are the parsed net's (`Rows.ofNet`), and nothing verifies
 that the unit net lowers its template's Definition. The tail stages of `tc_units` templates are outside every unit's
-rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds template instances
+rows. The typed path is not the prover's. `keyProg` has no edges between units: the headline bounds template instances
 that fail at their own committed values, and a template instance reading its producers' outputs is carried by the copy
 constraints and the region pins, not by an edge of the program. The proof coins are the challenger's, on its keyed coin
 tree (A6, tree coins): `verify` refuses a session on a committed seed's coins (`ProvedScope.servedForm`), so a session
@@ -110,8 +110,8 @@ hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hid
 does, and `FailClosed.flock_verify_sound` states both. Sessions of more than one table are outside it (the circuit
 prover's default is one). -/
 theorem flock_headline_exec
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -122,20 +122,20 @@ theorem flock_headline_exec
     (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
     (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap Dig)) (N : ℕ)
     (hdec : DecodesOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dec one fin capOf
-      (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+      (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512
       (planAt ht dj x₀) (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).binding
         (rsAt_computes hU ht hc dj x₀ hpub hpt hscope))
       (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
       (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 leaf512
-      (planAt ht dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+      (planAt ht dj x₀ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))) j
       (batchStratL H512 enc512 leaf512 (planAt ht dj x₀)
         (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (planAt ht dj x₀)
               (tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).binding
@@ -143,12 +143,12 @@ theorem flock_headline_exec
               (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict (planAt ht dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict (planAt ht dj x₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 leaf512 (tablesAt ht dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
-          (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAt ht dj x₀) (tabAt ht dj x₀)
+          (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAt ht dj x₀) (tabAt ht dj x₀)
           ((rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).binding
         (rsAt_computes hU ht hc dj x₀ hpub hpt hscope)) k Rw M ρ t' :=
   (Placed.keyProg c hU n).flock_headline_live_on (Layout.outsOf c hU n) σs ks hks St hS Kd pop Lb src hA3

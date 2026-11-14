@@ -7,7 +7,7 @@ public import Flock.FV3
 /-!
 # N2's execution phase verdict of record
 
-`verdict` decides one execution phase of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from
+`verdict` decides one execution phase of N2 (`verity/core/protocols/certifier/service.py`, `TransferBlocks.verify`) from
 the proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
 
 * the verifier's own run of Flock's Lean verifier (`proofs.verify`, whose findings `Case.findings` carries) refused
@@ -234,7 +234,7 @@ def le (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>>
 /-- `x` as `width` big-endian bytes, `x < 2^(8·width)`. -/
 def be (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>> (8 * (width - 1 - i))).toUInt8⟩
 
-/-- The link-window's served domain id (`LinkWindows.domain(window).domain_id`): one-stage's window domain over four
+/-- The execution phase's served domain id (`TransferBlocks.domain(window).domain_id`): one-stage's window domain over four
 leaves, its binding the identity digest of the registered Program, the partition, the value, its schema and leaf count,
 and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`
 (`Flock.FV3.Sha512.Domain.make`). -/
@@ -250,7 +250,7 @@ def manifestSet (c : Case) : NetworkCheck.SyncSet :=
 
 /-- An end's grid as its head encodes it (`head_check.grid_bytes`): T, r, B and τ_b as u32 big-endian, then the grid's
 parameters digest, which binds Σ_sync on egress; on a network certifier link, both ends' the network certifier's
-(`LinkWindows.grid`). -/
+(`TransferBlocks.grid`). -/
 def gridBytes (c : Case) (d : Nat) : V ByteArray := do
   let e := if d = 0 then c.egress else c.ingress
   let g := e.grid
@@ -266,8 +266,8 @@ def syncWords (s : Sync) : Option (Nat × Nat × Nat) :=
   let w := (s.delta, s.num / g, s.den / g)
   if w.1 < 2 ^ 16 ∧ w.2.1 < 2 ^ 16 ∧ w.2.2 < 2 ^ 16 then some w else none
 
-/-- The unit's public row as the verifier derives it from public fields alone (`LinkWindows.public_arguments`, then
-`LinkWindows.row`): both certificates' signed digests, then each end's registered root, served domain, link, window,
+/-- The unit's public row as the verifier derives it from public fields alone (`TransferBlocks.public_arguments`, then
+`TransferBlocks.row`): both certificates' signed digests, then each end's registered root, served domain, link, window,
 grid and (with a profile) its row for the window, then on a served link the window's declared sync. None where the unit
 takes no instance: not two certificates, a signed digest of another length, a window past an end's profile, or no sync
 a served unit can hold. -/
@@ -309,7 +309,7 @@ def pinned (g : String) : Bool :=
     !defn.isEmpty && !defn.contains '\n' && rest.head? == some '@' && (rest.drop 1).all hex
   else false
 
-/-- Whether the findings prove this link's proof block and the sample (`LinkWindows.proved`, then each session's proof
+/-- Whether the findings prove this link's proof block and the sample (`TransferBlocks.proved`, then each session's proof
 blocks): nothing refused, every gate pinned, one or more sessions, each accepted, naming the registered Program and
 proving exactly the sampled proof blocks. -/
 def proved (c : Case) : Bool :=
@@ -383,7 +383,7 @@ def opened (c : Case) (row : Option ByteArray) : Option Nat := do
 
 /-! ## The certificates and the sync -/
 
-/-- The certificates' check (`LinkWindows.certified`): two, each naming this link, its end (egress first) and the window,
+/-- The certificates' check (`TransferBlocks.certified`): two, each naming this link, its end (egress first) and the window,
 and the key's and verifying in the link's certifier session (`Certificate.signs`). -/
 def certified (c : Case) : Bool :=
   c.certificates.size == 2 && (List.range 2).all fun d =>
@@ -485,7 +485,7 @@ def servedOf (j : Json) : V Served := do
 end Served
 
 /-- Why the client refuses certificate `x`, in the order it checks, or none where it keeps it: another key's (`key`),
-another link-window's (`link-window`), a clock certificate that isn't egress (`clock`), a signature that doesn't verify
+another execution phase's (`link-window`), a clock certificate that isn't egress (`clock`), a signature that doesn't verify
 under the key in the session (`Certificate.signs`: `signature`), a second of its direction among those `kept`
 (`second`), or a clock certificate signing a digest that one kept earlier signs (`signed`: `reused`). -/
 def refusal (s : Served) (clock : Bool) (kept : Array Direction) (signed : Array ByteArray) (x : Certificate) :

@@ -22,7 +22,7 @@ import Proofs.Flock.Soundness.Refine.Plays
 # The model's masked level 0, with its values
 
 `PlaysLig.lean`'s runs exist at any values; the verdict needs them at the executable's. The lane rounds end in the
-lane coins (`foldRoundsZK_val`), `ρ` is its two coins (`drawKs_two`), level 0's padded queries end in `qbPadOut`
+lane coins (`foldRoundsZK_val`), `ρ` is its two coins (`sampleKs_two`), level 0's padded queries end in `qbPadOut`
 (`queryAndBatchPadC_plays`), and `ligeritoPadZC_model` composes the masked level 0 from runs of its parts, as the non-ZK
 session's `ligeritoC_model`.
 -/
@@ -73,15 +73,15 @@ theorem foldRoundsZK_val {np : ℕ} (P : ZkSession.Pads0 np 2) (p : LigeritoProo
       exact Plays.bind' ih (Plays.pure _) (List.append_nil _).symm (List.append_nil _).symm
 
 /-- **`ρ`, with its coins**: two `K` coins. -/
-theorem drawKs_two (c₀ c₁ : Array F128) (h₀ : c₀.size = 2) (h₁ : c₁.size = 2) :
-    Plays fOf (Model.drawKs execArith 2) [] [c₀, c₁]
+theorem sampleKs_two (c₀ c₁ : Array F128) (h₀ : c₀.size = 2) (h₁ : c₁.size = 2) :
+    Plays fOf (Model.sampleKs execArith 2) [] [c₀, c₁]
       (Fin.cons (execArith.ofLimbs (fOf c₀[0]!) (fOf c₀[1]!))
         (Fin.cons (execArith.ofLimbs (fOf c₁[0]!) (fOf c₁[1]!)) Fin.elim0)) := by
   have hk : ∀ c : Array F128, c.size = 2 →
       Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := fun c hc => by
     unfold Model.drawK
     exact Plays.bind' (ms₂ := []) (cs₂ := []) (Plays.drawVec c hc (by omega)) (Plays.pure _) (by simp) (by simp)
-  rw [Model.drawKs, Model.drawKs, Model.drawKs]
+  rw [Model.sampleKs, Model.sampleKs, Model.sampleKs]
   refine Plays.bind' (hk c₀ h₀) ?_ rfl rfl
   refine Plays.bind' (Plays.bind' (hk c₁ h₁) (Plays.bind' (Plays.pure _) (Plays.pure _) rfl rfl) rfl rfl)
     (Plays.pure _) rfl rfl
@@ -124,7 +124,7 @@ theorem ligeritoPadZC_model {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Account
     (hl : sch.levels = lv₀ :: lv₁ :: rest) (z₀ cβ₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1)
     (hβ₀ : cβ₀.size = 1) (y₀ : 𝔽) (m₀ : 𝕂 × 𝕂) {msF : List Msg} {csF : List (Array F128)} {ini : List 𝕂}
     (hfold : ∀ s q, ∃ s', Plays fOf (ZkSession.foldRoundsZK execArith P sch.k0 0 s q) msF csF (ini, s'))
-    (ev : Fin 2 → 𝕂) {csρ : List (Array F128)} {ρ : Fin 2 → 𝕂} (hρ : Plays fOf (Model.drawKs execArith 2) [] csρ ρ)
+    (ev : Fin 2 → 𝕂) {csρ : List (Array F128)} {ρ : Fin 2 → 𝕂} (hρ : Plays fOf (Model.sampleKs execArith 2) [] csρ ρ)
     (T' : 𝕂) (ybar : Fin tp → 𝕂) (m' : F256 × F256) (C₁ : Cap D) {msO : List Msg} {csO : List (Array F128)}
     {sT : Opens 𝔽 D → 𝕂} {qT : Opens 𝔽 D → Model.Quad 𝕂} {ctxs : List (Model.OodCtx 𝔽)}
     (htwo : Plays fOf (Model.twoOodC (D := D) execArith (sch.m - 7 - sch.k0 + 1) 0 (fun _ => T')

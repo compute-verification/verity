@@ -76,9 +76,24 @@ from verity_vllm.records.schema_ids import REPLAY_SLIM_SCHEMA
 # partition, the admission's calibration and the timeline are imported inside the functions that read them: the route pin's and the
 # driver's imports put the catalog's Definitions into the Definition table, which this module's import is to leave as it found it.
 
-__all__ = ["OnRead", "Options", "Refused", "WORDS", "main", "manifest_of", "of_record", "open_weights", "opener",
-           "provider", "registered_roles", "replay_args", "tensor_root_of", "tree_refusal", "weights_attest",
-           "worker_peak"]
+__all__ = [
+    "WORDS",
+    "OnRead",
+    "Options",
+    "Refused",
+    "main",
+    "manifest_of",
+    "of_record",
+    "open_weights",
+    "opener",
+    "provider",
+    "registered_roles",
+    "replay_args",
+    "tensor_root_of",
+    "tree_refusal",
+    "weights_attest",
+    "worker_peak",
+]
 
 logger = init_logger(__name__)
 
@@ -367,7 +382,7 @@ class OnRead(Mapping):
     holds it, and one that does not open is refused by name on its read (``LookupError``, which ``.get`` does not swallow)."""
 
     def __init__(self, bundle: Path, tree: dict[str, Any], root_of_record: str | None, ck: Any, *, tp: dict[str, int] | None = None,
-                 roles: dict[str, dict[str, Any]] | None = None):
+                 roles: dict[str, dict[str, Any]] | None = None) -> None:
         names = tree["names"]
         _folded, refused = tree_refusal(tree, root_of_record)
         if refused:
@@ -613,10 +628,10 @@ def kept_sample(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
     want = slim["picks"]
     if got == want:
         return
-    draw = getattr(s.args, "replay_draw", None)
+    design = getattr(s.args, "replay_draw", None)
     seen = (f"reads what the keep does not hold ({why})" if why else
-            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} drawn)")
-    raise Refused(f"this code's draw from the keep {seen}" + (f"; the record draws by {draw!r}" if draw else ""))
+            f"shares {len({tuple(p) for p in want} & {tuple(p) for p in got or ()})} of the keep's {len(want)} picks ({len(got or ())} sampled)")
+    raise Refused(f"this code's sample from the keep {seen}" + (f"; the record samples by {design!r}" if design else ""))
 
 
 def replay(o: Options) -> bool | None:

@@ -18,6 +18,8 @@ from verity.commitments.frame_v3 import FrameV3, Port, RowLeaf
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
+from verity.commitments.periods import flock_inputs as FI
+from verity.commitments.periods import rows as SR
 from verity.commitments.rowleaf import (
     ROLE_X,
     row_leaf,
@@ -27,14 +29,12 @@ from verity.commitments.rowleaf import (
 )
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import flock_inputs as FI
-from verity.commitments.windows import rows as SR
-from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 
 from verity_vllm.commit import index as IX
+from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
 
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
 DEFS = (bind(REGISTRY["RoPEHead_v1"], D=64), bind(REGISTRY["SiluMul_v1"], I=64))

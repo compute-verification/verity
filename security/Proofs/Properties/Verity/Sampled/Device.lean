@@ -18,7 +18,7 @@ what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` hold
 
 * **The lines** (`rootValue`, `releaseValue`, `helloValue`, `openValue`): the values the deployed challenger writes as
   its release log's lines (`LiveRecord._root` and `LiveRecord._release`, `LiveChallenger.sample_tree` and
-  `LiveChallenger.open_tree` in `verity/core/protocols/spot/challenger.py`), each line its value's
+  `LiveChallenger.open_tree` in `verity/protocols/proofs/spot/device/challenger.py`), each line its value's
   `Flock.canon` text (`lineOf`). Each value holds its keys in order and prints, so its line is its text
   (`canon_lineOf`), and it has the fields v2 reads (`root_value`, `release_plain`, `hello_value`, `open_value`).
 * **The printer** (`printLog`, `prints_printLog`): a log's lines, from what the device holds between releases (its
@@ -1085,7 +1085,7 @@ them in a play (`ledger_le`). `draws` are the bits it samples at the close, and 
 A deployment opens only the auditor's live window: the window its ledger's open names (`OpensOn`'s `w`) is the one the
 auditor runs, never one the prover's side chooses, since nothing the verifier keys on comes from the prover's side.
 Here `opens θ a` reads the prover's request `a`, and nothing in this structure ties the window it opens to the
-auditor's. `logged_le_dev` reads only the play's log (`Binding.Logged`), so it holds at every `opens`; the leg's
+auditor's. `logged_le_dev` reads only the play's log (`Binding.Logged`), so it holds at every `opens`; the subprotocol's
 assembly takes the live-window rule as a hypothesis or a field. -/
 structure Deployment where
   run : ByteArray → ByteArray → List Release → ByteArray → List Bool → RunSetup
@@ -1207,12 +1207,12 @@ accepted play whose log v2 read isn't the device's is at most as likely as the r
 forger's forgery (`Binding.logged_le`), the device's history at each play having printed the play's log (`binds_dev`)
 and signed what the play's signatures are on (`signsPlay_dev`). -/
 theorem logged_le_dev {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] (V : Vocab d α)
-    (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
+    (T : PinnedTables) (k : Verity.Registration.Composite) (P : Deployment) (θ : ByteArray) (F : Array ByteArray)
+    (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (hD : V.signer θ = P.signer V.families θ) :
     Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Binding.Logged Binding.readsV2 o) (V.game θ F c) σ ≤
-      ENNReal.ofReal ((Binding.readFinder V (dev (P.setupOf V.families)) θ F c σ).Pr Verity.sha512Msg) +
+      ENNReal.ofReal ((Binding.readFinder V T (dev (P.setupOf V.families)) θ F c σ).Pr Verity.sha512Msg) +
         ENNReal.ofReal ((Binding.forger V (dev (P.setupOf V.families)) θ F c σ).Pr Verity.lmsVerify) :=
-  Binding.logged_le V k Binding.readsV2 (dev (P.setupOf V.families)) θ F c σ
+  Binding.logged_le V T k Binding.readsV2 (dev (P.setupOf V.families)) θ F c σ
     (binds_dev V k (P.setupOf V.families) θ) (signsPlay_dev V P θ F c hD)
 
 end Verity.Sampled.Device

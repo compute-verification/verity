@@ -158,7 +158,7 @@ def verdict(session_dir: Path) -> dict:
 
 def ref_sample(q: int, n_t: int, k: int) -> dict:
     """The second stage's sample of template ``t``'s part at its first units: ``q·min(k, n_t)`` of its ``q·n_t``, the size
-    of every sample the second stage takes there (`select.second_law`'s subset in each cell)."""
+    of every sample the second stage takes there (`select.second_sampling_design`'s subset in each cell)."""
     size = q * min(k, n_t)
     return {"k": size, "law": "subset", "population": q * n_t, "units": list(range(size))}
 
@@ -195,7 +195,7 @@ def export_registration(out: Path, run_out: Path, stream, order: int, n: int, q:
     the run: `tests/TwoGuard.lean`'s ``files`` reads these alone. -> ``held.json``'s object."""
     from verity.protocols.proofs.spot.verifier import second_stage as SS
     from verity.circuits.codec import canonical_json, descriptor_id, encode_program
-    from verity.commitments.windows.rows import expected_ports
+    from verity.commitments.periods.rows import expected_ports
 
     out.mkdir(parents=True, exist_ok=True)
     entry = stream._entries[order]

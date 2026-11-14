@@ -16,9 +16,11 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.commitments import history as HT
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as K
 
 from verity_vllm.commit import history_tables as H
 from verity_vllm.commit import history_tables_device as HD
+from verity_torch.pouw import row_table_device as RTL
 
 PROGRAM, VALUE = "ab" * 64, H.name("r0", 3)
 
@@ -107,7 +109,7 @@ def test_histories_take_the_twin_as_their_tables():
 
 def _cuda():
     torch = pytest.importorskip("torch")
-    if not torch.cuda.is_available() or HD.D.nvcc() is None:
+    if not torch.cuda.is_available() or K.nvcc() is None:
         pytest.skip("needs CUDA and nvcc")
     return torch
 
@@ -144,7 +146,7 @@ def test_the_device_table_takes_salts_given():
 def _declared(name: str) -> list[Any]:
     """The ctypes of ``name``'s parameters as `row_table.cu` declares them: `Hist`'s pointer for a ``const Hist*``, a void pointer
     for any other pointer, and the integer of the declared width."""
-    (parameters,) = re.findall(rf'extern "C" int {name}\(([^)]*)\)', (HD.D.CUDA_DIR / "row_table.cu").read_text())
+    (parameters,) = re.findall(rf'extern "C" int {name}\(([^)]*)\)', (K.CUDA_DIR / "row_table.cu").read_text())
     kinds = [" ".join(p.split()).rsplit(" ", 1)[0] for p in parameters.split(",")]
     integers = {"uint64_t": ctypes.c_uint64, "uint32_t": ctypes.c_uint32}
     return [HD._hp if k == "const Hist*" else ctypes.c_void_p if k.endswith("*") else integers[k] for k in kinds]
@@ -235,7 +237,7 @@ def _stand_ins(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 
     def append(h: Any, start: int, k: int, rows: int, hm: int, ms: int, tree: int, bcs: int, salts: int) -> int:
         assert (hm, ms) == (library.hm.data_ptr(), library.ms.data_ptr()) and it.at(rows, np.uint16).size == k * h._obj.L // 2
-        return HD._host().rt_hist_append_host(h, start, k, rows, HD.D._hm(), HD.D._prefixes(), it.at(tree, np.uint64),
+        return HD._host().rt_hist_append_host(h, start, k, rows, K.hm_tables(), K.leaf_prefixes(), it.at(tree, np.uint64),
                                               it.at(bcs, np.uint64), it.at(salts, np.uint32))
 
     def paths(h: Any, tree: int, positions: int, n: int, out: int) -> int:
@@ -260,7 +262,7 @@ def _stand_ins(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     it.lib = SimpleNamespace(rt_hist_init=_Kernel("rt_hist_init", init, it), rt_hist_append=_Kernel("rt_hist_append", append, it),
                              rt_hist_paths=_Kernel("rt_hist_paths", paths, it))
     library = SimpleNamespace(
-        hm=it.on(HD.D._hm().view(np.int64)), ms=it.on(np.zeros(16, dtype=np.int64)), lib=it.lib,
+        hm=it.on(K.hm_tables().view(np.int64)), ms=it.on(np.zeros(16, dtype=np.int64)), lib=it.lib,
         stream=SimpleNamespace(cuda_stream=STREAM, synchronize=lambda: it.log.append("synchronized"),
                                wait_event=lambda event: it.log.append(f"the table's stream waits for an event on {event.on}")))
     cuda = SimpleNamespace(Event=Event, stream=stream, current_device=lambda: CURRENT_DEVICE,
@@ -270,7 +272,7 @@ def _stand_ins(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         empty=lambda n, dtype, device: _Tensor(np.zeros(n, dtype=dtype), device, held),
         device=lambda kind, index=None: SimpleNamespace(
             index=index if index is not None else int(kind.split(":")[1]) if ":" in kind else None)))
-    monkeypatch.setattr(HD.D.DeviceLibrary, "of", staticmethod(of))
+    monkeypatch.setattr(RTL.DeviceLibrary, "of", staticmethod(of))
     return it
 
 

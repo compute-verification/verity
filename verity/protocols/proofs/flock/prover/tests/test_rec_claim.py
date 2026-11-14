@@ -33,7 +33,7 @@ U = (0, 1)
 
 # --- the honest opening ------------------------------------------------------------------------------------------------------
 
-class _Draw(A.CoinSource):
+class _Sample(A.RoundCoins):
     """The verifier's coins flipped as the prover goes, in the rounds `rec_algebra.run` reads them."""
 
     def __init__(self, g: random.Random):
@@ -134,7 +134,7 @@ def open_table(sh: A.Shape, bits: np.ndarray, claims: list, g: random.Random) ->
     its messages (the zerocheck's and lincheck's fields empty, no opened rows) and each Ligerito level's consistency sums
     (`Messages.cons`, ``Σ_j eq(α)[j] row_j[l]`` per lane, from the committed tables rather than the encoded rows)."""
     sch, n = sh.sched, sh.m - 7
-    coins = _Draw(g)
+    coins = _Sample(g)
     t = pack(bits)
     assert len(t) == 1 << n
     rs = [ring_switch(bits, list(c.x[1:])) for c in claims]

@@ -1,4 +1,4 @@
-"""The proof system's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
+"""The proof system's challenger: its live coins, the live coins of every protocol (Lean of record:
 `Spot.Challenger`, `verity/protocols/proofs/spot/verifier/lean`, which `tests/test_difftest.py` there holds this to).
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
@@ -17,8 +17,8 @@ and never twice: a retry never resamples.  There is no beacon and no Fiat–Sham
 a client derives what it samples from the opened coin (`verity.commitments.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
-**Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
-`verity.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
+**The challenger's entropy is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` claim id of
+`verity.commitments.claim_ids` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
 `coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
 challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
 `os.urandom` or any other source no assumption covers; a test's seeded stream stays unnamed.
@@ -137,7 +137,7 @@ new one.  `ledger_line` writes an entry as the auditor does.
 **A lane's day** is a UTC day, numbered from 1970-01-01 (`day_of`), and its program is the one the lane's `declaration`
 entry names for it: its program's SHA-512 and its blocks' descriptor keys, declared at `declared_utc`, the challenger's
 own clock, for that day or a later one.  A lane declares a day once.  Once a lane has declared, each later `open` of its
-windows (the window's registration, before its first coin) is on a day it declared earlier: its `started_utc`'s, the
+windows (the window's docket, before its first coin) is on a day it declared earlier: its `started_utc`'s, the
 challenger's clock too, so the ledger orders a day's declaration before every coin of the day.  `_days` checks both in a
 second pass over the entries the first accepted; a lane that never declares opens as before.  `declared_day` is what a
 per-day check reads of the ledger: the day of the window's open and the lane's declarations before it.
@@ -199,7 +199,7 @@ So the log shows each session's evidence fixed before the next session's tree is
 
 The first client is PoUW's live window (`verity.protocols.accounting.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.commitments`, `verity.claims` and `verity.channel`, so any client calls it as it is.
+`verity.commitments` and `verity.channel`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -217,10 +217,10 @@ from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity import claims
 from verity.channel import Record
 from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
+from verity.commitments import claim_ids
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
 from verity.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
@@ -361,10 +361,10 @@ MAIN_FORM = ("a list of main's first-parent commits, each 40 lowercase hex (`git
 NO_MAIN = ("the verifier holds no copy of main's history, so it can't tell whether the host's pinned tree is one main's "
            "check passed: give it the auditor's own `git rev-list --first-parent origin/main`")
 NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
-#: the property every coin source's claim instance is assumed of: independent uniform output
+#: the property each entropy's claim instance is assumed of: independent uniform output
 COIN_PROPERTY = "uniform"
 NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
-            "assumption of verity.claims), so no assumption covers its coins: a served challenger draws from a named "
+            "claim id of verity.commitments.claim_ids), so no assumption covers its coins: a served challenger draws from a named "
             "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
@@ -373,15 +373,14 @@ class CoinError(ValueError):
 
 
 def coin_claim(entropy: Any) -> str | None:
-    """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` assumption of
-    `verity.claims`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
+    """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` claim id of
+    `verity.commitments.claim_ids`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
     `CoinError`: a misnamed source is refused, never taken for an unnamed one."""
     claim = getattr(entropy, "claim", None)
     if claim is None:
         return None
-    prop, sep, instance = claim.partition("/") if type(claim) is str else ("", "", "")
-    if not (sep and prop == COIN_PROPERTY and instance in claims.INSTANCES):
-        raise CoinError(f"a coin source's claim is a {COIN_PROPERTY}/<instance> assumption of verity.claims, "
+    if not (type(claim) is str and claim.startswith(f"{COIN_PROPERTY}/") and claim in claim_ids.IDS):
+        raise CoinError(f"an entropy's claim is a {COIN_PROPERTY}/<instance> claim id of verity.commitments.claim_ids, "
                         f"not {claim!r}")
     return claim
 
@@ -1079,7 +1078,7 @@ def sample_link_first(label: str, after: bytes, log: Sequence[str]) -> bool:
     the rest in pairs, a root's line and its coin's release: no coin of family `label` whose root's line names `after`
     is released after a line opening a coin tree's round (`open_line`), and the first such line opens the stream
     ``session`` (`link_line`), whose first round is the link points. A coin tree's own line may come anywhere. In v2's
-    one-stage audit `label` is the parameters' challenger family and `after` the registration's digest, so the coins so
+    one-stage audit `label` is the parameters' challenger family and `after` the docket's digest, so the coins so
     released are the sample's, and v2 refuses a log out of this order (`SAMPLE_LINK_FIRST`)."""
     opened, pending = False, None
     for line in log:
@@ -1911,7 +1910,7 @@ def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main
     session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no
     older than its period's open (the freshness floor and the period pin), which this function doesn't check.  Every path
     that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and memory-accounting's
-    PoUB (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
+    PoUB (`poub.coins`).  `audited_session` alone checks no pin and credits
     nothing.  Only the open's pin is held: a repin of the host after the open neither helps nor harms the session, which
     is credited by the commit its open sealed, the pins log only growing past it."""
     audited, opened = _audited(ledger, window, key, verify)

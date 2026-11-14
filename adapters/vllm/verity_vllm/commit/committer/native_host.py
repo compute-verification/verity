@@ -88,10 +88,13 @@ from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import DROPPED, NativeRangeOpenings, open_levels
 from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline.spans import Spans
 
 __all__ = ["GPU_CHUNK_BYTES", "NativeHostCommitter", "bounded_host_bound", "hazard_of_record", "schedule_stream_bound",
            "value_family"]
+
+logger = init_logger(__name__)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -275,8 +278,8 @@ def memtrace(where: str, step: int | None = None) -> None:
 
     a, r = torch.cuda.memory_allocated(), torch.cuda.memory_reserved()
     free, total = torch.cuda.mem_get_info()
-    print(f"[memtrace] {time.strftime('%H:%M:%S')} step {step if step is not None else '-':>4} {where:<28} alloc {a / 2**30:6.2f} reserved {r / 2**30:6.2f} "
-          f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
+    logger.info("[memtrace] step %4s %-28s alloc %6.2f reserved %6.2f device-used %6.2f GiB", step if step is not None else "-", where,
+                a / 2**30, r / 2**30, (total - free) / 2**30)
 
 
 class NativeHostCommitter(WindowViews, NativeRangeOpenings):
@@ -906,13 +909,13 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         if t.device.type != "cuda":
             return
         self.x03_expected += 1                       # attempted acquisition; committed counted only after the copy was issued
-        self._acquire_impl(name, t, job)
+        self._copy_into_step(name, t, job)
         self.x03_committed += 1
 
-    def _acquire_impl(self, name: str, t: Any, job: _StepJob) -> None:
+    def _copy_into_step(self, name: str, t: Any, job: _StepJob) -> None:
         t0 = time.perf_counter()
-        if self._rt is not None and t.is_contiguous():
-            return self._acquire_by_cudart(name, t, job, t0)
+        if self._rt is not None and self.arena is not None and t.is_contiguous():
+            return self._acquire_by_cudart(name, t, job, t0, self.arena)
         src = t.detach()
         if not src.is_contiguous():
             src = src.contiguous()          # a device copy: counted under acquisition (bytes noted)
@@ -958,7 +961,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
     # ---- acquisition by libcudart: no torch ops on the serving thread at all -- the snapshot is one cudaMemcpyAsync (D2D, stream-ordered
     # on the compute stream) issued through libcudart via ctypes on raw data pointers (~2 us CPU instead of ~15-20 us for slice+view+copy_).
     # Bit semantics identical to the arena copy (the value check compares the committed bytes with hook-time clones).
-    def _acquire_by_cudart(self, name: str, t: Any, job: _StepJob, t0: float) -> None:
+    def _acquire_by_cudart(self, name: str, t: Any, job: _StepJob, t0: float, arena: _DeviceArena) -> None:
         nbytes = t.numel() * t.element_size()
         if nbytes == 0:
             return
@@ -976,7 +979,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         off = (job.cursor + 3) & ~3
         if off + nbytes > job.arena.numel():
             job.overflow.append((job.arena, job.cursor))
-            job.arena = self.arena.take(max(nbytes, self.arena.block_bytes))
+            job.arena = arena.take(max(nbytes, arena.block_bytes))
             job.arena_ptr = job.arena.data_ptr()
             off = 0
         stream = job.stream_handle
@@ -1028,7 +1031,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             self._side = torch.cuda.Stream()
         return self._side
 
-    def _move_step_to_host(self, job: _StepJob) -> float:
+    def _move_step_to_host(self, job: _StepJob, arena: _DeviceArena) -> float:
         """Worker: D2H of the step's packed device stream into pinned memory on the side stream; sets meta.host views.  Returns the
         wall seconds spent (issue + wait; overlapped with the engine's compute stream)."""
         t0 = time.perf_counter()
@@ -1040,7 +1043,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 m.host = hv[m.dev_off:m.dev_off + m.nbytes]
                 m.dev_block = None
             job.stream = hv[:job.cursor]
-            self.arena.release(job.arena)
+            arena.release(job.arena)
             job.arena = None
             return time.perf_counter() - t0
         side = self._side_stream()
@@ -1049,10 +1052,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             blocks = job.overflow + [(job.arena, job.cursor)]
             total = sum(used for _b, used in blocks)
             host = self.pool.take(total) if total else None
-            hv = memoryview(host.numpy()).cast("B") if total else memoryview(b"")
+            hv = memoryview(host.numpy()).cast("B") if host is not None else memoryview(b"")
             base = 0
             for blk, used in blocks:                       # the packed step stream = the used parts of the blocks, contiguous
-                if used == 0:
+                if used == 0 or host is None:
                     continue
                 host[base:base + used].copy_(blk[:used], non_blocking=True)
                 for m in job.metas:
@@ -1065,7 +1068,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             ev.record(side)
         ev.synchronize()
         for blk, _used in blocks:
-            self.arena.release(blk)
+            arena.release(blk)
         for m in job.metas:
             m.dev_block = None
         job.overflow = []
@@ -1127,7 +1130,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         try:
             os.sched_setaffinity(0, cores)
         except OSError:
-            pass
+            logger.warning("thread group %d: pinning to cores %s was refused; it runs unpinned", group, sorted(cores), exc_info=True)
 
     def _start_worker(self) -> None:
         if self._worker is not None and self._worker.is_alive():
@@ -1167,8 +1170,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             self._commit_step(job)
         except Exception as e:  # noqa: BLE001
             self.errors.append(f"worker step {job.step}: {e!r}"[:300])
-            for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
-                self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
+            if self.arena is not None and job.arena is not None:
+                for blk in [job.arena, *(b for b, _u in job.overflow)]:
+                    self.arena.release(blk)  # the serving thread waits on the ring for the blocks a failed step holds
             self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
@@ -1193,14 +1197,15 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                                "collector (native_collect_v2b)")
         if "noworker" in self.ABL:
             job.event.synchronize()
-            for blk in [job.arena, *(b for b, _u in job.overflow)] if job.arena is not None else []:
-                self.arena.release(blk)
+            if self.arena is not None and job.arena is not None:
+                for blk in [job.arena, *(b for b, _u in job.overflow)]:
+                    self.arena.release(blk)
             self._layouts[job.step] = job.metas
             self._done[job.step] = StepCommitment(job.step, b"", b"", 0, sum(m.nbytes for m in job.metas), len(job.metas), b"", job.t_step_end,
                                                   time.perf_counter(), job.backlog)
             return
         if self.arena is not None and job.arena is not None:
-            mv_s = self._move_step_to_host(job)                       # side stream: D2H of the packed step, overlapped with compute
+            mv_s = self._move_step_to_host(job, self.arena)                   # side stream: D2H of the packed step, overlapped with compute
             self.spans.add("movement", mv_s, step=job.step, nbytes=0)
         else:
             job.event.synchronize()           # every direct D2H copy of this step has landed
@@ -1375,7 +1380,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return tuple(open_levels(levels, index))
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
-        """Production verifier core (`_verify_rows`): the row and its salt give the hiding leaf, the path folds it to the tree root, which
+        """Serving verifier core (`_verify_rows`): the row and its salt give the hiding leaf, the path folds it to the tree root, which
         binds into the ORIGINAL step root, which is in the run root."""
         return self._verify_rows(run, opening)
 
@@ -1457,7 +1462,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             # R10a / R10b (norm kernel interiors): DECLARED treatment only.  Every interior fp32 value of fused_add_rms_norm_kernel (squares,
             # cub block-reduction partials, variance/N, rsqrtf, x*rstd) and of the layer-0 Triton _rms_norm_kernel is a deterministic function
             # of the BOUND source row (the token's residual/embedding bf16 row, R2e / R2b) and the registered weight row under the pinned
-            # kernel's fixed reduction order = the registry's exact model (`verity/definitions/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
+            # kernel's fixed reduction order = the registry's exact model (`adapters/vllm/verity_vllm/definitions/registry/b1.py` RMSNormFusedCuda v2, 2340/2340 rows
             # conformant).  So the derived-value route applies with a ROW-sourced phi: opening = source-row leaf(s) + weight opening + op-by-op
             # replay; no interior word needs a leaf.  The verifier for that multi-source phi is NOT implemented -> the checker
             # reports 'derived-declared', never secure.  Alternative = M1-style export of 47.6 MB/request (not built).

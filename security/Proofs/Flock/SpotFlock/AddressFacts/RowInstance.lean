@@ -7,7 +7,7 @@ public import Proofs.Flock.SpotFlock.AddressFacts.Row
 
 The first step of `InstanceFact`: with no proof block always checked, a checked unit of an accepted run is the proof
 block `blockAt sample j` of an interior slot `j` the second sample proves (`proved_of_checked`), the sample being
-`secondDraw`'s (`select_of_secondDraw`).
+`secondDraw`'s (`select_of_secondSample`).
 -/
 
 @[expose] public section
@@ -35,7 +35,7 @@ theorem proved_of_checked {g : RegTwo} {N u : ℕ} {src₁ src₂ : ByteArray} {
 variable (h : Held)
 
 /-- **The run's second sample is the second stage's selection's.** -/
-theorem select_of_secondDraw {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {draw : Json}
+theorem select_of_secondSample {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {draw : Json}
     (hd : secondDraw h c₀ c₁ = some draw) :
     ∃ read, Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks (stageSrc c₁) = .ok (draw, read) := by
   unfold secondDraw at hd

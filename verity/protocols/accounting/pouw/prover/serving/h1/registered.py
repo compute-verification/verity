@@ -55,6 +55,8 @@ from verity.commitments.rowleaf import (
 from verity.protocols.accounting.pouw.verifier.audit import hm96_salt
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
+from verity.protocols.accounting.pouw.prover.serving.tensors import dtype_name, h1_device, tensors
+
 _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 #: `commit`'s path (`path`): ``"auto"``, ``"gpu"`` or ``"numpy"``, set by the caller that configures the run
@@ -240,25 +242,22 @@ class Rows(Sequence):
 
 def path() -> str:
     """Where `commit` hashes, `MODE`'s choice: ``"gpu"`` (`pouw_h1_registered_device`, refused where it can't run),
-    ``"numpy"``, or by default ``"auto"``, the GPU where this process has CUDA through torch and the kernels build for its
-    device, else NumPy. Both register the same bytes; NumPy is the reference."""
+    ``"numpy"``, or by default ``"auto"``, the GPU where the workload handed in its H1 device (`tensors.use_h1`) and it can
+    hash here (`tensors.H1Device.available`), else NumPy. Both register the same bytes; NumPy is the reference."""
     mode = MODE
     if mode not in ("auto", "gpu", "numpy"):
         raise ValueError(f"MODE={mode!r}: auto, gpu or numpy")
     if mode != "auto":
         return mode
-    from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
-
-    return "gpu" if D.available() else "numpy"
+    try:
+        device = h1_device()
+    except NotImplementedError:
+        return "numpy"
+    return "gpu" if device.available() else "numpy"
 
 
 def _host(words: Any) -> np.ndarray:
-    if hasattr(words, "detach"):
-        import torch
-
-        t = words.detach()
-        return t.view(torch.uint8).cpu().numpy().view("<u2") if t.dtype == torch.uint16 else t.cpu().numpy()
-    return np.asarray(words)
+    return np.asarray(words) if isinstance(words, np.ndarray) or not hasattr(words, "dtype") else tensors().host(words)
 
 
 class Later:
@@ -302,8 +301,7 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
                          "the GPU path")
     if not (gpu and getattr(words, "is_cuda", False)):
         words = _host(words)
-    if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or str(words.dtype) not in ("uint16",
-                                                                                                  "torch.uint16"):
+    if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or dtype_name(words) != "uint16":
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
     n, w = (int(d) for d in words.shape)
     dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
@@ -322,9 +320,7 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
         return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS, rows=held, salts=salts,
                             bcs=bcs, levels=levels, schema=schema, **binding)
     if gpu:
-        from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
-
-        hashing = D.device_hash(words, key, nonce, given, dom.domain_id,
+        hashing = h1_device().device_hash(words, key, nonce, given, dom.domain_id,
                                 None if public is None else (public.head, public.first, public.ok), also)
         return Later(hashing, made) if later else made(*hashing.result())
     if public is not None:
@@ -338,9 +334,7 @@ def public_salts(head: bytes, first: int, n: int, ok: bool = False) -> bytes:
     if n < 1 or first < 0 or first + n > 1 << 64:
         raise ValueError(f"{n} public salts from position {first}: at least one, every position a u64")
     if path() == "gpu":
-        from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
-
-        return D.device_public_salts(head, first, n, ok)
+        return h1_device().device_public_salts(head, first, n, ok)
     return b"".join(_public_salt(head, u, ok) for u in range(first, first + n))
 
 

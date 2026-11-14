@@ -48,7 +48,7 @@ from verity.circuits.evaluation.reference import evaluate_call
 from verity.circuits.layout import FunctionCall
 from verity.circuits.refs import Refs, runs
 from verity.circuits.types import Tuple as TupleT
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.check.fold_sources import _EXTRA_NORM_SOURCES as _EXTRA_NORM_SOURCES
 from verity_vllm.check.fold_sources import _LAYER_FIELDS as _LAYER_FIELDS

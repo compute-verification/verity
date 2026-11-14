@@ -11,13 +11,13 @@
 # key's lane (GATE_LANE, default vllm) has a period open, and saves each live arm's Commit session tree and its sample
 # session's (GATE fetch, $OUT/<leg>/commit-session.tgz and commit-draw-session.tgz) for pouw_h1_gpu.py --check-challenger
 # (its --draw-dir). The units kernel is built for the node's card
-# (arch.sh: ARCH, 120a or 90a); LEG_ARGS are more pouw_h1_gpu.py flags for every arm (another int8 pin: --base-role
+# (arch.sh: ARCH, 120a or 90a); SUBPROTOCOL_ARGS are more pouw_h1_gpu.py flags for every arm (another int8 pin: --base-role
 # LLAMA32_1B --role LLAMA32_1B_INT8 --repo verity-int8/Llama-3.2-1B-INT8) and PY the node's Python (default
 # /workspace/jobs/venv312's; an H200 node's is /workspace/cp/venv312's).
 #
 #   research run --on NODE --project verity --source . --cwd source --mem-gb 128 --timeout 4h --declared-output 'out/*' \
 #     --env LEGS=j10r-live [--env GATE=... --env CHALLENGER=127.0.0.1:7811 --env PEER=NODE --env CIRCUITS=DIR] \
-#     -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE \
+#     -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/check/slot.py --by LANE \
 #     --run-max 12600 -- bash benchmarks/pouw/served_h1/commit_variants.sh
 set -u
 . "$(dirname "$0")/arch.sh"
@@ -44,13 +44,13 @@ cd adapters/vllm
 rc_all=0
 for leg in ${LEGS:-v1}; do
   mkdir -p "$OUT/$leg"
-  read -r -a extra <<< "${LEG_ARGS:-}"
+  read -r -a extra <<< "${SUBPROTOCOL_ARGS:-}"
   case "$leg" in j10r*) extra+=(--j10r) ;; esac
   case "$leg" in *-live) extra+=(--challenger "${CHALLENGER:?}" --gate "${GATE:?}" --peer "${PEER:?}"
                                  --period "${PERIOD:-commit-$(date -u +%Y%m%dT%H%M%SZ)-$leg}" --circuits "${CIRCUITS:?}") ;; esac
   echo "[legs] leg $leg start $(date -u +%FT%TZ)"
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-commit-legs} gpu-lease 1 --wait --max-min 120 --mem-gb 96 -- \
-    env PYTHONPATH="$PWD/../..:$PWD/../../tools/config:$PWD" HF_HOME=/workspace/hf "${PY:-/workspace/jobs/venv312/bin/python}" -m tests.protocols.pouw_h1_gpu \
+    env PYTHONPATH="$PWD/../..:$PWD/../../tools/config:$PWD" HF_HOME=/workspace/hf "${PY:-/workspace/jobs/venv312/bin/python}" ../../benchmarks/pouw/served_h1/h1_gpu.py \
     --workload fill --served --commit --negatives --receipts "$S/h1u_hbc.so" "${extra[@]}" --credit \
     --live-dump "$OUT/$leg/live" --declare 32,3,32,4 --out "$OUT/$leg" --at 2026-10-21T00:00:00Z --by "${BY:-commit-legs}" \
     > "$OUT/$leg/stdout.log" 2> "$OUT/$leg/stderr.log"

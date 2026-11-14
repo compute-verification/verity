@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.Claim
 public import Proofs.Properties.Verity.Majority
 
 /-!
-# The two-stage leg's majority: the boundary values fixed at registration
+# The two-stage subprotocol's majority: the boundary values fixed at registration
 
 `MajorityBound` asks that, where the claim fails on the vocabulary's transcript, an accepted run of the frame's prover
 whose extracted witness is in the two-stage relation be at most `bind` likely. The transcript is the majority of the
@@ -23,13 +23,13 @@ plays.
   (`bindFinder`) runs the frame twice, independently, and returns it.
 * **The bound** (`majorityBound`): where the claim fails on the majority, more than `ε · n` units are unbound in it and
   at most `ε · n` in an accepted witness's transcript, so the witness binds a unit the majority doesn't and differs from
-  it at one of the unit's boundary bits (`Majority.unbound_drawn`); such plays weigh at most
+  it at one of the unit's boundary bits (`Majority.unbound_sampled`); such plays weigh at most
   `√(min(W, 2n) · K)`, `K` the binding finder's collision probability (`Majority.Plays.ex_off_le`), and at most
   `√(min(W, 2n) · E[cost] / 2^256)` under `ecr/sha-512` at it (`majorityBound_ecr`).
 
 The deployed device's history holds one play's signatures, so an earlier period's genuine challenger signature in the
 evidence makes the strategy's error `⊤` at the deployed theorems; nothing here reads the device, and that hole stays
-open on this leg until the key pins close it.
+open on this subprotocol until the key pins close it.
 -/
 
 @[expose] public section
@@ -198,7 +198,7 @@ theorem off_of_accepts (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     have h' := huW
     simp only [Accounting.unbound, Finset.mem_filter, Finset.mem_univ, true_and, not_or, not_exists, not_and,
       not_not] at h'
-    obtain ⟨g, hg, i, hi, hbit⟩ := Majority.unbound_drawn (V.partsOf θ F) (V.Opens θ F c) h'.1 h'.2 huX
+    obtain ⟨g, hg, i, hi, hbit⟩ := Majority.unbound_sampled (V.partsOf θ F) (V.Opens θ F c) h'.1 h'.2 huX
     exact ⟨u, hacc, ⟨wt, hw, huW⟩, wt, hw, hR', g, hg, i, hi, hbit⟩
 
 /-- **The witness fixed at registration**: where the vocabulary's transcript is the majority (`hX`), the claim holds on
@@ -237,7 +237,7 @@ theorem majorityBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) 
 
 /-- **The witness fixed at registration under `ecr/sha-512`**: `majorityBound` where the binding finder meets
 `ExpectedCR`, so that `K` is its expected SHA-512 calls over `2^256`: the binding term
-`√(min(W, 2n) · E[cost] / 2^256)` of the recursive leg (`Verity.Recursive.Dep.delta`). -/
+`√(min(W, 2n) · E[cost] / 2^256)` of the recursive subprotocol (`Verity.Recursive.Dep.delta`). -/
 theorem majorityBound_ecr (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))

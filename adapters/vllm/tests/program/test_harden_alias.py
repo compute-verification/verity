@@ -1,5 +1,5 @@
 """Mutation / alias effects of the Bet A registered compiler (`torch.export(strict=False)` training IR ->
-`verity_vllm.program.frontend.derive`).
+`verity_torch.frontend.derive`).
 
 What is under test. `derive` translates the pre-dispatch export graph WITH in-place ops kept in place (no functionalisation):
 a rule-owned mutating op (`rotary_embedding`, `fused_add_rms_norm`, `rms_norm`, `silu_and_mul`) rebinds the mutated fx node
@@ -47,10 +47,10 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules import vllm_iface as vi
 
 PROF = dict(mode="profile", profile="b1-eager")
@@ -721,7 +721,7 @@ def _test_Y(cls):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# T: Bet A's PRODUCTION carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
+# T: Bet A's SERVING carrier — `verity_cba::triton_launch(str kernel, Tensor(a!)[] tensors, str meta_json)` marks EVERY
 # tensor argument as mutated (over-declared). The vLLM binding rules (`rules/vllm_bindings/triton_launches.py`) decide from the pinned kernel
 # (name + source sha256 + constexprs + geometry) which operand the kernel actually writes: input_ptr /
 # weight_ptr must stay readable after a launch; a kernel that is not the pinned one (another body, another name) must refuse.

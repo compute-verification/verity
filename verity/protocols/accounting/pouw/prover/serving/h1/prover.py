@@ -33,7 +33,7 @@ import threading
 import zipfile
 import zlib
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -42,6 +42,7 @@ import numpy as np
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
+from verity.protocols.accounting.pouw.prover.serving.tensors import tensors
 
 KEY = "key"
 CALLS = "calls"
@@ -144,13 +145,14 @@ def kept_bytes(rows: int, k: int, units: int) -> int:
 
 
 def _bytes_of(x: Any) -> Any:
-    """``x`` (a tensor or an array) as one flat run of its bytes in C order: a uint8 CUDA tensor where it is, else an array."""
-    if hasattr(x, "detach"):
-        import torch
-
-        t = x.detach().contiguous().reshape(-1)
-        return t.view(torch.uint8) if t.is_cuda else t.numpy().view(np.uint8)
-    return np.ascontiguousarray(x).reshape(-1).view(np.uint8)
+    """``x`` (an array or one of the workload's buffers, `tensors`) as one flat run of its bytes in C order: a uint8 buffer
+    where it is when that is a CUDA device, else an array."""
+    if isinstance(x, np.ndarray) or not hasattr(x, "dtype"):
+        return np.ascontiguousarray(x).reshape(-1).view(np.uint8)
+    ts = tensors()
+    if not getattr(x, "is_cuda", False):
+        return np.ascontiguousarray(ts.host(x)).reshape(-1).view(np.uint8)
+    return ts.view(x.contiguous().reshape(-1), "uint8")
 
 
 #: each window directory open on a `Writer` (`Writer.open`), by its path
@@ -171,8 +173,9 @@ class _Job:
     lo: int
     #: each array's (offset, bytes, dtype, shape) in the ring: a, s_a and, when the call has them, its records
     spans: tuple[tuple[int, int, Any, tuple[int, ...]], ...]
-    #: the copies' event on the device's current stream (None: copied from the host before the job was queued)
-    copied: Any
+    #: waits for the copies queued on the device's current stream (`tensors.Tensors.copy_to_host`; None: copied from the host
+    #: before the job was queued)
+    copied: Callable[[], None] | None
 
 
 class Writer:
@@ -188,13 +191,14 @@ class Writer:
     another thread is writing ends as it ends, so no `wait` waits on a call the writer won't write."""
 
     def __init__(self, bound: int, threads: int = 2) -> None:
-        import torch
-
         if threads < 1:
             raise ValueError(f"a writer of {threads} threads: at least one")
         self.bound = _up(bound)
-        self._pinned = torch.empty(self.bound, dtype=torch.uint8, pin_memory=True) if torch.cuda.is_available() else None
-        self._ring = self._pinned.numpy() if self._pinned is not None else np.empty(self.bound, np.uint8)
+        try:
+            self._ring = tensors().zeros((self.bound,), "uint8")
+        except NotImplementedError:
+            # no workload handed its buffers in, so every call kept here is the host's arrays
+            self._ring = np.zeros(self.bound, np.uint8)
         self._cv = threading.Condition()
         #: the calls whose bytes are in the ring, in the order kept; the first ``_taken`` of them are being or were written
         self._jobs: deque[_Job] = deque()
@@ -249,26 +253,15 @@ class Writer:
                 st["calls"] += 1
                 st["failed"].append(f"call {index}: the writer stopped at {self._stopped}")
                 return
-            at, spans, stream = lo, [], None
+            at, spans, copied = lo, [], None
             for b, dtype, shape in parts:
                 size = int(b.shape[0])
                 if isinstance(b, np.ndarray):
                     self._ring[at:at + size] = b
                 else:
-                    import torch
-
-                    stream = torch.cuda.current_stream(b.device)
-                    self._pinned[at:at + size].copy_(b, non_blocking=True)
-                    # the copy is still queued when this returns: the allocator gives its source to no other stream till then
-                    b.record_stream(stream)
+                    copied = tensors().copy_to_host(b, self._ring[at:at + size])
                 spans.append((at, size, dtype, shape))
                 at += _up(size)
-            copied = None
-            if stream is not None:
-                import torch
-
-                copied = torch.cuda.Event(blocking=True)
-                copied.record(stream)
             self._jobs.append(_Job(self._seq, key, int(index), lo, tuple(spans), copied))
             self._seq += 1
             self._head = lo + n
@@ -289,11 +282,11 @@ class Writer:
             failed = None
             try:
                 if job.copied is not None:
-                    job.copied.synchronize()
+                    job.copied()
                 a, s_a, *records = (self._ring[at:at + n].view(dtype).reshape(shape) for at, n, dtype, shape in job.spans)
                 _savez(private(Path(job.directory) / CALLS) / f"{job.index}.npz", a, s_a, records[0] if records else None)
             except (OSError, RuntimeError) as e:
-                # the file system's failures and the device's (torch raises a CUDA error as a RuntimeError) are the
+                # the file system's failures and the device's (a device error is a RuntimeError) are the
                 # window's, raised by its `wait`
                 failed = f"call {job.index}: {type(e).__name__}: {e}"
             except BaseException as e:

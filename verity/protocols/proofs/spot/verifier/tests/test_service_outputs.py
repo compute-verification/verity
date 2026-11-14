@@ -1,10 +1,10 @@
 """A stream's records chained by output values (`registration.check`'s `outputs`): a later registration's registered value
 is a port an earlier record committed, so the state one window leaves is the state a later one reads, under the earlier
 record's root, domain and hiding leaves. The stream hands R7 the record each output value names however long its log, and
-the run of record (`Run.run`) checks the output values the registration did, in one stage and in a two-stage design's
-interior registration. And a stream's certified entries (`registration.check`'s `certified`): a registered value that is
+the run of record (`Run.run`) checks the output values the docket did, in one stage and in a two-stage design's
+interior docket. And a stream's certified entries (`registration.check`'s `certified`): a registered value that is
 none of the program's parameters, which the stream's check and its run of record hold to the entry the verifier built
-for it, and an interior registration takes none."""
+for it, and an interior docket takes none."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 
 import fake_challenger as FC
 
@@ -38,7 +38,7 @@ SCHEMA = "hm96-sha512/row/v2"
 RUN = "r-outputs-test"
 SESSION = "5e" * 64
 DELTA = 2.0 ** -40
-LAW = {"law": "subset", "k": 2}
+SAMPLING_DESIGN = {"law": "subset", "k": 2}
 N = 6
 #: `next`: the state a window leaves, which a later window reads as its registered `state`.
 PORTS = ("x", "out", "next")
@@ -47,7 +47,7 @@ BOUNDARY, INTERIOR = ("bx", "bout", "carry"), ("x", "out")
 N_RHO, NB, Q, K = 3, 4, 2, 1
 STATE = S.Value("state", None, "serve", registered=True)
 #: A link's certified rows: a registered value that is none of the program's parameters, with the entry and root the
-#: verifier built for it from the registration it read under the deployment's key.
+#: verifier built for it from the docket it read under the deployment's key.
 ROWS = S.Value("link-0/in/7", None, "serve", registered=True)
 CERTIFIED = {ROWS.name: {"root": "c5" * 64, "leaves": 3, "words": 64, "domain": "c4" * 64}}
 ROWS_ENTRY = {"value": ROWS.name, **CERTIFIED[ROWS.name]}
@@ -62,7 +62,7 @@ def _public(ports, registered=(STATE,)) -> tuple[S.Public, ...]:
 
 
 def _spec(registered=(STATE,)) -> S.Spec:
-    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), *registered), S.Law("rate:1/3"),
+    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), *registered), S.SamplingDesign("rate:1/3"),
                   S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(PORTS, registered),
                   b"outputs-test")
 
@@ -80,18 +80,18 @@ def _stream(spec: S.Spec | None = None, **kwargs) -> S.Stream:
                                                 "clock": lambda: 0.0, **kwargs})
 
 
-def _record(program: Program, query, sizes: Mapping[str, int], law, row: int, previous: str | None, registered=(),
+def _record(program: Program, query, sizes: Mapping[str, int], sampling_design, row: int, previous: str | None, registered=(),
             **window) -> tuple[dict, dict]:
     part = P.partition(program, query)
     ports = {v: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), v, SCHEMA, n, RUN)}
              for v, n in sizes.items()}
     roots = [{"port": v, "root": f"{row:02x}{i + 1:02x}" * 32, **ports[v]} for i, v in enumerate(sizes)]
-    return R.record(program, query, law, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row, **window},
+    return R.record(program, query, sampling_design, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": row, **window},
                     previous=previous, registered=list(registered)), ports
 
 
 def _window(row: int, previous: str | None, registered=()) -> tuple[dict, dict]:
-    return _record(P.population_program(CARRY, N), QUERY, dict.fromkeys(PORTS, N), LAW, row, previous, registered)
+    return _record(P.population_program(CARRY, N), QUERY, dict.fromkeys(PORTS, N), SAMPLING_DESIGN, row, previous, registered)
 
 
 def _left(rec: Mapping, port: str = "next") -> dict:
@@ -136,7 +136,7 @@ def _three_windows(stream: S.Stream) -> str:
 
 def test_a_window_reads_the_state_an_earlier_window_left():
     """Window 0 commits the state it leaves as its port `next`; windows 1 and 2 follow it; window 3 registers that port as
-    its `state`. Its check gets window 0's record though it is neither the last record nor a value's first registration,
+    its `state`. Its check gets window 0's record though it is neither the last record nor a value's first docket,
     the verdict is the whole log's, and its outcome is accepted, the run of record holding the output value as R7 did.
     Window 0's record left out of the log R7 reads is `R7-output`, as is a record the log doesn't hold; a root other than
     the port's is `R7-held`; and the value registered with no output named is refused under its own domain."""
@@ -147,7 +147,7 @@ def test_a_window_reads_the_state_an_earlier_window_left():
     cand, ports = _window(3, prev, [_left(w0)])
 
     def check(log: list) -> V.Verdict:
-        return V.check(cand, P.population_program(CARRY, N), QUERY, LAW, S.SCHEME, ports, None, (), log, None, None,
+        return V.check(cand, P.population_program(CARRY, N), QUERY, SAMPLING_DESIGN, S.SCHEME, ports, None, (), log, None, None,
                        {"state": 2}, window_root=FC.WINDOW["root"], outputs=out)
 
     assert stream._earlier(cand) == [stream.log[-1]] and check(stream._earlier(cand)).codes[0] == "R7-output"
@@ -168,7 +168,7 @@ def test_a_window_reads_the_state_an_earlier_window_left():
 
 def test_the_run_of_record_reads_the_output_values(monkeypatch):
     """The stream's run of record gets the output values R7 took (`verifier.run`'s `value_outputs`, in the Lean's
-    params): a run that drops them refuses the registration the stream accepted, and the outcome with it."""
+    params): a run that drops them refuses the docket the stream accepted, and the outcome with it."""
     stream = _stream()
     prev = _three_windows(stream)
     w0 = stream.log[0]
@@ -210,7 +210,7 @@ def test_a_stream_takes_the_verifiers_certified_entries():
 
 def test_the_run_of_record_reads_the_certified_entries(monkeypatch):
     """The stream's run of record gets the certified entries R7 took (`verifier.run`'s `certified`, in the Lean's
-    params): a run that drops them refuses the registration the stream accepted, and the outcome with it."""
+    params): a run that drops them refuses the docket the stream accepted, and the outcome with it."""
     stream = _stream(_spec((STATE, ROWS)))
     cand, ports = _window(0, None, [ROWS_ENTRY])
     reg = stream.register(cand, ports, certified=CERTIFIED)
@@ -243,7 +243,7 @@ def test_a_stream_holds_a_certified_value_to_a_reported_read():
 
 def _two_stage(spec: S.Spec):
     """A two-stage stream of `spec` past its first-stage sample: the stream, its boundary record, which leaves its replay
-    blocks' state at port `carry`, that registration, the sample, the interior's `outputs` naming that port, and the
+    blocks' state at port `carry`, that docket, the sample, the interior's `outputs` naming that port, and the
     interior's record and ports registering the entries it is given."""
     stream = _stream(spec, replay=BLOCK)
     m = Q * N_RHO
@@ -272,9 +272,9 @@ def test_an_interior_registration_takes_no_certified_entries():
 
 
 def test_an_interior_registration_reads_a_port_of_its_boundary():
-    """Under a two-stage design the interior registration's registered `state` is the boundary registration's port
-    `carry`, the state its replay blocks leave: R7 takes it in the interior registration, the interior's copies carry
-    it to the run of record, which agrees on the outcome binding both registrations. Its one failure is round 2's
+    """Under a two-stage design the interior docket's registered `state` is the boundary docket's port
+    `carry`, the state its replay blocks leave: R7 takes it in the interior docket, the interior's copies carry
+    it to the run of record, which agrees on the outcome binding both dockets. Its one failure is round 2's
     (`second-read`): the replay block's Definition links CARRY's `x`, `state` and output to the boundary's ports of
     them, which this boundary doesn't register, and its session, which the verdict of record names as it checked it,
     reads `state` from the registered value instead. Registered with no output named, it is refused under its own

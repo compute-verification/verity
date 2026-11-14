@@ -27,7 +27,7 @@ mutations drop one (``missing``), reject one (``failed``), repeat one, add an un
 coin the prover chose (``chosen``), and break the forms.
 
 A `window-drawn` case is what `credit._window_drawn` reads of an execution phase, the sample `Credit.descriptorDrawn` gives the
-J10-R credit period's statement (`Properties.Pouw.PeriodJ10R.creditDrawn`): the execution phase's open root, its sample (its coin's live
+J10-R credit period's statement (`Properties.Pouw.MonitoringPeriodJ10R.creditDrawn`): the execution phase's open root, its sample (its coin's live
 opening, its root and its receipts), its circuit's descriptor (today's units or J10-R's) and a committed K. Its
 mutations break the coin's opening, the root and receipts the sample is keyed by, the descriptor's hex and K's form, and
 give a K past the execution phase's units.
@@ -844,7 +844,7 @@ def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
 def _alt_layout(rng: random.Random, lay: dict) -> dict:
     """Another layout of `lay`'s linears: another slot, another n, or the calls in another order, with other units or
     other strata than `lay`'s."""
-    (r, c), out = lay["tile"], json.loads(json.dumps(lay))
+    (_, c), out = lay["tile"], json.loads(json.dumps(lay))
     while True:
         match rng.choice(["m", "n", "calls", "drop"]):
             case "m":

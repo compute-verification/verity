@@ -15,6 +15,7 @@ from typing import Any
 
 from verity_vllm.config import option
 from verity_vllm.engine.arrivals import realized_arrive_steps
+from verity_vllm.log import write
 from verity_vllm.program.compiled_relations import OUTPUT_ROLES, pointer_arity, roles_of
 from verity_vllm.query.manifest.format import manifest_digest as _manifest_digest
 from verity_vllm.records.schema_ids import MANIFEST_VERIFY_SCHEMA
@@ -412,7 +413,7 @@ def main(a: VerifyOptions) -> int:
         rec["why"] = "; ".join(why)
     with open(a.out, "w") as f:
         json.dump(rec, f, indent=1)
-    print(f"[compiled_manifest verify] ok={rec['ok']} used {str(rec['used_digest'])[:16]} rows {rows_digest[:16]} rebuilt {str(rec['rebuilt_digest'])[:16]} "
+    write(f"[compiled_manifest verify] ok={rec['ok']} used {str(rec['used_digest'])[:16]} rows {rows_digest[:16]} rebuilt {str(rec['rebuilt_digest'])[:16]} "
           f"program {str(rec['used_program_digest'])[:16]} / {str(rec['rebuilt_program_digest'])[:16]}{(' -- ' + rec['why']) if not rec['ok'] else ''} -> {a.out}")
     return 0 if rec["ok"] else 3
 

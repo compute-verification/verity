@@ -37,7 +37,7 @@ Check = Callable[[Mapping[str, Any], Path, int], tuple[dict[str, Any], dict[str,
 #: a party of the live run, not an entry of its own
 LIVE = "live"
 ROLES = tuple(SP.PROTOCOL.parties)
-SPOKES = (SP.CHALLENGER, SP.FIREWALL, SP.WORKERS)
+SPOKES = (SP.CHALLENGER, SP.ZK_SERVER, SP.WORKERS)
 PROVER = ("prover", "developer")
 KEY = lms.Params(64, 1, 3)
 
@@ -108,7 +108,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("verifier", "workers", ("draw",), after=("coins",)),
                         Channel("workers", "firewall", ("witness",), after=("draw",)),
                         Channel("firewall", "verifier", ("proof",), after=("draw",))),
-              needs=frozenset({"windows"}), law=_design, default_law="subset:8"),
+              needs=frozenset({"windows"}), law=_design, default_sampling_design="subset:8"),
     Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
     Component("pearl-plus", SP.IDS["pearl-plus"], parties=_VERIFIER, needs=frozenset({"windows"})),
     Component("inference-only", SP.IDS["inference-only"], parties=IO.MANIFEST.parties, requires=("sampled-proofs",)),
@@ -117,7 +117,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("certifier", SP.IDS["certifier"], parties=_CERTIFIER, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_certifier_params,
-              default_params=CERTIFIER_DEFAULTS, law=_work_design, default_law="work:64"),
+              default_params=CERTIFIER_DEFAULTS, law=_work_design, default_sampling_design="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay", "noise", "store", "receipts"}), (Role("workers", "developer"),),
@@ -206,7 +206,7 @@ class Machine:
     def capabilities(self, party: str) -> dict[str, Any]:
         if party == SP.CHALLENGER:
             return {"host": self.host()}
-        return {SP.FIREWALL: {"pin": self.pin}, SP.WORKERS: {"serve": self.serve},
+        return {SP.ZK_SERVER: {"pin": self.pin}, SP.WORKERS: {"serve": self.serve},
                 SP.VERIFIER: {"audit": self.audit, "component": self.component, "product": self.product}}[party]
 
 
@@ -231,7 +231,7 @@ def coins_of(config: Mapping[str, Any], local: bool) -> str:
     ``development``."""
     at = {p["name"]: p for p in config["party"]}
     shared = any(at[p]["machine"] == at[SP.CHALLENGER]["machine"] and at[p].get("principal") in PROVER
-                 for p in (SP.FIREWALL, SP.WORKERS))
+                 for p in (SP.ZK_SERVER, SP.WORKERS))
     return "simulated" if local or shared else "development"
 
 

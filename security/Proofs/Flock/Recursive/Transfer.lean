@@ -89,7 +89,7 @@ noncomputable def linkTermCandZC (k : ℕ) (S : Finset (Fin n)) (R : Reg)
       (LinkEvCandZK A P planZ tab vb Sk wv S R u Xc) /
     (1 - rateZ (planZ S R) (tab S R u) k))
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The compiled `--zk` audit's analysis against a candidate**: `analysisZC`, its incorrect proof blocks also those that read a
 wire disagreeing with the candidate (`candWrongZ`), and its binding error at `LinkEvCandZK`. -/
@@ -100,7 +100,7 @@ noncomputable def analysisCandZC
     (hj : JointZC A Hs planZ k a) :
     ExtractionAnalysis L Reg (batchedSessionZC A Hs planZ) where
   Tr := Fin C.N → Bool
-  wrong t := P.wrong t ∪ candWrongZ A P planZ tab vb Sk wv t
+  incorrect t := P.incorrect t ∪ candWrongZ A P planZ tab vb Sk wv t
   committed R τ := Xc R τ
   ks S R τ u := ENNReal.ofReal (a S R (zcStrat A Hs planZ τ) (tab S R u) / (1 - rateZ (planZ S R) (tab S R u) k))
   link := linkTermCandZC A Hs P planZ tab vb Sk wv k
@@ -110,7 +110,7 @@ noncomputable def analysisCandZC
       fun T hc => ⟨hc, fun M _ hsat => by
         rcases Finset.mem_union.1 hu with hw | hw
         · by_contra hno
-          refine P.mem_wrong.1 hw (P.correct_congr (fun g hg => ?_) (hlow S R u hS M hsat))
+          refine P.mem_incorrect.1 hw (P.correct_congr (fun g hg => ?_) (hlow S R u hS M hsat))
           by_contra hne
           exact hno ⟨g, hg, Or.inl (Ne.symm hne)⟩
         · obtain ⟨g, hg, hpos, hne⟩ := (Finset.mem_filter.1 hw).2
@@ -407,7 +407,7 @@ theorem zk_flock_candValsC (hA : A.Correct)
   classical
   have hlow := loweringSoundZK_of_place A P planZ tab place
   have hj := jointZC_ksBound A hA Hs planZ hk
-  have h := extraction_audit_drawn
+  have h := extraction_audit_sampled
     (analysisCandZC A Hs P planZ tab vb Sk wv (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
       (fun S R j => (hr S R j).trans_lt hρ) hlow _ hj)
     (cand_knowledgeSoundZC A Hs P planZ tab vb Sk wv _ _ hlow hj)
@@ -570,7 +570,7 @@ section Session
 
 open Exec Refine Flock FlockLevel3 ZkExec ZkBind Integrate Placed DecodeZL Composed
 
-open ZkHidden (planZHJ tabZHJ DrawSetupZHJ TagsOkZHJ DrawOkZKHJ placeZHJ)
+open ZkHidden (planZHJ tabZHJ SampleSetupZHJ TagsOkZHJ SampleOkZKHJ placeZHJ)
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
 /-- **The committed values of a `--zk --registered` session are a candidate's on a set of commit strings, but for the
@@ -579,7 +579,7 @@ the value binding `vbHJ`, with `cr/sha-512` for the knowledge finders of the sim
 theorem zk_session_candValsR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
@@ -587,9 +587,9 @@ theorem zk_session_candValsR
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
     -- the sampling design
-    (Lv : Law n)
+    (Lv : SamplingDesign n)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts (Lv.draw ω))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (Lv.draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
@@ -626,7 +626,7 @@ theorem zk_session_candValsR
     (tabZHJ dj y₀) execArith_correct (placeZHJ dj y₀ ht hc hscope hU) (vbHJ dj y₀ ht hc hscope hU hpub) Sk wv
     hk hRw hM hρ hr ht' (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ) hCR
   exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
-    (zk_headline_exec_drawnJ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ∃ u ∈ S,
+    (zk_headline_exec_sampledJ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ∃ u ∈ S,
       ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u,
         CandBadZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           (vbHJ dj y₀ ht hc hscope hU hpub) Sk wv

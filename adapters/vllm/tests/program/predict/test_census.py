@@ -36,10 +36,10 @@ from verity.circuits.requirement import (
     from_census,
     upper_bound,
 )
-from verity.definitions.boolean import boolean_version, lift
-from verity.definitions.registry import b1, b1_tp2
-from verity.definitions.registry import cublas_bf16 as CB
-from verity.definitions.registry import tp_allreduce as TA
+from verity.circuits.ops.boolean.versions import boolean_version, lift
+from verity_vllm.definitions.registry import b1, b1_tp2
+from verity_vllm.definitions.registry import cublas_bf16 as CB
+from verity_vllm.definitions.registry import tp_allreduce as TA
 
 from tests.program import test_derive_neutrality as GLM
 from tests.program.predict.test_predict import FIX, TINY, _phi
@@ -51,7 +51,7 @@ from verity_vllm.query.required import SAMPLING_EVENTS
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
 C = model_shape(CFG)
 #: a token row's linear MACs: q/k/v, o, gate/up and down per layer, and the LM head
-LINEAR = C.NL * C.H * ((C.NH + 2 * C.KVH) * C.D + C.NH * C.D + 3 * C.I) + C.H * C.V
+LINEAR = C.NL * C.H * ((C.NH + 2 * C.KVH) * C.D + C.NH * C.D + 3 * C.INTER) + C.H * C.V
 #: one position's K and V over every layer, in bf16
 KV_BITS = C.NL * 2 * C.KVH * C.D * 16
 #: one position's row of the rotary cos/sin table, in bf16

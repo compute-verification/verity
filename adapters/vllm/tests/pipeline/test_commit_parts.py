@@ -3,10 +3,10 @@
 environment (`staging_environ`) where it refuses, excludes families, traces the footprint or drops a flush point; the Programs'
 forecast (`c2_programs_forecast`) where an instance file can't be read; the serving loop (`run_workload`) where a request
 arrives late, the engine has nothing to serve or a request is let go unfinished, over `test_commit_main`'s stand-in engine;
-the hooks-only ablation (`make_committer`'s ``hooks_only``); the check that the engine is left as it was (`assert_pristine`)
-where a runner's method or a module's forward is still wrapped, or the sampler keeps a hook; and the kept bytes' digests
-(`tensor_digests`): a whole FA2 row's planes, a row of zeros, a later pair's differences and the step dumped.  The two
-commands each reader runs, and `commit`'s clock, are stood in.  CPU only."""
+the windowed worker and the hooks-only ablation (`make_committer`'s ``native_collect_v2b`` and ``hooks_only``); the check
+that the engine is left as it was (`assert_pristine`) where a runner's method or a module's forward is still wrapped, or the
+sampler keeps a hook; and the kept bytes' digests (`tensor_digests`): a whole FA2 row's planes, a row of zeros, a later
+pair's differences and the step dumped.  The two commands each reader runs, and `commit`'s clock, are stood in.  CPU only."""
 from __future__ import annotations
 
 import dataclasses
@@ -58,8 +58,10 @@ def test_the_source_s_commit_is_the_export_s_when_the_directory_holds_one(tmp_pa
 @pytest.mark.parametrize("export, printed, head", [
     (None, "f" * 40 + "\n", "f" * 40),
     ("{not json", "f" * 40 + "\n", "f" * 40),
+    ("[1]", "f" * 40 + "\n", "f" * 40),
     (None, "", None),
     (None, FileNotFoundError("git"), None),
+    (None, subprocess.TimeoutExpired(["git"], 10), None),
 ])
 def test_else_it_is_git_s_head_and_none_where_git_names_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, export: str | None,
                                                               printed: str | Exception, head: str | None) -> None:
@@ -70,7 +72,8 @@ def test_else_it_is_git_s_head_and_none_where_git_names_none(tmp_path: Path, mon
     assert commit.git_head() == head and asked == [["git", "rev-parse", "HEAD"]]
 
 
-@pytest.mark.parametrize("printed, mib", [("1234\n5678\n", 1234), ("", None), ("[N/A]\n", None), (FileNotFoundError("nvidia-smi"), None)])
+@pytest.mark.parametrize("printed, mib", [("1234\n5678\n", 1234), ("", None), ("[N/A]\n", None), (FileNotFoundError("nvidia-smi"), None),
+                                          (subprocess.TimeoutExpired(["nvidia-smi"], 20), None)])
 def test_the_device_s_memory_in_use_is_the_first_device_s_and_none_where_it_cannot_be_read(
         monkeypatch: pytest.MonkeyPatch, printed: str | Exception, mib: int | None) -> None:
     asked = runs(monkeypatch, printed)
@@ -87,9 +90,10 @@ def test_an_engine_row_s_request_is_the_workload_s_by_its_id_or_the_id_vllm_suff
 
 @pytest.fixture
 def environ(monkeypatch: pytest.MonkeyPatch) -> Callable[[], dict[str, str | None]]:
-    """The names `staging_environ` writes, absent now; what each holds when called."""
+    """The names `staging_environ` writes, absent now and again at the test's end; what each holds when called."""
     for name in ENVIRON:
-        monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
     return lambda: {name: settings.raw(name) for name in ENVIRON}
 
 
@@ -122,7 +126,7 @@ def test_a_late_read_drops_its_leaf_from_the_gather_flush_points_and_says_so(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
         environ: Callable[[], dict[str, str | None]]) -> None:
     before = NC.GATHER_FLUSH_LEAVES
-    leaf = sorted(before)[0]
+    leaf = min(before)
     monkeypatch.setattr(NC, "GATHER_FLUSH_LEAVES", before)
     commit.staging_environ(staged(tmp_path, late_read=leaf))
     left = NC.GATHER_FLUSH_LEAVES
@@ -204,6 +208,41 @@ def test_the_hooks_only_ablation_counts_the_device_tensors_its_hooks_see_and_com
     assert (job.metas, waited, com._layouts) == ([None, None], [100.75], {3: []})
     assert com._done == {3: StepCommitment(3, zero, zero, 0, 0, 2, b"\0" * 32, 99.0, 100.75, 2)}
     assert (com.spans.total["acquisition"], com.spans.per_step[3]["acquisition"]) == (0.75, 0.75)
+
+
+@pytest.mark.parametrize("given, arena_bytes, threads, scheme", [
+    ({"arena_mb": 3, "pinned_populate_threads": 5, "commit_scheme": "rows-sha512"}, 3 << 20, 5, "rows-sha512"),
+    ({"arena_mb": None}, None, None, None),
+    ({"arena_mb": 0}, None, None, None),
+])
+def test_the_windowed_worker_is_the_native_collector_gathering_on_native_hooks_with_the_commits_arena_threads_and_scheme(
+        monkeypatch: pytest.MonkeyPatch, given: dict[str, Any], arena_bytes: int | None, threads: int | None,
+        scheme: str | None) -> None:
+    """``native_collect_v2b`` is the native collector with its gather windows, native hooks, automatic blocks and native worker
+    on, the engine and the run's id passed through, the arena in bytes when the Commit names one, and the populate threads and
+    the commit scheme as the Commit has them."""
+    made: list[tuple[Any, dict[str, Any]]] = []
+
+    def collector(eng: Any, **kw: Any) -> str:
+        made.append((eng, kw))
+        return "the collector"
+    monkeypatch.setattr(NC, "NativeCollectCommitter", collector)
+    eng = object()
+    assert commit.make_committer("native_collect_v2b", cast(Any, eng), cast(Any, SimpleNamespace(**given)), "r7") == "the collector"
+    assert made == [(eng, {"run_id": "r7", "arena_bytes": arena_bytes, "gather": True, "native_hooks": True, "auto_blocks": True,
+                           "native_worker": True, "populate_threads": threads, "commit_scheme": scheme})]
+
+
+def test_an_empty_committer_is_a_usage_error_naming_the_committers(capsys: pytest.CaptureFixture[str]) -> None:
+    """``--committer ""`` names no treatment arm's committer, so the command line refuses it (exit 2) and names the ones to
+    give; a named committer, the default one included, passes as given."""
+    with pytest.raises(SystemExit) as e:
+        cli.parse("commit", ["--out", "o", "--committer", ""], {})
+    assert e.value.code == 2
+    assert "--committer is empty: name the treatment arm's committer (native_collect_v2b, the default; hooks_only; or " \
+           "plugin:MODULE:FACTORY), or run the control alone with --only-arm control" in capsys.readouterr().err
+    assert cli.parse("commit", ["--out", "o"], {}).committer == "native_collect_v2b"
+    assert cli.parse("commit", ["--out", "o", "--committer", "hooks_only"], {}).committer == "hooks_only"
 
 
 def engine(**runner: Any) -> Any:

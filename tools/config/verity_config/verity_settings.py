@@ -416,7 +416,7 @@ REGISTRY = EnvSettings(
     # ---- verity.circuits, its suites included
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
-    # ---- verity.definitions' suite
+    # ---- verity_vllm.definitions' suite
     Setting("VERITY_ML_DEFINITIONS_SLOW", flag, False, WHERE, "the definitions' tests at served statics run (the DSA mask's cut "
             "at 43,008 and 131,072 keys, and the served positions merge against its one-port merge, minutes): which tests run, "
             "never what a circuit computes"),
@@ -429,6 +429,10 @@ REGISTRY = EnvSettings(
     Setting("VERITY_SAMPLED_TWO_CASE", stripped, "", WHERE, "a directory holding one honest two-stage play's case "
             "(sampled_two_small.sh's $OUT/form), which the composition suite's opt-in accept test reads: which tests run, "
             "never what a verdict says"),
+    # ---- PoUW's prover suite
+    Setting("VERITY_SUITE_ROOT", stripped, "", WHERE, "the tree the suite runner (tools/check/suites.py) runs a suite in, "
+            "set under check, where test_pouw_device's CPU build runs and fails without a C++ compiler instead of skipping: "
+            "which tests run, never what a commitment holds"),
     schema=RECORD_SCHEMA)
 
 

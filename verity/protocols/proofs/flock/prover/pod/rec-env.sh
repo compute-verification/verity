@@ -1,5 +1,5 @@
 # Sourced by the rec-v0 jobs (80-rec-inner.sh, 87-rec-c3-open.sh, 88-rec-c3-inner.sh) after their CPU pinning: the run's
-# directories ($O out/, $S scratch, $L cache), host.txt, /usr/bin/time, the Lean verifier ($LEAN_BIN, and $FIREWALL_BIN beside it, built in the background: wait $LP), the
+# directories ($O out/, $S scratch, $L cache), host.txt, /usr/bin/time, the Lean verifier ($LEAN_BIN, and $ZK_SERVER_BIN beside it, built in the background: wait $LP), the
 # prover build ($B, 60-circuit.sh's, keyed by its sources) and the job's Python ($REPO's packages on PYTHONPATH).
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/rec-v0-job}/out; mkdir -p $O
 [ -z "${FLOCK_WORK:-}" ] && [ ! -w /workspace ] && export FLOCK_WORK=/workspace/jobs/rec-v0
@@ -16,15 +16,15 @@ trap 'rm -rf $S' EXIT
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
 LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
 # the inner session's send check (rec_live --lean), built beside it
-FIREWALL_BIN=$L/lean-$LSHA/flock-firewall
+ZK_SERVER_BIN=$L/lean-$LSHA/flock-zk-server
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   exec 9>$L/lean.lock; flock 9
-  if [ ! -x $LEAN_BIN ] || [ ! -x $FIREWALL_BIN ]; then
+  if [ ! -x $LEAN_BIN ] || [ ! -x $ZK_SERVER_BIN ]; then
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-      && (cd $LEAN_SRC && lake build verity-verify-proof flock-firewall) && mkdir -p $L/lean-$LSHA \
-      && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_SRC/.lake/build/bin/flock-firewall $L/lean-$LSHA/
+      && (cd $LEAN_SRC && lake build verity-verify-proof flock-zk-server) && mkdir -p $L/lean-$LSHA \
+      && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_SRC/.lake/build/bin/flock-zk-server $L/lean-$LSHA/
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!

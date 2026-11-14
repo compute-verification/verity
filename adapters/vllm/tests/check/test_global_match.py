@@ -22,8 +22,8 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Concat, Explicit, Strided, runs
-from verity.definitions.registry import b1
-from verity.definitions.registry.topp_geometry import registered_splits, splits_for
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for
 
 from tests.check import test_batch_decomp_e2e as e2e
 from tests.check.test_batch_decomp_e2e import (
@@ -271,7 +271,7 @@ def component(req, d, witness=None):
 
 
 def p_attention_tgrouped(node, ctx):
-    """The PRODUCTION emission order (`patterns.AttentionScope.match`): one Compute per DISTINCT T = position+1 over the batch's rows
+    """The SERVED emission order (`patterns.AttentionScope.match`): one Compute per DISTINCT T = position+1 over the batch's rows
     in first-occurrence order, rows = the rows sharing that T (a running decode at position p and an arriving prefill's row p land
     in one group, created when the decode row is seen). The toy default (`p_attention`) emits per row in row order and therefore
     never shows M-ARRIVAL-ORDER; this variant reproduces it on CPU with the same fold code path (`fold._compute_emit` per group)."""
@@ -784,7 +784,7 @@ def test_record_serving_a_request_the_program_did_not_declare_fails_g1(memory, t
     assert set(res["request_ids"]["unknown_ids"]) == {U1["id"]}   # the record's UUID is not in the Program's table -> undeclared
 
 
-# ------------------------------------------------- arrival order: the production emission order on CPU
+# ------------------------------------------------- arrival order: the served emission order on CPU
 
 # r0's decode at engine step 1 is position 3 (T=4); a prefill of LP 5 arriving at step 1 has a position-3 row -> AttentionScope's
 # T=4 group is created by r0's row first, so rX's position-3 attention is emitted before its positions 0..2 (the pod fixture:
@@ -1521,7 +1521,7 @@ def _driver_stop_at(oracle, rid, n_answer, eos_step):
 
 def _driver_claims(oracle, rid=None, lag=None, **fields):
     """The driver's tokens.json record-schema claims: doc.lag.value (the resolved fact as the driver wrote it) and per request the
-    served_output_len / executed_prefix_len / cap_exhausted fields m1_capture writes."""
+    served_output_len / executed_prefix_len / cap_exhausted fields match_capture writes."""
     tp = os.path.join(oracle, "capture", "tokens.json")
     tk = json.loads(Path(tp).read_text())
     if lag is not None:
@@ -1745,7 +1745,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert _r(resp, "r1")["served_output_len"] == 2 and _r(resp, "r1")["executed_prefix_len"] == 3 and _r(resp, "r1")["cap_exhausted"] is True
     assert _r(resp, "r1")["finish"] == "length" and resp["lag"]["exercised"] is False      # not an EOS stop: the lag rule is not what failed
 
-    # (11) the record schema (m1_capture's tokens.json): doc.lag.value + per-request served_output_len / executed_prefix_len are the driver's
+    # (11) the record schema (match_capture's tokens.json): doc.lag.value + per-request served_output_len / executed_prefix_len are the driver's
     # CLAIMS from the same recorded fact; claims that agree pass, a tokens.json lag disagreeing with the header is "not one attested execution",
     # a length claim disagreeing with the rows is named with both lengths
     gpc, oraclec = assemble([R0, R1_LAG], tmp_path / "claims", lag=1)
@@ -2108,7 +2108,7 @@ def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_p
 
 @pytest.mark.slow
 def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is_asked_for_and_labelled(memory, tmp_path):
-    """capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association legs cannot run);
+    """capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association checks cannot run);
     tokens_optional=True (CLI --tokens-optional) accepts it LABELLED checks[G6].tokens_json=false -- mechanism/fixture runs only."""
     gp, oracle = assemble([R0, R1], tmp_path, lag=0)
     _set_async_scheduling(oracle, False)
@@ -2309,7 +2309,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     produced, in batch_decomp's CLI schema: key for key what a standalone decompose() over the same fold and components returns
     (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (the row driver's derive-and-rerun)."""
     monkeypatch.setenv(GMF.FLAG, impl)
-    monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 legs return the per-request entries: the document must not depend on W
+    monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 workers return the per-request entries: the document must not depend on W
     gp, oracle = assemble([R0, R1_LATE, R2_LATE], tmp_path)
     gpp = tmp_path / "gp.json"
     gpp.write_text(json.dumps(gp))

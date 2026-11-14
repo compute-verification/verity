@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Logged
 
 /-!
-# Sampled proofs' coupling over a window: the members' answered stops, in order in the play's log
+# SPOT's coupling over a window: the members' answered stops, in order in the play's log
 
 The members' sessions' traces run one after another, each from where the one before it ended, and the play the
 sampled verdict accepts is the one on the tape of the position the last ends at. This module says where in that one
@@ -234,7 +234,7 @@ end Rounds
 section Member
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → PosDecoders g σ R Reg}
-  {M : WindowCoinMap g σ Ω R} {BL : WindowLinkHold} {B : WindowRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
+  {M : ExecutionPhaseCoinMap g σ Ω R} {BL : ExecutionPhaseLinkHold} {B : ExecutionPhaseRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
 
 /-- **A member's session's trace, in order in the log**: on the trace of the session of the member at place `i` from a
 position that keeps the invariant at the cuts `Ks₀`, whose walk stops where `StopOf` says after the log `pre` at the

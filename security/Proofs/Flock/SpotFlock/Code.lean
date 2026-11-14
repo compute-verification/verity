@@ -12,6 +12,7 @@ public import Flock.Desc
 public import Flock.Comp
 public import Flock.PortRoots
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 
 /-!
 # SPOT[Flock]'s two-stage verifier
@@ -215,7 +216,7 @@ def namesEq (got : Option (List String)) (want : List String) : Bool :=
 
 /-- **A record names its registration's names** (`n`): its roots' ports are the registration's ports and its registered
 values the registration's registered values, each a string named once (`namesEq`). `Run.run`'s registration check
-(`Registration.check`) holds a record to this at its registration's verifier, whose ports and registered values, the
+(`Docket.check`) holds a record to this at its registration's verifier, whose ports and registered values, the
 values it holds a certified entry for among them, are each listed once: `R3-ports` of the ports, and of the registered
 values `R7-values` where the registration registers some and the record's keys, which then have no `registered`,
 where it registers none. -/
@@ -822,7 +823,7 @@ def pinOk (t : ℕ) (w : FlockDeploy.Raw) : Bool :=
   | none => false
 
 /-- **Template `t`'s part of the second stage's population** in a replay sample of `q` blocks: its `q · n_t` slots from
-`q · Σ_{t' < t} n_{t'}`, as `Select.secondLaw` lays out the cells, template by template. -/
+`q · Σ_{t' < t} n_{t'}`, as `Select.secondSamplingDesign` lays out the cells, template by template. -/
 def partAt (q t : ℕ) : Spot.SecondStage.Part :=
   ⟨h.names.getD t "", q * (h.reg.ns.toList.take t).sum, h.reg.ns.getD t 0⟩
 
@@ -1126,7 +1127,7 @@ noncomputable def base : Code :=
     parse := parse h
     scopeCheck := fun x => ((parse h x).bind (partition h)).isSome
     partition := partition h
-    stage2 := fun _ => univ
+    secondStage := fun _ => univ
     checked := fun _ _ => []
     rounds := fun _ u => univ.filter fun t =>
       off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)

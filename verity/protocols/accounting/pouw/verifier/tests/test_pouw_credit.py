@@ -902,7 +902,7 @@ def test_each_live_unit_reads_the_public_max_tokens_as_its_caps(seed):
 def test_the_commit_record_is_bound_under_calls_root():
     """The Commit record's digest is its format's tagged SHA-512 of its bytes (`registration.digest`), and `calls_root`
     binds it after the manifest and the served trees' digest, as vllm's `pouw_h1.calls_root` must, byte for byte."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
     d = cases.window_instance(random.Random("honest/bound"))
     raw = bytes.fromhex(d["commit"])
     (digest, _reg), _ = Cr.commit_of(d["commit"])
@@ -1202,7 +1202,7 @@ def _worst_miss(strata: list[tuple[int, int, int]], eps: Fraction, total: int) -
     return worst
 
 
-def test_the_eps_holds_at_the_work_laws_cap():
+def test_the_eps_holds_at_the_work_sampling_designs_cap():
     """At K = n the work sampling design samples a stratum of little work only in part, so the cap is K >= W, not the unit count:
     1,000 units of work 1 and 1,000 of work 1,000, all credited, sampled at K = n = 2,000. The reported ε, `eps_at` at
     (C, W, 1), about 1.38%, holds: every set holding that share of the work is missed with probability at most δ. The

@@ -23,9 +23,9 @@ sessions in order (`OrderShown`). The two-stage form refuses a play without them
   ledger's lines read as (`Ledger.checked_ok`), and each window `verifyLedger` returns is an `open` among those
   entries, named by its root, whose `end`, where it has one, is an `end` among them of the open's session
   (`Ledger.verifyLedger_inv`; `win_lines`). The reserve is the one the form finds among the same entries
-  (`reserve_line`). The parameters name the two windows (`windowsOf_some`) and a challenger key (`keyOf_some`).
+  (`reserve_line`). The parameters name the two windows (`executionPhasesOf_some`) and a challenger key (`keyOf_some`).
 
-The two windows the parameters name differ (`windowsOf_ne`): the form refuses an interior audit on the boundary
+The two windows the parameters name differ (`executionPhasesOf_ne`): the form refuses an interior audit on the boundary
 registration's window.
 
 `cutBound_accept` is then the cut with one premise left about the device: its history at each play printed the play's
@@ -159,12 +159,12 @@ theorem option_bind_ok {α β : Type} {o : Option α} {f : α → Option β} {b 
   | none => cases h
   | some a => exact ⟨a, rfl, h⟩
 
-/-- The two windows `windowsOf` names are the boundary registration's and the interior audit's open roots. -/
-theorem windowsOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (hp : paramsAt θ = .ok p)
-    {w₁ w₂ : String} (h : windowsOf θ = some (w₁, w₂)) :
+/-- The two windows `executionPhasesOf` names are the boundary registration's and the interior audit's open roots. -/
+theorem executionPhasesOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} (hp : paramsAt θ = .ok p)
+    {w₁ w₂ : String} (h : executionPhasesOf θ = some (w₁, w₂)) :
     p.boundary.verifier.windowRoot = some w₁ ∧ p.audit.base.verifier.windowRoot = some w₂ := by
   have hb : boundaryOf p = .ok p.boundary := rfl
-  unfold windowsOf at h
+  unfold executionPhasesOf at h
   rw [hp] at h
   cases h1 : p.boundary.verifier.windowRoot with
   | none => simp [Except.toOption, hb, h1] at h
@@ -180,17 +180,17 @@ theorem windowsOf_some {θ : ByteArray} {p : VStar.Recursive.SampledTwo.Params} 
       obtain ⟨rfl, rfl⟩ := hpair
       exact ⟨rfl, rfl⟩
 
-/-- **The two windows `windowsOf` names differ**: the parameters are the form's parse (`paramsAt_form`), and the
+/-- **The two windows `executionPhasesOf` names differ**: the parameters are the form's parse (`paramsAt_form`), and the
 form's parameters parse only where the interior audit's window is not the boundary registration's
 (`VStar.Recursive.SampledTwo.paramsOfJson_ok`, its refusal `ONE_WINDOW`). -/
-theorem windowsOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : windowsOf θ = some (w₁, w₂)) : w₁ ≠ w₂ := by
+theorem executionPhasesOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : executionPhasesOf θ = some (w₁, w₂)) : w₁ ≠ w₂ := by
   cases hp : paramsAt θ with
   | error err =>
-    unfold windowsOf at h
+    unfold executionPhasesOf at h
     rw [hp] at h
     simp [Except.toOption] at h
   | ok p =>
-    obtain ⟨h₁, h₂⟩ := windowsOf_some hp h
+    obtain ⟨h₁, h₂⟩ := executionPhasesOf_some hp h
     obtain ⟨j, hj⟩ := paramsAt_form hp
     have hne := (VStar.Recursive.SampledTwo.paramsOfJson_ok hj).2
     rw [h₁, h₂] at hne
@@ -199,7 +199,7 @@ theorem windowsOf_ne {θ : ByteArray} {w₁ w₂ : String} (h : windowsOf θ = s
 /-- **A window `verifyLedger` returns is an open among the entries it read, named by its root**, and its end, where
 it has one, is an end among them of the open's session (`Ledger.verifyLedger_inv`). -/
 theorem win_lines {es : Array LedgerEntry} {key : ChallengerKey} {wins : Array Win}
-    {ms : Array Spot.Challenger.MonitoringPeriod} (h : verifyLedger es key = .ok (wins, ms)) {w : String} {W : Win}
+    {ms : Array Spot.Challenger.PeriodRecord} (h : verifyLedger es key = .ok (wins, ms)) {w : String} {W : Win}
     (hf : wins.find? (·.root == w) = some W) :
     W.opened ∈ es.toList ∧ W.opened.kind = "open" ∧ openedRoot W.opened = w ∧
       ∀ en, W.ended = some en → en ∈ es.toList ∧ en.kind = "end" ∧ en.session = W.opened.session := by
@@ -241,7 +241,7 @@ theorem orderShown (θ : ByteArray) : OrderShown θ := by
   have hpθ : paramsAt θ = .ok p := by
     rw [← hθ]
     exact paramsAt_of_caseOf h1
-  obtain ⟨hw₁, hw₂⟩ := windowsOf_some hpθ hw
+  obtain ⟨hw₁, hw₂⟩ := executionPhasesOf_some hpθ hw
   obtain ⟨k, label, hk, -⟩ := keyOf_some hpθ
   obtain ⟨first, second, -, hsec, -, wins, ms, hch, en, r, hen, hr, hlt⟩ :=
     ordered_order (VStar.Recursive.SampledTwo.accepted_ordered hacc) hk hw₁ hw₂ hne
@@ -275,7 +275,7 @@ device's, is at most as likely as the read finder's collision plus the forger's 
 theorem cutBound_accept (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c))
     (hw : Wired V k θ)
-    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) →
+    (hP : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) →
       PrintsInOrder (dev o) w₁ w₂ o.log)
     (hs : SignsPlay V dev θ F c) : CutBound V k θ F c σ ReadIsDevice (terms V dev θ F c σ) :=
   cutBound_order V k dev θ F c σ hw (firstReads θ) (orderShown θ) hP hs

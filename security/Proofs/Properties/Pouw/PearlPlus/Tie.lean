@@ -1,8 +1,8 @@
 module
 
 public import Properties.Pouw.PearlPlusTie
-public import Proofs.Pouw.PearlPlus.Draw
-public import Proofs.Properties.Pouw.PearlPlus.Draw
+public import Proofs.Pouw.PearlPlus.Sample
+public import Proofs.Properties.Pouw.PearlPlus.Sample
 
 /-!
 # The wrong share counts the untied cells (`Properties.Pouw.PearlPlus.UntiedCellsAtMost`)
@@ -18,7 +18,7 @@ about the run's passes and table alone.
   weight `wref(1, |K|, n) |cr| |cc| / n` by the lcm `L` of the denominators, so its integer ticket is
   `L |cr| |cc| cellTicket r` (`tileTickets_eq`). Every tile has a width `n > 0` (`Scheme.tiles` cuts no block of a width
   of 0, `n_pos_of_tile`), so `L > 0`, and the wrong share is the untied tiles' cells weighed by their cell tickets over
-  all tiles' (`wrong_eq`, `total_eq`).
+  all tiles' (`incorrect_eq`, `total_eq`).
 * **The fill is the most cells such a share holds.** Grouped by record, a unit of ticket weight of record `r` holds
   1 / `cellTicket r` cells (`cellUnits`, whose pairs are `unitsBy`'s). For any `l ≥ 0`,
   Σ ρ a ≤ l Σ a + Σ w (ρ − l)⁺ over units of weight `w`, count `ρ` a unit of weight and `a ≤ w` of it taken. Filling
@@ -28,7 +28,7 @@ about the run's passes and table alone.
 
 @[expose] public section
 
-open Pouw.PearlPlus.Draw (cells tickets_eq mem_cells dvd_lcmOf lcmOf tile?_offsets grid tiles_getElem? nblocks
+open Pouw.PearlPlus.Sample (cells tickets_eq mem_cells dvd_lcmOf lcmOf tile?_offsets grid tiles_getElem? nblocks
   ticketWeight_eq tileWeight wref_one_cast length_flatMap_const)
 
 namespace Properties.Pouw.PearlPlus
@@ -214,7 +214,7 @@ theorem sum_le_fill (L : List (ℚ × ℚ × ℝ)) (b : ℝ) (hnn : ∀ t ∈ L,
 /-! ## The run's tiles and records -/
 
 /-- A tile's credited cells: |credited rows| · |credited columns|. -/
-def tileCells (c : _root_.Pouw.PearlPlus.Draw.Cell) : ℕ :=
+def tileCells (c : _root_.Pouw.PearlPlus.Sample.Cell) : ℕ :=
   (c.r.credited c.rows c.cols).1.length * (c.r.credited c.rows c.cols).2.length
 
 /-- A record's credited cells, as `unitsBy` counts them. -/
@@ -240,7 +240,7 @@ def runRecords (passes : List Pass) : List (ℕ × Pass × ℕ × UnitRecord) :=
   passes.zipIdx.flatMap fun q => q.1.records.zipIdx.map fun s => (q.2, q.1, s.2, s.1)
 
 /-- A record's tiles, as `cells` lists them. -/
-def recordTiles (q : ℕ × Pass × ℕ × UnitRecord) : List _root_.Pouw.PearlPlus.Draw.Cell :=
+def recordTiles (q : ℕ × Pass × ℕ × UnitRecord) : List _root_.Pouw.PearlPlus.Sample.Cell :=
   (q.2.1.scheme.tiles q.2.2.2.matmul.m q.2.2.2.matmul.n).zipIdx.map fun e =>
     { i := q.1, p := q.2.1, pos := q.2.2.1, r := q.2.2.2, x := e.2, rows := e.1.1, cols := e.1.2 }
 
@@ -248,11 +248,11 @@ theorem cells_eq (passes : List Pass) : cells passes = (runRecords passes).flatM
   simp only [cells, runRecords, List.flatMap_assoc, List.flatMap_map]
   rfl
 
-theorem sum_cells_eq (passes : List Pass) (F : _root_.Pouw.PearlPlus.Draw.Cell → ℝ) :
+theorem sum_cells_eq (passes : List Pass) (F : _root_.Pouw.PearlPlus.Sample.Cell → ℝ) :
     ((cells passes).map F).sum = ((runRecords passes).map fun q => ((recordTiles q).map F).sum).sum := by
   rw [cells_eq, sum_map_flatMap']
 
-theorem mem_recordTiles_r {q : ℕ × Pass × ℕ × UnitRecord} {c : _root_.Pouw.PearlPlus.Draw.Cell}
+theorem mem_recordTiles_r {q : ℕ × Pass × ℕ × UnitRecord} {c : _root_.Pouw.PearlPlus.Sample.Cell}
     (h : c ∈ recordTiles q) : c.r = q.2.2.2 := by
   unfold recordTiles at h
   obtain ⟨e, -, rfl⟩ := List.mem_map.1 h
@@ -265,7 +265,7 @@ theorem sum_cnt_recordTiles (q : ℕ × Pass × ℕ × UnitRecord) :
   exact congrArg List.sum (map_zipIdx_fst (fun rc : List ℕ × List ℕ =>
     (((q.2.2.2.credited rc.1 rc.2).1.length * (q.2.2.2.credited rc.1 rc.2).2.length : ℕ) : ℝ)) _ 0)
 
-theorem sum_ticket_left (q : ℕ × Pass × ℕ × UnitRecord) (f : _root_.Pouw.PearlPlus.Draw.Cell → ℝ) :
+theorem sum_ticket_left (q : ℕ × Pass × ℕ × UnitRecord) (f : _root_.Pouw.PearlPlus.Sample.Cell → ℝ) :
     ((recordTiles q).map fun c => (cellTicket c.r : ℝ) * f c).sum =
       (cellTicket q.2.2.2 : ℝ) * ((recordTiles q).map f).sum := by
   rw [← sum_map_mul_left']
@@ -305,10 +305,10 @@ theorem cellTicket_pos {r : UnitRecord} (hn : 0 < r.matmul.n) : 0 < cellTicket r
 /-! ## The integer tickets -/
 
 /-- The lcm of the tiles' denominators, by which `tickets` scales every tile's weight. -/
-def ticketDen (passes : List Pass) : ℕ := lcmOf ((cells passes).map _root_.Pouw.PearlPlus.Draw.Cell.weight)
+def ticketDen (passes : List Pass) : ℕ := lcmOf ((cells passes).map _root_.Pouw.PearlPlus.Sample.Cell.weight)
 
 /-- A tile's integer ticket, as `tickets` scales it. -/
-def tileTickets (passes : List Pass) (c : _root_.Pouw.PearlPlus.Draw.Cell) : ℕ :=
+def tileTickets (passes : List Pass) (c : _root_.Pouw.PearlPlus.Sample.Cell) : ℕ :=
   (ticketWeight c.r c.rows c.cols).1 * (ticketDen passes / (ticketWeight c.r c.rows c.cols).2)
 
 theorem tickets_eq' (passes : List Pass) :
@@ -333,10 +333,10 @@ theorem ticketDen_pos (passes : List Pass) : 0 < ticketDen passes := by
   exact Nat.pos_of_ne_zero (tileWeight c.r c.rows c.cols).den_nz
 
 /-- **A tile's integer ticket** is its credited cells at its record's cell ticket, scaled by `ticketDen`. -/
-theorem tileTickets_eq {passes : List Pass} {c : _root_.Pouw.PearlPlus.Draw.Cell} (hc : c ∈ cells passes) :
+theorem tileTickets_eq {passes : List Pass} {c : _root_.Pouw.PearlPlus.Sample.Cell} (hc : c ∈ cells passes) :
     (tileTickets passes c : ℚ) = (ticketDen passes : ℚ) * tileCells c * cellTicket c.r := by
   have hn := n_pos_of_tile (mem_cells.1 hc).2.2
-  have hd := dvd_lcmOf (List.mem_map_of_mem (f := _root_.Pouw.PearlPlus.Draw.Cell.weight) hc)
+  have hd := dvd_lcmOf (List.mem_map_of_mem (f := _root_.Pouw.PearlPlus.Sample.Cell.weight) hc)
   change (ticketWeight c.r c.rows c.cols).2 ∣ ticketDen passes at hd
   unfold tileTickets
   rw [ticketWeight_eq _ _ _ hn] at hd ⊢
@@ -358,7 +358,7 @@ theorem tileTickets_eq {passes : List Pass} {c : _root_.Pouw.PearlPlus.Draw.Cell
     _ = (ticketDen passes : ℚ) * tileWeight c.r c.rows c.cols := by rw [Rat.num_div_den]
     _ = _ := by rw [hqq]; ring
 
-theorem tileTickets_real {passes : List Pass} {c : _root_.Pouw.PearlPlus.Draw.Cell} (hc : c ∈ cells passes) :
+theorem tileTickets_real {passes : List Pass} {c : _root_.Pouw.PearlPlus.Sample.Cell} (hc : c ∈ cells passes) :
     (tileTickets passes c : ℝ) = (ticketDen passes : ℝ) * ((cellTicket c.r : ℝ) * tileCells c) := by
   have h := congrArg (fun x : ℚ => (x : ℝ)) (tileTickets_eq hc)
   simp only [Rat.cast_mul, Rat.cast_natCast] at h
@@ -368,7 +368,7 @@ theorem tileTickets_real {passes : List Pass} {c : _root_.Pouw.PearlPlus.Draw.Ce
 /-! ## The wrong share as cells -/
 
 /-- A tile's credited cells where its table does not tie it, else 0. -/
-noncomputable def untiedTileCells (R : Run) (c : _root_.Pouw.PearlPlus.Draw.Cell) : ℕ :=
+noncomputable def untiedTileCells (R : Run) (c : _root_.Pouw.PearlPlus.Sample.Cell) : ℕ :=
   if TileTiedAtW R.w R.rounds R.passes R.table (c.i, c.p.offsets[c.pos]! + c.x) then 0 else tileCells c
 
 /-- The run's tiles' credited cells, each at its record's cell ticket. -/
@@ -379,7 +379,7 @@ noncomputable def ticketSum (R : Run) : ℝ :=
 noncomputable def untiedSum (R : Run) : ℝ :=
   ((cells R.passes).map fun c => (cellTicket c.r : ℝ) * untiedTileCells R c).sum
 
-theorem untiedTileCells_le (R : Run) (c : _root_.Pouw.PearlPlus.Draw.Cell) : untiedTileCells R c ≤ tileCells c := by
+theorem untiedTileCells_le (R : Run) (c : _root_.Pouw.PearlPlus.Sample.Cell) : untiedTileCells R c ≤ tileCells c := by
   unfold untiedTileCells
   split_ifs <;> simp
 
@@ -412,8 +412,8 @@ theorem total_eq (R : Run) : (ticketTotal (tickets R.passes) : ℝ) = (ticketDen
   show (tileTickets R.passes c : ℝ) = _
   rw [tileTickets_real hc]
 
-theorem wrong_eq (R : Run) : (R.wrongWeight : ℝ) = (ticketDen R.passes : ℝ) * untiedSum R := by
-  unfold Run.wrongWeight untiedSum
+theorem incorrect_eq (R : Run) : (R.incorrectWeight : ℝ) = (ticketDen R.passes : ℝ) * untiedSum R := by
+  unfold Run.incorrectWeight untiedSum
   rw [sum_ite_fin (tickets R.passes) (TileTiedAtW R.w R.rounds R.passes R.table), tickets_eq', List.map_map,
     cast_sum_nat, ← sum_map_mul_left']
   congr 1
@@ -428,7 +428,7 @@ theorem wrong_eq (R : Run) : (R.wrongWeight : ℝ) = (ticketDen R.passes : ℝ) 
 
 /-- **The untied credited cells are at most an untied share's**: at most ε of the ticket weight is untied, so the untied
 tiles' cells at their cell tickets are at most ε of all tiles'. -/
-theorem untiedSum_le (R : Run) (ε : ℝ) (hε : R.wrongShare ≤ ε) : untiedSum R ≤ ε * ticketSum R := by
+theorem untiedSum_le (R : Run) (ε : ℝ) (hε : R.incorrectShare ≤ ε) : untiedSum R ≤ ε * ticketSum R := by
   have hAW : untiedSum R ≤ ticketSum R := by
     unfold untiedSum ticketSum
     exact sum_map_le' _ _ _ fun c _ => mul_le_mul_of_nonneg_left (Nat.cast_le.2 (untiedTileCells_le R c))
@@ -437,9 +437,9 @@ theorem untiedSum_le (R : Run) (ε : ℝ) (hε : R.wrongShare ≤ ε) : untiedSu
     unfold ticketSum
     exact sum_map_nonneg' _ _ fun c _ => mul_nonneg (Rat.cast_nonneg.2 (cellTicket_nonneg c.r)) (Nat.cast_nonneg _)
   have hD : (0 : ℝ) < ticketDen R.passes := by exact_mod_cast ticketDen_pos R.passes
-  have hs : R.wrongShare = ((ticketDen R.passes : ℝ) * untiedSum R) / ((ticketDen R.passes : ℝ) * ticketSum R) := by
-    unfold Run.wrongShare
-    rw [wrong_eq, total_eq]
+  have hs : R.incorrectShare = ((ticketDen R.passes : ℝ) * untiedSum R) / ((ticketDen R.passes : ℝ) * ticketSum R) := by
+    unfold Run.incorrectShare
+    rw [incorrect_eq, total_eq]
   rcases hW0.lt_or_eq with hWp | hWz
   · rw [hs, div_le_iff₀ (mul_pos hD hWp)] at hε
     have h : (ticketDen R.passes : ℝ) * untiedSum R ≤ (ticketDen R.passes : ℝ) * (ε * ticketSum R) := by
@@ -452,10 +452,10 @@ theorem untiedSum_le (R : Run) (ε : ℝ) (hε : R.wrongShare ≤ ε) : untiedSu
 /-! ## The untied credited cells lie in untied tiles -/
 
 /-- A tile's credited cells, as cells (pass, record, row, column). -/
-def boxOf (c : _root_.Pouw.PearlPlus.Draw.Cell) : List Cell :=
+def boxOf (c : _root_.Pouw.PearlPlus.Sample.Cell) : List Cell :=
   (c.r.credited c.rows c.cols).1.flatMap fun i => (c.r.credited c.rows c.cols).2.map fun j => (c.i, c.pos, i, j)
 
-theorem boxOf_length (c : _root_.Pouw.PearlPlus.Draw.Cell) : (boxOf c).length = tileCells c := by
+theorem boxOf_length (c : _root_.Pouw.PearlPlus.Sample.Cell) : (boxOf c).length = tileCells c := by
   unfold boxOf tileCells
   rw [length_flatMap_const (fun i => (c.r.credited c.rows c.cols).2.map fun j => (c.i, c.pos, i, j))
     (c.r.credited c.rows c.cols).2.length (fun _ => by simp)]

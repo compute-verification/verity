@@ -40,7 +40,7 @@ every product, is a reference, not an answer.
 
 ## Parties
 
-PoUW, the compute accounting protocol, has three parties (`parties.PROTOCOL`, on the deployment layer
+PoUW, the compute accounting protocol, has three parties (`parties.protocol(ask)`, on the deployment layer
 `verity.runtime`). Each execution phase runs the same rounds between them:
 
 - **The prover** is the developer's: its GPU serving and the PoUW prover (`verity/protocols/accounting/pouw/prover/`,
@@ -77,8 +77,8 @@ record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); an
 (`Core.Composition.tiedSameB`, `verity/protocols/compose/verifier/lean/README.md`). H1's development executable
 (`Core.Remote.protocol`, `verity/remote/v0`, which no configuration names) has PoUW's credit period check, `PouwCheck.Period.protocol`
 (`verity/pouw/period/v1`), as onsite does, in Pearl+'s place, every execution phase of the credit period naming the record as its
-Commit record (`Core.Remote.windows`). In the remote demo, on that development executable, the vLLM demo
-(`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
+Commit record (`Core.Remote.windows`). In the vLLM served run, on that development executable
+(`adapters/vllm/tools/served_run/`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/protocols/compose/verifier/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/protocols/compose/verifier/onsite`).
@@ -93,7 +93,7 @@ The verifier is Lean, the source of truth for what PoUW checks: three Lake packa
   system's answer to it (the evidence); `PouwCheck.Credit` decides what a served execution phase, and a credit period
   (below), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
 - `lean/window` (`pouw_window`): what an execution phase registers and makes public: its grid level, its sample size K′, its
-  fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Draw`,
+  fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Sample`,
   `PouwWindow.Length`, `PouwWindow.Public`, `PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Rounds`).
 - `lean/commit` (`pouw_commit`): PoUW's commitments: tagged bindings, frames, rows, execution-phase coins and samples, all SHA-512.
 
@@ -123,7 +123,7 @@ difftest only.
 | The round coins | `core_check.rounds` | `roundsCheck` (`rounds`) | `rounds_twin` |
 | The sample | `credit.drawn` | `Credit.drawn` (`drawn`) | `drawn_twin` |
 | A period's presented roots | `credit.period` | `Credit.periodRoots`, a stub that refuses everything | `period_twin` |
-| A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
+| A Pearl-C period's credit | `credit.pearl_c_period_credit` | `Credit.pearlCMonitoringPeriodCredit`, a stub that refuses everything | `pearl_c_period_credit_twin` |
 | Passes credited together | `credit.passes_distinct` | Pearl+'s `PearlPlus.passesDistinct` (`passes-distinct`) | `passes_distinct_twin` |
 
 Several functions are twins only, because the Lean decides their verdict inside a whole case's (`registered_twin`,
@@ -149,9 +149,9 @@ execution phase:
    commits the circuit files, and a close; it counts only closed and complete.
 
 How it is run: the difftests run the Lean against the Python on generated cases
-(`uv run tools/verity/check/suites.py verity/protocols/accounting/pouw/verifier/lean/check`, and likewise `lean/window` and
+(`uv run tools/check/suites.py verity/protocols/accounting/pouw/verifier/lean/check`, and likewise `lean/window` and
 `lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside SPOT's
-(`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
+(`verity/protocols/compose/verifier/lean/tests/test_composition_difftest.py`); `verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 
 ## Schemes
@@ -166,8 +166,10 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   Blackwell (sm_120). The `-h3` forms hash with SHA-512 throughout, and h3 is the default wherever a hashing format or
   tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
   TurboSHAKE128 leaves and SHA-256 trees.
-- **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/protocols/accounting/pouw/prover/schemes/pearl_c4.py`): Pearl-C with the FP8 product
-  replaced by sm_120's FP4 with scale groups, NVFP4 only.
+- **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/protocols/experimental/pearl_c4/prover/pearl_c4.py`): Pearl-C with the FP8 product
+  replaced by sm_120's FP4 with scale groups, NVFP4 only. It is experimental: its kernel, scheme, tile check
+  (`prover/pc4.py`) and vectors are `verity/protocols/experimental/pearl_c4/`'s, which registers the scheme when
+  imported; until then `schemes.get("pearl-c-nvfp4-v0")` raises `NotImplementedError`.
 - **NCP** (`ncp-v1`, `verity/protocols/accounting/pouw/prover/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
@@ -193,7 +195,7 @@ reads. Proved:
   (1 + ε)/(1 − ε_s)·T < W with probability at most (1 − ε_s)^t + δ, for every share ε_s < 1 of the reference work W);
   NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`. Each follows from its gap form. Pearl-C's at 8192³ on the RTX PRO
   6000 (sm_120) at an inert-work share of 1/1,000 is a lemma beside its gap form, not a listed guarantee
-  (`PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192`, ε = 1648180439/444424569561, 0.371%, in
+  (`PearlC.EpsSm120v1LoopCast8p72Rev1InertShare1000_8192`, ε = 1648180439/444424569561, 0.371%, in
   `security/Proofs/Pouw/Lemmas/PearlCRecords.lean`), and its figure is not the served point's. What is served is Llama 3.2 1B on an
   H200, credited under the H100 record at an inert-work share of 1/400, and its gap is a lemma, not yet a listed
   guarantee: `pearlCGapH100Rev1_llama32_1b` (`security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean`), under
@@ -229,8 +231,8 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.WindowDelta`, and
-`Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);
+Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.ExecutionPhaseDelta`, and
+`Pouw.Guarantees.Window.ServiceMissProb` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);
 and Dither's guarantees (`security/Definitions/Pouw/Guarantees/DitherInstance.lean`). No guarantee over the remote protocol as a whole
 is stated yet; `Properties.Composition` (`security/Properties/Composition.lean`) proves the composition's accept rule
 against its code.
@@ -239,7 +241,7 @@ The guarantees rest on named assumptions, each a hypothesis of the statement: th
 proved (`Pouw.NCP.Assumptions.TTNCP_U`, and Pearl-C's TT_OUT forms such as
 `Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1` and, at the H100, `Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8`
 beside the device model `Pouw.PearlC.Assumptions.W1CompleteH100`), the receipt clock (`Pouw.Assumptions.HonestClock`), and the claims
-`trusted-device`, `live-verifier`, `cr/sha-512` and `prf/sha-512` (`verity.claims`). The lemmas at device records
+`trusted-device`, `live-verifier`, `cr/sha-512` and `prf/sha-512` (`verity.commitments.claim_ids`). The lemmas at device records
 (`security/Proofs/Pouw/Lemmas/PearlCRecords.lean`) rest on further forms that no listed statement takes: Pearl-C4's
 TT_OUT at its sm_120 record (`TTOutFp4Sm120W1`), the seeded noise's forms (`RowSeedNoise`, `CodeSeedNoise`) and the
 sampled tile's proof (`TileProofSoundAll`).
@@ -262,8 +264,8 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 ## Where things are
 
 - `protocol`: the `PoUWScheme` interface.
-- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `PROTOCOL`), each machine's work
-  a capability it is given.
+- `parties`: PoUW's prover, challenger and verifier on the deployment layer (`MANIFEST`, `protocol(ask)`), each
+  machine's work a capability it is given.
 - `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`,
   `live_reads`: the Python references the Lean is held to, and the reference rules not yet ported.
 - `verity/protocols/accounting/pouw/prover/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,

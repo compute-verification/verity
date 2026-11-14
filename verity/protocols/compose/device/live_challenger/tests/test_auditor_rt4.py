@@ -185,7 +185,7 @@ def test_the_open_answer_status_and_end_carry_the_coin_commitment_the_hello_answ
 
 def test_a_withheld_sessions_gate_gives_no_coin_commitment_root_and_fetches_no_record_before_its_end(host, signer, tmp_path,
                                                                                                     monkeypatch):
-    """A sampled-proofs window's session (`reserve --withhold`): its reserve and open say `withheld: true` (so
+    """A SPOT window's session (`reserve --withhold`): its reserve and open say `withheld: true` (so
     `challenger.withheld_on` takes its window), serve.py runs it `--withhold`, and its hello answers the layout alone.
     Until its end entry the gate hands out no root: the open's answer, though `ready` has one, and `status` carry
     `commitment` null, and `fetch` refuses, though serve.py has written out/record.json. Once its end is in, `status`
@@ -232,7 +232,8 @@ def test_a_withheld_sessions_gate_gives_no_coin_commitment_root_and_fetches_no_r
 
 def test_rt4_int_30_a_trailing_newline_or_a_period_opens_nothing_and_an_uppercase_root_is_refused(host, signer, capsys):
     rest = f"--scheme verity/test/coins/v1 --families '{json.dumps(FAMILIES)}'"
-    for words, why in ((f"reserve --peer 'vy-nebius-1\n' {rest}", "--peer"),
+    for words, why in ((f"reserve --peer elsewhere {rest}", "--peer 'elsewhere': not one of this device's peers"),
+                       (f"reserve --peer 'vy-nebius-1\n' {rest}", "--peer"),
                        (f"reserve --period 'p0\n' --peer vy-nebius-1 {rest}", "no --commit, --period"),
                        (f"reserve --period p0 --peer vy-nebius-1 {rest}", "no --commit, --period"),
                        (f"reserve --commit {COMMIT} --peer vy-nebius-1 {rest}", "no --commit, --period")):

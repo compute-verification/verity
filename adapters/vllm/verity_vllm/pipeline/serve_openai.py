@@ -14,7 +14,7 @@
         [--remote-verifier HOST:PORT [--remote-kv-lib SO] [--remote-filler-gib 0]]
         [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
 
-It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
+It serves what a network certifier's client sends: ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,
@@ -22,7 +22,7 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
-certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+certifier's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
 ``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every
@@ -135,7 +135,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm import settings
+from verity_vllm import messages as M, settings
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED, UNSEEDED, rule_of
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_head as HD, serve_learn as SL,
@@ -740,7 +740,7 @@ def main(opts: Options) -> int:
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
-    (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
+    M.write(out / "serve.json", "ServingConfiguration", json.dumps(record, indent=1, default=str).encode())
     if mirror is not None:
         mirror()
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
@@ -758,7 +758,7 @@ def main(opts: Options) -> int:
                    "release": draws.summary() if draws is not None else None,
                    "mirror_errors": mirror.errors[:10] if mirror else None,
                    "remote_session": session.end() if session is not None else None}
-            (out / "summary.json").write_text(json.dumps(got, indent=1))
+            M.write(out / "summary.json", "RunTotals", json.dumps(got, indent=1).encode())
             if mirror is not None:
                 mirror()
             return got

@@ -1,0 +1,19 @@
+# The retired word family DRAW in four Lean definitions of PoUB's that lock records read (MEM-152's retired words), by
+# `python3 tools/move/rename.py --map tools/move/draw_poub_lean_read_map.toml`: `DrawCoins` (a run's coins with its
+# openings coins), `w2Draw` (the honest burst trace), `appendDrawn` (the session's append) and `drawnHashed`, each to the
+# Glossary's sample or sampled, wherever it stands. The locks' records keep the old names until the Lean check's
+# `--update --moved tools/move/draw_poub_lean_read_moves.json`, which `rename.py --moves` printed on the tree before the
+# move. Not here: guarantee names (`drawExact`, `drawAtMost`), named assumptions (`RemoteDraw`), the `Draw` and `Drawn`
+# namespaces and the bare words. The Lean check's merge test and fixture keep their bytes; the certifier's paths are
+# excluded while its quiet window lasts.
+
+[words]
+"DrawCoins" = "SampleCoins"
+"w2Draw" = "w2Sample"
+"appendDrawn" = "appendSampled"
+"drawnHashed" = "sampledHashed"
+
+[rewrite]
+exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "GLOSSARY.md", "tests/lint/**",
+           "tests/test_retired_terms.py", "tools/verity/lean/tests/**", "verity/protocols/accounting/certifier/**",
+           "security/**/Certifier/**"]

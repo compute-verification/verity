@@ -12,12 +12,11 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from verity.circuits.program import Program
 from verity.commitments import row_table as RT
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R
-from verity.commitments.windows import rows as CS, tables as TB
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
+from verity.commitments.periods import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
 
@@ -31,7 +30,7 @@ from test_service import DELTA, Clock, _refused  # noqa: E402
 
 TEMPLATE = P.template_id(DEFN)
 #: Two of the window's 40 proof blocks, and a twentieth of however many it registers.
-RULE = S.Law("stratified-rate:1/20")
+RULE = S.SamplingDesign("stratified-rate:1/20")
 
 
 def _spec(mine: CS.Binding, table: bool = True) -> S.Spec:
@@ -58,7 +57,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     outcomes each run by the Lean verifier: the only test that takes a row-table window's record through a Stream, so a
     `row-table` root the service can't register or the verifier refuses shows here and not on a served window."""
     program, query = CS.population_program([(DEFN, UNITS)], several=True)
-    c, _s, _got = committed(monkeypatch, law=S.selection_law(RULE, UNITS, D.strata_sizes(program, query)),
+    c, _s, _got = committed(monkeypatch, law=S.selection_sampling_design(RULE, UNITS, D.strata_sizes(program, query)),
                             work_table=S.selection_table(RULE, program, query, None))
     mine = c.window
     publics = {m.key: c.public_body(k) for k, m in enumerate(mine.members)}

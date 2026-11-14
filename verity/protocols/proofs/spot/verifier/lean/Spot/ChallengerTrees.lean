@@ -53,8 +53,8 @@ over the log's trees and the request's records, each with its tables), each `{"r
 -/
 module
 
-public import Spot.ChallengerDraw
-meta import Spot.ChallengerDraw
+public import Spot.ChallengerSample
+meta import Spot.ChallengerSample
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -129,10 +129,10 @@ private def isHexN (j : Json) (n : Nat) : Bool :=
 
 private def strOf (j : Json) : String := match j with | .str s => s | _ => ""
 
-/-- `_stream`: a stream's name, 1 to `MAX_SESSION_ID` ASCII letters, digits, '-', '.', '_' and '/'. -/
+/-- `_stream`: a stream's name, 1 to `MAX_CHALLENGE_PHASE_ID` ASCII letters, digits, '-', '.', '_' and '/'. -/
 private def isStream (j : Json) : Bool :=
   match j with
-  | .str s => 0 < s.length && s.length ≤ MAX_SESSION_ID &&
+  | .str s => 0 < s.length && s.length ≤ MAX_CHALLENGE_PHASE_ID &&
       s.all fun c => c.isAlphanum && c.toNat < 128 || c == '-' || c == '.' || c == '_' || c == '/'
   | _ => false
 
@@ -283,7 +283,7 @@ def sessionsTreeReason (trees : Array LoggedTree) (records : Array (String × Ar
   return none
 
 /-- The coin trees the one session the auditor's ledger opens on `window` under `key` shows the challenger sampled and
-opened (`coinTreesOf`), from the sample's coin evidence `{ledger, main, pins, segment, session}` (`drawCoins`'s, read
+opened (`coinTreesOf`), from the sample's coin evidence `{ledger, main, pins, segment, session}` (`sampleCoins`'s, read
 through `trustedChallengePhaseOf`). -/
 def trustedTreesOf (key : ChallengerKey) (window : String) (coins : Json) : V (Array LoggedTree) := do
   unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM

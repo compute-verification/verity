@@ -246,21 +246,21 @@ theorem resample_finds {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled C
     (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (sel : List ℕ → Option (Fin (L.nPU x)))
     (G : (Fin (L.V.k x) → Coin) → Fin (L.nPU x) → Msg → A.W → Prop) (r d : Fin (L.V.k x) → Coin) :
     (Ex fun σ => L.selHit H P x ω sel G
-        (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ))) ≤
+        (forkOn (L.secondStage x) r (forkOn (L.selRounds x sel (forkOn (L.secondStage x) r d)) d σ))) ≤
       2 * (Ex fun σ => L.oneWait.selHit H P x ω sel G
-        (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ))) +
+        (forkOn (L.secondStage x) r (forkOn (L.selRounds x sel (forkOn (L.secondStage x) r d)) d σ))) +
         (2 * L.κs x + Real.sqrt ((L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω
-          (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ)))) := by
-  cases h : L.selSlot x sel (forkOn (L.stage2 x) r d) with
+          (forkOn (L.secondStage x) r (forkOn (L.selRounds x sel (forkOn (L.secondStage x) r d)) d σ)))) := by
+  cases h : L.selSlot x sel (forkOn (L.secondStage x) r d) with
   | none =>
-    have h₁ : L.oneWait.selSlot x sel (forkOn (L.stage2 x) r d) = none := h
+    have h₁ : L.oneWait.selSlot x sel (forkOn (L.secondStage x) r d) = none := h
     rw [selRounds_none h]
     simp only [forkOn_empty]
     rw [selHit_none H L P x ω sel G h, selHit_none H L.oneWait P x ω sel G h₁,
       Ex_const (α := Fin (L.V.k x) → Coin) (0 : ℝ)]
     have := L.κs_nonneg x
     have := Real.sqrt_nonneg ((L.V.k x : ℝ) * L.γs x *
-      Ex fun _ : Fin (L.V.k x) → Coin => forkCollAt H L.V P x ω (forkOn (L.stage2 x) r d))
+      Ex fun _ : Fin (L.V.k x) → Coin => forkCollAt H L.V P x ω (forkOn (L.secondStage x) r d))
     linarith
   | some iu =>
     obtain ⟨i, u⟩ := iu
@@ -281,17 +281,17 @@ def SessionFinds (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
       ∀ ω r (sel : List ℕ → Option (Fin (L.nPU x)))
         (G : (Fin (L.V.k x) → Coin) → Fin (L.nPU x) → Msg → A.W → Prop),
         Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-          (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-            ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-                L.FoundWith H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)
-                  (G (forkOn (L.stage2 x) r p.1) i)) ≤
+          (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+            ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+                L.FoundWith H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)
+                  (G (forkOn (L.secondStage x) r p.1) i)) ≤
           2 * Pr (fun p : (Fin (L.V.k x) → Coin) × L.oneWait.SlotEC x =>
-            (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-              ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-                ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-                  L.oneWait.FoundWith H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)
-                    (G (forkOn (L.stage2 x) r p.1) i)) +
+            (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+              ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+                ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+                  L.oneWait.FoundWith H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)
+                    (G (forkOn (L.secondStage x) r p.1) i)) +
             (2 * L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
 
 /-- **`SessionFinds` from `Arg.OneWaitFinds`**, the proof system's rounds and the contract: `sessionKS_of`'s weight
@@ -300,49 +300,49 @@ inequality (`Ex_sqrt_le`). -/
 theorem sessionFinds_of {H : Msg → Msg} (hF : A.OneWaitFinds H) {L : Compiled Coin A} (hS : L.RunsFixed H) :
     L.SessionFinds H := by
   intro x Ω _ _ P
-  refine ⟨fun ω r => Ex fun d => forkCollAt H L.V P x ω (forkOn (L.stage2 x) r d),
+  refine ⟨fun ω r => Ex fun d => forkCollAt H L.V P x ω (forkOn (L.secondStage x) r d),
     fun ω r => Ex_nonneg fun d => forkCollAt_nonneg H L.V P x ω _, le_of_eq ?_, fun ω r sel G => ?_⟩
   · rw [Ex_prod, ← Ex_forkCollAt H L.V P x, Ex_prod]
     congr 1
     funext ω
     exact (Ex_prod (fun p : (Fin (L.V.k x) → Coin) × (Fin (L.V.k x) → Coin) =>
-      forkCollAt H L.V P x ω (forkOn (L.stage2 x) p.1 p.2))).symm.trans (Ex_forkOn _ _)
-  have hres := Ex_resample (fun d => L.selRounds x sel (forkOn (L.stage2 x) r d)) (selRounds_resample hS sel r)
-    fun d => forkCollAt H L.V P x ω (forkOn (L.stage2 x) r d)
-  have hres' := Ex_resample (fun d => L.selRounds x sel (forkOn (L.stage2 x) r d)) (selRounds_resample hS sel r)
-    fun d => L.selHit H P x ω sel G (forkOn (L.stage2 x) r d)
-  have hres₁ := Ex_resample (fun d => L.selRounds x sel (forkOn (L.stage2 x) r d)) (selRounds_resample hS sel r)
-    fun d => L.oneWait.selHit H P x ω sel G (forkOn (L.stage2 x) r d)
+      forkCollAt H L.V P x ω (forkOn (L.secondStage x) p.1 p.2))).symm.trans (Ex_forkOn _ _)
+  have hres := Ex_resample (fun d => L.selRounds x sel (forkOn (L.secondStage x) r d)) (selRounds_resample hS sel r)
+    fun d => forkCollAt H L.V P x ω (forkOn (L.secondStage x) r d)
+  have hres' := Ex_resample (fun d => L.selRounds x sel (forkOn (L.secondStage x) r d)) (selRounds_resample hS sel r)
+    fun d => L.selHit H P x ω sel G (forkOn (L.secondStage x) r d)
+  have hres₁ := Ex_resample (fun d => L.selRounds x sel (forkOn (L.secondStage x) r d)) (selRounds_resample hS sel r)
+    fun d => L.oneWait.selHit H P x ω sel G (forkOn (L.secondStage x) r d)
   beta_reduce at hres hres' hres₁
   have step1 : Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-        ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-            L.FoundWith H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)
-              (G (forkOn (L.stage2 x) r p.1) i)) ≤
-      Ex fun d => L.selHit H P x ω sel G (forkOn (L.stage2 x) r d) := by
+      (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+        ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+            L.FoundWith H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)
+              (G (forkOn (L.secondStage x) r p.1) i)) ≤
+      Ex fun d => L.selHit H P x ω sel G (forkOn (L.secondStage x) r d) := by
     rw [Pr_prod_eq_Ex]
     exact Ex_mono fun d => Pr_mono fun c ⟨ha, i, hs, u, hm, hn⟩ => ⟨ha, i, u, selSlot_eq_some.2 ⟨hs, hm⟩, hn⟩
-  have step2 : (Ex fun d => L.oneWait.selHit H P x ω sel G (forkOn (L.stage2 x) r d)) ≤
+  have step2 : (Ex fun d => L.oneWait.selHit H P x ω sel G (forkOn (L.secondStage x) r d)) ≤
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.oneWait.SlotEC x =>
-        (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∃ i, sel (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-              L.oneWait.FoundWith H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)
-                (G (forkOn (L.stage2 x) r p.1) i)) := by
+        (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+          ∃ i, sel (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+            ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+              L.oneWait.FoundWith H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)
+                (G (forkOn (L.secondStage x) r p.1) i)) := by
     rw [Pr_prod_eq_Ex]
     exact Ex_mono fun d => Pr_mono fun c ⟨ha, i, u, hiu, hn⟩ =>
       ⟨ha, i, (selSlot_eq_some.1 hiu).1, u, (selSlot_eq_some.1 hiu).2, hn⟩
   have hsq : (Ex fun d => Real.sqrt ((L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω
-        (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ)))) ≤
-      Real.sqrt ((L.V.k x : ℝ) * L.γs x * Ex fun d => forkCollAt H L.V P x ω (forkOn (L.stage2 x) r d)) := by
+        (forkOn (L.secondStage x) r (forkOn (L.selRounds x sel (forkOn (L.secondStage x) r d)) d σ)))) ≤
+      Real.sqrt ((L.V.k x : ℝ) * L.γs x * Ex fun d => forkCollAt H L.V P x ω (forkOn (L.secondStage x) r d)) := by
     refine (Ex_sqrt_le _ fun d => mul_nonneg (mul_nonneg (Nat.cast_nonneg _) (L.γs_nonneg x))
       (Ex_nonneg fun σ => forkCollAt_nonneg H L.V P x ω _)).trans (le_of_eq ?_)
     rw [Ex_mul_left, hres]
-  have hmid : (Ex fun d => L.selHit H P x ω sel G (forkOn (L.stage2 x) r d)) ≤
-      2 * (Ex fun d => L.oneWait.selHit H P x ω sel G (forkOn (L.stage2 x) r d)) +
+  have hmid : (Ex fun d => L.selHit H P x ω sel G (forkOn (L.secondStage x) r d)) ≤
+      2 * (Ex fun d => L.oneWait.selHit H P x ω sel G (forkOn (L.secondStage x) r d)) +
         (2 * L.κs x + Ex fun d => Real.sqrt ((L.V.k x : ℝ) * L.γs x * Ex fun σ => forkCollAt H L.V P x ω
-          (forkOn (L.stage2 x) r (forkOn (L.selRounds x sel (forkOn (L.stage2 x) r d)) d σ)))) := by
+          (forkOn (L.secondStage x) r (forkOn (L.selRounds x sel (forkOn (L.secondStage x) r d)) d σ)))) := by
     rw [← hres', ← hres₁]
     refine (Ex_mono fun d => resample_finds hF hS x P ω sel G r d).trans (le_of_eq ?_)
     rw [Ex_add, Ex_mul_left, Ex_add, Ex_const]

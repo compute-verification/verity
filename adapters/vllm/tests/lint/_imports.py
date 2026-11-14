@@ -1,21 +1,20 @@
-"""The integration's internal import graph and the layer map, for the P2/P4/P5/P9 lints; and which modules of ``verity``
+"""The integration's internal import graph and the layer map, for the P2/P4/P9 lints; and which modules of ``verity``
 are core (``core``, ``core_less_definitions``), for P1, ``conftest.py``'s guard and the boundary tests of ``tests/program``.
 
-An edge is one import statement in a library module that names another library module (``verity_vllm``'s, or the
-Definitions that moved from its ``program`` layer to ``verity.definitions``, which keep that layer): module-level and
+An edge is one import statement in a library module that names another library module (``verity_vllm``'s, the
+served circuits' Definitions in ``verity_vllm.definitions`` among them, in the ``program`` layer): module-level and
 function-level (lazy) imports alike, plus ``importlib.import_module`` with a literal name.  ``from pkg import name``
 resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 
 ``LAYER`` places every module in the layer of its top-level package (longest prefix wins).  The order, top to bottom,
-is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
+is ``pipeline``, ``check``, ``acquire``, ``observe|commit``, ``engine``, ``query|correspondence``,
 ``program``, ``collectives``, ``config``, core, with ``tests`` above ``pipeline``.  The modules bound for core sit in
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
 sits in ``pipeline``.  ``OPTIONAL`` names the packages a
 tree may hold or not (a private protocol's driver, the commitment scheme's reference).  ``engine.hooks``, the one owner of
 runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``settings``,
 the environment's registry, and ``log``, the logger, import nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
-(``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
-restricts a peer edge.
+(``observe|commit``, ``query|correspondence``) may import each other; no rule restricts a peer edge.
 """
 from __future__ import annotations
 
@@ -26,25 +25,24 @@ from typing import TypeGuard
 
 from . import _ratchet as R
 
-LAYERS = ("tests", "pipeline", "check|properties", "acquire", "observe|commit", "engine", "query|correspondence",
+LAYERS = ("tests", "pipeline", "check", "acquire", "observe|commit", "engine", "query|correspondence",
           "program", "collectives", "config", "core")
 RANK = {name: len(LAYERS) - i for i, name in enumerate(LAYERS)}
 
 LAYER = {
     "verity_vllm": "pipeline",
     "verity_vllm.pipeline": "pipeline",
-    "verity_vllm.check": "check|properties",
-    "verity_vllm.properties": "check|properties",
+    "verity_vllm.check": "check",
     "verity_vllm.acquire": "acquire",
     "verity_vllm.protocols": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
-    "verity_vllm.protocols.remote_bandwidth": "observe|commit",                     # the node's store: registry, codecs, receipts, vLLM binder
+    "verity_vllm.protocols.poub": "observe|commit",                     # PoUB's node store on the engine: the binder and the Commit's session
     "verity_vllm.engine": "engine",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program": "program",
-    "verity.definitions": "program",                        # moved from program/; circuits', held to P9 as it stood
+    "verity_vllm.definitions": "program",                        # the served circuits' Definitions, held to P9 as they stood
     "verity_vllm.program.predict": "pipeline",                         # the Program ahead of time: imports pipeline, check, acquire, engine
     "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.config": "config",
@@ -63,13 +61,10 @@ LAYER = {
 
 #: the packages a tree may not hold, a private protocol's driver (`verity_vllm.protocols.DRIVERS`) and the commitment scheme's
 #: reference: placed where present
-OPTIONAL = ("verity_vllm.protocols.remote_bandwidth", "verity_vllm.commitments")
+OPTIONAL = ("verity_vllm.protocols.poub", "verity_vllm.commitments")
 
 #: the packages whose modules are graph nodes
-LIBRARY_PACKAGES = ("verity_vllm", "verity.definitions")
-
-#: The property harnesses.
-PROPERTY_MODULES = ("verity_vllm.properties",)
+LIBRARY_PACKAGES = ("verity_vllm",)
 
 #: The replay drivers (check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
@@ -109,13 +104,6 @@ def modules() -> dict[str, str]:
     return {R.module_name(p): R.rel(p) for p in R.library_files()}
 
 
-@cache
-def core_packages() -> tuple[str, ...]:
-    """The packages of ``R.DEFINITIONS`` that aren't the library's (``R.in_library``): core's, so an import of one is no edge."""
-    return tuple(R.module_name(init) for d in sorted(R.DEFINITIONS.iterdir())
-                 if (init := d / "__init__.py").is_file() and not R.in_library(init))
-
-
 def _resolve(target: str, known: dict[str, str]) -> str | None:
     parts = target.split(".")
     for i in range(len(parts), 0, -1):
@@ -143,14 +131,14 @@ def edges() -> tuple[Edge, ...]:
                 if node.level:
                     anchor = pkg.split(".")[: len(pkg.split(".")) - node.level + 1]
                     base = ".".join([*anchor, *([base] if base else [])])
-                targets = [name if name in known or in_group(name, core_packages()) else base
+                targets = [name if name in known else base
                            for name in (f"{base}.{a.name}" for a in node.names)]
             else:
                 lit = R.dynamic_module(node) if isinstance(node, ast.Call) else None
                 if lit:
                     targets = [lit]
             for t in targets:
-                if not in_group(t, LIBRARY_PACKAGES) or in_group(t, core_packages()):
+                if not in_group(t, LIBRARY_PACKAGES):
                     continue
                 dst = _resolve(t, known)
                 if dst and dst != mod:
@@ -247,12 +235,12 @@ SIDES: dict[str, bool] = {
     "verity.runtime": False,
     "verity.protocols.accounting.poub.device": False,
     "verity.protocols.accounting.poub.verifier.remote_session": False,
-    "verity.protocols.accounting.pouw.clear": False,
+    "verity.protocols.accounting.pouw.prover.clear": False,
     "verity.protocols.accounting.pouw.verifier.receipts": False,
     "verity.protocols.compose": False,
 }
 #: the same for a test of what the Definitions import: the integration's Definitions are not core
-SIDES_LESS_DEFINITIONS: dict[str, bool] = {**SIDES, "verity.definitions": False}
+SIDES_LESS_DEFINITIONS: dict[str, bool] = {**SIDES, "verity_vllm.definitions": False}
 
 
 def _side(name: str | None, sides: dict[str, bool]) -> bool:

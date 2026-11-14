@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Spot
-public import VStarRecursive.Protocol
+public import VStarRecursion.Protocol
 import Proofs.Properties.Challenger
 
 /-!
@@ -152,8 +152,8 @@ theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} 
     · next vs hv =>
       have hv := VStar.Recursive.heldVerdicts_ok hv
       have hacc := _root_.Properties.Challenger.oneStage_check_of_accept (p := p.base) (c := c)
-        (e := { e.base with verdicts := vs }) hacc
-      obtain ⟨law, d, n, -, -, -, hva, -⟩ := _root_.Properties.Spot.acceptMeans _ _ _ _ _ hacc
+        (e := { e.base with verdicts := vs }) (VStar.Recursive.Caller.gate_accept hacc).2
+      obtain ⟨samplingDesign, d, n, -, -, -, hva, -⟩ := _root_.Properties.Spot.acceptMeans _ _ _ _ _ hacc
       obtain ⟨hd, parts, hpv, why, units, programSha, hvs⟩ := verdicts_shape hv
       have hok : parts.all (·.2.toBool) = true := by
         have hmem : (s!"flock-verify/{session}", VStar.Recursive.verdictJson (parts.all (·.2.toBool)) session why

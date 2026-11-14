@@ -11,7 +11,7 @@ public import Proofs.Flock.Soundness.Refine.Paths
 import all Lean.Data.Json.Basic
 
 /-!
-# Sampled proofs' coupling: the decoders and the field encoding
+# SPOT's coupling: the decoders and the field encoding
 
 The projection reads each stop's most likely message through decoders (`Decoders`), and the coin map writes the live
 coins into an opening as bits under an encoding of the field (the `e` of `couplingTarget_assembled`). This module gives

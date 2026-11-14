@@ -40,14 +40,29 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
-from verity.protocols.accounting.pouw.verifier import verifier
-from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.accounting.pouw.verifier.audit import (
+from verity.protocols.accounting.pouw.prover.serving import (
+    COIN_DRAW,
+    H1_CHALLENGER,
+    H1_SCHEME,
+    H1_TILE,
+    ROUND0,
+    CommitTap,
     Epoch,
+    H1Call,
+    H1Run,
+    Matmul,
+    Shape,
     Workload,
+    commit_committed,
+    commit_site,
+    draw_challenger,
+    numpy_of,
+    program_salt,
+    to_host,
+    verifier_coins,
     weights_root,
+    zy_host,
 )
-from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import (
@@ -56,21 +71,17 @@ from verity_vllm.engine import (
 )
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
 from verity_vllm.protocols.pouw import h1_hooks as PHK
-from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
-from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 
-ENTRY = f"pouw:{PH.SCHEME}"
+ENTRY = f"pouw:{H1_SCHEME}"
 EXTENSION = "verity_vllm.protocols.pouw.h1_ranks.RankExtension"
 #: with ``install``'s ``commit``: `RankExtension` with the Commit on each rank (in ``acquire``, which builds the int8 source)
 COMMIT_EXTENSION = "verity_vllm.acquire.h1_commit.RankCommit"
-#: the module of Model Runner V2, whose `sort_batch_req_ids` orders a step's rows (`pouw_h1_requests.batch_order`)
+#: the module of Model Runner V2, whose `sort_batch_req_ids` orders a step's rows (`h1_hooks.batch_order`)
 MRV2 = "vllm.v1.worker.gpu.model_runner"
 
 
-class RankRun(PH.H1Run):
+class RankRun(H1Run):
     """One rank's side of the window: the calls of its linears [lo, hi) of the window's L, each at its global index
     s·L + w with its tables, under the salt the holder pushes (`RankExtension.h1rank_open`). A linear the rank's step
     already holds starts its next step (`H1Run.record`); rounds, admission and coins are the holder's. With ``ship`` each
@@ -91,17 +102,17 @@ class RankRun(PH.H1Run):
         return None
 
     def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None,
-              zy: Any = None) -> PH.Call:
+              zy: Any = None) -> H1Call:
         call = super()._call(s, w, a, s_a, weight, weight_scale, records, zy)
         if self.ship and self.commit:
             new = weight is not None and self._held.get(w) is not weight
             if new:
                 self._held[w] = weight
             self.shipped[call.index] = {
-                "a": None if a is None else np.array(PH.numpy_of(a)),
-                "s_a": None if s_a is None else np.array(PH.numpy_of(s_a)), "records": ZR.host(records),
-                "weight": np.array(PH.numpy_of(weight)) if new else None,
-                "weight_scale": np.array(PH.numpy_of(weight_scale)) if new and weight_scale is not None else None}
+                "a": None if a is None else np.array(numpy_of(a)),
+                "s_a": None if s_a is None else np.array(numpy_of(s_a)), "records": zy_host(records),
+                "weight": np.array(numpy_of(weight)) if new else None,
+                "weight_scale": np.array(numpy_of(weight_scale)) if new and weight_scale is not None else None}
         return call
 
     def rows_since(self, sent: int) -> list[dict[str, Any]]:
@@ -113,7 +124,7 @@ class RankRun(PH.H1Run):
 
 
 @dataclass
-class RankTap(CT.CommitTap):
+class RankTap(CommitTap):
     """A rank's tap on its Commit (`acquire.h1_commit.RankCommit.h1rank_commit`): what the holder's `pouw_h1_commit.CommitTap` reads of what
     the Commit acquired, each H1 linear's x_q (``/0``) and s_a (``/1``) at its site and the port's input ids, its first
     ``n`` (None with no count of the step's scheduled tokens), copied to the host with the engine step, each site under the
@@ -125,19 +136,19 @@ class RankTap(CT.CommitTap):
 
     def take(self, name: str, t: Any, step: int, n: int | None = None) -> None:
         if self.port is not None and name == self.port:
-            self.out.append((name, int(step), None if n is None else np.array(CT._host(t)).reshape(-1)[:n]))
+            self.out.append((name, int(step), None if n is None else np.array(to_host(t)).reshape(-1)[:n]))
             return
         op, _, port = name.rpartition("/")
         module = op.removesuffix("/row_quant")
         if module != op and port in ("0", "1"):
-            self.out.append((f"{CT.site(self.names.get(module, module))}/{port}", int(step), np.array(CT._host(t))))
+            self.out.append((f"{commit_site(self.names.get(module, module))}/{port}", int(step), np.array(to_host(t))))
 
     def drain(self) -> list[tuple[str, int, np.ndarray | None]]:
         out, self.out = self.out, []
         return out
 
 
-def feed(tap: CT.CommitTap, acquired: Sequence[tuple[str, int, Any]], first: bool) -> None:
+def feed(tap: CommitTap, acquired: Sequence[tuple[str, int, Any]], first: bool) -> None:
     """One rank's acquisitions (`RankTap.drain`) into the window's tap, in the order the rank acquired them: its sites' x_q
     and s_a, and with ``first`` (the rank holding linear 0) the port's input ids, which every other rank's at the same
     engine step must equal (refused otherwise)."""
@@ -157,7 +168,7 @@ def wire_rank(run: RankRun, hooks: Any, layers: list[Any], rows: int) -> None:
         w = run.lo + i
         hooks.wrap(layer.quant_method, "observe", lambda orig, w=w: PHK.observer(run, w, orig))
         hooks.wrap(layer.quant_method, "apply", lambda orig, w=w: PHK.traced(run, w, orig))
-        if run.commit and hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % PH.TILE[1] == 0:
+        if run.commit and hasattr(type(layer.quant_method), "zy_rows") and layer.weight.shape[0] % H1_TILE[1] == 0:
             hooks.patch(layer.quant_method, "zy_rows", rows)
 
 
@@ -168,6 +179,8 @@ class RankExtension:
     #: the installed rank's state (`h1rank_install`: its ``run``, its ``hooks``, the calls ``sent`` so far and, with the
     #: Commit, its ``commit``); None before the install and after the release
     _h1rank: dict[str, Any] | None = None
+    #: the worker's model runner, which vLLM's worker has when these methods are mixed into it
+    model_runner: Any
 
     def _h1rank_state(self) -> dict[str, Any]:
         if self._h1rank is None:
@@ -176,7 +189,7 @@ class RankExtension:
 
     def _h1rank_layers(self) -> tuple[Any, list[Any]]:
         from verity_vllm.protocols import pouw
-        model = self.model_runner.get_model()  # type: ignore[attr-defined]
+        model = self.model_runner.get_model()
         return model, PHK.layers(model, pouw.linear_types())
 
     def _h1rank_rank(self) -> tuple[int, int]:
@@ -190,7 +203,7 @@ class RankExtension:
         pp, tp = self._h1rank_rank()
         return {"pp": pp, "tp": tp, "shapes": [[int(d) for d in m.weight.shape] for m in layers],
                 "names": pouw._named(model, layers),
-                "decode_query_len": int(self.model_runner.decode_query_len)}  # type: ignore[attr-defined]
+                "decode_query_len": int(self.model_runner.decode_query_len)}
 
     def h1rank_install(self, entry: str, los: Mapping[tuple[int, int], int], shapes: Sequence[Sequence[int]],
                        modules: Mapping[int, str], rows: int, steps: int, key: bytes, ship: bool = False) -> dict[str, Any]:
@@ -233,7 +246,7 @@ class RankExtension:
                 try:
                     rc = com.finalize()
                     errors = rc.extra.get("errors")    # None from a committer whose finalize states none
-                    out = {"lo": st["run"].lo, **CT.committed(com, rc, ("expected_tensors", "committed_tensors", "errors_n")),
+                    out = {"lo": st["run"].lo, **commit_committed(com, rc, ("expected_tensors", "committed_tensors", "errors_n")),
                            "errors": [str(e)[:300] for e in errors][:8] if errors else []}
                 finally:
                     com.close()
@@ -251,8 +264,8 @@ def executor_of(llm: Any) -> Any:
 
 
 def _runner(decode_query_len: int) -> Any:
-    """What `pouw_h1_requests.batch_order` reads of the ranks' Model Runner V2: its module's batch order (once `install`
-    has imported it; `pouw_h1_requests.sort_batch_req_ids` until then) and its decode_query_len."""
+    """What `h1_hooks.batch_order` reads of the ranks' Model Runner V2: its module's batch order (once `install`
+    has imported it; `h1_hooks.sort_batch_req_ids` until then) and its decode_query_len."""
     return type("GPUModelRunner", (), {"__module__": MRV2, "decode_query_len": int(decode_query_len)})()
 
 
@@ -260,7 +273,7 @@ class Holder:
     """The window of a multiprocess engine (`install`): its `H1Run` (``run``) fed by the ranks and admitted at the executor;
     `finish` pulls the last calls, closes and releases the window and the ranks' hooks."""
 
-    def __init__(self, run: PH.H1Run, executor: Any, layout: list[dict[str, Any]], hooks: Hooks) -> None:
+    def __init__(self, run: H1Run, executor: Any, layout: list[dict[str, Any]], hooks: Hooks) -> None:
         self.run, self.executor, self.layout, self.hooks = run, executor, layout, hooks
         self.runner = _runner(layout[0]["decode_query_len"])
         self.ranks: dict[int, dict[str, Any]] = {}
@@ -297,7 +310,7 @@ class Holder:
         def execute_model(scheduler_output: Any, non_block: bool = False) -> Any:
             if int(getattr(scheduler_output, "total_num_scheduled_tokens", 0) or 0) and not self.run.closed:
                 self.pull()
-                self.run.admit(RQ.new_requests(scheduler_output), RQ.batch_order(self.runner, scheduler_output))
+                self.run.admit(PHK.new_requests(scheduler_output), PHK.batch_order(self.runner, scheduler_output))
                 self._push()
             return orig(scheduler_output, non_block)
         return execute_model
@@ -325,13 +338,13 @@ class Holder:
             self.committed = {o["lo"]: o for o in outs or () if o is not None}
 
 
-def ingest(run: PH.H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
+def ingest(run: H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
     """Rank calls into the holder's `run`, in index order, as `H1Run._call` takes them: each call, its tables, verdict and
     bindings, and with ``served`` its rows registered (`pouw_h1_served.Served.commit`); a round closes with its step's last
     linear."""
     last = len(run.shapes_) - 1
     for r in sorted(rows, key=lambda r: r["call"]["index"]):
-        c = PH.Call(**r["call"])
+        c = H1Call(**r["call"])
         if run.calls and c.index <= run.calls[-1].index:
             raise RuntimeError(f"{run.entry}: rank call {c.index} after call {run.calls[-1].index}")
         run.calls.append(c)
@@ -352,7 +365,7 @@ def ingest(run: PH.H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
 
 
 def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any = None, opener: Any = None,
-            admission: str = RQ.ROUND0, transcript_dir: str | None = None, key: bytes | None = None,
+            admission: str = ROUND0, transcript_dir: str | None = None, key: bytes | None = None,
             entry: str = ENTRY, executor: Any = None, served: Any = None,
             commit: Mapping[str, Any] | None = None) -> Holder:
     """H1 on an engine built with ``worker_extension_cls`` = `EXTENSION`: the ranks' layout gathered, each rank's `RankRun`
@@ -400,19 +413,19 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     salt, draw, commits = None, None, {}
     if coins is not None:
         commitment, opening = coins.commitment, coins.open("salt", weights_root(roots))
-        salt = PH.program_salt(Epoch.start(declared, roots, commitment, opening).salt)
-        draw = (LiveRecord(Wd.draw_challenger(rounds.challenger.commitment.epoch, verifier.coins), Wd.DRAW)
+        salt = program_salt(Epoch.start(declared, roots, commitment, opening).salt)
+        draw = (LiveRecord(draw_challenger(rounds.challenger.commitment.epoch, verifier_coins), COIN_DRAW)
                 if rounds is not None else None)
         commits = {"coins": commitment.to_json(), "salt_opening": opening.to_json(),
                    **({"round_coins": rounds.challenger.commitment.to_json()} if rounds is not None else {})}
-    source = PH.CHALLENGER if opener is not None else "in-process"
-    run = PH.H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds, key=key,
-                   draw=draw, admission=admission, coin_source=source, opener=opener, served=served)
+    source = H1_CHALLENGER if opener is not None else "in-process"
+    run = H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds, key=key,
+                   draw=draw, admission=admission, coins_from=source, opener=opener, served=served)
     if commit is not None:
         ports = {o["port"] for o in executor.collective_rpc("h1rank_commit", kwargs=dict(commit))}
         if len(ports) != 1:
             raise RuntimeError(f"{entry}: the ranks' Commits acquire input ids under {sorted(map(str, ports))}, not one port")
-        served.tap = CT.CommitTap(port=ports.pop())
+        served.tap = CommitTap(port=ports.pop())
     run.commits.update(weights_root=weights_root(roots).hex(), coin_source=source, **commits,
                        ranks=[{"pp": o["pp"], "tp": o["tp"], "first_linear": los[(o["pp"], o["tp"])],
                                "linears": len(o["shapes"])} for o in layout])

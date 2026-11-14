@@ -115,7 +115,7 @@ theorem accepts_reps {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutpu
 
 /-- The headline's tables put the link claims at `PT_LOCAL`, at a sample that sets up and at a refused one. -/
 theorem tableAt_ptLocal {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
-    {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) (S : Finset (Fin n)) :
+    {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀)) (S : Finset (Fin n)) :
     (tableAt ht dj x₀ S).T.ptLocal = PT_LOCAL := by
   rcases tableAt_cases ht dj x₀ S with ⟨x, e⟩ | e <;> rw [e] <;> rfl
 

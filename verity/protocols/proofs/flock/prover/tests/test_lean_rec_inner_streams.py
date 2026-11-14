@@ -11,7 +11,7 @@ committed, or its table named as a sparse phase's or R's stream (`sparse`, `stac
 its salted top is registered at staging (the entry `stacked` of the
 statement's `verity/registration/v2` circuit registration, `circuit-registration.json`), whose digest the inner circuit's
 META binds (`circuit-meta.txt`, the staged `circuit.txt`'s header): the verifier takes both (`--rec-inner-circuit`,
-`--rec-inner-registration`) and refuses, each with its `FIREWALL-REFUSED` reason, a record META does not bind, a session
+`--rec-inner-registration`) and refuses, each with its `ZK-SERVER-REFUSED` reason, a record META does not bind, a session
 with R's stream and no registered top, and R's binding round committing a top other than the registered one; a
 registration naming R needs R's stream. R's `m` and claims are META's `stacked`, the shape staging committed R at (the
 registered cap fixes neither: m 22 to 24 share it), and R's stream is held to that shape's rounds: a META naming no shape or
@@ -64,7 +64,7 @@ def _meta_registration() -> str:
 def _registered(tmp_path: Path, change, bind: bool = True) -> list[str]:
     """`rec-c3-inner`'s circuit registration changed by ``change``, and its circuit header with META's `registration` the changed
     record's digest when ``bind`` (as a statement staged with that record would be), `rec-c3-inner`'s own otherwise."""
-    from verity.protocols.proofs.spot.verifier.one_stage.registration import digest
+    from verity.protocols.proofs.spot.verifier.one_stage.docket import digest
 
     rec = json.loads((_fixture(C3) / "circuit-registration.json").read_text())
     change(rec)
@@ -167,7 +167,7 @@ def test_a_stream_missing_is_refused(tmp_path, change, why):
     assert (rc, line, err) == (1, None, f"rec inner transcript: {why}")
 
 
-def test_the_sparse_streams_and_rs_are_the_coin_servers_alone(tmp_path):
+def test_the_sparse_streams_and_rs_are_the_live_coin_parts_alone(tmp_path):
     """The prover's record holds the reps only, so whether the session committed R is the challenger's record's to say,
     held to the registration: a transcript with R's stream gone from its rounds and its declarations is read as a session
     without R when no registration names R, and refused as a downgrade when the one META binds does."""
@@ -189,8 +189,8 @@ def _flip(x: str) -> str:
     return c.hex()
 
 
-CAP = "FIREWALL-REFUSED: registration: stacked/rep0's binding round's top is not stacked's registered top"
-NO_TOP = "FIREWALL-REFUSED: registration: stacked has no root at Commit and no registered top"
+CAP = "ZK-SERVER-REFUSED: registration: stacked/rep0's binding round's top is not stacked's registered top"
+NO_TOP = "ZK-SERVER-REFUSED: registration: stacked has no root at Commit and no registered top"
 
 
 def _top(change):
@@ -262,7 +262,7 @@ def test_an_r_stream_with_no_stacked_entry_is_refused(tmp_path, change):
 
 def test_an_r_stream_with_no_registration_is_refused():
     """With neither the inner circuit nor its registration, nothing binds R before the coins."""
-    assert _read(C3, inner=[]) == (1, None, "FIREWALL-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's "
+    assert _read(C3, inner=[]) == (1, None, "ZK-SERVER-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's "
                                             "META binds no circuit registration (--rec-inner-circuit, --rec-inner-registration)")
 
 
@@ -274,7 +274,7 @@ def test_an_r_stream_with_no_registration_is_refused():
 ], ids=["window", "population", "root", "no-stacked"])
 def test_a_record_whose_digest_is_not_metas_is_refused(tmp_path, change):
     """The record changed and META left as staged: whatever the change, the record is not the one META binds."""
-    why = f"FIREWALL-REFUSED: registration: the record is not the circuit registration META binds ({_meta_registration()})"
+    why = f"ZK-SERVER-REFUSED: registration: the record is not the circuit registration META binds ({_meta_registration()})"
     assert _read(C3, inner=_registered(tmp_path, change, bind=False)) == (1, None, why)
 
 
@@ -285,16 +285,16 @@ def test_meta_and_the_record_go_together(tmp_path):
     del m["registration"]
     (tmp_path / "circuit-meta.txt").write_text(f"{head}\nMETA {json.dumps(m)}\n")
     assert _read(C3, inner=_inner(tmp_path / "circuit-meta.txt")) == (
-        1, None, "FIREWALL-REFUSED: registration: the record is not the circuit registration META binds (META binds none)")
+        1, None, "ZK-SERVER-REFUSED: registration: the record is not the circuit registration META binds (META binds none)")
     assert _read(C3, inner=["--rec-inner-circuit", str(C3 / "circuit-meta.txt")]) == (
-        1, None, f"FIREWALL-REFUSED: registration: META binds the circuit registration {_meta_registration()}, and the "
+        1, None, f"ZK-SERVER-REFUSED: registration: META binds the circuit registration {_meta_registration()}, and the "
                  "verifier holds none (--rec-inner-registration)")
 
 
 #: R's shape as staging committed R (META's `stacked`, `rec_session.stage_stacked`): `rec_sparse.table_m` at the bucket
 #: 18,13,6,0 and the two reps' claims
 R_SHAPE = {"m": 23, "claims": 2}
-SHAPE = ("FIREWALL-REFUSED: registration: stacked/rep0 is not R's stream at the shape staging committed R at (m {m}, claims "
+SHAPE = ("ZK-SERVER-REFUSED: registration: stacked/rep0 is not R's stream at the shape staging committed R at (m {m}, claims "
          "{claims}, META's stacked): ")
 
 
@@ -321,7 +321,7 @@ def test_rs_shape_is_metas():
 
 
 @pytest.mark.parametrize("change,why", [
-    (lambda m: m.__delitem__("stacked"), "FIREWALL-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's META "
+    (lambda m: m.__delitem__("stacked"), "ZK-SERVER-REFUSED: registration: stacked/rep0 binds R, and the inner circuit's META "
      "names no shape of R (stacked): R's m and claims are bound nowhere"),
     (lambda m: m.__setitem__("stacked", {"m": 22, "claims": 2}), SHAPE.format(m=22, claims=2) +
      "round 3 is (coins 16, tops [], level0 1, commits true), not (coins 15, tops [], level0 1, commits true)"),
@@ -439,7 +439,7 @@ def test_a_top_another_stream_committed_is_refused(tmp_path):
 
     rc, line, err = _read(C3, _changed(tmp_path, swap))
     assert (rc, line) == (1, None)
-    assert err == (f"rec inner transcript: the b ‖ c {swap.first[:16]}… is committed twice; the firewall commits each under a "
+    assert err == (f"rec inner transcript: the b ‖ c {swap.first[:16]}… is committed twice; the ZK server commits each under a "
                    "fresh salt"), err
 
 
@@ -641,7 +641,7 @@ def _moved(stream: str, j: int, k: int):
 
 def test_each_reps_stream_holds_its_schedules_rounds(tmp_path):
     """`RecVStar.checkCommitRounds` first holds every stream but the sparse phases' and R's to the rep's schedule at the
-    verifier's inner shape, round for round (`RepsDrawn`'s second half): `rec-c3-inner`'s reps split z_partial's round, as private
+    verifier's inner shape, round for round (`RepsSampled`'s second half): `rec-c3-inner`'s reps split z_partial's round, as private
     circuits' do (`holo_rounds`, 95 rounds), so under a shape whose circuits are public (`rep_rounds`, 94) they are
     refused for their rounds."""
     assert _covers(tmp_path, _shape(tmp_path, holo=False)) == (
@@ -678,7 +678,7 @@ def test_the_circuit_tables_tops_sit_at_its_schedule(tmp_path, change, why):
     assert _covers(tmp_path, _shape(tmp_path), _changed(tmp_path, change)) == (1, f"rec inner transcript: {why}")
 
 
-POINTS_WHY = ("rec inner transcript: the inner session's record's link points are not the ones the coin server drew "
+POINTS_WHY = ("rec inner transcript: the inner session's record's link points are not the ones the challenger's live-coin part drew "
               "(link.points): check 5 would take the extra claims at points the prover chose")
 
 
@@ -687,7 +687,7 @@ def _bit_off(h: str) -> str:
 
 
 @pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
-def test_the_records_link_points_are_the_coin_servers(tmp_path, d):
+def test_the_records_link_points_are_the_live_coin_parts(tmp_path, d):
     """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points (the prover's record),
     so they must be the ones the challenger's live-coin part drew after `root_B` (the transcript's `link.points`, `points × m` coins in
     point order). `rec-c3-inner`'s and rec-coins' sessions pass; a transcript whose first link coin is one bit off is refused, and so
@@ -763,7 +763,7 @@ def test_the_recursions_statement_version_before_sha512_salts_is_refused(tmp_pat
         "verity/rec-inner/v2's under SHA-512"), p
     p = run("verity/rec-inner/v2")
     assert p.returncode == 0 and p.stdout.startswith("RECVSTAR "), p
-OFF = ("rec inner transcript: the coin server's record is off the schedule of the verifier's inner shape (m {m}, k_log "
+OFF = ("rec inner transcript: the challenger's live-coin part's record is off the schedule of the verifier's inner shape (m {m}, k_log "
        "{k_log}, claims {claims}): ")
 
 
@@ -821,7 +821,7 @@ def test_the_honest_records_are_on_the_verifiers_schedule(tmp_path):
     assert _covers(tmp_path, _shape(tmp_path)) == (0, "")
 
 
-NOT_OWN_FORMAT = ("rec inner transcript: the coin server's record does not read in its own format (RecRecord.readFull: "
+NOT_OWN_FORMAT = ("rec inner transcript: the challenger's live-coin part's record does not read in its own format (RecRecord.readFull: "
                   "rec_live.record_bytes, its rounds first, then its kind, tops, Hello in its keys' order and the "
                   "link's roots and points, at json.dumps' indent=1)")
 
@@ -831,7 +831,7 @@ NOT_OWN_FORMAT = ("rec inner transcript: the coin server's record does not read 
     lambda t: json.dumps({"rounds": t["rounds"], **t}, indent=2),
     lambda t: json.dumps({"rounds": t["rounds"], **t, "hello": dict(reversed(t["hello"].items()))}, indent=1),
 ], ids=["compact", "indent-2", "hello-reordered"])
-def test_a_record_not_in_the_coin_servers_format_is_refused(tmp_path, write):
+def test_a_record_not_in_the_live_coin_parts_format_is_refused(tmp_path, write):
     """`RecSetup.checkReads`: the recursion's transcript model reads the challenger's record in its own format
     (`RecRecord.readFull`), so the verifier reads it so too. The plain session's record with its values unchanged,
     written compactly, at another indent or with Hello's keys in another order, passes every check of the transcript
@@ -946,7 +946,7 @@ def test_rec_inner_refuses_r_without_the_sparse_shape():
 
 
 STOPPED = "rec inner transcript: the inner session ended stop, not finish: a stopped session is no inner proof"
-NO_END = "rec inner transcript: the coin server's record names no end; only a finished session is read"
+NO_END = "rec inner transcript: the challenger's live-coin part's record names no end; only a finished session is read"
 
 
 @pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
@@ -965,13 +965,13 @@ def test_a_stopped_sessions_record_is_refused(tmp_path, d):
 
 def test_the_record_rec_live_writes_for_a_stopped_session_is_refused(tmp_path):
     """A session `rec_live`'s ZK server stops (here at a `Link` whose `y` is not the schedule's length) still gets the challenger's
-    live-coin part's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
+    live-coin part's record, ending `stop` (`test_rec_live_zk_server`); presented as the inner transcript, it is refused as no inner
     proof before anything else is read. The same session run to `Finish` ends `finish` and is refused, if at all, for
     something else."""
-    import test_rec_live_firewall as F
+    import test_rec_live_zk_server as F
 
     stopped = F._proxy(F._schedule())
-    assert F._refusal(F._run(stopped, y=bytes(31))).startswith("rec proxy: FIREWALL-REFUSED: Link's y: ")
+    assert F._refusal(F._run(stopped, y=bytes(31))).startswith("rec proxy: ZK-SERVER-REFUSED: Link's y: ")
     assert stopped.coins.record()["end"] == "stop"
     assert _read(PLAIN, _write(tmp_path / "stopped.json", stopped.coins.record())) == (1, None, STOPPED)
     finished = F._proxy(F._schedule())

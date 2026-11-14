@@ -43,7 +43,7 @@ the sampling record `SamplingDeploy.deploy`). Where its run accepts against SHA-
 at the statement's inputs `s` (`insOf true x = some s`, what verity-verify-proof reads of the statement), on the last message's
 record and proof files `f`, and:
 
-* the record's sample is the statement's as a value (`Custody.recordDraw_of_checks`: the verifier rebuilds both,
+* the record's sample is the statement's as a value (`Custody.recordSample_of_checks`: the verifier rebuilds both,
   `Flock.norm`);
 * verity-verify-proof `--zk` accepts that transcript at the statement's inputs (`AcceptsZK s.read.I ⟨f.record, f.proofs⟩`, and
   so `LiveAcceptsZK` at every outcome carrying it).
@@ -85,7 +85,7 @@ theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω
   simp only [ite_true] at hv
   obtain ⟨hins, hs⟩ := setupOf_some (act_decide hact)
   have hzk : s.read.zk = true := readOf_zk (x := x) (by simp [readOf, hins])
-  have hdraw := Claims.Bridge.Custody.recordDraw_of_checks hins hc
+  have hdraw := Claims.Bridge.Custody.recordSample_of_checks hins hc
   refine ⟨s, spec, sts, link, c₁, mids, f, hact, hins, hdraw, ?_⟩
   exact ⟨spec, sts, Claims.Bridge.Custody.setupOf_zkInputs (Ins.setup_read hs) hzk
     (Claims.Bridge.Custody.publicInputs_none_of_checks hc) hdraw, Claims.Bridge.Custody.setup_shapeOk hs hzk, hv⟩

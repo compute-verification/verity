@@ -21,9 +21,9 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import wiring as WI
-from verity.definitions.registry import io_shell as IO
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import wiring as WI
+from verity_vllm.definitions.registry import io_shell as IO
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.pouw.verifier import audit as AU
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
@@ -924,7 +924,7 @@ def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_woul
     with pytest.raises(Unexpressible) as refused:
         class_circuit(S._registered(), CLASS, None, GRAIN)
     why = str(refused.value)
-    assert why.startswith(f"{len(short)} templates C-Flock's composer wouldn't prove: ")
+    assert why.startswith(f"{len(short)} templates Flock's composer wouldn't prove: ")
     named = {_label(fn) for fn, _ in circuit.templates if re.search(re.escape(IF.descriptor_id(fn)) + "(: | cut )", why)}
     assert named == set(short)
 

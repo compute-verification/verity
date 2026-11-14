@@ -37,7 +37,7 @@ samples from the operating system for each row, never for another. The opening (
 wiring with its salt) is witness, which the network certifier hands to the prover alone (`Cells.witness`: the salts,
 since the rows and the wiring are the record's).
 
-**The signed head** (`CellsHead`) is public, as a hiding root is:
+**The signed head** (`CellsHead`):
 
     H = u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ parameters (64 bytes) ‖ u32be B ‖ u32be S ‖ u32be T
       ‖ wiring (64 bytes) ‖ domain (64 bytes) ‖ root (64 bytes)
@@ -47,7 +47,8 @@ and its certificate is `Issuer.sign`'s of the cells digest: the certifier's mess
 session (`certificate.certificate_message`). The wire record's certificate of the same execution phase signs its salted
 record digest instead, so neither verifies as the other (each would need a SHA-512 preimage).
 
-**The registration** (`registration`) is the head and its certificate as one public JSON object:
+**The registration** (`registration`) is the head and its certificate as one JSON object, kept whole on a run's
+private side: `wiring` is private, and the auditor's gate publishes the object less it:
 
     {"format": REGISTRATION, "value", "link", "direction", "window", "parameters", "cell_bytes", "rows", "words",
      "word_bits", "row_schema", "domain", "wiring", "root",
@@ -86,6 +87,7 @@ request k (`order[k] + 1`).
 
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -98,10 +100,10 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier.active import HEADER
 from verity.protocols.accounting.certifier.verifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
                                                          _u)
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
@@ -129,7 +131,7 @@ def row_bytes(params: WardenParams) -> int:
 
 
 def window_rows(record: BlockGrid, params: WardenParams) -> list[bytes]:
-    """The link-window's rows: each bucket's slots in order, a slot no connection holds B zero bytes."""
+    """The execution phase's rows: each bucket's slots in order, a slot no connection holds B zero bytes."""
     grid = params.grid
     if len(record.grid) != grid.buckets or any(len(row) != grid.allocation for row in record.grid):
         raise ValueError(f"a window has {grid.buckets} buckets of {grid.allocation} slots")
@@ -171,7 +173,7 @@ class Wiring:
                                  f"{last_first}: connections are admitted in ordinal order")
             if cells < r or cells % r or first < 0 or first + cells // r > T:
                 raise ValueError(f"connection {q}'s {cells} cells from row {first} aren't r = {r} a row within the "
-                                 f"link-window's {T} rows")
+                                 f"execution phase's {T} rows")
             for t in range(first, first + cells // r):
                 rows[t].append(q)
             last_q, last_first = q, first
@@ -193,11 +195,11 @@ class Wiring:
                 raise ValueError(f"a read is (connection, cell), not {read!r}")
             q, k = read
             if q not in held:
-                raise ValueError(f"connection {q} holds no slot of the link-window: a read opens a connection's own "
+                raise ValueError(f"connection {q} holds no slot of the execution phase: a read opens a connection's own "
                                  "cells, never an empty slot")
             first, cells = held[q]
             if not 0 <= k < cells:
-                raise ValueError(f"connection {q} has {cells} cells in the link-window, not cell {k}")
+                raise ValueError(f"connection {q} has {cells} cells in the execution phase, not cell {k}")
             if (q, k) in seen:
                 raise ValueError(f"connection {q}'s cell {k} is read twice")
             seen.add((q, k))
@@ -207,7 +209,7 @@ class Wiring:
 
 
 def wiring(record: BlockGrid, params: WardenParams, salt: bytes | None = None) -> Wiring:
-    """The link-window's wiring, read off its record (a cell's stream field is its connection's ordinal), under `salt`
+    """The execution phase's wiring, read off its record (a cell's stream field is its connection's ordinal), under `salt`
     (default: 64 bytes fresh from the operating system); ValueError when the record's cells aren't where the schedule
     puts them."""
     held: dict[int, list[tuple[int, int]]] = {}
@@ -288,8 +290,8 @@ def opens(dom: CommitmentDomain, root: bytes, position: int, bc_: bytes, path: b
 
 @dataclass(frozen=True, slots=True)
 class CellsHead:
-    """What the network certifier signs for an execution phase's rows: public, since its root and wiring digest are
-    hiding."""
+    """What the network certifier signs for an execution phase's rows. A run keeps it on its private side, in the
+    registration: `wiring` is private."""
 
     link: str
     direction: Direction
@@ -340,7 +342,7 @@ class Cells:
         (default: fresh from the operating system) and never for another row."""
         rows = tuple(bytes(r) for r in rows)
         if len(rows) != rows_of(params) or any(len(r) != row_bytes(params) for r in rows):
-            raise ValueError(f"a link-window is {rows_of(params)} rows of {row_bytes(params)} bytes, one a bucket")
+            raise ValueError(f"an execution phase is {rows_of(params)} rows of {row_bytes(params)} bytes, one a bucket")
         wiring.live(params)
         salts = tuple(_INST.fresh_salt() for _ in rows) if salts is None else tuple(bytes(s) for s in salts)
         if len(salts) != len(rows) or any(len(s) != _INST.salt_bytes for s in salts):
@@ -404,7 +406,7 @@ class Cells:
         prover's), and its header's `registered` entry, `{"value", "positions", "paths"}`. With `units`, the
         positions are the rows its cells are in, and the entry names its value (`Units.value`), as `port` does."""
         if any(not 0 <= p < len(self.rows) for p in positions):
-            raise ValueError(f"a position is outside the link-window's {len(self.rows)} rows")
+            raise ValueError(f"a position is outside the execution phase's {len(self.rows)} rows")
         if units is not None and [t for t, _ in self.wiring.place(self.params, units.cells)] != list(positions):
             raise ValueError("the positions aren't the rows the units' wiring reads")
         return ([words(self.rows[p]) for p in positions], [self.salts[p] for p in positions],
@@ -416,7 +418,7 @@ def read_witness(blob: bytes) -> tuple[list[bytes], bytes]:
     """`Cells.witness` read back: the rows' salts and the wiring's."""
     rows = len(blob) - WIRING_SALT_BYTES
     if rows < 0 or rows % SALT_BYTES:
-        raise ValueError(f"a link-window's witness is {SALT_BYTES} bytes a row and the wiring's {WIRING_SALT_BYTES}")
+        raise ValueError(f"an execution phase's witness is {SALT_BYTES} bytes a row and the wiring's {WIRING_SALT_BYTES}")
     return [blob[i:i + SALT_BYTES] for i in range(0, rows, SALT_BYTES)], blob[rows:]
 
 
@@ -434,8 +436,8 @@ def _layout(params: WardenParams, window: int) -> dict[str, int]:
 
 
 def registration(head: CellsHead, certificate: Certificate, params: WardenParams) -> dict[str, Any]:
-    """The public record a proof block's registered port reads: the head, the rows' format and order, and the
-    certificate."""
+    """The record a proof block's registered port reads: the head, the rows' format and order, and the
+    certificate. A run keeps it whole on its private side; the auditor's gate publishes it less the wiring."""
     return {"format": REGISTRATION, "value": head.value, "link": head.link, "direction": head.direction.value,
             "window": head.window, "parameters": head.parameters.hex(), "cell_bytes": head.cell_bytes,
             "rows": head.rows, "words": head.slots * head.cell_bytes // 2, "word_bits": WORD_BITS,
@@ -545,3 +547,13 @@ def refusal(port_: Mapping[str, Any], dom: CommitmentDomain, entry: Mapping[str,
 def reads_file(ports: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """The verifier's own `--registered` file (`verity/registered-reads/v1`) of its ports, `{circuit port: port}`."""
     return {"format": G.READS_V1, "ports": {p: dict(e) for p, e in ports.items()}}
+
+
+def reads_text(file: Mapping[str, Any] | None) -> str:
+    """A `--registered` file's text (`reads_file`'s, or null for a statement with no registered read): its JSON with
+    sorted keys and no space. A port's ``reads`` are positions, protocol structure, and a run of them (the same row
+    read by a member's first units) is a run of small numbers, as a record head's bucket counts are, which are witness.
+    Written with JSON's default separators the two runs are the same bytes, and a reader that compares a released
+    file's bytes with the witness's (the record's leak guard) can't tell this file from a copy of the counts; written
+    without them it shares no run of bytes with a list the certifier's record writes."""
+    return json.dumps(file, sort_keys=True, separators=(",", ":"))

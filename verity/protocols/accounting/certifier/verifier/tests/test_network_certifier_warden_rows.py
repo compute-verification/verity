@@ -15,7 +15,7 @@ import signers
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import warden_rows as W
-from verity.protocols.accounting.certifier.verifier.active import DATA
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.accounting.certifier.verifier.grid import Reason, BlockGrid, Status
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import (B, EOF, P, PARAMS, cells, records,
@@ -46,7 +46,7 @@ def _attest(tmp_path, record, direction=Direction.EGRESS, session=signers.SESSIO
     return issuer, cells_, cert
 
 
-def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
+def test_a_phase_is_a_row_a_bucket_whatever_the_load(traffic):
     """T rows in every window, loaded or idle; row b is bucket b's S slots in slot order, an empty slot B zero bytes."""
     warden, _ = traffic
     idle, _, _ = run([], {}, windows=1)

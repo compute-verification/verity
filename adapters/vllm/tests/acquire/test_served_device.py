@@ -12,11 +12,11 @@ import json
 from typing import Any
 
 import pytest
-from verity.definitions.registry import bf16_gemm_check as BC
 
 from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire.inductor_templates import Unmodelled
+from verity_vllm.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.engine.profiles.devices import CARD, NO_CARD
 from verity_vllm.pipeline import served_match
 

@@ -2,11 +2,11 @@ module
 
 public import Proofs.Flock.SpotFlock.InstanceStmt.Header
 public import Proofs.Flock.SpotFlock.EntriesAt
-import Proofs.Pouw.Period.Sort
+import Proofs.Pouw.MonitoringPeriod.Sort
 import Std.Data.TreeMap.Raw.Lemmas
 import Flock.Comp
 import Flock.JsonParse
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Canon
 import all Lean.Data.Json.Basic
@@ -59,7 +59,7 @@ theorem keys?_model {t : Impl String (fun _ => Json)} {l : List String} (hs : l.
     (h : t.toListModel.map (·.1) = l) : Spot.keys? (.obj ⟨⟨t⟩⟩) = some l.toArray := by
   show some (Spot.sortStrings ((⟨⟨t⟩⟩ : Std.TreeMap.Raw String Json compare).toArray.map (·.1))) = _
   rw [keys_toArray, h, Spot.sortStrings]
-  exact congrArg some (Array.ext' (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted (as := l.toArray) hs))
+  exact congrArg some (Array.ext' (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_of_sorted (as := l.toArray) hs))
 
 theorem stmt_obj (r : Run) (circ cls t : String) :
     Json.mkObj [("draw", sampleJ), ("header", hdrJ r circ cls), ("registered", regJ), ("template", .str t)] =

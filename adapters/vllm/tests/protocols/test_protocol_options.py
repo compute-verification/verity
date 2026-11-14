@@ -2,7 +2,7 @@
 installs innermost first, uninstalls to exactly what the model held, and records what each option committed to.
 
 CPU only.  The PoUW and POUS adapters are stand-ins (`_fake_adapter`) over a toy linear layer whose ``quant_method.apply`` is
-the hook site both real adapters wrap; the sampled-proofs adapter is the real one.
+the hook site both real adapters wrap; the SPOT adapter is the real one.
 """
 from __future__ import annotations
 
@@ -390,10 +390,10 @@ def test_an_adapter_that_installs_another_entry_leaves_nothing_installed(monkeyp
 def test_a_driver_its_tree_does_not_hold_is_refused_by_name(monkeypatch):
     """A protocol serving drives by flag (`driver`, PoUB's ``--remote-verifier``) is imported by name, so a tree without its
     package refuses the flag by name rather than failing to import."""
-    monkeypatch.setitem(PO.DRIVERS, "remote-bandwidth", "not_landed_here")
-    with pytest.raises(PO.Refused, match=r"remote-bandwidth: its driver verity_vllm\.protocols\.not_landed_here\.remote is "
+    monkeypatch.setitem(PO.DRIVERS, "poub", "not_landed_here")
+    with pytest.raises(PO.Refused, match=r"poub: its driver verity_vllm\.protocols\.not_landed_here\.remote is "
                                          "not on this tree"):
-        PO.driver("remote-bandwidth", "remote")
+        PO.driver("poub", "remote")
     with pytest.raises(PO.Refused, match="no driver of protocol 'pous'"):
         PO.driver("pous", "remote")
 
@@ -409,7 +409,7 @@ def test_spot_alone_at_the_commit_adds_no_hooks():
 
 def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still_parses(capsys):
     """vllm-v1 (SHA-256, 32-byte roots) is registered so a recorded run's target parses and digests as it did; a Commit
-    refuses it by name, and refuses a committer whose scheme isn't the one sampled proofs is declared with."""
+    refuses it by name, and refuses a committer whose scheme isn't the one SPOT is declared with."""
     assert config.DEFAULT_ROW_PROTOCOLS == ("sampled-proofs:rows-sha512",)
     with pytest.raises(PO.Refused, match=r"sampled-proofs:vllm-v1: vllm-v1 \(SHA-256, 32-byte roots\) is kept only to read "
                                          r"recorded runs: .* declare sampled-proofs:rows-sha512"):
@@ -653,8 +653,7 @@ def _commit(*enabled):
 
 def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     """`verity.protocols.accounting.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
-    that scheme is admitted beside sampled proofs, and every other one keeps its refusal, word for word.  Without sampled
-    proofs nothing changes."""
+    that scheme is admitted beside SPOT, and every other one keeps its refusal, word for word.  Without SPOT nothing changes."""
     from verity.protocols.accounting.pouw.prover import circuit
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
@@ -679,16 +678,16 @@ PEARL_SETTINGS = {"device": "cuda", "kernel": "/k", "cubin": "/c"}
 
 
 def _cut_window(cut=None, **more):
-    """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside sampled proofs, ``cut`` the
-    sampled-proofs setting naming the executor whose sites the window's circuit is cut at."""
+    """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside SPOT, ``cut`` the
+    SPOT setting naming the executor whose sites the window's circuit is cut at."""
     own = {**({} if cut is None else {PO.CUT: cut}), **more}
     return PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
                       settings={"pouw": PEARL_SETTINGS, "sampled-proofs": own})
 
 
 def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
-    """Pearl-C has no circuit (its y is noise-dependent), so sampled proofs takes it only where the window's circuit is cut at
-    its linears and reads the tables its calls commit (`window_class.PearlTables`), which the sampled-proofs setting
+    """Pearl-C has no circuit (its y is noise-dependent), so SPOT takes it only where the window's circuit is cut at
+    its linears and reads the tables its calls commit (`window_class.PearlTables`), which the SPOT setting
     ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
     composition refuses by name; a row's Commit refuses any cut, since its request Programs are never cut."""
     from verity_vllm.protocols import pouw

@@ -30,7 +30,7 @@ the cost.
   copy of the Programs' statics and its verdict ``o0``; Lean holds each ``srb`` row's b‖c to the leaf its own reads file
   names (`served_rows.reads_port`), and the host predicts the same read (`served_rows.leaf_ok`). A block passes when it is
   proved and its verdict is ``ACCEPT``. The received-pieces scan is `leak_scan.scan`
-  (``benchmarks/network_traces/leak_scan.py``), every zero-knowledge driver's, and a row shorter than its piece (``srb``
+  (``verity/protocols/accounting/certifier/prover/leak_scan.py``), every zero-knowledge driver's, and a row shorter than its piece (``srb``
   at G = 1 in the slice's class, 8 bytes) is found whole (`leak_scan.find_whole`).
 """
 from __future__ import annotations
@@ -48,11 +48,12 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
-import leak_scan as LS  # noqa: E402
+import zk_drivers  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, n2_zk as N2  # noqa: E402
 import served_tie_window as STW  # noqa: E402
 import served_tie_zk as STZ  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import served_rows as SR  # noqa: E402
-from verity.protocols.accounting.certifier.prover import served_statics as SS, served_tie as ST  # noqa: E402
+from verity_vllm.compiler import served_rows as SR  # noqa: E402
+from verity_vllm.compiler import served_statics as SS, served_tie as ST  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 
 CLASSES = {k: {s: c[s] for s in ("R", "P", "IW", "L", "T")} for k, c in STZ.CLASSES.items()}
@@ -264,7 +265,7 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
     verdicts[f"lean-verify/{name}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"}
     proved = a0.proved_units(m["header"], live or {})
-    timing = {k: (live or {}).get(k) for k in N2.TIMING}
+    timing = {k: (live or {}).get(k) for k in STZ.TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",
                                                                                          "sigma")},
                         "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
@@ -304,8 +305,8 @@ def audit(M, N2, a, sg, m: dict, units: list, d: SimpleNamespace, out: Path, por
             "verdicts": {k: y.get("accepted") for k, y in verdicts.items()}, "why": {k: y.get("why") for k, y in verdicts.items()},
             "registered": lv.get("registered"), "timing": statement[name], "lean_verify_s": lv.get("verify_s"),
             "proof_bytes": proofs,
-            "per_unit": {"prove_total_s": N2._per(timing.get("prove_total_s"), n), "proof_bytes": N2._per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": N2._per(lv.get("verify_s"), n)}}
+            "per_unit": {"prove_total_s": STZ._per(timing.get("prove_total_s"), n), "proof_bytes": STZ._per(sum(proofs) if proofs else None, n),
+                         "lean_verify_s": STZ._per(lv.get("verify_s"), n)}}
 
 
 def blobs_of(units: list, salts: dict) -> tuple[dict[str, bytes], set[str]]:
@@ -367,7 +368,7 @@ def prove(a) -> int:
     if a.dry or not ref_ok:
         return 0 if ref_ok else 1
 
-    N2 = __import__("n2_zk")
+    zk_drivers.install()
     M = N2._one_stage()
     defn = SS.unit(**d.st)
     secret = os.urandom(32)

@@ -22,10 +22,10 @@
    "declarations": 60
   },
   "Proofs/Flock": {
-   "modules": 296,
-   "declarations": 2361
+   "modules": 300,
+   "declarations": 2415
   },
-  "Proofs/Nci": {
+  "Proofs/InferenceOnly": {
    "modules": 1,
    "declarations": 4
   },

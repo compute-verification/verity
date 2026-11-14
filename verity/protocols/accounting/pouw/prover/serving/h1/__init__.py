@@ -8,8 +8,8 @@ served int8 linear call as its own Program on bits, which `verity.protocols.acco
   column) grid, so each rest commits one BF16 (the width rule). Rows and weight rows off a whole tile (`TILE`, a warp's
   32 × 32, the tile the H1 kernel computes) are padded: pad row p reads constant zero bits of its own, contiguous, so it is a
   distinct row of the site, and its outputs are not served.
-* **The static layout** (`H1Run`, the static-circuit rule): every call has the same T rows (``rows``, vLLM's
-  ``max_num_batched_tokens``, a multiple of 32), so its Program is `program(k, n, T)` whatever the step served. The step's m
+* **The static layout** (`H1Run`, the static-circuit rule): every call has the same T rows (``rows``, the engine's
+  scheduler's tokens a step, ``max_num_batched_tokens``, a multiple of 32), so its Program is `program(k, n, T)` whatever the step served. The step's m
   served rows fill slots 0 .. m - 1 and every other slot is an empty row, zero bytes under scale 0 (`slots`). The window is S
   steps (``steps``) of one call per linear: call (s, w) is at positions s·U + off(w) + u (`layout`: U is a step's proof blocks,
   off(w) the proof blocks of the linears before w), and steps past the last served one are all empty. Nothing about a call's rows or
@@ -38,9 +38,9 @@ served int8 linear call as its own Program on bits, which `verity.protocols.acco
   and held to them by core's credit (`credit._arow`); a window that fails it credits nothing (`pouw_h1_commit.UNTIED`).
 * **z** is the call's z/y records (`pouw_h1_records`): the int8 arm serves ``verity_int8::scaled_mm_zy`` over T slots (its
   ``zy_rows``), writing the served y and one record a proof block, its exact z (`Call.z`'s cells) then y = dq(z). With none,
-  none is committed (with ``retain``, `engine.int8_exact.int_mm` beside, to check). The last ``retain`` calls' Y are kept.
+  none is committed (with ``retain``, the arm's `int_mm` beside, `int8_arm.Int8Arm`, to check). The last ``retain`` calls' Y are kept.
 * **The credit gate** (`credit_gate`, compute accounting's credit rule): each served call's ``apply`` runs under a trace
-  (`traced`); the call gate-passes only if the y it hands back to vLLM was written by the GEMM invocation that wrote its
+  (`traced`); the call gate-passes only if the y it hands back to the serving engine was written by the GEMM invocation that wrote its
   z, the only GEMM of the call, and z is its records, which hold together with its scales and served y
   (`pouw_h1_records.reason`, else ``credit: z-records: ...``). An arm serving ``scaled_mm``'s y with z an ``_int_mm``
   beside it is refused (``credit: served-output-not-credited-kernel: ...``), as is a call recorded outside ``apply`` (`UNTRACED`).
@@ -70,6 +70,7 @@ import json
 import os
 from collections import Counter, deque
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
@@ -91,11 +92,12 @@ from verity.protocols.accounting.pouw.verifier.credit import CREDIT
 from verity.protocols.proofs.spot.device.challenger import CoinError
 
 from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity.protocols.accounting.pouw.prover.serving import int8_arm as ARM
 from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
+from verity.protocols.accounting.pouw.prover.serving.h1 import tables as TB
 from verity.protocols.accounting.pouw.prover.serving.h1.commit import calls_root
 from verity.protocols.accounting.pouw.prover.serving.h1.names import SALT_TAG, program_salt
 from verity.protocols.accounting.pouw.prover.serving.h1.records import numpy_of
@@ -107,18 +109,18 @@ from verity.protocols.accounting.pouw.prover.serving.h1.static import (
     graph_pad,
     utilization,
 )
-from verity_vllm.records.schema_ids import POUW_H1_CALLS_SCHEMA
 
 SCHEME = H.SCHEME
 TILE = (32, 32)
 #: the bits of one s8 entry and of one bf16 output
 I8_BITS, BF16_BITS = 8, 16
-RECORD = POUW_H1_CALLS_SCHEMA
+#: a served window's calls record's schema, `CALLS_FILE`, which `H1Run.finish` writes
+RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
 #: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
 #: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
 PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
-#: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
+#: the one origin a credited window's coins may come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
 #: the credit refusal of every call of a window whose coins the auditor's challenger didn't sample
 IN_PROCESS = ("credit: coins-not-the-auditors: the window's coins were held in the serving process, not drawn by the "
@@ -320,7 +322,7 @@ class H1Run:
     def __init__(self, entry: str, salt: bytes | None, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]],
                  rows: int, steps: int, retain: int = 0, transcript_dir: str | None = None, commit: bool = True,
                  rounds: Any = None, key: bytes | None = None, draw: Any = None, admission: str = RQ.ROUND0,
-                 coin_source: str = "in-process", opener: Opener | None = None, served: Any = None,
+                 coins_from: str = "in-process", opener: Opener | None = None, served: Any = None,
                  prover: str | None = None, session: str | None = None, graphs: Sequence[int] = (),
                  commit_record: CT.CommitRecord | None = None) -> None:
         if admission not in RQ.ADMISSIONS:
@@ -346,7 +348,7 @@ class H1Run:
         #: why the window's salt opening was refused (also ``details["unopened"]``): a window opens it once
         self._unopened: str | None = None
         self.rounds, self._key, self.served = rounds, key if key is not None else os.urandom(32), served
-        self.draw, self.admission, self.coin_source, self.commit_record = draw, admission, coin_source, commit_record
+        self.draw, self.admission, self.coins_from, self.commit_record = draw, admission, coins_from, commit_record
         #: the gate's reserved session (None for in-process coins), bound by round 0's input-ids table (`Served.ids_tree`)
         self.session = session
         #: the root of round 0's input-ids table, inside round 0's request root (`open_window`)
@@ -356,7 +358,7 @@ class H1Run:
             PV.keep_key(self.prover, self._key)
         #: each call's table roots (`tables`), the calls whose tables the GPU is still hashing, and each call's receipt root
         self._roots: dict[int, dict[str, str | None]] = {}
-        self._hashing: deque[tuple[int, TD.Pending]] = deque()
+        self._hashing: deque[tuple[int, Any]] = deque()
         self.receipts: dict[int, bytes] = {}
         #: the admitted requests' entries in admission order, each round's, and the requests refused admission
         self.requests: list[RQ.RequestEntry] = []
@@ -390,7 +392,7 @@ class H1Run:
     @property
     def tables(self) -> dict[int, dict[str, str | None]]:
         """Each call's table roots (hex; z None when the run has no exact Y for it), once the GPU has hashed them all."""
-        TD.settle(self, wait=True)
+        TB.settle(self, wait=True)
         if self.served is not None:
             self.served.settle()
         return self._roots
@@ -435,8 +437,8 @@ class H1Run:
         return requests
 
     def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
-        """The call's A and z tables (`pouw_h1_tables_device.commit_tables`)."""
-        TD.commit_tables(self, call, a, s_a, records, zy)
+        """The call's A and z tables (`pouw_h1_tables.commit_tables`)."""
+        TB.commit_tables(self, call, a, s_a, records, zy)
 
     def call(self, index: int) -> Call:
         """Call `index`; KeyError when the window has none."""
@@ -457,7 +459,7 @@ class H1Run:
             self._commit_tables(call, a, s_a, records, zy)
             if self.served is not None:
                 self._roots[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
-            TD.flush(self)
+            TB.flush(self)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
@@ -471,7 +473,7 @@ class H1Run:
               ) -> list[RQ.RequestEntry]:
         """The step about to run: the requests the engine admits for it, each (req_id, prompt token ids, token cap), and its
         batch order, each scheduled request's (req_id, rows) in the order the step's A tables hold its rows
-        (`pouw_h1_requests.batch_order`). Each new request's entry goes in the step's round, at its first slot; a req_id
+        (the adapter's). Each new request's entry goes in the step's round, at its first slot; a req_id
         already admitted (a request resumed
         after a preemption) keeps its entry (`readmitted`). A request past the window's S steps, with no prompt token or
         cap, or not in the batch is refused (`refused_requests`): it has no entry, and its rows are a gap
@@ -590,6 +592,16 @@ class H1Run:
         return [f"step {u['round']}: {u['rows']} row{'' if u['rows'] == 1 else 's'} of a request with no entry"
                 for u in self.unadmitted] + self.unbound
 
+    def observe(self, site: int, x: Any, weight: Any, y: Any, /, *, x_scale: Any = None, weight_scale: Any = None,
+                z: Any = None) -> None:
+        """`serving.observe_matmul`: linear ``site``'s call as its arm served it, recorded (`record`) unless the run commits
+        nothing. ``y`` is the arm's, which `judge` holds against the call's trace. A record given z writes neither y nor z
+        and runs no GEMM, so it runs `credit_gate.outside` the trace; one without z stays in it, where the GEMM a retaining
+        record runs is seen."""
+        if self.commit:
+            with CG.outside() if z is not None else nullcontext():
+                self.record(site, x, x_scale, weight, weight_scale, z)
+
     def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
         """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and
         the z its arm handed over: its records (`pouw_h1_records.of`), committed as its z table; without them nothing is
@@ -610,8 +622,7 @@ class H1Run:
         records = ZR.of(z, units(k, n, self.rows)) if n % TILE[1] == 0 else None
         zy = z if records is not None else None
         if z is None and self.retain:
-            from verity_vllm.engine.int8_exact import int_mm
-            z = int_mm(a, weight)
+            z = ARM.arm().int_mm(a, weight)
         call = self._call(self.step, w, a, s_a, weight, weight_scale, records, zy)
         if self.retain:
             y = ZR.split(ZR.host(records), call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
@@ -619,9 +630,9 @@ class H1Run:
         self._recorded = (call, z, None if records is None else (records, s_a, weight_scale))
         return call
 
-    def judge(self, trace: CG.Trace, y: Any) -> dict[str, Any] | None:
+    def judge(self, trace: Any, y: Any) -> dict[str, Any] | None:
         """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
-        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
+        back to the serving engine; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
         the records' device first (`pouw_h1_records.holds_on`) and on the host's copy only when that doesn't hold."""
         made, self._recorded = self._recorded, None
         if made is None:
@@ -630,7 +641,7 @@ class H1Run:
         v = CG.verdict(trace, y, z)
         if v["credit"] and not (held is not None and ZR.holds_on(z, call.rows, call.n, y, held[1], held[2])) \
                 and (why := ZR.refusal(held and (held[0], numpy_of(held[1]), numpy_of(held[2])), call,
-                                       TD.row_words(y, call.m, "<i2"))):
+                                       TB.row_words(y, call.m, "<i2"))):
             v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
         self.verdicts[call.index] = v
         return v
@@ -659,7 +670,7 @@ class H1Run:
                                     "per_round": [len(self.admitted.get(r, [])) for r in range(self.steps)],
                                     "readmitted": len(self.readmitted), "gaps": self.request_gaps(),
                                     "coins": "live" if self.rounds is not None else "none",
-                                    "coin_source": self.coin_source, "admission": self.admission,
+                                    "coin_source": self.coins_from, "admission": self.admission,
                                     "a_roots": "bound: each call's A table is under its round's root" if unbound is None
                                     else f"unbound: {unbound}"}
         self.details["static"] = self.static()
@@ -693,7 +704,7 @@ class H1Run:
         ids aren't the Commit's (`pouw_h1_commit.UNTIED`, ``details.roots1``)."""
         out = {c.index: self.verdict(c) for c in self.calls if c.m}
         untied = bool(tie.get("reason")) if (tie := self.details.get("roots1")) else False
-        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coin_source != CHALLENGER),
+        for why, on in ((RQ.UNENTERED, bool(self.request_gaps())), (IN_PROCESS, self.coins_from != CHALLENGER),
                         (CT.UNTIED, untied)):
             out = {i: {**v, "credit": False, "reason": why} if on and v["credit"] else v for i, v in out.items()}
         return out
@@ -719,7 +730,7 @@ class H1Run:
         return {"rule": "gate-pass the served rows of calls whose served y is the credited kernel's own output only, and none "
                         "in a window that served a row of a request with no entry or whose coins the auditor's challenger "
                         "didn't draw; padded work and refused calls are shown, not gate-passed", "requests": gaps,
-                "coins": self.coin_source,
+                "coins": self.coins_from,
                 "gate_passed": {"rows": sum(c.served for c in ok), "macs": sum(c.served * c.n * c.k for c in ok)},
                 "refused": {"calls": len(no), "rows": sum(c.served for c in no), "macs": sum(c.served * c.n * c.k for c in no),
                             "reasons": CG.reasons(verdicts[c.index] for c in no)},

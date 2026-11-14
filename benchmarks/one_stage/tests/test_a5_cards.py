@@ -1,5 +1,6 @@
-"""An audit's cards: ``--devices`` is the one place it takes them from, SPOT's proof server proves on them (one CPU
-prover without them, as before), a session that proves on the CPU refuses them by name, and the summary says of
+"""An audit's cards: ``--gpus`` is the one place it takes them from, SPOT's proof server proves on them behind the ZK
+server or not, numbered by PCI bus (one CPU prover without them, as before), a plain session, which proves on the CPU,
+refuses them by name, and the summary says of
 each session where it proved and which of its seconds are its proving's. No card is needed here: the proof server is a
 stand-in that keeps what it was given, and nvidia-smi's answer is handed in."""
 
@@ -13,8 +14,8 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-import a0  # noqa: E402
-import a5  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5  # noqa: E402
 from verity_flock.proof_server import Session  # noqa: E402
 
 PERFORMANCE = """
@@ -41,7 +42,7 @@ GPU 00000000:DB:00.0
 
 
 def _args(**more) -> argparse.Namespace:
-    return argparse.Namespace(**{"bin": "flock-circuit", "plain": False, "firewall": None, **more})
+    return argparse.Namespace(**{"bin": "flock-circuit", "plain": False, "zk_server": None, **more})
 
 
 @pytest.fixture
@@ -52,7 +53,7 @@ def made(monkeypatch) -> list[dict]:
     return got
 
 
-def test_devices_names_the_cards_by_index_each_once():
+def test_gpus_names_the_cards_by_index_each_once():
     assert a5.cards("0") == [0] and a5.cards("0,2,3,4,5,6,7") == [0, 2, 3, 4, 5, 6, 7] and a5.cards(" 3 , 1 ") == [3, 1]
     for text in ("", "0,", "0,0", "a", "GPU-1f0c", "-1", "0 1", "1.5"):
         with pytest.raises(argparse.ArgumentTypeError, match="their indices, each once"):
@@ -60,9 +61,9 @@ def test_devices_names_the_cards_by_index_each_once():
 
 
 def test_an_audit_without_devices_proves_on_one_cpu_prover_as_before(tmp_path, made):
-    """No ``devices`` (an older caller's namespace has none), None and an empty list are all the CPU: the proof server
+    """No ``gpus`` (an older caller's namespace has none), None and an empty list are all the CPU: the proof server
     gets no devices and the environment it had."""
-    for a in (_args(), _args(devices=None), _args(devices=[])):
+    for a in (_args(), _args(gpus=None), _args(gpus=[])):
         assert a5.devices(a) is None and a5.devices_refusal(a) is None
         assert a5.proof_server(a, tmp_path) is made[-1]
         assert made[-1] == {"bin": "flock-circuit", "out": tmp_path / "proof-server", "devices": None, "env": a0.DIRECT,
@@ -70,21 +71,33 @@ def test_an_audit_without_devices_proves_on_one_cpu_prover_as_before(tmp_path, m
 
 
 def test_an_audits_cards_go_to_the_proof_server_numbered_as_nvidia_smi_numbers_them(tmp_path, made):
-    a = _args(devices=[0, 2, 3])
+    a = _args(gpus=[0, 2, 3])
     a5.proof_server(a, tmp_path)
     assert made[-1]["devices"] == [0, 2, 3] == a5.devices(a)
     assert made[-1]["env"] == {**a0.DIRECT, "CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
 
 
-@pytest.mark.parametrize("how", [{"plain": True}, {"firewall": "flock-firewall"}])
-def test_a_session_that_proves_on_the_cpu_takes_no_card_and_says_so(tmp_path, made, how):
-    """A plain session is a process pair on the CPU, and one behind the ZK server proves on the CPU too, on the proof
-    server's kept prover: without cards they are as before (here, with no sampled member, no proof server), and with
-    cards the audit is refused by name, never run on the CPU in silence."""
-    assert a5.proof_server(_args(**how), tmp_path) is None and a5.devices_refusal(_args(**how)) is None
-    a = _args(devices=[0], **how)
-    assert "drop --devices" in a5.devices_refusal(a)
-    with pytest.raises(ValueError, match="drop --devices"):
+def test_behind_the_zk_server_the_cards_go_to_its_kept_prover_numbered_as_nvidia_smi_numbers_them(tmp_path, made):
+    """Behind the ZK server the proof server's kept prover proves on the cards too (`prove --zk --gpu --stream`), in
+    the members' one environment with the cards numbered by PCI bus and the witness the host's (the ZK server refuses
+    one the device builds); without cards it is that environment alone."""
+    window = {"partition_file": tmp_path / "partition.json", "program_file": tmp_path / "program.json"}
+    want = a0.prover_env("loop", window)
+    a5.proof_server(_args(zk_server="loop", gpus=[1, 4]), tmp_path, [dict(window)])
+    assert made[-1]["devices"] == [1, 4]
+    assert made[-1]["env"] == {**want, "FC_HOST_WITNESS": "1", "CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
+    assert a5.devices_refusal(_args(zk_server="loop", gpus=[1, 4])) is None
+    a5.proof_server(_args(zk_server="loop"), tmp_path, [dict(window)])
+    assert made[-1]["devices"] is None and made[-1]["env"] == want
+
+
+def test_a_plain_session_proves_on_the_cpu_takes_no_card_and_says_so(tmp_path, made):
+    """A plain session is a process pair on the CPU: without cards it is as before (no proof server), and with cards
+    the audit is refused by name, never run on the CPU in silence."""
+    assert a5.proof_server(_args(plain=True), tmp_path) is None and a5.devices_refusal(_args(plain=True)) is None
+    a = _args(gpus=[0], plain=True)
+    assert "drop --gpus" in a5.devices_refusal(a)
+    with pytest.raises(ValueError, match="drop --gpus"):
         a5.proof_server(a, tmp_path)
     assert made == []
 

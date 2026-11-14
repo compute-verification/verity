@@ -8,7 +8,7 @@ public import Definitions.Core.Uniform
 # Interaction: the live-coin model every proof system's claims are stated in
 
 The vocabulary the claims of every proof system read, inner or outer: Flock's (`Definitions/Claims.lean`), the
-recursion's (`Definitions/Claims/Recursion.lean`), the sampled proofs' (`Definitions/Claims/Sampling.lean`) and the
+recursion's (`Definitions/Claims/Recursion.lean`), SPOT's (`Definitions/Claims/Sampling.lean`) and the
 composition of zero knowledge through a recursion (`Definitions/Core/Rec.lean`). It is
 Core's, and keeps the namespace `Claims` its records were written under. Its forms:
 
@@ -549,8 +549,8 @@ structure Recorded {Coin : Type} (V : Verifier Coin) where
 
 /-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is for a test
 against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s `lean-agreement` job
-(`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier's checks
-(`verity-verify-proof agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+(`tools/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier's checks
+(`verity-verify-proof agree`, `verity/protocols/proofs/flock/prover/agreement/agree.py`) and fails unless each passes them. Its sessions are of
 forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (recs : List (Recorded V)) : Prop :=
   recs ≠ [] ∧ ∀ e ∈ recs, (run H (replay e.as) V e.x () e.r).out = .acc

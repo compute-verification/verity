@@ -5,18 +5,18 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import hashlib
-import os
 
 import numpy as np
 import pytest
+from verity_config.verity_settings import REGISTRY as VERITY_SETTINGS
 
 from verity.protocols.accounting.pouw.prover.serving import circuit as PC
 from verity.protocols.accounting.pouw.prover.serving import device as PD
 from verity.protocols.accounting.pouw.prover.serving import native as PN
 
-#: Under `check` (`tools/verity/check/suites.py` sets VERITY_SUITE_ROOT) the CPU build always runs: without a compiler these tests
+#: Under `check` (`tools/check/suites.py` sets VERITY_SUITE_ROOT) the CPU build always runs: without a compiler these tests
 #: fail there instead of skipping. nvcc and a GPU stay optional (their tests skip by name).
-IN_CHECK = bool(os.environ.get("VERITY_SUITE_ROOT"))
+IN_CHECK = bool(VERITY_SETTINGS.VERITY_SUITE_ROOT)
 pytestmark = pytest.mark.skipif(PD.compiler() is None and not IN_CHECK, reason="needs a C++ compiler")
 
 

@@ -17,7 +17,6 @@ import pytest
 import torch
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.definitions.registry import marlin_moe as MM
 
 from tests import fake_vllm
 from tests.acquire.test_glm53_sources import Committer
@@ -26,6 +25,7 @@ from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import moe_align_source as MA
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources import taps
+from verity_vllm.definitions.registry import marlin_moe as MM
 from verity_vllm.query.manifest.bind import Binder, source_ports
 
 

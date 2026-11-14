@@ -39,13 +39,14 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Properties.Certifier.Device.Lms
+import Proofs.Properties.Hash.Lms
+import Proofs.Properties.Hash.Lms
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# N2's link-window verdict: what an acceptance establishes
+# N2's execution phase verdict: what an acceptance establishes
 
 The proof of `Properties.Certifier.TransferBlocksAcceptMeans`: `verdict`'s accept bit is `acceptedOf` of its four
 checks (`verdict_shape`), and each check that holds is its predicate (`proved_spec`, `opened_spec`, `certified_spec`,
@@ -53,7 +54,7 @@ checks (`verdict_shape`), and each check that holds is its predicate (`proved_sp
 
 Its two lemmas:
 
-* honest: `transferBlocksAcceptMeans_honest`, the converse, that a link-window proved, opened, certified and synced is
+* honest: `transferBlocksAcceptMeans_honest`, the converse, that an execution phase proved, opened, certified and synced is
   accepted with the property's outputs and digest (each predicate is its check, `proved_of` … `synced_of`, and the
   verdict's digest always computes, `verdictDigest_ok`); and `transferBlocksAcceptMeans_honest_certifier`, that on a warden
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
@@ -62,9 +63,9 @@ Its two lemmas:
   the findings of its run of Flock's verifier (`ExecutionPhaseProved`) and the statement's public file holding the sampled
   proof block's row commitments (`ExecutionPhaseOpened`, whose header line `commitments` reads through Flock's JSON parser, which no proof
   here evaluates, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
-* nontrivial: `transferBlocksAcceptMeans_nontrivial`, that a verifier accepting every link-window doesn't have the property
+* nontrivial: `transferBlocksAcceptMeans_nontrivial`, that a verifier accepting every execution phase doesn't have the property
   (`TransferBlocksAcceptMeansBy`, which is the property at the verdict, `transferBlocksAcceptMeans_by`): it accepts a warden
-  link-window with no findings, which isn't proved.
+  execution phase with no findings, which isn't proved.
 -/
 
 @[expose] public section
@@ -75,7 +76,7 @@ open Lean (Json toJson)
 namespace Properties.Certifier
 
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
-local instance instLawfulBEqByteArray_linkWindow : LawfulBEq ByteArray where
+local instance instLawfulBEqByteArray_transferBlocks : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
@@ -340,7 +341,7 @@ theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true acceptedOutput
   simp only [ht, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
 
-/-- **A link-window proved, opened, certified and synced is accepted** (the honest lemma of `TransferBlocksAcceptMeans`,
+/-- **An execution phase proved, opened, certified and synced is accepted** (the honest lemma of `TransferBlocksAcceptMeans`,
 its converse): the verdict accepts it, with the outputs and digest the property states. -/
 theorem transferBlocksAcceptMeans_honest :
     ∀ c : Case, ExecutionPhaseAccepted c → (verdict c).map Verdict.accepted = .ok true ∧ ExecutionPhaseVerdict c := by
@@ -354,7 +355,7 @@ theorem transferBlocksAcceptMeans_honest :
       Bool.and_self, Option.getD_some, hout, hd, bind, Except.bind, pure, Except.pure]
   exact ⟨by rw [hv]; rfl, _, hv, rfl, hd⟩
 
-/-- **An honest warden link-window is accepted** (the honest lemma of `TransferBlocksAcceptMeans` on a warden link): one
+/-- **An honest warden execution phase is accepted** (the honest lemma of `TransferBlocksAcceptMeans` on a warden link): one
 proved and opened whose two certificates the certifier's device signed under its key (a key `Lms.key` derives at
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
 theorem transferBlocksAcceptMeans_honest_certifier :
@@ -376,7 +377,7 @@ theorem transferBlocksAcceptMeans_honest_certifier :
 
 theorem transferBlocksAcceptMeans_by : TransferBlocksAcceptMeans ↔ TransferBlocksAcceptMeansBy verdict := Iff.rfl
 
-/-- A warden link-window with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
+/-- A warden execution phase with no findings, on an empty grid: no verifier's acceptance of it means it was proved. -/
 def unproved (w : ByteArray) : Case where
   link := ""
   run := ""
@@ -405,8 +406,8 @@ def unproved (w : ByteArray) : Case where
   ingress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
   kind := .warden w
 
-/-- **No verifier that accepts every link-window has `TransferBlocksAcceptMeans`' property** (its nontrivial lemma): such a
-verifier accepts a warden link-window with no findings (`unproved`), which isn't `ExecutionPhaseProved`. -/
+/-- **No verifier that accepts every execution phase has `TransferBlocksAcceptMeans`' property** (its nontrivial lemma): such a
+verifier accepts a warden execution phase with no findings (`unproved`), which isn't `ExecutionPhaseProved`. -/
 theorem transferBlocksAcceptMeans_nontrivial : ∀ v, AcceptsAll v → ¬ TransferBlocksAcceptMeansBy v := by
   intro v hall h
   obtain ⟨-, fs, hf, -⟩ := (h (unproved .empty) (hall _)).1.1

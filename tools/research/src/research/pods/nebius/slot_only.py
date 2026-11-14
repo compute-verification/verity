@@ -27,7 +27,7 @@ import re
 import shlex
 import signal
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 MARKER = Path("/etc/vy/runs-via-slot")
@@ -41,7 +41,7 @@ LOG = Path("/workspace/monitoring/slot-only.jsonl")
 #: tree each run ships
 NODE_SLOT = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
 #: slot.py as a run's command names it: a shipped tree's, or the machine's own
-SLOT_PATHS = ("tools/verity/check/slot.py", NODE_SLOT)
+SLOT_PATHS = ("tools/check/slot.py", NODE_SLOT)
 #: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
 #: `proofs` pool), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
@@ -59,7 +59,7 @@ POOL_WAIT_S = 14400
 
 def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = None, wait_s: float = POOL_WAIT_S,
             twin: str | None = None) -> list[str]:
-    """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/verity/check/slot.py --by
+    """CMD as a run in `pool`, the one way a lane's run takes it: `env CHECK_SLOTS=POOL python3 tools/check/slot.py --by
     LANE [--wait-max POOL_WAIT_S --run-max S] [--twin PAIR] -- nice -n 19 CMD...`, naming slot.py by its path in the run's own
     shipped tree (so the run's cwd is its source); the launch names the machine's own copy instead where the machine has one
     (`node_copy`). `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
@@ -125,7 +125,7 @@ def refusal(machine_marker: Path = MARKER, pools: dict[str, str] | None = None) 
     without `--pool` learns the flag that sends it, rather than wrapping slot.py by hand."""
     have = sorted(p for p, f in (POOLS if pools is None else pools).items() if Path(f).is_file())
     send = (f"add `--pool {'|'.join(have)}` to `research run` or `verity lean try`, which sends CMD through that pool's slots"
-            if have else "send it as `python3 tools/verity/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
+            if have else "send it as `python3 tools/check/slot.py [--by NAME] -- CMD...`, which `check.py --record --on` does")
     return f"this machine takes a `research run` only through its check slots ({machine_marker}): {send}"
 
 
@@ -213,7 +213,7 @@ def stop(o: dict, *, proc: Path = Path("/proc"), kill=os.kill, dry_run: bool = F
             sent.append(p)
         except ProcessLookupError:
             pass
-    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "pgid": o["pgid"], "workload_group_seen": o["pgid"] in groups, "sigterm": sent, "dry_run": dry_run, "why": why}
 
 
@@ -228,7 +228,7 @@ def renice(o: dict, nice: int, *, proc: Path = Path("/proc"), dry_run: bool = Fa
                 moved.append(p)
         except (ProcessLookupError, PermissionError):
             pass
-    return {"at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
+    return {"at_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "run": o["run"], "command": o["command"][:12],
             "reniced": moved, "nice": nice, "dry_run": dry_run, "why": "a direct run, not through a check slot (slot.py)"}
 
 

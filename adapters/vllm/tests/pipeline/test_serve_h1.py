@@ -257,7 +257,13 @@ def test_with_h1_receipts_each_window_registers_the_zy_receipts_a_lanes_combine_
     the other tests serve can't show it."""
     from verity.protocols.accounting.pouw.verifier import credit as CR
 
-    from tests.protocols import test_pouw_h1_receipts as TR
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[4] / "adapters" / "torch" / "tests" / "pouw" / "test_pouw_h1_receipts.py"
+    spec = importlib.util.spec_from_file_location("test_pouw_h1_receipts", path)
+    TR = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(TR)
 
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", prover=tmp_path / "prover",
@@ -313,7 +319,7 @@ def test_the_declared_program_is_written_as_its_digest_is_hashed_with_the_layout
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit())
     body = gzip.decompress((tmp_path / "h1" / SH.PROGRAM).read_bytes())
-    meta = json.loads((tmp_path / "h1" / SH.PROGRAM_META).read_text())
+    meta = json.loads((tmp_path / "h1" / PH.PROGRAM_META).read_text())
     assert hashlib.sha512(body).hexdigest() == arm.digest == program_digest(arm.program) == meta["program_digest"]
     assert body == SV.descriptor(arm.program) and meta["bytes"] == len(body)
     assert (meta["rows"], meta["steps"]) == (ROWS, STEPS) and arm.describe()["program_file"] == f"h1/{SH.PROGRAM}"
@@ -553,7 +559,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     from verity.protocols.accounting.pouw.verifier import verifier
 
     from verity_vllm.protocols.pouw import h1_hooks as PHK
-    from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
+    from verity_torch.pouw.h1 import tables_device as TD
 
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     calls, roots, warmed, built = [], [], [], []
@@ -578,6 +584,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
         return 3
 
     monkeypatch.setattr(PH, "weight_root", rooted)
+    monkeypatch.setattr(PHK, "h1_weight_root", rooted)
     monkeypatch.setattr(PHK, "warm_zy", warm)
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
@@ -780,6 +787,19 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
         draws.wait(window=0)
     assert arm.describe()["draw"] == f"put as {SH.DRAWER} into the draw-gated release"
     srv.src.uninstall()
+
+
+def test_a_gate_window_that_commits_no_session_root_refuses_its_draw_by_name():
+    """A gate window's draw is taken on its gate session's open root: a run that commits no session, or one with no
+    root, is refused by name before any stream reaches `drawn_units`."""
+    arm = SimpleNamespace(sessions=object(), _period_k={"p1": 4})
+    held = {"session": "s/7", "period": "p1"}
+    for commits in ({}, {"session": {"session": "s/7"}}):
+        with pytest.raises(ValueError, match="^session s/7's window commits no gate session's open root"):
+            SH.H1Windows.draw_of(arm, SimpleNamespace(commits=commits), held)
+    root = "ab" * 64
+    assert SH.H1Windows.draw_of(arm, SimpleNamespace(commits={"session": {"root": root}}), held) == (
+        4, root, "period p1's open")
 
 
 class ArmSpy:

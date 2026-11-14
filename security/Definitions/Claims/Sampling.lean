@@ -5,7 +5,7 @@ public import Definitions.Claims
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
 
-The claims block of sampled proofs (`verity/core/protocols/spot/`), one-stage sampling, on the
+The claims block of SPOT (`verity/protocols/proofs/spot/`), one-stage sampling, on the
 shared definitions of `Definitions.Core.Interaction`, in the template's eight items and the README glossary's terms. Parametric in
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.
@@ -97,7 +97,7 @@ def CommitmentScheme.Binds {α : Type} (H : Msg → Msg) (Cm : CommitmentScheme 
 
 /-! ## The program and its partition -/
 
-/-- **A gate** of the Boolean profile (`verity/ml/circuits/PROTOCOL.md` §9): an input (`Input1_v1` or
+/-- **A gate** of the Boolean profile (`verity/circuits/PROTOCOL.md` §9): an input (`Input1_v1` or
 `RegisteredInput1_v1`, its value committed under the roots), a constant bit (`Const1`), `Not_v1` of a wire, or
 `And<n>_v1` or `Xor<n>_v1` of wires. -/
 inductive BGate where
@@ -236,7 +236,7 @@ structure SizeClass where
 /-- `K`: the bits of a wire index, enough for the `W = N_IN + G` wires, at least one. -/
 def SizeClass.indexBits (c : SizeClass) : ℕ := Nat.log2 (c.nIn + c.G - 1) + 1
 
-/-- **A private circuit's gates**, as the universal unit takes them (`verity.ml.private_circuits.universal`): SSA wires,
+/-- **A private circuit's gates**, as the universal unit takes them (`verity.circuits.private_circuits.universal`): SSA wires,
 the `nIn` inputs and then one per gate. Gate `(op, a, b)` reads wires `a` and `b` and computes XOR, AND, XNOR or NAND
 (`op`'s bit 0 picks AND, bit 1 negates); a wire at or past the reading gate's own reads `0`, as does an output past the
 last wire. -/
@@ -423,7 +423,7 @@ private circuit's description), and the Flock verifier its sessions run (`flock`
 parser, the opened columns of a run, the code, each trace's codeword length and decoding radius, and how a trace is
 read as a witness.
 
-The sample is `V`'s, from its coins, in this layout: `stage2` holds the rounds after the sample (the sessions), so runs that
+The sample is `V`'s, from its coins, in this layout: `secondStage` holds the rounds after the sample (the sessions), so runs that
 keep the other rounds make the same sample and see the same interior commitments; `checked` is the slots of the proof
 blocks the run checks; `rounds` is each one's session's rounds; `session` is its Flock statement and what its session
 showed; `reveal` is what its Flock witness reveals: committed values, each with the roots it is committed under (the
@@ -444,7 +444,7 @@ structure Deploy (Coin Col T : Type) where
   commit : CommitmentScheme Bool
   universal : SizeClass → Prog
   flock : Flock.Deploy Coin Col T
-  stage2 : (x : Msg) → Finset (Fin (V.k x))
+  secondStage : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → Coin) → List ℕ
   rounds : (x : Msg) → ℕ → Finset (Fin (V.k x))
   session : Msg → ℕ → Seen → Option (Msg × Seen)

@@ -28,7 +28,12 @@ record's runs back wherever its BYTES are needed (canonical sha256 serialisation
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from verity.circuits.defs import DefinitionTable
+    from verity.circuits.refs import Refs
 
 __all__ = ["expand", "expand_mixed", "expanded_file_args", "file_items_from_refs", "first_runs", "from_runs",
            "hash_operand", "idx_values", "is_file_prog", "lean_root", "n_crosses_step", "n_max_producer", "n_producers",
@@ -331,7 +336,7 @@ def file_items_from_refs_json(j) -> list[list]:
     return _file_items(from_json(j))
 
 
-def file_items_from_refs(r) -> list[list]:
+def file_items_from_refs(r: Refs) -> list[list]:
     """The stored items of one operand from the fold's own Refs object (== `file_items_from_refs_json(r.to_json())`, the writer's path)."""
     return _file_items(from_refs(r))
 
@@ -369,11 +374,11 @@ def runs_from_file_items(items: Iterable) -> list[tuple]:
     return out
 
 
-def is_file_prog(it) -> bool:
+def is_file_prog(it: Sequence[Any]) -> bool:
     return len(it) == 8 and it[0] in _FILE_SPACES
 
 
-def p_item_indices(r) -> tuple[int, ...]:
+def p_item_indices(r: Sequence[Any]) -> tuple[int, ...]:
     """The parameter indices a stored parameter-space item reads: a "p" run's one, a "P" progression's `count` (O(1) when dI == 0,
     the weight reads' shape).  Any other item reads none."""
     if r[0] == "p":
@@ -384,7 +389,7 @@ def p_item_indices(r) -> tuple[int, ...]:
     return (idx,) if dI == 0 or c <= 1 else tuple(range(idx, idx + c * dI, dI))
 
 
-def p_item_weight_span(r, w_param: int) -> tuple[int, int] | None:
+def p_item_weight_span(r: Sequence[Any], w_param: int) -> tuple[int, int] | None:
     """[lo, hi) union bounds of the runs of a stored parameter-space item that read parameter `w_param`; None when it reads none."""
     if r[0] == "p":
         return (r[2], r[3]) if r[1] == w_param else None
@@ -466,7 +471,7 @@ def rle_mapped(items: list[tuple]) -> list[tuple]:
     return out
 
 
-def lean_root(desc: dict, registry) -> dict:
+def lean_root(desc: dict, registry: DefinitionTable) -> dict:
     """The root body of a descriptor as compact instances WITHOUT building its Node / Coll / Refs objects (codec.decode_program builds
     them for every root node, then compare.Prog expanded their runs and dropped the IR).  Every non-root definition is decoded by
     decode_program's own reader, `codec.definition_decoder`, refusals included (they are the Definitions' small bodies: their spec

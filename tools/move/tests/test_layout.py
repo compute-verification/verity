@@ -372,7 +372,7 @@ def _pinned_tree(tmp_path: Path, json_pins: dict[str, dict], more: dict[str, str
              "README.md": PINNED_README,
              "pous/TRUSTED.sha256": f"{_sha(PINNED_MANIFEST)}  ../sec/Proofs/lake-manifest.json\n"
                                     f"{_sha(chr(10))}  ../sec/Proofs/lakefile.toml\n",
-             "tools/verity/check/pins.py":
+             "tools/check/pins.py":
                  "from __future__ import annotations\n\nfrom dataclasses import dataclass\n\n\n@dataclass(frozen=True)\nclass Pin:\n"
                  "    path: str\n    key: str | None\n    under: str\n\n\n"
                  f'PINS = (Pin("pous/TRUSTED.sha256", None, "pous"), {listed})\n',
@@ -603,7 +603,7 @@ def test_a_failed_uv_lock_fails_the_move(tmp_path, monkeypatch):
     """A move whose `uv lock` failed left a lock `uv sync` fails on, and exited 0, so `stage.py` certified a commit no suite
     could start on. It exits 1 with uv's reason, which `stage.py` and `restack.py` refuse on."""
     r = tmp_path / "repo"
-    files = {"old/a.txt": "", "tools/verity/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
+    files = {"old/a.txt": "", "tools/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
              "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
     for p, t in files.items():
         (r / p).parent.mkdir(parents=True, exist_ok=True)
@@ -875,6 +875,20 @@ def test_a_module_moved_into_a_package_gets_each_level_and_an_emptied_package_lo
     assert "`__init__.py` of nothing but comments and whitespace, left in a package the move empties, deleted: 2" in p.stdout
 
 
+def test_an_anchor_inside_a_string_literal_stays_as_written(tmp_path):
+    """A moved file's own anchor is recounted from its new place; one inside a string (a toy's source, a docstring's
+    example) is no anchor of the file's, and recounting it would change the toy (or, joined back in parentheses with
+    double quotes inside a double-quoted string, leave the file unparseable)."""
+    toy = 'LIB = "ROOT = Path(__file__).resolve().parents[2]\\n"\n'
+    r, p = _run(tmp_path, {"tools/a/b/t.py": '"""`Path(__file__).parents[1]` names b."""\nROOT = Path(__file__).resolve().parents[3]\n'
+                           + toy, "tools/a/b/data.json": "{}\n"},
+                LEVELS_MAP.replace('"benchmarks/live/" = "verity/composite/device/live/"', '"tools/a/b/" = "tools/b/"')
+                .replace('"benchmarks.live" = "verity.composite.device.live"', '"tools.a.b" = "tools.b"'))
+    assert p.returncode == 0, p.stderr
+    assert (r / "tools/b/t.py").read_text() == ('"""`Path(__file__).parents[1]` names b."""\n'
+                                                 'ROOT = Path(__file__).resolve().parents[2]\n' + toy)
+
+
 @pytest.mark.parametrize("text, comments", [
     ("", True), ("\n\n", True), ("# the data sheets\n", True), ("  # indented\r\n\t\n\f\n", True),
     ("# -*- coding: utf-8 -*-\n# one a GPU\n", True), ("#!/usr/bin/env python3\n", True),
@@ -905,7 +919,7 @@ CODE = "from verity.hardware.site import S\n\n\ndef load(name):\n    return {nam
 def _certify(r: Path, base: str) -> dict:
     """`move_check.py`'s verdict on the mover's run, committed on ``base``."""
     git(r, "commit", "-q", "-m", "move")
-    spec = importlib.util.spec_from_file_location("layout_move_check", HERE.parents[2] / "tools/verity/check/move_check.py")
+    spec = importlib.util.spec_from_file_location("layout_move_check", HERE.parents[2] / "tools/check/move_check.py")
     mc = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mc)
     return mc.certify(base.strip(), git(r, "rev-parse", "HEAD").strip(), cwd=str(r))
@@ -922,6 +936,18 @@ def test_an_emptied_packages_init_of_comments_alone_is_deleted_and_certified(tmp
     cert = _certify(r, git(r, "rev-parse", "HEAD"))
     assert cert["certified"], cert["refusals"]
     assert cert["rules"]["emptied"] == ["verity/hardware/cards/__init__.py", "verity/hardware/nodes/__init__.py"]
+
+
+def test_a_relative_path_to_a_file_that_moves_beside_it_stays_relative_and_is_certified(tmp_path):
+    """`../../device/two_stage.sh` in `prover/audit/README.md` names a file the map moves into the README's own directory:
+    it is written `./two_stage.sh`, a path still read as relative, and `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {"spot/device/two_stage.sh": "echo two\n", "spot/prover/audit/README.md": "The stage (`../../device/two_stage.sh`).\n"},
+                '[roots]\nold = {}\nnew = {}\n\n[paths]\n"spot/device/two_stage.sh" = "spot/prover/audit/two_stage.sh"\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "spot/prover/audit/README.md").read_text() == "The stage (`./two_stage.sh`).\n"
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
 
 
 @pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE, b"# caf\xe9\n"])
@@ -1064,6 +1090,26 @@ def test_a_workspaces_members_and_a_directory_beside_its_own_parts_follow_the_to
     assert (r / "pyproject.toml").read_text() == (
         '[tool.uv.workspace]\nmembers = ["verity/flock/prover", "other"]\n\n[tool.uv.sources]\nother = { workspace = true }\n\n'
         '[tool.gate]\nkeyed = ["verity/flock", "other"]\nlevels = ["verity/flock/prover", "verity/flock/agreement"]\n')
+
+
+@pytest.mark.parametrize("stays", [{}, {"bench/slots/bench.py": "Y = 1\n"}])
+def test_a_workspace_member_whose_files_move_by_file_rows_follows_its_pyproject(tmp_path, stays):
+    """`bench/slots/`'s files move by rows of their own, with no row for the directory, and its bench may stay: the
+    workspace's `members` names the directory its `pyproject.toml` went to, rather than losing the distribution, and
+    `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {
+        **stays, "bench/slots/slots.py": "X = 1\n", "bench/slots/tests/test_slots.py": "def test():\n    pass\n",
+        "bench/slots/pyproject.toml": '[project]\nname = "slots"\n', "other/pyproject.toml": '[project]\nname = "other"\n',
+        "pyproject.toml": ('[project]\nname = "root"\n\n[tool.uv.workspace]\nmembers = ["other", "bench/slots"]\n\n'
+                           '[tool.uv.sources]\nother = { workspace = true }\n'),
+    }, '[roots]\nold = {}\nnew = {}\n\n[paths]\n"bench/slots/slots.py" = "lib/cuda/slots/slots.py"\n'
+       '"bench/slots/pyproject.toml" = "lib/cuda/slots/pyproject.toml"\n"bench/slots/tests/" = "lib/cuda/slots/tests/"\n\n'
+       '[modules]\n"bench.slots.slots" = "lib.cuda.slots.slots"\n"bench.slots.tests" = "lib.cuda.slots.tests"\n')
+    assert p.returncode == 0, p.stderr
+    assert 'members = ["other", "lib/cuda/slots"]\n' in (r / "pyproject.toml").read_text()
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
 
 
 NAMES = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n", "other/x.py": "X = 1\n",

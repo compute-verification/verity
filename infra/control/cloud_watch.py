@@ -96,9 +96,11 @@ class Unreadable(Exception):
 
 
 def http(method: str, url: str, headers: dict | None = None, body: bytes | None = None, timeout: float = 30) -> tuple[int, bytes]:
-    req = urllib.request.Request(url, data=body, method=method, headers=headers or {})
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(url, data=body, method=method, headers=headers or {})  # noqa: S310 (http or https, checked above)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310 (http or https, checked above)
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()

@@ -8,13 +8,13 @@ public import Proofs.Core.Circuit
 public import Proofs.Properties.Verity.Majority
 
 /-!
-# The target, proved: sampled proofs at the recursive configuration
+# The target, proved: SPOT at the recursive configuration
 
 `spotRecursive` proves the target's bound at each strategy from the property `acc_of_accepts` states
 (`AccOfAccepts`, the statement of `acc_of_accepts` at the deployment), at `acc_of_accepts`.
 
 The proof, at a strategy `σ` whose finders meet `FinderCR` (elsewhere the error is `⊤`), where the files pass the
-commit phase's check (elsewhere no play is accepted) and sampled proofs' claim fails on the extracted transcript `X`
+commit phase's check (elsewhere no play is accepted) and SPOT's claim fails on the extracted transcript `X`
 (elsewhere the event is empty), so that the unbound units `U` number more than `ε n`:
 * each accepted play shows, through the coupling (`SessionIn.names_shows`) and G, an accepted run of the recursive
   verifier at a dense statement (`verdict_run`);
@@ -23,7 +23,7 @@ commit phase's check (elsewhere no play is accepted) and sampled proofs' claim f
   `bitsLin2On_of_ksLin2On`, and at a statement at the deployment's tables also `2^{-167.7} + t' · 2^{-174.95}` through
   `bitsLin2KOn_of_ksLin2On` and `Dep.kappa_eps_oneTable`), or the
   extractor's witness, correct and opened on every sampled proof block (`hread`), differs from `X` at some bit of a wire of a sampled
-  proof block of `U` (`unbound_drawn`), the bit `X`'s plurality didn't pick (`offEvent`, `pr_verdict_le`);
+  proof block of `U` (`unbound_sampled`), the bit `X`'s plurality didn't pick (`offEvent`, `pr_verdict_le`);
 * averaged over the samples, the miss is at most `δs` (`hdraw`), and the last event is at most `√(min(W, 2n) · K)`,
   `K = E[bindBudget] / 2^256`, with `W` the file's wire bits and `n` its units. Both bounds pick one piece per play
   (`units_bound`), giving each piece a share `a` at most `p`, and rest on `hcoll`, which turns two independent plays
@@ -32,9 +32,9 @@ commit phase's check (elsewhere no play is accepted) and sampled proofs' claim f
   - at the bits (`ex_off_le_bits`), `p` is the bit's minority weight, at most its majority's
     (`minority_le_majority`), so `∑ a p ≤ K` and `(∑ a)² ≤ W ∑ a² ≤ WK`;
   - at the units (`ex_off_le_units`), `p_u` is the probability of sampling `u`, and the majority at any bit of `u`'s
-    wires weighs at least `p_u / 2` (`drawn_le_weight`), so `∑ a p ≤ 2K` and `(∑ a)² ≤ n ∑ a² ≤ 2nK`.
+    wires weighs at least `p_u / 2` (`sampled_le_weight`), so `∑ a p ≤ 2K` and `(∑ a)² ≤ n ∑ a² ≤ 2nK`.
 
-The averaging is `Verity.Majority`'s, which the two-stage leg reads too: the session's plays are a `Majority.Plays`
+The averaging is `Verity.Majority`'s, which the two-stage subprotocol reads too: the session's plays are a `Majority.Plays`
 (`Dep.plays`), `Dep.weight` and `Dep.extract` are its weight and plurality, and each lemma above is the shared one at
 them.
 -/
@@ -102,22 +102,16 @@ theorem verdict_run (q : Dep) (hG : AccOfAccepts q) (V : Vocab d α) (k : Verity
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen)
     (ξ : S.Ξ) (s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin)) (h : RecVerdict V k (S.out ξ s)) :
     RecDeploy.DenseAt (S.x ξ) ∧ (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2).out = .acc := by
-  obtain ⟨-, -, a, cb, eb, hcase, hda, j, p, hj, hp⟩ := h
-  obtain ⟨p', c', ev, hp', -, he, pub, prof, hch⟩ := id hda
-  rw [hj] at hp'
-  change VStar.Recursive.Sampled.paramsOfJson j = .ok p' at hp'
-  rw [hp] at hp'
-  cases hp'
-  cases ev with
-  | inl e₀ =>
-      change VStar.Recursive.Sampled.checkBlobs (.inr p) c' (.inl e₀)
-        (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof at hch
-      simp [VStar.Recursive.Sampled.checkBlobs] at hch
-  | inr e =>
-      have hch' : VStar.Recursive.checkBlobs p c' e (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof :=
-        hch
-      obtain ⟨hN, hS, hR⟩ := S.names_shows ξ s a cb eb j p e hcase hda hj hp he
-      exact hG p c' e _ pub prof hch' (S.x ξ) hN S.Ω (S.P ξ) s.1 s.2 hS hR (hlive ξ s.1 s.2)
+  obtain ⟨-, -, a, cb, eb, hcase, hda⟩ := h
+  obtain ⟨p, c', e, hp, -, he, pub, prof, hch⟩ := id hda
+  cases hj : Core.canonicalJson a with
+  | error err => rw [hj] at hp; cases hp
+  | ok j =>
+    rw [hj] at hp
+    have hp' : VStar.Recursive.paramsOfJson j = .ok p := hp
+    have hch' : VStar.Recursive.checkBlobs p c' e (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof := hch
+    obtain ⟨hN, hS, hR⟩ := S.names_shows ξ s a cb eb j p e hcase hda hj hp' he
+    exact hG p c' e _ pub prof hch' (S.x ξ) hN S.Ω (S.P ξ) s.1 s.2 hS hR (hlive ξ s.1 s.2)
 
 /-- **The recursive session's plays** (`Majority.Plays` at the session `S` and the reading `readX`): the samples `ξ`,
 a run with the extractor's seed at each (`Dep.Sample`), the run's accept, the units `ξ` samples, the extractor's
@@ -197,7 +191,7 @@ def offEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
 
 /-- **A run's sample of the unit `u`**: at the sample `ξ` and a run with the extractor's seed `s`, the run accepts, `ξ`
 samples `u`, and the extractor returns a witness in the recursive relation. -/
-def drawEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
+def sampleEvent (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ) (u : Fin (V.units θ F)) (ξ : S.Ξ)
     (s : q.Sample V S ξ) : Prop :=
   (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧ u ∈ S.drawOf ξ ∧
@@ -277,13 +271,13 @@ theorem ex_coll_le (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array Byte
 /-- **The plurality's bit weighs at least half a sampled proof block**: at a bit `i` of a wire `g` of the unit `u`, the weight of
 the bit `Dep.extract` picked there is at least half the probability that the run accepts, samples `u` and the extractor
 returns a witness in the recursive relation. -/
-theorem drawn_le_weight (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
+theorem sampled_le_weight (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace) {u : Fin (V.units θ F)}
     {g : Fin (V.circuitOf θ F).N} (hg : g ∈ (V.partsOf θ F).io u) {i : ℕ} (hi : i < (V.circuitOf θ F).w g) :
-    Ex (fun ξ => Pr (drawEvent q V S u ξ)) ≤ 2 * q.weight V S readX g i ((q.extract V S readX g).getLsbD i) := by
+    Ex (fun ξ => Pr (sampleEvent q V S u ξ)) ≤ 2 * q.weight V S readX g i ((q.extract V S readX g).getLsbD i) := by
   rw [Dep.extract_plays, Dep.weight_plays]
-  exact (q.plays V S readX).drawn_le_weight hg hi
+  exact (q.plays V S readX).sampled_le_weight hg hi
 
 /-- **The binding term at the bits**: averaged over the samples, the probability that the run accepts while the
 extractor's witness differs from the plurality `Dep.extract` at a bit of a wire of a sampled proof block is at most
@@ -311,7 +305,7 @@ theorem ex_off_le_bits (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array 
 extractor's witness differs from the plurality `Dep.extract` at a bit of a wire of a sampled proof block is at most
 `√(2n · E[bindBudget] / 2^256)`, `n` the file's units (`Majority.Plays.ex_off_le_units` at the session's plays): a run
 off the plurality at a bit of a wire of `u` collides, through `hcoll`, with every run that reads the plurality's bit
-there, which weighs at least half `u`'s sample (`drawn_le_weight`). -/
+there, which weighs at least half `u`'s sample (`sampled_le_weight`). -/
 theorem ex_off_le_units (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray}
     {σ : Game.Strategy (V.game θ F c)} {k : Verity.Registration.Composite} (S : SessionIn V q k θ F c σ)
     (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Trace)
@@ -331,13 +325,13 @@ theorem ex_off_le_units (q : Dep) (V : Vocab d α) {θ c : ByteArray} {F : Array
 
 /-- **A sampled unbound unit gives a wire bit off the plurality**: where the witness's reading is correct on, and opened
 at, every unit the sample holds (`hread`), a sampled proof block unbound in `X` has a wire where `X` differs from the reading, at
-some bit (`Majority.unbound_drawn` at the file's partition). -/
-theorem unbound_drawn (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {Xw Xe : (V.circuitOf θ F).Trace}
+some bit (`Majority.unbound_sampled` at the file's partition). -/
+theorem unbound_sampled (V : Vocab d α) {θ c : ByteArray} {F : Array ByteArray} {Xw Xe : (V.circuitOf θ F).Trace}
     {u : Fin (V.units θ F)}
     (hc : (V.partsOf θ F).Correct Xw u) (ho : ∀ g ∈ (V.partsOf θ F).io u, V.Opens θ F c g (Xw g))
     (hu : u ∈ Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) Xe) :
     ∃ g ∈ (V.partsOf θ F).io u, ∃ i < (V.circuitOf θ F).w g, (Xw g).getLsbD i = !(Xe g).getLsbD i :=
-  Majority.unbound_drawn (V.partsOf θ F) (V.Opens θ F c) hc ho hu
+  Majority.unbound_sampled (V.partsOf θ F) (V.Opens θ F c) hc ho hu
 
 /-- **One sample's share**: at the sample `ξ`, the probability over the session's tape and coins that the recursive
 configuration's verdict holds is at most the sample's miss of the unbound units (one where `ξ` misses them), plus
@@ -444,7 +438,7 @@ theorem pr_verdict_le (q : Dep) (hG : AccOfAccepts q)
           | some wt =>
               rw [hw] at hR
               obtain ⟨hcu, hou⟩ := hread ξ wt hR u₀ hu₀d
-              obtain ⟨g, hg, i, hi, hbit⟩ := unbound_drawn V hcu hou hu₀U
+              obtain ⟨g, hg, i, hi, hbit⟩ := unbound_sampled V hcu hou hu₀U
               exact ⟨u₀, hacc, hu₀d, wt, hw, hR, g, hg, i, hi, hbit⟩
         · exact Or.inl ⟨hacc, hR⟩
     _ ≤ Pr (fun s : q.Sample V S ξ =>
@@ -501,10 +495,10 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
   · rw [min_eq_right h]
     exact ex_off_le_units q V S readX collOf dColl hcoll hcr.2
 
-/-- **The target: sampled proofs at the recursive configuration**, in the per-prover form over the causal game (R4′,
+/-- **The target: SPOT at the recursive configuration**, in the per-prover form over the causal game (R4′,
 R5, R6), with the recursive configuration's verdict (`RecVerdict`). At composite `k`, the parameters `θ`, the
 committed files `F`, the commitment `c` and a strategy `σ`, with `S` its recursive session (`SessionIn`), the
-probability that the recursive component accepts while sampled proofs' claim fails on the extractor's transcript
+probability that the recursive component accepts while SPOT's claim fails on the extractor's transcript
 (`¬ Holds k .sampled`) is at most `Dep.errAt` at `S`, the shared `condError FinderCR δ`: where `FinderCR` holds at
 the finders built from `σ`, `δs + E_ξ[ksAt] + √(min(bits, 2n) · E[bindBudget(σ)] / 2^256)` with `n` the units,
 and `⊤` elsewhere, where `ksAt` is `t'(σ) · 2^{-λ}`, and at a sample whose statement is at the deployment's tables the

@@ -101,7 +101,7 @@ from typing import Any
 import numpy as np
 
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.population import population
@@ -112,7 +112,7 @@ from verity.commitments import history as HT
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_tables as BT
 from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 from verity_vllm.records.boundary_tables import TableRoots
@@ -513,7 +513,7 @@ class Layout:
         None for a class that doesn't."""
         if not self.logits:
             return None
-        from verity.definitions.registry import greedy_stages as GS
+        from verity_vllm.definitions.registry import greedy_stages as GS
 
         fn, t = self.check, P.template_id(self.check)
         V, N = (int(fn.bindings[k]) for k in ("V", "N")) if getattr(fn, "defn", None) is GS.GreedySelect else (0, 0)
@@ -739,7 +739,7 @@ def record(pub: Mapping[str, Any], check: SpecializedDefinition, design: Mapping
            window: Mapping[str, Any] | None = None, stop: Any = None) -> dict[str, Any]:
     """The class's boundary registration (one-stage's record) from its ``commit.json``, laid out under ``check`` and the
     stop rule ``stop`` (`layout_of`): `Layout.program` under `Layout.grain` at sampling design ``design`` (the first stage's,
-    `service.selection_law`), each of its values' root (`Layout.values`), and its window: served, the run, the window's
+    `service.selection_sampling_design`), each of its values' root (`Layout.values`), and its window: served, the run, the window's
     index as its row, the class, the check and the index's leaf, with ``window``'s items (the advice's binding)."""
     L, c = layout_of(pub, check, stop), BoundaryCommit.of(pub, COMMIT)
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.ports().items()]

@@ -16,17 +16,15 @@ from functools import partial
 from types import SimpleNamespace
 from typing import Any
 
+from verity.protocols.accounting.pouw.prover.serving import H1_COMMIT_SCHEME as SCHEME
+from verity.protocols.accounting.pouw.prover.serving import CommitTap, Sites
+from verity.protocols.accounting.pouw.prover.serving import commit_site as site
+
 from verity_vllm import settings
 from verity_vllm.acquire.sources.int8_source import Int8Source
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving.h1.commit import (
-    SCHEME,
-    CommitTap,
-    Sites,
-    site,
-)
 from verity_vllm.protocols.pouw.h1_hooks import expert_names
 from verity_vllm.protocols.pouw.h1_ranks import RankExtension, RankRun, RankTap
 
