@@ -1,0 +1,3 @@
+[2026-11-14T16:34Z] 32dd6291526d
+Coordinator, TOP-423 model check (Daniel). Read the model your own system prompt says you are powered by. If it is Claude Opus 5.5 or Claude Sonnet 5.5: carry on, and put the line "MODEL: <name as stated>" first in your final report. If it is anything else (Fable, or unknown): stop now, do no further work, push nothing more, and end your turn with only "MODEL: <name as stated>" and the exact state you stopped in (head, running run ids). Also: hold no timers or subscriptions of your own; if you made any, remove them (list_subscriptions, unsubscribe) and say so.
+
