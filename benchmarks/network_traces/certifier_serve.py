@@ -203,6 +203,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import http.client
 import json
 import math
 import multiprocessing
@@ -579,12 +580,26 @@ def request_body(model: str, tokens: int, prompt: str | list[int] = PROMPT, temp
 
 
 def _call(url: str, path: str, body: dict | None = None, api_key_env: str | None = None) -> dict:
-    headers = {"content-type": "application/json"}
+    """The JSON the endpoint at `url` (`http(s)://HOST[:PORT][/PREFIX]`) answers at `path`: to a GET, or to a POST of
+    `body` as JSON. A `url` of any other form is refused by name before anything is opened, so only HTTP is spoken.
+    An answer that isn't a 2xx raises `OSError`, as a connection that fails does; a redirect is such an answer."""
+    u = urllib.parse.urlsplit(url)
+    if u.scheme not in ("http", "https") or not u.hostname:
+        raise SystemExit(f"an endpoint is http(s)://HOST[:PORT][/PREFIX], not {url!r}")
+    headers = {"content-type": "application/json", "connection": "close"}
     if api_key_env:
         headers["authorization"] = f"Bearer {os.environ[api_key_env]}"
-    data = None if body is None else json.dumps(body).encode()
-    with urllib.request.urlopen(urllib.request.Request(url.rstrip("/") + path, data, headers), timeout=60) as r:
-        return json.loads(r.read())
+    connect = http.client.HTTPSConnection if u.scheme == "https" else http.client.HTTPConnection
+    connection = connect(u.hostname, u.port, timeout=60)
+    try:
+        connection.request("GET" if body is None else "POST", u.path.rstrip("/") + path,
+                           None if body is None else json.dumps(body).encode(), headers)
+        answer = connection.getresponse()
+        if not 200 <= answer.status < 300:
+            raise OSError(f"{url.rstrip('/')}{path} answered {answer.status} {answer.reason}")
+        return json.loads(answer.read())
+    finally:
+        connection.close()
 
 
 def served_model(url: str, api_key_env: str | None = None) -> str:
