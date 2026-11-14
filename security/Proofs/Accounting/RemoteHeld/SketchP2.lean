@@ -38,7 +38,7 @@ import Proofs.Accounting.RemoteHeld.Sketch
 /-!
 # The receipts' sketch bound over PoUS's P2 store: the proof
 
-`SketchBoundSession` at P2's receipts: a unit of four 2,056-byte blocks, `m = 257` sectors, 16 sign rows, `h = 512`,
+`SketchBoundRun` at P2's receipts: a unit of four 2,056-byte blocks, `m = 257` sectors, 16 sign rows, `h = 512`,
 `r = 12`, at most `Q + P` candidate seeds and `Q` queries, at `ε_ro = (Q + P)²/2^257`, as `SketchBoundDeployed` is at
 `m = 128`.
 -/
@@ -52,7 +52,7 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
 /-- **The sketch bound at P2's receipts** (`Accounting.Guarantees.Remote.SketchBoundP2`). -/
 theorem SketchBoundP2 : Accounting.Guarantees.Remote.SketchBoundP2 := by
   intro β Hs _ _ P N S L q Q G qtot ε A T hε hP hRank hG hqtot hH hq hrec hpres
-  have h := SketchBoundSession β Hs P N 257 512 S L q 16 12 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 257) A T (by norm_num)
+  have h := SketchBoundRun β Hs P N 257 512 S L q 16 12 G qtot ε (((Q : ℝ) + P) ^ 2 / 2 ^ 257) A T (by norm_num)
     hε (by positivity) hP hRank hH hq hrec hpres
   unfold SketchBound Trace.Holds at h ⊢
   rw [show (8 * 12 : ℕ) = 96 from rfl] at h
