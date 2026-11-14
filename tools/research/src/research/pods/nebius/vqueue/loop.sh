@@ -27,7 +27,8 @@
 #
 # The node's paths follow ci's args on the command line, so a flag of args naming another host's file never wins: the log, the
 # lock, the five lists (each read as empty while it is missing, as on any host; a tick names the missing ones in one line) and
-# --graph2, graph2.sh beside this script.
+# --graph2, graph2.sh beside this script. The steps after a landing publish the Lean cache with lean_publish.sh beside it
+# (RESEARCH_LEAN_PUBLISH; a credential file may set it empty to turn the publish off).
 #
 # Credentials, none in this file or its unit: VQ_CRED/*.env (root's, readable by the group: the store's key, the Slack token)
 # are sourced for each tick, and GH_TOKEN is the token vy-vqueue-token.timer keeps in VQ_TOKEN, which root mints from the App's
@@ -57,7 +58,7 @@ if [ "${1:-}" = git ]; then
 fi
 
 export HOME=$H PATH="$LIB/bin:/usr/local/bin:/usr/bin:/bin" GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 \
-  PYTHONUNBUFFERED=1 RESEARCH_LANE=ci TMPDIR=$H/tmp TRAIN_TREES=$H/trains
+  PYTHONUNBUFFERED=1 RESEARCH_LANE=ci TMPDIR=$H/tmp TRAIN_TREES=$H/trains RESEARCH_LEAN_PUBLISH=$LIB/lean_publish.sh
 
 say() { echo "vy-vqueue: $*" >&2; }
 

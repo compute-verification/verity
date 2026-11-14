@@ -1,6 +1,7 @@
 """The verified queue's loop as a unit on a node (pods/nebius/vqueue): what loop.sh runs in each mode, with a stand-in for
 `python3.12 -m research queue vqueue` that records its argv and environment; how it stops; whose token git and gh get; what
 root's oneshot writes; and that deploy.toml installs every file the units name on one node, as a user of its own."""
+import inspect
 import json
 import os
 import re
@@ -22,7 +23,7 @@ LOOP = VQ / "loop.sh"
 HELPER = "infra/control/gh_app_token.sh"          # the control pod's own, which token.sh runs on the node
 CONFIG, SKIP = 78, 75
 KEYS = ("HOME", "PATH", "PYTHONPATH", "TMPDIR", "TRAIN_TREES", "GH_TOKEN", "AWS_ACCESS_KEY_ID", "SLACK_BOT_TOKEN",
-        "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT", merge.DRIVE_ENV)
+        "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT", merge.DRIVE_ENV, merge.LEAN_PUBLISH_ENV)
 #: each list's flag, which the loop otherwise reads at the control pod's path, and the node's file under live/
 LISTS = {"--deselect": "deselect", "--keep-runs": "keep-runs", "--wide-file": "wide", "--heavy-file": "heavy", "--pins-file": "pins"}
 # The stand-in tick: one JSON line a call. With VQ_TEST_TERM its first call tells the loop to stop and then goes on, as a tick
@@ -107,7 +108,7 @@ def test_with_no_mode_file_a_tick_is_a_dry_run_in_the_node_s_own_paths_as_the_ap
     assert env["PATH"].split(":")[0] == os.path.realpath(VQ / "bin") and (VQ / "bin" / "gh").is_file()
     assert (env["GH_TOKEN"], env["AWS_ACCESS_KEY_ID"], env["SLACK_BOT_TOKEN"]) == ("dummy-app", "dummy-r2", "dummy-slack")
     assert env["RESEARCH_AGENT_URL"] is None and env["RESEARCH_LANE"] == "ci" and env["GIT_TERMINAL_PROMPT"] == "0"
-    assert flag(argv, "--graph2") == os.path.realpath(VQ / "graph2.sh")
+    assert env[merge.LEAN_PUBLISH_ENV] == os.path.realpath(VQ / "lean_publish.sh") and flag(argv, "--graph2") == os.path.realpath(VQ / "graph2.sh")
     helper = subprocess.run(["git", "-C", str(node.clone), "config", "--local", "--get", "credential.helper"],
                             capture_output=True, text=True).stdout.strip()
     assert helper == f"!{os.path.realpath(LOOP)} git"
@@ -206,18 +207,29 @@ if sys.argv[1:3] == ["pods", "ssh"] and "--print" in sys.argv:
     if sys.argv[3] != os.environ.get("FAKE_KNOWN", sys.argv[3]):
         sys.exit(f"research pods ssh: no machine named {sys.argv[3]!r}")
     print(os.environ["FAKE_SSH"])
+elif sys.argv[1:3] == ["pods", "ssh"]:
+    print(os.environ.get("FAKE_UNIT", "active"))
+"""
+FAKE_MERGE = """import json, os
+def push_mirror(repo, sha, name):
+    with open(os.environ["FAKE_CALLS"], "a") as f:
+        f.write(json.dumps(["push_mirror", str(repo), sha, name]) + "\\n")
+    print(f"research merge: pushed main ({sha[:12]}) to {name}")
+    return os.environ.get("FAKE_PUSH", "1") == "1"
 """
 
 
 class Research:
-    """`python3.12 -m research` as the node's wrappers call it, stood in for under tmp: each call one JSON line in ``calls``;
-    `pods ssh NAME --print` prints FAKE_SSH for a name FAKE_KNOWN allows."""
+    """`python3.12 -m research` and `research.merge.push_mirror` as the node's wrappers call them, stood in for under tmp: each
+    call one JSON line in ``calls``; `pods ssh NAME --print` prints FAKE_SSH for a name FAKE_KNOWN allows, `pods ssh NAME --
+    CMD` prints FAKE_UNIT (the unit's state), and push_mirror succeeds unless FAKE_PUSH is 0."""
 
     def __init__(self, tmp: Path):
         pkg, self.calls, self.home = tmp / "fake" / "research", tmp / "calls.jsonl", tmp / "home"
         pkg.mkdir(parents=True)
         (pkg / "__init__.py").write_text("")
         (pkg / "__main__.py").write_text(FAKE_MAIN)
+        (pkg / "merge.py").write_text(FAKE_MERGE)
         (self.home / "live").mkdir(parents=True)
         self.env = {"PATH": os.environ["PATH"], "HOME": str(self.home), "PYTHONPATH": str(pkg.parent),
                     "VQ_PYTHON": sys.executable, "FAKE_CALLS": str(self.calls)}
@@ -253,6 +265,43 @@ def test_graph2_s_wrapper_reaches_its_machine_by_name_with_each_argument_whole(t
     assert fake.made() == [["pods", "ssh", "vy-nebius-cpu-7", "--print"]]
     r = graph2("list", VQ_GRAPH2_NODE="vy-nowhere")
     assert r.returncode == 1 and "no machine named 'vy-nowhere'" in r.stderr and len(out.read_text().splitlines()) == 1
+
+
+def test_the_lean_publish_pushes_the_full_sha_to_the_cache_s_machine_then_starts_its_publisher(tmp_path):
+    """After a landing touching Lean, the loop's after-landing step runs lean_publish.sh SHA in a checkout of the loop's
+    clone (merge.lean_publish).  The machine is a registered name (VQ_LEAN_NODE, default vy-nebius-cpu-4); the push is the merge
+    mirror's (push_mirror) of the full sha; the publisher's unit is started without waiting.  A sha the clone lacks, a push
+    that fails and a unit that doesn't start each exit 1, starting nothing after, with the log's last lines on stdout, which
+    merge.lean_publish quotes."""
+    assert list(inspect.signature(merge.push_mirror).parameters)[:3] == ["repo", "sha", "name"]
+    fake, clone = Research(tmp_path), tmp_path / "clone"
+    git = ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", str(clone)]
+    subprocess.run(["git", "init", "-q", str(clone)], check=True)
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "x"], check=True)
+    sha = subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    start = ["pods", "ssh", "vy-nebius-cpu-4", "--", "sudo -n systemctl start --no-block vy-lean-cache-daily.service; "
+             "systemctl is-active vy-lean-cache-daily.service"]
+    log = fake.home / "live" / "lean-publish.log"
+
+    def publish(ref: str, **more: str) -> subprocess.CompletedProcess:
+        fake.calls.unlink(missing_ok=True)
+        return subprocess.run([str(VQ / "lean_publish.sh"), ref], cwd=clone, env={**fake.env, **more}, capture_output=True, text=True)
+
+    r = publish(sha[:12])
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert fake.made() == [["push_mirror", str(clone.resolve()), sha, "vy-nebius-cpu-4"], start]
+    lines = log.read_text().splitlines()
+    assert re.fullmatch(rf"\S+Z publish {sha[:12]} on vy-nebius-cpu-4", lines[0]) and lines[-1] == "start: active"
+    assert r.stdout.splitlines() == lines[-3:]
+    r = publish(sha, FAKE_UNIT="failed")
+    assert r.returncode == 1 and fake.made()[-1] == start and r.stdout.splitlines()[-1] == "start: failed"
+    r = publish(sha, FAKE_PUSH="0")
+    assert r.returncode == 1 and fake.made() == [["push_mirror", str(clone.resolve()), sha, "vy-nebius-cpu-4"]]
+    r = publish("0" * 40)
+    assert r.returncode == 1 and fake.made() == [] and f"{'0' * 40}: no such commit in {clone.resolve()}" in r.stdout
+    assert publish(sha, VQ_LEAN_NODE="vy-other").returncode == 0
+    pushed, started = fake.made()
+    assert pushed[3] == started[2] == "vy-other"
 
 
 def test_a_node_missing_the_clone_the_pin_or_the_args_says_which_and_runs_nothing(node):
