@@ -18,7 +18,7 @@ from verity_flock import circuit as FC
 
 ROOT = Path(__file__).resolve().parents[6]
 LEAN = ROOT / "verity/protocols/proofs/flock/verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 STATEMENT = "verity/flock-circuit+plain-leaves"
 
 
@@ -95,7 +95,7 @@ def test_the_plain_leaf_statement_is_the_default_one_by_name():
 def _verify(*args: str) -> subprocess.CompletedProcess:
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
     return subprocess.run([str(BIN), "verify", "--statement", STATEMENT, *args], capture_output=True, text=True, check=False)
 
 

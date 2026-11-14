@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # One plain sampled session of `J` hidden-output tables: the plan, the samples and the openings
 
-`flock-verify verify --plain-tables --session-tables J` (no `--zk`) at hidden outputs: `Stmt.setupTables` sets table `j`
+`verity-verify-proof verify --plain-tables --session-tables J` (no `--zk`) at hidden outputs: `Stmt.setupTables` sets table `j`
 up with `Stmt.setupHidden` under `tagsAt` at its sample `Composed.drawJ`. These are `PlainJ/Defs.lean`'s plan pieces with
 the one-table hidden-output tables (`HiddenExec.TableH`, `DrawSetupH`) in place of `Integrate.Table`, at the plain inputs
 `PlainJ.inputsPJ I j`, as `ZkHidden.tableShHJ` takes them at the `--zk` inputs:
@@ -50,7 +50,7 @@ variable {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)
   (x₀ : DrawSetupH (inputsPJ I 0) mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at sample `S`, under hidden outputs**, with the inputs it is set up on: the table flock-verify sets up at
+/-- **Table `j` at sample `S`, under hidden outputs**, with the inputs it is set up on: the table verity-verify-proof sets up at
 table `j`'s inputs and sample when it sets one up, and otherwise the reference setup `x₀`'s refused table at table 0's
 inputs. -/
 noncomputable def tablePHJ (S : Finset (Fin n)) (j : Fin (nTab I)) :
@@ -71,7 +71,7 @@ theorem tablePHJ_refused {S : Finset (Fin n)} {j : Fin (nTab I)}
   unfold tablePHJ
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
-/-- **Table `j` where flock-verify sets it up**: at a `DrawSetupH` of table `j`'s inputs and sample, `tablePHJ` is the
+/-- **Table `j` where verity-verify-proof sets it up**: at a `DrawSetupH` of table `j`'s inputs and sample, `tablePHJ` is the
 table of one with the same statement. -/
 theorem tablePHJ_of {S : Finset (Fin n)} {j : Fin (nTab I)}
     (x : DrawSetupH (inputsPJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :

@@ -1,10 +1,10 @@
 """A pod job's Lean step, fail closed (``85-rec-reprice.sh`` and ``86-zk-cpu-steps.sh``, STEP=lean): each part's
-flock-verify exit, as its ``/usr/bin/time -v`` record has it (``time-PART.txt``'s ``Exit status``), and the ``VERDICT``
+verity-verify-proof exit, as its ``/usr/bin/time -v`` record has it (``time-PART.txt``'s ``Exit status``), and the ``VERDICT``
 lines of its log (``PART.log``, one per session). An honest part passes when it exited 0 and has a VERDICT and every VERDICT
 accepts. A forgery is the parts named ``forged-KIND-PART``, PART one of the honest parts named (else the whole name is its
-kind): V* accepts only when every part does, so a forgery is refused when one of its parts exited 1, flock-verify's
+kind): V* accepts only when every part does, so a forgery is refused when one of its parts exited 1, verity-verify-proof's
 refusal, with a VERDICT and none accepting, and every other part of it has a VERDICT (a part the forgery leaves as the
-honest one is accepted). ``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from
+honest one is accepted). ``verity-verify-proof statement``'s line is its part's VERDICT: accepted when Lean derived the units from
 the verifier's program (``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has
 neither file and fails. A forgery's part the verifier never checked is "no proof produced (not exercised)", never a
 refusal: one whose session Lean found missing its files (``session files: …``), and one the ZK server held back (its
@@ -55,7 +55,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-REFUSED = 1  # flock-verify's exit when a session is refused (2: its inputs, with no VERDICT)
+REFUSED = 1  # verity-verify-proof's exit when a session is refused (2: its inputs, with no VERDICT)
 RECORD = "rec-compose.json"  # the composition's record in DIR (module docstring)
 
 # The V* parts that read each forged inner coin (rec_inner.py forge, at level 0): the challenge coin after the binding round

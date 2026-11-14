@@ -2,7 +2,7 @@
 one integrity profile.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
-      python benchmarks/one_stage/a3.py --sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR \\
+      python benchmarks/one_stage/a3.py --sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out DIR \\
       [--layer 0] [--k 128] [--delta 2^-20]
 
 * **Population.** The captured instances of layer `--layer` in each set under `--sets` (one directory per template, in the
@@ -11,7 +11,7 @@ one integrity profile.
   `Q_template_instances` v0: one unit per instance, no width rule.
 * **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
-* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` samples k units over the whole
+* **One sample, `Subset(k)` over the union.** The verifier's Lean `verity-verify-proof draw` samples k units over the whole
   population, on a development challenger's coins opened after the registration (`a0.challenger_draw`).
   With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very sample, so the audited
   sample is the verifier's; without it, the Lean sample fixes only how many units fall in each template and each server samples
@@ -182,7 +182,7 @@ def main() -> int:
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "tree")), "tool": "flock-verify verify --archive"}
+        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, flags=("--coins", "tree")), "tool": "verity-verify-proof verify --archive"}
         statement[m["name"]] = {k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest", "public_sha512", "sigma")}
         statement[m["name"]]["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")}
         statement[m["name"]]["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")

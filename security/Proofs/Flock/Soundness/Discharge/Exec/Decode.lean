@@ -8,7 +8,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 /-!
 # Pieces of `DecodesAll`: the aligned tape and the cap
 
-`DecodesAll` (`Live.lean`) asks, on every live outcome flock-verify accepts, for each rep's run on one typed tape
+`DecodesAll` (`Live.lean`) asks, on every live outcome verity-verify-proof accepts, for each rep's run on one typed tape
 (`PlaysT`) decoded from the round bytes and the proof file, and for the salted verdict at the cap `capOf` reads off
 `root_B`. The refinement (`verify_refines_hm96`) gives each rep's run with its messages and its coins as two lists
 (`Plays`). Two pieces of the bridge:
@@ -18,7 +18,7 @@ import Proofs.Flock.Soundness.Refine.Seam
   `repTape`: each round's messages are those its retained bytes decode to.
 * `capOfRoot`, `capOfRoot_eq`: the cap read off `root_B`. Any array of 64-byte entries whose concatenation is `root_B`
   has `capOfRoot root_B` as its `capDig`.
-* `verify_cap_hm96`, `verify_cap_ofCircuit_hm96`: in a one-table session flock-verify accepts under `hm96-sha512/v1`,
+* `verify_cap_hm96`, `verify_cap_ofCircuit_hm96`: in a one-table session verity-verify-proof accepts under `hm96-sha512/v1`,
   rep 0's cap, which S16 compares with `root_B` and whose entries are 64-byte digests (`rep_refines`), is
   `capOfRoot root_B`. So `capOf` can be `capOfRoot`: the cap the salted verdict of `verify_refines_hm96` reads,
   `capDig p₀.cap`, is a function of `root_B` alone.
@@ -137,7 +137,7 @@ theorem verify_cap_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) 
   rw [hms] at hw₀
   exact ⟨sess, sch, p₀, hsess, hf, hp₀, (capOfRoot_eq hw₀ (hc₀.symm.trans (bytes_eq_of_beq hroot))).symm⟩
 
-/-- `verify_cap_hm96` for the statements flock-verify is set up with (`verify_refines_ofCircuit_hm96`'s form). -/
+/-- `verify_cap_hm96` for the statements verity-verify-proof is set up with (`verify_refines_ofCircuit_hm96`'s form). -/
 theorem verify_cap_ofCircuit_hm96 (st : Flock.Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (hm : 13 ≤ st.m)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (record : String) (proofs : Array ByteArray)
     (h : Flock.verify st.spec #[Setup.ofCircuit st] record proofs = .ok ()) :

@@ -294,9 +294,9 @@ def test_the_lean_check_agrees_with_sigma_check(server):
 
 
 def test_flock_verify_sigma_check_prints_the_verdict_and_the_fix(tmp_path):
-    """`flock-verify sigma-check WORD BITS`, the verifier's command: one `SIGMACHECK` line with the verdict the difftest holds,
+    """`verity-verify-proof sigma-check WORD BITS`, the verifier's command: one `SIGMACHECK` line with the verdict the difftest holds,
     exit 0 when the lift holds and 1 when it is refused, and each refusal's reason followed by its fix."""
-    exe = D.build(Path(__file__).resolve().parents[7] / "verity/protocols/proofs/flock/verifier", "flock-verify")
+    exe = D.build(Path(__file__).resolve().parents[7] / "verity/protocols/proofs/flock/verifier", "verity-verify-proof")
     for k, case in enumerate(CASES):
         files = [tmp_path / f"{k}.{side}.json" for side in ("word", "bits")]
         for f, side in zip(files, ("word", "bits")):

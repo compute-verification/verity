@@ -72,18 +72,18 @@ def _tensors(seed: int) -> list[torch.Tensor]:
     return [torch.randn(1, 8, generator=g).to(torch.bfloat16) for _ in range(4)]
 
 
-def _oracle(cap: Path, steps: dict) -> None:
-    cap.mkdir(parents=True, exist_ok=True)
-    with (cap / "coll.rank0.jsonl").open("w") as f:
+def _oracle(capture_dir: Path, steps: dict) -> None:
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    with (capture_dir / "coll.rank0.jsonl").open("w") as f:
         for s, (parts, _outs) in steps.items():
             for k, mod in enumerate([OPROJ, MOE]):
                 f.write(json.dumps({"rank": 0, "step": s, "k": k, "kind": "all_reduce", "module": mod, "shape": list(parts[k].shape)}) + "\n")
     for s, (parts, outs) in steps.items():
-        torch.save({"step": s, "part": parts, "out": outs}, cap / f"coll.rank0.step{s}.pt")
+        torch.save({"step": s, "part": parts, "out": outs}, capture_dir / f"coll.rank0.step{s}.pt")
 
 
-def _record_witness(cap: Path, step: int, ws: list[torch.Tensor]) -> None:
-    with (cap / OW.witness_file(0)).open("a") as f:
+def _record_witness(capture_dir: Path, step: int, ws: list[torch.Tensor]) -> None:
+    with (capture_dir / OW.witness_file(0)).open("a") as f:
         for m, t in zip(OW.MEMBERS, ws):
             f.write(json.dumps({"rank": 0, "step": step, "k": 1, "module": MOE, "member": m, "sha256": OW.digest(tps._bytes(t))}) + "\n")
 

@@ -131,7 +131,7 @@ FORMS = {"unit form, own rows": ({}, None), "two input groups": ({"groups": 2}, 
 @pytest.mark.parametrize("form, want", FORMS.values(), ids=FORMS.keys())
 def test_the_mirror_of_the_ks_form_refuses_what_lean_refuses(tmp_path, form, want):
     """`ks_form_why` on files' heads: `KsScope.filesWhy`'s scope refusal with its reason, a shared-row file left to
-    Lean's `sharedWhy` (`verity/protocols/proofs/flock/prover/tests/test_lean_ks_form.py` holds it to `flock-verify ks-form` on the prover's
+    Lean's `sharedWhy` (`verity/protocols/proofs/flock/prover/tests/test_lean_ks_form.py` holds it to `verity-verify-proof ks-form` on the prover's
     files)."""
     assert PF.ks_form_why(*_files(tmp_path, **form)) == want
 
@@ -141,7 +141,7 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
-    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF, "executable", lambda: Path("verity-verify-proof"))
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
@@ -259,7 +259,7 @@ def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_wit
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
-    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF, "executable", lambda: Path("verity-verify-proof"))
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
@@ -438,7 +438,7 @@ def _same(v1, v2):
 @lean
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
-    """The v2 audit (`Spot.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
+    """The v2 audit (`Spot.OneStageZk`) runs `verity-verify-proof verify --zk`'s one-stage path inside its own Lean, on
     the files as blobs: on the honest session (accepted at its shared rows, proving its sampled proof blocks), a session
     whose proof bytes were tampered with (record kept or rehashed), and the honest session without the verifier's
     registered file, its finding is `verify`'s, reason and proof blocks included."""

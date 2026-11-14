@@ -39,7 +39,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
-# Level 0's request first, at flock-verify's acceptance
+# Level 0's request first, at verity-verify-proof's acceptance
 
 `accepts_req0`: when `Accepts I t`, whether or not the outputs are hidden, at every table `j` and rep `r`, every
 result of the rep's compiled game played with its proof file's messages and its stream's coins requests level 0 first,

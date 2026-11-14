@@ -64,7 +64,7 @@ Nothing here proves it small for `K*`: it is below `2^-193` for all but `2^-64` 
 that `K*` is not one of the others is unproved. No premise is taken on the key or on SHA-512.
 
 Its hypotheses are an untyped statement and `EndToEndHidden`'s reference setup `y₀`: table 0's, at `mPts` link points,
-at some sample `d₀`, which every sample flock-verify accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). Every
+at some sample `d₀`, which every sample verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`). Every
 table's statement avoids the mask slot, since `verify --zk` refuses one that meets it
 (`FailClosed.DrawSetupZHJ.avoidsMask`). -/
 def ZeroKnowledgeHidden : Prop :=

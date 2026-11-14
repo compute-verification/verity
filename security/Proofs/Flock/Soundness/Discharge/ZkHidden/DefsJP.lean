@@ -13,7 +13,7 @@ set_option Elab.async false
 /-!
 # One hidden-output `--zk` session of `J` tables at the verifier's public inputs
 
-`ZkHidden/DefsJ.lean` at the verifier's public inputs `own` (`flock-verify verify --zk --public-inputs F`, which
+`ZkHidden/DefsJ.lean` at the verifier's public inputs `own` (`verity-verify-proof verify --zk --public-inputs F`, which
 `Main.buildSessionOf` passes to `Stmt.setupTables`). `HmIn.checkOwn` holds the public file's public input words to `own`
 and changes nothing else `Stmt.setupHidden` returns, but at `own = none` it refuses a circuit with public input
 ports, so the acceptance is its own event (`AcceptsZKP`, which at `none` is `AcceptsZK`: `acceptsZKP_none`):
@@ -42,7 +42,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## The acceptance -/
 
-/-- **flock-verify `--zk` accepts the transcript at the verifier's public inputs `own`** (`AcceptsZK` with
+/-- **verity-verify-proof `--zk` accepts the transcript at the verifier's public inputs `own`** (`AcceptsZK` with
 `Exec.setupOfP`). -/
 def AcceptsZKP (I : Inputs) (own : Option ByteArray) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOfP (zkInputs I) own t.record = .ok (spec, sts) ∧ sts.forM Flock.Zk.shapeOk = .ok () ∧
@@ -50,12 +50,12 @@ def AcceptsZKP (I : Inputs) (own : Option ByteArray) (t : Exec.Transcript) : Pro
 
 theorem acceptsZKP_none (I : Inputs) (t : Exec.Transcript) : AcceptsZKP I none t ↔ AcceptsZK I t := Iff.rfl
 
-/-- flock-verify `--zk` accepts the live audit's transcript at `own`. -/
+/-- verity-verify-proof `--zk` accepts the live audit's transcript at `own`. -/
 def LiveAcceptsZKP {n : ℕ} {Reg : Type} (I : Inputs) (own : Option ByteArray)
     (o : Reg × Finset (Fin n) × Exec.Transcript) : Prop :=
   AcceptsZKP I own o.2.2
 
-/-! ## flock-verify's tables at `count > 1` at `own` -/
+/-! ## verity-verify-proof's tables at `count > 1` at `own` -/
 
 section Parts
 
