@@ -233,6 +233,18 @@ def test_the_windowed_worker_is_the_native_collector_gathering_on_native_hooks_w
                            "native_worker": True, "populate_threads": threads, "commit_scheme": scheme})]
 
 
+def test_an_empty_committer_is_a_usage_error_naming_the_committers(capsys: pytest.CaptureFixture[str]) -> None:
+    """``--committer ""`` names no treatment arm's committer, so the command line refuses it (exit 2) and names the ones to
+    give; a named committer, the default one included, passes as given."""
+    with pytest.raises(SystemExit) as e:
+        cli.parse("commit", ["--out", "o", "--committer", ""], {})
+    assert e.value.code == 2
+    assert "--committer is empty: name the treatment arm's committer (native_collect_v2b, the default; hooks_only; or " \
+           "plugin:MODULE:FACTORY), or run the control alone with --only-arm control" in capsys.readouterr().err
+    assert cli.parse("commit", ["--out", "o"], {}).committer == "native_collect_v2b"
+    assert cli.parse("commit", ["--out", "o", "--committer", "hooks_only"], {}).committer == "hooks_only"
+
+
 def engine(**runner: Any) -> Any:
     """An engine whose runner holds ``runner`` and whose model has two modules, as `assert_pristine` reads one."""
     return SimpleNamespace(runner=SimpleNamespace(**runner), model=torch.nn.Sequential(torch.nn.Linear(1, 1), torch.nn.ReLU()))

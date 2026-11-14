@@ -875,6 +875,14 @@ def staging_environ(args: Options) -> None:
         print(f"[delta] LATE-READ NEGATIVE TEST: gather flush points {sorted(_nc.GATHER_FLUSH_LEAVES)} (dropped {args.late_read!r}); roots must NOT match arm 2", flush=True)
 
 
+def committer_arg(s: str) -> str:
+    """``--committer``'s value, refused when empty: a treatment arm always has a committer, so `main`'s is never None."""
+    if not s:
+        raise UsageError("--committer is empty: name the treatment arm's committer (native_collect_v2b, the default; hooks_only; or "
+                         "plugin:MODULE:FACTORY), or run the control alone with --only-arm control")
+    return s
+
+
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class Options:
     workload: str = option("--workload", type=workload_arg, default="workloads/workload_cov_b0_b1_c256.json")
@@ -882,7 +890,7 @@ class Options:
     case: str | None = option("--case", default=None)
     out: str = option("--out")
     pairs: int = option("--pairs", type=int, default=5)
-    committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | hooks_only (an ablation, not a commitment) | plugin:<module>:<factory>")
+    committer: str = option("--committer", type=committer_arg, default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | hooks_only (an ablation, not a commitment) | plugin:<module>:<factory>")
     commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME,), help="the commitment scheme, rows-sha512 (hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), the windowed worker's (native_collect_v2b with --window-mb > 0)")
     chunk: int = option("--chunk", type=int, default=65536, help="hooks_only: the leaf, in bytes of the packed step stream, it reports (it hashes nothing); a rows-sha512 row is step_rows.ROW_BYTES")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
@@ -1219,7 +1227,7 @@ def main(args: Options) -> None:
         com = make_committer(kind, eng, args, run_id)
         if served is not None:
             served.attach(com)                               # the committer wraps nothing: the source acquires every value of the Build
-            com.program_digest = SR.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
+            com.program_digest = SR.program_field(served.build["program_digest"])   # the served Build's digest binds the roots
         _att = attach_of_record(com, eng, args, required_manifest, out, kind=kind, required_classes=required_classes,
                                 required_classes_cli=required_classes_cli, hidden_family=hidden_family if not required_classes_cli else None,
                                 fa_version=fa_version, cb_plan=cb_plan, served=served)
@@ -1227,13 +1235,12 @@ def main(args: Options) -> None:
         flip_weight_rec, _live_wd, _wor_rec = committer_setup(cfg, eng, com, kind=kind, reqs=reqs, sampling=sampling, base=base,
                                                               flip_weight_rec=flip_weight_rec, _hidden_required=_hidden_required)
         coms[kind] = com
-    com = coms[kinds[0]] if kinds else None
     if served is not None:
         _rb = served.rebuild(json.loads(Path(args.workload).read_text()), str(out))   # every kernel has launched in the warm-ups
         print(f"[delta] served Build of this process: program {str(_rb['program_digest'])[:16]} complete {_rb['complete']}, equal to the Build "
-              f"of record {_rb['program_digest'] == required_manifest['program_digest']}", flush=True)
+              f"of record {_rb['program_digest'] == served.build['program_digest']}", flush=True)
     protocols = PO.at_commit(_ekw["target"], eng.model, versions, _settings)   # after every committer registered the weights
-    if args.value_check and com is not None and hasattr(com, "_layouts"):
+    if args.value_check and kinds and hasattr(com := coms[kinds[0]], "_layouts"):
         # VALUE-CORRECTNESS (VALUE-FIRST §5): one extra instrumented run with reference taps + re-execution of the registered relation
         from verity_vllm.check.value_check import run_value_check
         vres = run_value_check(com, lambda: run_workload(eng, reqs, sampling), lambda: assert_pristine(eng, base))
@@ -1275,12 +1282,12 @@ def main(args: Options) -> None:
             torch.cuda.reset_peak_memory_stats()
             rss0, _ = rss_kb()
             rc = None
-            com = coms[arm] if multi and arm != "control" else (coms[kinds[0]] if kinds else None)
             _wstage = f"work.pair{pair}.{arm}"
             TL.start(_wstage, pair=pair, arm=arm)
             # the remote session audits the first instrumented run, a pass an engine step of it; the control arm is never audited
             _lock = _rs.begin() if _rs is not None and arm != "control" and _rs.lockstep is None else None
             if arm != "control":
+                com = coms[arm if multi else kinds[0]]
                 com.reset()
                 if served is not None:
                     served.src.begin_run()
