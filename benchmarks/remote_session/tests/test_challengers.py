@@ -573,7 +573,7 @@ LINE_PIECES = ["challenger_head", "challenger_credited", "challenger_pinned", "c
 
 
 def test_the_lines_ledger_and_credit_are_the_leans_and_the_python_alone_credits_none(host, tmp_path, monkeypatch):
-    """`auditor_line` asks the Lean verifier (`sampled-proofs-verifier`) for the ledger's head, each gate session's
+    """`auditor_line` asks the Lean verifier (`spot-verifier`) for the ledger's head, each gate session's
     *credited* and *pinned* checks and its read of the ledger, and acts on its answers: an honest session the Python
     credits is credited where the Lean agrees. Where the Lean refuses the head, or answers it otherwise than the Python,
     the run's line is refused; where it does so for the credit, the pin or the session's read of the ledger, the

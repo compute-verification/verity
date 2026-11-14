@@ -36,7 +36,8 @@ UNITS_WHY = "a template's units over the ranks are not the joined record's count
 SHAPE_WHY = ("the ranks are not {of, prefix}, the prefix r<rank>/, at least one rank, each {window, units, wires}: 128 "
              "lowercase hex digits, naturals by template, a natural")
 WIRES_WHY = ("the joined record's first wires are not each rank's own wires moved to its units, a rank's count of them, in "
-             "rank order, or a wire after them has its reader units in no one rank or all its writers in its reader's rank")
+             "rank order, or a wire after them reads no reader unit, or one in no rank, or in some rank whose units it reads "
+             "has all its writers of them in that rank")
 READS_WHY = ("the joined record's registered declarations are not its ranks', each named r<r>/... and at its rank's units, "
              "in rank order, or a rank's record declares what the join names no rule for (values, histories, supplied "
              "parameters)")
@@ -75,10 +76,22 @@ def ranks_of(field: Any) -> list[tuple[str, dict[str, int], int]] | None:
     return out
 
 
+def bounds(ranks: Sequence[tuple[str, Mapping[str, int], int]], template: str) -> list[int]:
+    """`Spot.Ranks.Ranks.bounds`: ``template``'s first unit of each rank in the joined circuit, then its count."""
+    b = [0]
+    for q in ranks:
+        b.append(b[-1] + q[1].get(template, 0))
+    return b
+
+
+def _segment_in(b: Sequence[int], r: int) -> tuple[int, int]:
+    lo = b[min(r, len(b) - 1)]
+    return lo, b[r + 1] if r + 1 < len(b) else lo
+
+
 def segment(ranks: Sequence[tuple[str, Mapping[str, int], int]], template: str, r: int) -> tuple[int, int]:
     """`Spot.Ranks.Ranks.segment`: rank ``r``'s units of ``template`` in the joined circuit, ``[lo, hi)``."""
-    lo = sum(q[1].get(template, 0) for q in ranks[:r])
-    return lo, lo + (ranks[r][1].get(template, 0) if r < len(ranks) else 0)
+    return _segment_in(bounds(ranks, template), r)
 
 
 def index_of(template: str, key: str) -> int | None:
@@ -111,9 +124,12 @@ def _leaves_agree(ms: Sequence[tuple[int, Mapping[str, Any]]]) -> bool:
                for _j, h in ms)
 
 
+def _rank_in(b: Sequence[int], lo: int, hi: int) -> int | None:
+    return next((r for r in range(len(b) - 1) if b[r] <= lo <= hi < b[r + 1]), None)
+
+
 def _rank_of(ranks: Sequence[tuple[str, Mapping[str, int], int]], template: str, lo: int, hi: int) -> int | None:
-    return next((r for r in range(len(ranks)) if segment(ranks, template, r)[0] <= lo <= hi < segment(ranks, template, r)[1]),
-                None)
+    return _rank_in(bounds(ranks, template), lo, hi)
 
 
 def _same(a: Any, b: Any) -> bool:
@@ -134,16 +150,22 @@ def shifted_wires(ranks: Sequence[tuple[str, Mapping[str, int], int]], r: int, d
                    segment(ranks, w.get("writer", ""), r)[0]) for w in doc.get("wires", [])]
 
 
-def _join_wire_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], w: Mapping[str, Any]) -> bool:
-    try:
-        radix, step, (_c0, cuts) = list(w["radix"]), list(w["step"]), w.get("cut", (0, 1))
-        units = math.prod(radix) // cuts
-        lo = w["base"] + sum(min(0, (k - 1) * d) for k, d in zip(radix, step, strict=True))
-        hi = w["base"] + sum(max(0, (k - 1) * d) for k, d in zip(radix, step, strict=True))
-        r = _rank_of(ranks, w["reader"], w["at"], w["at"] + units - 1)
-    except (KeyError, TypeError, ValueError):
+def _join_wire_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], w: Any) -> bool:
+    """`Spot.Ranks.joinWireOk`: one box per wire and reader rank it reads."""
+    p = _pattern(w)
+    if p is None:
         return False
-    return r is not None and units >= 1 and not (lo >= 0 and _rank_of(ranks, w["writer"], lo, hi) == r)
+    units, c = _reader_units(p), p["cut"][1]
+    br, bw = bounds(ranks, p["reader"]), bounds(ranks, p["writer"])
+    if units < 1 or p["at"] + units > _segment_in(br, len(ranks) - 1)[1]:
+        return False
+    for r in range(len(ranks)):
+        lo, hi = _segment_in(br, r)
+        if max(lo, p["at"]) < min(hi, p["at"] + units):
+            x, y = _box(p, (max(lo, p["at"]) - p["at"]) * c, (min(hi, p["at"] + units) - p["at"]) * c - 1)
+            if x >= 0 and _rank_in(bw, x, y) == r:
+                return False
+    return True
 
 
 def wires_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], record: Mapping[str, Any],
@@ -336,6 +358,52 @@ def _box(p: Mapping[str, Any], lo: int, hi: int) -> tuple[int, int]:
     return a, b
 
 
+def _reads_in(w: Mapping[str, Any], t: str, lo: int, n: int) -> bool:
+    return w["reader"] == t and max(lo, w["at"]) < min(lo + n, w["at"] + _reader_units(w))
+
+
+def _bisect(n: int, p: Callable[[int], bool]) -> int:
+    """`Spot.SecondWindow.bisect`: the least ``i < n`` where ``p(i)`` holds, ``p`` false and then true; ``n`` if never."""
+    lo, hi = 0, n
+    while lo < hi:
+        mid = (lo + hi) // 2
+        lo, hi = (lo, mid) if p(mid) else (mid + 1, hi)
+    return lo
+
+
+class Index:
+    """`Spot.SecondWindow.Index`: the wires sorted by reader template, port and first unit (ties in the record's order),
+    and at each place the most end of its port's wires up to there."""
+
+    def __init__(self, ws: Sequence[Mapping[str, Any]]) -> None:
+        self.ws = sorted(ws, key=lambda w: (w["reader"], w["port"], w["at"]))
+        self.keys = [(w["reader"], w["port"]) for w in self.ws]
+        self.ends: list[int] = []
+        for i, w in enumerate(self.ws):
+            e = w["at"] + _reader_units(w)
+            same = i > 0 and (self.ws[i - 1]["reader"], self.ws[i - 1]["port"]) == (w["reader"], w["port"])
+            self.ends.append(max(self.ends[-1], e) if same else e)
+
+    def meets(self, t: str, port: str, lo: int, n: int) -> list[Mapping[str, Any]]:
+        """`Index.meets`: the wires reading ``t``'s ``port`` that meet units ``[lo, lo + n)``, by first unit."""
+        keys = self.keys
+        a = _bisect(len(keys), lambda i: not keys[i] < (t, port))
+        b = _bisect(len(keys), lambda i: (t, port) < keys[i])
+        i = a + _bisect(b - a, lambda k: lo < self.ends[a + k])
+        j = a + _bisect(b - a, lambda k: lo + n <= self.ws[a + k]["at"])
+        return [w for w in self.ws[i:j] if _reads_in(w, t, lo, n)]
+
+    def ports(self, t: str) -> list[str]:
+        """`Index.ports`: ``t``'s wired ports, each once, by name."""
+        a = _bisect(len(self.ws), lambda i: not self.ws[i]["reader"] < t)
+        b = _bisect(len(self.ws), lambda i: t < self.ws[i]["reader"])
+        out: list[str] = []
+        for w in self.ws[a:b]:
+            if not out or out[-1] != w["port"]:
+                out.append(w["port"])
+        return out
+
+
 def _writer_ranks(ranks: Sequence[tuple[str, Mapping[str, int], int]], m: tuple[int, str, int, int, int],
                   w: Mapping[str, Any]) -> list[int] | None:
     """`Spot.SecondWindow.writerRanks`."""
@@ -351,11 +419,11 @@ def _writer_ranks(ranks: Sequence[tuple[str, Mapping[str, int], int]], m: tuple[
     return [p] if p is not None and p == q else None
 
 
-def _tree_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ws: Sequence[Mapping[str, Any]],
-             m: tuple[int, str, int, int, int]) -> bool:
+def _tree_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ix: Index, m: tuple[int, str, int, int, int]) -> bool:
     """`Spot.SecondWindow.treeOk`."""
-    for port in _distinct([w["port"] for w in ws if w["reader"] == m[1]]):
-        rss = [_writer_ranks(ranks, m, w) for w in ws if w["reader"] == m[1] and w["port"] == port]
+    lo = segment(ranks, m[1], m[0])[0] + m[3]
+    for port in ix.ports(m[1]):
+        rss = [_writer_ranks(ranks, m, w) for w in ix.meets(m[1], port, lo, m[4])]
         if any(x is None for x in rss) or len({r for x in rss for r in x}) > 1:
             return False
     return True
@@ -365,7 +433,7 @@ def wire_tree_failures(ranks: Sequence[tuple[str, Mapping[str, int], int]], reco
                        ms: Sequence[tuple[int, str, int, int, int]]) -> list[tuple[str, Any]]:
     """`Spot.SecondWindow.wireTreeFailures`: ``ranks-wire-tree``."""
     ws = _all(_list(record, "wires"), _pattern)
-    ok = ws is not None and all(_tree_ok(ranks, ws, m) for m in ms)
+    ok = ws is not None and all(_tree_ok(ranks, Index(ws), m) for m in ms)
     return [] if ok else [("ranks-wire-tree", WIRE_TREE_WHY)]
 
 
@@ -385,15 +453,11 @@ class Given:
     ref_reads: tuple[tuple[str, Any], ...] = ()
 
 
-def _reads_in(w: Mapping[str, Any], t: str, lo: int, n: int) -> bool:
-    return w["reader"] == t and max(lo, w["at"]) < min(lo + n, w["at"] + _reader_units(w))
-
-
-def wire_for(ws: Sequence[Mapping[str, Any]], t: str, port: str, lo: int, n: int) -> tuple[SS.Wire | None] | None:
+def wire_for(ix: Index, t: str, port: str, lo: int, n: int) -> tuple[SS.Wire | None] | None:
     """`Spot.SecondWindow.wireFor`, the one rule every per-session check reads a wire by: ``(None,)`` for no wired port
     of the member's, ``(wire,)`` for its one writer's output port covering every unit, None for two writers or a
     partial cover."""
-    meet = [w for w in ws if w["port"] == port and _reads_in(w, t, lo, n)]
+    meet = ix.meets(t, port, lo, n)
     if not meet:
         return (None,)
     w0 = meet[0]
@@ -403,21 +467,20 @@ def wire_for(ws: Sequence[Mapping[str, Any]], t: str, port: str, lo: int, n: int
     return None
 
 
-def member_wires(ws: Sequence[Mapping[str, Any]], m: tuple[int, str, int, int, int], lo: int) -> list[SS.Wire] | None:
+def member_wires(ix: Index, m: tuple[int, str, int, int, int], lo: int) -> list[SS.Wire] | None:
     """`Spot.SecondWindow.memberWires`."""
     out = []
-    for port in _distinct([w["port"] for w in ws if w["reader"] == m[1]]):
-        x = wire_for(ws, m[1], port, lo, m[4])
+    for port in ix.ports(m[1]):
+        x = wire_for(ix, m[1], port, lo, m[4])
         if x is None:
             return None
         out += [x[0]] if x[0] is not None else []
     return out
 
 
-def writer_unit(ws: Sequence[Mapping[str, Any]], t: str, port: str, u: int) -> tuple[str, int] | None:
+def writer_unit(ix: Index, t: str, port: str, u: int) -> tuple[str, int] | None:
     """`Spot.SecondWindow.writerUnit`."""
-    w = next((w for w in ws if w["reader"] == t and w["port"] == port and w["at"] <= u < w["at"] + _reader_units(w)),
-             None)
+    w = next(iter(ix.meets(t, port, u, 1)), None)
     return None if w is None else (w["writer"], _writer_at(w, (u - w["at"]) * w["cut"][1]))
 
 
@@ -430,11 +493,11 @@ def own_for(g: Given, links: Sequence[SS.Link], m: tuple[int, str, int, int, int
                   ref_reads=g.ref_reads, wires=tuple(wires))
 
 
-def _wired_read_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ws: Sequence[Mapping[str, Any]],
+def _wired_read_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ix: Index,
                    dockets: Sequence[Any], p: SS.Part, r: int, w: SS.Wire, v: str, e: Any) -> bool:
     """`Spot.SecondWindow.wiredReadOk`."""
     first = segment(ranks, p.template, r)[0]
-    x0 = writer_unit(ws, p.template, w.port, first + p.lo)
+    x0 = writer_unit(ix, p.template, w.port, first + p.lo)
     r2 = None if x0 is None or x0[1] < 0 else _rank_of(ranks, w.writer, x0[1], x0[1])
     if r2 is None:
         return False
@@ -444,13 +507,13 @@ def _wired_read_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ws: Sequ
         return False
 
     def row(u: int) -> int | None:
-        y = writer_unit(ws, p.template, w.port, first + u)
+        y = writer_unit(ix, p.template, w.port, first + u)
         return y[1] - wfirst if y is not None and wfirst <= y[1] and _rank_of(ranks, w.writer, y[1], y[1]) == r2 else None
     return (v == SS._port_of(SS._by_template(d), w.writer, w.wport) and SS._same_at(e, x)
             and SS._placed_ok(1, p, e, SS._get(x, "leaves"), row))
 
 
-def window_read_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ws: Sequence[Mapping[str, Any]],
+def window_read_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ix: Index,
                    dockets: Sequence[Any], own: SS.Own, named: bool, p: SS.Part, r: int, port: str, e: Any) -> bool:
     """`Spot.SecondWindow.windowReadOk`: ``second-read`` in the window form."""
     lo, hi = segment(ranks, p.template, r)
@@ -461,7 +524,7 @@ def window_read_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], ws: Sequ
         return False
     w = SS._wire_of(own, p.template, port)
     if w is not None:
-        return _wired_read_ok(ranks, ws, dockets, p, r, w, v, e)
+        return _wired_read_ok(ranks, ix, dockets, p, r, w, v, e)
     x = SS._by_port(own.interior).get(v)
     if x is not None:
         return (v == SS._port_of(named, p.template, port) and SS._same_at(e, x)
@@ -483,12 +546,12 @@ def position_of(registrations: Sequence[Mapping[str, Any]], m: tuple[int, str, i
     return next((i for i, h in enumerate(g["members"]) if h["key"] == key), len(g["members"]))
 
 
-def member_codes(ranks: Sequence[tuple[str, Mapping[str, int], int]], ws: Sequence[Mapping[str, Any]], g: Given,
+def member_codes(ranks: Sequence[tuple[str, Mapping[str, int], int]], ix: Index, g: Given,
                  own: SS.Own, m: tuple[int, str, int, int, int], k: int, s: SS.Stmt) -> list[str]:
     """`Spot.SecondWindow.memberCodes`."""
     named, p = SS._by_template(own.interior), SS.Part(m[1], m[3], m[4])
     reads = SS._entries(SS._get(s.registered, "ports"))
-    read = (all(window_read_ok(ranks, ws, g.dockets, own, named, p, m[0], port, e) for port, e in reads)
+    read = (all(window_read_ok(ranks, ix, g.dockets, own, named, p, m[0], port, e) for port, e in reads)
             and SS._linked_read(own, m[1], reads) and SS._wired_read(own, m[1], reads))
     return [c for c in SS._stmt_codes(own, named, k, p, s) if c != "second-read"] + ([] if read else ["second-read"])
 
@@ -503,6 +566,7 @@ def session_failures(g: Given, ranks: Sequence[tuple[str, Mapping[str, int], int
     if links is None or ws is None:
         out.append(("second-read", DESIGN_WHY))
     else:
+        ix = Index(ws)
         for i in range(max(len(ms), len(statements))):
             m = ms[i] if i < len(ms) else None
             if i >= len(statements):
@@ -518,14 +582,14 @@ def session_failures(g: Given, ranks: Sequence[tuple[str, Mapping[str, int], int
             else:
                 first = segment(ranks, m[1], m[0])[0]
                 lo = first + m[3]
-                wires = member_wires(ws, m, lo)
+                wires = member_wires(ix, m, lo)
                 if wires is None:
                     out.append(("second-read", {"statement": i, "template": st.template, "why": TWO_WRITERS_WHY}))
                     continue
                 drawn = [u - first for t, u in sample if t == m[1] and lo <= u < lo + m[4]]
                 own = own_for(g, links, m, drawn, wires)
                 out += [(c, {"statement": i, "template": st.template})
-                        for c in member_codes(ranks, ws, g, own, m, position_of(registrations, m), st)]
+                        for c in member_codes(ranks, ix, g, own, m, position_of(registrations, m), st)]
     ws2 = wires_of(record)
     own = SS.Own(sample=(), parts=None, interior=None, boundary=None, drawn=(), wires=None if ws2 is None else tuple(ws2))
     return out + SS.table_rows_failures(own, statements)

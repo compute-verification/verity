@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Pouw.Assumptions.TS
-public import Properties.Pouw.Period
+public import Properties.Pouw.MonitoringPeriod
 
 /-!
 # PoUW's proof system soundness from its proof layer
 
-`Properties.Pouw.Period.ServiceSound` bounds, in each window, the event that PoUW's deployed check
+`Properties.Pouw.MonitoringPeriod.ServiceSound` bounds, in each window, the event that PoUW's deployed check
 (`PouwCheck.protocol.check`) accepts the window and some unit it publishes as sampled (`Public.drawn`) has an opening that
 fails its relation. `Accounting.TS.ProofLayer.SoundAt` bounds each proof of a window's proof layer the same way, and
 `Accounting.Guarantees.TS.SessionSoundAt` concludes it of a layer whose proofs are Flock sessions. This module states
@@ -46,7 +46,7 @@ def layer {Ω U V : Type} {n nπ : ℕ} (acc : Paths Ω n → Fin n → Prop)
   rel x w i v := ∀ u, drawn x w u → sessOf x w u = i → rel x w u (v (key u))
   right _ _ := True
 
-open PouwCheck Properties.Pouw.Period in
+open PouwCheck Properties.Pouw.MonitoringPeriod in
 /-- **PoUW's check as a sampled layer**: window `w` is accepted where PoUW's deployed check accepts it, and its sampled
 proof blocks are the units the check publishes as sampled (`Public.drawn`), each read at its index. -/
 def checkLayer {C Ξ V : Type} {m Np n nπ : ℕ} (p : Params)
@@ -71,20 +71,20 @@ statement that fails at its openings with probability at most `δ` (`Accounting.
 some unit it publishes as sampled fails its relation with probability at most `n_π · δ` (`ServiceSound`). -/
 def CheckProofSystemSound : Prop :=
   ∀ {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n nπ : ℕ} (p : PouwCheck.Params)
-    (ws : Properties.Pouw.Period.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
+    (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
     (sessOf : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → Fin nπ) (δ : ℝ),
     Accounting.Assumptions.TS.ProofSoundAt (Sessions.checkLayer p ws opened rel sessOf) δ →
-      Properties.Pouw.Period.ServiceSound p ws opened rel (nπ * δ)
+      Properties.Pouw.MonitoringPeriod.ServiceSound p ws opened rel (nπ * δ)
 
 /-- **`CheckProofSystemSound`'s premise holds where the deployed check accepts**: some period of one window, at a
 population of 144 units and one session a window, has PoUW's deployed check accepting the window on every path and its
 layer, under relations every opening meets, sound at `0`. -/
 def CheckProofSystemSoundHonest : Prop :=
   ∃ (m : ℕ) (p : PouwCheck.Params)
-    (ws : Properties.Pouw.Period.Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
-    (∀ x w, Properties.Pouw.Period.Accepts p (ws.reg x w) (ws.ev x w)) ∧
+    (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
+    (∀ x w, Properties.Pouw.MonitoringPeriod.Accepts p (ws.reg x w) (ws.ev x w)) ∧
       Accounting.Assumptions.TS.ProofSoundAt
         (Sessions.checkLayer p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => True) (fun _ _ _ => (0 : Fin 1))) 0
 
@@ -93,7 +93,7 @@ has PoUW's deployed check accepting and publishing a sampled proof block on ever
 `ServiceSound` fails there at `0`. -/
 def CheckProofSystemSoundNontrivial : Prop :=
   ∃ (m : ℕ) (p : PouwCheck.Params)
-    (ws : Properties.Pouw.Period.Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
-    ¬ Properties.Pouw.Period.ServiceSound p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => False) 0
+    (ws : Properties.Pouw.MonitoringPeriod.Executions (Paths Bool m × (Equiv.Perm (Fin 144) × Unit)) 1),
+    ¬ Properties.Pouw.MonitoringPeriod.ServiceSound p ws (fun _ _ _ _ => ()) (fun _ _ _ _ => False) 0
 
 end Properties.Certifier.JointBridge

@@ -14,7 +14,7 @@
 //
 // MUFU.RCP and MUFU.SQRT are the hardware tables measured on the RTX 4090 (cuda/mufu_probe.cu, cuda/rms_probe.cu;
 // both verified on all 2^32 inputs).  The ``variant`` bit mask deliberately breaks single dataflow choices so
-// the check harness can show that each alternative mismatches the production kernel (0 = the model).
+// the check harness can show that each alternative mismatches the serving kernel (0 = the model).
 
 #include <cmath>
 #include <cstdint>

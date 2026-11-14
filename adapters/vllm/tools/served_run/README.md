@@ -62,7 +62,7 @@ gets no verdict.
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
 challenger is an auditor device reached through its gate, and its live coins are PoUW's always and SPOT's when
-`PP_CHALLENGER` names it, V3c's audit, the sampled-proofs audit of record, among them. Otherwise a local development
+`PP_CHALLENGER` names it, V3c's audit, the SPOT audit of record, among them. Otherwise a local development
 challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's coins, and
 `served_verdicts.sh` takes it only in a development run, which `placement.toml` says it is (`DEVELOPMENT=1`).
 The verifier flips no coins of its own. The other three are not

@@ -126,10 +126,8 @@ def test_every_build_takes_its_sources_from_the_one_directory_of_pouws_prover():
     pytest.importorskip("torch")
     from verity.protocols.accounting.pouw import prover
     from verity.protocols.accounting.pouw.prover.serving import device as PD
-    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts
-    from verity.protocols.accounting.pouw.prover.serving.h1 import (
-        registered_device as RD,
-    )
+    from verity_torch.pouw.h1 import receipts
+    from verity_torch.pouw.h1 import registered_device as RD
 
     assert K.CUDA_DIR == PD.HERE == Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
     named = {*K.DEVICE_SOURCES, *K.HOST_SOURCES, *PD.SOURCES, *PD.CUDA_SOURCES, *PD.FUSED_SOURCES, *RD.DEVICE_SOURCES,

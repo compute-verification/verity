@@ -1,9 +1,9 @@
 """Round 2's wired key (`SecondStage.keyFailure`, `openedRow`) held to its Python (`second_stage._key_failure`) through
-the ``second_statements`` piece of two executables: `sampled-proofs-difftest`, the build of record's, whose switch is
-off (`SecondStage.WIRED_KEY`), and `sampled-proofs-wired-key-dev`, the development executable with it on. One MoE
+the ``second_statements`` piece of two executables: `spot-difftest`, the build of record's, whose switch is
+off (`SecondStage.WIRED_KEY`), and `spot-wired-key-dev`, the development executable with it on. One MoE
 layer's read of its expert's row, over the two-template interior (`SECOND_MIXED`): its router, PAIR, writes each
 token's expert index at `out`, and the read, TRIPLE, a read of the table round 1's record registers, takes its key
-`tok` from it, unit for unit. And the verifier of record (`sampled-proofs-verifier`) serves no piece that takes the
+`tok` from it, unit for unit. And the verifier of record (`spot-verifier`) serves no piece that takes the
 switch from its input.
 """
 
@@ -23,8 +23,8 @@ from test_difftest import PACKAGE, PIECES, SECOND_MIXED, _as_stated, _second_cas
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-DEV = "sampled-proofs-wired-key-dev"
-VERIFIER = "sampled-proofs-verifier"
+DEV = "spot-wired-key-dev"
+VERIFIER = "spot-verifier"
 PAIR, TRIPLE = SECOND_MIXED.templates
 SAMPLE, DRAWN = [0, 2], [1, 4, 6, 9]
 #: The read's table in round 1's record (`t`) of `V` rows, its root and domain id, which the verifier fills as bytes.

@@ -174,9 +174,10 @@ private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : 
     {receipt draw samplingDesign : Json} {read : ℕ} {acc : Bool} {staged : List (String × Json)}
     (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, samplingDesign, read)) = .ok (acc, staged)) :
     (∃ e, staged = [("interior", e)]) ∧ ∃ rec_ strata,
-      Spot.Run.audit i it.record receipt draw samplingDesign (it.provedUnits.getD (Spot.Draw.proved draw))
-        (it.instances.getD (it.provedUnits.getD (Spot.Draw.proved draw)).size) it.served it.sessionRoots =
-          .ok rec_ ∧
+      Spot.Run.audit i it.params.verifier it.record receipt draw samplingDesign
+        (it.provedUnits.getD (Spot.Draw.proved draw))
+        (it.instances.getD (it.provedUnits.getD (Spot.Draw.proved draw)).size) it.served it.sessionRoots
+          it.params.windowValues = .ok rec_ ∧
       Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
       acc = Spot.jeq (Spot.getD (Spot.SecondStage.attach rec_
         (Spot.SecondStage.checkAny form (runOwn i it sample strata draw) it.statements)
@@ -204,9 +205,9 @@ private theorem record_wf {x : Spot.Record.Input} {r : Json} (h : Spot.Record.re
     | (cases h; exact ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩)
 
 /-- **An audit record is a well-formed object.** -/
-private theorem audit_wf {i : Spot.Run.Input} {record receipt draw samplingDesign : Json} {proved : Array Int} {instances : Int}
-    {served sessionRoots r : Json}
-    (h : Spot.Run.audit i record receipt draw samplingDesign proved instances served sessionRoots = .ok r) :
+private theorem audit_wf {i : Spot.Run.Input} {v : Spot.Docket.Verifier} {record receipt draw samplingDesign : Json}
+    {proved : Array Int} {instances : Int} {served sessionRoots r : Json} {named : Array String}
+    (h : Spot.Run.audit i v record receipt draw samplingDesign proved instances served sessionRoots named = .ok r) :
     ∃ m : Std.TreeMap.Raw String Json compare, r = .obj m ∧ m.WF := by
   unfold Spot.Run.audit at h
   obtain ⟨x, _, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h

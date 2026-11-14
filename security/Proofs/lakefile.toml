@@ -40,7 +40,7 @@ path = "../../verity/protocols/proofs/recursion/verifier/vstar_cli"
 name = "core_vstar_recursive"
 path = "../../verity/protocols/proofs/spot_flock/verifier/lean"
 
-# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
+# SPOT's recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
 # `RecursiveKSAt`'s event
 [[require]]
 name = "spot_flock_recursion"
@@ -78,12 +78,12 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Pouw.LiveSalt.Canon", "Proofs.Properties.Pouw.LiveSalt.Coin", "Proofs.Properties.Pouw.Strata",
   "Proofs.Properties.Pouw.PearlPlus", "Proofs.Properties.Pouw.PearlPlus.Open",
   "Proofs.Properties.Pouw.PearlPlus.Verdict", "Proofs.Properties.Pouw.PearlPlus.Witnesses",
-  "Proofs.Properties.Pouw.PearlPlus.Draw", "Proofs.Properties.Pouw.PearlPlus.Tie", "Proofs.Pouw.PearlPlus.Numerics",
+  "Proofs.Properties.Pouw.PearlPlus.Sample", "Proofs.Properties.Pouw.PearlPlus.Tie", "Proofs.Pouw.PearlPlus.Numerics",
   "Proofs.Properties.InferenceOnly", "Proofs.Properties.Pous", "Proofs.Properties.Pous.TimedAudit", "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Session",
   "Proofs.Properties.Pous.Run", "Proofs.Properties.Pous.Setup", "Proofs.Properties.Pous.RunAt",
   "Proofs.Properties.Pous.RunAccepts", "Proofs.Properties.Pous.Component", "Proofs.Properties.Accounting.InProofs",
-  "Proofs.Properties.Compose.Remote.InProofs", "Proofs.Properties.Pous.InProofs",
+  "Proofs.Properties.Poub.Remote.InProofs", "Proofs.Properties.Pous.InProofs",
   "Proofs.Properties.Pous.SetupInProofs", "Proofs.Properties.Certifier.Check", "Proofs.Properties.Hash.Identity",
   "Proofs.Properties.Hash.Lms", "Proofs.Properties.Pous.Wipe", "Proofs.Properties.InferenceOnly.DescVerdict",
   "Proofs.Properties.InferenceOnly.DescAgree", "Proofs.Properties.InferenceOnly.Walk",
@@ -95,20 +95,21 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",
   "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.Certifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
+  "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
   "Proofs.Properties.Spot.Rate", "Proofs.Flock.Bridge.RatePeriod", "Proofs.Properties.Spot.MonitoringPeriod",
   "Proofs.Properties.Spot.MonitoringPeriodLedger", "Proofs.Properties.Spot.MonitoringPeriodSigned",
   "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Spot.SecondRefused", "Proofs.Properties.Accounting.Requirement",
-  "Proofs.Properties.NetworkScan", "Proofs.Properties.Compose.Remote", "Proofs.Properties.Compose.Remote.Coins",
-  "Proofs.Properties.Compose.Remote.Frozen", "Proofs.Properties.Compose.Remote.Order",
-  "Proofs.Properties.Compose.Remote.Pooled", "Proofs.Properties.Accounting.Served",
-  "Proofs.Properties.Compose.Remote.Line", "Proofs.Properties.Compose.Remote.Schedule", "Proofs.Properties.Compose.Remote.RecordAccepts",
-  "Proofs.Properties.Compose.Remote.Shared", "Proofs.Properties.Compose.Remote.SharedLink",
-  "Proofs.Properties.Compose.Remote.Live", "Proofs.Properties.Compose.Remote.Subprotocol",
+  "Proofs.Properties.NetworkScan", "Proofs.Properties.Poub.Remote", "Proofs.Properties.Poub.Remote.Coins",
+  "Proofs.Properties.Poub.Remote.Frozen", "Proofs.Properties.Poub.Remote.Order",
+  "Proofs.Properties.Poub.Remote.Pooled", "Proofs.Properties.Accounting.Served",
+  "Proofs.Properties.Poub.Remote.Line", "Proofs.Properties.Poub.Remote.Schedule", "Proofs.Properties.Poub.Remote.RecordAccepts",
+  "Proofs.Properties.Poub.Remote.Shared", "Proofs.Properties.Poub.Remote.SharedLink",
+  "Proofs.Properties.Poub.Remote.Live", "Proofs.Properties.Poub.Remote.Subprotocol",
   "Proofs.Flock.Claims.Bridge.CustodyZkP", "Proofs.Properties.Verity.SampledCoins",
   "Proofs.Flock.SpotFlock.RunsAs.Round2", "Proofs.Flock.SpotFlock.RunsAs.RoundTwoOf",
   "Proofs.Flock.SpotFlock.RunsAs.SecondStageOf", "Proofs.Flock.SpotFlock.RunsAs.PopulationOf",
-  "Proofs.Properties.Verity.Sampled.Deployed", "Proofs.Properties.Compose.Remote.SubprotocolWitnesses",
+  "Proofs.Properties.Verity.Sampled.Deployed", "Proofs.Properties.Poub.Remote.SubprotocolWitnesses",
   "Proofs.Flock.SpotFlock.RunsAs", "Proofs.Flock.SpotFlock.RunsAs.Played", "Proofs.Flock.SpotFlock.RunsAs.FirstSample",
   "Proofs.Flock.SpotFlock.HeldOf", "Proofs.Flock.SpotFlock.HeldOfFiles", "Proofs.Flock.SpotFlock.HeldOfCheck",
   "Proofs.Flock.SpotFlock.HeldOfRun", "Proofs.Flock.SpotFlock.RunsAs.OfCheck", "Proofs.Flock.SpotFlock.RunsAs.Parsed",

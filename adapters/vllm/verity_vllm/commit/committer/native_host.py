@@ -1380,7 +1380,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         return tuple(open_levels(levels, index))
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
-        """Production verifier core (`_verify_rows`): the row and its salt give the hiding leaf, the path folds it to the tree root, which
+        """Serving verifier core (`_verify_rows`): the row and its salt give the hiding leaf, the path folds it to the tree root, which
         binds into the ORIGINAL step root, which is in the run root."""
         return self._verify_rows(run, opening)
 

@@ -50,13 +50,16 @@ def test_behind_the_zk_server_the_proof_server_proves_one_session_at_a_time_on_t
 
 
 @pytest.mark.parametrize("loop", ["loop", None], ids=["behind the ZK server", "with no ZK server"])
-def test_the_proof_server_proves_on_the_audits_gpus_and_on_the_cpu_without_them(tmp_path, loop):
+def test_the_proof_server_proves_on_the_audits_gpus_and_on_the_cpu_without_them(tmp_path, monkeypatch, loop):
+    monkeypatch.delenv("FC_HOST_WITNESS", raising=False)
     window = {"partition_file": tmp_path / "partition.json", "program_file": tmp_path / "program.json"}
     on_gpus = a5.proof_server(args(loop, gpus=[3]), tmp_path, [dict(window)])
     assert on_gpus.devices == [3]
+    # behind the ZK server, which refuses a witness the device builds, the host builds a device's
+    assert on_gpus._env.get("FC_HOST_WITNESS") == ("1" if loop else None)
     on_gpus.close()
     on_cpu = a5.proof_server(args(loop), tmp_path, [dict(window)])
-    assert on_cpu.devices == [None]
+    assert on_cpu.devices == [None] and "FC_HOST_WITNESS" not in on_cpu._env
     on_cpu.close()
 
 

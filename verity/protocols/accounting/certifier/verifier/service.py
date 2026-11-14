@@ -16,13 +16,13 @@ is one execution phase, one proof block. Its `window` provenance is `{"kind": "s
 challenger holds w to the registration's order in the stream (`TransferBlocks.register`), so the receipt's order is the
 execution phase. The
 network verdict of record is `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share
-credit: it accepts only when every window of the egress profile (a served link's profile) is registered in order and
-its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each
+credit: it accepts only when every window of the link (its `WardenProfile`'s) is registered in order and its outcome
+of record accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each
 reject the link. A run's is the AND over its links'.
 
 **The period sample** (`TransferBlocks.period_draw`) samples the execution phases instead. The prover first commits the
-period: every window's salted root (`root`), which the challenger records before it reads a coin (a coin source with
-a `commit` is first committed to the period's digest, as a remote challenger's is). It then samples `subset:K` of the n
+period: every window's salted root (`root`), which the challenger records before it reads a coin (coins with a `commit`
+are first committed to the period's digest, as a remote challenger's is). It then samples `subset:K` of the n
 windows, and only the drawn windows are registered, in window order, each held to its committed root
 (`register(drawn=…)`), selected and proved. `network_verdict(drawn=…)` accepts when exactly the drawn windows are
 registered, in order, each under its committed root, with an accepted outcome of record, and it states what the sample
@@ -39,30 +39,21 @@ sample. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
 `TransferBlocks` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
 
-**Public items**, each with its reason (`PUBLIC`, which a served link's and a warden link's are built from): the population (one), the window (its index, the order), the
-committed value's leaf count and domain, its salted root, the parameters digests, the charge and the occupancy profile
-(fixed before the run, bound by the spec's context), and the check's two public outputs, `verdict` and `deadline`. A
-rejected execution phase shows only the service's `reject`: the violation's kind stays in the verifier.
-
-**The occupancy profile** (`TransferBlocks.occupancy`) is the placement's public occupancy for an end of the link: each
-window's T counts, the frames that end's record holds in each bucket, as the Program and the placement fix them. Only a
-served link's ingress end has one: no link's egress counts are a profile's (a link is served or a warden's), and an end
-whose rows the Program reads rather than predicts, such as requests from outside, has none. The profile is fixed before
-the run and bound by the spec's context, and nothing declared at run time sets it. So a port-window it leaves empty
-needs no content check: a head with frames where the profile says 0 fails N2's count check. An end without a profile
-has no such backing, since its occupancy is its record's own.
+**Public items**, each with its reason (`PUBLIC`): the population (one), the window (its index, the order), the
+committed value's leaf count and domain, its salted root, the parameters digests, the network certifier's schedule and
+the link's windows (fixed before the run, bound by the spec's context), and the check's two public outputs, `verdict`
+and `deadline`. A rejected execution phase shows only the service's `reject`: the violation's kind stays in the
+verifier.
 
 **The check** is `TransferBlocks.unit`, `NetworkTransferBlocks` v5{EGRESS, INGRESS}: each end's head check,
 `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are those statics), a Boolean Definition over its
 end's signed digest (`certificate_digest`: the end's record digest hidden under the certifier's salt), its direction a
 constant of the proof block (egress 0, ingress 1). The head opens at leaf 2 + direction under the registered root, a
 hiding read; its link, direction and window are the execution phase's; its status is complete; its T, r,
-B, τ_b and parameters digest are the end's declared grid's; on an end with an occupancy profile its T counts are the
-profile's row for the window; and its record digest under the certifier's salt is the signed digest, so the certificate
-signs the head the check opened. A window past the profile has no row to give, so it is rejected. The proof block's
-parameters are the two signed digests (``egress``, ``ingress``) and each end's head check's others, ``<end>_<name>``;
-its output is two bits, `OUTPUTS`: ``verdict``, the AND of the head checks (and on a served link the served counts'
-check), and ``deadline``, the AND of the two heads' deadline bits. The certificates are not in the proof block: the
+B, τ_b and parameters digest are the end's declared grid's; and its record digest under the certifier's salt is the
+signed digest, so the certificate signs the head the check opened. The proof block's parameters are the two signed
+digests (``egress``, ``ingress``) and each end's head check's others, ``<end>_<name>``; its output is two bits,
+`OUTPUTS`: ``verdict``, the AND of the head checks, and ``deadline``, the AND of the two heads' deadline bits. The certificates are not in the proof block: the
 verifier checks them on their public fields (`TransferBlocks.certified`).
 
 In the proof block's Program each head check is one gate that names the Definition and its circuit digest
@@ -77,12 +68,7 @@ from the pin, never computed, since tracing the gadgets takes minutes: a size cl
 names none (`@unpinned`), and no proof of its proof block is accepted, while its verdict of record in the clear is
 unchanged.
 
-The count check is the part of the egress grid check that needs no frame's bytes, and the only grid check on ingress.
-It runs on every execution phase, as a structural check must. In a proof it is an equality of each head's 32·T count
-bits with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
-
-N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system Spec, is
-retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `verity/protocols/accounting/certifier/prover/scan_zk.py`
+N3, the content check, a prototype evaluated in the clear and in no proof-system Spec, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `verity/protocols/accounting/certifier/prover/scan_zk.py`
 proves in zero knowledge, outside this protocol.
 
 **The proof.** The prover proves the sampled proof block as one Flock statement of one instance: rows ``pub`` (the proof
@@ -102,11 +88,10 @@ alone. It accepts when
   root, the execution phase's public fields and both certificates' signed digests), and its ``o0`` row to the output
   word delivered, whose verdict and deadline bits are both 1;
 - the certificates' check accepts (`certified`: each verifies under the network certifier's public key in its certifier
-  session over its public fields and its signed digest, and names the registered execution phase), and the window's
-  declared sync is one of Σ_sync.
+  session over its public fields and its signed digest, and names the registered execution phase).
 
 What the verifier receives: the registration (the salted root), the sample, the two certificates' public fields and
-signatures, from the certifier, which is the auditor's device; the declared syncs; and from the prover the statement's
+signatures, from the certifier, which is the auditor's device; and from the prover the statement's
 public file (each row's hiding commitment), its session files, the circuit file (held to the committed digest), the
 salts of the ``pub`` and ``o0`` rows and the output word. Never the opening nor the ``wit`` row's salt. The certificates
 are not a public item of the Spec: the service's public kinds (structure, outputs, coins, hiding commitments) have none
@@ -115,60 +100,33 @@ service, in the clear. That is a provisional exception to the four public kinds,
 
 `TransferBlocks.clear` is the in-the-clear check on the opening, for a debug comparison only (`verify(opening=…)`, off by
 default, which adds its accept bit and decides nothing) and the tests' reference: the opening reproduces the registered
-root, each end's head check accepts (`head_check.reference`), and the audit (`audit.Audit`) accepts both records under
-the certifier's key and session, comparing no grid (`check_link(grid=False)`). `TransferBlocks.unproved_outcome` decides a
+root, each end's head check accepts (`head_check.reference`), the opening's certificates hold (`certified`) and both
+heads met their deadline. The records' cells are the scan's (`warden.audit`
+reads them in the clear), and the certifier's host audit doesn't read them. `TransferBlocks.unproved_outcome` decides a
 run that proves nothing (a rehearsal, the simulator) on it, so its verdict says ``"decided_by": "clear"`` and is never
 zero-knowledge.
 
-N2 compares no grid in the clear and takes no frames, so its claim is counts only: on every execution phase the egress
-head's counts are the profile's (and the ingress head's, where that end declares one), which puts the link's timing at
-the profile. The egress grid is the head's counts filled with the head's frames in order (`grid.fill`), and the head's
-digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. Nothing here holds the egress
-grid to the Program's.
-
-**A served link** (`TransferBlocks(served=served.ServedProfile(…))`) has egress counts that follow its requests' arrivals
-and the run-time syncs, so no profile fixes them before the run. Its proof block is `NetworkServedTransferBlocks` v4{EGRESS,
-INGRESS, SERVED}: the checks above, and one gate naming `served.NetworkServedCounts_v1` and its pinned circuit digest
-(`served.gate`, pinned in `served.circuit-check.json`), which holds the egress head's
-counts to the ones the ingress head's counts derive under the window's declared sync (`served`'s docstring has the
-derivation, its premises and the carry-over). Its public items are `PUBLIC_SERVED`: no egress profile, the served
-sizes, and the window's declared sync, the advice `charge` already counts, which the served counts read and the proof
-block takes as its ``sync`` parameter. The in-the-clear check runs `served_check` too.
-
-**A warden link** (`TransferBlocks(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
-of each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
+**The link** (`TransferBlocks(warden=WardenProfile(…))`) is the network certifier's (`warden.Warden`) own two records of
+each execution phase: its responses on egress and its requests on ingress, on its one grid, certified under its
 schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
 (`certificate.parameters_digest`). The network certifier is the auditor's device, and its code puts every bucket's
 cells, r for each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's proof blocks
 in zero knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms
-charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the active network certifier runs no shaper clock, so a window
-declares no sync and the charge is 0. Its proof block is the plain one, `NetworkTransferBlocks` v5{EGRESS, INGRESS}, each
-head check holding its end's head to the network certifier's grid and digest and to the network certifier's signed
-digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the opening's root and the head checks: the
-records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records.
+charge them (log2 #S_s and Σ_c log2(cap_c + 1)), and the network certifier runs no shaper clock, so a window declares
+no sync and the charge is 0. Each head check holds its end's head to the network certifier's grid and digest and to its
+signed digest. N2 takes no frames: the frames, their content and their order, are the scan's, and N2 says nothing of
+them. A `TransferBlocks` without a `WardenProfile` raises `ValueError`.
 
-`TransferBlocks` refuses a link that is neither served nor a warden's (`ValueError`): no occupancy profile holds a link's
-egress timing.
-
-`TransferBlocks.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
-and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:
-`clear` accepts every execution phase it accepts, and differs from it only where the record's grid, at the profile's
-counts, isn't the Program's: in its frames, which N2 doesn't hold, or because the declared syncs
-move the Program's counts off the profile, which N2 holds the counts to instead.
-
-When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `audit.Audit` runs beside it as the
-reference: an execution phase where the two differ rejects, and the verdict says `"by": "lean"` and carries the
-reference's accept bit (`reference`), never a violation's kind.
-
-**The verdict of record is the Lean's** on every kind of link: `NetworkCheck.TransferBlocks.verdict`
+**The verdict of record is the Lean's**: `NetworkCheck.TransferBlocks.verdict`
 (`verity/protocols/accounting/certifier/verifier/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
 line `OF_RECORD`. `verify` runs it and this module's `python_verdict` on every proof, records
 whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects an execution phase where they differ or
-the Lean refuses the case. On a network certifier link the Lean reads the network certifier's parameters digest
-(`lean_case`'s ``warden``) for both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what
+the Lean refuses the case. The Lean reads the network certifier's parameters digest (`lean_case`'s ``warden``) for
+both ends' grids and no sync, as `grid` and `python_verdict` do; its other kinds of link (`Kind.plain`, `Kind.served`)
+are cases this module never sends. The gap list, what
 `python_verdict` reads that the
 Lean takes as an input rather than checks:
-- on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
+- the network certifier's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
   as its schedule's, `warden.WardenParams.digest`), which neither derives;
 - what both take from the proof system and the lowering: the findings of the verifier's own run of Flock's Lean
   verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the sample, and the registered
@@ -180,15 +138,13 @@ through both to the verdict it recorded, and the properties of the Lean's verdic
 `security/Properties/Certifier/Check/TransferBlocks.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
-registered proof block whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
-sync is declared; the outcome record binds the registered root, the sample and the delivered sessions. The
+registered proof block whose public row is the verifier's own and whose output word is 0b11 and the certificates verify;
+the outcome record binds the registered root, the sample and the delivered sessions. The
 verifier reads no witness. The proof opens the head leaves (2, 3) only, so the
 record leaves (0, 1), which hold each certified record whole, are committed but read by nothing in the verdict, and
 the certificates' signatures are checked
-on the host from their public fields, not in the proof. One clock per spatial unit across links (`Audit.syncs`) is
-not checked here: each registration is one execution phase, checked alone. The frames, their content and their order
-within the counts, are not held: an accepted outcome says nothing of them, so the claim is counts only (timing at the
-profile).
+on the host from their public fields, not in the proof. Each registration is one execution phase, checked alone. The
+frames, their content and their order within the counts, are not held: an accepted outcome says nothing of them.
 """
 from __future__ import annotations
 
@@ -213,21 +169,19 @@ from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.protocols.accounting.certifier.verifier import audit as host_audit, head_check as HC, lean_audit as LA, served as SV
-from verity.protocols.accounting.certifier.verifier.lean_audit import Audit
-from verity.protocols.accounting.certifier.verifier.certificate import Certificate, CertifiedRecord, Direction, LmsKey, PublicKey, \
-    parameters_digest
+from verity.protocols.accounting.certifier.verifier import head_check as HC, lean_audit as LA
+from verity.protocols.accounting.certifier.verifier.certificate import Certificate, CertifiedRecord, Direction, LmsKey, PublicKey
 from verity.protocols.accounting.certifier.verifier.grid import GridParams
-from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet
+from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import audit as OA, partition as P, proofs as PF, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
-#: Whose verdict on an execution phase's proof is the record's, by kind of link (`TransferBlocks.kind`): the Lean's
-#: (``"lean"``, `NetworkCheck.TransferBlocks`) or this module's (``"python"``). Both run on every proof either way. Setting a
-#: kind to ``"python"`` is the one line that switches it back.
-OF_RECORD = {"served": "lean", "warden": "lean"}
+#: Whose verdict on an execution phase's proof is the record's: the Lean's (``"lean"``, `NetworkCheck.TransferBlocks`) or
+#: this module's (``"python"``). Both run on every proof either way. Setting it to ``"python"`` is the one line that
+#: switches it back.
+OF_RECORD = "lean"
 
 SPEC = "verity-network-certifier/service-spec/v0"
 SESSION = "verity-network-certifier/session/v0"
@@ -278,11 +232,6 @@ def _head_expanded(L: int, T: int, counts: bool):
     return HC.expand(HC.gate(L, T, counts), HC.unit(L, T, counts))
 
 
-@lru_cache(maxsize=None)
-def _served_expanded(*key: int):
-    return HC.expand(SV.gate(*key), SV.unit(*key))
-
-
 def _checks(B, S_, args, check=HC.gate) -> tuple[list[Coll], list[Coll], list[Any]]:
     """Each end's head check (`check`'s for its size class) over its end's signed digest (the proof block's `egress` or
     `ingress`) and its own direction, a constant; each end's head counts and its deadline byte's low bit, as the head
@@ -315,50 +264,34 @@ def _outputs(B, oks: list[Coll], deadline: list[Any]) -> Coll:
 
 
 _OUT = Array(len(OUTPUTS), BL.BIT)
-_SYNC = ("sync", Array(3, Array(SV.SYNC_BITS, BL.BIT)))
 
 
-def _units(check, served) -> tuple[CompositeDefinition, CompositeDefinition]:
-    """N2's unit and its served link's, each head check called as `check`, and the served counts as `served` gives
-    them, for its size class."""
+def _unit(check) -> CompositeDefinition:
+    """N2's unit, each head check called as `check` for its size class."""
 
     def body(B, S_, *args):
         oks, _, deadline = _checks(B, S_, args, check)
         return _outputs(B, oks, deadline)
 
-    def body_served(B, S_, *args):
-        oks, (egress, ingress), deadline = _checks(B, S_, args[:-1], check)
-        return _outputs(B, oks + [B.call(served(*S_.SERVED), ingress, egress, args[-1])], deadline)
-
-    return (CompositeDefinition(
+    return CompositeDefinition(
         "NetworkTransferBlocks", 5, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), _OUT), body,
         doc="the proof block of network accounting: one execution phase, both directions, over the two certificates' signed "
             "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS). Its two output bits are the "
-            "verdict, both head checks, and the deadline, both heads' deadline bits", register=False),
-        CompositeDefinition(
-        "NetworkServedTransferBlocks", 4, ("EGRESS", "INGRESS", "SERVED"),
-        lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), _OUT), body_served,
-        doc="the proof block of network accounting on a served link: `NetworkTransferBlocks`'s checks, and the egress "
-            "head's counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, "
-            "SERVED its (T, FOUT, FIN, R, RIN)), in its verdict bit", register=False))
+            "verdict, both head checks, and the deadline, both heads' deadline bits", register=False)
 
 
-_UNIT, _SERVED_UNIT = _units(HC.gate, SV.gate)
-#: the same units with each gate replaced by the Definition it names, as a proof's circuit lowers them
-_PROOF_UNIT, _PROOF_SERVED_UNIT = _units(_head_expanded, _served_expanded)
+_UNIT = _unit(HC.gate)
+#: the same unit with each gate replaced by the Definition it names, as a proof's circuit lowers it
+_PROOF_UNIT = _unit(_head_expanded)
 
 
-def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None, *,
-         proof: bool = False):
-    """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
-    and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`). With
-    `proof`, the unit a proof's circuit lowers: the same id and signature, so the template the registered query names,
-    with each gate the Definition it names once that Definition's circuit digest is the gate's pin
+def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], *, proof: bool = False):
+    """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`).
+    With `proof`, the unit a proof's circuit lowers: the same id and signature, so the template the registered query
+    names, with each gate the Definition it names once that Definition's circuit digest is the gate's pin
     (`head_check.expand`, which traces it: minutes a head check, and a `ValueError` for an unpinned size class)."""
-    plain, served_ = (_PROOF_UNIT, _PROOF_SERVED_UNIT) if proof else (_UNIT, _SERVED_UNIT)
-    if served is None:
-        return bind(plain, EGRESS=tuple(egress), INGRESS=tuple(ingress))
-    return bind(served_, EGRESS=tuple(egress), INGRESS=tuple(ingress), SERVED=tuple(served))
+    return bind(_PROOF_UNIT if proof else _UNIT, EGRESS=tuple(egress), INGRESS=tuple(ingress))
+
 
 PUBLIC = (
     S.Public("population", "structure", "one proof unit per registration: the link-window"),
@@ -367,24 +300,8 @@ PUBLIC = (
     S.Public(f"domain:{VALUE}", "structure", "the served domain, which binds the check, the link and the window"),
     S.Public(VALUE, "commitment", "the link-window's certified records under one salted root"),
     S.Public("parameters", "structure", "the parameters digests (W1) the certificates sign, fixed before the run"),
-    S.Public("charge", "structure", "log2 #Σ_sync bits per window, the clock-sync advice the accepted-runs bound charges"),
-    S.Public("occupancy", "structure", "each end's frames per bucket in each window, the placement's occupancy profile, "
-             "fixed before the run; none for an end the Program reads rather than predicts"),
     S.Public("verdict", "output", "the link-window's verdict, accept or reject; a violation's kind stays hidden"),
     S.Public("deadline", "output", "the certifier settled both records by the verdict deadline"),
-)
-#: a served link's: no egress occupancy profile, its sizes instead, and the window's declared sync, which its proof
-#: block reads
-PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
-    S.Public("occupancy", "structure", "the ingress end's frames per bucket in each window where the placement fixes "
-             "them, fixed before the run; none on egress, whose counts the unit derives"),
-    S.Public("served", "structure", "frames a response (FIXLEN), frames a request, windows and the certifier's own "
-             "frames a window (its salt's), fixed before the run"),
-    S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
-             "`charge` already counts, which the served counts read"),
-)
-#: a warden link's: no occupancy profile and no sync, the warden's schedule instead, which puts its counts
-PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
     S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
              "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
              "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
@@ -439,14 +356,6 @@ def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
         return json.loads(lines[0])
     except ValueError:
         return {"refused": f"verity-verify-proof draw answered a DRAW line that is not JSON: {lines[0][:300]}"}
-
-
-def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
-    return len(egress) > window and egress[window].accepted and ingress[window].accepted
-
-
-def _profile(rows: Sequence[Sequence[int]] | None) -> list[list[int]] | None:
-    return None if rows is None else [list(r) for r in rows]
 
 
 @dataclass(frozen=True)
@@ -561,10 +470,9 @@ class WardenProfile:
 class TransferBlocks:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
-    challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
-    occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A link is
-    served (`served`, FIXLEN; an ingress profile at most) or a warden's (`warden`: the active warden's records, its key
-    and session the certifier's here, its counts its schedule's, and no sync, so `sync_set` is unread)."""
+    challenger sampled for the certifier's session, which every certificate signs), the proof deadline in seconds, and
+    the network certifier's profile (`warden`: its records, its key and session the certifier's here, its counts its
+    schedule's). It declares no sync, so `sync_set` is read only as the Lean case's ``sync_set``."""
 
     link: str
     params: GridParams
@@ -574,94 +482,45 @@ class TransferBlocks:
     certifier_session: bytes
     ingress: GridParams | None = None
     proof_deadline: float | None = None
-    occupancy: tuple[Sequence[Sequence[int]] | None, Sequence[Sequence[int]] | None] = (None, None)
-    served: SV.ServedProfile | None = None
     warden: WardenProfile | None = None
 
     def __post_init__(self) -> None:
-        if len(self.occupancy) != 2:
-            raise ValueError("the occupancy profile has one entry per end: (egress, ingress)")
-        if self.warden is not None:
-            if self.served is not None or tuple(self.occupancy) != (None, None):
-                raise ValueError("a warden link's counts are its schedule's: it has no occupancy or served profile")
-            if self.ingress_params != self.params:
-                raise ValueError("a warden link's two ends are on the warden's one grid")
-        if self.served is not None:
-            g, i = self.params, self.ingress_params
-            if self.occupancy[0] is not None:
-                raise ValueError("a served link's egress counts are derived: it has no egress occupancy profile")
-            if (g.buckets, g.bucket_ms) != (i.buckets, i.bucket_ms):
-                raise ValueError("a served link's ends share T and τ_b: its anchors are ingress buckets")
-            for sync in self.sync_set:
-                SV.sync_words(sync)
-        elif self.warden is None:
-            raise ValueError("a link is served (TransferBlocks(served=…)) or a network certifier's (TransferBlocks(warden=…)): "
-                             "no occupancy profile holds its egress counts")
-        for end, profile, g in zip(("egress", "ingress"), self.occupancy, (self.params, self.ingress_params)):
-            for w, row in enumerate(profile or ()):
-                if len(row) != g.buckets or any(type(n) is not int or not 0 <= n <= g.allocation for n in row):
-                    raise ValueError(f"{end} window {w}: an occupancy row is {g.buckets} counts of 0 … {g.allocation}")
+        if self.warden is None:
+            raise ValueError("a link is the network certifier's: TransferBlocks(warden=WardenProfile(windows, digest))")
+        if self.ingress_params != self.params:
+            raise ValueError("a warden link's two ends are on the warden's one grid")
 
     @property
     def ingress_params(self) -> GridParams:
         return self.ingress or self.params
 
-    @property
-    def kind(self) -> str:
-        """``"served"`` or ``"warden"``."""
-        return "served" if self.served is not None else "warden"
-
-    def declares(self, direction: int, window: int, counts: Sequence[int]) -> bool:
-        """Whether `counts` are the occupancy profile's for the end (0 egress, 1 ingress) in the window: always for an
-        end with no profile, never for a window past its profile."""
-        profile = self.occupancy[direction]
-        return profile is None or (window < len(profile) and tuple(counts) == tuple(profile[window]))
-
-    @property
-    def charge(self) -> float:
-        """log2 #Σ_sync: 7 bits per window at 16 × 8; 0 on a network certifier link, which declares no sync."""
-        return 0.0 if self.warden is not None else self.sync_set.bits
-
     def head_key(self, direction: int) -> tuple[int, int, int]:
-        """The end's head check's size class (L, T, COUNTS): the link name's UTF-8 length, the end's buckets, and 1 when
-        the end has an occupancy profile."""
+        """The end's head check's size class (L, T, COUNTS): the link name's UTF-8 length, the end's buckets, and 0, no
+        occupancy profile."""
         g = (self.params, self.ingress_params)[direction]
-        return len(self.link.encode("utf-8")), g.buckets, int(self.occupancy[direction] is not None)
+        return len(self.link.encode("utf-8")), g.buckets, 0
 
     def grid(self, direction: int) -> bytes:
-        """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the egress grid's parameters digest
-        binds Σ_sync, the ingress grid's none; on a network certifier link both are the network certifier's
-        (`WardenProfile.digest`)."""
-        if self.warden is not None:
-            return HC.grid_bytes((self.params, self.ingress_params)[direction], self.warden.digest)
-        if direction == 0:
-            return HC.grid_bytes(self.params, parameters_digest(self.params, self.sync_set))
-        return HC.grid_bytes(self.ingress_params, parameters_digest(self.ingress_params))
-
-    def served_key(self) -> tuple[int, int, int, int, int, int] | None:
-        """The served counts' size class (T, FOUT, FIN, R, RIN, OWN) on a served link, else None."""
-        if self.served is None:
-            return None
-        return (self.params.buckets, self.served.response_frames, self.served.request_frames, self.params.allocation,
-                self.ingress_params.allocation, self.served.own)
+        """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the network certifier's grid under
+        its parameters digest (`WardenProfile.digest`)."""
+        return HC.grid_bytes((self.params, self.ingress_params)[direction], self.warden.digest)
 
     @property
     def windows(self) -> int:
-        """The link's windows, which `network_verdict` takes by default: the served or warden profile's."""
-        return (self.served or self.warden).windows
+        """The link's windows, which `network_verdict` takes by default: its `WardenProfile`'s."""
+        return self.warden.windows
 
     @cached_property
     def unit(self):
-        """N2's proof block for this link (`unit`): its heads' size classes are the link's, and on a served link its
-        served counts' (`served_key`)."""
-        return unit(self.head_key(0), self.head_key(1), self.served_key())
+        """N2's proof block for this link (`unit`): its heads' size classes are the link's."""
+        return unit(self.head_key(0), self.head_key(1))
 
     @cached_property
     def proof_block(self):
         """The proof block a proof's circuit lowers: `unit` with each gate the Definition it names (`unit(proof=True)`),
         the template of the registered query under the same id. The prover's and the auditor's lowering, never the
         registered Program, which holds the gates."""
-        return unit(self.head_key(0), self.head_key(1), self.served_key(), proof=True)
+        return unit(self.head_key(0), self.head_key(1), proof=True)
 
     @cached_property
     def query(self) -> dict[str, Any]:
@@ -685,17 +544,13 @@ class TransferBlocks:
     def spec(self) -> S.Spec:
         context = canonical_json({
             "format": SPEC, "link": self.link, "run": self.run, "key": self.key.key_id.hex(),
-            "certifier_session": self.certifier_session.hex(), "charge": self.charge,
+            "certifier_session": self.certifier_session.hex(), "charge": 0.0,
             "parameters": {"egress": self.grid(0)[-HC.DIGEST_BYTES:].hex(),
                            "ingress": self.grid(1)[-HC.DIGEST_BYTES:].hex()},
-            "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy],
-            **({} if self.served is None else {"served": [self.served.response_frames, self.served.request_frames,
-                                                          self.served.windows, self.served.own]}),
-            **({} if self.warden is None else {"warden": [self.warden.windows, self.warden.digest.hex()]})})
+            "occupancy": [None, None], "warden": [self.warden.windows, self.warden.digest.hex()]})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query, public_outputs=OUTPUTS,
                         proof_deadline=self.proof_deadline)
-        public = PUBLIC_SERVED if self.served is not None else PUBLIC_WARDEN
-        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
+        return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, PUBLIC, context)
 
     def stream(self, **kwargs: Any) -> S.Stream:
         """The challenger's stream for this link (`S.Stream`'s budget, delta, challenger, coins and clock)."""
@@ -780,20 +635,20 @@ class TransferBlocks:
 
     def head_checks(self, opening: Hidden, root: bytes) -> list[HC.Instance | None]:
         """Each end's head check on the opening under `root`, the registered root: the execution phase's public inputs with
-        the end's grid, its profile's row and its certificate's signed digest, and as witness the head, its salt, its
-        two siblings and the certifier's salt for the record. None where the proof block takes no instance: a window
-        past the end's profile, which has no row to give, or a head whose length isn't the proof block's."""
+        the end's grid and its certificate's signed digest, and as witness the head, its salt, its two siblings and the
+        certifier's salt for the record. None where the proof block takes no instance: a head whose length isn't the
+        proof block's."""
         w, dom = opening.window, self.domain(opening.window)
         levels = tree_levels(dom, self.leaves(opening))
         out: list[HC.Instance | None] = []
         for d, record in enumerate(opening.records):
             L, T, _ = self.head_key(d)
-            profile, head, i = self.occupancy[d], record.head.encode(), HEADS + d
-            if (profile is not None and w >= len(profile)) or len(head) != HC.Shape(L, T).HL:
+            head, i = record.head.encode(), HEADS + d
+            if len(head) != HC.Shape(L, T).HL:
                 out.append(None)
                 continue
             out.append(HC.Instance(root, dom.domain_id, self.link.encode("utf-8"), d, w, self.grid(d),
-                                   None if profile is None else tuple(profile[w]), record.certificate.digest, head,
+                                   None, record.certificate.digest, head,
                                    opening.salts[i], tuple(level[(i >> k) ^ 1] for k, level in enumerate(levels[:-1])),
                                    record.salt, T))
         return out
@@ -821,59 +676,42 @@ class TransferBlocks:
         params, _ = self.unit.signature()
         return sum(t.leaves for n, t in params if n in self.layout[row])
 
-    def _arguments(self, insts: Sequence[HC.Instance], sync: tuple[int, int, int] | None) -> dict[str, list[int]]:
+    def _arguments(self, insts: Sequence[HC.Instance]) -> dict[str, list[int]]:
         out = {end: HC._digest_bits(inst.signed) for end, inst in zip(_ENDS, insts)}
         for end, inst in zip(_ENDS, insts):
             for (name, _), bits in zip(inst.unit.signature()[0], HC.arguments(inst)):
                 if name not in _FIXED:
                     out[f"{end}_{name}"] = bits
-        if self.served is not None:
-            out["sync"] = SV.arguments((), (), sync)[2]
         return out
-
-    def _sync(self, window: int, syncs: Sequence[ClockSync]) -> tuple[int, int, int] | None:
-        if self.served is None:
-            return None
-        try:
-            return SV.sync_words(syncs[window]) if window < len(syncs) else None
-        except ValueError:
-            return None
-
-    def _takes(self, sync: tuple[int, int, int] | None) -> bool:
-        """Whether the unit's input holds the window's declared sync on a served link."""
-        return self.served is None or sync is not None
 
     def arguments(self, opening: Hidden, root: bytes, syncs: Sequence[ClockSync] = ()) -> dict[str, list[int]] | None:
         """The unit's arguments on the opening under `root`, the registered root, by parameter, each its leaves' bits
-        (each end's `head_check.arguments`, and on a served link the window's declared sync): the prover's side. None
-        where the unit takes no instance (`head_checks`), or on a served link no sync its input can hold."""
+        (each end's `head_check.arguments`): the prover's side. None where the unit takes no instance (`head_checks`).
+        `syncs` is unread: the link declares none."""
         insts = self.head_checks(opening, root)
-        sync = self._sync(opening.window, syncs)
-        if None in insts or not self._takes(sync):
+        if None in insts:
             return None
-        return self._arguments(insts, sync)
+        return self._arguments(insts)
 
     def public_arguments(self, window: int, root: bytes, certificates: Sequence[Certificate],
                          syncs: Sequence[ClockSync] = ()) -> dict[str, list[int]] | None:
         """The unit's public arguments (`layout`'s ``pub``) as the verifier derives them from public fields alone: the
-        registered `root`, the execution phase's domain, the link, the window, each end's grid and its profile's row, each
-        end's certificate's signed digest, and on a served link the window's declared sync. None where the unit takes
-        no instance: a window past an end's profile, a signed digest of another length, or no sync."""
-        sync = self._sync(window, syncs)
-        if len(certificates) != 2 or not self._takes(sync):
+        registered `root`, the execution phase's domain, the link, the window, each end's grid and each end's certificate's
+        signed digest. None where the unit takes no instance: not two certificates, or a signed digest of another
+        length. `syncs` is unread: the link declares none."""
+        if len(certificates) != 2:
             return None
         insts = []
         for d, c in enumerate(certificates):
             L, T, _ = self.head_key(d)
-            profile = self.occupancy[d]
-            if (profile is not None and window >= len(profile)) or len(getattr(c, "digest", b"")) != HC.DIGEST_BYTES:
+            if len(getattr(c, "digest", b"")) != HC.DIGEST_BYTES:
                 return None
             insts.append(HC.Instance(root, self.domain(window).domain_id, self.link.encode("utf-8"), d, window,
-                                     self.grid(d), None if profile is None else tuple(profile[window]), c.digest,
+                                     self.grid(d), None, c.digest,
                                      bytes(HC.Shape(L, T).HL), bytes(_INST.salt_bytes),
                                      (bytes(HC.DIGEST_BYTES), bytes(HC.DIGEST_BYTES)),
                                      bytes(64), T))
-        args = self._arguments(insts, sync)
+        args = self._arguments(insts)
         return {n: args[n] for n in self.layout["pub"]}
 
     def row(self, args: Mapping[str, Sequence[int]], row: str) -> bytes:
@@ -882,22 +720,11 @@ class TransferBlocks:
         return bytes(sum(b << j for j, b in enumerate(bits[k:k + 8])) for k in range(0, len(bits), 8))
 
     def outputs(self, opening: Hidden, root: bytes, syncs: Sequence[ClockSync] = ()) -> int:
-        """The unit's output word on the opening under `root` by each gate's reference (`head_check.reference`, and on
-        a served link `served_check`), which the tests hold to the circuits: bit 0 the verdict, bit 1 the deadline. What
-        the prover claims, and the debug comparison's."""
+        """The unit's output word on the opening under `root` by each gate's reference (`head_check.reference`), which
+        the tests hold to the circuits: bit 0 the verdict, bit 1 the deadline. What the prover claims, and the debug
+        comparison's. `syncs` is unread: the link declares none."""
         verdict = all(i is not None and HC.reference(i) for i in self.head_checks(opening, root))
-        verdict = verdict and (self.served is None or self.served_check(opening, syncs))
         return int(verdict) | int(all(r.head.deadline for r in opening.records)) << 1
-
-    def _audit(self, audit: Any, opening: Hidden, syncs: Sequence[ClockSync],
-               frames: Sequence[LogicalFrame] | None = None) -> tuple[list[Any], list[Any]]:
-        """The audit of both records; the egress grid compared with the Program's only when `frames` are given."""
-        w, (egress, ingress) = opening.window, opening.records
-        out = audit.check_link(self.link, [egress], frames or (), list(syncs)[:w + 1], self.sync_set, self.params,
-                               key=self.key, session=self.certifier_session, grid=frames is not None)
-        inn = audit.check_ingress_link(self.link, [ingress], w + 1, key=self.key, params=self.ingress_params,
-                                       session=self.certifier_session)
-        return out, inn
 
     def _registered(self, opening: Hidden, draw: S.Draw) -> str:
         reg = draw.registration.record
@@ -906,12 +733,8 @@ class TransferBlocks:
         return reg["roots"][0]["root"]
 
     def gates(self) -> list[PrimitiveDefinition]:
-        """The unit's gates: each end's head check (`head_check.gate`), and on a served link the served counts'
-        (`served.gate`)."""
-        out = [HC.gate(*self.head_key(d)) for d in (0, 1)]
-        if self.served is not None:
-            out.append(SV.gate(*self.served_key()))
-        return out
+        """The unit's gates: each end's head check (`head_check.gate`)."""
+        return [HC.gate(*self.head_key(d)) for d in (0, 1)]
 
     def proved(self, findings: Sequence[Finding]) -> bool:
         """Whether `findings`, the verifier's run over a delivered proof of the proof block (`proofs.verify`),
@@ -957,8 +780,7 @@ class TransferBlocks:
         opened = _opened(delivered, draw.units[0], self.row(args, "pub") if args is not None else None,
                          self.bits("pub")) if proved else None
         word = opened if opened is not None else 0
-        accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
-                    and (self.warden is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
+        accepted = proved and opened is not None and word == 0b11 and self.certified(w, certificates)
         return self._decided(draw, sessions, accepted, {"verdict": int(accepted), "deadline": word >> 1 & 1})
 
     def lean_case(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -968,9 +790,8 @@ class TransferBlocks:
         and partition's digests, the gate ids), the registration, the sample, the findings of its own run of Flock's
         Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
         SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
-        as `public_arguments` reads it, the declared syncs, Σ_sync,
-        the key and session, each end's grid and profile, and on a warden link the warden's parameters digest. None for
-        a key the Lean doesn't read (not an `LmsKey`)."""
+        as `public_arguments` reads it, the declared syncs, Σ_sync, the key and session, each end's grid with no
+        profile, and the warden's parameters digest. None for a key the Lean doesn't read (not an `LmsKey`)."""
         if not isinstance(self.key, LmsKey):
             return None
         reg, p = draw.registration.record, self.key.params
@@ -997,7 +818,7 @@ class TransferBlocks:
             public = None
         word = delivered.output
         case: dict[str, Any] = {
-            "kind": self.kind, "link": self.link, "run": self.run, "window": w, "root": reg["roots"][0]["root"],
+            "kind": "warden", "link": self.link, "run": self.run, "window": w, "root": reg["roots"][0]["root"],
             "registration": draw.registration.digest, "units": list(draw.units), "program": self._partition["program"],
             "partition": P.digest(self._partition), "gates": [g.id for g in self.gates()],
             "findings": None if findings is None else [
@@ -1010,10 +831,9 @@ class TransferBlocks:
                          "rhos": [[r.numerator, r.denominator] for r in self.sync_set.rhos]},
             "lms": {"N": p.N, "W": p.W, "H": p.H, "toy": p.toy}, "key": self.key.public.hex(),
             "session": bytes(self.certifier_session).hex(),
-            "egress": {"grid": LA._grid_json(self.params), "profile": _profile(self.occupancy[0])},
-            "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": _profile(self.occupancy[1])}}
-        if self.warden is not None:
-            case["warden"] = self.warden.digest.hex()
+            "egress": {"grid": LA._grid_json(self.params), "profile": None},
+            "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": None},
+            "warden": self.warden.digest.hex()}
         return case
 
     def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
@@ -1041,8 +861,8 @@ class TransferBlocks:
         - the proof's public row opens, under the salt delivered, to the verifier's own copy (`public_arguments`: the
           registered root, the public fields and both certificates' signed digests), and its output row to the word
           delivered (`_opened`), whose verdict bit and deadline bit are both 1;
-        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync (on a warden
-          link, which declares none, nothing is read of `syncs`).
+        - the certificates' check accepts (`certified`). The link declares no sync: the Python reads nothing of
+          `syncs`, which reach the Lean case alone.
         The verdict reports the public outputs, the proved deadline bit among them, and never a violation's kind.
         `opening` (the witness) is for a debug comparison only, off by default: given, the verdict also carries the
         in-the-clear check's accept bit (`clear`), which decides nothing.
@@ -1057,7 +877,7 @@ class TransferBlocks:
         sessions = delivered.sessions()
         python = self.python_verdict(draw, certificates, syncs, delivered, findings, sessions)
         lean = self.lean_verdict(draw, certificates, syncs, delivered, findings, sessions)
-        by = OF_RECORD[self.kind]
+        by = OF_RECORD
         mine, other = (lean, python) if by == "lean" else (python, lean)
         if lean is None or any(lean[k] != python[k] for k in python):
             mine = self._decided(draw, sessions, False, {"verdict": 0, "deadline": 0})
@@ -1067,56 +887,18 @@ class TransferBlocks:
             verdict["clear"] = {"accepted": self.clear(opening, draw, syncs)["accepted"]}
         return verdict
 
-    def clear(self, opening: Hidden, draw: S.Draw, syncs: Sequence[ClockSync]) -> dict[str, Any]:
+    def clear(self, opening: Hidden, draw: S.Draw, syncs: Sequence[ClockSync] = ()) -> dict[str, Any]:
         """The in-the-clear check on the opening, the witness: the debug comparison `verify` makes on request and the
         tests' reference, never a verdict of record. Accepted when the opening reproduces the registered root under the
-        execution phase's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
-        docstring). `syncs` are the declared clock syncs of windows 0 … w. On a served link it also runs the served
-        counts' check (`served_check`). On a warden link it is the root, the head checks, the opening's certificates
-        (`certified`) and both heads' deadline bits (the module docstring's "A warden link")."""
+        execution phase's domain, both head checks accept (the module docstring), the opening's two certificates hold
+        (`certified`) and both heads met their deadline. `syncs` is unread: the link declares none."""
         root = self._registered(opening, draw)
-        w, (egress, ingress) = opening.window, opening.records
-        sealed = self.root(opening) == root
-        headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
-        headed = headed and (self.served is None or self.served_check(opening, syncs))
-        if self.warden is not None:
-            holds = sealed and headed and self.certified(w, [r.certificate for r in opening.records])
-            public = {"verdict": int(holds), "deadline": int(egress.head.deadline and ingress.head.deadline)}
-            return {"of_record": False, "accepted": holds and public["deadline"] == 1, "public": public}
-        audit = Audit()
-        out, inn = self._audit(audit, opening, syncs)
-        accepted = sealed and headed and _accepts(out, inn, w)
-        public = {"verdict": int(accepted), "deadline": int(egress.head.deadline and ingress.head.deadline)}
-        verdict = {"of_record": False, "accepted": accepted, "public": public}
-        reference = getattr(audit, "reference", None)
-        if reference is not None:
-            verdict |= {"by": "lean",
-                        "reference": {"accepted": sealed and headed
-                                      and _accepts(reference[:len(out)], reference[len(out):], w)}}
-        return verdict
-
-    def served_check(self, opening: Hidden, syncs: Sequence[ClockSync]) -> bool:
-        """The served counts' check on the execution phase (`served.reference`, which the tests hold to the circuit): the
-        egress head's counts are those its ingress head's derive under the window's declared sync. False for a window
-        with no declared sync, or one the proof block's input can't hold."""
-        w, (egress, ingress) = opening.window, opening.records
-        if w >= len(syncs):
-            return False
-        try:
-            sync = SV.sync_words(syncs[w])
-        except ValueError:
-            return False
-        return SV.reference(*self.served_key(), ingress.head.counts, egress.head.counts, sync)
-
-    def stand_in(self, opening: Hidden, draw: S.Draw, frames: Sequence[LogicalFrame],
-                 syncs: Sequence[ClockSync]) -> bool:
-        """The in-the-clear accept bit, the tests' oracle: the opening reproduces the registered root, the host audit
-        (`audit.Audit`) accepts both records with the egress grid compared with the Program's, from its logical
-        `frames`, and each head's counts are the profile's (`declares`)."""
-        root = self._registered(opening, draw)
-        out, inn = self._audit(host_audit.Audit(), opening, syncs, frames)
-        counted = all(self.declares(d, opening.window, r.head.counts) for d, r in enumerate(opening.records))
-        return self.root(opening) == root and counted and _accepts(out, inn, opening.window)
+        egress, ingress = opening.records
+        holds = self.root(opening) == root and all(
+            i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root))) \
+            and self.certified(opening.window, [r.certificate for r in opening.records])
+        public = {"verdict": int(holds), "deadline": int(egress.head.deadline and ingress.head.deadline)}
+        return {"of_record": False, "accepted": holds and public["deadline"] == 1, "public": public}
 
     def statement(self, draw: S.Draw) -> dict[str, Any]:
         reg = draw.registration.record
@@ -1162,7 +944,7 @@ class TransferBlocks:
         """The period's sample over its execution phases 0 … n − 1, after the prover committed them: `roots`, window w's
         salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes). Every
         window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n (the rule `rate:k/n`), on `coins`
-        (a callable of a byte count, as a stream's); a coin source with a `commit` method is first committed to the
+        (a callable of a byte count, as a stream's); coins with a `commit` method are first committed to the
         period's digest (`commitment`), so the coins come after every commitment of the period. Call it before the
         stream's first registration. The object is `{format, stream, law, k, population, units, roots, commitment,
         read}`, `read` the coin bytes the sample read, in order (hex), from which the network verdict's Lean samples its
@@ -1229,8 +1011,7 @@ class TransferBlocks:
         order or not at all (a gap, or a run that stops short), a registration past the last window, a registration
         with no outcome yet, and a rejected or late outcome each reject the link; `refused` lists their windows.
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
-        the verdict to the stream and those records. On a served or warden link the windows are by default its
-        profile's (`windows`).
+        the verdict to the stream and those records. The windows are by default the `WardenProfile`'s (`windows`).
 
         With `drawn`, the period sample (`period_draw`) over this stream's n windows, the stream's registrations must be
         exactly the drawn windows, in order, each under the root the period committed for it, and each needs an
@@ -1247,8 +1028,8 @@ class TransferBlocks:
         the windows registered, when the Lean can't sample, when `drawn`'s proof blocks aren't the Lean's, and when a
         registered window isn't one the Lean sampled; a sampled window not registered is in `refused`. `selection` is
         the sample of record, ``by`` ``lean``
-        (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a stream that isn't this link's and on
-        a sample that isn't this stream's period sample."""
+        (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a stream that isn't this link's,
+        and on a sample that isn't this stream's period sample."""
         n = self._period(stream, windows)
         why: dict[str, Any] = {}
         if drawn is None:
@@ -1298,4 +1079,4 @@ class TransferBlocks:
 
 
 __all__ = ["BC_BYTES", "Delivered", "HEADS", "LEAVES", "TransferBlocks", "OUTPUTS", "OUT_BITS", "Hidden", "PORTS",
-           "PUBLIC", "PUBLIC_SERVED", "ROWS", "SCHEMA", "VALUE", "encode", "output_row", "rows", "unit"]
+           "PUBLIC", "ROWS", "SCHEMA", "VALUE", "WardenProfile", "encode", "output_row", "rows", "unit"]

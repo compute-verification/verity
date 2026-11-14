@@ -106,14 +106,14 @@ import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
 import verity.protocols.accounting.pouw.prover.serving.h1.model_key as MK
 import verity.protocols.accounting.pouw.prover.serving.h1.prover as PV
 import verity_vllm.protocols.pouw.h1_ranks as PHR
-import verity.protocols.accounting.pouw.prover.serving.h1.receipts as RC
+import verity_torch.pouw.h1.receipts as RC
 import verity.protocols.accounting.pouw.prover.serving.h1.registered as NR
-import verity.protocols.accounting.pouw.prover.serving.h1.registered_device as RGD
+import verity_torch.pouw.h1.registered_device as RGD
 import verity.protocols.accounting.pouw.prover.serving.h1.requests as RQ
 import verity.protocols.accounting.pouw.prover.serving.h1.served as SV
 import verity.protocols.accounting.pouw.prover.serving.h1.served_files as SF
 import verity.protocols.accounting.pouw.prover.serving.h1.static as ST
-import verity.protocols.accounting.pouw.prover.serving.h1.tables_device as TBD
+import verity_torch.pouw.h1.tables_device as TBD
 import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
 import verity.protocols.accounting.pouw.prover.serving.h1.words as W
 from tests.protocols import challenger_host as CH
@@ -689,9 +689,10 @@ def test_a_sample_session_of_another_layout_is_refused(tmp_path, monkeypatch, fa
                                        "live window's draw session's: its draw coin alone")
 
 
-def test_the_sample_sessions_files_are_none_where_the_ledger_pins_no_session_on_its_root(served, tmp_path):
+def test_the_sample_sessions_files_are_the_ledgers_refusal_where_it_pins_no_session_on_its_root(served, tmp_path):
     """`draw_files` fetches the session the ledger opens on the window's sample root, pinned; where the ledger opens none
-    on that root, or holds no pins log, it fetches nothing and gives None, which `draw_session_reason` refuses."""
+    on that root, or holds no pins log, it fetches nothing and gives the ledger's `CoinError`, which `draw_session_reason`
+    refuses naming it; no files at all (None) it refuses as `NO_DRAW_SESSION`."""
     host, honest, _record = served
     (tmp_path / "tree").mkdir()
     (tmp_path / "tree" / "out").symlink_to(host.draw.directory, target_is_directory=True)
@@ -705,10 +706,13 @@ def test_the_sample_sessions_files_are_none_where_the_ledger_pins_no_session_on_
     assert files is not None and asked == [host.draw.session_id]
     assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), files,
                                    PHC.lms_verify) is None
-    assert PHD.draw_files({"draw": {"root": "ab" * 64}}, ledger, fetch, PHC.lms_verify) is None
+    assert isinstance(PHD.draw_files({"draw": {"root": "ab" * 64}}, ledger, fetch, PHC.lms_verify), CoinError)
     unpinned = PHC.Ledger.load([host.ledger.path], host.key, main=CH.MAIN)
-    assert PHD.draw_files(honest, unpinned, fetch, PHC.lms_verify) is None
-    assert asked == [host.draw.session_id]
+    refused = PHD.draw_files(honest, unpinned, fetch, PHC.lms_verify)
+    assert isinstance(refused, CoinError) and asked == [host.draw.session_id]
+    assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), refused,
+                                   PHC.lms_verify) == ("the window's draw session is not one the ledger opens on its draw "
+                                                       f"root: {refused}")
     assert PHD.draw_session_reason(honest, host.key, list(ledger.lines), list(ledger.pins), list(ledger.main), None,
                                    PHC.lms_verify) == PHD.NO_DRAW_SESSION
 
@@ -2011,7 +2015,7 @@ def test_h1_hashes_with_numpy_and_says_why_where_cuda_is_there_and_its_kernels_d
     why = ("H1's registered values hash with NumPy: the GPU path doesn't build here "
            "(RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on the path))")
     assert [str(w.message) for w in said] == [why]
-    monkeypatch.setattr(RGD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    monkeypatch.setattr(RGD.RTL.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert RGD.available.__wrapped__() is True and built == [(0, RGD.device_lib, "rr_midstates")]
 
 
@@ -2523,7 +2527,7 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     assert [str(w.message) for w in said] == [("H1's call z tables hash apart from their zy@<c> values: zy_commit.cu "
                                                "doesn't build here (RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on "
                                                "the path))")]
-    monkeypatch.setattr(TBD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    monkeypatch.setattr(TBD.RTL.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert TBD.available.__wrapped__() is True and built == [(0, TBD.device_lib, "rt_midstates", TBD.STREAMS)]
     asked: list[tuple] = []
 

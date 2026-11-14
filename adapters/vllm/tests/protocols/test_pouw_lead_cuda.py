@@ -13,7 +13,7 @@ if not torch.cuda.is_available():
 
 from tests.protocols import test_pouw_lead as T  # noqa: E402
 from verity.protocols.accounting.pouw.prover.serving.lead import rows as L  # noqa: E402
-from verity.protocols.accounting.pouw.prover.serving.lead import rows_device as LD  # noqa: E402
+from verity_torch.pouw.lead import rows_device as LD  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.errors import Refused  # noqa: E402

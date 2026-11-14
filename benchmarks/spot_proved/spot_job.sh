@@ -7,7 +7,7 @@
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"
 #   ARM=... LOAD=... CAPTURE=DIR STEPS=s,... bash .../spot_job.sh   # only stage an earlier run's capture again (CPU only)
 # The engine's environment is the served one's: ENGINE_ENV=FILE (KEY=VALUE lines, a server's engine_env.txt) is exported,
-# and FLASHINFER=1 (the default, as production) puts $CUDA_HOME/bin (default /usr/local/cuda-12.9) on PATH for FlashInfer's
+# and FLASHINFER=1 (the default, as in serving) puts $CUDA_HOME/bin (default /usr/local/cuda-12.9) on PATH for FlashInfer's
 # JIT; OUT/engine_env.txt.
 # 1. The first-stage coin: one step of the replay block's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
 #    all-reduce + norm) and one with BIG (DeepGEMM and its group quants, the multimem all-reduce, the fused add + RMSNorm at

@@ -36,7 +36,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
   `adapters/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
   art id, so the run can be verified again from the store.
-- `expert_tables_tp.sh`: the committer's per-expert tables docket of a TP model, one file a rank (`verity-vllm
+- `expert_tables_tp.sh`: the committer's per-expert tables registration of a TP model, one file a rank (`verity-vllm
   tp-register-tables --served`): each rank's expert stacks composed from the checkpoint of record, held to a capture's served
   SHA-512s and committed under the committer's key, which never leaves the node. A window's per-expert table reads count
   registered against these files (`records_audit.py audit --registered`).
@@ -316,12 +316,19 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   line naming both), and lowers the same window circuit (PHI), predict row's Build is the row's Build of record, `BUILD_OF_RECORD` (BUILD), and
   W registers exactly that circuit's Pearl+ values (CUT). Its last line, `SERVED-COMPARE: EQUAL` or `NOT EQUAL`, is the
   one the record names (`served_verdicts.py record --served-compare`); `served_verdicts.sh served-compare K` reruns it.
+- `rehearsal.sh check|serve|audit|compose|probe`: the remote demo's served path as one command a node, each verb
+  `served_verdicts.sh` at fixed settings (Pearl+ tied to the window, product remote) with its output through a filter
+  that withholds a session secret. `check` runs on any CPU node what the other verbs read that needs no card and no
+  gate: the settings, the class's circuit from the serve's φ, a stand-in window of the class through what a served
+  window's close reads of it (`rehearsal_window.py`), the harness's policy step and its limits, the policy's Lean check
+  on the class's own Program with the settings' `ALPHA`, `GAMMA` and `DAY_PROGRAM` held to what it answers
+  (`rehearsal_limits.py`), the day's declaration, the Lean the verbs run, and Pearl+ against this tree's own gate code.
 
 Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
 inputs sent with the run; it builds `flock-circuit` and `verity-verify-proof` once per pod, then runs the driver, whose
 `--m0-pythonpath` names that tree. The drivers' checks go through the verifier
-(`one_stage.verifier`), which builds the sampled-proofs Lean in the run's tree on its first check, hence `--cwd clone`:
+(`one_stage.verifier`), which builds the SPOT Lean in the run's tree on its first check, hence `--cwd clone`:
 
 ~~~sh
 bash benchmarks/one_stage/pod.sh    # a job run from a clone of the tree, with m0.tar, lean.tar and set.tar sent

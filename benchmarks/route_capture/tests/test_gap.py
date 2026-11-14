@@ -60,8 +60,8 @@ def test_a_class_g_step_has_no_gap(tmp_path, launches):
     assert [(r["definition"], r["status"], r["owner"]) for r in g["gaps"]] == [(ids[0].split("{")[0], "fails circuit-check", "circuits")]
 
 
-def test_production_steps_name_each_gap(tmp_path, launches):
-    """A padded FULL-graph decode batch with long contexts and an 8,192-token mixed step: each family the production limits add
+def test_serving_steps_name_each_gap(tmp_path, launches):
+    """A padded FULL-graph decode batch with long contexts and an 8,192-token mixed step: each family the serving limits add
     is its own row, with its refusal, its owner and its statics' range."""
     need = gap.needs(launches, CLASS_G_STEP, flashinfer_sampler=False)
     g = gap.gap(_capture(tmp_path, [CLASS_G_STEP, DECODE_PADDED, MIXED_8192]), _check({n.id for n in need}), phi=launches.phi)
@@ -106,8 +106,8 @@ def test_the_sampler_fallback_turns_its_row_off(tmp_path, launches):
 
 
 def test_an_engine_without_flashinfer_is_said(tmp_path, launches):
-    """A pod whose vLLM finds neither FlashInfer's prebuilt kernels nor nvcc serves other kernels than production's image; the
-    gap's rows stay the decoder's for production, and the report says the captured engine differed."""
+    """A pod whose vLLM finds neither FlashInfer's prebuilt kernels nor nvcc serves other kernels than serving's image; the
+    gap's rows stay the decoder's for serving, and the report says the captured engine differed."""
     cap = _capture(tmp_path, [DECODE_PADDED])
     (tmp_path / "engine_env.txt").write_text("VLLM_USE_FLASHINFER_SAMPLER=unset\nhas_flashinfer=False flashinfer_cubin=False\n")
     g = gap.gap(cap, _check([]), phi=launches.phi)

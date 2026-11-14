@@ -390,8 +390,11 @@ theorem sibling_core {tags : Tags} {cf pf₁ pf₂ : ByteArray} {coins : Coins} 
 /-- **The shape check reads only what siblings share**: `m`, the block count, Δ, the regions and the circuit. -/
 theorem shapeOk_sibling {st₁ st₂ : Stmt} (h : Stmt.Sibling st₁ st₂) : Zk.shapeOk st₂ = Zk.shapeOk st₁ := by
   obtain ⟨-, -, hc, -, -, hnbl, hm, -, -, hreg, hda, hdb, -⟩ := h
-  unfold Zk.shapeOk Zk.maskFree
+  -- `shapeOk` discards `queries0`'s count (`let _ ←`), and its success is fixed by `m` alone, so the `wideLeaf` that
+  -- siblings need not share does not reach the result.
+  unfold Zk.shapeOk Zk.maskFree Zk.queries0
   simp only [hc, hnbl, hm, hreg, hda, hdb]
+  split_ifs <;> simp only [throw_bind', pure_bind]
 
 /-- **A setup at the sample of no unit, carried to another public file.** `Stmt.setupHidden` returned `st₁` at the
 public file `pf₁` and a sample `d₁` that proves no unit (`st₁.n = 0`), with no public inputs of the verifier's own. At
