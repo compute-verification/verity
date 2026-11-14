@@ -2405,6 +2405,11 @@
         "verity/protocols/accounting/pouw/verifier/dither/": "verity/protocols/experimental/dither/",
         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_dither.py": "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/maxtput/build_job.sh": "adapters/vllm/verity_vllm/ops/served_build.sh"
+      }
     }
   ]
 }

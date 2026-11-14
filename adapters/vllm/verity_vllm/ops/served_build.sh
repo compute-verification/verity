@@ -9,7 +9,7 @@
 # Run from the source tree's root, on one RTX PRO 6000, with the match workload in $RESEARCH_RUN_DIR/inputs/match.json:
 #
 #   RESEARCH_RUN_DIR=DIR VERITY_BENCH_VENV=VENV CASE=LLAMA31_8B CKPT_REPO=unsloth--Llama-3.1-8B CKPT_REV=REV \
-#     bash benchmarks/hash/maxtput/build_job.sh
+#     bash adapters/vllm/verity_vllm/ops/served_build.sh
 #
 # Env:
 #   CASE                  the checkpoint role (verity_vllm.config.CHECKPOINTS), LLAMA31_8B
