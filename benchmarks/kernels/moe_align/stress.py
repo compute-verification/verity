@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from verity_vllm.engine.moe_align import Align
 
 #: the integration's distribution, whose entry points `site` declares
-PYPROJECT = Path(__file__).resolve().parents[2] / "adapters" / "vllm" / "pyproject.toml"
+PYPROJECT = Path(__file__).resolve().parents[3] / "adapters" / "vllm" / "pyproject.toml"
 MODULE = "verity_vllm.engine.moe_align"
 E, TOPK = 384, 6
 #: DeepSeek-V4-Pro's layers (config.json ``num_hidden_layers``), each with routed experts: the op's calls a decode step

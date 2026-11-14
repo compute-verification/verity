@@ -2701,6 +2701,11 @@
       "paths": {
         "verity/protocols/proofs/spot/verifier/one_stage/registration.py": "verity/protocols/proofs/spot/verifier/one_stage/docket.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/moe_align/": "benchmarks/kernels/moe_align/"
+      }
     }
   ]
 }
