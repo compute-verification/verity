@@ -1,11 +1,11 @@
 """A served window's boundary commitment (`pipeline.boundary_rows`): each span's `b.ingress` and `b.egress` rows word for
 word, the size classes, one class's commitment under core's window domains registering by both verifiers, its files
 recommitting to its roots, the replay block's return as one more value of a class that says it is verdicts or ids, named
-and laid out as round 2 links it, the serving path's hook on a stand-in for vLLM's V1 scheduler committing each window's
+and laid out as round 2 links it, a class's Definition whose parameters and return are its boundary values, each of which
+round 2 links, the serving path's hook on a stand-in for vLLM's V1 scheduler committing each window's
 finished requests by class as it closes, and a serve's stop rule: a stop class's rows, its stop word the stop block's
 output over the committed rows, the stop blocks' own registration over the class's boundary record, a response one id
-shorter or longer than the rule's refused, a class that holds the rule and verdicts together, and a class's
-Definition whose parameters and return are its boundary values, each of which round 2 links."""
+shorter or longer than the rule's refused, and a class that holds the rule and verdicts together."""
 
 from __future__ import annotations
 
