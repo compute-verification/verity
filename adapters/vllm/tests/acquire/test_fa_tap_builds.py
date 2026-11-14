@@ -1,8 +1,9 @@
 """The two builds of the FlashAttention taps without a compiler: `verity-vllm fa2-tap-build`
 (`verity_vllm.acquire.fa2_tap_src.build_ext`) and `fa3-tap-build` (`verity_vllm.acquire.fa3_tap_src.build_fa3_ext`).
 
-A build's `main` is run whole on a tree of empty files, with torch's `load` and the toolkit's two programs replaced by
-recorders: what it hands the compiler, which programs it starts, and what it writes beside the extension.
+A build's `main` is run whole on a tree of empty files, with torch's `load`, the toolkit's two programs and the build's
+clock replaced by one recorder: what it hands the compiler, which programs it starts, and what it writes beside the
+extension, the seconds `load` took among it.
 """
 
 from __future__ import annotations
@@ -26,30 +27,39 @@ SET_BY_A_BUILD = ("CUDA_HOME", "MAX_JOBS", "TORCH_CUDA_ARCH_LIST")
 
 
 class Toolkit:
-    """What a build asked of torch's `load` and of the programs it started, and the extension `load` leaves behind."""
+    """What a build asked of torch's `load` and of the programs it started, and the extension `load` leaves behind.
+
+    It is each build's `time` too: its clock moves only when `load` runs (2.54 s) or a program does (8 s), so the
+    seconds a build records are `load`'s alone, rounded to a tenth."""
 
     def __init__(self, home: Path) -> None:
         self.home = home
+        self.now = 100.0
         self.loads: list[dict[str, Any]] = []
         self.programs: list[tuple[list[str], dict[str, Any]]] = []
         self.extension: bytes | None = b"an extension"
 
     def load(self, **kwargs: Any) -> None:
         self.loads.append(kwargs)
+        self.now += 2.54
         if self.extension is not None:
             Path(kwargs["build_directory"], kwargs["name"] + ".so").write_bytes(self.extension)
 
     def run(self, argv: list[str], **kwargs: Any) -> types.SimpleNamespace:
         self.programs.append((argv, kwargs))
+        self.now += 8.0
         if argv[1:] == ["--version"]:
             return types.SimpleNamespace(stdout=NVCC, stderr="")
         return types.SimpleNamespace(stdout="Fatbin elf code:\n", stderr="a warning\n")
 
+    def time(self) -> float:
+        return self.now
+
 
 @pytest.fixture
 def toolkit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Toolkit:
-    """The recorders in place, the extension's op namespace as one public name and one private, and the three settings a
-    build writes set through `monkeypatch`, which puts each back after the test."""
+    """The recorder in place, as each build's `time` too, the extension's op namespace as one public name and one private,
+    and the three settings a build writes set through `monkeypatch`, which puts each back after the test."""
     torch = pytest.importorskip("torch")
     cpp_extension = pytest.importorskip("torch.utils.cpp_extension")
     made = Toolkit(tmp_path / "cuda")
@@ -57,6 +67,8 @@ def toolkit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Toolkit:
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(cpp_extension, "load", made.load)
     monkeypatch.setattr(subprocess, "run", made.run)
+    for module in (FA2, FA3):
+        monkeypatch.setattr(module, "time", made)
     monkeypatch.setattr(torch.ops, NAME, types.SimpleNamespace(verity_tap_mode=None, _private=None), raising=False)
     return made
 
@@ -126,8 +138,6 @@ def test_fa2_build_compiles_the_split_kernels_of_each_head_dim_and_records_what_
     assert written == dict(zip(SET_BY_A_BUILD, (str(toolkit.home), "7", "8.0"), strict=True))
 
     info = _record(build)
-    seconds = info.pop("compile_seconds")
-    assert isinstance(seconds, float) and seconds >= 0
     assert info == {
         "name": NAME, "tree": str(csrc), "tree_commit": "a commit", "sources": sources,
         "source_sha256": {s: FA2.sha256(s) for s in sources},
@@ -135,11 +145,12 @@ def test_fa2_build_compiles_the_split_kernels_of_each_head_dim_and_records_what_
         "defines": defines, "cxx_flags": ["-O3", "-DNDEBUG", "-std=c++20", *_flags(defines)], "nvcc_flags": nvcc_flags,
         "arch": "8.0", "hdims": [64, 128], "nvcc_version": ["Cuda compilation tools, release 0.0", "Build a.b"],
         "torch": torch.__version__, "torch_cuda": torch.version.cuda, "cuda_home": str(toolkit.home), "max_jobs": "7",
-        "so": so, "so_sha256": FA2.sha256(so), "so_bytes": len(b"an extension"), "ops": ["verity_tap_mode"],
+        "compile_seconds": 2.5, "so": so, "so_sha256": FA2.sha256(so), "so_bytes": len(b"an extension"),
+        "ops": ["verity_tap_mode"],
     }
     assert list(info["header_sha256"]) == [str(src / "a.h"), str(src / "b.h")]
     assert (build / "resource_usage.txt").read_text() == "Fatbin elf code:\na warning\n"
-    assert capsys.readouterr().out == f"BUILD-OK {NAME} {seconds} s {so} ['verity_tap_mode']\n"
+    assert capsys.readouterr().out == f"BUILD-OK {NAME} 2.5 s {so} ['verity_tap_mode']\n"
 
 
 def test_fa3_build_compiles_the_paged_kernel_of_each_head_dim_links_the_driver_stub_and_records_what_it_built(
@@ -180,20 +191,18 @@ def test_fa3_build_compiles_the_paged_kernel_of_each_head_dim_links_the_driver_s
     assert written == dict(zip(SET_BY_A_BUILD, (str(toolkit.home), "7", "9.0a"), strict=True))
 
     info = _record(build)
-    seconds = info.pop("compile_seconds")
-    assert isinstance(seconds, float) and seconds >= 0
     assert info == {
         "name": NAME, "tree": str(tree), "tree_commit": "a commit", "sources": sources,
         "source_sha256": {s: FA3.sha256(s) for s in sources}, "header_sha256": {h: FA3.sha256(h) for h in headers},
         "defines": defines, "cxx_flags": ["-O3", "-DNDEBUG", "-std=c++20", *_flags(defines)], "nvcc_flags": nvcc_flags,
         "arch": "9.0a", "hdims": [128], "nvcc_version": ["Cuda compilation tools, release 0.0", "Build a.b"],
         "torch": torch.__version__, "torch_cuda": torch.version.cuda, "cuda_home": str(toolkit.home), "max_jobs": "7",
-        "ldflags": ldflags, "so": so, "so_sha256": FA3.sha256(so), "so_bytes": len(b"an extension"),
-        "ops": ["verity_tap_mode"],
+        "ldflags": ldflags, "compile_seconds": 2.5, "so": so, "so_sha256": FA3.sha256(so),
+        "so_bytes": len(b"an extension"), "ops": ["verity_tap_mode"],
     }
     assert list(info["header_sha256"]) == headers
     assert (build / "resource_usage.txt").read_text() == "Fatbin elf code:\na warning\n"
-    assert capsys.readouterr().out == f"BUILD-OK {NAME} {seconds} s {so} ['verity_tap_mode']\n"
+    assert capsys.readouterr().out == f"BUILD-OK {NAME} 2.5 s {so} ['verity_tap_mode']\n"
 
 
 @pytest.mark.parametrize(("build", "home"), [("fa2", "/usr/local/cuda-12.9"), ("fa3", "/usr/local/cuda")], ids=["fa2", "fa3"])
