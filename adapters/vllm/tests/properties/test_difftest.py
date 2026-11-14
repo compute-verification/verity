@@ -77,11 +77,7 @@ def test_produce_writes_bf16_outputs_as_words(tmp_path, monkeypatch):
     # a production op returning bfloat16 must cross to numpy as uint16 words (numpy has no bf16;
     # `Tensor.numpy()` raised "Got unsupported ScalarType BFloat16" and every bf16-output Definition was un-difftestable)
     pytest.importorskip("torch")
-    mod = types.ModuleType("fake_bf16_adapter")
-    vars(mod).update(
-        SEMANTIC_ID="test/BiasAdd@v1", spec=lambda st: bind(b1.BiasAdd, N=st["N"]), production=lambda st, ins: [ins[0] + ins[1]],
-        cases=lambda rng, i: {"statics": {"N": 4}, "inputs": [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2})
-    monkeypatch.setitem(sys.modules, "fake_bf16_adapter", mod)
+    _whole_adapter(monkeypatch, "fake_bf16_adapter")
     man = difftest.produce("fake_bf16_adapter", 1, 3, tmp_path / "dt", device="cpu")
     out = np.load(tmp_path / "dt" / "case_0" / "out_0.npy")
     assert man["cases"][0]["outputs"] == [{"shape": [4], "dtype": "bfloat16"}] and out.dtype == np.uint16 and out.shape == (4,)
@@ -94,6 +90,12 @@ def _adapter(monkeypatch: pytest.MonkeyPatch, name: str, **names: object) -> Non
     mod = types.ModuleType(name)
     vars(mod).update(spec=lambda st: bind(b1.BiasAdd, N=st["N"]), **names)
     monkeypatch.setitem(sys.modules, name, mod)
+
+
+def _whole_adapter(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    """The BiasAdd adapter whole, importable as `name`: two random operands a case, and torch's own sum as the pinned operation."""
+    _adapter(monkeypatch, name, SEMANTIC_ID="test/BiasAdd@v1", production=lambda st, ins: [ins[0] + ins[1]],
+             cases=lambda rng, i: {"statics": {"N": 4}, "inputs": [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2})
 
 
 def _produced(d: Path, kinds: tuple[str, ...], wrong: tuple[int, ...] = ()) -> Path:
@@ -204,8 +206,7 @@ def test_main_produce_hands_produce_the_command_lines_values_and_its_defaults(
 def test_main_produce_writes_the_cases_that_main_check_then_reads(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     pytest.importorskip("torch")
-    _adapter(monkeypatch, "whole_adapter", SEMANTIC_ID="test/BiasAdd@v1", production=lambda st, ins: [ins[0] + ins[1]],
-             cases=lambda rng, i: {"statics": {"N": 4}, "inputs": [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2})
+    _whole_adapter(monkeypatch, "whole_adapter")
     d, out = tmp_path / "dt", tmp_path / "quarantine.json"
     argv = ["produce", "--adapter", "whole_adapter", "--n", "2", "--seed", "3", "--out", str(d), "--device", "cpu"]
     assert difftest.main(cli.parse("properties-admission", argv, {})) == 0
