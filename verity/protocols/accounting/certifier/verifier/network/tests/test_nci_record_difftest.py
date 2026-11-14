@@ -1,8 +1,8 @@
 """The inference-only policy's check of an execution phase's circuit record (`NciCheck.Record`) against the Python
 reference: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 687 cases (600 random circuits,
-two in five broken in one way, and 87 shaped ones, most in the shape of a served class) and, on each,
+`verity/protocols/policy/inference_only/verifier/nci/lean/scripts/record_difftest_vectors.py` writes 689 cases (600 random circuits,
+two in five broken in one way, and 89 shaped ones, most in the shape of a served class) and, on each,
 `scripts/nci_record_reference.py`'s results, which visit every row of every unit. `check` runs the Lean half in its
 Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/RecordDifftestMain.lean` fails unless
 `Record`, `RecordCount` and `RecordRows` give Python's results on every case, and unless SPOT's reader reads the
@@ -112,7 +112,7 @@ def shaped() -> dict[str, dict]:
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 687 cases and the reference's results, byte for byte as the record pins them."""
+    """All 689 cases and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{record_difftest/cases.jsonl}", "{record_difftest/python.jsonl}", str(vectors.total())]
@@ -714,9 +714,10 @@ def test_a_row_format_is_held_to_the_registration_log(shaped):
     and the form holds it to the registration log: the run's own record registers the value in leaves of that width,
     or the log's first record does (θ, at that width). Held, the scan state in 32-bit leaves, of either schema, and a
     weight registered in 32-bit leaves are what they are in 16-bit ones: the verdict and every count of the accepted
-    case. The same records with another width, with the format dropped, or with a format the log does not register
-    are refused (`formats`); a format the form's shape refuses is refused with the declarations (`inputs`). A weight
-    the first record registers in 32-bit leaves with no format in the record is no θ: its rows are fresh."""
+    case. The same records with another width, with the format dropped, with a format the log does not register, or
+    with the value's entry stating 16 bits over the same rows and words are refused (`formats`); a format the form's
+    shape refuses is refused with the declarations (`inputs`). A weight the first record registers in 32-bit leaves
+    with no format in the record is no θ: its rows are fresh."""
     got = {what: vectors.results(shaped[what]["case"]) for what in FORMATS}
     held = vectors.results(shaped["2x3 registered"]["case"])
     for what, stage in FORMATS.items():

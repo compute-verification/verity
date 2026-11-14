@@ -60,7 +60,8 @@ its gates are computed and a root node of it is no input. The record of that one
 record with a unit of it more at the Program's root that the record does not list, each refused with its templates.
 Then a row format (`FORMATS`): the scan state and a weight registered in 32-bit leaves, their formats right, taken
 with the served shape's verdict; the weight with no format, its rows fresh; and formats the log does not hold, each
-refused (`formats`), and formats the form's shape refuses, each refused with the declarations (`inputs`).
+refused (`formats`), among them the two right formats where the value's entry states 16 bits over the same rows and
+words, half the record's bits; and formats the form's shape refuses, each refused with the declarations (`inputs`).
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -847,8 +848,9 @@ SEG32 = {"row_schema": "hm96-sha512/row-seg/v1", "word_bits": 32}
 #: a row format (`registered.formats`) and the registration beside it: the stage that refuses the case (None where it
 #: is not refused), the circuit (`lowered(2, 3)` where None, else `passed_on` of that way with its one weight held
 #: and committed) and what `shaped`'s `one` takes besides: the record's `formats`, the parameters the run's own record
-#: registers (`ran`, each with its leaves' bits) and the weights the log's first record registers in 32-bit leaves
-#: (`wide`). The scan state is the run's own input: no record before the run's registers it.
+#: registers (`ran`, each with its leaves' bits), the weights the log's first record registers in 32-bit leaves
+#: (`wide`) and the width an entry states where it is not that of its leaves (`stated`). The scan state is the run's
+#: own input: no record before the run's registers it.
 FORMATS: dict[str, tuple] = {
     "the scan state in 32-bit leaves, its format right": (None, None, {"formats": {"scan-state": SEG32},
                                                                        "ran": {"scan-state": 32}}),
@@ -880,6 +882,11 @@ FORMATS: dict[str, tuple] = {
                           "edit": lambda d: d["registered"]["params"].update({"scan-state": 9})}),
     "a 32-bit format on a weight read in rows of one 16-bit leaf":
         ("inputs", "gates", {"formats": {"weights/wide": SEG32}, "wide": ("weights/wide",)}),
+    "the scan state in 32-bit leaves, its format right, its entry stating 16 bits":
+        ("formats", None, {"formats": {"scan-state": SEG32}, "ran": {"scan-state": 32}, "stated": {"scan-state": 16}}),
+    "a weight in 32-bit leaves, its format right, its entry stating 16 bits":
+        ("formats", None, {"formats": {"weights/query": SEG32}, "wide": ("weights/query",),
+                           "stated": {"weights/query": 16}}),
 }
 
 
@@ -941,26 +948,28 @@ def shaped() -> list[dict]:
 
         def one(what: str, c: Circuit, seed: int, *, held=WEIGHTS, committed=WEIGHTS, moved=(), beside=False,
                 before=2, policy=policy, pins=pins, n=n, edit=None, pinned=None, broken=None, refused=None,
-                reroot=None, alone=None, unlisted=None, formats=None, ran=None, wide=()) -> None:
+                reroot=None, alone=None, unlisted=None, formats=None, ran=None, wide=(), stated=None) -> None:
             """The case on `c`; with `edit`, its record then edited; with `reroot`, its Program's root then edited;
             with `alone`, its Program and record then those of a circuit of that one template (`_alone`); with
             `unlisted`, its Program's root then with a unit of that template more, which its record does not list
             (`_unlisted`); with `pinned`, its pins then those; `broken`, the stage that refuses it; `refused`, that
             stage where it refuses the circuit as built. With `formats`, its record's row formats; `ran`, the
             parameters the run's own record registers, each in leaves of the bits it gives; `wide`, the `held`
-            weights the log's first record registers in 32-bit leaves."""
+            weights the log's first record registers in 32-bit leaves; `stated`, the width a parameter's entry states
+            where it is not that of its leaves (`_registered`)."""
             rng = random.Random(50_000 + 100 * n + seed)
             roots = {p: _hex(rng) for p in c.params}
             order = None
             if beside:
                 order, c.order = c.order, None
             c.formats = dict(formats or {})
+            stated = stated or {}
             made = finish(rng, c, {p: _registered(_hex(rng) if p in moved else roots[p], c.params[p],
-                                                  32 if p in wide else 16)
+                                                  32 if p in wide else 16, stated.get(p))
                                    for p in held if p in c.params},
                           {p: roots[p] for p in (*committed, "scan-state") if p in c.params}, pins, before=before,
                           order=order, policy=policy, refused=refused,
-                          ran={p: _registered(roots[p], c.params[p], b) for p, b in (ran or {}).items()})
+                          ran={p: _registered(roots[p], c.params[p], b, stated.get(p)) for p, b in (ran or {}).items()})
             if edit is not None:
                 _rewrite(made, edit)
             if reroot is not None:
@@ -1097,12 +1106,14 @@ def shaped() -> list[dict]:
     return out
 
 
-def _registered(root: str, n: int, bits: int) -> tuple:
+def _registered(root: str, n: int, bits: int, stated: int | None = None) -> tuple:
     """A registration entry's root and shape for a parameter of `n` 16-bit leaves, in rows of two leaves of `bits`
-    bits (of one where `bits` takes `n` to an odd number of leaves); its width beside them where it is not 16."""
+    bits (of one where `bits` takes `n` to an odd number of leaves); its width beside them where it is not 16. With
+    `stated`, the entry states that width for the same rows and words."""
     leaves = 16 * n // bits
     words = 2 if leaves % 2 == 0 else 1
-    return (root, leaves // words, words) + (() if bits == 16 else (bits,))
+    width = bits if stated is None else stated
+    return (root, leaves // words, words) + (() if width == 16 else (width,))
 
 
 def listed(c: Circuit):
