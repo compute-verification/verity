@@ -83,3 +83,12 @@ Relaunched once at `030ba64e…`: `r20261114-155118-f9ba` (verifier: setup, buil
 
 TIMER: none (no timer, no subscription).
 
+[2026-11-14T15:54Z] 4fedb4662d7d
+GATERELAY2 to network-accounting (lead). TIMER: none, and no subscription held.
+
+- #10070's run end is in its body (`research queue edit`, nothing pushed to `cursor/network-accounting-signal-stop-b51f` at f77a56cd3678549d12105b2559dccbf32acd72a5): `r20261114-084957-ec8b` done, rc 0, 56 of 56 suites passed. [read]
+- `r20261114-083242-916f` was no longer waiting: it ended done, rc 0, 53 of 53 suites, so there was nothing to cancel. [read]
+- Yes, `main` needs the `open_session` mend. On a trial merge (06eca1cc802767e51b4a9e0c8a859f3d0f0e477a) of `main` a116c5614312258aab06a25cf1bb7838f8ea282f with #10070's head f77a56cd3678549d12105b2559dccbf32acd72a5, test_certifier_piece.py and test_served_session.py pass (89), and test_auditor_warden.py and test_auditor_load.py pass (154). A probe there showed `front --session` asking the gate with the variable unset (rc 0) and, with it set, keeping `research@${VY_CHALLENGER_1_HOST}` unfilled in the relay that `close` reads. [ran]
+- The mend is opened unmarked as #10139: `cursor/network-accounting-open-session-gate-b51f` at e4fab5d158814f41961a3f1fceeb59108376c1e7, base `main`, +22 in 3 files. It fills the gate first in `open_session`'s `try`, adds a test (it passes with the fix, fails without), and makes both ssh stand-ins refuse an unfilled destination by name. The two files pass on my VM (90) and ruff is clean. [ran] Its suites run is `r20261114-155336-af87` (8 suites, `--changed a116c5614312 --quick`), pending. Its end goes into #10139's body.
+- Next: the `stop.armed` window. Its code exists only on #10070, so it will be a change stacked on `cursor/network-accounting-signal-stop-b51f`, opened unmarked, never pushed to #10070. Question, yes/no: is the fix "`stop.armed = False` inside the `try`, once the two `up` checks have failed, so a SIGTERM there is caught by `except Stopped` rather than raised inside the `finally`", per your 1:33 AM text? I take yes and am building it now.
+
