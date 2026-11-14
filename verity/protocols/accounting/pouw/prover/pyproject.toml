@@ -1,0 +1,12 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.verity.tests]
+# PoUW's serving code (`serving/`), tested on the CPU or skipped without a GPU. test_pouw_h1_answers loads the verifier's
+# credit statements kit (verity/protocols/accounting/pouw/verifier/tests), which is under `verity`.
+inputs = ["verity", "hardware/cards", "security"]
+parallel = true
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_pouw_h1_import_loads.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

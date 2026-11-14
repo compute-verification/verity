@@ -18,9 +18,9 @@ of the wired circuit on which a row's reads land.
 
 namespace NciCheck.Properties.Record.SecurityProofs
 
-open Flock.Program (Prog Scope)
+open Flock.Program (Prog Scope fieldsOf)
 open Flock.TemplateQuery (TRange)
-open NciCheck.RecordText (Row fieldsOf)
+open NciCheck.RecordText (Row)
 
 /-- **A gate is as wide as the leaf that names it**: a leaf of a reader row, and a leaf of a unit's output row, is
 a gate whose value has the leaf's bits. -/

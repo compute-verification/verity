@@ -64,12 +64,12 @@ rs keep "$ROOT" --owner @vllm --expires 7d --priority high \
 cd "$TREE/adapters/vllm"
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
 compiler_args() {   # DIR: `verity-vllm advice`'s --compiler-name/--compiler-digest for the served run DIR (its serve.json)
-  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$1" --cap-bits "$CAP") \
+  (cd "$TREE" && "$PY" verity/protocols/proofs/spot/prover/audit/prove_path.py compiler --serve-run "$1" --cap-bits "$CAP") \
     | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 CKPT=$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV
 weights_args() {    # DIR FILE: `verity-vllm advice`'s --weights-of-record for the served run DIR, the committer's registration written to FILE
-  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py weights-registration --serve-run "$1" --checkpoint-dir "$CKPT" \
+  (cd "$TREE" && "$PY" verity/protocols/proofs/spot/prover/audit/prove_path.py weights-registration --serve-run "$1" --checkpoint-dir "$CKPT" \
     --key "$1/private/weights.key" --out "$2") >> "$OUT/weights_registration.txt" 2>&1 && echo "--weights-of-record $2"
 }
 no_weights() { echo "NO WEIGHTS REGISTRATION for $1 (weights_registration.txt): no window registers a weight's root, so every weight read counts free" | tee -a "$OUT/steps.txt"; }

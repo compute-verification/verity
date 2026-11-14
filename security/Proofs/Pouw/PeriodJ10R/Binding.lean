@@ -221,7 +221,7 @@ theorem monitoringPeriodPositions_mem {ι C Ξ V : Type} (Cd : Declared ι) {n N
   | none => exact Finset.mem_insert_self _ _
   | some g => exact Finset.mem_insert_of_mem (List.mem_toFinset.2 (List.mem_of_getElem? h))
 
-section OnePeriod
+section OneMonitoringPeriod
 
 open Accounting.Compose.PeriodBinding
 
@@ -256,11 +256,11 @@ instance instNonemptyOneCoins_proofs : Nonempty OneCoins := ⟨oneCoins false⟩
 variable (o : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 1 Bool)
 
 /-- `oneMonitoringPeriod`'s tile reads the gate `dag.length = 0` at every slot. -/
-theorem onePeriod_pos (w t : Fin 1) (k : ℕ) : (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).pos w t k = (w, 0) := by
+theorem oneMonitoringPeriod_pos (w t : Fin 1) (k : ℕ) : (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).pos w t k = (w, 0) := by
   simp [Declared.monitoringPeriodLayer, Declared.slots, unitGates, oneMonitoringPeriod]
 
 /-- Every position of `oneMonitoringPeriod` is cut before the coin bit, so its continuations are the fresh coins. -/
-theorem onePeriod_cont (ℓ : Fin 1 × ℕ) (x z : OneCoins) :
+theorem oneMonitoringPeriod_cont (ℓ : Fin 1 × ℕ) (x z : OneCoins) :
     (oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl o).cont ℓ x z = z := by
   obtain ⟨w, g⟩ := ℓ
   obtain rfl : w = 0 := Subsingleton.elim _ _
@@ -295,15 +295,15 @@ theorem one_split (v : OneCoins → Bool) (p : OneCoins × OneCoins) :
 theorem acceptAll_committed (x x' : OneCoins) (ℓ : Fin 1 × ℕ) :
     acceptAllLayer.committed x ℓ = acceptAllLayer.committed x' ℓ := by
   unfold SampledLayer.committed
-  exact plural_of_sp _ _ (funext fun z => (onePeriod_cont acceptAllOutcomes ℓ x z).trans
-    (onePeriod_cont acceptAllOutcomes ℓ x' z).symm)
+  exact plural_of_sp _ _ (funext fun z => (oneMonitoringPeriod_cont acceptAllOutcomes ℓ x z).trans
+    (oneMonitoringPeriod_cont acceptAllOutcomes ℓ x' z).symm)
 
 /-- Under `acceptAllOutcomes` binding fails on the path whose coin bit isn't the committed value. -/
 theorem acceptAll_moved : ∃ x, acceptAllLayer.MovedIn x 0 := by
   refine ⟨oneCoins (!acceptAllLayer.committed (oneCoins false) (0, 0)), 0, trivial, fun h => ?_⟩
   have h0 := congrFun h 0
   change _ = acceptAllLayer.committed _ ((oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl acceptAllOutcomes).pos 0 _ 0) at h0
-  rw [onePeriod_pos, acceptAll_committed _ (oneCoins false)] at h0
+  rw [oneMonitoringPeriod_pos, acceptAll_committed _ (oneCoins false)] at h0
   have h1 : (!acceptAllLayer.committed (oneCoins false) (0, 0)) = acceptAllLayer.committed (oneCoins false) (0, 0) :=
     h0
   revert h1
@@ -317,9 +317,9 @@ theorem honest_committed (x : OneCoins) (w : Fin 1) : honestLayer.committed x (w
   · rintro ⟨_, _, _, -, -, hv⟩
     exact hv.symm
   · intro hv
-    exact ⟨w, 0, 0, onePeriod_pos honestOutcomes w _ 0, trivial, hv.symm⟩
+    exact ⟨w, 0, 0, oneMonitoringPeriod_pos honestOutcomes w _ 0, trivial, hv.symm⟩
 
-end OnePeriod
+end OneMonitoringPeriod
 
 end Properties.Pouw.PeriodJ10R.SecurityProofs.Binding
 
@@ -346,7 +346,7 @@ theorem MonitoringPeriodBindingPerProver_honest : Pouw.Guarantees.MonitoringPeri
     obtain ⟨i, -, hi⟩ := hx
     refine hi (funext fun k => ?_)
     show false = honestLayer.committed x ((oneMonitoringPeriod.monitoringPeriodLayer Nat.one_pos le_rfl honestOutcomes).pos w _ k)
-    rw [onePeriod_pos]
+    rw [oneMonitoringPeriod_pos]
     exact (honest_committed x w).symm
 
 theorem MonitoringPeriodBindingPerProver_nontrivial : Pouw.Guarantees.MonitoringPeriodBindingPerProver_nontrivial := by
