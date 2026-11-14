@@ -21,7 +21,7 @@ warps = { value = 48, unit = "warp/SM", mark = "ceiling", source = "CUDA C++ Pro
 
 [clock]
 sm = { value = 2430, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (nvidia-smi -q, all eight cards: max, application, default application and max customer boost clocks 2430 MHz); art:529e118ea9ea (NVML: SM and memory clock offset ranges [0, 0], supported graphics clocks top at 2430); art:198a12d9c2e8 (every lock, application clock and offset above 2430 MHz refused or clamped)" }
-tensor = { value = 2430, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, and no source gives this card a lower tensor clock" }
+tensor = { value = 2430, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, and no source gives this card a lower tensor clock. The vendor's TF32 figures sit on it so: the product page's 'TF32 Tensor Core 234 TFLOPS' is this card at this clock, sm.count x rate.tensor x 2430 MHz x 2 / weight.tf32 = 233.9 dense TFLOPS, and whitepaper v1.1, Table 4's 'Peak TF32 Tensor TFLOPS' 251.9 is the same rate at the Workstation Edition's 2617 MHz boost clock" }
 memory = { value = 12481, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (max and application memory clock 12481 MHz); art:529e118ea9ea (supported memory clocks [12481, 405], offset range [0, 0]); art:198a12d9c2e8 (a memory clock lock at 12981 MHz clamped, NVML still reading 12481 MHz, and a +500 MHz memory offset refused; no application clock above 12481 MHz was tried)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
