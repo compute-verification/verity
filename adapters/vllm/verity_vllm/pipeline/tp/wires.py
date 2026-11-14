@@ -1,23 +1,25 @@
-"""A tensor-parallel window's collective sites at a grain C-Flock proves (`sites_circuit`): each request's W rank Programs'
+"""A tensor-parallel window's collective sites at a grain Flock proves (`sites_circuit`): each request's W rank Programs'
 producers of a partial, the units combining them and the calls that read a combine's output, with each site's binding
 (`program.tp_binding`) as wires. Row p of every combine unit's parts, cut W ways, is rank p's partial row there, and every
 read of a combine's output is the output row of the unit that computes it.
 
 A wired row is committed under its writer's salt (`wiring.salts`), so a peer row and its writer's output are one public
 string. A peer row that isn't its writer's output is a wrong block of the window (`wiring.check`, and `check_drawn` on the
-units a sample draws), never a free input: `interface.input_count` counts every peer row wired.
+units a sample samples), never a free input: `interface.input_count` counts every peer row wired.
 
 **Units** (`grain.lower`). A site's units are:
-* its producers' units, per rank;
+* its producers' units, per rank, a batch's those of each member its partial reads;
 * at coordinate grain, each rank's gathers of its words into rows of K;
 * its combine units (one a chunk at coordinate grain, one a row at row grain, none for a gather), the gathers of a token
   row's chunks, and the fused all-reduce's norm, one unit for every rank;
 * its readers, per rank: a call of a rank Program reading a combine's output is a unit of its own Definition, placed at the
-  last site it reads. A token select (`TokenSelect_v4{V}`) is instead the served window's split of it
+  last site it reads, and a batch of n such calls n units, a mapped argument laid unit after unit and a shared one read
+  alike by each. A token select (`TokenSelect_v4{V}`) is instead the served window's split of it
   (`grain.GROUP`): V / C units `TokenSelectGroups_v1{C, GROUP}` reading its logits as their writers' rows, C
   `grain.select_width`, and one `TokenSelectCombine_v2{V, GROUP}` reading their bests and indices and ``x0``, logits[0]'s
   producer unit's word. A call producing a later site's partial (the LM head reading the last norm) is its producer units,
   each reading it, and a read by another site's combine (the fused all-reduce's residual) is that site's combine units' port.
+  A batch of token selects is refused by name.
 
 Each template's units are allocated in the public order: request; then the site's place in its request Program's call
 order, its step then its layer; then stage (`PRODUCER`, `GATHER`, `COMBINE`, `OUTPUT`, `NORM`, `CONSUMER`); then rank (none
@@ -220,9 +222,16 @@ class _Window:
         (_q, k, tid, u, _m), = _pieces(self.units[i, j, PRODUCER, p], q, 1)
         return tid, self.outs[i, j, PRODUCER, p][k], u
 
-    def consumer(self, i: int, j: int, r: int, x: int, fn: Any, segs: Sequence[Segment]) -> None:
+    def consumer(self, i: int, j: int, r: int, x: int, fn: Any, segs: Sequence[Segment], batch: TB.Batch | None = None) -> None:
         """Rank ``r``'s reader call ``x`` (Definition ``fn``) placed at site ``j``: a unit of ``fn``, or a token select's
-        group units and select (module docstring), where its logits' writer rows fit whole groups."""
+        group units and select (module docstring), where its logits' writer rows fit whole groups; a batch reader ``x``
+        (``batch``, `tp_binding.RankSites.batches`) a unit of ``fn`` for each member."""
+        if batch is not None:
+            if fn.defn is DF.TokenSelectV4:
+                raise ValueError(f"{self.name}: request {i}'s rank {r} node {x} ({fn.id}) is a batch of {batch[0]} token "
+                                 "selects: a token select reading a combine's output is lowered as a call")
+            self.consumers[i, r, x] = (self.alloc((i, j, CONSUMER, r), fn, batch[0]),)
+            return
         widths = {w for _lo, _hi, w, *_ in segs}
         C = None
         if fn.defn is DF.TokenSelectV4 and len(widths) == 1:
@@ -267,6 +276,32 @@ class _Window:
                 self.unwired.append(f"{what} reads leaves [{l1}, {h1}): {why}")
 
 
+def _members(lo: int, hi: int, P: int) -> list[tuple[int, int, int]]:
+    """``[lo, hi)`` of a batch's argument or output, ``P`` leaves a member, cut where its members meet: (member, lo, hi)."""
+    return [(t, max(lo, t * P), min(hi, (t + 1) * P)) for t in range(lo // P, -(-hi // P))]
+
+
+def _member_reads(b: TB.RequestBinding, r: int, x: int, a: int, off: int, lo: int, hi: int) -> list[tuple[int, int]]:
+    """The leaves of a site's output that rank ``r``'s reader ``(x, a, off, lo, hi)`` reads: ``[lo, hi)``, or for an argument
+    a batch maps, cut where its members' arguments meet, so the token row is a member's read and not the batch's."""
+    batch = b.batches.get(r, {}).get(x)
+    if batch is None or batch[1][a] is None:
+        return [(lo, hi)]
+    return [(lo + c - off, lo + d - off) for _t, c, d in _members(off, off + hi - lo, b.fns[r][x].signature()[0][a][1].leaves)]
+
+
+def _member_runs(b: TB.RequestBinding, p: int, runs: Sequence[TB.Run]) -> list[tuple[int, int, int]]:
+    """Rank ``p``'s partial ``runs`` of a site, a batch producer's cut at its members, each piece at its member's leaves."""
+    out = []
+    for n, lo, hi in runs:
+        if n not in b.batches.get(p, {}):
+            out.append((n, lo, hi))
+            continue
+        M = b.fns[p][n].signature()[1].leaves
+        out.extend((n, c - t * M, d - t * M) for t, c, d in _members(lo, hi, M))
+    return out
+
+
 def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks: Sequence[int] | None = None) -> Sites:
     """The window of the collective sites of ``bindings`` (by advice request, None for a request no rank ran), of every rank
     or of ``ranks`` alone (module docstring); refused (ValueError) by name where a site has no grain (`grain.lower`)."""
@@ -298,18 +333,19 @@ def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks
         mine: dict[tuple[int, int], list[tuple[int, int, int]]] = {}
         for j, s in enumerate(b.sites):
             where = f"{name}: request {i}'s collective {s.k} [{s.lo}, {s.hi})"
-            reads = [(lo, hi) for rd in s.readers for *_, lo, hi in rd]
+            reads = [m for r, rd in enumerate(s.readers) for rdr in rd for m in _member_reads(b, r, *rdr)]
+            own = [_member_runs(b, p, s.own[p]) for p in range(world)]
             low = lowered[j] = G.lower(b.fns[0][s.combine[0][0]],
-                                       [[(b.fns[p][n], lo, hi) for n, lo, hi in s.own[p]] for p in range(world)], reads, where)
+                                       [[(b.fns[p][n], lo, hi) for n, lo, hi in own[p]] for p in range(world)], reads, where)
             win.site(i, j, low)
             segs[j] = win.writers(i, j, low)
             for r in rs:
                 q = 0
-                for (n, _lo, _hi), (*_, m) in zip(s.own[r], low.producers[r]):
+                for (n, _lo, _hi), (*_, m) in zip(own[r], low.producers[r]):
                     mine.setdefault((r, n), []).append((j, q, m))
                     q += m
                 for x in sorted(last.get((j, r), ())):
-                    win.consumer(i, j, r, x, b.fns[r][x], segs[j])
+                    win.consumer(i, j, r, x, b.fns[r][x], segs[j], b.batches.get(r, {}).get(x))
         for j, s in enumerate(b.sites):
             for r in rs:
                 for x, a, off, lo, hi in s.readers[r] if s.readers else ():
@@ -347,7 +383,9 @@ def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks
                         continue
                     else:
                         (unit,) = win.consumers[i, r, x]
-                        target = ("spread", [unit], port, win.words(unit[0], port))
+                        batch = b.batches.get(r, {}).get(x)
+                        kind = "same" if batch is not None and batch[1][a] is None else "spread"
+                        target = (kind, [unit], port, win.words(unit[0], port))
                     win.read(what, target, off, lo, hi, segs[j])
     templates = tuple((fn, win.count[tid]) for tid, fn in win.fns.items())
     circuit = I.Circuit(name, templates, wires=tuple(I.coalesce(win.wires)), cuts=win.cuts, order=tuple(win.order))

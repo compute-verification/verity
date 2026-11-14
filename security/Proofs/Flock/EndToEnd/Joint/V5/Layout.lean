@@ -284,7 +284,7 @@ theorem mem_design_draw (h : w.Laid) (k : Fin w.ms.length) (ω : w.L.Ω) (v : Fi
   rw [← e]
   exact w.mem_part k _ v
 
-/-- **A sampled unit `u` belongs to the member with `base ≤ u < base + n`**, as its proof block `u - base`. -/
+/-- **A sampled proof block `u` belongs to the member with `base ≤ u < base + n`**, as its proof block `u - base`. -/
 theorem mem_draw_iff (h : w.Laid) (ω : w.L.Ω) (u : Fin w.nJ) :
     u ∈ w.L.draw ω ↔ ∃ k v, u.val = w.base k + v.val ∧ v ∈ (w.design k).draw ω := by
   constructor
@@ -350,18 +350,25 @@ theorem Laid.prCoin_parts (h : w.Laid) (E : Finset (Fin w.nJ) → Prop) :
 
 variable (w)
 
-/-- **The design member `k`'s session is played alone at is the window's marginal too**: the earlier sessions' coins it
-samples with the window's don't move its sample. -/
-theorem prCoin_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) → Prop) :
-    prCoin (fun x : (w.memberLaw τ k).Ω => E ((w.memberLaw τ k).draw x)) =
-      prCoin (fun ω : w.L.Ω => E ((w.ms.get k).part (w.L.draw ω))) :=
-  w.avg_memberLaw τ k fun S => if E S then 1 else 0
+section Ended
 
-/-- Member `k`'s design played alone misses a set of its proof blocks exactly when the window's sample misses their
-places in the population. -/
+variable [Nonempty w.EndΩ]
+
+/-- **The design member `k`'s session is played alone at is the window's marginal where the sample ended**: the earlier
+sessions' coins it samples with the window's don't move its sample, so the ended share of an event's probability at it
+is at most the probability the window's one sample gives the event at member `k`'s part. -/
+theorem prCoin_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) (E : Finset (Fin (w.ms.get k).n) → Prop) :
+    w.endShare * prCoin (fun x : (w.memberLaw τ k).Ω => E ((w.memberLaw τ k).draw x)) ≤
+      prCoin (fun ω : w.L.Ω => E ((w.ms.get k).part (w.L.draw ω))) :=
+  w.endShare_mul_avg_le τ k fun S => if E S then 1 else 0
+
+/-- The ended share of the probability that member `k`'s design played alone misses a set of its proof blocks is at most
+the probability that the window's sample misses their places in the population. -/
 theorem memberLaw_escape (τ : Strategy w.game) (k : Fin w.ms.length) (B : Finset (Fin (w.ms.get k).n)) :
-    (w.memberLaw τ k).escape B = w.L.escape (B.image (w.ms.get k).emb) :=
-  (w.prCoin_memberLaw τ k fun S => Disjoint S B).trans (w.design_escape k B)
+    w.endShare * (w.memberLaw τ k).escape B ≤ w.L.escape (B.image (w.ms.get k).emb) :=
+  (w.prCoin_memberLaw τ k fun S => Disjoint S B).trans_eq (w.design_escape k B)
+
+end Ended
 
 /-- **Member `k`'s design misses a set of its proof blocks** with probability at most the window's sampling design's
 own miss `P_a` of their places in the population, under A3. -/
@@ -370,11 +377,16 @@ theorem design_escape_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (k : 
     (w.design k).escape B ≤ ENNReal.ofReal (w.pa (B.image (w.ms.get k).emb)) :=
   (w.design_escape k B).trans_le (Bridge.execSel_escape_le w.src hA3 w.hlaw w.hns _)
 
+section Ended
+
+variable [Nonempty w.EndΩ]
+
 /-! ### The window's incorrect proof blocks are its members' -/
 
 theorem wrongSet_eq_join (τ : Strategy w.game) : w.wrongSet τ = w.join (w.memberWrong τ) := by
   ext u
-  simp only [JointAuditV5.wrongSet, JointAuditV5.join, Finset.mem_biUnion, Finset.mem_univ, true_and,
+  rw [w.wrongSet_eq τ]
+  simp only [JointAuditV5.join, Finset.mem_biUnion, Finset.mem_univ, true_and,
     Finset.mem_image]
 
 variable {w}
@@ -398,5 +410,7 @@ theorem Laid.mem_wrongSet (h : w.Laid) (τ : Strategy w.game) (u : Fin w.nJ) :
     have e : (w.ms.get k).emb v = u := Fin.ext ((h.emb k v).trans hu.symm)
     rw [← e, ← w.mem_part k, h.part_wrongSet τ k]
     exact hv
+
+end Ended
 
 end Flock.Guarantees.JointAuditV5

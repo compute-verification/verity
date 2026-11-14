@@ -16,7 +16,7 @@ the member's part of it (`Member.part`), and the window's projection hands each 
   sizes add up to the sample's.
 * **The registered layout** (`Window.Laid`, `Window.Laid.partitions`): the members in unit order, member `k`'s proof
   block `v` at the population's place `base k + v`, its base the sum of the counts of the members before it
-  (`JointAuditV5.Laid`), both fixed by the registration before the sample. A sampled unit `u` is then the proof block
+  (`JointAuditV5.Laid`), both fixed by the registration before the sample. A sampled proof block `u` is then the proof block
   of the one member with `base ≤ u < base + n` (`JointAuditV5.Laid.mem_iff`, `Laid.member_unique`), so the members'
   places partition the population.
 * **The marginals** (`Window.avg_design`, `Window.drawMiss_extend`, `Window.joint_extend`, `Window.eps_extend`,
@@ -146,7 +146,7 @@ theorem Window.sum_part_card (W : Window) (h : W.Partitions) (S : Finset (Fin W.
 /-- **The window's members are laid out in unit order** (`JointAuditV5.Laid`): their proof-block counts sum to the
 population, and member `k`'s proof block `v` sits at the population's place `base k + v`, its base the sum of the
 counts of the members before it. The counts, the bases and the places are the registration's, fixed before the
-sample; a sampled unit `u` is the proof block of the member with `base ≤ u < base + n`
+sample; a sampled proof block `u` is the proof block of the member with `base ≤ u < base + n`
 (`JointAuditV5.Laid.mem_iff`). -/
 def Window.Laid (W : Window) : Prop := (W.joint 0).Laid
 

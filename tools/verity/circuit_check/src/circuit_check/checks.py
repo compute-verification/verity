@@ -33,7 +33,7 @@
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on sampled
                      operand intervals within its bounds with every operand leaf folded into its interval, returns within the
                      interval the transfer gives; recorded only for a Definition that declares either
-    redundant gates  a value computed twice inside one proof block: the gates `verity.definitions.word.Graph` finds recomputed
+    redundant gates  a value computed twice inside one proof block: the gates `verity.circuits.word.Graph` finds recomputed
                      (same primitive, same operands by value) that `word.units` puts in one proof block, and the ANDs of a
                      Boolean proof block on identical operands, its commits apart (`redundant_ands`); counted, with where
                      (primitive @ activation, or the named subcircuit)
@@ -110,7 +110,7 @@ _LIMB = (1 << 64) - 1
 class Options:
     """``vectors`` input vectors per correspondence check (the all-edge ones first), fewer when the reference would spend more
     than ``reference_budget`` gate evaluations on them (never fewer than ``min_vectors``); ``X`` / ``W`` / ``extras`` the word
-    query; the word view draws 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
+    query; the word view samples 16 times the vectors within 16 times the budget (`_word_vectors`); Definitions over
     ``partition_max_gates`` gates or ``partition_max_leaves`` parameter leaves are not partitioned, over
     ``lower_max_gates`` gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole; ``input_budget``
     bounds vectors x input leaves, ``lane_budget`` vectors x proof blocks when a template's proof blocks are evaluated;
@@ -1110,7 +1110,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     proof blocks is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else
     `word.unit_rule`'s count;
     None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     P = F if applies else Findings()
     v2 = applies and q_word == 2
@@ -1204,7 +1204,7 @@ def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
     `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`), or cuts so down to a member
     over its own budget that it doesn't (``too-large``)."""
     from verity.circuits.cut import separable
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     if isinstance(fn, ScalarReference):
         return None
@@ -1281,7 +1281,7 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     targets."""
     from verity.circuits import boolean as BL
     from verity.circuits.cut import separable
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     if callee_gap(fn, opts, memo.setdefault("callee_gap", {})) is not None:
         return None
@@ -1307,7 +1307,7 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     part: dict[str, Any] = {"applies": True, "checked": True, "reason": why, "q_word": 2 if v2 else 1,
                             "max_out_bits": max((r.get("max_out_bits") or 0 for r in out.values()), default=0), "by_callees": out}
     if separable(fn) is not None:
-        from verity.definitions.cross_call import members_check
+        from verity.circuits.cross_call import members_check
 
         with spent("partition-members"):
             across = members_check(fn, word)
@@ -1514,7 +1514,7 @@ def _held_blocks(entries: list[dict], catalog: bool = False) -> tuple[dict[str, 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
     """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
-    names (`verity.protocols.certifier.verifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
+    names (`verity.protocols.accounting.certifier.verifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
     place of the digest is the Definition's.  Any other Definition holding a ``digests`` pin (a binding at served statics
     over `targets.MAX_GATES`, which the pin keeps in ``--all``) is held to it the same way, so every held pin is compared."""
     from verity.circuits.codec import program_digest
@@ -1630,7 +1630,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         F.warn("redundant-gates", "boolean", sub.id, red, f"ANDs on identical operands in the {name} unit", where=dict(by.most_common()))
     if not isinstance(low, IL.Lowering):
         rec["compared"] = 0
-        rec["correspondence"] = ("verity/protocols/flock/prover/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
+        rec["correspondence"] = ("verity/protocols/proofs/flock/prover/tests/test_ir_sampling.py holds the unit to its lane_reference, the step at one "
                                  "vocabulary position of the row")
         return rec
     params, _ = signature_of(d)
@@ -1688,7 +1688,7 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     """A served workload's request Program (a Build's ``instances.json.gz``, or its directory), as the sidecar of the package
     that writes it reads it (`targets.request_program`): `word.check_query` over its Calls (the cross-Call conditions: every
     Value a Call reads or returns is committed) and every check on each distinct Definition."""
-    from verity.definitions import word as W
+    from verity.circuits import word as W
 
     from .targets import request_program
 
@@ -1704,9 +1704,9 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     out: dict[str, Any] = {"row": str(p), "query": r["query"], "calls": r["calls"], "units": r["units"], "gates": r["gates"],
                            "committed_interior_words": r["committed_interior_words"], "definitions": []}
     try:
-        from verity.definitions import cross_call
+        from verity.circuits import cross_call
     except ImportError:
-        out["cross_call"] = {"checked": False, "reason": "verity.definitions.cross_call is not on this tree"}
+        out["cross_call"] = {"checked": False, "reason": "verity.circuits.cross_call is not on this tree"}
     else:
         x = cross_call.check_program(rows, strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}

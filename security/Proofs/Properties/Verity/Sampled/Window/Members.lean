@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.Sampled.Held
 # The per-member form's acceptance is its members' verdicts, in member order
 
 One-stage v2 in this tree runs every session at one statement (`Spot.OneStageZk.run`) and refuses evidence of more
-than one session. The per-member form gives each drawn member of a window a statement of its own, with one session.
+than one session. The per-member form gives each sampled member of a window a statement of its own, with one session.
 This module is a stand-in for that form's run over this tree's `step`, as it would be once the verifier holds it and no
 longer refuses it, and reads its acceptance; nothing here is the verifier's, and the verifier's gate is not lifted.
 
@@ -23,7 +23,7 @@ longer refuses it, and reads its acceptance; nothing here is the verifier's, and
 * **`runMembers_iff`**: the per-member run accepts every session exactly where the statements' structure holds, each
   statement is exactly one session at its member's statement (`Stated`), the sessions have their verdicts in order
   (`Verdicts`, each after the coin-tree keys of the members before it) and the proved units are the evidence's.
-* **What the registration fixes of a member before the draw** (`SliceHeld`, `Member.Fixed`): the member's public file
+* **What the registration fixes of a member before the sample** (`SliceHeld`, `Member.Fixed`): the member's public file
   is held to the member's slice of the registration (its scheme, its ports' roots and domains, its number of proof
   blocks) and to the member's units, as `publicHeld` holds the one statement's to the whole registration.
   `publicHeld_iff` is that reading of `publicHeld`: the one-statement path's check is the slice check at the whole
@@ -179,7 +179,7 @@ def follows (held : Array Member) (m : Member) : Bool :=
 
 /-- One statement held, after the members `held` of the statements before it: it names a member of the parameters
 `ms` that no earlier statement named, in the members' order (`follows`), and has exactly one session (one pass on live
-coins, never retried; an undrawn member has no statement). The members so far, with its own. -/
+coins, never retried; an unsampled member has no statement). The members so far, with its own. -/
 def heldStep (ms : Array Member) (held : Array Member) (st : StatementFiles) : Flock.V (Array Member) :=
   match st.member with
   | none => throw "the evidence's proofs are one statement's and the parameters' per member"
@@ -544,7 +544,7 @@ theorem runMembers_iff {ms : Array Member} {sts : Array StatementFiles} {want : 
   · rintro ⟨held, l, hheld, hs, hv, hprov⟩
     exact ⟨held, l, hheld, sessions_of_stated hs, hv, hprov⟩
 
-/-- **The per-member form's sessions are one a statement**: as many as the statements, so as many as the drawn
+/-- **The per-member form's sessions are one a statement**: as many as the statements, so as many as the sampled
 members. -/
 theorem stated_length {bs : _root_.Core.Blobs} {ms : Array Member} {sts : Array StatementFiles}
     {held : Array Member} {l : List (StepAt × _root_.Spot.OneStageZk.RunFiles)}
@@ -552,7 +552,7 @@ theorem stated_length {bs : _root_.Core.Blobs} {ms : Array Member} {sts : Array 
     l.length = sts.size := by
   rw [← h.length_eq, Array.length_toList, Array.size_zip, ← (membersHeld_zip hheld).1, Nat.min_self]
 
-/-! ## What the registration fixes of a member before the draw -/
+/-! ## What the registration fixes of a member before the sample -/
 
 /-- The header `h`'s `units.indices` are exactly the units `us`, in order: `Spot.OneStageZk.indicesHeld` at a
 member's units in place of the population's. -/
@@ -633,7 +633,7 @@ theorem SliceHeld.population {slice : Json} {us : Array ℕ} {pubB : ByteArray} 
   obtain ⟨hd, hh, hc, -⟩ := h
   exact ⟨hd, hh, matchesPublic_population hc⟩
 
-/-- **A member's statement is fixed by the registration before the draw**: the public file its own inputs name is a
+/-- **A member's statement is fixed by the registration before the sample**: the public file its own inputs name is a
 blob held to the member's slice `slice` of the registration and to the member's units (`SliceHeld`). The slice is the
 registration's, recorded before any coin; the member's inputs and units are the parameters'. -/
 def Member.Fixed (m : Member) (slice : Json) (bs : _root_.Core.Blobs) : Prop :=
@@ -658,9 +658,9 @@ def Accepts (slice : Member → Json) (ms : Array Member) (sts : Array Statement
   (runMembers ms sts want bs = .ok r ∧ r.all = true) ∧
     ∀ held, membersHeld ms sts = .ok held → ∀ m ∈ held, m.Fixed (slice m) bs
 
-/-- **The per-member form accepts exactly where each drawn member's session, in member order, has an accepting
+/-- **The per-member form accepts exactly where each sampled member's session, in member order, has an accepting
 verdict on its own registered statement, each session's coins its own**: `runMembers_iff`, with each member's
-statement fixed by its slice of the registration before the draw. -/
+statement fixed by its slice of the registration before the sample. -/
 theorem accepts_iff {slice : Member → Json} {ms : Array Member} {sts : Array StatementFiles} {want : Array ℕ}
     {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run} :
     Accepts slice ms sts want bs r ↔

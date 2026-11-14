@@ -66,11 +66,12 @@ else:
 '''
 
 
-def _piece(tmp_path: Path, served: dict | None, period: dict | None = None,
+def _piece(tmp_path: Path, served: dict | None, period: dict | None = None, first: dict | None = None,
            **extra: str) -> tuple[subprocess.CompletedProcess, Path, Path]:
-    """The piece on window 7 of a toy serve dir whose ``pearl/w7/served.json`` is ``served`` (none if None) and whose
-    window serve left ``pearlplus/period.json`` `period` (none if None), under PEARLPLUS_TIE with the window serve's cubin
-    and a toy gpu-lease: the run, the serve dir and the toy tree."""
+    """The piece on window 7 of a toy serve dir whose ``pearl/w7/served.json`` is ``served`` (none if None), whose
+    window serve left ``pearlplus/period.json`` `period` (none if None) and ``deployment-registration.json`` `first` (none
+    if None), under PEARLPLUS_TIE with the window serve's cubin and a toy gpu-lease: the run, the serve dir and the toy
+    tree."""
     tree, bin_, venv, sd = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "one_stage", tree / "benchmarks" / "harness", tree / ".venv" / "bin", bin_, venv,
               sd / "pearl" / "w7", tmp_path / "piece", tmp_path / "cubin"):
@@ -90,6 +91,8 @@ def _piece(tmp_path: Path, served: dict | None, period: dict | None = None,
     if period is not None:
         (sd / "pearlplus").mkdir()
         (sd / "pearlplus" / "period.json").write_text(json.dumps(period))
+    if first is not None:
+        (sd / "deployment-registration.json").write_text(json.dumps(first))
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "PEARLPLUS_TIE": "1",
            "PEARLC_KERNEL": "pearl_c_sm90", "PEARLC_CUBIN": str(tmp_path / "cubin" / "pearl_c_sm90.cubin"),
            "PEARLPLUS_JOBS": "1", "PEARLPLUS_TIE_CMD": f'printf "%s\\n" "$@" > {tmp_path}/tie.args; echo "PEARL-TIE: tied"',
@@ -128,7 +131,7 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     w = str(q / "window-record.json")
     retain = argv["served_passes.py retain"]
     assert retain[retain.index("--passes") + 1] == str(q / "passes") and retain[retain.index("--window-record") + 1] == w
-    assert retain[retain.index("--volunteer") + 1] == str(q / "volunteer.json")
+    assert retain[retain.index("--volunteer") + 1] == str(q / "volunteer.json") and "--previous-record" not in retain
     assert (tmp_path / "tie.args").read_text().split() == [str(sd), "7", w, str(q / "passes")]
     verify = argv["served_passes.py verify"]
     assert verify[verify.index("--tie") + 1] == w and verify[verify.index("--passes") + 1] == str(q / "passes")
@@ -142,6 +145,19 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert any(x.startswith("POUW tie: served_verdicts.sh pearl-tie exit 0 after ") and x.endswith(": PEARL-TIE: tied")
                for x in lines), lines
     assert (sd / "pearl" / "w7" / "coin.json").exists()
+
+
+def test_under_pearlplus_tie_w_is_chained_after_the_serves_first_registration_record(tmp_path):
+    """Where the window serve wrote its first registration record (served_verdicts.sh's weights():
+    SERVE_DIR/deployment-registration.json, which registers the weights before the first request), `retain` gets it as
+    ``--previous-record`` beside ``--window-record W``, so W is chained after it and the weights' record is the log's
+    first; a serve dir with none leaves W chained after nothing (the test above)."""
+    run, sd, _tree = _piece(tmp_path, _epoch(), first={"previous": None})
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    retain = next(a for a in _steps(tmp_path) if Path(a[0]).name == "served_passes.py" and a[1] == "retain")
+    w = str(sd / "private" / "pearlplus" / "window-record.json")
+    at = retain.index("--window-record")
+    assert retain[at:at + 4] == ["--window-record", w, "--previous-record", str(sd / "deployment-registration.json")]
 
 
 def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_retain_tie_or_verdict(tmp_path):
@@ -165,9 +181,9 @@ def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_r
 def test_under_pearlplus_tie_and_the_gate_the_piece_draws_only_after_a_period_whose_reserves_held(tmp_path, case):
     """Under the gate the window serve closed its Pearl-C period (served_verdicts.sh's serve()), its period.json saying
     whether the lane's reserves since the open were the window's salt sessions alone (``reserves``) and holding the gate's
-    close (``close``): the piece draws only after one that closed and held, and once the coin is drawn its RULE line reads
+    close (``close``): the piece samples only after one that closed and held, and once the coin is flipped its RULE line reads
     the ledger (``pearlplus-period rule`` on the serve dir's pearlplus/, the lane and the coin record). Otherwise, the
-    gate's close refused too, it says why, draws nothing and still writes its piece."""
+    gate's close refused too, it says why, samples nothing and still writes its piece."""
     reserves = {"held": {"ok": True}, "unclosed": {"ok": True}, "refused": {"ok": False}, "unread": None}[case]
     period = {"name": "pp-r1", **({} if reserves is None else {"reserves": reserves}),
               **({} if case == "unclosed" else {"close": {"kind": "period-close"}})}
@@ -290,8 +306,8 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
 
 def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_draw(tmp_path):
     """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
-    right before verify draws, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
-    fills, refuses every other reserve of the lane, so none comes between its close and the draw, which a compose takes
+    right before verify samples, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
+    fills, refuses every other reserve of the lane, so none comes between its close and the sample, which a compose takes
     only as the lane's first reserve after the close."""
     rc, said, got = _untied(tmp_path, "yes reject")(PEARLC_CHALLENGER_GATE="ssh gate")
     names = [" ".join(c["argv"][:2]) if c["argv"][:1] == ["pearlplus-period"] else

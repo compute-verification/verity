@@ -39,12 +39,12 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.commitments.crypto import lms
-from verity.protocols.pouw.verifier import salt as PS
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import salt_of
-from verity.protocols.spot.device import challenger as LC
-from verity.protocols.spot.device import remote as R
-from verity.protocols.spot.device.challenger import LiveCommitment, record_message
+from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import salt_of
+from verity.protocols.proofs.spot.device import challenger as LC
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import LiveCommitment, record_message
 
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1 as T
@@ -61,7 +61,7 @@ SA, SB = CH.session_id(0xa), CH.session_id(0xb)
 DRAW_NAME = CH.session_id(0xd)
 #: the gate's v2 head (31 entries: v1 opens, one-step v2 opens, then periods infra-smoke-20261020a to d,
 #: c's and d's windows two-step) and seven of its challenge phases' trees as the gate's ``fetch`` gave them; registered
-#: (fixtures/artifacts.json), fetched by `research data fetch-fixtures`
+#: (artifacts.json), fetched by `research data fetch-fixtures`
 SMOKE = Path(__file__).parent / "fixtures" / "challenger_periods"
 #: the SHA-512 of the challenger key the gate signed its ledger with; a verifier reads its
 #: pin from config, never from code

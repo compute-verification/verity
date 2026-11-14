@@ -69,7 +69,7 @@ read takes a supplied value (`supplied`), one row the verifier fills from its pi
 the domain id, under public salts; an opening's verdict reads the table's supplied 1, so a verdict of 0 opens no root,
 and the opening's row, salt and path are its units' own values, which the verdict holds to the pinned root inside the
 proof at the hidden key. A history table (`History`) is read the same way, but its rows are a writer template's outputs
-in the order its runs give, each committed under the table's salt at its position, so the verifier of record computes its
+in the order its runs give, each committed under the table's salt at its position, so the verifier computes its
 root itself from the writers' public strings and holds the window's registered root to it, at which the verifier pins
 the table (`verity.commitments.windows.history`). Cut
 registered reads and ingress are refused by the committer until it commits them. A `Read`
@@ -184,15 +184,15 @@ def _static(v: Any) -> Any:
     return v
 
 
-# A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/definitions/ops`)
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/circuits/ops`)
 # and not the rest of `verity/definitions` (its `loads` in tests/import_order.toml).
 
 @functools.cache
 def _load_catalog() -> None:
-    """Import every module of `verity.definitions.ops`, the catalog's, the embedding's registered read
+    """Import every module of `verity.circuits.ops`, the catalog's, the embedding's registered read
     (`commitments.gates.embedding`) and the streamed SHA-512 a checkpoint tie reads (`commitments.gates.sha512_stream`):
     each registers its Definitions as it loads."""
-    from verity.definitions import ops
+    from verity.circuits import ops
 
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
         if ".tests" not in m.name:
@@ -1032,8 +1032,8 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
             raise ValueError(f"table read {r.doc()}: a declared table's root or domain id, a 64-byte port")
         rects.append((r.reader, r.port, r.at, r.at + r.units, 0, k, r.doc()))
     for o in reg.openings:
-        units(o.reader, o.at, o.units, o.doc())
         port(o.reader, o.key, o.doc())
+        units(o.reader, o.at, o.units, o.doc())
         if o.table not in tables or o.verdict not in dict(templates[o.reader][0].outs) or not o.ports:
             raise ValueError(f"opening {o.doc()}: a declared table's row at its key, with a verdict output")
         for p in o.ports:
@@ -2037,7 +2037,7 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     ingress, and its window's ingress apart
     (``window_ingress``, `listed_ingress`), which ``free`` still holds: only the link checks
     bind those rows, so a count that subtracts them names that premise. ``pins`` are the verifier's own, never the record's: the roots it fixed before the run, by the
-    names the record gives the registered parameters (``{param: root}``), a history table's the root the verifier of record
+    names the record gives the registered parameters (``{param: root}``), a history table's the root the verifier
     held to the one over its writers' public strings (`verity.commitments.windows.history`); ``roots`` the window's, as its registration
     records them (`Window.write`). A parameter is held where the window's root for it is the verifier's pin of it
     (`held_params`), and a pin names its parameter alone: a pin ``P`` holds no ``P/…`` (one of a registration of several

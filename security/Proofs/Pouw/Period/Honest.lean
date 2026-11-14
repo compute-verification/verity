@@ -206,7 +206,7 @@ def stages : SplitStages Bool (Fin 144) 1 :=
   .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period : (n : ℕ) → WindowPlay Bool Ω1 (Fin 144) circuit.rounds n
+def period : (n : ℕ) → ExecutionPhasePlay Bool Ω1 (Fin 144) circuit.rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
@@ -253,7 +253,7 @@ noncomputable def anatomy : Anatomy Unit Unit Unit Unit := { Honest.anatomy with
 
 /-- The play: the period's ideal game at `liveCone`, accepted on every path. -/
 noncomputable def play (n : ℕ) : Play Ω1 n Unit Unit Unit Unit where
-  game := periodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n)
+  game := monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n)
   accepts := fun _ => True
   run := fun _ => anatomy
 
@@ -310,7 +310,7 @@ theorem prefixLen_all (n : ℕ) (x : Paths Ω1 n) : (windows n).prefixLen prm x 
 /-! ## The honest windows' claims -/
 
 theorem period_every {P : (Fin 144 → Bool) → SplitStages Bool (Fin 144) 1 → Prop} (h : P (fun _ => true) stages) :
-    ∀ n, (period n).EveryWindow P
+    ∀ n, (period n).EveryExecutionPhase P
   | 0 => trivial
   | n + 1 => ⟨h, fun _ => period_every h n⟩
 
@@ -343,14 +343,14 @@ theorem paid_share (s : Mode) (hs : s ≠ .paid) (t : Fin 144) (c : Bool) :
 theorem every_perLiveTile {P : Kind → ReceiptGame Bool 1 → ReceiptGame Bool 1 → Prop}
     (h : ∀ k (t : Fin 144), P k (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .folded t)
       (tileGame (fun _ _ => Mode.paid) (fun _ _ => True) (fun _ _ => True) .whole t)) (n : ℕ) :
-    (period n).EveryWindow (fun live W => PerLiveTile Honest.scheme circuit live W P) :=
+    (period n).EveryExecutionPhase (fun live W => PerLiveTile Honest.scheme circuit live W P) :=
   period_every (P := fun live W => PerLiveTile Honest.scheme circuit live W P)
     ⟨fun t _ _ k _ _ => h k t, fun _ => trivial⟩ n
 
 /-- **The honest period passes every prefix of its game**, at any weights and costs. -/
 theorem acceptsUpTo_period (wt : (Fin 144 → Bool) → Fin 144 → ℝ) (a b : ℝ) :
     ∀ (n j : ℕ) (x : Paths Ω1 n),
-      RoundGame.acceptsUpTo (periodGame (tileStage circuit 144) wt a b 24 (period n)) j x
+      RoundGame.acceptsUpTo (monitoringPeriodGame (tileStage circuit 144) wt a b 24 (period n)) j x
   | 0, _, _ => trivial
   | _ + 1, 0, _ => trivial
   | n + 1, j + 1, x =>
@@ -385,20 +385,20 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     (∀ j, stageShare (tileStage circuit 144) (shareCone Honest.scheme circuit 144) j ≤ 1) ∧
     (∀ t : Fin 144, 0 < shareCone Honest.scheme circuit 144 t →
       tileLuck Honest.scheme circuit 144 t ≤ 7 / 8 ∧ tileLuck0 Honest.scheme circuit 144 t ≤ 1 / 2) ∧
-    (play n).game = periodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n) ∧
-    (period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
+    (play n).game = monitoringPeriodGame (tileStage circuit 144) (liveCone Honest.scheme circuit 144) 1 1 24 (period n) ∧
+    (period n).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer n) (play n).game ∧
     (∀ w, prob (fun x => (layer n).MovedIn x w) ≤ 0) ∧
     RegisteredBeforeDraw (windows n) ∧ SampleIsCoin hK24 prm (windows n) ∧
     ServiceSound prm (windows n) opened (stagedAt salt staged) 0 ∧
     SaltIsLiveCoin hr1 (salt (n := n)) enc ∧ StagedPins staged flat ∧
-    (period n).EveryWindow
+    (period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => OperandHMu (Honest.scheme.mu k) G)) ∧
-    (period n).EveryWindow
+    (period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => ReceiptLuckAt (Honest.scheme.rB k) G)) ∧
-    (period n).EveryWindow
+    (period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
-    UnitFixed (play n) (layer n) (periodMode circuit (period n) (run n))
+    UnitFixed (play n) (layer n) (monitoringPeriodMode circuit (period n) (run n))
       (fun _ t => (tileWords Honest.scheme circuit 144 t : ℝ)) (fun _ => 128) ∧
     (∀ x w, Accepts prm ((windows n).reg x w) ((windows n).ev x w)) ∧
     (∀ x, (windows n).prefixLen prm x = n) ∧

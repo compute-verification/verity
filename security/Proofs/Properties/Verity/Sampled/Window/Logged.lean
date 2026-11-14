@@ -230,6 +230,11 @@ structure MemberSteps (k : Verity.Registration.Composite) (P : Exchange → Prop
     (p r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
     ((W.extend M.widening).joint t).ms[i]? = some m → ¬ (m.part ((W.extend M.widening).L.draw ω)).Nonempty →
     I ω r i p → I ω r (i + 1) p
+  ends : ∀ (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)),
+    (Pos.root (roundCuts V θ F c rd) (M.start ω)).Past r →
+    V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ r.tape) ∧ NoMiss V θ F c rd σ r.tape ∧
+      P (CoinTape.run (V.game θ F c) σ r.tape) →
+    ((W.extend M.widening).joint t).ended ω = true
 
 /-- **The decoders' premise at each member's session, at where the walk stops** (`MemberDecodes`): from the members'
 steps (`MemberSteps`) at an invariant `I`, it holds at `I` beside the play's start kept and `StopsAt` at the stop a
@@ -251,5 +256,6 @@ theorem memberDecodes_of_stops (k : Verity.Registration.Composite) (P : Exchange
     exact ⟨⟨hI', Pos.inv_consume (Pos.toStop_spec (hmr.inv hI.2.1)).2.2,
       StopsAt.next hP (hmr.stopsAt hP hI.2.2) id⟩, hacc'⟩
   skip ω i m p r hm hd hI := ⟨h.skip ω i m p r hm hd hI.1, hI.2.1, hI.2.2⟩
+  ends := h.ends
 
 end Verity.Sampled

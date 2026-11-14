@@ -47,8 +47,8 @@ from typing import Any
 
 import pytest
 
-from verity.protocols.spot.verifier.consumers import exfiltration_bound, location_bits
-from verity.protocols.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
+from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
+from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, registration as R
 from verity.circuits.codec import canonical_json
 from verity.commitments.windows import interface as IF, rows as CS
 from verity_difftest import settings as opt
@@ -401,7 +401,7 @@ def test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit
 @pytest.mark.slow
 def test_a_plain_audit_takes_the_stand_ins_window_under_a_stratified_rate_only_inside_one_table(tp):
     """`--plain` covers one table under a stratified sample (`a5.PLAIN_SCOPE`): the stand-in's window, one member over every
-    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified law at the K its
+    unit, is inside it under the stratified rate a stream's rule states (stratified-rate:1/2, the stratified sampling design at the K its
     one stratum needs), and refused before the sample under the subset or work rate, its own fixed count (subset:8), sampled
     outside a stream, with a second member, or with registered reads or shared rows. A `--zk` audit is refused for none of these."""
     compiler, requests, bound, _o = PP.compiled(tp["args"]["honest"])
@@ -1223,6 +1223,57 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     shard.write_bytes(bytes(body))
     assert register(key) == PP.REFUSED
     assert "the checkpoint is not of record" in capsys.readouterr().err and not out.exists()
+
+
+def test_the_weights_registration_is_also_the_first_record_of_the_serves_registration_log(tmp_path, capsys, monkeypatch):
+    """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
+    serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
+    that registers each rooted weight parameter's entry as the registration states it, by name, and names the unrooted
+    ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
+    names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
+    name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
+    given (its Lean's `isTheta`). Without the flag no such record is
+    written; a registration with a value that is no weight parameter gives none, and a name under a weight's with a
+    suffix `_param` takes no form of (``/bnk``, ``/b<b>/table``, ``/b<b>/vocab``) is such a value: the record is refused
+    whole, never written without the name."""
+    import functools
+
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.window_weights import Grain
+
+    grain = Grain(gemm_words=512, rows=9, select=64)
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
+    run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
+    run.mkdir()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
+             "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
+    (run / "serve.json").write_text(json.dumps(serve))
+    hf.write_text(json.dumps(TINY))
+    man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
+    out, key, first = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key", tmp_path / "first.json"
+    argv = ["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
+            "--hf-config", str(hf), "--key", str(key), "--out", str(out)]
+    capsys.readouterr()
+    assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
+    assert PP.main([*argv, "--deployment-record", str(first)]) == 0
+    reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
+    assert rec == WW.deployment_record(reg) and said["deployment"] == R.digest(rec) and said["roots"] == 16
+    assert (rec["format"], rec["protocol"], rec["previous"]) == (R.FORMAT_V2, R.PROTOCOL, None)
+    assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
+    assert {e["value"]: e for e in rec["registered"]} == reg["values"]
+    assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
+    assert rec["deployment"] == {"kind": WW.DEPLOYMENT, "program": reg["program"], "grain": reg["grain"],
+                                 "model": {"repo": serve["model"], "revision": serve["revision"]},
+                                 "unrooted": sorted(reg["unrooted"])}
+    assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
+    assert key.read_bytes().hex() not in first.read_text()
+    stem = next(iter(reg["values"])).rpartition("@")[0]
+    for name in ("x", f"{stem}@192/bnk", f"{stem}@3072/b0/table", f"{stem}@192/b0/vocab"):
+        odd = {**reg, "values": {**reg["values"], name: {**next(iter(reg["values"].values())), "value": name}}}
+        with pytest.raises(ValueError, match=re.escape(f"{name!r} is no weight parameter")):
+            WW.deployment_record(odd)
+    with pytest.raises(ValueError, match="never a weights record"):
+        WW.deployment_record({"schema": "other"})
 
 
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):

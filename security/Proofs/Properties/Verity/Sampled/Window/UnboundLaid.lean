@@ -14,7 +14,7 @@ The proof goes a member at a time, in the members' order (`JointAuditV5.faulty_o
 circuits side by side that a trace doesn't bind are the first's, then the second's (`Verity.unbound_beside`); the
 first's are faulty at the first member (`MemberV5.unboundFaulty`), whose read has its population's units
 (`MemberV5.fileRead_units`), so the rest's start where the next member's proof blocks do (`MemberLayout.base_succ`).
-A member's faulty unit is one of its proof blocks (`MemberV5.lt_of_mem_faulty`) and incorrect
+A member's incorrect proof block is one of its proof blocks (`MemberV5.lt_of_mem_faulty`) and incorrect
 (`MemberV5.faultyWrong`), and the window's incorrect proof blocks are its members' at their places
 (`JointAuditV5.Laid.mem_wrongSet`).
 -/
@@ -38,7 +38,7 @@ variable {Reg : Type} {nJ : ℕ} (m : MemberV5 Reg nJ)
 theorem fileRead_units (hc : m.Checked) : m.fileRead.units = m.n :=
   Flock.Bridge.unitsOfFile_eq hc.parsed
 
-/-- **A member's faulty units are among its proof blocks.** -/
+/-- **A member's incorrect proof blocks are among its proof blocks.** -/
 theorem lt_of_mem_faulty {Xv : Fin m.Cc.N → Bool} {v : ℕ} (h : v ∈ m.faulty Xv) : v < m.n := by
   have hv : v < m.blocks.blocks.length := Finset.mem_range.1 (Finset.mem_filter.1 h).1
   have hl : m.blocks.blocks.length = m.n := Flock.Bridge.blocks_length_partOf m.P (ns := [m.n]) (by simp)
@@ -50,7 +50,7 @@ namespace JointAuditV5
 
 open Classical
 
-variable (w : JointAuditV5)
+variable (w : JointAuditV5) [Nonempty w.EndΩ]
 
 theorem seats_length (τ : Strategy w.game) : (w.seats τ).length = w.ms.length := by
   simp [seats]
@@ -74,7 +74,7 @@ theorem seats_drop (τ : Strategy w.game) {j : ℕ} {s : Seat w.Reg w.nJ} {ss : 
   simp only [seats, List.getElem_ofFn]
 
 /-- **From member `j` on**: where the members from `j` on are read at `r` and `rs` side by side, every unit the trace
-doesn't bind is a faulty unit of one of them, a member whose files pass the verifier's checks, at its place among the
+doesn't bind is an incorrect proof block of one of them, a member whose files pass the verifier's checks, at its place among the
 window's proof blocks less member `j`'s. -/
 theorem faulty_of_readsWith (τ : Strategy w.game) :
     ∀ (rs : List Verity.FileRead) (r : Verity.FileRead)
@@ -139,6 +139,6 @@ namespace Verity.Sampled
 
 /-- **Across a window's members, the units its trace doesn't bind are its incorrect proof blocks**, at every cost
 (`Window.UnboundWrong`). -/
-theorem Window.unboundWrong (W : Window) : W.UnboundWrong := fun t => (W.joint t).unboundWrong
+theorem Window.unboundWrong (W : Window) : W.UnboundWrong := fun t _ => (W.joint t).unboundWrong
 
 end Verity.Sampled

@@ -105,7 +105,7 @@ ALLOWED: dict[str, int] = {
     "tools/research/tests/test_retention.py": 2,
     "tools/research/tests/test_slack.py": 36,
     # addresses and instance ids that benchmarks, examples and their tests record or run against
-    "verity/composite/device/live_challenger/publish.sh": 2,
+    "verity/protocols/compose/device/live_challenger/publish.sh": 2,
     "benchmarks/network_traces/site.json": 1,
     "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": 2,
     "benchmarks/numerical/tests/bench/data/flock-cells/6d1295ed.json": 3,
@@ -128,7 +128,7 @@ ALLOWED: dict[str, int] = {
     "demos/vllm/placement.toml": 1,
     "adapters/vllm/tests/protocols/pouw_h1_rehearsal.py": 1,
     "tools/verity/check/tests/test_placement.py": 3,
-    "verity/definitions/ops/tests/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
+    "verity/circuits/ops/tests/fixtures/tc-sm100-f8-2026-10-19/records.json": 1,
     # stand-ins that predate the documentation ranges
     "tools/verity/check/tests/test_verdicts.py": 2,
     # version numbers the scan reads as addresses

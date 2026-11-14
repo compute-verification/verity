@@ -35,8 +35,8 @@ import case_files as CF  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.commitments.windows import interface as IF  # noqa: E402
-from verity.definitions.ops import gemm as G  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R  # noqa: E402
+from verity.circuits.ops import gemm as G  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R  # noqa: E402
 
 KS = (128, 256)
 DESIGN = "stratified:1"
@@ -73,7 +73,7 @@ def window(d: Path, members: int, ks: tuple[int, ...] = KS) -> Path:
 
 def audit_argv(win: Path, out: Path, main: Path, flock: Path, lean: Path, ports: int = len(KS)) -> list[str]:
     """The served harness's audit step on ``win``, a session's port for each of its ``ports`` templates."""
-    m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/flock/prover/python",
+    m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python", "verity/protocols/proofs/flock/prover/python",
                                                   "adapters/vllm"))
     return [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(win),
             "--law", DESIGN, "--circuit", hashlib.sha512((win / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,

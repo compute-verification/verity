@@ -45,7 +45,7 @@ of the named `Prop`s below.
   verifier doesn't set up on the committed files, an accepted play's blobs sent hold v2's tables and the members'
   files, so it sets the window up there (`WindowAt`), or the window's read finder outputs a collision, at most the
   read finder's bound, the δ's last term (`verdict_le_files`).
-* **The verifier's window at an accepted play** (`windowAt_members`): `WindowAt` from the deployment's window on the
+* **The verifier's window at an accepted play** (`executionPhaseAt_members`): `WindowAt` from the deployment's window on the
   registered files (`WindowRegistered`), which the vocabulary reads on every committed files alike (`read`,
   `MemberForm.WindowOn.of_read`), laid out with its members' files passing at an accepted play (`WindowPasses`).
 * **The leg and remote's soundness** (`spotSound`, `remote_soundness_window`): `windowSpotSound_sessions` at the
@@ -285,7 +285,7 @@ strategy projected there (`JointFinderCR`), asked of this strategy alone; `True`
 def premisesOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (I.base.game θ F c) → Prop
   | .sampled => fun θ F c σ =>
-    ∀ W, I.windows θ F = some W →
+    ∀ W, I.windows θ F = some W → ∀ _ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ,
       JointFinderCR ((K.live W θ F c σ).joint (I.base.cost θ F c σ)) (K.project W θ F c σ)
   | a => I.base.premises a
 
@@ -353,20 +353,30 @@ theorem forgerOf_signed : ∀ a θ F c σ (x : (I.forgerOf a θ F c σ).S),
 
 /-- **The extractor at the deployment's windows**: at a window, the seats of the window's members at the projected
 strategy, each member's transcript at its own files' circuit, side by side in the order the vocabulary reads the
-members' files (`Flock.Guarantees.tracesWith`); elsewhere the base's. -/
+members' files (`Flock.Guarantees.tracesWith`), where some outcome of the window's stream ends its sample, and the
+zero trace where none does; elsewhere the base's. No proof reads the zero trace, which only makes the extractor
+total: where no outcome ends the sample the window's audit rejects every run
+(`JointAuditV5.prob_accepts_of_not_ends`), and the claim's transfer is asked only where one does (`ClaimTransfers`,
+whose proof reads the extractor by `extractOf_some`). -/
 noncomputable def extractOf (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (I.base.game θ F c)) : (I.base.read θ F).circuit.Trace :=
+  open Classical in
   match I.windows θ F with
-  | some W => Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
-      (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ))
+  | some W =>
+    if _ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ then
+      Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
+        (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ))
+    else fun _ => 0
   | none => I.base.extract θ F c σ
 
 theorem extractOf_some {θ : ByteArray} {F : Array ByteArray} {W : Window} (hW : I.windows θ F = some W)
-    (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)) :
+    (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c))
+    [he : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ] :
     I.extractOf K θ F c σ = Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
       (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)) := by
   unfold extractOf
   rw [hW]
+  exact dite_eq_left he
 
 /-- **The deployed vocabulary**: the base with SPOT's names (v2's log, the window's read finder and the binding's
 forger, the further finders and the window's premises at `K`'s finders and projection, the extractor at the
@@ -447,7 +457,7 @@ incorrect at the projected strategy (`JointAuditV5.wrongSet`). -/
 def ClaimTransfers : Prop :=
   ∀ θ F W, I.windows θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
     ¬ Accounting.IntegrityHolds (I.base.partsOf θ F) (I.base.Opens θ F c) (I.extractOf K θ F c σ)
-        (I.base.certOf θ).ε →
+        (I.base.certOf θ).ε → ∀ _ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ,
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
         ((((K.live W θ F c σ).joint (I.base.cost θ F c σ)).wrongSet (K.project W θ F c σ)).card : ℝ)
 
@@ -467,7 +477,8 @@ structure ClaimReads : Prop where
   share : ∀ θ F W, I.windows θ F = some W → (I.base.certOf θ).ε = W.ε
   units : ∀ θ F W, I.windows θ F = some W → I.base.units θ F = W.nJ
   reads : ∀ θ F W, I.windows θ F = some W → W.RootsFix →
-    ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
+    ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c))
+      (_ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ),
     ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).ReadsAt (I.base.read θ F) (I.base.Opens θ F c)
       (Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
         (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)))
@@ -480,7 +491,7 @@ projection's coins, laid out as the window is, `Window.Laid.extend`, `Window.Lai
 the published share has more than that share of the committed files' units unbound, which are the window's share and
 population. -/
 theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
-  intro θ F W hW hR c σ hI
+  intro θ F W hW hR c σ hI he
   rw [I.extractOf_some K hW c σ] at hI
   have hcard : (Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c)
         (Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
@@ -489,7 +500,7 @@ theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
     Flock.Guarantees.JointAuditV5.UnboundWrong.card_le
       (Window.unboundWrong (K.live W θ F c σ) (I.base.cost θ F c σ))
       (((h.laid θ F W hW).extend (K.coins W θ F c σ)).joint (I.base.cost θ F c σ))
-      (I.base.read θ F) (I.base.Opens θ F c) _ (K.project W θ F c σ) (h.reads θ F W hW hR c σ)
+      (I.base.read θ F) (I.base.Opens θ F c) _ (K.project W θ F c σ) (h.reads θ F W hW hR c σ he)
   have hlt : (I.base.certOf θ).ε * ((I.base.units θ F : ℕ) : ℝ) <
       ((Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c)
         (Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
@@ -597,7 +608,7 @@ def WindowPasses (k : Verity.Registration.Composite) : Prop :=
 (`WindowRegistered`), is on every committed files, which the vocabulary reads alike (`read`,
 `MemberForm.WindowOn.of_read`), and at an accepted play it is laid out with its members' files passing
 (`WindowPasses`). -/
-theorem windowAt_members (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
+theorem executionPhaseAt_members (k : Verity.Registration.Composite) (hW : I.WindowRegistered)
     (hpass : I.WindowPasses k) : I.WindowAt k := by
   intro θ F W hw hP hplay
   have hon : MemberForm.WindowOn I.base θ F W :=

@@ -583,14 +583,14 @@ def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_l
                      "why": "every check slot is taken (a: busy)"}]
     assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:00Z", "priority": True,
                                                               "slot": "a", "cores": "0", "took": "2026-10-01T09:00:20Z",
-                                                              "why": "every check slot is taken (a: busy)"}
+                                                              "reserves_gib": 0, "why": "every check slot is taken (a: busy)"}
     (tmp_path / "free").mkdir()
     (tmp_path / "free" / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "free" / "slots")
     with pytest.raises(Exec):
         SLOT.main(["--", "true"], now=lambda: t[0], sleep=lambda s: pytest.fail("a free slot is taken without a wait"))
     assert json.loads((run / SLOT.RUN_SLOT).read_text()) == {"state": "held", "since": "2026-10-01T09:00:20Z", "slot": "a", "cores": "0",
-                                                              "took": "2026-10-01T09:00:20Z"}, "it waited behind nothing"
+                                                              "took": "2026-10-01T09:00:20Z", "reserves_gib": 0}, "it waited behind nothing"
     (tmp_path / "again").mkdir()
     (tmp_path / "again" / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "again" / "slots")
@@ -605,6 +605,39 @@ def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_l
     run.rmdir()
     SLOT.record_slot(str(run), {"state": "waiting"})                       # an unwritable run dir never stops the check
     assert not run.exists()
+
+
+def test_a_run_s_slot_record_says_what_its_slot_reserves_for_it_and_the_scope_its_check_runs_in(tmp_path, monkeypatch):
+    """A run's record says what the run asked and what it held (research.memmark). For a run in a check slot the ask is what
+    the slot reserved for it, the larger of the slot's mem= and the run's own ask, and a `scope=1` check leaves the cgroup
+    the run's samples are of: the run's slot.json says both."""
+    run = tmp_path / "run"
+    run.mkdir()
+    (tmp_path / "slots").write_text("a 0 mem=500 scope=1\nb 1 mem=64\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT, "memory_gb", lambda: 1000)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261023-000000-abcd")
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda f, argv, env: (_ for _ in ()).throw(Exec(env["CHECK_SLOT"])))
+    monkeypatch.setattr(SLOT, "scope_refusal", lambda: None)
+    monkeypatch.setattr(SLOT, "SESSION_DROPINS", tmp_path / "no-dropins")
+    with pytest.raises(Exec, match="a"):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot a is free"))
+    doc = json.loads((run / SLOT.RUN_SLOT).read_text())
+    assert doc == {"state": "held", "since": "2026-10-01T09:00:00Z", "slot": "a", "cores": "0", "took": "2026-10-01T09:00:00Z",
+                   "reserves_gib": 500, "scope": "check-a-r20261023-000000-abcd.scope"}
+    monkeypatch.setenv(SLOT.RUN_MEM_ENV, "100")                            # 93.2 GiB: more than b's mem=
+    with pytest.raises(Exec, match="b"):                                   # a's lock is still held: the faked exec kept it
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot b is free"))
+    doc = json.loads((run / SLOT.RUN_SLOT).read_text())
+    assert (doc["slot"], doc["reserves_gib"]) == ("b", 94) and "scope" not in doc, "what the run asks, in whole GiB, and no scope of its own"
+    (tmp_path / "slots").write_text("a 0\nb 1\nc 2\n")
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV)
+    with pytest.raises(Exec, match="c"):
+        SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=lambda _s: pytest.fail("slot c is free"))
+    assert json.loads((run / SLOT.RUN_SLOT).read_text())["reserves_gib"] == 0, \
+        "a slot that reserves nothing says so: by the key a reader knows a slot.py that writes it took the slot"
 
 
 def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
@@ -871,7 +904,7 @@ def test_a_check_recorded_on_a_machine_runs_in_a_slot(monkeypatch):
 
 
 def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypatch, tmp_path):
-    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside verity/protocols/flock/ still runs
+    """`--record --agreement`: the lander's check of a train that changes a pinned guarantee outside verity/protocols/proofs/flock/ still runs
     the agreement step, with the pinned build and inputs as the run's inputs and their URLs sent with it."""
     spec2 = importlib.util.spec_from_file_location("repo_check_agreement", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)

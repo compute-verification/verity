@@ -11,19 +11,19 @@ from test_repository import ROOT, _tracked
 
 #: Specs that stay: {PROTOCOL.md: why}.
 KEPT = {
-    "verity/protocols/pouw/verifier/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
+    "verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
     "verity/circuits/PROTOCOL.md": "a format: the circuit file",
     "verity/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
     "verity/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",
     "adapters/vllm/verity_vllm/commitments/vllm_v1/PROTOCOL.md": "a format: the vLLM v1 commitment",
-    "verity/protocols/flock/prover/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
+    "verity/protocols/proofs/flock/prover/live/PROTOCOL.md": "a format: the zero-knowledge prover's sessions",
 }
 #: Specs of protocols whose verifier is already Lean, each to be deleted: {PROTOCOL.md: the Lean that covers it}. An entry
 #: only goes, in the PR that deletes its file.
 RETIRING = {
-    "verity/protocols/certifier/verifier/PROTOCOL.md": "verity/protocols/certifier/device/program/lean",
-    "verity/protocols/pous/verifier/PROTOCOL.md": "verity/protocols/pous/lean",
-    "verity/protocols/poub/verifier/PROTOCOL.md": "verity/protocols/poub/verifier/lean",
+    "verity/protocols/accounting/certifier/verifier/PROTOCOL.md": "verity/protocols/accounting/certifier/device/program/lean",
+    "verity/protocols/accounting/pous/verifier/PROTOCOL.md": "tools/pous_grader",
+    "verity/protocols/accounting/poub/verifier/PROTOCOL.md": "verity/protocols/accounting/poub/verifier/lean",
 }
 
 

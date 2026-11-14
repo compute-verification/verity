@@ -19,8 +19,9 @@ blobs sent (`sentEvidenceAt`) and the proof files decoded from it at the stateme
 (`statementFiles statementTable`).
 
 The sample's family's releases precede every opening (`accept_read`'s `SampleLinkFirst`). At coins whose bytes are
-the window's, the window's sample is the units v1's check proved (`joint_draw_of_drew`, `checkAt_proved`, at the
-registration's population, `WindowOn.population`), so each member with a proof block in it has a statement with one
+the window's, the window's sample ends on them, so its sample ended (`joint_drawUnits_of_drew`), and the sample is the
+units v1's check proved (`joint_draw_of_drew`, `checkAt_proved`, at the registration's population,
+`WindowOn.population`), so each member with a proof block in it has a statement with one
 session (`member_session`), which the check names at its place (`named_at`), whose record and evidence are the ones
 sent for that place (`sentRecordAt_session`, `sentEvidenceAt_session`), which the verifier's read holds the device's
 log to (`sessionRead_logged`), and whose proof files are the evidence's (`statementFiles_evidence`). The log opens
@@ -110,7 +111,12 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
     rw [Array.length_toList, Array.length_toList, Array.size_zip, ← hzip.1, Nat.min_self] at h1
     exact h1.symm
   have hMA := hset.toWindowOn.membersAt
-  refine ⟨?_, opensLast_congr hfr hA.opensLast, Nat.le_of_eq (by rw [hplace.1, hcount, hsize]), ?_⟩
+  obtain ⟨read', hok⟩ := joint_drawUnits_of_drew hdrew (W.joint 0) ω hL hnJ hpre
+  have hok' : _root_.Spot.Draw.drawUnits W.law W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
+      .ok (drawnUnits ev.base.draw, read') := hok
+  have hended : Flock.Guarantees.sampleEnded W.src W.law W.nJ ω = true := by
+    simp only [Flock.Guarantees.sampleEnded, hok']
+  refine ⟨hended, ?_, opensLast_congr hfr hA.opensLast, Nat.le_of_eq (by rw [hplace.1, hcount, hsize]), ?_⟩
   · rw [← helloSpecs_congr hfr]
     exact hA.specs
   intro i m hi hne

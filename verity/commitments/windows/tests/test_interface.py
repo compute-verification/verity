@@ -30,8 +30,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.boolean import cast as BC, gemm as BG
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean import cast as BC, gemm as BG
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments import history as HT, row_table as RT
 from verity.commitments.gates import embedding as E
@@ -137,9 +137,9 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
 
 
 def test_a_windows_salts_are_the_operating_systems_bytes_one_draw_a_port(monkeypatch):
-    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one draw a port in
+    """With no test key, `rows.commit` takes every row's salt from the OS generator, 192 bytes a row in one sample a port in
     the ports' order, and stretches none from a key: each port's salts are the bytes the generator gave for it. Two closes
-    of one window draw other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
+    of one window sample other salts, so other roots; a test's key still gives its ChaCha20 stream (`rows.salts`), the
     port's index its nonce."""
     win, _ins, _outs = window()
     ports = [m.port(p) for m in win.window.members for p, _ in m.all_rows]
@@ -857,7 +857,7 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
     """A history table's writer's output rows, and the rows a wire fills from them, are ``hm96-sha512/row-seg/v1`` rows,
     each unit's under the table's salt at its position, so its public string is the table's leaf and the wiring check
     holds; the record states them so, and the verifier derives the same members from it, stated or listed, and the same
-    history tables, whose root the verifier of record computes from its writers' public bodies, the root the window
+    history tables, whose root the verifier computes from its writers' public bodies, the root the window
     registers and the verifier pins; a later window's positions follow the rows it holds of the earlier ones."""
     table = HT.HistoryTable("program", "latent", 8, 16)
     win, got, publics = history_window(table)
@@ -1037,7 +1037,8 @@ def test_a_history_is_declared_by_its_writers_output_and_runs_and_read_as_a_tabl
 
 def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_the_description():
     """`input_count` counts each kind of input from the circuit's description alone, never its program; the one free row is
-    the third token. A declaration outside its port, units, parameter or table, or on a row another fills, is refused."""
+    the third token. A declaration outside its port, units, parameter or table, or on a row another fills, is refused, and
+    so is one whose reader is no template of the circuit, an opening as a read, a table read and an ingress are."""
     rec = declared().description()
     words = 3 * (2 + 32 + 32 + 16 + 96 + 64) + 6 * (16 + 128) + 3 * (16 + 256)
     assert I.input_count(rec, pins=PIN, roots=PIN) == {"units": 12, "inputs": 16 * words, "wired": 16 * (6 * 16 + 6 * 8),
@@ -1056,11 +1057,18 @@ def test_every_input_row_is_wired_registered_ingress_or_free_and_counted_from_th
         (dict(registered=replace(reg, openings=(replace(reg.openings[0], verdict="o2"),))), "verdict"),
         (dict(registered=replace(reg, tables=(I.Table("embed", "weights", 512, 16, 5),))), "registered parameter's leaves"),
         (dict(registered=replace(reg, reads=(*reg.reads, I.Read(G8ID, "x", "weights", 0, (1,), 0, (0,))))), "both fill rows"),
+        (dict(registered=replace(reg, reads=(replace(reg.reads[0], reader="other"),))), "names no parameter of a template"),
+        (dict(registered=replace(reg, roots=(replace(reg.roots[0], reader="other"),))), "names no parameter of a template"),
+        (dict(registered=replace(reg, openings=(replace(reg.openings[0], reader="other"),))), "names no parameter of a template"),
+        (dict(ingress=(I.Ingress("other", "tok", 0, 2, 0),)), "names no parameter of a template"),
     ]:
         with pytest.raises(ValueError, match=why):
             declared(**edit)
     with pytest.raises(ValueError, match="both fill rows"):
         I.input_count({**rec, "ingress": [*rec["ingress"], {**rec["ingress"][0], "at": 1}]})
+    opening = {**rec["registered"]["openings"][0], "reader": "other"}
+    with pytest.raises(ValueError, match="names no parameter of a template"):
+        I.input_count({**rec, "registered": {**rec["registered"], "openings": [opening]}}, pins=PIN, roots=PIN)
 
 
 def test_a_registered_read_is_registered_only_where_the_windows_root_is_the_one_the_verifier_pinned_before_the_run():
@@ -2189,7 +2197,7 @@ def test_the_catalog_resolves_a_descriptor_id_to_verity_s_definition():
 
 
 def test_a_template_whose_static_is_a_composite_definition_resolves():
-    from verity.definitions.ops.boolean import gemm as BG
+    from verity.circuits.ops.boolean import gemm as BG
     fn = bind(BG.ScaledMmS8CoordinateRows, K=128, R=2, DOT=BG.GEMM_SM120_S8["DOT"])
     assert descriptor_id(I.resolve(descriptor_id(fn))) == descriptor_id(fn)
 

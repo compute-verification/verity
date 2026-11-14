@@ -1,4 +1,4 @@
-"""The verifier's side of a window's history tables (`interface.History`). The verifier of record computes each table's
+"""The verifier's side of a window's history tables (`interface.History`). The verifier computes each table's
 root itself, over its rows' public strings in the positions its runs give (`history.order`), from its writers' public
 bodies, which the leaf layer binds, and from the strings it holds of the table's earlier windows, the placeholder past
 its length, and holds the root the window's registration records to it before the sample (one-stage
@@ -6,7 +6,7 @@ its length, and holds the root the window's registration records to it before th
 `params` is that ``history``, and the prover's root is never trusted. `pins` is the verifier's pin of each table at that
 registered root, from which `interface.registered_reads` makes the table's supplied values and by which
 `interface.input_count` counts its reads registered; `params` reads each table's root from its pin, so the root the reads
-open against is the one the verifier of record holds. `strings` is a table's strings, which a later window's held runs
+open against is the one the verifier holds. `strings` is a table's strings, which a later window's held runs
 read."""
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def _pin(h: I.History, root: str) -> dict[str, Any]:
 
 def params(doc: Mapping[str, Any], w: CS.Binding, publics: Mapping[str, bytes], pinned: Mapping[str, Mapping[str, Any]],
            held: Mapping[str, Sequence[bytes]] | None = None) -> dict[str, Any] | None:
-    """The verifier of record's ``history`` for the circuit record ``doc``'s history tables in its window ``w``
+    """The verifier's ``history`` for the circuit record ``doc``'s history tables in its window ``w``
     (``{"digests", "tables", "held", "registered"}``, `history.roots_of`'s form): the SHA-512 of every member's public
     body (``publics``, by member key, the digests the leaf layer is over); each table's declaration, with the units its
     writer has in the window (``first``, ``units``) and its writer's members, each with its public body, its rows in the
@@ -105,6 +105,6 @@ def pins(doc: Mapping[str, Any], roots: Mapping[str, str]) -> dict[str, dict[str
     """The verifier's pin of each of the circuit record ``doc``'s history tables (``{"value", "root", "leaves", "words",
     "domain"}``, a pinned registered parameter's, which `interface.registered_reads` and `interface.input_count` take):
     the root the window's registration records for it (``roots``, `interface.registered_roots`), which stands only beside
-    `params` of the same pins, by which the verifier of record holds it to the root over the table's strings before the
+    `params` of the same pins, by which the verifier holds it to the root over the table's strings before the
     sample. Refused (ValueError) where the registration records none."""
     return {h.name: _pin(h, _root(h, roots)) for h in _histories(doc)}

@@ -1,7 +1,7 @@
 """PoUW's `ncp-v2` in the model Program: `NcpLinearRow_v1{K,N}` and `NcpLinearRowBias_v1{K,N}`, one row of a PoUW linear's
 served output without and with its bias.
 
-A PoUW linear's call is its own `NcpLinear_v1` Program call (`verity.protocols.pouw.prover.circuit`), and its served y depends on x and W
+A PoUW linear's call is its own `NcpLinear_v1` Program call (`verity.protocols.accounting.pouw.prover.circuit`), and its served y depends on x and W
 alone: the noise cancels in Z = A·Bᵀ, which is exact. So one row of the model Program at a PoUW site is this Definition.
 It quantizes the row and each weight row with the adapter's quantizer (`protocol_options.pouw.quantize`,
 ``verity.pouw.symmetric-int7-rowmax-rne-f32/v1``):
@@ -23,10 +23,10 @@ import struct
 from verity.circuits.defs import bind, composite, primitive
 from verity.circuits.refs import array_of
 from verity.circuits.types import Array, Value
-from verity.definitions.ops import fp32 as F
-from verity.definitions.ops import prims as P
-from verity.definitions.ops import scalar as SC
-from verity.definitions.ops.ncp import NcpDequant
+from verity.circuits.ops import fp32 as F
+from verity.circuits.ops import prims as P
+from verity.circuits.ops import scalar as SC
+from verity.circuits.ops.ncp import NcpDequant
 
 BF16, F32, U32, I7, BIT = Value(16), Value(32), Value(32), Value(7), Value(1)
 A16I7 = Array(16, I7)

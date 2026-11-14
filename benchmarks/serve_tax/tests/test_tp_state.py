@@ -140,7 +140,7 @@ def test_rng_state_puts_back_every_generator(monkeypatch):
 
 class V2:
     """A stand-in for Model Runner V2's request slots and sampling states, its ``add_request`` as vLLM d9105ea80 has it
-    (a seedless request draws its seed from numpy's global generator)."""
+    (a seedless request samples its seed from numpy's global generator)."""
 
     def __init__(self, n: int = 8):
         self.req_states = NS(req_id_to_index={}, index_to_req_id={}, free=list(range(n)))

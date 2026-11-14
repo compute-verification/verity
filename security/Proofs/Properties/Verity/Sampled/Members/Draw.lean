@@ -12,7 +12,7 @@ audit of several members (`Flock.Guarantees.JointAuditV5`) laid out in order (`J
 the audit's, and each member's sample is its part of it:
 
 * **The window's sample is v2's units** (`joint_draw_eq`, `joint_drawUnits_of_drew`, `joint_draw_of_drew`): at coins
-  whose bytes start with the coins v2 drew its units from, at a window whose law and population are the ones v2 drew
+  whose bytes start with the coins v2 drew its units from, at a window whose sampling design and population are the ones v2 drew
   under, the window's sample is the proof blocks v2's units name. A sample reads only a prefix of its bytes
   (`drawUnits_append`).
 * **Member `k`'s sample is its part of v2's units** (`member_draw_eq`, `member_draw_of_drew`): the units `u` with
@@ -100,7 +100,7 @@ theorem joint_draw_eq (w : JointAuditV5) (ω : w.L.Ω) {units : Array ℕ} {read
   Finset.ext fun u => (w.draw_ok ω h u).trans (by simp)
 
 /-- **v2's sample ends the same on the window's bytes**: at coins whose bytes start with the coins v2 drew its units
-from, at a window whose law and population are the ones v2 drew under. -/
+from, at a window whose sampling design and population are the ones v2 drew under. -/
 theorem joint_drawUnits_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws}
     {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units)
     (w : JointAuditV5) (ω : w.L.Ω) (hL : w.law = L) (hn : w.nJ = n)
@@ -114,7 +114,7 @@ theorem joint_drawUnits_of_drew {k : Verity.Registration.Composite} {s : Verity.
   exact drawUnits_append L n ξ t units read hdu
 
 /-- **v2's units are the window's sample** at coins whose bytes start with the coins v2 drew them from, at a window
-whose law and population are the ones v2 drew under: the period's one sample is the joint audit's. -/
+whose sampling design and population are the ones v2 drew under: the period's one sample is the joint audit's. -/
 theorem joint_draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) (w : JointAuditV5) (ω : w.L.Ω)
     (hL : w.law = L) (hn : w.nJ = n) (hξ : bitsOf ξ <+: bitsOf (_root_.Properties.Spot.bytesOf (w.src ω 0))) :
@@ -136,7 +136,7 @@ theorem member_draw_eq {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length) (�
   simp
 
 /-- **Member `k`'s sample is its part of v2's units**, at coins whose bytes start with the coins v2 drew them from, at a
-window laid out in order whose law and population are the ones v2 drew under. -/
+window laid out in order whose sampling design and population are the ones v2 drew under. -/
 theorem member_draw_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) {w : JointAuditV5} (hw : w.Laid)
     (j : Fin w.ms.length) (ω : w.L.Ω) (hL : w.law = L) (hn : w.nJ = n)
@@ -161,7 +161,7 @@ theorem printedPart_member {w : JointAuditV5} (hw : w.Laid) (k : Fin w.ms.length
   rw [member_draw_eq hw k ω h, printedPart, printedDraw, card_filter_ascending ha, drawOf_filter ha]
 
 /-- **Member `k`'s sample file is the subset print of its part of v2's units**, at coins whose bytes start with the
-coins v2 drew them from, at a window laid out in order whose law and population are the ones v2 drew under, where
+coins v2 drew them from, at a window laid out in order whose sampling design and population are the ones v2 drew under, where
 v2's units are ascending below the population. -/
 theorem printedPart_of_drew {k : Verity.Registration.Composite} {s : Verity.Sent} {dr : Draws} {L : Flock.Draw.Law}
     {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (h : Drew k s dr L n ξ units) {w : JointAuditV5} (hw : w.Laid)
