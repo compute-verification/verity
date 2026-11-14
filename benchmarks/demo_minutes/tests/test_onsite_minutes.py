@@ -76,7 +76,7 @@ def test_an_accepting_verdict_of_the_seven_checks_from_research_runs_on_main_is_
                                     "better": "lower", "target": 60, "verdict": "accept",
                                     "runs": ["r-prover", "r-auditor"], "commit": on}]
     assert (doc["run_id"], doc["validation"]["status"], doc["validation"]["checker"]) == (
-        "r-minutes", "passed", "demos/onsite_served/minutes.py")
+        "r-minutes", "passed", "benchmarks/demo_minutes/onsite_minutes.py")
     assert capsys.readouterr().out.startswith("MINUTES {")
 
 

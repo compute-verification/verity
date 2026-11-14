@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
+HERE = (Path(__file__).resolve().parents[4] / "demos" / "vllm")
 #: the challenger host's address as a launch's environment holds it, here a documentation address
 CHALLENGER_HOST = "192.0.2.21"
 
@@ -34,7 +34,7 @@ def run(tmp_path: Path, *args: str, **env: str) -> subprocess.CompletedProcess:
         (tree / "adapters" / "vllm" / "workloads" / "SHA256SUMS").write_text(
             f"{hashlib.sha256(workload).hexdigest()}  {row}.json\n")
     held = {k: v for k, v in os.environ.items() if k != "VY_CHALLENGER_1_HOST"}
-    return subprocess.run(["bash", str(tree / "demos" / "vllm" / "run.sh"), *args], capture_output=True, text=True,
+    return subprocess.run(["bash", str(tree / "adapters" / "vllm" / "tools" / "served_run" / "run.sh"), *args], capture_output=True, text=True,
                           check=False, env={**held, "HOME": str(tmp_path), **env})
 
 

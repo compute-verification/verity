@@ -45,7 +45,7 @@ from verity.protocols.proofs.spot.verifier import parties as SP
 from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
 from verity.channel import Refused
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 SERVED_WINDOW, GATE, CHECK = "served-window", "gate", "check"
 RUNS = (SERVED_WINDOW, GATE, CHECK)
 RUNNER = "benchmarks/one_stage/served_verdicts.sh"
