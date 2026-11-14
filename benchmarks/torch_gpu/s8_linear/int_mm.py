@@ -1,5 +1,5 @@
 """The int_mm backend of the exact W8A8 linear (run.py's `--kernel int_mm`; the plain GEMM
-p2_stage's full.py and j10r_sm90's bench call): every coordinate of x W^T is `ScaledMmS8Coordinate_v1{K, DOT}`
+p2_stage's full.py calls): every coordinate of x W^T is `ScaledMmS8Coordinate_v1{K, DOT}`
 (`verity.circuits.ops.gemm`),
 
     acc[i, j] = sum_k x[i, k] w[j, k]                                  s32, exact in any order for K < 2^17

@@ -66,6 +66,7 @@ from verity_vllm.program.frontend.derive_context import (
 from verity_vllm.program.frontend.derive_context import (
     module_registrations as module_registrations,  # read through this module
 )
+from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.outcomes import (
     _CODE_TO_REASON,
     REASONS,
@@ -74,19 +75,14 @@ from verity_vllm.program.frontend.outcomes import (
     _jsonable,
     refuse,
 )
+from verity_vllm.program.frontend.program_identity import check_identity
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
 from verity_vllm.program.frontend.report import DerivationTail, DeriveReport
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleSet, StateRule
-from verity_vllm.program.frontend.torch_frontend import (
-    FRONTEND_VERSION,
-    FrontendError,
-    check_identity,
-    shape_of,
-    type_of_tensor,
-)
-from verity_vllm.program.frontend.value_types import Alloc
+from verity_vllm.program.frontend.value_types import Alloc, shape_of, type_of_tensor
 
+FRONTEND_VERSION = "verity_vllm.program.frontend.torch_frontend/2026-09-07.fe2"  # an id every derivation's provenance holds, not a module's path
 DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: rotary table without terminal cast, 0-d buffer operand in Elementwise; d3: embedding padding_idx, bf16 inv_freq rotary table; d2: HF 5.x plumbing
 
 aten = torch.ops.aten

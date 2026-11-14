@@ -1,4 +1,4 @@
-"""The pair-major MoE definitions (`verity_vllm.program.quarantine.ov_moe.moe`), the `MoEFusedExperts`
+"""The pair-major MoE definitions (`verity.definitions.registry.moe`), the `MoEFusedExperts`
 recognizer (positive and negative cases on synthetic events shaped exactly like the pinned vLLM's `vllm.moe_forward`
 body as recorded on OLMoE).  The recorded kernel cases and captures are `test_gen_ov_moe_of_record`."""
 
@@ -11,6 +11,7 @@ import math
 import numpy as np
 import pytest
 
+from verity.definitions.numerics.moe_twins import nv_expf_bits
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
 
@@ -23,7 +24,7 @@ from verity.circuits.layout import resolve
 from verity.circuits.program import Program
 from verity.definitions.registry import b1
 from verity.definitions.registry import prims as P
-from verity_vllm.program.quarantine.ov_moe import moe as Q
+from verity.definitions.registry import moe as Q
 
 C = OV.C
 H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
@@ -108,7 +109,6 @@ def test_router_stand_in_ids_and_tie_rule():
 
 
 def test_quarantine_identity_and_conformance_labels():
-    assert Q.SEMANTIC_ID == "ov-moe/MoeExpertGemm@v1"
     assert Q.MoeRouterTopK.conformance == "not-yet-established" and Q.NvExpf.id == "NvExpf_v1"   # cov-moe: the CUDA expf sequence, no stand-in
     for d in (Q.MoeExpertGemm, Q.MoeExpertGemmW):
         assert d.conformance == "not-yet-established" and d.version == 1
@@ -124,14 +124,14 @@ def test_nv_expf_composite_equals_the_direct_sequence_and_is_total():
                 0xC2CFF1B5, 0xC2AEAC50, 0x7F7FFFFF, 0xFF7FFFFF, 0x41200000, 0xC1200000, 0x00800000]
     rng = np.random.default_rng(0)
     for x in specials + [int(v) for v in rng.integers(0, 2**32, size=200, dtype=np.uint64)]:
-        assert _eval(prog, [[x]])[0] == Q.nv_expf_bits(x)
-    f = lambda v: P.f32_of(Q.nv_expf_bits(P.bits_of(np.float32(v))))
+        assert _eval(prog, [[x]])[0] == nv_expf_bits(x)
+    f = lambda v: P.f32_of(nv_expf_bits(P.bits_of(np.float32(v))))
     assert f(0.0) == 1.0 and f(-0.0) == 1.0 and f(np.inf) == np.inf and f(-np.inf) == 0.0 and np.isnan(f(np.nan))
     assert f(89.0) == np.inf and f(-104.0) == 0.0 and f(-87.33655) == np.float32(1.1754907e-38)     # over/underflow, no ftz on the product
     # 1 ulp off the correctly rounded value, as libdevice is: exp(-1) = 0.367879441171... whose nearest f32 is 0x3EBC5AB2
     # (from the double, which is far from the f32 midpoint, so no double rounding).  NOT `np.exp(np.float32)` as the reference:
     # numpy's single-precision exp is platform code (macOS gives 0x3EBC5AB2, the pod's SIMD path 0x3EBC5AB1).
-    assert Q.nv_expf_bits(P.bits_of(np.float32(-1.0))) == 0x3EBC5AB3 and P.bits_of(np.float32(math.exp(-1.0))) == 0x3EBC5AB2
+    assert nv_expf_bits(P.bits_of(np.float32(-1.0))) == 0x3EBC5AB3 and P.bits_of(np.float32(math.exp(-1.0))) == 0x3EBC5AB2
 
 
 def test_nv_expf_helpers_are_the_ptx_ops():

@@ -23,20 +23,28 @@ import pearl_c_vectors as V
 from verity.circuits import boolean as BL
 from verity.circuits import partition_object as PO
 from verity.circuits.evaluation import evaluate
+from verity.circuits.ops.fp32 import F32FmaV2
+from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32
+from verity.circuits.ops.scalar import I32Le
 from verity.circuits.program import Program
+from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.circuits.types import Array
 from verity.commitments.randomness import derive
-from verity.commitments.rowleaf import sha512_row_seg_digest
-from verity.circuits.ops.fp32 import F32FmaV2
-from verity.circuits.ops.prims import (BlackwellE4m3QmmaDot32, E4m3ToF32, F2fpBf16, F32ToE4m3Sat, HopperE4m3QgmmaDot32)
-from verity.circuits.ops.scalar import I32Le
-from verity.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
+from verity.commitments.rowleaf import (
+    ROLE_W,
+    ROLE_X,
+    SCHEMA_HM96_SHA512_ROW_SEG,
+    SCHEMA_HM96_SHA512_ROW_V2,
+    sha512_row_seg_digest,
+)
+from verity.protocols.accounting.pouw.prover.circuit import leaves as L
 from verity.protocols.accounting.pouw.prover.circuit import pc8, plan
 from verity.protocols.accounting.pouw.prover.circuit import words as W
 from verity.protocols.accounting.pouw.prover.circuit.anchors import TileAnchors
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
+from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Tile
 
 K = 128
@@ -398,9 +406,6 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
     """`Pc8TileSide` is `Pc8TileHidden` with each row's index field (`leaves.INDEX`) as one more value: its digest is the
     hiding tile's whatever the indices, and the rows its ports make (`SIDE_PORTS`: codes, P, then the index field, each
     leaf's bits in order) are the window's side rows (`window.side_row`), A's row-seg and B's v2, k/2 + 72 words each."""
-    from verity.protocols.accounting.pouw.verifier import window as Wd
-    from verity.protocols.accounting.pouw.prover.circuit import leaves as L
-    from verity.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
     tm, tn = 2, 3
     fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True, "h0")["tile"]
     assert fn.id == f"Pc8TileSide_v1{{K={K},TM={tm},TN={tn},DEV='sm120'}}" and fn.defn is pc8.Pc8TileSideDef

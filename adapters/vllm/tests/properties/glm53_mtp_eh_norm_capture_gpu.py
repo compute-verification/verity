@@ -5,7 +5,7 @@ against the models it was chosen over (`alternatives`): the reduction orders a t
 position tests the select could make.
 
 One GPU process writes `<out>/glm53_mtp_eh_norm_capture.json`, the property record `glm53_mtp_eh_norm_capture`
-(`properties.record`), the kernel's PTX and SASS under `<out>/ptx/`, and each launch's inputs and output under `<out>/words/`.  The
+(`records.property_record`), the kernel's PTX and SASS under `<out>/ptx/`, and each launch's inputs and output under `<out>/words/`.  The
 device gate runs first and nothing else runs when it fails (exit 3).  vLLM runs as in `glm53_dsa_capture_gpu`, at its defaults (its
 `environment`: `served_defaults`, a served engine's toolchain, the Triton cache in the scratch directory), its switches read back by
 that capture's `served`.
@@ -59,10 +59,10 @@ from tests.properties import glm53_dsa_capture_gpu as DS
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as FR
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import dsa_norm_rows as NR
-from verity_vllm.properties.record import seal as seal_record
-from verity_vllm.records import mtp_captures
+from verity_vllm.records.property_record import seal as seal_record
+from verity_vllm.records.schema_ids import GLM53_MTP_EH_NORM_CAPTURE_SCHEMA
 
-SCHEMA = mtp_captures.EH_NORM
+SCHEMA = GLM53_MTP_EH_NORM_CAPTURE_SCHEMA
 RECORD = "glm53_mtp_eh_norm_capture.json"
 #: GLM-5.3's hidden size, `next_power_of_2` of it, Triton's default warps, and rms_norm_eps
 H, BLOCK, WARPS, EPS = 6144, 8192, 4, 1e-5

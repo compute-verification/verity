@@ -9,7 +9,7 @@ whose plan exists only on compute capability 10.3 (glm52_low_latency_gemm.py:89)
 the request count, so M runs from 1 to the largest launch served: M_MAX, the route table's `m_max`.
 
 One GPU process writes `<out>/glm53_mtp_eh_proj_capture.json`, the property record `glm53_mtp_eh_proj_capture`
-(`properties.record`), the scans' records under `<out>/scan/`, and the compared rows' inputs and outputs under `<out>/words/`.  It
+(`records.property_record`), the scans' records under `<out>/scan/`, and the compared rows' inputs and outputs under `<out>/words/`.  It
 is `glm53_bf16_gemm_capture_gpu`'s served-default capture at one more shape (`MODEL` in its `MODELS`), with its own launches:
 
   gate     `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs; nothing else runs when it fails (exit 3).
@@ -55,10 +55,10 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_bf16_gemm_capture_gpu as BG
-from verity_vllm.properties.record import seal as seal_record
-from verity_vllm.records import mtp_captures
+from verity_vllm.records.property_record import seal as seal_record
+from verity_vllm.records.schema_ids import GLM53_MTP_EH_PROJ_CAPTURE_SCHEMA
 
-SCHEMA = mtp_captures.EH_PROJ
+SCHEMA = GLM53_MTP_EH_PROJ_CAPTURE_SCHEMA
 RECORD = "glm53_mtp_eh_proj_capture.json"
 MODEL, PHASE, NAME = "glm53-mtp", "linear", "mtp.eh_proj"
 K, N = 2 * 6144, 6144

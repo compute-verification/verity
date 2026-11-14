@@ -12,7 +12,7 @@ schedule, max_model_len, clean_logits=False, indices=None)` (sparse_attn_indexer
 6R rows, the launch `glm53_dsa_capture_gpu`'s decode case runs at 8 rows; here the rows come from vLLM's own flattening.
 
 One GPU process writes `<out>/glm53_mtp_indexer_logits_capture.json`, the property record `glm53_mtp_indexer_logits_capture`
-(`properties.record`), and each launch's inputs and compared words under `<out>/words/`.
+(`records.property_record`), and each launch's inputs and compared words under `<out>/words/`.
 
   gate     `fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs; nothing else runs when it fails (exit 3).
   served   vLLM's switches (`glm53_dsa_capture_gpu.served`): DeepGEMM on and importable, not batch invariant; `_use_flattening`
@@ -51,10 +51,10 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
-from verity_vllm.properties.record import seal as seal_record
-from verity_vllm.records import mtp_captures
+from verity_vllm.records.property_record import seal as seal_record
+from verity_vllm.records.schema_ids import GLM53_MTP_INDEXER_LOGITS_CAPTURE_SCHEMA
 
-SCHEMA = mtp_captures.INDEXER_LOGITS
+SCHEMA = GLM53_MTP_INDEXER_LOGITS_CAPTURE_SCHEMA
 RECORD = "glm53_mtp_indexer_logits_capture.json"
 H, D, BLOCK, STRIDE = DS.H, DS.D, DS.BLOCK, DS.STRIDE
 SPEC, NEXT_N = 5, 6
