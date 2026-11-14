@@ -10,4 +10,4 @@ untraced = ["tests/test_row_commit.py", "tests/test_sha512.py"]
 # which import verity.circuits, verity.commitments.crypto and verity.errors.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/commitments", "verity/circuits",
           "verity/commitments/crypto",
-          "verity/definitions/__init__.py"]
+          "adapters/vllm/verity_vllm/definitions/__init__.py"]
