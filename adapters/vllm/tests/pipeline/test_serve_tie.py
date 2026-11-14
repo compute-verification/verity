@@ -249,7 +249,8 @@ def test_without_day_w_the_window_log_and_the_tie_are_byte_for_byte_as_before(tm
 
 def _tied_day(tmp_path, monkeypatch, program: str):
     day = SD.declare(_opts(tmp_path, *_day(tmp_path, 0, program)), tmp_path)
-    srv, runs = _Server(monkeypatch), {}
+    srv = _Server(monkeypatch)
+    runs: dict[int, Any] = {}
     wc = WindowCommit(runs)
     tie = TIE.WindowTie("v3c-window-commit", tmp_path / "serve", runner=wc, day=day)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", unit=_unit(),

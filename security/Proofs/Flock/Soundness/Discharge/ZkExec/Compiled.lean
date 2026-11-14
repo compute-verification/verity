@@ -26,7 +26,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
 
 /-!
-# flock-verify `--zk`'s headline at the compiled `--zk` table
+# verity-verify-proof `--zk`'s headline at the compiled `--zk` table
 
 `Refines.lean`'s one-table refinement and headline at `Discharge/ZkLink`'s compiled `--zk` table. At each sample `S` and
 registration `R` the table is `T S R : TabZK 𝔽 mPts`, its reps `ZkLink.repZCAt A Hs (T S R)` (`repZ`), the level-0 cap
@@ -37,7 +37,7 @@ That table's `sessionZC` is `ZkLink.batchedSessionZC` at the one-table plan (`se
 applies:
 
 * `zk_headline_exec_zc`: against any live prover, at any sampling design,
-  `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`;
+  `Pr[verity-verify-proof --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`;
 * `zk_headline_exec_zc_execOS`: the same at the live sample (`Law.execOS`, `drawWith`'s stratified sampling design) under A3
   (`UniformRandomBytes`), with `Law.stratified`'s count curve for `miss(K)`.
 
@@ -108,8 +108,8 @@ variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fi
   {decode : DecoderZK (C := C) (planOne T) tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ZkLink.ValueBindingZ A P (planOne T) tab decode Hc)
 
-/-- **The `--zk` headline at flock-verify's acceptance, at the compiled `--zk` table**: against any live prover `τ`,
-flock-verify `--zk` accepts the live audit's transcript while the simulated prover's committed values have at least `K`
+/-- **The `--zk` headline at verity-verify-proof's acceptance, at the compiled `--zk` table**: against any live prover `τ`,
+verity-verify-proof `--zk` accepts the live audit's transcript while the simulated prover's committed values have at least `K`
 incorrect proof blocks with probability at most `miss(K) + ε_ks + δ_link` of the compiled count curve at that prover. -/
 theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) {k Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, ZkLink.rateZ (planOne T S R) j k ≤ ρ)
@@ -133,7 +133,7 @@ theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) 
   exact zk_headline_exec_one (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dg dec one fin capOf N L _ hdec τ _ _
     (hc.symm.trans_le hB)
 
-/-- **The `--zk` headline at flock-verify's acceptance, at the live sample under A3**: `zk_headline_exec_zc` with the
+/-- **The `--zk` headline at verity-verify-proof's acceptance, at the live sample under A3**: `zk_headline_exec_zc` with the
 units sampled by `Flock.Draw.drawWith`'s stratified sampling design on a byte source A3 makes uniform (the challenger's coins),
 `miss(K)` `Law.stratified`'s count curve. -/
 theorem zk_headline_exec_zc_execOS (hlow : LoweringSoundZK A P (planOne T) tab decode)

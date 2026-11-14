@@ -114,7 +114,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Classical
 
 /-- **Flock's rows link at served roots.** At a Flock session (`RowsSession`), at every outcome of its live audit
-(sample `S`, registration `R`, the record `wr` writes) that flock-verify `--zk --registered` accepts, a sampled proof block `u`
+(sample `S`, registration `R`, the record `wr` writes) that verity-verify-proof `--zk --registered` accepts, a sampled proof block `u`
 whose served roots are registered (`ServedRegistered`: its opening `rdU u` reads exactly its rows at the ports `own`
 names, as `own` gives them) and whose rows are right at its owned reads (`RowsAt`) has, on each of its wires at a served
 read, the committed tree's row: the value layer's bit (`Xv`) is the registrant's row's. Acceptance names each port of

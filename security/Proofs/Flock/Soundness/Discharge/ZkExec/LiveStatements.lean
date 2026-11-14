@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive` (statement)
 
-`RunsZC` at `Discharge/ZkLink`'s live tables `tablesAtZK` (`ZkLink/TablesAt.lean`): on every live outcome flock-verify
+`RunsZC` at `Discharge/ZkLink`'s live tables `tablesAtZK` (`ZkLink/TablesAt.lean`): on every live outcome verity-verify-proof
 `--zk` accepts, each rep has a `RepRun` on its rounds along `repShapeZ` and the compiled table accepts at the two runs'
 ends. Its pieces are proved or frozen apart: the per-rep runs (`zk_rep_plays`, `zk_rep_run`), the verdict
 (`ZkTableVerdict`) and the table being the executable's (`TablesAtZKLive`, taken here as a hypothesis).
@@ -58,13 +58,13 @@ noncomputable def decAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (S : F
 noncomputable def opnAtZ (T : Finset (Fin n) → Reg → TabZK 𝔽 mPts) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
     (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : ZkLink.OpensZ 𝔽 Dig (List UInt8) :=
   match Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition I.program with
-  | .ok st => match Zk.schedule st.m with
+  | .ok st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => opnZ (Setup.ofCircuit st) sch (nXZ T S R) #[proofs[0]!, proofs[1]!]
     | .error _ => default
   | .error _ => default
 
 /-- **`RunsZC` at the live `--zk` tables, at the sampling design's samples** (the decoder premise's message half at `--zk`). Given that wherever
-flock-verify accepts the `--zk` table is the executable's (`TablesAtZKLive`), on untyped one-table inputs under the tags
+verity-verify-proof accepts the `--zk` table is the executable's (`TablesAtZKLive`), on untyped one-table inputs under the tags
 `TagsOk` fixes, with `wr` the challenger's record of the live `--zk` session and each of the sampling design's samples proving its
 units at `mPts` link points (`DrawOkZK` at `L.draw ω`: the link points depend on `|S|`, so no `mPts` holds at every
 sample), `RunsZC` holds at the sampling design's samples (`RunsOnZC`) at the tables `tablesAtZK` under `hm96-sha512/v1` (`hs512`), with

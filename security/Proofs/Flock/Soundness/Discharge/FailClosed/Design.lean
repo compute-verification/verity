@@ -10,7 +10,7 @@ set_option Elab.async false
 /-!
 # The hidden-output headlines without `--zk` at a sample design
 
-flock-verify samples a one-table session without `--zk` by one of two laws (`ProvedScope.lawWhy`): the live stratified
+verity-verify-proof samples a one-table session without `--zk` by one of two laws (`ProvedScope.lawWhy`): the live stratified
 sample, and at hidden outputs also the live subset sample, the sample every one_stage driver takes. Neither headline reads
 the sampling design but through its miss term, so one statement covers both: a **sample design** `DrawDesign n` names the live sample's
 law and population and the ideal miss that bounds its count curve under A3 (`DrawDesign.miss_le`, which is
@@ -37,7 +37,7 @@ namespace FlockSoundness.Discharge
 
 open Game Model Accounting Refine Audit
 
-/-- **A sample design**: the sampling design flock-verify's live sample of a one-table session without `--zk` is by. The stratified sample
+/-- **A sample design**: the sampling design verity-verify-proof's live sample of a one-table session without `--zk` is by. The stratified sample
 at executable strata `St`, stratum `s` sampling `(St s).k` of its units, over `pop` units; or the subset sample of `kd` of
 the `n` units. -/
 inductive DrawDesign (n : ℕ) : Type
@@ -224,7 +224,7 @@ open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec Floc
 open FlockSoundness.Discharge.General (rsAtG rsAtG_computes)
 open scoped ENNReal
 
-/-- **One hidden-output non-ZK sampled session that flock-verify accepts at a sample design is sound, with the decoder
+/-- **One hidden-output non-ZK sampled session that verity-verify-proof accepts at a sample design is sound, with the decoder
 discharged.** `flock_headline_exec_hidden_dec` at any design's live sample. -/
 theorem flock_headline_exec_hidden_design_dec
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) {mPts : ℕ}
@@ -293,7 +293,7 @@ theorem flock_headline_exec_hidden_design_dec
     (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ
     (hCR hs) (hKS hs)
 
-/-- **One hidden-output non-ZK sampled session that flock-verify accepts at a sample design, where the wires feed, is
+/-- **One hidden-output non-ZK sampled session that verity-verify-proof accepts at a sample design, where the wires feed, is
 sound.** `flock_headline_exec_hiddenG` at any design's live sample. -/
 theorem flock_headline_exec_hiddenG_design
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) {mPts : ℕ}

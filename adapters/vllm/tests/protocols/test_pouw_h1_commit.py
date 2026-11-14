@@ -6,7 +6,7 @@ step and K and each round's input-ids table ``ids@<s>`` as its step's input ids,
 binds the record. A window whose served A is all zero codes, or one A row off the rows the Commit acquired, or whose
 step table holds its calls' rows shifted by a call, or whose Commit ids aren't its prompts, each with an honest Commit,
 credits nothing (`UNTIED`); core's credit refuses each at ``arow`` (here and `test_credit_gate`). The window here is a
-two-linear stand-in under the auditor host's coins (`test_pouw_h1._host`), or a linear and a MoE layer's routed experts
+two-linear stand-in under the auditor device's coins (`test_pouw_h1._host`), or a linear and a MoE layer's routed experts
 (`MoEModel`), whose calls' rows the Commit acquires under their H1 names, an idle expert's as its zero rows."""
 from __future__ import annotations
 

@@ -63,7 +63,7 @@ bits, so `b = 16`.
 The network certifier is one device on the server's uplink, as in `MonitoringPeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
 active network certifier) and its record of them, the observations the audits read, so on every schedule its record
-format holds the client's cells read back from the record. Its one named assumption is `trusted-host`.
+format holds the client's cells read back from the record. Its one named assumption is `trusted-device`.
 
 The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
 audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`) and the live
@@ -87,7 +87,7 @@ values `ρ i` at the registered inputs), with `n i` proof blocks, each committin
 operator at the period's observations `o` is `op i (runsBefore o i)`, which reads only the windows before `i`, closed
 by then (`runsBefore`), and window `i` only through the observations before each step, so no window still open and
 none after; with
-the network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
+the network certifier running its code by `trusted-device` on schedules in `Ss`, each held by its record format `f`
 (`RecordFormat.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the
@@ -115,7 +115,7 @@ def PooledLeakAccepted : Prop :=
     {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
     (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)

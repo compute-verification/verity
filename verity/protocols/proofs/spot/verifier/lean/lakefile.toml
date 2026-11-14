@@ -4,8 +4,8 @@
 # it. `sampled-proofs-verifier` is the verifier of record the Python calls (`one_stage.verifier`). Code, not analysis: Lean
 # core, C-Flock and the interface.
 name = "core_spot"
-defaultTargets = ["Spot", "sampled-proofs-one-stage", "sampled-proofs-one-stage-zk", "sampled-proofs-difftest",
-  "sampled-proofs-verifier", "site-difftest", "sampled-proofs-plancheck"]
+defaultTargets = ["Spot", "sampled-proofs-one-stage", "sampled-proofs-one-stage-zk", "spot-monitoring-period",
+  "sampled-proofs-difftest", "sampled-proofs-verifier", "site-difftest", "sampled-proofs-plancheck"]
 
 [leanOptions]
 autoImplicit = false
@@ -39,6 +39,12 @@ root = "Spot.Main"
 [[lean_exe]]
 name = "sampled-proofs-one-stage-zk"
 root = "Spot.ZkMain"
+
+# SPOT's period (`verity/sampled-proofs/period/v1`, `Spot.MonitoringPeriod.protocol`): every window of a lane's
+# monitoring period held to one accepting one-stage audit on its proofs.
+[[lean_exe]]
+name = "spot-monitoring-period"
+root = "Spot.MonitoringPeriodMain"
 
 [[lean_exe]]
 name = "sampled-proofs-difftest"

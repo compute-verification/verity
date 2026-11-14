@@ -12,7 +12,7 @@ import all Init.Data.Ord.String
 /-!
 # The record's coin tree is the session's: each stream opens at most `2^roundsLog` rounds
 
-`flock-verify --zk` sets the session up on its keyed coin tree (`Live.coinSpec`, `roundsLog` 9), and `Record.decode`'s
+`verity-verify-proof --zk` sets the session up on its keyed coin tree (`Live.coinSpec`, `roundsLog` 9), and `Record.decode`'s
 S2 holds the record's `coin_tree.spec` to it (`CoinTree.checkRecord`, by canonical text). v2's
 `Spot.Challenger.sessionTreeReason` holds the record's `coin_tree` to the tree the release log shows sampled
 under its root (`jeq`, by canonical text), and v2's read gives that tree's `Hello` the spec its line shows. So the

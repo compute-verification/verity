@@ -1,4 +1,4 @@
-"""`research pods guard` (pods/guard.py), the one guard over budgets.toml, against a fake RunPod API: what is in scope, per-line caps
+"""`research pods guard` (pods/guard.py), the one guard over budgets.toml, against a fake RunPod API: what is in scope, per-line limits
 that hold until raised and spare pods that appear later, the balance floor, each line's max pod age, uncovered project pods, a
 removed line, never the clock, the last good budgets kept, dry runs, and the CLI."""
 from __future__ import annotations
@@ -96,16 +96,16 @@ def test_scope_is_the_lines_and_the_project_minus_exempt_names_the_host_and_fore
     assert state["last_ok_poll"] == T0 + 600 and api.deleted == []
 
 
-def test_a_line_at_its_cap_terminates_its_pods_and_holds_until_the_cap_is_raised():
+def test_a_line_at_its_limit_terminates_its_pods_and_holds_until_the_limit_is_raised():
     api = FakeRunPod([pod("a", "vy-a-1", 2, 5), pod("b", "vy-a-2", 2, 5), pod("g", "vy-a-big-1", 2, 5)])
     state, lines = G.new_state(T0), []
     step(api, TOML, state, T0, lines)
     step(api, TOML, state, T0 + 3600, lines)
     assert sorted(api.deleted) == ["a", "b"], "$4/h x 1 h >= $3: the line trips; the big line's pod is not its"
-    assert "'vy-a-' CAP $3 reached (spent $4.00)" in state["lines"]["vy-a-"]["tripped"]["why"]
+    assert "'vy-a-' LIMIT $3 reached (spent $4.00)" in state["lines"]["vy-a-"]["tripped"]["why"]
     api.add(pod("n", "vy-a-3", 1, -60))
     step(api, TOML, state, T0 + 3700, lines)
-    assert "n" not in api.deleted and any("OVER-CAP n" in ln for ln in lines), "a pod that appears under a tripped line is not killed"
+    assert "n" not in api.deleted and any("OVER-LIMIT n" in ln for ln in lines), "a pod that appears under a tripped line is not killed"
     raised = TOML.replace("cap_usd = 3,", "cap_usd = 10,")
     step(api, raised, state, T0 + 3760, lines)
     assert state["lines"]["vy-a-"]["tripped"] is None and any("UNTRIPPED 'vy-a-'" in ln for ln in lines)
@@ -205,10 +205,10 @@ def test_the_last_good_budgets_stay_in_force_when_the_file_breaks_and_across_a_r
     t = [T0]
     clock, sleep = (lambda: t[0]), (lambda s: t.__setitem__(0, t[0] + 1800))
     assert G.run(cfg(tmp_path), api, clock=clock, sleep=sleep, iterations=1) == 0
-    f.write_text(TOML.replace("cap_usd = 3,", "cap = 300,"))
+    f.write_text(TOML.replace("cap_usd = 3,", "limit = 300,"))
     assert G.run(cfg(tmp_path), api, clock=clock, sleep=sleep, iterations=1) == 0
     state = json.loads((guard_dir / "guard-budgets.json").read_text())
-    assert "cap not a line key" in state["budgets"]["error"] and state["budgets"]["lines"]["vy-a-"]["cap_usd"] == 3.0
+    assert "limit not a line key" in state["budgets"]["error"] and state["budgets"]["lines"]["vy-a-"]["cap_usd"] == 3.0
     f.unlink()
     assert G.run(cfg(tmp_path), api, clock=clock, sleep=sleep, iterations=2) == 0
     assert api.deleted == ["a"], "a restart with no readable file enforces the budgets its state carries"

@@ -103,13 +103,13 @@ it is written before the pending seals too, and its ``final`` is true only once 
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
-``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
+``--challenger-peer`` each window's coins come from a session of its own on the auditor device's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
 ``--protocols pouw:pearl-c-h100-v1-h3`` (``--precision bfloat16``) serves every linear but the LM head as Pearl+'s FP8
 product under this server's Commit, one Pearl+ epoch a Commit window, the window's circuit cut at those linears
 (`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
 its outcome is its ``windows.jsonl`` line's ``pouw_pearl``. With ``--challenger-gate``, ``--challenger-peer`` and
-``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor host's challenger,
+``--challenger-lane`` each window's salt coin comes from a salt-only session of its own on the auditor device's challenger,
 reserved under the lane when the window opens (`serve_pearl.live`); without them it is in-process and credits nothing.
 ``--day N`` declares day N's one circuit in ``--day-log`` before the model loads, and each window's registration names it (`serve_day`).
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to

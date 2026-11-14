@@ -318,7 +318,7 @@ def main(o: Options) -> int:
     blocks = {}
     for b in o.block:
         proj, _, n = b.partition("=")
-        if not proj or not n.isdigit():
+        if not proj or not n.isdecimal():
             raise UsageError(f"--block {b!r}: PROJ=n")
         blocks[proj] = int(n)
     if not blocks and not o.shard and not o.bnk:

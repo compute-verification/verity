@@ -33,7 +33,7 @@ TREE=(--tree-test-os)
 echo "${TREE_FROM:-test-os}" > $O/tree-source.txt
 
 N=${N:-64}; D=$S/stage
-# InnerClaims.lean as an executable beside flock-verify (interpreted it takes about half an hour), cached by its sources
+# InnerClaims.lean as an executable beside verity-verify-proof (interpreted it takes about half an hour), cached by its sources
 CSHA=$( (echo $LSHA; cat verity/protocols/proofs/flock/prover/tests/lean/InnerClaims.lean) | sha256sum | cut -c1-16)
 CLAIMS_BIN=$L/claims-$CSHA/inner-claims
 (

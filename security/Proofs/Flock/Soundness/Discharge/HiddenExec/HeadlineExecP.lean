@@ -10,7 +10,7 @@ set_option Elab.async false
 /-!
 # The headline at the executable over hidden-output sessions at the verifier's public inputs
 
-`flock_headline_exec_hidden` (`HeadlineExec.lean`) at flock-verify's acceptance at the verifier's own public input words
+`flock_headline_exec_hidden` (`HeadlineExec.lean`) at verity-verify-proof's acceptance at the verifier's own public input words
 `own` (`Exec.AcceptsP I own`, `--public-inputs`). `flock_headline_exec_hiddenP` instantiates
 `Prog.flock_headline_live_onXP` at the circuit's program on the keys with public inputs `Placed.keyProgP c pi hU n`
 (each unit input on the gate of its key, a public leaf's on its public word's bit), its returned outputs' bits for the
@@ -45,7 +45,7 @@ in `rs`'s scope (`hcS`, `ht`, `hscope`; a templated file's committed circuit unr
 (`hpub`), and let the verifier pass its own public input words `own`. Let the challenger write sample `S` as the JSON
 `dj S` (`x₀` one sample it sets up with `Stmt.setupHidden … own`), the units be sampled with `Flock.Draw.drawWith`'s
 stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and each sample's session be the live-coin
-part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify accepts at `own`
+part's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, verity-verify-proof accepts at `own`
 with at least `K` incorrect proof blocks of `Placed.keyProgP c pi hU n`, at the simulated prover's committed values (1 on the
 constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability at most
 `miss(K) + ε_ks + δ_link`. -/

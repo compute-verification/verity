@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.With.Hashes
+public import Flock.HmRow
+public import Flock.ByteLines
+public import Flock.TmplLines
+
+/-!
 `Flock.HmRow`, `HmOut`'s setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
 digest of what the session brings taken from the oracle, in a verdict monad `M`. Run in `V` with `Hashes.ofSha512 Sha512.hash`
 it is `Stmt.setupTables` (`Flock.With.SetupEq`). The copies keep the originals' text; what hashes nothing is the compiled
@@ -19,12 +26,6 @@ table pins (`Pinned.tableSha`), `row_key_sha512` (`Pinned.rowKey`), the zero row
 a registered scheme through the oracle, `MerkleScheme.opsWith`). No digest of these depends on the session: the flock lock's
 `verifier.stop` names each.
 -/
-module
-
-public import Flock.With.Hashes
-public import Flock.HmRow
-public import Flock.ByteLines
-public import Flock.TmplLines
 
 @[expose] public section
 set_option backward.privateInPublic true

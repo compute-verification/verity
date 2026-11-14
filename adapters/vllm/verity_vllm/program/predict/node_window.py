@@ -5,9 +5,10 @@ the frame each Definition family's lowering is added to (`FAMILIES`).
 The frame walks the Program's nodes in order. A node whose family has a lowering is emitted as units at the node's step
 (its scheduler step: a step ends at its token select, `SELECTS`); any other node emits nothing, and every row a lowered
 reader would read of it is left a free input (`Free`), listed with its family and node, so a window settles from the first
-family on and what is left is always listed (`NodeWindow.census`). Every other rank's partial (a ``peers_*`` input) and
-a request input (the prompt) are free inputs the same way, listed by name; the census lists every ``peers_*`` input with
-the nodes that read it, lowered or not.
+family on and what is left is always listed (`NodeWindow.census`). Every other rank's partial (a ``peers_*`` input) is
+a free input the same way, listed by name; the census lists every ``peers_*`` input with the nodes that read it, lowered or
+not. A port that reads the prompt alone, whole, is the request's ingress (`interface.Ingress`, at its unit's step), not a
+free input: the prompt is what the request brings.
 
 A lowering is ``lower(w, j, node)``: it allocates units (`NodeWindow.unit`), feeds their ports from the rows the frame hands it
 (`NodeWindow.take`, `NodeWindow.feed`), reads weights from the weights record (``w.b.read``, at `NodeWindow.weight`'s word),
@@ -116,7 +117,7 @@ class Piece:
 class Free:
     """Units [at, at + count) of template ``tid`` leave port ``port`` free: its rows are ``kind`` ``"peer"`` (another rank's
     partial, ``name`` its input), ``"node"`` (a node of ``family``, which has no lowering yet, ``name`` its index) or
-    ``"param"`` (a request input, ``name`` it)."""
+    ``"param"`` (an input of the Program's no registered read takes, ``name`` it: the weights record)."""
     tid: str
     port: str
     at: int
@@ -166,6 +167,7 @@ class NodeWindow:
         weights = dict(fn.signature()[0])[WEIGHTS]
         labels = [label for label, _ in weights.fields]
         self.fields = _spans(f"{name}: weight", weights.fields)
+        self._firsts = [f[0] for f in self.fields]
         self.b.weights = tuple((label, s[1], e[1] - s[1]) for label, s, e in zip(labels, self.fields, self.fields[1:]))
         nodes = fn.body.nodes
         ends = [j for j, n in enumerate(nodes) if _family(n) in SELECTS]
@@ -174,6 +176,15 @@ class NodeWindow:
         self.meta: dict[int, tuple[int, int, int, list[tuple[int, int, int]] | None]] = {}
         self.outs: dict[int, _Out | str] = {}
         self.free: list[Free] = []
+        self.ingress: list[IF.Ingress] = []
+        #: the circuit's external ports (`interface.Circuit.external`): each select's combine's token (`node_window_select`)
+        self.external: list[str] = []
+        #: each registered entry a lowering lays out from the weights record (`node_window_sparse.entry`), by parameter: the
+        #: record's leaves it holds, in turn
+        self.entries: dict[str, Refs] = {}
+        #: each lowered select's combine by node: its statics V and N, its members, its ``logits`` rows (`feed_rows`' grids)
+        #: and its wired parameters' writers, ``(param, template, first unit)`` (`node_window_select.stop_check` reads them)
+        self.combines: dict[int, tuple[int, int, int, list, list[tuple[str, str, int]]]] = {}
         self.unlowered: dict[str, list[int]] = {}
         self.peers: dict[str, list[tuple[int, str]]] = {}
         #: each template's allocations, ``(first unit, units, family)`` (a gather's family `GATHER`)
@@ -217,14 +228,18 @@ class NodeWindow:
         return self
 
     def _meta(self, j: int, node: Any) -> None:
-        """Node ``j``'s members, a member's leaves and words, and its return fields' spans (`_spans`; None where they aren't
-        whole u16 words, which only an unlowered node may have)."""
+        """Node ``j``'s members, a member's leaves and words, and its return fields' spans (`_spans`; a return of one bit
+        is one u16 word, its bit low, as `interface.layout` lays out the unit's; None where they aren't whole u16 words,
+        which only an unlowered node may have)."""
         n = node.n if node.form == "batch" else 1
         leaves = node.out_leaves // n if n else 0
         try:
             ret = node.fn.signature()[1]
             fields = [f[1] if isinstance(f, tuple) else f for f in (getattr(ret, "fields", None) or (ret,))]
-            spans = _spans(f"{self.name}: node {j} ({node.fn.id}) return", [(f"o{i}", t) for i, t in enumerate(fields)])
+            if len(fields) == 1 and fields[0].leaves == 1 and fields[0].width_set() == {1}:
+                spans = [(0, 0, 16), (1, 1, 0)]
+            else:
+                spans = _spans(f"{self.name}: node {j} ({node.fn.id}) return", [(f"o{i}", t) for i, t in enumerate(fields)])
             words = spans[-1][1]
         except (Unexpressible, AttributeError, TypeError):
             spans, words = None, 0
@@ -262,7 +277,7 @@ class NodeWindow:
                         out.append(("n", idx, m, _word(spans, lo - m * L, what), _word(spans, e - m * L, what)))
                     lo, m = e, m + 1
             elif self.params[idx] == WEIGHTS:
-                k = bisect.bisect_right([f[0] for f in self.fields], lo) - 1
+                k = bisect.bisect_right(self._firsts, lo) - 1
                 if hi > self.fields[k + 1][0]:
                     raise Unexpressible(f"{self.name}: a weight read of leaves [{lo}, {hi}) spans two weights")
                 out.append(("p", WEIGHTS, _word(self.fields, lo, f"{self.name}: a weight read"),
@@ -340,9 +355,11 @@ class NodeWindow:
     def feed(self, tid: str, port: str, at: int, grid: Sequence[tuple[Row, ...]] | _Free, shape: Sequence[int]) -> None:
         """Units ``at`` on, in the mixed radix ``shape`` (the first digit slowest), read ``grid``'s rows (unit order, one entry
         a unit): one feed where every digit shifts the first unit's rows by a constant step, else a feed a unit; left free
-        (`Free`) where ``grid`` is."""
+        (`Free`) where ``grid`` is, or the request's ingress where it is the prompt alone (`_ingress`)."""
         count = math.prod(shape)
         if isinstance(grid, _Free):
+            if self._ingress(tid, port, at, count, grid.sources):
+                return
             for kind, fam, name in grid.sources:
                 self.free.append(Free(tid, port, at, count, kind, fam, name))
             return
@@ -426,9 +443,18 @@ class NodeWindow:
         """Leave a port free over ``grid``'s stand-in rows, as `feed` leaves one free over a free take, and keep the grid."""
         if len(grid) != count:
             raise ValueError(f"{tid} {port}: {len(grid)} entries for {count} units")
-        for kind, fam, name in dict.fromkeys(s for rs in grid for s in self._sources(rs)):
-            self.free.append(Free(tid, port, at, count, kind, fam, name, rows))
+        sources = list(dict.fromkeys(s for rs in grid for s in self._sources(rs)))
+        if rows != (0, 1, 1) or not self._ingress(tid, port, at, count, sources):
+            for kind, fam, name in sources:
+                self.free.append(Free(tid, port, at, count, kind, fam, name, rows))
         self.stood.append((tid, port, at, count, rows, list(grid)))
+
+    def _ingress(self, tid: str, port: str, at: int, count: int, sources: Sequence[tuple[str, str, str]]) -> bool:
+        """Units [at, at + count) read port ``port`` whole from the prompt alone: the request's ingress at the node's step."""
+        if not sources or any((kind, name) != ("param", PROMPT) for kind, _fam, name in sources):
+            return False
+        self.ingress.append(IF.Ingress(tid, port, at, count, self._step_of[self._j]))
+        return True
 
     def _sources(self, rows: Sequence[Row]) -> list[tuple[str, str, str]]:
         """The free sources stand-in ``rows`` read, as `rows` names them."""
@@ -515,7 +541,8 @@ class NodeWindow:
 
     def circuit(self) -> IF.Circuit:
         """The lowered units settled (`_Builder.settle`) and emitted as one Circuit: its registered reads the weights', its
-        blocks one slot (the request) at the Program's steps, its free ports the ones `free` lists."""
+        ingress the prompt's reads (`ingress`), its external ports `external`, its blocks one slot (the request) at the Program's
+        steps, its free ports the ones `free` lists."""
         if not self.lowered:
             self.lower()
         b = self.b
@@ -534,13 +561,15 @@ class NodeWindow:
         wires = tuple(IF.coalesce(b.wires))
         starts = {tid: [at for at, _n, _slot, _step in spans] for tid, spans in b.spans.items()}
         return IF.Circuit(self.name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()), wires=wires, cuts=b.cuts,
-                          registered=reg, blocks=IF.Blocks(1, self.steps, tuple(inference(b.spans, 1))),
+                          registered=reg, ingress=tuple(self.ingress), external=tuple(self.external),
+                          blocks=IF.Blocks(1, self.steps, tuple(inference(b.spans, 1))),
                           order=IF.ordered(b.units, wires, starts) if wires else None)
 
     def _check_rows(self) -> None:
         """Refuse, naming each, a port `feed_rows` fed that is also fed whole (`_Builder.feed`, or left free whole by
         `feed`), and a row of a unit it fed twice (wired twice, free twice, or wired and free)."""
-        whole = set(self.b.read_rows) | {(f.tid, f.port) for f in self.free if f.rows[2] == 1}
+        whole = (set(self.b.read_rows) | {(f.tid, f.port) for f in self.free if f.rows[2] == 1}
+                 | {(g.reader, g.port) for g in self.ingress})
         why = [f"{tid} {port}: fed row by row, cut {k} ways, and whole" for (tid, port), (k, _) in self.row_fed.items()
                if (tid, port) in whole]
         for (tid, port), (_k, fed) in self.row_fed.items():
@@ -580,9 +609,16 @@ class NodeWindow:
                 "units": dict(sorted(units.items())), "templates": dict(sorted(templates.items())),
                 "wires": dict(sorted(wires.items())), "wire_patterns": len(circuit.wires),
                 "free": {k: dict(v) for k, v in sorted(free.items())},
+                "ingress": _ingress_census(self.ingress, lay),
                 "unlowered": {k: len(v) for k, v in sorted(self.unlowered.items())},
                 "peers": {p: [f"node {j} {fam}" for j, fam in v] for p, v in sorted(self.peers.items(), key=lambda x: _peer(x[0]))},
                 "steps": self.steps}
+
+
+def _ingress_census(ingress: Sequence[IF.Ingress], lay: Mapping[str, Mapping[str, int]]) -> dict[str, int]:
+    """``ingress``' ports, unit ports and their words (``lay``: each template's port words)."""
+    return {"ports": len(ingress), "unit_ports": sum(g.units for g in ingress),
+            "words": sum(g.units * lay[g.reader][g.port] for g in ingress)}
 
 
 def _family(node: Any) -> str:

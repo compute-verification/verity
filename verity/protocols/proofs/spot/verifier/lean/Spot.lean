@@ -32,6 +32,7 @@ public import Spot.SecondStage
 public import Spot.Returned
 public import Spot.SecondStageExamples
 public import Spot.SecondWires
+public import Spot.BoundaryWritten
 public import Spot.Run
 public import Spot.Stream
 public import Spot.Fleet
@@ -44,6 +45,8 @@ public import Spot.ChallengerCoins
 public import Spot.ChallengerDraw
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
+public import Spot.MonitoringPeriod
+public import Spot.MonitoringPeriodAudit
 public import Spot.Wires
 public import Spot.HistoryTable
 public import Spot.WiresSpan

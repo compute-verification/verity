@@ -40,7 +40,7 @@ from typing import IO, Any
 from verity_vllm.engine import handle
 from verity_vllm.engine.hooks import Hooks
 
-__all__ = ["SCHEMA", "StepTrace", "load", "step_geometry", "steps"]
+__all__ = ["SCHEMA", "SERVED", "StepTrace", "load", "scheduler_config", "step_geometry", "steps"]
 
 #: `records.schema_ids.STEP_TRACE_SCHEMA`'s string, written here: suites outside the adapter list the files this module
 #: imports one by one (`benchmarks/network_traces` and `benchmarks/serve_tax`, their `[tool.verity.tests] inputs`)

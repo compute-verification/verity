@@ -5,5 +5,7 @@ testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.verity.tests]
-# summarize.py and gen_wgmma.py read the standard library alone, so the suite's inputs are its own directory.
-inputs = []
+# summarize.py reads θ from the H200's card (the Site's reader, `verity.device`, which imports `verity.errors` and the
+# wire, `verity.channel`); gen_wgmma.py reads the standard library alone.
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "hardware/cards", "verity/device.py",
+          "verity/channel.py"]

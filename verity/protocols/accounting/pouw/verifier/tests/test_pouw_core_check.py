@@ -174,7 +174,7 @@ def _instance(seed: int, name: str = "honest") -> dict:
 
 
 def _answer(case) -> dict:
-    return json.loads(CC.line(CC.case(case)))
+    return json.loads(CC.line(CC.case_twin(case)))
 
 
 def test_every_mutation_hits_its_refusal():
@@ -347,7 +347,7 @@ OPENING_EXPECT = {
 
 
 def _opening(case: dict) -> str | None:
-    return CC.opening(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
+    return CC.opening_twin(CC.params(case["params"]), CC.commitment(bytes.fromhex(case["commitment"])), case["units"],
                       case["unit"], bytes.fromhex(case["pub"]), case["opening"],
                       None if case["salt"] is None else bytes.fromhex(case["salt"]))
 
@@ -359,7 +359,7 @@ def _hits(reason: str | None, want) -> bool:
 
 
 def test_every_opening_mutation_hits_its_refusal():
-    """`core_check.opening` accepts an honest opening, a call's tile or the filler's, and refuses each mutation, over a
+    """`core_check.opening_twin` accepts an honest opening, a call's tile or the filler's, and refuses each mutation, over a
     few cases each, with the reason it aims at (or reads hex and the header as both sides must)."""
     assert set(OPENING_EXPECT) == set(openings.NAMES) | {"honest"}
     for name, want in OPENING_EXPECT.items():
@@ -394,7 +394,7 @@ def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
     at its public row under the certified salt (and opens only under its own, which no verifier holds); with no salt, or
     in an execution phase the context doesn't certify, the opening refuses before it reads a row."""
     raw, ctx, reveal, committed, sid, prover = _certified_pass(1)
-    assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=committed, stream=sid, prover=prover) == (
+    assert CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, committed=committed, stream=sid, prover=prover) == (
         "certifier", None)
     salt = CC.certified_salt(raw, ctx, reveal, committed, sid, prover)
     assert salt == PS.pouw_salt(reveal, 1, sid, prover) == bytes.fromhex(json.loads(raw)["salt"])
@@ -405,7 +405,7 @@ def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
         assert cases[salt]["opening"] == cases[own]["opening"] and cases[salt]["pub"] != cases[own]["pub"]
 
         def opened(case, held):
-            return CC.opening(CC.params(case["params"]), CC.commitment(vectors._canon(case["record"]).encode()),
+            return CC.opening_twin(CC.params(case["params"]), CC.commitment(vectors._canon(case["record"]).encode()),
                               case["units"], case["unit"], case["pub"], case["opening"], held)
 
         assert opened(cases[salt], salt) is None
@@ -472,7 +472,7 @@ def test_the_verifiers_j10r_blocks_are_the_tiles():
 
 
 def test_the_opening_reads_what_served_zk_writes():
-    """`core_check.opening`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
+    """`core_check.opening_twin`'s constants are the ones served_zk commits under: one-stage's served domain, and the fp8-p
     A and B rows' schemas."""
     assert CC.SERVED_DOMAIN == R.WINDOW_DOMAIN
     assert CC.OPENED == (("a", L.ROW_SCHEMA["fp8-p", ROLE_X]), ("b", L.ROW_SCHEMA["fp8-p", ROLE_W]))
@@ -613,12 +613,12 @@ DRAW_EXPECT = {
 
 
 def test_every_pass_mutation_hits_its_refusal():
-    """`core_check.pass_epoch` re-starts an honest pass's execution phase (each coin version, and a recorded beacon's) and refuses
+    """`core_check.pass_epoch_twin` re-starts an honest pass's execution phase (each coin version, and a recorded beacon's) and refuses
     each mutation, over a few cases each, with the refusal it aims at."""
     assert set(PASS_EXPECT) == set(passes.PASS_NAMES) | {"honest"}
     for name, want in PASS_EXPECT.items():
         for seed in range(6):
-            how, refused = CC.pass_epoch(*passes.pass_args(passes.pass_instance(random.Random(f"{name}/{seed}"), name)))
+            how, refused = CC.pass_epoch_twin(*passes.pass_args(passes.pass_instance(random.Random(f"{name}/{seed}"), name)))
             if isinstance(want, set):
                 assert refused is None and how in want, (name, seed, refused)
             else:
@@ -635,11 +635,11 @@ def test_each_honest_pass_is_had_as_it_was_salted():
         for seed in range(6):
             case = passes.pass_instance(random.Random(f"{kind}/{seed}"), kind=kind)
             assert {case[k] is not None for k in passes.CERTIFIED} == {kind == "certified"}
-            assert CC.pass_epoch(*passes.pass_args(case)) == (how, None), (kind, seed)
+            assert CC.pass_epoch_twin(*passes.pass_args(case)) == (how, None), (kind, seed)
 
 
 def test_every_draw_mutation_hits_its_refusal():
-    """`core_check.draw` accepts an honest sample under seeded coins or a live execution phase's (a certified execution phase's, held as its
+    """`core_check.draw_twin` accepts an honest sample under seeded coins or a live execution phase's (a certified execution phase's, held as its
     challenger's signed record with the key it is signed under, which must be the one the execution phase's parameters pin) and
     refuses each mutation with the refusal it aims at: a bare live commitment, a malformed key, no record, a record
     signed under another key than the one its coins name, a tampered signature or a record whose commitment was
@@ -649,16 +649,16 @@ def test_every_draw_mutation_hits_its_refusal():
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
         for seed in range(6):
-            got = CC.draw(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
+            got = CC.draw_twin(*passes.draw_args(passes.draw_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and got[1].startswith(want[1])), \
                 (name, seed, got)
     for seed in range(6):
         live, _ = passes.honest_live_draw(random.Random(f"live/{seed}"))
         seeded, _ = passes.honest_draw(random.Random(f"seeded/{seed}"), Co.SCHEME, early=False)
-        assert CC.draw(*passes.draw_args(live)) is None and CC.draw(*passes.draw_args(seeded)) is None
-        assert CC.draw(*passes.draw_args({**live, "opening": seeded["opening"]}))[1].startswith(
+        assert CC.draw_twin(*passes.draw_args(live)) is None and CC.draw_twin(*passes.draw_args(seeded)) is None
+        assert CC.draw_twin(*passes.draw_args({**live, "opening": seeded["opening"]}))[1].startswith(
             "the draw's a live coin opening is")
-        assert CC.draw(*passes.draw_args({**seeded, "opening": live["opening"]}))[0] == "coin"
+        assert CC.draw_twin(*passes.draw_args({**seeded, "opening": live["opening"]}))[0] == "coin"
 
 
 def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
@@ -693,14 +693,14 @@ def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
         d = _live_draw(prover, "the prover's coins", reg, stream, receipt, n, k, pinned)
         if bad not in d["units"]:
             break
-    assert CC.draw(*passes.draw_args(d)) == (CC.COIN_KEY, CC.OTHER_KEY)
-    assert CC.draw(*passes.draw_args({**d, "coins": {**d["coins"], "key": pinned}})) == \
+    assert CC.draw_twin(*passes.draw_args(d)) == (CC.COIN_KEY, CC.OTHER_KEY)
+    assert CC.draw_twin(*passes.draw_args({**d, "coins": {**d["coins"], "key": pinned}})) == \
         ("coin", "the challenger record's signature does not verify under the verifier's challenger key")
-    code, why = CC.draw(*passes.draw_args({**d, "key": None}))
+    code, why = CC.draw_twin(*passes.draw_args({**d, "key": None}))
     assert code == CC.COIN_KEY and why.startswith(CC.NO_PINNED_KEY)
-    assert CC.draw(*passes.draw_args({**d, "key": d["coins"]["key"]})) is None
+    assert CC.draw_twin(*passes.draw_args({**d, "key": d["coins"]["key"]})) is None
     honest = _live_draw(verifier, "the verifier's coins", reg, stream, receipt, n, k, pinned)
-    assert CC.draw(*passes.draw_args(honest)) is None
+    assert CC.draw_twin(*passes.draw_args(honest)) is None
 
 
 #: the refusal each mutation of the session's pin aims at, `rounds`' and `salt`'s alike
@@ -756,7 +756,7 @@ ROUNDS_EXPECT = {
 
 
 def test_every_rounds_mutation_hits_its_refusal():
-    """`core_check.rounds` accepts an honest live execution phase's round coins, read through the challenger's signed session the
+    """`core_check.rounds_twin` accepts an honest live execution phase's round coins, read through the challenger's signed session the
     auditor's signed ledger opens and ends for the execution phase, and refuses each mutation (an in-process challenger's coins,
     an unsigned or tampered log, a ledger signed under another key, cut before the session's end or at a reused leaf, a
     second session for the execution phase's root, a v1 ledger, an end naming another record leaf or no hellos, hellos
@@ -767,7 +767,7 @@ def test_every_rounds_mutation_hits_its_refusal():
     assert set(ROUNDS_EXPECT) == set(rounds_cases.ROUNDS_NAMES) | {"honest"}
     for name, want in ROUNDS_EXPECT.items():
         for seed in range(6):
-            got = CC.rounds(*rounds_cases.rounds_args(rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name)))
+            got = CC.rounds_twin(*rounds_cases.rounds_args(rounds_cases.rounds_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and want[1] in got[1]), \
                 (name, seed, got)
 
@@ -794,7 +794,7 @@ SALT_EXPECT = {
 
 
 def test_every_salt_mutation_hits_its_refusal():
-    """`core_check.salt` accepts an honest live execution phase's salt coin, read through the challenger's signed session the
+    """`core_check.salt_of_record` accepts an honest live execution phase's salt coin, read through the challenger's signed session the
     auditor's signed ledger reserves, opens and ends for the execution phase, and refuses each mutation with the refusal it aims
     at: the session's (no ledger, a forged one, an in-process challenger's coins, a log the ledger didn't seal, another
     session's files, a session not pinned to a logged commit on main's first-parent line), a session opened without a
@@ -805,7 +805,7 @@ def test_every_salt_mutation_hits_its_refusal():
     assert set(SALT_EXPECT) == set(rounds_cases.SALT_NAMES) | {"honest"}
     for name, want in SALT_EXPECT.items():
         for seed in range(6):
-            got = CC.salt(*rounds_cases.salt_args(rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name)))
+            got = CC.salt_twin(*rounds_cases.salt_args(rounds_cases.salt_instance(random.Random(f"{name}/{seed}"), name)))
             assert (got is None) if want is None else (got is not None and got[0] == want[0] and want[1] in got[1]), \
                 (name, seed, got)
 
@@ -842,7 +842,7 @@ LIVE_SALT_EXPECT = {
 
 
 def test_every_live_salt_mutation_hits_its_refusal():
-    """`core_check.live_salt` (LIVESALT2) accepts a live Pearl-C pass whose salt coin came from a salt-only session the
+    """`core_check.live_salt_twin` (LIVESALT2) accepts a live Pearl-C pass whose salt coin came from a salt-only session the
     auditor's signed ledger reserved, opened on the pass's salt execution phase's root R = `epoch_open_root(W, pass_index)` and
     ended complete, read through the session's own files, and refuses each mutation with the refusal it aims at: the
     manifest's form and workload, a call index of 2^32 or more, a `pass_index` that isn't an integer in [0, 2^64), the
@@ -855,18 +855,18 @@ def test_every_live_salt_mutation_hits_its_refusal():
     assert set(LIVE_SALT_EXPECT) == set(passes.LIVE_SALT_NAMES) | {"honest"}
     for name, want in LIVE_SALT_EXPECT.items():
         for seed in range(6):
-            salt, got = CC.live_salt(*passes.live_salt_args(passes.live_salt_instance(random.Random(f"{name}/{seed}"),
+            salt, got = CC.live_salt_twin(*passes.live_salt_args(passes.live_salt_instance(random.Random(f"{name}/{seed}"),
                                                                                       name)))
             assert (got is None and len(salt) == 32) if want is None else (
                 salt is None and got is not None and got[0] == want[0] and want[1] in got[1]), (name, seed, got)
     d = passes.live_salt_instance(random.Random("a float pass_index"))
     for bad in (0.0, 1.0, 1.5, float(d["manifest"]["pass_index"])):
         m = {**d["manifest"], "pass_index": bad}
-        assert CC.live_salt(*passes.live_salt_args({**d, "manifest": m})) == (None, ("manifest", CC.PASS_FORM)), bad
+        assert CC.live_salt_twin(*passes.live_salt_args({**d, "manifest": m})) == (None, ("manifest", CC.PASS_FORM)), bad
 
 
 def _live_pass(seed: str, name: str = "honest") -> tuple[str | None, tuple[str, str] | None]:
-    return CC.pass_epoch(*passes.pass_args(passes.pass_instance(random.Random(seed), name, kind="live")))
+    return CC.pass_epoch_twin(*passes.pass_args(passes.pass_instance(random.Random(seed), name, kind="live")))
 
 
 def test_a_live_pearl_c_pass_is_credited_only_from_its_complete_salt_only_session():
@@ -901,14 +901,14 @@ def test_one_epoch_reads_one_session_and_one_salt():
     is the Pearl-C credit period's to refuse, not `live_salt`'s."""
     for seed in range(4):
         d = passes.live_salt_instance(random.Random(f"one epoch, one session/{seed}"))
-        salt, refused = CC.live_salt(*passes.live_salt_args(d))
+        salt, refused = CC.live_salt_twin(*passes.live_salt_args(d))
         assert refused is None and d["manifest"]["pass_index"] < 1 << 64
         assert all(u["index"] < CC.CALL_BOUND for u in d["manifest"]["matmuls"])
         other = json.loads(json.dumps(d["manifest"]))
         n, top = len(other["matmuls"]), max(u["index"] for u in other["matmuls"])
         other.update(run="r-the-next-pass", matmuls=[{**u, "index": i} for i, u in
                                                      enumerate(other["matmuls"], start=min(top + 1, CC.CALL_BOUND - n))])
-        assert CC.live_salt(*passes.live_salt_args({**d, "manifest": other})) == (salt, None)
+        assert CC.live_salt_twin(*passes.live_salt_args({**d, "manifest": other})) == (salt, None)
 
 
 def test_two_epochs_over_one_weights_root_read_two_sessions_and_two_salts():
@@ -919,11 +919,11 @@ def test_two_epochs_over_one_weights_root_read_two_sessions_and_two_salts():
     h0 = passes.honest_live(rng, json.loads(json.dumps(man)), k=0)
     h1 = passes.honest_live(rng, json.loads(json.dumps(man)), k=1)
     assert h0["w"] == h1["w"] and h0["r"] != h1["r"] and h0["s"].sid != h1["s"].sid
-    s0, r0 = CC.live_salt(*passes.live_salt_args({**h0["live"], "manifest": h0["man"]}))
-    s1, r1 = CC.live_salt(*passes.live_salt_args({**h1["live"], "manifest": h1["man"]}))
+    s0, r0 = CC.live_salt_twin(*passes.live_salt_args({**h0["live"], "manifest": h0["man"]}))
+    s1, r1 = CC.live_salt_twin(*passes.live_salt_args({**h1["live"], "manifest": h1["man"]}))
     assert (r0, r1) == (None, None) and s0 != s1
     for live, m in ((h0["live"], h1["man"]), (h1["live"], h0["man"])):
-        _, refused = CC.live_salt(*passes.live_salt_args({**live, "manifest": m}))
+        _, refused = CC.live_salt_twin(*passes.live_salt_args({**live, "manifest": m}))
         assert refused == ("coin", "the challenger's session is not trusted: the auditor's ledger opens no challenger "
                                    "session for this window"), refused
 
@@ -934,8 +934,8 @@ def test_one_session_salts_one_window():
     root."""
     d = rounds_cases.salt_instance(random.Random("one session, one window"))
     second = random.Random("the second window's requests").randbytes(64).hex()
-    assert CC.salt(*rounds_cases.salt_args(d)) is None
-    assert CC.salt(*rounds_cases.salt_args({**d, "requests": second})) == ("salt", CC.OTHER_WINDOW)
+    assert CC.salt_twin(*rounds_cases.salt_args(d)) is None
+    assert CC.salt_twin(*rounds_cases.salt_args({**d, "requests": second})) == ("salt", CC.OTHER_WINDOW)
     assert PS.window_open_root(bytes.fromhex(d["weights"]), bytes.fromhex(d["requests"]),
                                "s20261020T120000Z-0002") != bytes.fromhex(d["window"]["root"])
 

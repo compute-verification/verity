@@ -14,7 +14,7 @@ serving wrote (``window/``, its private files too) and a5's records
 (``rank0/``, ``challenger/``, ``summary.json``).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
-      python benchmarks/one_stage/a5_row_tables.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+      python benchmarks/one_stage/a5_row_tables.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] --main FILE --out DIR
 """
 from __future__ import annotations

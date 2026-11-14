@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -13,6 +12,7 @@ from typing import Any
 from verity_bench import (
     breakdown,
     jobs,
+    kit,
     lean_verify,
     overhead,
     overhead_records,
@@ -32,6 +32,9 @@ from verity_bench.vllm.result import write
 from verity_bench.vllm.engine import ProcessEngineFactory
 from verity_bench.vllm.runner import run_benchmark
 from verity_bench.vllm.table import render
+
+#: the kind of a timed point's result, the artifact kind `research` stores it as
+POINT_KIND = "verity-vllm-benchmark/v1"
 
 
 def _spec_argument(parser: argparse.ArgumentParser) -> None:
@@ -115,30 +118,14 @@ def _point(args: Any) -> int:
     jobs.write_resolved(plan, out / "resolved-spec.json")
     (out / "settings.json").write_text(json.dumps(settings.record(), indent=1, sort_keys=True) + "\n", encoding="utf-8")
     passed = all(g["passed"] for g in doc["gates"])
-    envelope = {
-        "schema": "research/result/v0.1",
-        "kind": "verity-vllm-benchmark/v1",
-        "run_id": settings.RESEARCH_RUN_ID,
-        "workload_fingerprint": {
-            "identity": item.identity,
-            "resolved_spec_sha256": plan.spec_sha256,
-            "point": item.point.to_json(),
-        },
-        "validation": {
-            "status": "passed" if passed else "failed",
-            "checker": "verity-bench token and arm gates",
-            "detail": f"{sum(g['passed'] for g in doc['gates'])}/{len(doc['gates'])} gates passed",
-            "evidence": ["out/benchmark.json"],
-        },
-        "measurements": [],
-        "measurement_files": ["out/benchmark.json"],
-        "artifacts": ["out/table.md", "out/resolved-spec.json", "out/settings.json"],
-    }
-    target = run_dir / "result.json"
-    temporary = run_dir / f"result.json.tmp.{os.getpid()}"
-    temporary.write_text(json.dumps(envelope, indent=1) + "\n", encoding="utf-8")
-    os.replace(temporary, target)
-    result.record(doc, run_dir, settings.RESEARCH_RUN_ID, "out/benchmark.json")
+    writer = kit.Writer(run_dir, settings.RESEARCH_RUN_ID, kit.host_stamp(), POINT_KIND)
+    writer.fingerprint(identity=item.identity, resolved_spec_sha256=plan.spec_sha256, point=item.point.to_json())
+    writer.measurement_file("out/benchmark.json")
+    for kept in ("out/table.md", "out/resolved-spec.json", "out/settings.json"):
+        writer.artifact(kept)
+    result.record(doc, writer, "out/benchmark.json")
+    writer.validation("passed" if passed else "failed", "verity-bench token and arm gates",
+                      f"{sum(g['passed'] for g in doc['gates'])}/{len(doc['gates'])} gates passed", ["out/benchmark.json"])
     print(render(doc), end="")
     return 0 if passed else 3
 

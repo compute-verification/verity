@@ -264,8 +264,8 @@ never published) and salt its live salt; ks ‖ salt is one 128-byte block (`Has
 tops with distinct domain ids, a distinguisher's view (the key leaf and every digest) moves by at most the explicit
 advantages of two distinguishers built from it, one in hm96's hiding game and one against SHA-512 as a PRF keyed by its
 first block (`Pouw.Guarantees.KeyedLeaf.Hides`). The window's key is committed before its salt as its key leaf, the
-`hm96-sha512/v1` leaf over ks under 192 OS salt bytes, which the lead's registration records (`pouw.salt.lead_record`)
-and a proof opens ks against.
+`hm96-sha512/v1` leaf over ks under 192 OS salt bytes, which the window's registration records and a proof opens ks
+against.
 
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.

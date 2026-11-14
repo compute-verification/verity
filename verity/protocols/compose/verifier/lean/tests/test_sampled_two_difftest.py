@@ -28,7 +28,7 @@ from verity_difftest import canonical
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 OS = R.ONE_STAGE
-PORT = D.ProtocolPort("sampled-two", T.answer, st.nothing(), package=R.ROOT / "verity/protocols/proofs/recursion/verifier/recursive")
+PORT = D.ProtocolPort("sampled-two", T.answer, st.nothing(), package=R.ROOT / "verity/protocols/proofs/spot_flock/verifier/lean")
 server = D.server_fixture(PORT)
 DROP = object()
 

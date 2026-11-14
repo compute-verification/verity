@@ -326,15 +326,14 @@ def _rel(path: Any) -> str | None:
 
 
 def _rel_of(path: Any) -> str | None:
-    try:
-        p = Path(os.fsdecode(path))
-        p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
-        rel = os.path.relpath(p, _ROOT[0])
-        if rel.startswith("..") and _LINKS:            # a file through a link into the tree is the tree's (`_LINKS`)
-            rel = next((os.path.relpath(t + p[len(k):], _ROOT[0]) for k, t in _LINKS.items()
-                        if p == k or p.startswith(k + os.sep)), rel)
-    except (TypeError, ValueError):
-        return None
+    if not isinstance(path, (str, bytes, os.PathLike)):
+        return None                                    # an audit event's argument that names no file
+    p = Path(os.fsdecode(path))
+    p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
+    rel = os.path.relpath(p, _ROOT[0])
+    if rel.startswith("..") and _LINKS:                # a file through a link into the tree is the tree's (`_LINKS`)
+        rel = next((os.path.relpath(t + p[len(k):], _ROOT[0]) for k, t in _LINKS.items()
+                    if p == k or p.startswith(k + os.sep)), rel)
     if rel.startswith("..") or "__pycache__" in rel.split(os.sep) or rel.split(os.sep)[0] == ".venv":
         return None
     return rel
@@ -347,13 +346,9 @@ def _links(root: Path) -> dict[str, str]:
     out: dict[str, str] = {}
     for e in sys.path:
         d = os.path.abspath(e or os.getcwd())
-        if not os.path.relpath(d, root).startswith(".."):
+        if not os.path.relpath(d, root).startswith("..") or not os.path.isdir(d):
             continue
-        try:
-            names = os.listdir(d)
-        except OSError:
-            continue
-        for n in names:
+        for n in os.listdir(d):
             p = os.path.join(d, n)
             if os.path.islink(p) and not os.path.relpath(t := os.path.realpath(p), root).startswith(".."):
                 out[p] = t
@@ -733,15 +728,10 @@ def _instrument() -> None:
         return m
 
     builtins.__import__, importlib.import_module = __import__, import_module
-    try:
-        from verity.circuits import defs as D
-    except ImportError:
-        return
-    try:
-        from verity.circuits.evaluation import batch
-    except ImportError:
-        batch = None
-    if batch is not None and not isinstance(batch._KERNELS, _RecordedKernels):
+    from verity.circuits import defs as D
+    from verity.circuits.evaluation import batch
+
+    if not isinstance(batch._KERNELS, _RecordedKernels):
         batch._KERNELS = _RecordedKernels(batch._KERNELS)
     if not isinstance(D.REGISTRY.defs, _RecordedDefs):
         D.REGISTRY.defs = _RecordedDefs(D.REGISTRY.defs)
@@ -856,16 +846,19 @@ def _stale_bytecode() -> list[str]:
             path, cached = getattr(spec, "origin", None), getattr(spec, "cached", None)
             if not (isinstance(path, str) and path.endswith(".py") and cached and (rel := _rel(path)) is not None):
                 continue
+            if not (os.path.isfile(cached) and os.path.isfile(path)):
+                continue                               # no bytecode, so Python compiled it from its source
+            with open(cached, "rb") as fh:
+                head, body = fh.read(16), fh.read()
+            with open(path, "rb") as fh:
+                st, source = os.fstat(fh.fileno()), fh.read()
+            if not _taken(head, st, source):
+                continue                               # Python compiled this one from its source
             try:
-                with open(cached, "rb") as fh:
-                    head, body = fh.read(16), fh.read()
-                with open(path, "rb") as fh:
-                    st, source = os.fstat(fh.fileno()), fh.read()
-                if not _taken(head, st, source):
-                    continue                           # Python compiled this one from its source
                 code = marshal.loads(body)
-            except (OSError, EOFError, ValueError, TypeError):
-                continue                               # none, or one Python would not take either
+            except (EOFError, ValueError, TypeError):
+                out.append(rel)                        # a header that vouches for a body that doesn't load vouches for nothing
+                continue
             if code != compile(source, path, "exec", dont_inherit=True):
                 out.append(rel)
     finally:
@@ -1350,7 +1343,7 @@ def _where(fn: Any) -> str | None:
     return f"{_parsed(p)[0]}:{code.co_qualname}:{_defined_at(p, code.co_firstlineno)}"
 
 
-_TREES: dict[str, ast.Module | None] = {}
+_TREES: dict[str, ast.Module] = {}
 #: `_defined_at` by the file's content digest and the line
 _DEFINED: dict[tuple[str, int], str] = {}
 
@@ -1369,11 +1362,11 @@ def _defined_in(h: str, data: bytes, line: int) -> str:
     if h not in _TREES:
         try:
             _TREES[h] = ast.parse(data)
-        except (SyntaxError, ValueError):
-            _TREES[h] = None
+        except (SyntaxError, ValueError) as e:
+            return f"unparseable ({type(e).__name__}): {h}:{line}"      # the whole file's digest, so any edit is a change
     tree = _TREES[h]
     defs = ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda
-    nodes = [] if tree is None else [
+    nodes = [
         n for n in ast.walk(tree) if isinstance(n, defs)
         and min([n.lineno, *(d.lineno for d in getattr(n, "decorator_list", ()))]) == line]
     if not nodes:
@@ -1383,10 +1376,8 @@ def _defined_in(h: str, data: bytes, line: int) -> str:
 
 def _kernels_now(key: str) -> str | None:
     """What is registered now for ``key`` (``*``: for every Definition), digested; None when nothing is."""
-    try:
-        from verity.circuits.evaluation import batch
-    except ImportError:
-        return None
+    from verity.circuits.evaluation import batch
+
     reg = batch._KERNELS
     keys = sorted(dict.keys(reg)) if key == "*" else [key]
     got = {k: {n: [kn.domain, kn.version, kn.partial, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
@@ -1765,11 +1756,10 @@ def _top_imports(path: str, name: str) -> list[str]:
     ``from`` import may name, absolute."""
     if path in _IMPORTS:
         return _IMPORTS[path]
-    try:
-        tree = ast.parse(Path(path).read_text())
-    except (OSError, SyntaxError, ValueError):
-        _IMPORTS[path] = []
+    if not (path.endswith(".py") and os.path.isfile(path)):
+        _IMPORTS[path] = []                            # an extension module, or a source since deleted: no statement to read
         return []
+    tree = ast.parse(Path(path).read_text())
     pkg = name if os.path.basename(path) == "__init__.py" else name.rpartition(".")[0]
     out: list[str] = []
 
@@ -2030,10 +2020,7 @@ def _dist(root: Path, top: str) -> str | None:
     names = _packages().get(top)
     if not names:
         return None
-    try:
-        return ",".join(sorted(f"{d}=={metadata.version(d)}" for d in set(names)))
-    except metadata.PackageNotFoundError:
-        return None
+    return ",".join(sorted(f"{d}=={metadata.version(d)}" for d in set(names)))
 
 
 class _Prose(ast.NodeTransformer):

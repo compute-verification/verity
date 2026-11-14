@@ -1,10 +1,11 @@
-/-
-hm96-sha512's leaf under the pinned key as a builder program (`gates.hm96.leaf_gadget`, the traced Definition
-`Hm96Sha512Leaf_v1`).
--/
 module
 
 public import Flock.ReadNet.Sha
+
+/-!
+hm96-sha512's leaf under the pinned key as a builder program (`gates.hm96.leaf_gadget`, the traced Definition
+`Hm96Sha512Leaf_v1`).
+-/
 
 @[expose] public section
 

@@ -54,8 +54,6 @@ NOT_PATHS = {
     ("benchmarks/numerical/README.md", "utils.cpp::bfloat16_to_gfloat_tensor"): "the GPU simulator's source",
     ("benchmarks/pous/README.md", "gmp.h"): "the system's GMP header",
     ("benchmarks/ppl/README.md", "linears_layerwise.py"): "a harness the bench replaced",
-    ("fixtures/proof-format-v3/README.md", "test_format3_equivalence.py::test_write_vectors"): "veritor's test",
-    ("fixtures/proof-format-v3/README.md", "format3_equivalence.rs"): "D-SP1's guest, deleted with the archive",
     ("tools/verity/lean/README.md", "lakefile.lean"): "the file the package deliberately lacks",
     ("verity/protocols/accounting/pous/verifier/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
     ("verity/protocols/accounting/pous/verifier/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",

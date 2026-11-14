@@ -1,10 +1,3 @@
-/-
-A toy protocol that exercises every path of the interface: the `#guard`s below pin its outcomes, and
-`core-protocol-example` runs it through `Protocol.main`. It isn't a protocol of Verity's. Its parameters are
-`{"k": k}` and its commitment is a 32-byte root, which is its own digest. Its evidence is canonical JSON
-`{"drawn": n, "passed": m}`, recording m of n sampled proof blocks passed. It accepts when k units were sampled and all passed,
-rejects when one failed, and is undecided when fewer than k were sampled.
--/
 module
 
 public import CoreProtocol.Cli
@@ -13,6 +6,14 @@ public import CoreProtocol.Protocol
 import Lean.Data.Json.FromToJson.Basic
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Profile
+
+/-!
+A toy protocol that exercises every path of the interface: the `#guard`s below pin its outcomes, and
+`core-protocol-example` runs it through `Protocol.main`. It isn't a protocol of Verity's. Its parameters are
+`{"k": k}` and its commitment is a 32-byte root, which is its own digest. Its evidence is canonical JSON
+`{"drawn": n, "passed": m}`, recording m of n sampled proof blocks passed. It accepts when k units were sampled and all passed,
+rejects when one failed, and is undecided when fewer than k were sampled.
+-/
 
 @[expose] public section
 set_option backward.privateInPublic true

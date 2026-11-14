@@ -3,7 +3,7 @@
     stage SPEC OUT [N...]   `served_units/stage.py SPEC full OUT` as it is, and from the same built stager the full
                             statement's first N blocks for each N below full, as OUT-nN/{inst.bin,pub.bin}: the circuit and
                             its pin are OUT's, lowered once. An N that can't be staged is reported on stderr and left out.
-    summary OUT             OUT/summary.json (`verity/flock-sessions/v1`) and its table, from every `flock-verify verify`
+    summary OUT             OUT/summary.json (`verity/flock-sessions/v1`) and its table, from every `verity-verify-proof verify`
                             call flock_sessions.sh logged under OUT (TAG.err, the verifier's phase lines; TAG.out, its
                             verdicts; TAG.time, /usr/bin/time -v).
 

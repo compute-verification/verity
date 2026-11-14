@@ -21,10 +21,10 @@ before the sample (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] --out DIR [--delta 0.5]
       python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] --out DIR [--delta 0.5]
       python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --advice-opening F \\
         [--other-advice-opening F --other-windows DIR] --windows DIR --challenger local --main FILE ...
@@ -85,7 +85,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   registration under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
   trading one for a unit of the rest (`check_draw`), and the registration's law sampling them as the rest is (R1).
 * **One sample per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
-  verifier's Lean `flock-verify draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
+  verifier's Lean `verity-verify-proof draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
   streaming `flock-circuit prove --zk` and one queued verifier a template for the whole audit, with no ZK server (`a0.DIRECT`:
@@ -1065,10 +1065,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if plain(a):
             flags = ("--coins", "tree", "--stratified", str(drawn_law["k"]))
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
-                                        "tool": f"flock-verify verify {' '.join(flags)} --archive"}
+                                        "tool": f"verity-verify-proof verify {' '.join(flags)} --archive"}
         else:
             lv = s.get("lean_verify") or a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, members=kept)
-            got[f"lean-verify/m{k}"] = {**lv, "tool": "flock-verify verify --zk --archive"}
+            got[f"lean-verify/m{k}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
@@ -1397,8 +1397,8 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
     (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
     ``blobs``, the paths of the statements' files, of the circuit and public files of each member with no session, which
-    v2's check of the form reads too, and of the pinned lookup ``tables`` the statements' circuits look up. The
-    statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
+    v2's check of the form reads too, and of the pinned lookup ``tables`` the members' circuits look up, any member's.
+    The statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
     (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
     RP = own_replay()
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -1505,7 +1505,8 @@ def session_dirs(sdir: Path) -> tuple[Path, ...]:
 
 def looked_up_tables(st_dir: Path) -> list[Path]:
     """The pinned MUFU tables under a staged member's ``st_dir`` that its circuit looks up (`proofs.circuit_lookups`):
-    v2 holds the blobs' tables to exactly those."""
+    v2 holds the blobs' tables to exactly those, and in the per-member form a member's statement to those among the
+    blobs'."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     tdir = st_dir / "tables"
@@ -1516,10 +1517,11 @@ def looked_up_tables(st_dir: Path) -> list[Path]:
 def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: bool = False) -> dict | str | None:
     """`case_members`'s members and tables from the window's staged ``members``, every one of them, and the sampled
     members' sessions (`member_checks`'s ``done``): each member's circuit and public files' digests as staged before
-    the sample, its registered file, its units and its circuit's ``vus_per_block``, and a sampled member's session and
-    the tables its circuit looks up, one path a table. None for a window of one member, whose form is the one
-    statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's stage's challenger session,
-    `stage_trees`); or why the audit has no per-member case."""
+    the sample, its registered file, its units and its circuit's ``vus_per_block``, a sampled member's session, and
+    the tables every member's circuit looks up, sampled or not, one path a table: v2 holds each member's statement to
+    its own circuit's tables among the blobs (`OneStageZk.ownTables`) and reads every member's files. None for a window
+    of one member, whose form is the one statement's (`v2_proof`), unless ``one`` (its sessions ran on a caller's
+    stage's challenger session, `stage_trees`); or why the audit has no per-member case."""
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
     if len(members) < 2 and not one:
@@ -1537,8 +1539,7 @@ def members_proof(members: Sequence[dict], done: Sequence[dict], zk: bool, one: 
         reads = st.get("registered_file")
         out.append(PF.Member(m.key, PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{m.n}.bin", sessions), mm["pin"],
                              st["public"], json.loads(reads.read_text()) if reads else None, ((m.base, m.base + m.n),), g))
-        if sessions:
-            tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
+        tables.update((f.name, f) for f in looked_up_tables(st["dir"]) if f.name not in tables)
     return {"members": out, "tables": [tables[x] for x in sorted(tables)]}
 
 
@@ -1550,7 +1551,7 @@ def streamed(a: argparse.Namespace) -> bool:
 FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session's prover runs behind the ZK server's send check "
                  "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
-#: the ZK server's Lean session loop's executable, beside Lean's flock-verify in its package
+#: the ZK server's Lean session loop's executable, beside Lean's verity-verify-proof in its package
 ZK_SERVER_LOOP = "flock-firewall"
 #: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
 SAMPLE_FILE = "draw.json"

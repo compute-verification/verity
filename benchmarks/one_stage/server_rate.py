@@ -2,7 +2,7 @@
 (`verity_flock.proof_server.ProofServer`'s ``provers``), its sessions back to back, each K in turn.
 
     python benchmarks/one_stage/server_rate.py --bin flock-circuit --staged Z --types frw13,frw2 --provers 1,2,4 --out DIR \\
-        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2] [--lean-program F]] \\
+        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean verity-verify-proof [--lean-sessions 2] [--lean-program F]] \\
         [--tmpl-unit-bin B] [--wide-leaf]
 
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit sampled: a
@@ -32,7 +32,7 @@
   its circuit holds (`statement_blocks`); ``flat``, whether the provers' statement caches had stopped filling, with the
   hit series and the rule that decide it (``cache``; `cache_flat`); and ``cores``, the CPUs the row's processes could run
   on: their ``count``, their ``list`` and the ``numa_nodes`` that hold them (`cores`).
-* **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `flock-verify verify
+* **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `verity-verify-proof verify
   --zk` on their record on the server's verdict pool, one at a time and after the steady window, each with its own CPU
   seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type. ``--lean-program`` is the
   row's Program's descriptor, archived with them and handed to `verify` (``--program``); without it every Lean verdict
@@ -328,15 +328,15 @@ def no_verdict(statement: str, rc: int, said: str) -> str:
     and a wide-leaf name is known only to a Lean verifier whose `Flock/Tags.lean` lists it."""
     if "unknown statement" not in said:
         return f"no verdict (rc {rc})"
-    why = f"no verdict (rc {rc}): this flock-verify does not know the statement {statement!r} and refused it unread"
+    why = f"no verdict (rc {rc}): this verity-verify-proof does not know the statement {statement!r} and refused it unread"
     if statement.endswith(WIDE_LEAF):
-        why += ("; the wide level-0 leaf's names are known only to a flock-verify built from a tree whose "
+        why += ("; the wide level-0 leaf's names are known only to a verity-verify-proof built from a tree whose "
                 "Flock/Tags.lean lists them, so this says nothing of the proof")
     return why
 
 
 class Lean:
-    """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
+    """Lean `verity-verify-proof verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
     file and tables archived once, in scratch outside ``out`` (`close` removes it); ``statement``, the one `verify` sets
     up; ``program``, the Program's descriptor `verify` is handed (``--program``), archived with them: without it `verify`
     refuses every session, for lack of its program. A verdict keeps what `verify` says of the Program (`PROGRAM_FIELDS`).

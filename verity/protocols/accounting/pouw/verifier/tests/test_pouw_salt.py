@@ -4,7 +4,7 @@ are pinned; a context names its PoUW execution phase; `revealed` gives PoUW exec
 published, once, and fails closed when it is unregistered, early, late, revealed already or missing; `pouw_window` takes
 one whole PoUW execution phase aligned at 0 and nothing else; `Epoch.certified` applies `pouw_salt` of the reveal, the execution phase,
 the stream and the prover, 64 bytes, which the seeds and the identifier take, with the challenger's sampling coin; two
-registrations of one execution phase are salted apart; `core_check.pass_epoch` passes a certified execution phase's pass only when its
+registrations of one execution phase are salted apart; `core_check.pass_epoch_twin` passes a certified execution phase's pass only when its
 salt is that of the certifier's reveal and its weights, stream and prover those the prover recorded with the certifier,
 signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `WindowOpens` admits an execution phase
 once per stream and prover; a certified execution phase credits only units that read its salt (`unit_reason`); and a live
@@ -22,7 +22,6 @@ import random
 import pytest
 
 import epoch_coins as E
-from verity.commitments import hm96
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.certifier.verifier import active
 from verity.protocols.accounting.certifier.verifier.active import Proxy
@@ -133,47 +132,6 @@ def test_pouw_salt_form():
     for bad in (b"", bytearray(root), root.hex(), None):
         with pytest.raises(DomainError, match="public key"):
             PS.prover_id(bad)
-
-
-def test_lead_record_form():
-    """What the lead records for an execution phase before its salt is SHA-512(b"verity/pouw-lead-record/v1" ‖ weights' root ‖
-    stream ‖ prover ‖ key leaf ‖ u64be(calls)), 290 bytes, pinned on the lead's keyed vector, whose key leaf is the
-    `hm96.SHA512` tree leaf over ks_w under a 192-byte salt y₀, and on one of consecutive bytes. A part that isn't 64
-    bytes, and a call count that isn't a positive u64, are refused; another key leaf or call count is another record."""
-    def label(name: str, n: int) -> bytes:
-        tag = f"lead/keyed/vector/{name}".encode()
-        return b"".join(hashlib.sha512(tag + i.to_bytes(8, "big")).digest() for i in range(-(-n // 64)))[:n]
-    H = hm96.SHA512
-    weights, ks_w, stream, prover = (hashlib.sha512(f"lead/keyed/vector/{n}".encode()).digest()
-                                     for n in ("weights", "ks_w", "stream", "prover"))
-    key_leaf = H.tree_leaf(H.default_key, H.commit_string(H.default_key, ks_w, label("y0", H.salt_bytes)))
-    assert key_leaf.hex() == (
-        "e121d1ae87e74b21ddb3585cff79d9c21aac50281d5e3a77fa18453007ae3f8d"
-        "1315a9b3c0dda315ed6e199f57f62a9dee19a9fa4fcd25ac67be7c612672c095")
-    assert PS.lead_record(weights, stream, prover, key_leaf, 64).hex() == (
-        "546ffb4bbb7d5ead4ecbdbe7ada190d9e4201369fb8659b6327e459d21c5b7f3"
-        "a2860f62d77c0ed21185f131b71eabf5fb9f45b9e074891f0e300fa0cfe6edbe")
-    message = b"verity/pouw-lead-record/v1" + weights + stream + prover + key_leaf + (64).to_bytes(8, "big")
-    assert len(message) == 290 and PS.lead_record(weights, stream, prover, key_leaf, 64) == hashlib.sha512(message).digest()
-    stream, prover, root, leaf = (bytes(range(i, i + 64)) for i in (0, 64, 128, 192))
-    assert PS.lead_record(root, stream, prover, leaf, 3).hex() == (
-        "7d1472590172ae63855670e09f66e734792de175ac711a0a6be3992c94a3f6e7"
-        "671957517ba0a0db3c3541aea569ceb0fbcd912675444e1e5a0dd91aba53075f")
-    assert PS.lead_record(root, stream, prover, leaf, 3) != PS.pouw_record(root, stream, prover)
-    assert len({PS.lead_record(root, stream, prover, leaf, 3), PS.lead_record(root, stream, prover, leaf, 4),
-                PS.lead_record(root, stream, prover, root, 3)}) == 3
-    for bad in (leaf[:32], leaf + b"\0", bytearray(leaf), leaf.hex()):
-        with pytest.raises(DomainError, match="weights' root is 64 bytes"):
-            PS.lead_record(bad, stream, prover, leaf, 3)
-        with pytest.raises(DomainError, match="stream is a 64-byte digest"):
-            PS.lead_record(root, bad, prover, leaf, 3)
-        with pytest.raises(DomainError, match="prover is a 64-byte id"):
-            PS.lead_record(root, stream, bad, leaf, 3)
-        with pytest.raises(DomainError, match="key leaf is 64 bytes"):
-            PS.lead_record(root, stream, prover, bad, 3)
-    for bad in (0, -1, 1 << 64, True, 3.0):
-        with pytest.raises(DomainError, match="positive u64"):
-            PS.lead_record(root, stream, prover, leaf, bad)
 
 
 def test_window_open_root_form():
@@ -418,7 +376,7 @@ def manifest(work: Workload, roots: dict[int, bytes], p: int, salt: bytes, run: 
 
 
 def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal():
-    """`core_check.pass_epoch` in a certified execution phase, its context naming PoUW execution phase 1 and the pass, with the reveal
+    """`core_check.pass_epoch_twin` in a certified execution phase, its context naming PoUW execution phase 1 and the pass, with the reveal
     `revealed` and the record `committed` read from the certifier on that registration, and the execution phase's stream and
     prover: the pass the prover salted by `Epoch.certified` of execution phases 2 and 3 from the salt it received passes
     (``certifier``). Salted by execution phase 0's execution phase, by the raw reveal, or checked against execution phase 0's reveal, it doesn't, nor
@@ -431,13 +389,13 @@ def test_a_certified_window_passes_only_a_pass_salted_by_its_certifiers_reveal()
     assert reveal == sampled[1]
     record = PS.committed(c, 1, registration(1, ctx=ctx))
     bound = {"committed": record, "stream": STREAM, "prover": PROVER}
-    assert CC.pass_epoch(None, raw, ctx, reveal=reveal, **bound) == ("certifier", None)
+    assert CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, **bound) == ("certifier", None)
 
     mismatch = ("coin", "the pass's salt is not the certifier's for its window, stream and prover")
     for salt in (Epoch.certified(work, roots, [0, 1], 2, reveal, STREAM, PROVER).salt, reveal):
-        assert CC.pass_epoch(None, *manifest(work, roots, 1, salt), reveal=reveal, **bound) == (None, mismatch)
-    assert CC.pass_epoch(None, raw, ctx, reveal=PS.revealed(c, 0, registration(0)), **bound) == (None, mismatch)
-    how, refused = CC.pass_epoch(None, raw, ctx)
+        assert CC.pass_epoch_twin(None, *manifest(work, roots, 1, salt), reveal=reveal, **bound) == (None, mismatch)
+    assert CC.pass_epoch_twin(None, raw, ctx, reveal=PS.revealed(c, 0, registration(0)), **bound) == (None, mismatch)
+    how, refused = CC.pass_epoch_twin(None, raw, ctx)
     assert how is None and refused[0] == "coin" and refused[1].startswith(f"the pass's manifest is {CC.MANIFEST_CERTIFIED}")
 
 
@@ -465,11 +423,11 @@ def test_two_registrations_of_one_window_are_salted_apart():
     for (stream, prover), salt in zip(bindings, salts):
         raw, ctx = manifest(work, roots, 1, salt)
         for (s2, v2) in bindings:
-            got = CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=PS.pouw_record(root, s2, v2), stream=s2, prover=v2)
+            got = CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, committed=PS.pouw_record(root, s2, v2), stream=s2, prover=v2)
             assert got == (("certifier", None) if (s2, v2) == (stream, prover) else
                            (None, ("coin", "the pass's salt is not the certifier's for its window, stream and prover")))
             if (s2, v2) != (stream, prover):
-                assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=PS.pouw_record(root, stream, prover),
+                assert CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, committed=PS.pouw_record(root, stream, prover),
                                      stream=s2, prover=v2)[1][1].startswith("the pass's weights, stream and prover are not")
 
     lives = [certifier(4, pouw_window=2, salt=active.fresh_salt)[0] for _ in range(2)]
@@ -513,14 +471,14 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
     reveal = PS.revealed(c, 0, registration(0, ctx=ctx))
     got = PS.committed(c, 0, registration(0, ctx=ctx))
     assert got == record
-    assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=got, stream=STREAM, prover=PROVER) == ("certifier", None)
+    assert CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, committed=got, stream=STREAM, prover=PROVER) == ("certifier", None)
 
     raw1, ctx1 = manifest(work, roots, 1, Epoch.certified(work, roots, [2, 3], 2, sampled[1], STREAM, PROVER).salt)
     late = PS.revealed(c, 1, registration(1, ctx=ctx1))
     with pytest.raises(PS.Unrevealed, match="the certifier doesn't give what PoUW recorded for window 1"):
         PS.committed(c, 1, registration(1, ctx=ctx1))
     unrecorded = (None, ("coin", "the verifier holds no record the certifier made before it drew the window's salt"))
-    assert CC.pass_epoch(None, raw1, ctx1, reveal=late, committed=None, stream=STREAM, prover=PROVER) == unrecorded
+    assert CC.pass_epoch_twin(None, raw1, ctx1, reveal=late, committed=None, stream=STREAM, prover=PROVER) == unrecorded
     with pytest.raises(PS.Unrevealed, match="unregistered"):
         PS.committed(c, 0, registration(1))
 
@@ -541,21 +499,21 @@ def test_a_certified_window_passes_only_weights_and_a_binding_recorded_before_it
         Epoch.certified(work, roots, [0, 1], 2, reveal, STREAM, PROVER).salt
     other = (None, ("coin", "the pass's weights, stream and prover are not those the certifier recorded before it drew "
                             "the window's salt"))
-    assert CC.pass_epoch(None, *manifest(work, later, 0, Epoch.certified(work, later, [0, 1], 2, reveal, STREAM, PROVER).salt),
+    assert CC.pass_epoch_twin(None, *manifest(work, later, 0, Epoch.certified(work, later, [0, 1], 2, reveal, STREAM, PROVER).salt),
                          reveal=reveal, committed=got, stream=STREAM, prover=PROVER) == other
     for stream, prover in ((hashlib.sha512(STREAM).digest(), PROVER), (STREAM, hashlib.sha512(PROVER).digest())):
-        assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=got, stream=stream, prover=prover) == other
+        assert CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, committed=got, stream=stream, prover=prover) == other
     for none in (None, record[:32]):
-        assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=none, stream=STREAM, prover=PROVER) == unrecorded
+        assert CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, committed=none, stream=STREAM, prover=PROVER) == unrecorded
     for stream, prover in ((None, PROVER), (STREAM, None), (STREAM[:32], PROVER), (STREAM, PROVER + b"\0")):
-        assert CC.pass_epoch(None, raw, ctx, reveal=reveal, committed=got, stream=stream, prover=prover) == \
+        assert CC.pass_epoch_twin(None, raw, ctx, reveal=reveal, committed=got, stream=stream, prover=prover) == \
             (None, ("coin", "the verifier holds no 64-byte stream digest and 64-byte prover id for the window"))
 
     assert CC.recorded_reason(raw, got, STREAM, PROVER) is None
     for r, bound in ((raw, (None, STREAM, PROVER)), (raw, (got, hashlib.sha512(STREAM).digest(), PROVER)),
                      (raw, (got, STREAM, PROVER[:32])), (None, (got, STREAM, PROVER)),
                      (json.dumps({**json.loads(raw), "schema": CC.MANIFEST_SCHEMA}).encode(), (got, STREAM, PROVER))):
-        _, (_, why) = CC.pass_epoch(None, r, ctx, reveal=reveal, **dict(zip(("committed", "stream", "prover"), bound)))
+        _, (_, why) = CC.pass_epoch_twin(None, r, ctx, reveal=reveal, **dict(zip(("committed", "stream", "prover"), bound)))
         assert CC.recorded_reason(r, *bound) == why
 
 

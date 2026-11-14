@@ -7,13 +7,20 @@ public import Spot.OneStageZk
 
 The parameters of the one-stage audit's v2 (`Spot.OneStageZk`) register its circuit file by its SHA-512, and
 the circuit names the lookup tables its session reads: its META's `lookups` (`OneStageZk.lookupsOf`). v2 refuses blobs
-whose pinned MUFU tables (`OneStageZk.tablesOf`, the tables `inputsOf` hands `flock-verify`) are other than those
+whose pinned MUFU tables (`OneStageZk.tablesOf`, the tables `inputsOf` hands `verity-verify-proof`) are other than those
 before it sets up a session (`tablesHeld`, the first statement of `run`), so wherever its check accepts, the session's
 table set is the registered circuit's.
 
+In the per-member form the blobs are one set a window, and its members' circuits may look up different tables. There
+each member's statement (`Spot.OneStageZk.Member.statement`) is handed the blobs' pinned tables its own circuit looks
+up (`OneStageZk.ownTables`) and refuses where the blobs lack one of them, so a member's inputs hold its own circuit's
+tables and no other, whatever other pinned table the blobs hold.
+
 * `TablesRegistered`: on blobs `tablesHeld` accepts, and on blobs on which v2's check at any coins (`checkBlobsAt`)
   accepts, the registered circuit file is among the blobs and the pinned tables the blobs hold are, by name, the ones it
-  looks up (`HoldsRegisteredTables`).
+  looks up (`HoldsRegisteredTables`); and where a member's statement reads, its circuit file is among the blobs and the
+  lookup tables its inputs hold are the blobs' pinned tables among the names it looks up, every one of those names
+  (`HandedOwnTables`).
 
 It takes no premise.
 -/
@@ -31,13 +38,25 @@ def HoldsRegisteredTables (p : OneStageZk.Own) (bs : Core.Blobs) : Prop :=
   ∃ circuitB, bs.get p.circuit "circuit" = .ok circuitB ∧
     OneStageZk.lookupsOf circuitB = .ok ((OneStageZk.tablesOf bs).map (·.1))
 
-/-- **v2 holds the blobs' lookup tables to the registered circuit's**: on blobs its refusal (`tablesHeld`) accepts, and
-on blobs its check accepts at any coins, the pinned tables are the registered circuit's lookups. -/
+/-- **The tables `tables` are the blobs' pinned tables the circuit of `p` looks up, every one of them**: the circuit
+file the files `p` name is among the blobs, `tables` are the pinned MUFU tables the blobs hold among the names it looks
+up (`OneStageZk.tablesAmong`, in `Flock.MUFU_TABLES`' order), and their names are exactly those names: the blobs hold
+each table the circuit looks up, and `tables` hold no table it does not look up, whatever else the blobs hold. -/
+def HandedOwnTables (p : OneStageZk.Own) (bs : Core.Blobs) (tables : List (String × ByteArray)) : Prop :=
+  ∃ circuitB names, bs.get p.circuit "circuit" = .ok circuitB ∧ OneStageZk.lookupsOf circuitB = .ok names ∧
+    tables = OneStageZk.tablesAmong names bs ∧ tables.map (·.1) = names
+
+/-- **v2 holds the lookup tables to the registered circuit's**: on blobs its refusal (`tablesHeld`) accepts, and on
+blobs its check accepts at any coins, the pinned tables are the registered circuit's lookups; and where a member's
+statement of the per-member form reads, the lookup tables its inputs hold are its own circuit's among the blobs'
+(`HandedOwnTables`). -/
 def TablesRegistered : Prop :=
   (∀ (p : OneStageZk.Own) (bs : Core.Blobs), OneStageZk.tablesHeld p bs = .ok () → HoldsRegisteredTables p bs) ∧
-    ∀ (p : OneStageZk.Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : OneStageZk.Evidence) (bs : Core.Blobs)
+    (∀ (p : OneStageZk.Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : OneStageZk.Evidence) (bs : Core.Blobs)
       (pub : OneStage.Public) (prof : Core.Integrity),
-      OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof → HoldsRegisteredTables p.own bs
+      OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof → HoldsRegisteredTables p.own bs) ∧
+    ∀ (m : OneStageZk.Member) (slice : Lean.Json) (bs : Core.Blobs) (a : OneStageZk.StepAt),
+      m.statement slice bs = .ok a → HandedOwnTables m.own bs a.I.tables
 
 /-- A digest under which the witnesses' blobs hold their circuit file, whatever its bytes: `Core.Blobs` pairs each file
 with the digest it is found under. -/

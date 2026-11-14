@@ -99,7 +99,7 @@ inputs = [
     # tree to RecVStar's
     "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
-    # the flock-verify artifact
+    # the verity-verify-proof artifact
     "verity/protocols/proofs/flock/verifier/Flock/Test/RecCap.lean",
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/proofs/flock/prover/live/PROTOCOL.md",
@@ -115,7 +115,7 @@ worker_gb = 16
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
-artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify",
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-frame-tape",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rec-sparse",

@@ -16,6 +16,7 @@ from functools import partial
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.acquire.sources.int8_source import Int8Source
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.engine import hooks
@@ -131,7 +132,6 @@ def committer(engine: Any, run_id: str) -> Any:
     as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`protocols.pouw.h1.commit.SCHEME`). It retains
     its values nowhere unless VERITY_RETAIN says otherwise: H1 reads them from its tap, and the windowed collector retains
     none on the device."""
-    from verity_vllm import settings
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
     settings.setdefault("VERITY_RETAIN", "none")

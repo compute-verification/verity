@@ -121,6 +121,8 @@ namespace FlockComplete.CutFree
 
 open Flock Transcript Replay
 
+variable {wideLeaf : Bool}
+
 /-- **The cut's PIOP returns where its rank check passes**: answered by `asksCut` with room for its sends, with the
 circuit's fold defined at every point of the lincheck's shape, from any source, at `3 + (m − 6) + 3 + (k_log − 6) +
 2 + |e| + 1` sends. -/
@@ -200,7 +202,7 @@ layout's shape. `ligeritoPZk` returns at the replies (`ligeritoPZk_ret`), so at 
 (`ligeritoPZk_agree`) throws only at send `n + 1`, past its send count; the cut opening returns with it
 (`ligeritoPZk_cut_fw`), at its exact send count (`ligeritoCut_eqAt`). -/
 theorem ligeritoCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claims.Msg} (hr : ∀ k, coinOf (resp k) = coin k)
-    {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule m = .ok (sch, tPad))
+    {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule wideLeaf m = .ok (sch, tPad))
     (ms : MerkleScheme) (T : F128) (cm0 : Commit) (b : Array F128) (lay : Zk.PadLayout) (src : RepSrc)
     (t : Transcript) (l : Array Claims.Msg) (hN : l.size + (sch.k0 + 7 + 11 * (sch.levels.size - 1)) ≤ n)
     (hρ : Zk.rhoIndependent ((⟨coin (l.size + 2 + sch.k0) 0, coin (l.size + 2 + sch.k0) 1⟩ : F256),
@@ -258,7 +260,7 @@ theorem repCut_ret (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Claim
       ts.size = st.fold.kLog - 6 → ∃ w, st.fold.folded a b lw ρ ts = .ok w ∧ w.size = 64)
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = st.fold.kLog - 6 →
       ∃ v, st.fold.fold a lw ρ = .ok v)
-    {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad)) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
+    {sch : Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (rep : ℕ) (dom : ByteArray) (cm0 : Commit)
     (extras : Array Claim) (ic : InnerCommit) (src : RepSrc) (prior : Array (List F128)) (words : List ℕ)
     (l : Array Claims.Msg) (hN : l.size + CutEq.repSends st sch extras ≤ n)
     (hrk : ∀ zp zc t₁ l₁ lp lc t₂ l₂,
@@ -355,7 +357,7 @@ theorem repCut_ret {x : Msg} (hx : Live x) (c : Fin (refK x) → FlockDeploy.Coi
   rw [hs] at hs'
   cases hs'
   have hst : (stsOf x)[k / 2]! = stAt x ⟨k / 2, hi⟩ := getElem!_pos _ _ _
-  have hz₀ : _root_.Flock.Zk.schedule (stsOf x)[k / 2]!.m = .ok schs[k / 2]! := by
+  have hz₀ : _root_.Flock.Zk.schedule (stsOf x)[k / 2]!.wideLeaf (stsOf x)[k / 2]!.m = .ok schs[k / 2]! := by
     rw [hschs ⟨k / 2, hi⟩, hst]
     exact (zkTab x ⟨k / 2, hi⟩).hz
   rcases hsp : schs[k / 2]! with ⟨sch, tPad⟩

@@ -233,7 +233,8 @@ def _entry(v: object) -> dict[str, object]:
     return {"value": v, "unit": "-", "mark": "ceiling", "source": "a test's card"}
 
 
-CARD_FILE = {"sku": "sim-file", "sm": {"count": _entry(2)}, "clock": {"sm": _entry(1530)},
+CARD_FILE = {"sku": "sim-file", "kind": "gpu", "sm": {"count": _entry(2)},
+             "clock": {"default": "sm", "sm": _entry(1530)},
              "rate": {"tensor": _entry(1024)}, "memory": {"bandwidth": _entry(1.23456e12)},
              "store": {"reg": _entry(65536), "reg_extra": _entry(0), "smem": _entry(262144), "l2": _entry(1 << 20),
                        "dram": _entry(16 << 30)}}

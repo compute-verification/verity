@@ -10,7 +10,7 @@ stops included (`_kept_prover`).
   through the interface as serving writes one, under ``stratified:1``, the design the audit's rule (`RULE`, a stratified
   rate) names over its two proof blocks. A template is a stratum, so the sample always holds both proof blocks, one a
   member, and the audit runs two sessions.
-* **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor host's own
+* **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor device's own
   service on this machine (`a5_coins.Local`: `live_challenger`'s reserve, admit, run and `serve.py`), pinned on
   this checkout's first-parent line. `test_a5_reserve` opens one the same way under a stub of the Lean verifier's coins;
   here its `serve.py` runs SPOT's Lean verifier itself. Its key is the session's own, so its coins show the path and
@@ -116,7 +116,7 @@ def _window(d: Path, flipped: bool = False) -> Path:
 @pytest.fixture(scope="module")
 def binaries(tmp_path_factory) -> dict[str, Path]:
     """The prover, the Lean verifier and the ZK server's Lean (module docstring)."""
-    lean = {"lean": LEAN / "flock-verify", "firewall": LEAN / "flock-firewall"}
+    lean = {"lean": LEAN / "verity-verify-proof", "firewall": LEAN / "flock-firewall"}
     if not all(p.is_file() for p in lean.values()):
         pytest.skip(f"no {' or '.join(p.name for p in lean.values())} under {LEAN}: check's lean-build step builds them")
     prover = tmp_path_factory.mktemp("flock-circuit") / "flock-circuit"

@@ -105,7 +105,7 @@ noncomputable def finalAt (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (s 
     Option FlockDeploy.Final :=
   ((session IV st x s v).msgs.getLast?).bind fun m => FlockDeploy.finalOf m.1
 
-/-- The file name `flock-verify` gives a rep stream `w`'s proof (`Witness.lean`'s `{w.replace "/" "."}.bin`). -/
+/-- The file name `verity-verify-proof` gives a rep stream `w`'s proof (`Witness.lean`'s `{w.replace "/" "."}.bin`). -/
 def repName (w : String) : String := s!"{w.replace "/" "."}.bin"
 
 /-- **The blobs show the run.** In the run's view `v` at statement `x`, the recursive session's files that the compiled

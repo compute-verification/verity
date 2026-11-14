@@ -90,7 +90,7 @@ theorem repSlot_innerOff {x : Msg} {s0 : _} {spec : _root_.Flock.SessionSpec}
     repSlot x (2 * j.val + r.val) (innerOff e) = repSlot x (2 * j.val + r.val) (innerOff 0) + e := by
   have hjs : j.val < (stsOf x).size := lt_of_jOf j
   have hr2 := r.isLt
-  have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz₁ : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
     rw [show (2 * j.val + r.val) / 2 = j.val by omega, getElem!_pos (stsOf x) j.val hjs]
     exact (zkTab x j).hz

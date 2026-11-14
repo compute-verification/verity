@@ -846,7 +846,7 @@ class FakeCutlassLib:
 
 
 def test_a_cutlass_tile_order_is_a_candidate_of_its_own_where_the_grid_tells_it_apart():
-    src = (Path(__file__).parents[1] / "harness" / "native" / "cutlass_3x.cu").read_text()
+    src = (Path(__file__).parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "harness" / "native" / "cutlass_3x.cu").read_text()
     names = re.findall(r'ENTRY(?:_TS)?\("(cutlass3x_[^"]+)"', src)
     assert len(names) > 20 and all(B.cutlass_tile(n) for n in names)
     assert B.cutlass_tile("cutlass3x_nvfp4_128x32x256_coop_swap") == (128, 32)
@@ -925,7 +925,7 @@ def test_a_screen_only_run_screens_every_searched_candidate_and_times_nothing(mo
 
 
 def test_a_verity_registry_entry_is_its_own_source_in_one_tile_order_with_a_workspace_of_its_own():
-    native = Path(__file__).parents[1] / "harness" / "native"
+    native = Path(__file__).parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "harness" / "native"
     plain = (native.parents[1] / "nvfp4_sm120" / "nvf4_plain.cu").read_text()
     entries = re.findall(r'\{"(verity_[^"]+)", (\d), 0, (query\w*),', plain)
     assert {(n, int(k)) for n, k, _ in entries} >= {("verity_nvf4_256x128_o_ew", 5), ("verity_fp8_256x128_o_ew", 1)}

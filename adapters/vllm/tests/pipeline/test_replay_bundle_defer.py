@@ -1,6 +1,6 @@
 """`replay_bundle.defer` at the C2 site of a deferred run: the slim bundle of a planned replay's reads, a plan that fails, a store
-over its bound and a write that was started beside the checks, with the line each logs.  CPU only; sealing and opening a
-bundle are `test_replay_bundle.py`."""
+over its bound and a write that was started beside the checks, with the line each logs, and when the placed identities go
+with the bundle.  CPU only; sealing and opening a bundle are `test_replay_bundle.py`."""
 from __future__ import annotations
 
 import logging
@@ -46,9 +46,10 @@ class Site:
         self.args = SimpleNamespace(**{"replay_deferred": "slim", "retain": "host", "required_manifest": None, "openings": 64} | args)
 
     def defer(self, **kw: Any) -> bool:
-        return RB.defer(self.out, 1, self.com, self.rc, self.args, tl=self.tl, arm="instrumented", versions={}, reqs=[], sampling={},
-                        tokens={}, stop_of_record=None, ids_full=None, declaration=None, required_classes=[], row=self.row,
-                        deferred=self.deferred, **kw)
+        """`defer` for a run of no request, or of the `reqs`, `tokens` and `ids_full` given."""
+        run: dict[str, Any] = {"reqs": [], "tokens": {}, "ids_full": None} | kw
+        return RB.defer(self.out, 1, self.com, self.rc, self.args, tl=self.tl, arm="instrumented", versions={}, sampling={},
+                        stop_of_record=None, declaration=None, required_classes=[], row=self.row, deferred=self.deferred, **run)
 
     def store_bytes(self) -> int:
         return sum(p.stat().st_size for p in (RB.partial(self.out, 1) / "store").rglob("*.bin"))
@@ -109,6 +110,21 @@ def test_a_store_over_its_bound_defers_nothing_and_the_replay_runs_in_process(tm
     assert site.defer() is False and site.nothing_deferred()
     assert logged() == [("[delta] REPLAY BUNDLE (pair 1): REFUSED -- 0.0 GB is over the 0 GB cap (--replay-bundle-cap-gb); the C2 replay runs "
                           "in this process")]
+
+
+@pytest.mark.parametrize("tokens, kept", [({"a": [5, 6, 7], "b": [8]}, False), ({"a": [5, 6], "b": [8]}, True),
+                                          ({"a": [5, 6, 7], "b": []}, True), ({"a": [5, 6, 7, 9], "b": [8]}, False)])
+def test_the_placed_identities_go_with_the_bundle_only_when_a_request_stopped_early(tmp_path: Path, tokens: dict[str, list[int]],
+                                                                                    kept: bool) -> None:
+    """The replay reconciles what was not executed against the identities at the steps they were placed at, and reads them only
+    for a run in which a request stopped early: one whose served tokens are fewer than its `max_tokens`.  A request that
+    served as many, or more, is not one."""
+    site = Site(tmp_path, replay_deferred="full")
+    reqs = [{"request_id": "a", "max_tokens": 3}, {"request_id": "b", "max_tokens": 1}]
+    identities = [{"member": MEMBER, "engine_step": 0}]
+    assert site.defer(reqs=reqs, tokens=tokens, ids_full=identities)
+    context = site.deferred[1]
+    assert (context["requests"], context["tokens"], context["ids_full"]) == (reqs, tokens, identities if kept else None)
 
 
 def test_a_write_started_beside_the_checks_is_the_one_defer_takes(tmp_path: Path, logged: Lines) -> None:

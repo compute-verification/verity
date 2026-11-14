@@ -5,7 +5,7 @@
 # `verity-vllm serving-rows` on it; with WINDOW=served it is the in-Commit hook's over the same members (served_rope --served),
 # which A5 takes only over a SHA-512 run root of record. The fixture's members are committed under rows-sha512, which the window
 # names as its record's; COMMIT_SCHEME, if set, must say so (vllm-v1 is kept only to read recorded runs, and A5 over one is a5.py on
-# its bundle). M0's flock-circuit and Lean's flock-verify are built from this tree, in scratch (A5_FLOCK_WORK=DIR keeps M0's build).
+# its bundle). M0's flock-circuit and Lean's verity-verify-proof are built from this tree, in scratch (A5_FLOCK_WORK=DIR keeps M0's build).
 #   python3 tools/verity/check/slot.py --by LANE -- bash benchmarks/one_stage/a5.sh
 #   (a job run from a clone of the tree, 16 GB)
 # A5_ROW_DIR=D: a single-GPU deferred Commit's row dir in place of the fixture (its sealed D/commit/replay_bundle_p0 and the Build's
@@ -30,8 +30,8 @@ command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanp
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
 
-# Lean's flock-verify, in the background while M0 builds (its own .lake in this clone)
-(cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+# Lean's verity-verify-proof, in the background while M0 builds (its own .lake in this clone)
+(cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${A5_FLOCK_WORK:-$W}
@@ -39,7 +39,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof; FWL=${LEAN%/*}/flock-firewall
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
 (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier sampled-proofs-difftest) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 # every member's server on a challenger of its own (`a0.session`); its coins and its audit are the build above

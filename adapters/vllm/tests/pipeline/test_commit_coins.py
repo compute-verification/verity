@@ -1,4 +1,4 @@
-"""The Commit's coins from the auditor host's challenger (`verity_vllm.pipeline.commit_coins`): one
+"""The Commit's coins from the auditor device's challenger (`verity_vllm.pipeline.commit_coins`): one
 challenge phase a Commit, reserved through the gate before any root, opened on its first run's root of record, and each
 run's coins opened after that run's root; the verifier holds them to the one challenge phase the auditor's signed ledger opened
 for the Commit's root (`challenger.ledger_head`, `challenger.pinned_session`), run from a commit the host's pins log
@@ -38,7 +38,7 @@ def _root(name: str) -> bytes:
 
 
 class _Auditor:
-    """The challenger gate (`challenger_host.Gate`) and the auditor host's challenger in this process: `run` answers the Commit's
+    """The challenger gate (`challenger_host.Gate`) and the auditor device's challenger in this process: `run` answers the Commit's
     gate requests (`CC.ChallengerGate`'s argv, one shell word after the command) as the gate's forced command does, refusing a
     second open for a root; an open starts that challenge phase's challenger (withheld, `remote.open_session`, when its
     reserve said ``--withhold``), signed under `KEY` at the gate's next leaves, which the Commit reaches over a socket
@@ -278,7 +278,7 @@ def test_coins_held_in_the_commits_process_credit_nothing(tmp_path, monkeypatch)
     assert CC.replay_challenge(rc, "abcd") == ("abcd", {"source": "flag"})
     assert CC.replay_challenge(rc, None)[1] == {"source": CC.IN_PROCESS, "family": CC.REPLAY, "index": None}
     assert _reason(auditor, [rc.extra["coins"]], roots, sid) == (
-        "the Commit's coins were drawn in its own process, not by the auditor host's challenger: a measurement, which "
+        "the Commit's coins were drawn in its own process, not by the auditor device's challenger: a measurement, which "
         "credits nothing")
     assert _reason(auditor, [*records, rc.extra["coins"]], [*roots, roots[0]], sid).startswith(
         "the Commit's coins were drawn in its own process")

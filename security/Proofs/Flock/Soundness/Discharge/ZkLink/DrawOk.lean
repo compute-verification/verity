@@ -25,12 +25,12 @@ import Proofs.Flock.Soundness.Refine.Walk
 
 `zk_session_sound` takes `DrawOkZK I dj mPts` at each of `Law.execOS`'s samples: the sample file `dj S` proves `S`'s units,
 and setupH, under the `--zk` tags, sets up at `mPts` link points. The first half is what the record carries, so it is
-custody; the second is flock-verify's own arithmetic. This file splits them.
+custody; the second is verity-verify-proof's own arithmetic. This file splits them.
 
 * `drawOf law pop S`: the verifier's own sample of `S`, as `UnitDraw.ofJson` decodes it: its sampling design and population, `S`'s
   units ascending, no closure.
 * `DrawFileZK dj law pop`: every sample file `dj S` that `UnitDraw.ofJson` decodes decodes to `drawOf law pop S`. It is a
-  property of the file the challenger records, not of flock-verify (DrawWords' `hdj`, with the sampling design).
+  property of the file the challenger records, not of verity-verify-proof (DrawWords' `hdj`, with the sampling design).
 * `drawOkZK_of_exec`: from `DrawFileZK` at the live law's own stratified sampling design, `DrawOkZK` at every sample of `Law.execOS`,
   at `mPtsOf c.g (∑ s, ks s)`. At a run that succeeds the sample has `∑ s, ks s` units (`execOS_draw_card`); at a run that
   reads past the source's bytes the sample is every unit (`execOS_draw_card_or`), and a sample file of every unit that

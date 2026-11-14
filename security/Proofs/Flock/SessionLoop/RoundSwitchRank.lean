@@ -43,6 +43,8 @@ namespace LeanRelease
 open _root_.Flock.Firewall.Frame (K_SKIP)
 open Loop Ranked
 
+variable {wideLeaf : Bool}
+
 set_option maxHeartbeats 1600000 in
 /-- **The frame passes a rep's rank check at its ring switch's first round**: on a history of at most `refK x`
 openings whose last coins the frame takes, at table `j`'s rep `r`'s rank check (`Masked.rankSlot`), the round after
@@ -75,7 +77,7 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
   have hstj : (Masked.stsOf x)[j]! = (Masked.stsOf x)[j] := getElem!_pos _ j hj
   have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   have hm14 : 14 ≤ (Masked.stsOf x)[j].m := by have := (hall j hj).1; omega
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
   obtain ⟨N, hNd⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
       (y.sch.k0 + 7 + 11 * (y.sch.levels.size - 1)) := ⟨_, rfl⟩
@@ -146,7 +148,7 @@ theorem rank_unrefused_pcs (T : ZKMal.CoinLayer.TableData)
   obtain ⟨hts', ⟨tp, htp⟩, -⟩ := Count.placeholder_tab hph0
   rw [hz, Except.ok.injEq, Prod.mk.injEq] at htp
   obtain ⟨htsch, -⟩ := htp
-  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ = .ok (t.sch, y.tPad))
+  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (htsch ▸ hz : _root_.Flock.Zk.schedule _ _ = .ok (t.sch, y.tPad))
   obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph0
   have hdg : t.st.digest.size < 2 ^ 64 := by

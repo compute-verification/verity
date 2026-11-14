@@ -1,5 +1,5 @@
 """The witnesses against the auditor ledger v1, ported to v2 as the refusals they now meet, where they hit the auditor
-host's code: the gate, the ledger and its publisher.
+device's code: the gate, the ledger and its publisher.
 
 * A root gets one session, whatever period a v1 open named for it, and an open's `by` is its gate key's lane; `serve.py` is
   told the window's root (its refusal of a salt after any other root is `test_serve.py`'s).
@@ -359,7 +359,7 @@ def test_publish_reads_the_hosts_address_from_the_environment_and_ends_at_once_w
     env |= {"PATH": f"{bin_dir}:{env['PATH']}", "VY_CHALLENGER_STATE": str(tmp_path / "state")}
     for words in ([], ["--every", "300"]):
         r = subprocess.run(["bash", script, *words], env=env, capture_output=True, text=True)
-        assert r.returncode != 0 and "VY_CHALLENGER_1_HOST: the auditor host's address, or DEST as an argument" in r.stderr
+        assert r.returncode != 0 and "VY_CHALLENGER_1_HOST: the auditor device's address, or DEST as an argument" in r.stderr
     assert not asked.exists() and not (tmp_path / "state").exists()
     r = subprocess.run(["bash", script], env=env | {"VY_CHALLENGER_1_HOST": "192.0.2.21"}, capture_output=True, text=True)
     assert r.returncode == 9 and [line.split()[-2] for line in asked.read_text().splitlines()] == ["research@192.0.2.21"] * 3

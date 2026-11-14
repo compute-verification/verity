@@ -11,10 +11,10 @@ import pytest
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.liveness import dead_gates
+from verity.circuits.ops.prims import ZERO32
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.circuits.ops.prims import ZERO32
 from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import fa2_check_inf as F2
 from verity.definitions.registry import prims as P

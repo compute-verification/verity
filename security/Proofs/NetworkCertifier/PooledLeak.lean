@@ -61,7 +61,7 @@ The count half: a family of incorrect sets with fewer than `Fmax` proof blocks i
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` at any operator
 (`encard_leakAt_le`, from `encard_acceptedFaulty_le` at `AsReg`), and the window's operator is the one the earlier
 windows' observations fix (`runsBefore`), so the periods number at most the product of the windows' bounds, by
-induction over the windows (`encard_chain_le`); the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the
+induction over the windows (`encard_chain_le`); the faulty bits sum to at most `b · Fmax`. Under `trusted-device` the
 cells the client receives read back from the network certifier's record under the schedule, one its record format
 holds (`certifier_cells_read`), so they
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);
@@ -240,7 +240,7 @@ theorem encard_pooledJoint_le {L K S m : ℕ} (Good : (Fin m → Finset ℕ) →
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (sched : Z → CertifierSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
@@ -322,7 +322,7 @@ theorem encard_pooledFam_le {L K S m : ℕ} (Good : Fin m → Finset ℕ → Lis
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (sched : Z → CertifierSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
@@ -349,7 +349,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (sched : Z → CertifierSchedule Conn) (srv : Z → Srv) (hs : ∀ z ∈ Zs, sched z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (sched z, srv z)).1 = z)
@@ -432,7 +432,7 @@ theorem pooledLeak_fixed (h : Guarantees.PooledLeakAccepted) :
       {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn]
       (arr : Srv → Conn → Arrivals Cell) (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
       (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
-      (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+      (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
       (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
       (hfit : ∀ s ∈ Ss, f.fits s)
       (Zs : Set Z) (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)

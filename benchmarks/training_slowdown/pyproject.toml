@@ -21,10 +21,14 @@ untraced = ["tests/test_command.py", "tests/test_grade.py", "tests/test_job_shel
 # `benchmarks/training_slowdown/grader`: the suite nested here, whose sources tests/test_one_calculator.py holds to the
 # one module that reaches the calculator with the rest of this directory. `adapters/vllm/verity_vllm`: the
 # training-step frontend whose step test_program_reading reads as a Program, and
-# `benchmarks/circuit_properties/circuit_properties`, the reading of a Program's work it holds beside a trace's
-inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
+# `benchmarks/circuit_properties/circuit_properties`, the reading of a Program's work it holds beside a trace's. The
+# library writes its metric into the run's result with the harness kit's writer (`benchmarks/harness/verity_bench`)
+inputs = ["benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/kit.py",
+          "benchmarks/harness/verity_bench/settings.py",
+          "verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
           "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
-          "benchmarks/rho", "benchmarks/census/deployments.json",
+          "benchmarks/rho", "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml",
+          "benchmarks/census/deployments.json",
           "benchmarks/nci/calibrations.json", "tools/config/verity_config",
           "benchmarks/training_slowdown/grader", "benchmarks/circuit_properties/circuit_properties"]
 
