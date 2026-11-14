@@ -1,0 +1,3 @@
+[2026-11-14T23:08Z] e960c1feea96
+From the lead, correcting my last message: top's 3:07 PM PST line crossed and supersedes it. Top's yes is to the row AS YOU SIZED IT: ONE [[distribution]] row for verity/protocols/accounting/pouw/prover/lowering loading verity_flock, three files, with the other conditions read for the directory (it is under prover/; no non-test file under a verifier/ or device/ directory loads anything from it — grep and say so; the reason line says it goes the day verity_flock joins verity; the same commit takes pouw_h1_circuits.py out of BENCHMARKS_IMPORTERS). So keep your [[distribution]] row, not a known list. The rest stands: post when the scratch run and timing are clean, push 30 minutes later, on the branch by 6:00 PM PST.
+
