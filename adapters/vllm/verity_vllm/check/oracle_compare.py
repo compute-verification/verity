@@ -284,7 +284,7 @@ def _report(oracle: MatchOracle, wcheck: dict[str, Any], max_report: int, query_
         why = (f"C2 oracle mismatch: {len(mism)} identities differ from the Match oracle (first: step {i.get('step')} {i.get('op_path')}/{i.get('output_member')} "
                f"inv {i.get('invocation')} req {i.get('request_id')} range {i.get('element_range')} -- {m.get('why') or ('id ' + str(m.get('committed_id')) + ' vs ' + str(m.get('oracle_id')))})")
     elif result is None:
-        why = (f"{grade}: " + (f"steps {steps_not_snap[:8]}{'...' if len(steps_not_snap) > 8 else ''} not snapshotted by the Match (row_pod MATCH_SNAP_STEPS=all for a complete C2); " if steps_not_snap else "")
+        why = (f"{grade}: " + (f"steps {steps_not_snap[:8]}{'...' if len(steps_not_snap) > 8 else ''} not snapshotted by the Match (MATCH_SNAP_STEPS=all for a complete C2); " if steps_not_snap else "")
                + (f"request attribution unverified at {len(attrib_missing)} (step, request) pairs (first {attrib_missing[:4]}); " if attrib_missing else "")
                + (f"attribution ambiguous at steps {ambiguous[:8]} (equal ids + sampled id across requests, values not snapshotted); " if ambiguous else "")
                + "; ".join(f"{k} x{v}" for k, v in not_cmp.items() if not k.startswith("no oracle family")))
