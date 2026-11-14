@@ -2679,6 +2679,17 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
 WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates",
                  "signer_refused", "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
                  "load")
+#: the end's words for how a connection that neither ended nor was refused failed (the verdict's `failed`): the
+#: network certifier's own two outcomes, and `error` for any other. A client's exception is one, and its words are
+#: its connection's own line of `witness/client.json`
+FAILED = ("cut", "fail", "error")
+
+
+def failed_words(failed: object) -> list[str]:
+    """A check's `failed` as the end holds it: `FAILED`'s words alone, each once, `error` in place of anything
+    that isn't one of the first two, so the end has no word a client or an endpoint chose."""
+    return sorted({w if isinstance(w, str) and w in FAILED else FAILED[-1]
+                   for w in (failed if isinstance(failed, list) else [failed])})
 
 
 def row_certificate(line: dict) -> dict:
@@ -2747,7 +2758,7 @@ def warden_outcome(out: Path, witness: Path) -> dict:
     (`out/certificates.jsonl`), each row registration's certificate without its registration (`ROW_CERTIFICATES`),
     each cells' registration less its private keys (`ROW_REGISTRATIONS`, `row_registration`),
     the check's verdict (`accepted`, how many problems, `WARDEN_COUNTS`, its `cell_rows` less the registrations'
-    cost), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and the sink's
+    cost, its `failed` in `FAILED`'s words), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and the sink's
     acknowledgements, or why it was refused). A registrations' file with a line `ROW_LINE` doesn't rule is not
     published, no line of it, and the outcome says which line and what to change (``unruled``)."""
     for name in WARDEN_PUBLIC:
@@ -2786,6 +2797,8 @@ def warden_outcome(out: Path, witness: Path) -> dict:
                    **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
         if isinstance(verdict.get("cell_rows"), dict):
             verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS if k in verdict["cell_rows"]}
+        if "failed" in verdict:
+            verdict["failed"] = failed_words(verdict["failed"])
     sizes = {str(p.relative_to(witness)): p.stat().st_size for p in sorted(witness.rglob("*")) if p.is_file()}
     try:
         load = json.loads((out / "load-relay.json").read_text())

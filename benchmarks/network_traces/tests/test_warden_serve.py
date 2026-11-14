@@ -1026,6 +1026,32 @@ def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_cli
     assert result["problems"] == ["audit: connection 4 failed closed (format) at egress cell 0"]
 
 
+def test_the_summarys_failed_list_holds_the_checks_fixed_words_and_none_of_a_clients(tmp_path):
+    """The summary's `failed` says how the connections that neither ended nor were refused failed, in `FAILED`'s
+    words alone: the gate's end carries the list, and a word in it is a word a key with no name reads. The connection
+    this run's relay failed closed is in it by its client's outcome, `cut`. A client's connection that raised has its
+    exception's words on its own line of `client.json`; the check's problems keep them, and so does the connection's
+    row, and the summary says `error`."""
+    args, p, load = _session(tmp_path, 2)
+    requests, responses = load(4)
+    out = tmp_path / "run"
+    out.mkdir()
+    _run(out, tmp_path / "key", requests, responses[:3] + [_response([" a"])], windows=args.windows, params=p,
+         id_payload=p.payload, arrive=dict(enumerate([0, 0, 1, 2])))
+    assert ws.check(out)["summary"]["failed"] == ["cut"]
+    client = json.loads((out / "client.json").read_text())
+    said = "ConnectionResetError: the endpoint hung up on the first request"
+    index = client["connections"][0]["index"]
+    client["connections"][0] = {"index": index, "error": said}
+    (out / "client.json").write_text(json.dumps(client))
+    result = ws.check(out)
+    assert result["summary"]["failed"] == ["cut", "error"] and said not in json.dumps(result["summary"])
+    assert f"client connection {index}: {said}" in result["problems"]
+    assert {"index": index, "outcome": said} in result["connections"]
+    assert ws.failed_words(["cut", said, "cut", None, 3]) == ["cut", "error"] and ws.failed_words(said) == ["error"]
+    assert ws.failed_words([]) == [] and set(ws.failed_words(ws.FAILED)) == set(ws.FAILED)
+
+
 def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tmp_path, monkeypatch):
     """`check.json`'s `audit_windows` is the audit's verdict of each execution phase, whole. Of a session's two, the
     second, where a connection fails closed, is refused with that problem and the first accepted, while `problems`

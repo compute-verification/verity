@@ -307,6 +307,24 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
         assert secret not in public
 
 
+def test_the_ends_failed_list_holds_the_gates_fixed_words_and_none_of_a_clients(host):
+    """The end's `failed` says how the connections that neither ended nor were refused failed, in `FAILED`'s words
+    alone, whatever the check's summary holds: a client's exception's words, which the check may list, are `error`
+    in the end and stay whole in the witness's `check.json`. A key with no name reads the end."""
+    said = "ConnectionResetError: the endpoint hung up on the third request"
+    check = CHECK | {"accepted": False, "problems": [f"client connection 2: {said}"],
+                     "summary": CHECK["summary"] | {"ended": 2, "failed": ["cut", said]}}
+    run, end = run_warden(host, WARDEN_FILES.replace(repr(CHECK), repr(check)))
+    d = host.certifier / run
+    assert end["verdict"]["failed"] == ["cut", "error"] and end["verdict"]["problems"] == 1
+    assert end["verdict"]["accepted"] is False
+    public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
+    assert said.encode() not in public and b"hung up" not in public
+    assert json.loads((d / A.WITNESS / "check.json").read_text())["summary"]["failed"] == ["cut", said]
+    assert A.failed_words(["fail", "cut", "fail"]) == ["cut", "fail"] and A.failed_words([]) == []
+    assert A.failed_words(said) == A.failed_words([None]) == A.failed_words([["cut"]]) == ["error"]
+
+
 def test_of_a_row_registration_the_rehearsal_publishes_its_certificate_and_nothing_else(host):
     """Each line of `cells.jsonl` and of `rows.jsonl` stays whole in `witness/`. `out/` holds, line for line, its
     certificate under the link, direction and window its registration names (a connection rows' the link's egress),

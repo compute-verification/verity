@@ -120,13 +120,16 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 
 def verdict(check: dict) -> dict:
     """What `certificates` writes of the network certifier's own check, the gate's end's verdict
-    (`auditor.warden_outcome`): whether it accepted, how many problems, and `COUNTS` of its summary. A problem's words
-    are made from the witness, as the summary's other keys are, so neither is written."""
+    (`auditor.warden_outcome`): whether it accepted, how many problems, and `COUNTS` of its summary, its `failed` in the
+    check's fixed words (`warden_serve.FAILED`, the gate's `FAILED`). A problem's words are made from the witness, as
+    the summary's other keys are, so neither is written."""
     summary = check.get("summary") or {}
     out = {"accepted": check["accepted"], "problems": len(check["problems"]),
            **{k: summary[k] for k in COUNTS if k in summary}}
     if isinstance(out.get("cell_rows"), dict):
         out["cell_rows"] = {k: out["cell_rows"][k] for k in CELL_ROWS if k in out["cell_rows"]}
+    if "failed" in out:
+        out["failed"] = WS.failed_words(out["failed"])
     return out
 
 

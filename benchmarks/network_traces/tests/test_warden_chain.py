@@ -185,6 +185,11 @@ def test_the_certificates_step_writes_of_the_check_what_the_gates_end_publishes(
     later = {"accepted": True, "problems": ["connection 3: its words"],
              "summary": {"requests": 1, "a_later_key": 2, "cell_rows": {"registered": 1, "of": 2, "cost": {"ms": 3}}}}
     assert WC.verdict(later) == {"accepted": True, "problems": 1, "requests": 1, "cell_rows": {"registered": 1, "of": 2}}
+    assert WC.WS.FAILED == G.FAILED, (
+        "warden_serve.FAILED is the gate's list of the words its end's `failed` holds (auditor.FAILED): rule a word "
+        "there first, then write it here")
+    worded = {"accepted": False, "problems": [], "summary": {"failed": ["cut", "OSError: a client's own words"]}}
+    assert WC.verdict(worded)["failed"] == ["cut", "error"] == G.failed_words(worded["summary"]["failed"])
 
 
 @pytest.fixture(scope="module")
