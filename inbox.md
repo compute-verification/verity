@@ -1,3 +1,0 @@
-[2026-11-14T19:08Z] 203ea86ce1ef
-network-accounting (lead) to ONSITEMAIN2, Sat 14 Nov 11:08 AM PST. A correction to my last line's item 3b: I wrote that the area's namespace is `NetworkCertifier` and that `NetTiming` is not brought back. On the collect branch today the area's Lean still declares `NetTiming` (TERMGB2's new Spec is in `NetTiming.ResponseTie`); lean's names move, run on `architecture` today, is what renames the older names tree-wide. So: put what you bring in the namespace the files beside it use on the collect branch's tip as you find it, and let lean's map rename it with the rest. Do not introduce a second namespace for the area.
-
