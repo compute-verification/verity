@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import stat
 import sys
@@ -997,8 +998,7 @@ def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first
     holds; an R naming no previous record has none. Parts holding another W than R names, a W naming a first record the
     serve dir doesn't hold, and one naming another than it holds are refused: the log would not chain from the
     deployment's first record."""
-    first = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
-             "previous": None}
+    first = FIRST
     w, alone = h1_registration(R.digest(first)), h1_registration()
 
     def serve(name: str, held: dict, start: dict | None) -> tuple[Path, Path]:
@@ -1045,17 +1045,160 @@ def test_without_an_h1_log_the_policys_case_takes_its_log_from_pearl_plus_parts(
     assert "doesn't chain from the deployment's first record" in refused[0]["reason"]
 
 
+FIRST = {"format": R.FORMAT_V2, "protocol": R.PROTOCOL, "deployment": {"kind": "weights"}, "registered": [],
+         "previous": None}
+
+
+def handed_serve(root: Path, w: dict | None, first: dict | None = FIRST) -> tuple[Path, dict]:
+    """A copy of a compose hand-off of a serve tied to Pearl+, as far as the cases read it: V3c's audit of the window's
+    record R with R beside its case, the serve's first registration record and the window's W where the hand-off lists
+    them (`SC.DEPLOYMENT`, `SC.RECORDS`), and nothing else: no H1 log and no part of Pearl+'s case. R is chained right
+    after `h1_registration`'s W over ``first``; ``w`` is what the W file holds (None: no such file). The dir and v1's
+    case."""
+    v1 = tied_v1_case(h1_registration(R.digest(first) if first is not None else None))
+    audit = audit_dir(root / "v3c-w0-4-27-2", v1)
+    (audit / "window" / "registration.json").write_text(bytes.fromhex(v1["commitment"]).decode())
+    if first is not None:
+        (root / SC.DEPLOYMENT).write_text(json.dumps(first, indent=1))
+    if w is not None:
+        (root / "pearlplus" / "w0").mkdir(parents=True)
+        (root / "pearlplus" / "w0" / "registration.json").write_text(json.dumps(w, indent=1))
+    return root, v1
+
+
+def test_a_copy_of_the_compose_hand_off_alone_writes_the_policys_case_with_the_w_it_lists(tmp_path, capsys):
+    """Through the command, in a directory that holds only what a compose hand-off carries (no H1 log, no part of
+    Pearl+'s case): the policy's case is written and its check runs, its log the serve's first registration record and
+    the W the hand-off lists, each taken by the digest the next names, and its commitment v1's own, the record R. A
+    hand-off whose W file holds another W than R names, or none, refuses the policy's case alone, before its check
+    runs."""
+    w = h1_registration(R.digest(FIRST))
+    serve, v1 = handed_serve(tmp_path / "serve", w)
+    assert sorted(p.name for p in serve.iterdir()) == ["deployment-registration.json", "pearlplus", "v3c-w0-4-27-2"]
+    private = tmp_path / "private"
+    rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", private, "--alpha", "1", "--gamma", 1,
+                                  *stand_ins(tmp_path, v1))
+    assert (rc, refused) == (0, []), out
+    assert [c["verdict"] for c in cases if c["protocol"] == INF] == ["accept"]
+    case = json.loads((private / "inference-only" / "case.json").read_text())
+    assert case["params"]["log"] == [FIRST, w] and case["commitment"] == v1["commitment"]
+    assert json.loads((tmp_path / "reg.seen").read_text())["commitment"] == v1["commitment"]
+    for name, held in (("other-w", h1_registration(R.digest(FIRST), entry=5)), ("no-w", None)):
+        (tmp_path / "reg.seen").unlink(missing_ok=True)
+        serve, v1 = handed_serve(tmp_path / name, held)
+        rc, cases, refused, out = run(capsys, "--serve-dir", serve, "--private", tmp_path / f"private-{name}",
+                                      "--alpha", "1", "--gamma", 1, *stand_ins(tmp_path, v1))
+        assert rc == 1 and [c["protocol"] for c in cases] == [V1, SAMPLED], out
+        assert [r["protocol"] for r in refused] == [INF], refused
+        assert (f"none is the record of digest {R.digest(w)[:16]}…, which the record names as its previous, so its log "
+                "doesn't chain from the deployment's first record") in refused[0]["reason"]
+        assert not (tmp_path / f"private-{name}" / "inference-only").exists() and not (tmp_path / "reg.seen").exists()
+
+
+def test_the_log_is_walked_back_to_the_deployments_first_record_however_long_and_refused_at_a_missing_link(tmp_path):
+    """The walk assumes no length: from R's ``previous`` it takes each record by the digest the one after it names,
+    among the serve's first record and every window's W and R the serve dir holds, until a record whose ``previous`` is
+    null. A log of four records (the first, a window's W and R, the next window's W) is found whole, and a shorter one
+    for the earlier window's R. Where a link is missing, the first record's or one in the middle, it refuses at that
+    link, naming the digest no record answers; a record nobody names is no part of any log."""
+    def after(x: dict) -> dict:
+        return {"format": R.FORMAT_V2, "previous": R.digest(x), "program": "11" * 64}
+
+    w0 = h1_registration(R.digest(FIRST))
+    r0 = after(w0)
+    w1 = h1_registration(R.digest(r0), entry=1)
+    r1 = after(w1)
+    files = {SC.DEPLOYMENT: FIRST, "pearlplus/w0/registration.json": w0, "pearlplus/w1/registration.json": w1,
+             "v3c-w0-4-27-2/audit/window/registration.json": r0, "v3c-w1-4-27-2/audit/window/registration.json": r1,
+             "pearlplus/w9/registration.json": h1_registration(entry=9)}
+
+    def serve(name: str, *without) -> Path:
+        for f, rec in files.items():
+            if f not in without:
+                (tmp_path / name / f).parent.mkdir(parents=True, exist_ok=True)
+                (tmp_path / name / f).write_text(json.dumps(rec, sort_keys=True))
+        return tmp_path / name
+
+    whole = serve("whole")
+    assert SC.pearl_log(whole, None, r1) == [FIRST, w0, r0, w1]
+    SC._chain([FIRST, w0, r0, w1], r1)
+    assert SC.pearl_log(whole, None, r0) == [FIRST, w0]
+    assert SC.pearl_log(whole, None, {**r1, "previous": None}) == []
+    for gone, at, who in ((SC.DEPLOYMENT, FIRST, "the earliest of them found"),
+                          ("v3c-w0-4-27-2/audit/window/registration.json", r0, "the earliest of them found"),
+                          ("pearlplus/w1/registration.json", w1, "the record")):
+        with pytest.raises(SC.Refused) as e:
+            SC.pearl_log(serve(f"without-{R.digest(at)[:8]}", gone), None, r1)
+        assert (f"none is the record of digest {R.digest(at)[:16]}…, which {who} names as its previous, so its log doesn't "
+                "chain from the deployment's first record") in str(e.value)
+
+
+def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deployments_first_record_must(tmp_path):
+    """An empty or a truncated file under `SC.RECORDS` beside a whole log is skipped, as a record nobody names is, so the
+    walk gives the same log, and a walk refused at a missing link names each skipped file; the serve's first
+    registration record (`SC.DEPLOYMENT`) truncated is still refused."""
+    w0 = h1_registration(R.digest(FIRST))
+    r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
+    files = {SC.DEPLOYMENT: json.dumps(FIRST), Path("pearlplus/w0/registration.json"): json.dumps(w0),
+             Path("pearlplus/w9/registration.json"): "",
+             Path("v3c-w9-4-27-2/audit/window/registration.json"): '{"format": '}
+
+    def serve(name: str, changed: dict[Path, str] | None = None) -> Path:
+        for f, text in {**files, **(changed or {})}.items():
+            (tmp_path / name / f).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / name / f).write_text(text)
+        return tmp_path / name
+
+    assert SC.pearl_log(serve("beside"), None, r0) == [FIRST, w0]
+    with pytest.raises(SC.Refused) as e:
+        SC.pearl_log(serve("beside"), None, {**r0, "previous": "ab" * 64})
+    assert str(e.value).endswith("; no record either, since they don't parse: pearlplus/w9/registration.json "
+                                 "(JSONDecodeError), v3c-w9-4-27-2/audit/window/registration.json (JSONDecodeError)")
+    with pytest.raises(SC.Refused, match="deployment-registration.json: JSONDecodeError"):
+        SC.pearl_log(serve("first", {SC.DEPLOYMENT: json.dumps(FIRST)[:-3]}), None, r0)
+
+
+def test_the_hand_off_lists_the_records_by_the_patterns_the_walk_reads():
+    """`SC.RECORDS` and the hand-off's list of the serve's registration records (`served_verdicts.sh`'s
+    `handoff_inputs`) are two copies of the same patterns, in the same order."""
+    text = (HERE.parent / "served_verdicts.sh").read_text()
+    said = re.findall(r"""printf '%s\\n' ((?:\S+/registration\.json ?)+)\)""", text)
+    assert [tuple(x.split()) for x in said] == [SC.RECORDS]
+
+
+@lean
+def test_the_lean_check_refuses_a_log_whose_w_is_not_the_record_r_names(tmp_path, inference_only_exe):
+    """The verifier's own refusal, not the producer's: `inference-only check` accepts the policy's case over R with its
+    log the serve's first registration record and the W that R names, and handed in that W's place another W chained
+    after the same first record, alone or after it, or the right W without the first record before it, it rejects
+    ``trusted``: whoever hands the log over, the check holds each record's ``previous`` to the digest of the one before
+    it, R's included, and the first's to null."""
+    w = h1_registration(R.digest(FIRST))
+    v1 = tied_v1_case(w)
+    case = SC.inference_only_case(v1, *SC.UNBOUNDED, [FIRST, w])
+    got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
+    assert (got["protocol"], got["commitment"], got["verdict"]) == (INF, digest_of(v1), "accept"), got
+    other = h1_registration(R.digest(FIRST), entry=5)
+    for log in ([FIRST, other], [other], [w]):
+        case["params"]["log"] = log
+        got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
+        assert (got["protocol"], got["verdict"], got["reason"].split(":")[0]) == (INF, "reject", "trusted"), (log, got)
+
+
 @pytest.mark.parametrize("change, reason", [
     ("other-file", "the serve's H1 log names w0/registration.json as the record of digest"),
     ("no-file", "a line of the serve's H1 log names no record file and digest"),
     ("unchained", "the record's previous is no record the serve's H1 log names"),
     ("not-json", "the record names a previous record, and the serve's H1 log isn't readable: JSONDecodeError"),
-    ("no-log", "the record names a previous record, so pass the deployment's log (--log)"),
+    ("no-log", "which the record names as its previous, so its log doesn't chain from the deployment's first record: "
+               "pass the deployment's log (--log)"),
 ])
 def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_record(tmp_path, capsys, change, reason):
     """The policy's log is read off the serve's H1 log only as it names its records: a line whose file isn't the record
-    of its digest, a line naming none, a log that never reaches R's previous or isn't JSON, or no log for an R naming
-    one, refuses the policy's case alone (one-stage's and the period's are still written)."""
+    of its digest, a line naming none, or a log that never reaches R's previous or isn't JSON refuses the policy's case
+    alone (one-stage's and the period's are still written). So does a serve dir with no H1 log for an R naming a
+    previous record: its log is then walked among the serve's own registration records, which hold none of that
+    digest."""
     serve, v1, w = tied_serve(tmp_path / "serve")
     h1 = serve / "h1"
     if change == "other-file":

@@ -11,8 +11,9 @@ bare case too:
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
 ``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads the serve's H1 log
 (``D/h1/log.jsonl``, `H1_LOG`), PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`), Pearl+'s case's
-parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`) and the serve's first registration record
-(``D/deployment-registration.json``, `DEPLOYMENT`) where it holds them.
+parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`), the serve's first registration record
+(``D/deployment-registration.json``, `DEPLOYMENT`) and each window's registration records as the harness keeps them
+(`RECORDS`) where it holds them.
 Every case commits to the same record R, ``window/case.json``'s commitment, the record the audit sampled against (under
 H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Commit record before its sample coin,
 `serve_tie`), and each must name R's digest, SHA-512(format ‖ 0 ‖ canon(record)) (`registration.digest`), or nothing is
@@ -41,11 +42,15 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     ``--from-division`` read off the case's own division, `division_policy`, so the check confirms that the division
     complies and they're no security setting, which the case's private ``policy.json`` says beside them; without
     either no case is written), ``log`` (the deployment's records before R, from its first, whose ``previous`` is
-    null, as the policy's check reads them: ``--log``, else with ``--serve-dir`` the serve's H1 log through R's
-    ``previous``, `h1_log`, each window's registration W and record R up to the window's W; else, on a serve whose
-    window record is Pearl+'s, that W, which Pearl+'s case's parts hold, and before it the serve's first registration
-    record where W is chained after one, `pearl_log`; empty when R names no
-    previous record), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
+    null, as the policy's check reads them. It has three sources, tried in this order, and the first that is there is
+    the whole log, none filled in from another: (1) ``--log``, a file the caller hands; (2) with ``--serve-dir``, the
+    serve's H1 log through R's ``previous``, `h1_log`, each window's registration W and record R up to the window's W;
+    (3) the serve's own registration records, walked back from R's ``previous`` by digest to a record whose
+    ``previous`` is null, `pearl_log`: on a serve whose window record is Pearl+'s, that W and before it the serve's
+    first registration record, W from Pearl+'s case's parts on the served node and, on a copy of the compose hand-off,
+    which holds no part of Pearl+'s case, from the files the hand-off lists (`RECORDS`, `DEPLOYMENT`). Whoever handed
+    a record over, the policy's check holds the chain itself and refuses a log that doesn't reach R (``trusted``).
+    Empty when R names no previous record), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
     ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over its
     root's templates, and the registered values v1's own ``parameters`` name ahead of them, held to the record's
     ``program``, `parameters`);
@@ -181,6 +186,11 @@ PEARL_PLUS_PIECE = Path("private/pearlplus/case")
 #: Under ``--serve-dir``: the serve's first registration record, where the serve wrote one before its first request
 #: (`served_verdicts.sh`'s weights step: every weight's root, chained after nothing)
 DEPLOYMENT = Path("deployment-registration.json")
+#: The registration records a serve dir holds beside its first, by where the harness keeps them: each window's Pearl+
+#: record W (`served_verdicts.sh`'s `pearl_tie`) and each window's record R as its audit wrote it. The compose hand-off
+#: lists every one there is (`served_verdicts.sh`'s `handoff_inputs`), so a copy of it holds each record a window's log
+#: can name
+RECORDS = ("pearlplus/w*/registration.json", "v3c-w*/audit/window/registration.json")
 CASE_KEYS = {"commitment", "evidence", "params"}
 USAGE = 64
 #: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check reports
@@ -478,27 +488,41 @@ def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
 
 
 def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """The deployment's records before ``rec``, oldest first, on a serve whose window record is Pearl+'s: the record W
-    Pearl+'s case's parts (``parts``, `pearlplus_of`) hold its passes to, which ``rec`` is chained right after (the tie
-    `Core.Remote.V1.window` checks), and before it the serve's first registration record (`DEPLOYMENT` under ``serve``)
-    where W is chained after one. Each is taken by the digest the record after it names, so a W or a first record that
-    isn't the one named is no part of the log, and the refusal says the log doesn't reach the deployment's first record.
-    Empty when ``rec`` names no previous record."""
+    """The deployment's records before ``rec``, oldest first, on any serve dir without an H1 log, Pearl+'s or not:
+    walked back from the record ``rec`` names as its ``previous`` to one whose ``previous`` is null, each taken by the
+    digest the record after it names, however many there are. On the harness's serve tied to Pearl+ that is the record
+    W Pearl+'s passes are held to, which ``rec`` is chained right after (the tie `Core.Remote.V1.window` checks), and
+    before it the serve's first registration record where W is chained after one. The records it walks among are the W
+    Pearl+'s case's parts hold (``parts``, `pearlplus_of`) and the ones ``serve`` holds: its first (`DEPLOYMENT`, which
+    must parse where it is there) and each window's W and R (`RECORDS`), which is all a copy of the compose hand-off
+    holds of them. A file under `RECORDS` that doesn't parse, or that is no record of the digest a later one names, is
+    no part of the log, and a link no record answers is refused, saying the log doesn't reach the deployment's first
+    record and naming each file under `RECORDS` that didn't parse. Empty when ``rec`` names no previous record."""
     held: dict[str, dict[str, Any]] = {}
+    unread: list[str] = []
     if parts is not None:
         w = (_json(parts / "parts.json").get("window") or {}).get("record")
         if isinstance(w, dict):
             held[R.digest(w)] = w
-    if serve is not None and (serve / DEPLOYMENT).is_file():
-        first = _json(serve / DEPLOYMENT)
-        if isinstance(first, dict):
-            held[R.digest(first)] = first
+    if serve is not None:
+        found = [_json(serve / DEPLOYMENT)] if (serve / DEPLOYMENT).is_file() else []
+        for f in sorted(f for pattern in RECORDS for f in serve.glob(pattern) if f.is_file()):
+            try:
+                found.append(json.loads(f.read_text()))
+            except (OSError, ValueError) as e:
+                unread.append(f"{f.relative_to(serve)} ({type(e).__name__})")
+        for r in found:
+            if isinstance(r, dict):
+                held[R.digest(r)] = r
     log: list[dict[str, Any]] = []
     at = rec.get("previous")
     while at is not None:
-        _need(at in held and len(log) < len(held),
-              "the record's previous records are not Pearl+'s window record and, before it, the serve's first "
-              "registration record, so its log doesn't chain from the deployment's first record (pass --log)")
+        _need(isinstance(at, str) and at in held and len(log) < len(held),
+              "the record's previous records are not all among Pearl+'s window record and the serve's registration "
+              f"records (its first, each window's W and R): none is the record of digest {str(at)[:16]}…, which "
+              f"{'the record' if not log else 'the earliest of them found'} names as its previous, so its log doesn't "
+              "chain from the deployment's first record: pass the deployment's log (--log)"
+              + (f"; no record either, since they don't parse: {', '.join(unread)}" if unread else ""))
         log.insert(0, held[at])
         at = held[at].get("previous")
     return log
@@ -738,7 +762,7 @@ def produce(a: argparse.Namespace) -> int:
             log = _json(a.log)
         elif a.serve_dir is not None and (a.serve_dir / H1_LOG).is_file():
             log = h1_log(a.serve_dir / H1_LOG, rec)
-        elif pearlplus is not None:
+        elif pearlplus is not None or a.serve_dir is not None:
             log = pearl_log(a.serve_dir, pearlplus, rec)
         else:
             log = []
@@ -784,7 +808,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--from-division", action="store_true",
                     help="α and Γ read off the case's own division (division_policy) instead of given")
     ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list "
-                    "(default with --serve-dir: its H1 log's, h1_log)")
+                    "(default with --serve-dir: its H1 log's, h1_log, else the serve's own registration records, pearl_log)")
     ap.add_argument("--period", type=Path, help="PoUW's period case, pouw_piece.py period's --out (default with "
                     f"--serve-dir: its {PERIOD_PIECE} when it holds a case)")
     ap.add_argument("--pearlplus", type=Path, help="Pearl+'s case's parts, served_passes.py case's --out (default with "
