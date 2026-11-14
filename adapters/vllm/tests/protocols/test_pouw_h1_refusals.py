@@ -10,10 +10,19 @@ window (`pouw_h1_handoff.Holder`, `send_stream`, `client_of`, `resume`), a Pearl
 (`pouw_h1_commit.CommitTap.input_ids`, `reused`), and a window's served trees off its Program: its period's weights,
 a call's weight, a linear its forward skips, its receipt producer and round 0's input ids (`pouw_h1_served.Served`).
 Beside them, two paths only a large file takes: a file's digest kept for the process (`pouw_h1_answers.file_digest`)
-and a file past zip's 32-bit sizes written by ``np.savez`` (`pouw_h1_prover.savez`)."""
+and a file past zip's 32-bit sizes written by ``np.savez`` (`pouw_h1_prover.savez`).
+
+And what a window's own parts refuse with no GPU: its sessions (`pouw_h1_window`: a lane's open period, a salt coin
+that doesn't open, the gate's withheld open, a sample session's reserve, open and layout, a second open), a receipt
+producer's launches, run, codes, weight and roots (`pouw_h1_receipts.Receipts`), the sampled statements' window,
+weights, weights' key and sessions (`drawn.window_of`, `linear_weights`, `weights_key`, `statements`, `check`), a
+multiprocess window's ranks (`pouw_h1_ranks.install`, `ingest`, `RankExtension`), a call that committed nothing
+(`pouw_h1_served.Served.close`, `pouw_h1_kept.kept_row`), and the host's libraries and table roots
+(`pouw_h1_registered_device.host_lib`, `zy_host_lib`, `pouw_h1_tables_device.host_roots`)."""
 from __future__ import annotations
 
 import dataclasses
+import gzip
 import hashlib
 import io
 import json
@@ -23,6 +32,7 @@ import random
 import socket
 import threading
 from fractions import Fraction
+from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -35,6 +45,7 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.circuits.codec import canonical_json
+from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
@@ -46,7 +57,8 @@ from verity.protocols.accounting.pouw.verifier.audit import (
 )
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.proofs.spot.device import challenger as LC
-from verity.protocols.proofs.spot.device.challenger import LiveRecord
+from verity.protocols.proofs.spot.device import remote as R
+from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
 
 import verity_vllm.protocols.pouw.h1.answers as AN
 import verity_vllm.protocols.pouw.h1.challenger as PHC
@@ -56,27 +68,37 @@ import verity_vllm.protocols.pouw.h1.drawn as DN
 import verity_vllm.protocols.pouw.h1.drawn_rows as DR
 import verity_vllm.protocols.pouw.h1.handoff as HO
 import verity_vllm.protocols.pouw.h1.hooks as PHK
+import verity_vllm.protocols.pouw.h1.kept as KP
 import verity_vllm.protocols.pouw.h1.live as LV
 import verity_vllm.protocols.pouw.h1.model_key as MK
 import verity_vllm.protocols.pouw.h1.prover as PV
+import verity_vllm.protocols.pouw.h1.ranks as PHR
+import verity_vllm.protocols.pouw.h1.receipts as RC
 import verity_vllm.protocols.pouw.h1.registered as NR
+import verity_vllm.protocols.pouw.h1.registered_device as RGD
 import verity_vllm.protocols.pouw.h1.requests as RQ
 import verity_vllm.protocols.pouw.h1.served as SV
 import verity_vllm.protocols.pouw.h1.served_files as SF
 import verity_vllm.protocols.pouw.h1.static as ST
+import verity_vllm.protocols.pouw.h1.tables_device as TBD
+import verity_vllm.protocols.pouw.h1.window as PHW
 import verity_vllm.protocols.pouw.h1.words as W
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1_commit as TC
+from tests.protocols import test_pouw_h1_ranks as TR
 from tests.protocols import test_pouw_h1_served as TS
 from tests.protocols import test_pouw_pearl_c_served as PCS
 from tests.protocols.test_pouw_h1 import (
+    AUDITOR,
     KEY,
+    RESERVED,
     SALT,
     K,
     Linear,
     Runner,
     _admitted_run,
     _entry,
+    _gate,
     _host,
     _opening,
     _remote,
@@ -1094,3 +1116,521 @@ def test_a_file_past_zips_32_bit_sizes_is_the_one_np_savez_writes(tmp_path, monk
     past = PV.savez(tmp_path / "past.npz", arrays)
     assert own.read_bytes() == past.read_bytes() == want.getvalue()
     assert past == tmp_path / "past.npz" and past.stat().st_mode & 0o777 == 0o600
+
+
+def test_a_lanes_open_period_is_the_last_it_opened_that_the_ledger_has_not_closed():
+    """`open_period` is the body of the lane's ``period-open`` while no ``period-close`` of that period follows it:
+    None once the period is closed, and the next one's body once the lane opens another. Another lane's open and
+    another period's close change nothing."""
+    def entry(kind, **body):
+        return json.dumps({"kind": kind, "body": body})
+    first, second = {"lane": "vllm", "period": "p1"}, {"lane": "vllm", "period": "p2"}
+    lines = [entry("period-open", lane="other", period="q1"), entry("period-open", **first)]
+    assert PHW.open_period([], "vllm") is None and PHW.open_period(lines, "vllm") == first
+    assert PHW.open_period([*lines, entry("period-close", period="q1")], "vllm") == first
+    closed = [*lines, entry("period-close", period="p1")]
+    assert PHW.open_period(closed, "vllm") is None
+    assert PHW.open_period([*closed, entry("period-open", **second)], "vllm") == second
+
+
+class _Client:
+    """A challenger's client as `pouw_h1_window` reads one: what its hello answered (its coin commitment, or withheld
+    the layout's ``families`` alone), the coins it was asked, each of which it refuses, and how often it was closed."""
+
+    def __init__(self, commitment=None, families=()):
+        self.commitment, self.withheld, self.families = commitment, commitment is None, families
+        self.asked: list[tuple[str, int, bytes]] = []
+        self.closed = 0
+
+    def open(self, label, index, after):
+        self.asked.append((label, index, after))
+        raise CoinError("the challenger refused: that coin is open")
+
+    def close(self):
+        self.closed += 1
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
+def _reached(monkeypatch, *clients):
+    """`clients` in turn as what `remote.RemoteChallenger.connect` reaches; returns the (address, secret) of each try."""
+    tries: list[tuple[str, bytes | None]] = []
+    left = list(clients)
+
+    def connect(cls, at, secret=None):
+        tries.append((at, secret))
+        if not left:
+            raise OSError("no challenger is listening")
+        return left.pop(0)
+    monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(connect))
+    return tries
+
+
+def test_a_session_whose_salt_coin_does_not_open_is_closed_and_the_refusal_raised(monkeypatch):
+    """`session` (ncp-v2's) and `opened` (a reserved session the gate opens) reach the challenger, then ask its salt
+    coin after their root. Where that coin does not open, the session they reached is closed and the challenger's
+    refusal is raised as it was."""
+    live = Wd.live_challenger(0, 3, CH.entropy(1)).commitment
+    sid, root = CH.session_id(1), hashlib.sha512(b"a root").digest()
+    answer = {"session": sid, "seq": 0, "root": root.hex(), "commitment": live.root.hex()}
+    clients = [_Client(live), _Client(live)]
+    tries = _reached(monkeypatch, *clients)
+    for client, reach in zip(clients, (
+            lambda: PHW.session("pouw:test", AUDITOR, 3, root, answer),
+            lambda: PHW.opened("pouw:test", AUDITOR, 3, lambda s, r: answer, sid, root, "the window's open root"))):
+        with pytest.raises(CoinError) as refused:
+            reach()
+        assert str(refused.value) == "the challenger refused: that coin is open"
+        assert client.asked == [(Wd.SALT, 0, root)] and client.closed == 1
+    assert tries == [(AUDITOR, None), (AUDITOR, None)]
+
+
+@pytest.mark.parametrize("answer", [{"withheld": False, "signed": True}, {"signed": True}, {"withheld": 1, "signed": True},
+                                    {"withheld": True, "signed": True, "commitment": "c0" * 64}, {"withheld": True},
+                                    {"withheld": True, "signed": 1}],
+                         ids=["plain", "no-word-of-it", "withheld-1", "a-commitment", "unsigned", "signed-1"])
+def test_the_gates_open_of_a_withheld_session_says_withheld_and_signed_and_shows_no_commitment(answer):
+    """A sample session is reserved withheld: the gate's open of it says ``withheld: true`` and ``signed: true`` and
+    carries no coin commitment, and ``status`` is never asked for one. An answer short of that is refused before any
+    coin, by the session's id; one that has all three is the window's, less what a session's answer doesn't hold."""
+    sid, root, asked = CH.session_id(0xd), "ab" * 64, []
+
+    def gate(given):
+        def call(*words):
+            asked.append(words)
+            return {"session": sid, "seq": 4, "root": root, "commitment": None, **given}
+        return PHW.gate_of(call)
+    with pytest.raises(CoinError) as refused:
+        gate(answer)(sid, root, withhold=True)
+    assert str(refused.value) == f"the gate's open of {sid}: {PHW.WITHHELD_OPEN}"
+    assert gate({"withheld": True, "signed": True, "port": 7812, "ledger": "not a session's"})(sid, root, withhold=True) == {
+        "session": sid, "seq": 4, "root": root, "commitment": None, "port": 7812}
+    assert asked == [("open", "--session", sid, "--root", root)] * 2
+
+
+def test_a_sample_session_the_gate_reserved_plain_is_refused_and_a_withheld_ones_answer_is_the_windows():
+    """`reserve_draw` asks the gate for a session of the sampling coin alone, withheld. An answer that doesn't say
+    ``withheld: true`` is refused by the session's id; a withheld one is the reserve answer the window takes, its
+    session and the reserve's fields."""
+    sid, asked = CH.session_id(0xd), []
+
+    def gate(answer):
+        def call(*words):
+            asked.append(words)
+            return answer
+        return call
+    for answer in ({"session": sid, "seq": 3}, {"session": sid, "seq": 3, "withheld": False},
+                   {"session": sid, "seq": 3, "withheld": 1}):
+        with pytest.raises(CoinError) as refused:
+            PHW.reserve_draw(gate(answer), "vy-nebius-1")
+        assert str(refused.value) == f"the gate reserved draw session {sid} plain, not withheld"
+    reserved = {"session": sid, "seq": 3, "peer": "vy-nebius-1", "withheld": True, "scheme": PHC.SCHEME}
+    assert PHW.reserve_draw(gate(reserved), "vy-nebius-1") == {"session": sid, "seq": 3, "peer": "vy-nebius-1"}
+    assert asked == [("reserve", "--peer", "vy-nebius-1", "--scheme", PHC.SCHEME, "--families",
+                      json.dumps([[Wd.DRAW, 1]]), "--withhold")] * 4
+
+
+def test_a_windows_sampling_coin_has_no_session_unless_one_is_reserved_and_a_gate_opens_it(monkeypatch):
+    """With no reserve answer for a sample session, or no gate to open one, the window's sampling coin is refused with
+    `NO_DRAW_SESSION`, and nothing is asked of a gate or reached."""
+    sid, root, asked = CH.session_id(0xd), hashlib.sha512(b"a sample root").digest(), []
+    tries = _reached(monkeypatch)
+    for reserved, gate in ((None, lambda *a, **kw: asked.append(a)), ({"session": sid}, None), (None, None)):
+        with pytest.raises(CoinError) as refused:
+            PHW.DrawSession("pouw:test", AUDITOR, reserved, gate).record(root)
+        assert str(refused.value) == PHW.NO_DRAW_SESSION
+    assert asked == [] and tries == []
+
+
+@pytest.mark.parametrize("off", ["session", "root"])
+def test_a_sample_session_is_opened_once_on_the_windows_sample_root_and_a_retry_never_asks_again(monkeypatch, off):
+    """The gate opens the reserved sample session on the window's sample root, withheld. An answer for another
+    session, or for another root, is refused before anything is reached, by the session and the root; and the
+    session is asked for once: a second `record` is refused without a word to the gate."""
+    sid, root, asked = CH.session_id(0xd), hashlib.sha512(b"a sample root").digest(), []
+    tries = _reached(monkeypatch)
+
+    def gate(session, r, withhold=False):
+        asked.append((session, r, withhold))
+        return {"session": session, "root": r, off: {"session": CH.session_id(0xe), "root": "ab" * 64}[off]}
+    sample = PHW.DrawSession("pouw:test", AUDITOR, {"session": sid}, gate)
+    with pytest.raises(CoinError) as refused:
+        sample.record(root)
+    assert str(refused.value) == (f"pouw:test: the window's draw session {sid}: the gate's answer is not draw session "
+                                  f"{sid} opened on the draw root {root.hex()[:16]}...")
+    with pytest.raises(CoinError) as refused:
+        sample.record(root)
+    assert str(refused.value) == "the window's draw session is opened once: a retry never redraws"
+    assert asked == [(sid, root.hex(), True)] and tries == []
+    assert sample.session is None and sample.commitment is None
+
+
+SHOWN = ("draw session {sid}'s challenger answered its hello with a coin commitment: a draw session is withheld, its "
+         "commitment released only at its close")
+ANOTHER_LAYOUT = "draw session {sid}'s layout is not a draw session's, its draw coin alone"
+
+
+@pytest.mark.parametrize("client,said", [
+    (lambda: _Client(Wd.draw_challenger(0, CH.entropy(1)).commitment, ((Wd.DRAW, 1),)), SHOWN),
+    (lambda: _Client(families=((Wd.DRAW, 2),)), ANOTHER_LAYOUT),
+    (lambda: _Client(families=((Wd.DRAW, 1), (Wd.SALT, 1))), ANOTHER_LAYOUT)],
+    ids=["a-commitment", "two-coins", "a-salt-beside"])
+def test_a_sample_sessions_challenger_that_shows_its_commitment_or_another_layout_is_asked_no_coin(monkeypatch, client, said):
+    """A sample session's challenger answers its hello with the session's layout alone, its sampling coin and no
+    other. One that answers with a coin commitment, or whose layout holds two sampling coins or a salt coin beside
+    the one, is closed with no coin asked of it, and the window has no sample session."""
+    sid, root, reached = CH.session_id(0xd), hashlib.sha512(b"a sample root").digest(), client()
+    tries = _reached(monkeypatch, reached)
+    sample = PHW.DrawSession("pouw:test", AUDITOR, {"session": sid},
+                             lambda s, r, withhold=False: {"session": s, "root": r, "port": 7812, "secret": "5e" * 32})
+    with pytest.raises(CoinError) as refused:
+        sample.record(root)
+    assert str(refused.value) == said.format(sid=sid)
+    assert tries == [(f"{AUDITOR.rpartition(':')[0]}:7812", bytes.fromhex("5e" * 32))]
+    assert reached.asked == [] and reached.closed == 1 and sample.session is None and sample.commitment is None
+
+
+def test_a_windows_session_is_opened_once(tmp_path, monkeypatch):
+    """A window opens its reserved session on its open root once round 0's request table is committed, and once: a
+    second `open` is refused by the window's entry, and the session it holds closes as the first one's."""
+    host = _host(tmp_path, monkeypatch)
+    weights, requests = (hashlib.sha512(x).digest() for x in (b"weights", b"round 0's requests"))
+    window = PHW.Window("pouw:test", AUDITOR, 3, weights, RESERVED, _gate)
+    with pytest.raises(CoinError, match="^the window's session was never opened$"):
+        window.close()
+    salt, rounds, _sample, commits = window.open(requests)
+    try:
+        with pytest.raises(RuntimeError) as refused:
+            window.open(requests)
+    finally:
+        window.close()
+    assert str(refused.value) == "pouw:test: the window's session is opened once"
+    assert host.ended() is None
+    opened_on = PS.window_open_root(weights, requests, RESERVED["session"])
+    assert commits["session"]["root"] == opened_on.hex() and rounds.challenger is host.client
+    assert salt == salt_of(host.challenger.commitment, LC.LiveOpening.from_json(commits["salt_opening"]).coin, weights)
+
+
+def test_a_session_is_closed_when_what_follows_its_open_raises_and_left_open_when_it_does_not():
+    """`closed_on_error` closes the session it is given when its body raises, and raises what the body did; a body
+    that ends leaves the session open, and with no session there is nothing to close."""
+    client = _Client()
+    with PHW.closed_on_error(client):
+        pass
+    assert client.closed == 0
+    with pytest.raises(KeyError, match="^'after the open'$"), PHW.closed_on_error(client):
+        raise KeyError("after the open")
+    assert client.closed == 1
+    with pytest.raises(KeyError, match="^'no session'$"), PHW.closed_on_error(None):
+        raise KeyError("no session")
+
+
+def test_a_receipt_producer_takes_a_launch_a_run_and_each_calls_own_codes_and_weight():
+    """The producer refuses, each by name: a batch of no launch; a call before a run is bound, whose salt its seeds
+    take; a call with no weight handed over; a weight that is not the call's n × K contiguous int8 codes on its
+    device; and codes that are not at most the window's M rows of K int8 codes. What it takes becomes the call's A
+    over the M slots, zero past the served rows, beside its B."""
+    served, call = SimpleNamespace(m=32), SimpleNamespace(index=4, layer=1, n=32, k=K)
+    with pytest.raises(ValueError, match="^a batch takes at least one launch, not 0$"):
+        RC.Receipts(served, launches=0)
+    made = RC.Receipts(served)
+    codes: np.ndarray = np.arange(5 * K, dtype=np.int8).reshape(5, K)
+    weight: np.ndarray = np.ones((32, K), np.int8)
+    with pytest.raises(ValueError) as refused:
+        made(call, codes, None, weight, None)
+    assert str(refused.value) == "the receipt producer is bound to no run: its units' seeds take the run's salt (`bind`)"
+    with pytest.raises(ValueError, match="^call 4: no weight of linear 1 was handed over$"):
+        made.weight_of(call, None)
+    for held, what in ((lambda: torch.ones(16, K, dtype=torch.int8), f"torch.int8 (16, {K})"),
+                       (lambda: torch.ones(32, K, dtype=torch.int16), f"torch.int16 (32, {K})"),
+                       (lambda: torch.ones(K, 32, dtype=torch.int8).t(), f"torch.int8 (32, {K})")):
+        with pytest.raises(ValueError) as refused:
+            RC.Receipts(served, weight=lambda _call, held=held: held()).weight_of(call, None)
+        assert str(refused.value) == (f"call 4: its weight is {what} on cpu, not its 32 × {K} contiguous int8 codes on "
+                                      "cpu")
+    for given in (codes.astype(np.int16), codes[0], codes[:, :K // 2], np.zeros((33, K), np.int8)):
+        with pytest.raises(ValueError) as refused:
+            made.operands(call, given, weight)
+        assert str(refused.value) == (f"call 4: its codes are {given.dtype} {given.shape}, not at most 32 rows of {K} "
+                                      "int8 codes")
+    a, b = made.operands(call, codes, weight)
+    assert a.shape == (32, K) and np.array_equal(a[:5].numpy(), codes) and not a[5:].any()
+    assert np.array_equal(b.numpy(), weight) and made.weight_of(call, weight) is b
+
+
+def test_a_calls_seeds_take_its_operands_registered_roots_or_the_roots_the_producer_is_given():
+    """A call's seeds take the registered roots of its step's ``a/<K>@<s>`` and of ``b/<K>``. Asked before the window
+    registers them, the producer refuses and names both tables and the ones missing; a producer made with ``roots``
+    answers with those, whatever the window registers."""
+    served = SV.Served(PH.TILE, TS._unit())
+    served.declare([(32, K), (32, K)], {0: "q", 1: "o"}, 32, 2)
+    call = SimpleNamespace(index=0, k=K)
+    a, b = served.a_table(0), f"{served.program.fn.bindings['PREFIX']}b/{K}"
+    with pytest.raises(ValueError) as refused:
+        RC.Receipts(served).roots(call)
+    assert str(refused.value) == (f"call 0's seeds take the roots of {a} and {b}, and {[a, b]} isn't registered yet: a "
+                                  "step's receipts of K are asked for at its last call of K")
+    given = (bytes(64), bytes([1]) * 64)
+    assert RC.Receipts(served, roots=lambda c: given if c is call else None).roots(call) is given
+
+
+def test_a_ks_weights_are_read_from_the_checkpoint_only_by_a_reader_the_caller_binds():
+    """With no ``--weights`` file, K's weights come from ``--checkpoint`` through the reader the caller binds.
+    `linear_weights` refuses without a checkpoint, and with one and no reader, and says what to give; with both it
+    hands the reader the checkpoint, the window's linears and K, and returns what it read."""
+    linears, checkpoint, asked = [("q", 4, 3), ("o", 6, 2), ("k", 4, 2)], Path("model.safetensors"), []
+
+    def read(*args):
+        asked.append(args)
+        return "the weights"
+    for reader in (None, read):
+        with pytest.raises(Refused) as refused:
+            DN.linear_weights(linears, 4, None, None, reader)
+        assert str(refused.value) == ("b/<K>'s rows are the served model's weights: give --checkpoint (its "
+                                      "safetensors) or --weights")
+    with pytest.raises(Refused) as refused:
+        DN.linear_weights(linears, 4, checkpoint, None, None)
+    assert str(refused.value) == ("--checkpoint is read by benchmarks/pouw/h1_prove/drawn.py's reader: run that CLI, or "
+                                  "give --weights")
+    assert asked == [] and DN.linear_weights(linears, 4, checkpoint, None, read) == "the weights"
+    assert asked == [(checkpoint, linears, 4)]
+
+
+def test_the_key_a_ks_weights_are_salted_under_is_the_gates_model_key_for_the_windows_circuit(monkeypatch):
+    """With ``--gate`` and no ``--weights-key``, `weights_key` asks the gate's ``model-key`` for ``--model`` under the
+    window's circuit and weights' root, as one word of the gate's command, and takes the key its answer holds in hex
+    when the answer's ``key_sha512`` names it. It refuses, and says which: a gate with no ``--model``, before the gate
+    is asked; an answer that holds no key in hex, with the gate's exit and the end of what it wrote; and a key its
+    ``key_sha512`` doesn't name."""
+    key, circuit, weights = bytes(range(32)), "ab" * 64, "cd" * 64
+    win = {"program": circuit, "record": {"commitment": {"weights_root": weights}}}
+    asked: list[tuple[list[str], dict[str, Any]]] = []
+
+    def gate(stdout=b"", stderr=b"", code=0, model="M"):
+        def run(argv, **kw):
+            asked.append((argv, kw))
+            return SimpleNamespace(stdout=stdout, stderr=stderr, returncode=code)
+        monkeypatch.setattr(DN.subprocess, "run", run)
+        return SimpleNamespace(weights_key=None, gate="ssh auditor gate", model=model)
+
+    def refusal(*answer, **kw):
+        with pytest.raises(Refused) as refused:
+            DN.weights_key(gate(*answer, **kw), win)
+        return str(refused.value)
+    assert refusal(model=None) == "--gate reads the auditor's key with model-key --model ROLE: give --model"
+    assert asked == []
+    answer = {"key": key.hex(), "key_sha512": hashlib.sha512(key).hexdigest()}
+    assert DN.weights_key(gate(json.dumps(answer).encode()), win) == (key, "the gate's model-key for M")
+    assert asked == [(["ssh", "auditor", "gate", f"model-key --model M --circuit {circuit} --weights-root {weights}"],
+                      {"capture_output": True, "check": False})]
+    for stdout in (b'{"key_sha512": "00"}', b'{"key": "zz"}', b'{"key": 7}', b"[1]", b"no JSON"):
+        assert refusal(stdout) == f"the gate's model-key answered no key (exit 0): {stdout.decode()}"
+    assert refusal(b"", b"x" * 300 + b"denied\n", 3) == f"the gate's model-key answered no key (exit 3): {'x' * 293}denied\n"
+    for named in ({"key_sha512": "00" * 64}, {"key_sha512": None}):
+        assert refusal(json.dumps({**answer, **named}).encode()) == (
+            "the gate's model-key key is not the one its key_sha512 names")
+
+
+def test_a_windows_record_is_read_under_its_declared_programs_layout_and_only_with_its_served_trees(tmp_path):
+    """`window_of` reads a window's record beside the declared Program. It refuses a Program file whose bytes have no
+    layout, with core's reason; a record that names no served trees, or holds what is no list of their entries; and
+    one whose served trees were refused, with their refusals."""
+    served = SV.Served(PH.TILE, TS._unit())
+    served.declare([(32, K), (32, K)], {0: "q", 1: "o"}, 32, 2)
+    declared = SV.descriptor(served.program)
+    (tmp_path / DN.RECORD.format(w=0)).parent.mkdir(parents=True)
+
+    def refusal(commitment, raw=declared):
+        (tmp_path / DN.PROGRAM).write_bytes(gzip.compress(raw))
+        (tmp_path / DN.RECORD.format(w=0)).write_text(json.dumps({"commitment": commitment}))
+        with pytest.raises(Refused) as refused:
+            DN.window_of(tmp_path, 0)
+        return str(refused.value)
+    _layout, why = CR.layout_of(b"no descriptor")
+    assert why is not None and CR.layout_of(declared)[1] is None
+    assert refusal({}, b"no descriptor") == f"the declared Program's layout: {why[1]}"
+    for trees in ({}, {"served": None}, {"served": [{"value": "v"}]}, {"served": {"refused": []}},
+                  {"served": {"entries": {"value": "v"}}}):
+        assert refusal(trees) == "the window's record names no served trees: drawn rebuilds the values they registered"
+    refused = ["call 0: its weight is not its 32 × 64 int8 codes and 32 scales"]
+    assert refusal({"served": {"entries": [], "refused": refused}}) == f"the window's served trees were refused: {refused}"
+
+
+def _ranks(*ranks, cls=TR.FakeRank):
+    """An executor over one worker for each (pp, tp) of `ranks`, two linears each, and the workers."""
+    layers = TR._layers()
+    workers = [cls(tp, layers[2 * i:2 * i + 2]) for i, (_pp, tp) in enumerate(ranks)]
+    for worker, rank in zip(workers, ranks):
+        worker.rank = rank
+    return TR.Executor(workers), workers
+
+
+def _install(executor, **kw):
+    return PHR.install(None, executor=executor, rows=32, steps=4, key=KEY, entry="t", **kw)
+
+
+def test_a_multiprocess_window_is_refused_before_a_rank_is_installed_when_its_salt_or_its_ranks_dont_fit():
+    """`install` refuses, by the window's entry and before any rank holds a window: a salt from both coins and an
+    opener, or from neither; ranks whose runners disagree on decode_query_len; and the Commit over more than one
+    pipeline stage, whose later stages acquire no input ids."""
+    coins = Challenger(0, random.Random(0).randbytes)
+    executor, workers = _ranks((0, 0), (0, 1))
+    for salt in ({}, {"coins": coins, "opener": lambda requests: None}):
+        with pytest.raises(ValueError, match="^t: the window's salt is from coins or opened by its opener, one of the two$"):
+            _install(executor, **salt)
+    workers[1].model_runner.decode_query_len = 2
+    with pytest.raises(ValueError, match="^t: the ranks' runners disagree on decode_query_len$"):
+        _install(executor, coins=coins)
+    executor, staged = _ranks((0, 0), (1, 0))
+    with pytest.raises(ValueError, match="^t: the Commit across pipeline stages: a later stage acquires no input ids$"):
+        _install(executor, coins=coins, served=SV.Served(PH.TILE, TS._unit()), commit={})
+    assert all(worker._h1rank is None for worker in (*workers, *staged))
+
+
+class _ShortOfARoot(TR.FakeRank):
+    """A rank whose install answers without its last linear's weight root."""
+
+    def h1rank_install(self, **kw):
+        out = super().h1rank_install(**kw)
+        out["roots"].popitem()
+        return out
+
+
+class _Committing(TR.FakeRank):
+    """A rank whose Commit acquires input ids under a port named by its tensor-parallel rank."""
+
+    def h1rank_commit(self, **kw):
+        return {"port": f"ids@tp{self.rank[1]}"}
+
+
+def test_a_multiprocess_window_is_refused_when_its_ranks_roots_or_their_commits_ports_dont_make_one_window():
+    """Every linear of the window has its weight root from the rank that holds it, and with the Commit every rank
+    acquires input ids under one port. `install` refuses ranks whose roots cover fewer linears than their shapes
+    hold, and ranks whose Commits name two ports, each by the window's entry."""
+    coins = Challenger(0, random.Random(0).randbytes)
+    for cls, kw, said in ((_ShortOfARoot, {}, "t: the ranks' weight roots cover 2 of 4 linears"),
+                          (_Committing, {"served": SV.Served(PH.TILE, TS._unit()), "commit": {}},
+                           "t: the ranks' Commits acquire input ids under ['ids@tp0', 'ids@tp1'], not one port")):
+        executor, workers = _ranks((0, 0), (0, 1), cls=cls)
+        try:
+            with pytest.raises(RuntimeError) as refused:
+                _install(executor, coins=coins, **kw)
+        finally:
+            executor.collective_rpc("h1rank_release")
+        assert str(refused.value) == said and all(worker._h1rank is None for worker in workers)
+
+
+def test_a_rank_with_no_window_refuses_its_salt_and_its_rows_and_releases_nothing():
+    """Before `h1rank_install` and after `h1rank_release` a rank holds no window: it refuses the holder's salt and a
+    pull of its rows, and a release there returns None."""
+    rank = PHR.RankExtension()
+    for ask in (lambda: rank.h1rank_open(SALT), rank.h1rank_rows):
+        with pytest.raises(RuntimeError) as refused:
+            ask()
+        assert str(refused.value) == ("this rank holds no H1 window: h1rank_install has not run on it, or "
+                                      "h1rank_release has")
+    assert rank.h1rank_release() is None
+
+
+def test_a_rank_call_that_does_not_follow_the_windows_last_call_is_refused():
+    """The holder takes its ranks' calls in index order. One at or before the last call the window holds, here a
+    pulled call handed over again, is refused by both indices, and the window keeps its calls."""
+    holder, _executor = TR._staged()
+    run = holder.run
+    calls = list(run.calls)
+    again = {"call": dataclasses.asdict(calls[3])}
+    with pytest.raises(RuntimeError) as refused:
+        PHR.ingest(run, [again])
+    assert str(refused.value) == f"t: rank call 3 after call {calls[-1].index}"
+    assert run.calls == calls and calls[-1].index == len(calls) - 1
+
+
+def test_a_calls_statement_is_listed_with_the_one_session_that_proved_it_and_check_needs_credits_verification(tmp_path):
+    """`statements` lists each planned call's statement with the one session that proved it: a call whose directory
+    holds no session, or two, is refused by the call and the count, and with one the statement names it. `check` is
+    refused where the caller binds no verification of credit's."""
+    work, proved, out = tmp_path / "work", tmp_path / "work" / "c0", tmp_path / "statements.json"
+    work.mkdir()
+    (work / DN.PLAN).write_text(json.dumps({"calls": [{"call": 0, "circuit": "k64.circuit", "dir": str(proved)}]}))
+    a = SimpleNamespace(work=str(work), out=str(out))
+
+    def session(name):
+        (proved / "sessions" / name).mkdir(parents=True)
+        (proved / "sessions" / name / "session.json").write_text("{}")
+        return str(proved / "sessions" / name)
+
+    def refusal():
+        with pytest.raises(Refused) as refused:
+            DN.statements(a)
+        return str(refused.value)
+    once = "not one: a drawn statement is proved once, every instance drawn (session's subset:N)"
+    assert refusal() == f"call 0: 0 sessions in {proved}/sessions, {once}"
+    first = session("s1")
+    assert DN.statements(a) == 0
+    assert json.loads(out.read_text()) == [{"call": 0, "circuit": "k64.circuit", "public": str(proved / "pub.bin"),
+                                            "sessions": [first]}]
+    session("s2")
+    assert refusal() == f"call 0: 2 sessions in {proved}/sessions, {once}"
+    with pytest.raises(Refused) as refused:
+        DN.check(SimpleNamespace(verified=None))
+    assert str(refused.value) == ("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: "
+                                  "run that CLI")
+
+
+def test_a_window_that_committed_no_call_is_refused_at_its_close():
+    """A window whose Program was never declared committed no call: its close refuses it by that, once, and a window
+    already refused gains nothing at its close."""
+    served = SV.Served(PH.TILE, TS._unit())
+    served.close(None)
+    assert served.refused == ["no call was committed"]
+    served.close(None)
+    assert served.refused == ["no call was committed"]
+
+
+def test_a_kept_row_of_a_call_that_served_no_rows_is_zero_and_a_weight_row_is_its_ks_linears_own(tmp_path):
+    """`kept_row` rebuilds a served value's row from what the prover kept. A call that served no rows kept nothing, so
+    no file of it is read: its A rows are zero codes of scale 0 and its z table's rows those of no record. Row j of
+    ``b/<K>`` counts K's linears' weight rows in turn, a linear of another K between them skipped."""
+    rng = np.random.default_rng(5)
+    weights = [(rng.integers(-128, 128, (32, k), dtype=np.int8), rng.random(32, dtype=np.float32) + 1) for k in (K, 2 * K, K)]
+    served = {"prefix": "h1/", "m": 32, "linears": [(0, K, 32), (1, 2 * K, 32), (2, K, 32)], "calls": [(0,), (1,), (2,)],
+              "tile": PH.TILE}
+    state = {"served": ("served", served, None), "weights": weights}
+    calls = [{"index": c, "served": 0, "rows": 0} for c in range(3)]
+    empty: np.ndarray = np.zeros((1, K), np.int8)
+    assert KP.kept_row(tmp_path, state, calls, f"h1/a/{K}@0", 32 + 5) == SV.row_words(empty, np.zeros(1, "<f4"))[0].tolist()
+    no_z: np.ndarray = np.zeros((0, 32), "<i4")
+    no_y: np.ndarray = np.zeros((0, 32), np.int16)
+    assert KP.kept_row(tmp_path, state, calls, "h1/zy@2", 0) == SV.record_words(no_z, no_y, 32, PH.TILE)[0].tolist()
+    codes, scales = weights[2]
+    assert KP.kept_row(tmp_path, state, calls, f"h1/b/{K}", 32 + 1) == SV.row_words(codes[1:2], scales[1:2])[0].tolist()
+    assert KP.kept_row(tmp_path, state, calls, f"h1/b/{2 * K}", 1) == SV.row_words(*(x[1:2] for x in weights[1]))[0].tolist()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_hosts_table_roots_take_n_rows_of_8_bit_codes_and_n_32_bit_words():
+    """`host_roots` takes each table's codes as (n, K) of 8-bit values and its words as (n,) of 32-bit ones, and
+    refuses any other pair by their shapes and types."""
+    codes: np.ndarray = np.zeros((2, K), np.int8)
+    words: np.ndarray = np.zeros(2, np.uint32)
+    for c, w in ((codes[0], words[:1]), (codes.astype(np.int16), words), (codes, words.astype(np.uint16)),
+                 (codes, np.zeros(3, np.uint32)), (codes, words.reshape(2, 1))):
+        with pytest.raises(ValueError) as refused:
+            TBD.host_roots([(bytes(64), 0, c, w)], KEY)
+        assert str(refused.value) == (f"codes {c.shape} of {c.dtype} and words {w.shape} of {w.dtype} are not (n, K) "
+                                      "8-bit and (n,) 32-bit")
+
+
+def test_the_hosts_libraries_are_refused_where_no_cxx_compiler_is_on_the_path(monkeypatch):
+    """The host's twins of the device's hashing are built with the system's C++ compiler, the first of g++, c++ and
+    clang++ on the path. With none there, each library is refused by what is missing."""
+    asked: list[str] = []
+    monkeypatch.setattr(RGD.shutil, "which", lambda name: asked.append(name))
+    for lib in (RGD.host_lib, RGD.zy_host_lib):
+        with pytest.raises(RuntimeError, match=r"^no C\+\+ compiler on the path$"):
+            lib.__wrapped__()
+    assert asked == ["g++", "c++", "clang++"] * 2
