@@ -192,7 +192,7 @@ theorem StreamedWipe : Pous.Guarantees.StreamedWipe := PousStreamedWipe.streamed
 /-- **`StreamedWipe`'s honest lemma**: some prover, the honest server (`PousStreamedWipe.honest`, whose memory is the
 labels and which keeps nothing of its prior content), is accepted by the wipe's own acceptance (`StreamedWipe.Accepts`:
 every answer is its label) with probability 1, at one label of one bit, one challenge, one bit of prior content and
-labels drawn by the PRF that outputs its one-bit key. -/
+labels sampled by the PRF that outputs its one-bit key. -/
 theorem StreamedWipe_honest :
     ∃ (prf : Pous.Bits 1 → Fin 1 → Pous.Bits 1) (P : Pous.StreamedWipe.Prover 1 1 1 1 (1 * 1) 0),
       Pous.pr (fun x : (Pous.Bits 1 × (Fin 1 → Fin 1)) × Pous.Bits 1 =>
