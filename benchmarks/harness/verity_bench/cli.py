@@ -202,6 +202,8 @@ def _overhead_run(args: Any) -> int:
 
 def _overhead_table(args: Any) -> int:
     table = overhead_records.build(local_only=args.local_only)
+    if args.metrics and settings.is_set("RESEARCH_RUN_DIR"):
+        overhead_records.record(table, args.metrics)
     if args.json:
         print(json.dumps(table, indent=1, sort_keys=True))
     else:
@@ -352,8 +354,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None, metrics: Mapping[str, str] | None = None) -> int:
-    """`metrics`: a runner's metric ids, each for the total of `prove`'s table it names (`prove_records.FIGURES`),
-    which `prove` records in a research run's result."""
+    """`metrics`: a runner's metric ids, which `prove` (each for the total of its table it names, `prove_records.FIGURES`)
+    and `overhead table` (each for the γ of the row it names, `overhead_records.measurements`) record in a research run's
+    result."""
 
     args = _parser().parse_args(argv)
     args.metrics = dict(metrics or {})

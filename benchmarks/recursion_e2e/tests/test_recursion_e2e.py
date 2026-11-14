@@ -9,7 +9,9 @@ import shutil
 from pathlib import Path
 
 import pytest
+import rec_logs as RL
 import rec_profile as RP
+import rec_rows as RR
 import rec_table as RT
 import run as RUN
 
@@ -89,15 +91,15 @@ def row(doc: dict, stage: str) -> dict:
 
 
 def test_wall_seconds_reads_both_forms() -> None:
-    assert RP.wall_seconds("1:02:03") == 3723.0
-    assert RP.wall_seconds("0:12.50") == 12.5
+    assert RL.wall_seconds("1:02:03") == 3723.0
+    assert RL.wall_seconds("0:12.50") == 12.5
 
 
 def test_stat_is_median_and_range() -> None:
-    s = RP.Stat.of([3.0, None, 1.0, 2.0])
+    s = RR.Stat.of([3.0, None, 1.0, 2.0])
     assert s is not None
     assert (s.median, s.min, s.max, s.values) == (2.0, 1.0, 3.0, (3.0, 1.0, 2.0))
-    assert RP.Stat.of([None]) is None
+    assert RR.Stat.of([None]) is None
 
 
 def test_prover_row_counts_timed_runs_only(tmp_path: Path) -> None:
@@ -365,7 +367,7 @@ def test_headline_is_a_whole_run_only_when_every_step_ran(tmp_path: Path) -> Non
     assert "Verdict: one whole recursive run, **not accepted**" in RT.markdown(doc)
     h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS})
     assert h["complete"] is True and h["parts_ok"] is True and h["ok"] is False      # its parts passed; nothing composed
-    h = RP.headline([RP.compose_row([{"composed": True, "accepted": True, "why": ""}])], {"not_ok": []},
+    h = RP.headline([RR.compose_row([{"composed": True, "accepted": True, "why": ""}])], {"not_ok": []},
                     {s: ["0"] for s in RP.E2E_STEPS})
     assert h["complete"] is True and h["parts_ok"] is True and h["ok"] is True
     h = RP.headline([], {"not_ok": []}, {s: ["0"] for s in RP.E2E_STEPS if s != "lean"})
@@ -389,7 +391,7 @@ def whole(tmp: Path, *left: dict | str | None, modes: str = "dev") -> Path:
         (r / "out" / "lean" / "alg-p0.log").write_text('VERDICT {"accepted": true, "why": ""}\n')
         c = left[min(i, len(left) - 1)]
         if isinstance(c, dict):
-            (r / "out" / "lean" / RP.COMPOSITION).write_text(json.dumps(c))
+            (r / "out" / "lean" / RL.COMPOSITION).write_text(json.dumps(c))
         elif c is not None:
             (r / "step.log").write_text(f"lean L0: exit 0, accepted true, why ''\n{c}\nlean: 2/2 accepted\n")
     return o
@@ -472,7 +474,7 @@ def test_a_record_lean_gave_no_answer_in_is_no_accepted_run(tmp_path: Path) -> N
     doc = RP.read(whole(tmp_path, {"composed": True, "accepted": None, "why": "exit 2: 'usage'"}))
     c = row(doc, "compose")
     assert c["ok"] is None and c["note"] == "no answer: exit 2: 'usage'" and doc["headline"]["ok"] is False
-    (tmp_path / "out" / "steps" / "lean" / "r1" / "out" / "lean" / RP.COMPOSITION).write_text("{not json")
+    (tmp_path / "out" / "steps" / "lean" / "r1" / "out" / "lean" / RL.COMPOSITION).write_text("{not json")
     assert row(RP.read(tmp_path / "out"), "compose")["extra"]["composed"] is None
 
 
