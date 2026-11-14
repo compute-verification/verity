@@ -59,7 +59,7 @@ theorem LogUB.at_ubVal (o : Option ℚ) : LogUB o (ubVal o) := by
   · rfl
   · exact le_rfl
 
-theorem LogUB.le_ubVal {o : Option ℚ} {X : ℝ} (h : LogUB o X) : X ≤ ubVal o := by
+theorem LogUB.le_ubVal {o : Option ℚ} {Xs : ℝ} (h : LogUB o Xs) : Xs ≤ ubVal o := by
   cases o
   · exact le_of_eq h
   · exact h
@@ -141,21 +141,21 @@ theorem capped_split {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → G)
   rw [mul_sub, mul_one]
   linarith
 
-/-- A request's classes: `none`, the sets of `X` (each `some (some A)`) and the classes `Y ⊆ {some none}`. -/
-theorem sum_classes (X : Finset (Finset ℕ)) (Y : Finset (Option (Option (Finset ℕ)))) (hY : Y ⊆ {some none})
+/-- A request's classes: `none`, the sets of `Xs` (each `some (some A)`) and the classes `Ys ⊆ {some none}`. -/
+theorem sum_classes (Xs : Finset (Finset ℕ)) (Ys : Finset (Option (Option (Finset ℕ)))) (hY : Ys ⊆ {some none})
     (f : Option (Option (Finset ℕ)) → ℝ) :
-    ∑ a ∈ X.image (fun A => some (some A)) ∪ Y, f a = ∑ A ∈ X, f (some (some A)) + ∑ a ∈ Y, f a := by
+    ∑ a ∈ Xs.image (fun A => some (some A)) ∪ Ys, f a = ∑ A ∈ Xs, f (some (some A)) + ∑ a ∈ Ys, f a := by
   rw [Finset.sum_union, Finset.sum_image fun _ _ _ _ h => by simpa using h]
   rw [Finset.disjoint_left]
   intro a ha haY
   obtain ⟨A, -, rfl⟩ := Finset.mem_image.1 ha
   simpa using hY haY
 
-theorem sum_classes_none (X : Finset (Finset ℕ)) (Y : Finset (Option (Option (Finset ℕ)))) (hY : Y ⊆ {some none})
+theorem sum_classes_none (Xs : Finset (Finset ℕ)) (Ys : Finset (Option (Option (Finset ℕ)))) (hY : Ys ⊆ {some none})
     (f : Option (Option (Finset ℕ)) → ℝ) :
-    ∑ a ∈ insert none (X.image (fun A => some (some A)) ∪ Y), f a =
-      f none + ∑ A ∈ X, f (some (some A)) + ∑ a ∈ Y, f a := by
-  rw [Finset.sum_insert, sum_classes X Y hY, add_assoc]
+    ∑ a ∈ insert none (Xs.image (fun A => some (some A)) ∪ Ys), f a =
+      f none + ∑ A ∈ Xs, f (some (some A)) + ∑ a ∈ Ys, f a := by
+  rw [Finset.sum_insert, sum_classes Xs Ys hY, add_assoc]
   intro h
   rcases Finset.mem_union.1 h with h | h
   · obtain ⟨A, -, h⟩ := Finset.mem_image.1 h; cases h
@@ -670,9 +670,9 @@ noncomputable def actOf (s : AuditStatement) (Pt : Partition) (d : Design.Two) {
   Finset.univ.filter fun r => (Dr s Pt d req ρ r).Nonempty
 
 open Classical in
-/-- The classes `some (some A)` of the sets of `X`, with `some none` when `P`. -/
-noncomputable def clsOf (X : Finset (Finset ℕ)) (P : Prop) : Finset (Option (Option (Finset ℕ))) :=
-  X.image (fun A => some (some A)) ∪ if P then {some none} else ∅
+/-- The classes `some (some A)` of the sets of `Xs`, with `some none` when `P`. -/
+noncomputable def clsOf (Xs : Finset (Finset ℕ)) (P : Prop) : Finset (Option (Option (Finset ℕ))) :=
+  Xs.image (fun A => some (some A)) ∪ if P then {some none} else ∅
 
 /-- Request `r`'s classes avoiding the cells sampled whole: heavy when `y_S` exists. -/
 noncomputable def firstOf (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
@@ -703,8 +703,8 @@ noncomputable def yhat (Pt : Partition) (cs : List Cell) (yS : Option ℚ) : Opt
   | some none => ((yS.getD 0 : ℚ) : ℝ)
   | some (some A) => yOf Pt cs A
 
-theorem mem_clsOf_some {X : Finset (Finset ℕ)} {P : Prop} {A : Finset ℕ} :
-    some (some A) ∈ clsOf X P ↔ A ∈ X := by
+theorem mem_clsOf_some {Xs : Finset (Finset ℕ)} {P : Prop} {A : Finset ℕ} :
+    some (some A) ∈ clsOf Xs P ↔ A ∈ Xs := by
   classical
   unfold clsOf
   constructor
@@ -716,7 +716,7 @@ theorem mem_clsOf_some {X : Finset (Finset ℕ)} {P : Prop} {A : Finset ℕ} :
   · intro h
     exact Finset.mem_union_left _ (Finset.mem_image.2 ⟨A, h, rfl⟩)
 
-theorem mem_clsOf_heavy {X : Finset (Finset ℕ)} {P : Prop} : some none ∈ clsOf X P ↔ P := by
+theorem mem_clsOf_heavy {Xs : Finset (Finset ℕ)} {P : Prop} : some none ∈ clsOf Xs P ↔ P := by
   classical
   unfold clsOf
   constructor
@@ -727,7 +727,7 @@ theorem mem_clsOf_heavy {X : Finset (Finset ℕ)} {P : Prop} : some none ∈ cls
   · intro hP
     exact Finset.mem_union_right _ (by rw [if_pos hP]; simp)
 
-theorem none_not_mem_clsOf {X : Finset (Finset ℕ)} {P : Prop} : none ∉ clsOf X P := by
+theorem none_not_mem_clsOf {Xs : Finset (Finset ℕ)} {P : Prop} : none ∉ clsOf Xs P := by
   classical
   unfold clsOf
   intro h
