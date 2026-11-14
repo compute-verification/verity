@@ -78,17 +78,17 @@ OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT
 wait
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)
 LEAN=$(sed -n 's/.*BUILD_ONLY: \(\S*\) .*/\1/p' "$O/lean/job.log" 2>/dev/null | tail -1)
-# the ZK server's Lean frame (FC_FIREWALL=1 spawns it per rep), built in the same package as verity-verify-proof
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-if [ -x "$LEAN" ] && [ ! -x "$FC_FIREWALL_LEAN" ]; then
+# the ZK server's Lean frame (FC_ZK_SERVER=1 spawns it per rep), built in the same package as verity-verify-proof
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+if [ -x "$LEAN" ] && [ ! -x "$FC_ZK_SERVER_LEAN" ]; then
   command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-    > "$O/lake-firewall.log" 2>&1
+  (exec 8>"$PT_WORK/lean.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+    > "$O/lake-zk-server.log" 2>&1
 fi
-for p in "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" "$PY"; do
-  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-firewall.log"; exit 1; }
+for p in "$BIN" "$LEAN" "$FC_ZK_SERVER_LEAN" "$PY"; do
+  [ -x "$p" ] || { log "missing: '$p'"; tail -20 "$O/build.txt" "$O/lean-build.txt" "$O/lake-zk-server.log"; exit 1; }
 done
-sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
+sha256sum "$BIN" "$LEAN" "$FC_ZK_SERVER_LEAN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 
 if [ -z "${ZK_UNITS:-}" ]; then
   log "stage: K ${ZK_KS:-4096,14336}, sizes ${ZK_SIZES:-1,8,64,512}, draws ${ZK_SAMPLES:-1,8,64,c}"

@@ -34,7 +34,7 @@ export HZ_CONFIGS=sessions HZ_MEM_GB=${FS_MEM_GB:?set it to the --mem-gb of the 
 # shellcheck source=../pouw/hidden_zk/job.sh
 source benchmarks/pouw/hidden_zk/job.sh
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
-export FC_FIREWALL=0
+export FC_ZK_SERVER=0
 unset FC_HOST_WITNESS
 I=$RESEARCH_RUN_DIR/inputs
 V=benchmarks/verifier_cost
