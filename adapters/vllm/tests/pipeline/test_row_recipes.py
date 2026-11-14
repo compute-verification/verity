@@ -8,8 +8,10 @@ A recipe is a command in a script of this tree (`SCRIPTS`: a `.sh`, `.yaml`, `.y
 launcher is `verity-vllm`, `python -m verity_vllm.pipeline.cli` or `"$VV"`, the name the epoch's scripts give the launcher they
 write. Its words are the shell's (`shlex`), up to the first operator. A number that touches the redirect after it (`2>/dev/null`) is
 that redirect's file descriptor and no word; one a space parts from it (`--config-run 1 > log`) is a word. `${NAME:+WORDS}` gives WORDS
-and `${NAME:-WORD}` gives WORD; any other variable gives `STAND_IN`. Words the line doesn't spell (`"$@"`, `"${NAME[@]}"`, `$(...)`) and a line whose quotes
-`shlex` can't follow are failures that name the line (`UNREAD`), never a recipe passed over.
+and `${NAME:-WORD}` gives WORD; any other variable gives `STAND_IN`. A line in a shell function whose one unspelled word is `"$@"`
+is read at each call of the function, with the call's words after the function's `shift`s in its place. Other words the line doesn't
+spell (`"$@"` outside a function, `"${NAME[@]}"`, `$(...)`) and a line whose quotes `shlex` can't follow are failures that name the
+line (`UNREAD`), never a recipe passed over.
 """
 from __future__ import annotations
 
@@ -45,6 +47,8 @@ _DEFAULT = re.compile(r"\$\{\w+:-([^{}]*)\}")
 _UNSPELLED = re.compile(r"\$[@*]|\$\{\w+\[[@*]\]|\$$")
 _VARIABLE = re.compile(r"\$\{[^{}]*\}|\$\w+")
 _OPERATOR = re.compile(r"[();<>|&]+")
+_FUNCTION = re.compile(r"^(\w+)\(\)\s*\{")
+_SHIFT = re.compile(r"(?<![\w-])shift(?:\s+(\d+))?(?![\w-])")
 #: a redirect's file descriptor: a number that is a whole word and touches the operator after it. The first group is text the shell
 #: quotes, where a number is never one.
 _DESCRIPTOR = re.compile(r"""('[^']*'|"(?:\\.|[^"\\])*"|\\.)|(?<![^\s;|&()<>])\d+(?=[<>])""", re.DOTALL)
@@ -91,22 +95,67 @@ def recipes(line: str) -> Iterator[tuple[str, list[str]]]:
             yield toks[i + 1], [_VARIABLE.sub(STAND_IN, _DEFAULT.sub(r"\1", a)) for a in argv]
 
 
-def found() -> tuple[list[tuple[str, int, str, list[str]]], list[str]]:
-    """(script, line number, command, arguments) of every recipe in the tree, and each line that names a command and isn't read."""
-    out, unread = [], []
-    for path in sorted(p for p in TREE.rglob("*") if p.suffix in SCRIPTS and p.is_file() and "tests" not in p.relative_to(TREE).parts):
-        where = path.relative_to(TREE).as_posix()
-        for n, line in lines(path.read_text(encoding="utf-8")):
-            if not (mentions := len(MENTION.findall(_COMMENT.sub("", line)))):
-                continue
-            try:
-                got = list(recipes(line))
-            except Unread as e:
+def calls(text: str, name: str, shifts: int) -> Iterator[tuple[int, list[str]]]:
+    """Each call of the script's shell function ``name`` with its line's number and what ``"$@"`` holds in the function's body
+    after its ``shifts`` shifts: the call's words up to the first operator, less the first ``shifts``."""
+    for n, line in lines(text):
+        if _FUNCTION.match(line):
+            continue
+        try:
+            lex = shlex.shlex(line, posix=True, punctuation_chars=True)
+            lex.whitespace_split = True
+            toks = list(lex)
+        except ValueError:
+            continue
+        if toks[:1] == [name]:
+            end = next((j for j in range(1, len(toks)) if _OPERATOR.fullmatch(toks[j])), len(toks))
+            yield n, toks[1 + shifts:end]
+
+
+def script_recipes(where: str, text: str) -> tuple[list[tuple[str, int, str, list[str]]], list[str]]:
+    """(script, line number, command, arguments) of each recipe in the script ``where`` whose text is ``text``, and each line that
+    names a command and isn't read. A recipe in a shell function whose one unspelled word is ``"$@"`` is read at each call of the
+    function, as that call fills it."""
+    out: list[tuple[str, int, str, list[str]]] = []
+    unread: list[str] = []
+    function, shifts = None, 0
+    for n, line in lines(text):
+        if head := _FUNCTION.match(line):
+            function, shifts = head[1], 0
+        elif function and line.strip() == "}":
+            function = None
+        elif function:
+            shifts += sum(int(k or 1) for k in _SHIFT.findall(_COMMENT.sub("", line)))
+        if not (mentions := len(MENTION.findall(_COMMENT.sub("", line)))):
+            continue
+        try:
+            got = list(recipes(line))
+        except Unread as e:
+            if not (function and _UNSPELLED.findall(line) == ["$@"] and '"$@"' in line):
                 unread.append(f"{where}:{n}: {e}")
                 continue
-            if len(got) < mentions:
-                unread.append(f"{where}:{n}: names {mentions} commands, of which {len(got)} are read")
-            out += [(where, n, command, argv) for command, argv in got]
+            called = list(calls(text, function, shifts))
+            if not called:
+                unread.append(f"{where}:{n}: {e}, and the script never calls {function}()")
+            for m, args in called:
+                try:
+                    out += [(where, m, command, argv) for command, argv in recipes(line.replace('"$@"', shlex.join(args)))]
+                except Unread as at_call:
+                    unread.append(f"{where}:{m}: {at_call} (a call of {function}(), whose line {n} runs it)")
+            continue
+        if len(got) < mentions:
+            unread.append(f"{where}:{n}: names {mentions} commands, of which {len(got)} are read")
+        out += [(where, n, command, argv) for command, argv in got]
+    return out, unread
+
+
+def found() -> tuple[list[tuple[str, int, str, list[str]]], list[str]]:
+    """Every script's recipes and unread lines (`script_recipes`), over the tree."""
+    out, unread = [], []
+    for path in sorted(p for p in TREE.rglob("*") if p.suffix in SCRIPTS and p.is_file() and "tests" not in p.relative_to(TREE).parts):
+        got, missed = script_recipes(path.relative_to(TREE).as_posix(), path.read_text(encoding="utf-8"))
+        out += got
+        unread += missed
     return out, unread
 
 
@@ -157,6 +206,22 @@ def test_a_line_is_read_as_the_shell_gives_it(line: str, expected: list[tuple[st
 def test_words_a_line_does_not_spell_are_named_not_passed_over(line: str):
     with pytest.raises(Unread):
         list(recipes(line))
+
+
+def test_a_functions_dollar_at_is_read_at_each_call_after_its_shifts():
+    script = """row() {  # NAME ARGS...: one `verity-vllm row run`
+  local name=$1; shift
+  "$PY" -m verity_vllm.pipeline.cli row run "$ROW" R "$REPO" "$REV" --research-run-dir "$KEPT" "$@" > "$KEPT/$name.out"
+}
+row build --stages build --config-run 1 || stop build 10
+row replay --stages replay; rr=$?
+"""
+    got, unread = script_recipes("s.sh", script)
+    assert unread == []
+    assert got == [("s.sh", 5, "row", ["run", "1", "R", "1", "1", "--research-run-dir", "1", "--stages", "build", "--config-run", "1"]),
+                   ("s.sh", 6, "row", ["run", "1", "R", "1", "1", "--research-run-dir", "1", "--stages", "replay"])]
+    _, unread = script_recipes("s.sh", script.split("}\n")[0] + "}\n")
+    assert unread == ['s.sh:3: $@: words the line doesn\'t spell, and the script never calls row()']
 
 
 @pytest.mark.parametrize("where, n, command, argv", RECIPES, ids=[f"{where}:{n}" for where, n, _, _ in RECIPES])
