@@ -4043,7 +4043,7 @@ def test_a_single_file_carries_the_wait_cap_research_waitcap_states():
     single = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(single)
     assert single.waitcap is not waitcap
-    assert (single.waitcap.WAIT_CAP_S, single.waitcap.STILL_GOING) == (waitcap.WAIT_CAP_S, waitcap.STILL_GOING)
+    assert (single.waitcap.WAIT_LIMIT_S, single.waitcap.STILL_GOING) == (waitcap.WAIT_LIMIT_S, waitcap.STILL_GOING)
 
 
 @pytest.mark.parametrize("v", json.loads(VECTORS.read_text())["doorbells"]["cases"], ids=lambda v: v["name"])

@@ -30,7 +30,7 @@ from typing import Any
 
 from . import CANCEL_ACTORS, pyspy
 from .cancel import cancel as cancel_run
-from .cgroup import Cgroup, session_cap, uncapped
+from .cgroup import Cgroup, session_limit, uncapped
 from .classify import classify, write as write_failure
 from .events import Emitter, utc_now_ms
 from .job import build_job, input_ref, sampler_instruments, set_status, sha256_file, write_json_atomic
@@ -266,7 +266,7 @@ def run(a: argparse.Namespace, cmd: list[str], poll: Callable[[], None] | None =
                         cadence_s=a.cadence, pss_every_s=a.pss_every)
         write_json_atomic(d / "job.json", job)
     em.queue("started", stage=a.stage, job=a.job, attempt=a.attempt)
-    if (why := uncapped(Cgroup().limits(), session_cap())) is not None:
+    if (why := uncapped(Cgroup().limits(), session_limit())) is not None:
         set_status(d, "failed", rc=EX_NO_MEMORY_LIMIT, signal=None, error=f"no memory limit: {why}", stage=a.stage,
                    **_end_record(ended, em, a.stage))
         em.emit("mark", stage=a.stage, name="no_memory_limit", error=why)
