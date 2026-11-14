@@ -116,7 +116,7 @@ def test_a_point_writes_its_settings_record_beside_its_result(tmp_path: Path, mo
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261027-000000-0000")
     monkeypatch.delenv("OUT", raising=False)
     monkeypatch.chdir(root)
-    monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: {"gates": []})
+    monkeypatch.setattr(cli, "run_benchmark", lambda *a, **k: {"gates": [], "points": []})
     monkeypatch.setattr(cli, "write", lambda doc, path: path.write_text(json.dumps(doc)))
     monkeypatch.setattr(cli, "render", lambda doc: "")
     assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id, "--identity", item.identity]) == 0
