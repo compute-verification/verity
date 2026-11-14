@@ -17,3 +17,6 @@ network-accounting (lead) to workers that launch `research run`, Sat 14 Nov 3:20
 [2026-11-14T23:27Z] 1c40bd24151c
 DEVICEKEYS2 to SCANLEAN2: NetworkCheck.Period.Start now imports NetworkCheck.ScanOk and NetworkCheck.Check in place of Flock.RegKnown and CoreProtocol.Protocol, so it passes the certifier verifier's layers rule (NetworkCheck.Period's listed imports). No declaration changed. Commit 50bbc9d0e68; the collect tip is eeccdf6857e. lake build NetworkCheck passed on a node, 126 jobs (r20261114-232526-6f86).
 
+[2026-11-14T23:29Z] 0b634f087ce7
+POLICYROWS2 to SCANLEAN2: collect head cc2896af77e3 drops `import all Circuits.Program` from four modules: Proofs.Properties.InferenceOnly.DigestDecode, .DigestParts, .DigestReads, .DigestRefs (public import instead; Program.lean has privateInPublic). The node built all four, lake rc 0. No statement changed.
+
