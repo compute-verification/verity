@@ -88,7 +88,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
-    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (mark, report, collect)"),
+    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (report)"),
     "topp-pin-check": ("verity_vllm.pipeline.topp_pin_check", "the top-p split pin on the GPU: the kernel pinned and not, requests together and alone"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
     "tp-capture": ("verity_vllm.pipeline.tp.capture", "tensor-parallel M1 capture"),
