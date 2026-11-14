@@ -1982,7 +1982,7 @@
     {"file": "benchmarks/pous/bench.py", "count": 3},
     {"file": "benchmarks/pous/big_case.py", "count": 1},
     {"file": "benchmarks/pous/held_bandwidth.py", "count": 5},
-    {"file": "benchmarks/pous/memory_challenger/live.py", "count": 20},
+    {"file": "benchmarks/pous/memory_challenger/live.py", "count": 19},
     {"file": "benchmarks/pous/p2_v1/bandwidth.py", "count": 5},
     {"file": "benchmarks/pous/p2_v1/bw_session.sh", "count": 2},
     {"file": "benchmarks/pous/p2_v1/harness.py", "count": 6},
