@@ -83,6 +83,11 @@ def _exe(path: Path, text: str) -> Path:
     return path
 
 
+def _judge(tmp_path: Path) -> str:
+    """A Lean judge built already (WIPE_PROTOCOL_EXE), so the wrapper builds none; the stand-in demo.sh never runs it."""
+    return str(_exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n"))
+
+
 @pytest.fixture
 def node(tmp_path) -> dict[str, str]:
     """The environment of a node with a stand-in card, gpu-lease and demo.sh, WIPE_COMMAND's gate key, and the
@@ -233,7 +238,8 @@ def test_a_card_that_isnt_idle_is_refused(node, tmp_path, apps, used) -> None:
     d = tmp_path / "wipe"
     d.mkdir()
     (d / "answer.json").write_text("{}")
-    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "FAKE_SMI_APPS": apps, "FAKE_SMI_USED": used}, d, "--no-lean")
+    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "FAKE_SMI_APPS": apps, "FAKE_SMI_USED": used,
+                      "WIPE_PROTOCOL_EXE": _judge(tmp_path)}, d)
     assert r.returncode == 3, r.stdout + r.stderr
     refused = (d / "refused.txt").read_text()
     assert refused.startswith(f"WIPE REFUSED: the card {CARD} isn't idle: ") and "kills nothing" in refused
@@ -254,25 +260,13 @@ def test_a_gate_key_not_on_the_node_is_refused(node, tmp_path) -> None:
     assert not (tmp_path / "lease.log").exists() and not (d / "demo-argv.json").exists()
 
 
-def test_with_no_lean_judge_an_honest_wipe_is_undecided(node, tmp_path) -> None:
-    """`--no-lean`: no `wipe-protocol` among the period's tools, so the Python's accept of the honest session decides
-    nothing. The answer is undecided (exit 1), with no public outputs, and the headline says so."""
-    d = tmp_path / "pieces" / "wipe"
-    r = _wipe(node | {"GPU_LEASE_UUID": CARD}, d, "--no-lean")
-    assert r.returncode == 1, r.stdout + r.stderr
-    _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
-    assert (answer["verdict"], answer["reason"]) == ("undecided", W.NO_JUDGE)
-    headline = json.loads(r.stdout.strip().splitlines()[-1].removeprefix("WIPE "))
-    assert (headline["verdict"], headline["decided_by"]["program"], headline["exit"]) == ("undecided", "python", 1)
-
-
 def test_a_session_signed_under_another_key_than_the_pinned_one_is_rejected(node, tmp_path) -> None:
     """WIPE_KEY_SHA512 pins another key than the one the challenger signs under: the wipe runs, honest in every read,
     and its answer is a reject (exit 1) naming the key untrusted, decided by a case that trusts no key. The summary
     carries the key the session came with and that it isn't the pinned one."""
     d = tmp_path / "pieces" / "wipe"
     other = hashlib.sha512(b"another key").hexdigest()
-    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "WIPE_KEY_SHA512": other}, d, "--no-lean")
+    r = _wipe(node | {"GPU_LEASE_UUID": CARD, "WIPE_KEY_SHA512": other, "WIPE_PROTOCOL_EXE": _judge(tmp_path)}, d)
     assert r.returncode == 1, r.stdout + r.stderr
     _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
     assert (answer["verdict"], answer["reason"]) == ("reject", UNTRUSTED)
@@ -290,8 +284,9 @@ def test_a_run_that_pins_no_key_trusts_vy_auditor_2s_wipe_party_and_no_other(nod
     vy-auditor-2's wipe party: demo.sh gets it as `--trusted-sha512`, and the stand-in challenger's session, signed
     under another key, is rejected as any other key's is, by a case that trusts no key."""
     d = tmp_path / "pieces" / "wipe"
-    env = {k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"} | {"GPU_LEASE_UUID": CARD}
-    r = _wipe(env, d, "--no-lean")
+    env = {k: v for k, v in node.items() if k != "WIPE_KEY_SHA512"} | {"GPU_LEASE_UUID": CARD,
+                                                                        "WIPE_PROTOCOL_EXE": _judge(tmp_path)}
+    r = _wipe(env, d)
     assert r.returncode == 1, r.stdout + r.stderr
     argv = json.loads((d / "demo-argv.json").read_text())["argv"]
     assert argv[argv.index("--trusted-sha512") + 1] == AUDITOR_PIN != PINNED
@@ -328,14 +323,17 @@ def test_with_no_key_pinned_the_wipe_is_refused(node, tmp_path, pin, why) -> Non
     assert not any((d / f).exists() for f in ("answer.json", "demo-argv.json", "served.json", "lake-build.log"))
 
 
-def test_demo_sh_takes_the_wrappers_options(tmp_path) -> None:
+@pytest.mark.parametrize("unknown", ["--bogus", "--no-lean"])
+def test_demo_sh_takes_the_wrappers_options(tmp_path, unknown) -> None:
     """The wrapper's default demo.sh is beside it and knows every option the wrapper gives it: an unknown one after them
-    is the first it refuses, before it writes or builds anything."""
+    is the first it refuses, before it writes or builds anything. `--no-lean` is unknown: no period of demo.sh's runs
+    without the Lean judge."""
     r = subprocess.run(["bash", str(DEMO), "--node", "n", "--challenger", "c", "--challenger-address", "h:1",
                         "--challenger-command", "x", "--trusted-sha512", PINNED, "--reads", "5500", "--wipe-protocol", "e",
-                        "--no-lean", "--bogus"],
+                        unknown],
                        env=os.environ | {"OUT": str(tmp_path / "out")}, capture_output=True, text=True)
-    assert r.returncode == 2 and r.stdout.strip() == "demo.sh: unknown option --bogus (see the header)", r.stdout + r.stderr
+    assert r.returncode == 2 and r.stdout.strip() == f"demo.sh: unknown option {unknown} (see the header)", (
+        r.stdout + r.stderr)
 
 
 @pytest.mark.parametrize("pin, said", [
@@ -357,7 +355,7 @@ def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
     bin_.mkdir()
     for tool in ("dirname", "basename", "mkdir", "hostname"):
         (bin_ / tool).symlink_to(shutil.which(tool))
-    r = subprocess.run(["/bin/bash", str(DEMO), "--no-lean"], env={"PATH": str(bin_), "OUT": str(tmp_path / "out")},
+    r = subprocess.run(["/bin/bash", str(DEMO)], env={"PATH": str(bin_), "OUT": str(tmp_path / "out")},
                        capture_output=True, text=True)
     assert r.returncode == 3 and r.stdout == "", r.stdout + r.stderr
     assert r.stderr.strip() == ("demo.sh: this host has no `ip` (iproute2), which names the node's links: apt-get "
