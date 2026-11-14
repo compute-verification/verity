@@ -31,10 +31,10 @@ A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
 The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`Challenger`) and the prover
 (`challenger_session.Prover`). Their messages and codec, the request, the ids and the prover's side are PoUS's
 (`challenger_session`), which this device imports and which never imports it. The challenger takes its coin tree's hiding
-key and each round's salt from its host's coins too. `serve` is its party, run on the deployment layer's byte-stream
-adapter (`verity.runtime.stream`) on the clock and coins it is given: it reads its clock once before each index it
-sends and once after each block it takes, those readings alone, so on the same coins and readings it signs the same
-bytes wherever it runs.
+key and each round's salt from its host's coins too. `serve` is its party, stepped over the session's stream by PoUS's
+loop (`challenger_session.run`) on the clock and coins it is given: it reads its clock once before each index it sends
+and once after each block it takes, those readings alone, so on the same coins and readings it signs the same bytes
+wherever it runs.
 
 `python -m verity.protocols.accounting.pous.device.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's
 side (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks",
@@ -61,9 +61,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.runtime import stream
+from verity.protocol import ProtocolDef
 from verity.party import Finish, Identity, Received, Send
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Message, Phase, Refused
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device.challenger_session import (
@@ -78,6 +77,7 @@ from verity.protocols.accounting.pous.device.challenger_session import (
     Polled,
     Prover,
     coin_session_id,
+    run,
     session_id,
     setup_of,
 )
@@ -248,10 +248,10 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
     (`memory_challenger.collector_paused`); its id and record. `Refusal` when the party refuses the session."""
     party, given = Challenger(domain, warmups, mc.resolution_of(clock)), [coins]
     with mc.collector_paused():
-        done, _ = stream.run(party, request,
-                             Identity(CHALLENGER, capabilities={"signer": signer, "log": log, "salts": salts}), f,
-                             Frames(request["block_bytes"]), peer=PROVER, clock=clock,
-                             coins=lambda n: given.pop() if given else entropy(n))
+        done, _ = run(party, request,
+                      Identity(CHALLENGER, capabilities={"signer": signer, "log": log, "salts": salts}), f,
+                      Frames(request["block_bytes"]), peer=PROVER, clock=clock,
+                      coins=lambda n: given.pop() if given else entropy(n))
     if done.refused is not None:
         raise Refusal(done.refused)
     return party.sid, party.session

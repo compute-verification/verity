@@ -29,9 +29,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
-from verity.runtime.runner import ProtocolDef
 from verity.channel import Body, Int, List, Message, Phase, Refused, Schema
 
 from . import streamed_wipe as sw

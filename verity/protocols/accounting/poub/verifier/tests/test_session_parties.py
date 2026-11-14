@@ -11,7 +11,8 @@ import pytest
 from test_verifier_party import STORE, Entropy, dropping
 
 from verity.runtime import sources as S
-from verity.runtime.runner import ProtocolDef, run
+from verity.protocol import ProtocolDef
+from verity.runtime.runner import run
 from verity.protocols.accounting.poub.verifier import audit
 from verity.protocols.accounting.poub.verifier import period as P
 from verity.protocols.accounting.poub.verifier import session_parties as SP
