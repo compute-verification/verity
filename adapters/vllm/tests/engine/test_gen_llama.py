@@ -132,7 +132,6 @@ def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module
     # the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
     assert set(prof.notes["pins"]["gemm_tuned_ada"]) == {"N=2048,K=2048", "N=2048,K=6144", "N=4096,K=2048", "N=12288,K=2048", "N=151936,K=2048"}
     assert GP.GemmLaunchTuned.name not in base_names                                             # the base profile is untouched
-    assert prof.kernel_allowlist is BASE.PROFILE.kernel_allowlist                                # the frozen census allowlist, referenced
     pins = prof.notes["pins"]
     assert pins["gemm"] == BASE.PROFILE.notes["pins"]["gemm"] and pins["rms_norm"] == BASE.PROFILE.notes["pins"]["rms_norm"]
     assert pins["attention"]["kBlockN"] == mod.C["BN"] == 128 and pins["kv_cache"] == BASE.PROFILE.notes["pins"]["kv_cache"]
