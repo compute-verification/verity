@@ -1,5 +1,5 @@
 """vLLM serving under PoUB: an in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``)
-with `verity_vllm.protocols.remote_bandwidth.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
+with `verity_vllm.protocols.poub.binder.Binder` on it registers its weights and KV pool in a `NodeMemory`, and
 PoUB's prover's `serving.StoreBackend` (`verity.protocols.accounting.poub.prover.node_store.serving`) proves that store to a
 verifier while the engine serves a trace of requests:
 before each pass the engine runs its next step (its allocs, appends and frees, one memory-map/v1 line), and the pass
@@ -117,7 +117,7 @@ def fit(steps: int | None, pass_ms: int, windows: int | None = None, window_ms: 
 def row_steps(path: Path) -> int:
     """The engine steps of the row file ``path``'s run, its ``expected_engine_steps``; `Refused` for a file that
     states none, or whose target does not declare synchronous scheduling, which a Commit's session refuses once its
-    engine is about to be built (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession.target`)."""
+    engine is about to be built (`verity_vllm.protocols.poub.remote.CommitSession.target`)."""
     try:
         row = json.loads(Path(path).read_text())
     except (OSError, ValueError) as e:
@@ -265,7 +265,7 @@ def provers():
     the store."""
     from verity.protocols.accounting.poub.prover.node_store import serving
     from verity.protocols.accounting.poub.prover.node_store.registry import NodeMemory
-    from verity_vllm.protocols.remote_bandwidth.binder import Binder
+    from verity_vllm.protocols.poub.binder import Binder
     return serving, Binder, NodeMemory
 
 

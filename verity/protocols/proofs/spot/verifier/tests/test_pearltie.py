@@ -29,7 +29,7 @@ whose proof fails.
 
 **Records** (opt-in, `VERITY_PROVE_PATH_REMOTETIE`: the window's record, commit and write take a minute): R registers the
 circuit's values at W's entries and nothing else, chained right after W, and its sampling design samples a reader of every
-value, each value's readers templates of their own. `records_audit.tie_of` with no prefix ties the audit to W (each value
+value, each value's readers templates of their own. `window_tie.tie_of` ties the audit to W as its audit does (each value
 by its own name, in ``row-seg/v1`` rows of 32-bit words), and R1-R7 (`registration.check`) accept R on the log [W] and
 refuse it on [W'] (R6, and R7 at the flipped value's root). An R' written by hand after W' is accepted on [W']: no record
 holds a row, so the flipped row is refused by its reader's proof alone.
@@ -53,6 +53,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 import settings
+import window_tie as WT
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict import window_rows as WRS
@@ -71,8 +72,6 @@ from verity.circuits.evaluation import evaluate_batch
 from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
-sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 
 ROOT = HERE.parents[2]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
@@ -200,8 +199,7 @@ def _verify_run():
     return sys.modules[name]
 
 
-@pytest.fixture(scope="module")
-def toy() -> SimpleNamespace:
+def make_toy() -> SimpleNamespace:
     """The toy's cut window circuit, its honest rows from one served slot (a prompt of 27, 2 outputs), each of Pearl+'s
     values as its proof blocks make it, and Pearl+'s passes committing those values with their W."""
     reg = Registered.of(Phi(model={"repo": "org/toy", "revision": "r", "hf_config": CONFIG}, target=H200), default_seed=7)
@@ -219,6 +217,11 @@ def toy() -> SimpleNamespace:
             pearl[PEARL.a(s, call)] = rows.value(PEARL.a(s, call), PEARL.a_rows(CLASS, s), np.zeros(2 * k, np.uint16))
             pearl[PEARL.y(s, call)] = rows.value(PEARL.y(s, call), PEARL.rows(CLASS, s), np.zeros(2 * n, np.uint16))
     return SimpleNamespace(low=low, values=values, slots=slots, rows=rows, **vars(_window(c, pearl)))
+
+
+@pytest.fixture(scope="module")
+def toy() -> SimpleNamespace:
+    return make_toy()
 
 
 def _reuse(toy, W: dict, manifests: list[dict] | None = None) -> dict:
@@ -295,7 +298,7 @@ def written(toy, tmp_path_factory) -> SimpleNamespace:
     prov = {"window_circuit": {"class": [CLASS.slots, CLASS.prompt, CLASS.outputs, CLASS.lanes, CLASS.every], "window": 0},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: toy.values[SS.SCAN_STATE].entry()}}}
     win.write(committed, out, prov, registrar=REG, index_salt=WRS.index_salt(KEY, 0), previous=REG.digest(toy.W))
-    mine, doc = IF.of_records(out, SAMPLING_DESIGN, RA.catalog_resolve)
+    mine, doc = IF.of_records(out, SAMPLING_DESIGN, WT.catalog_resolve)
     publics = {m.key: (out / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)}
     return SimpleNamespace(dir=out, R=json.loads((out / "registration.json").read_text()), mine=mine, doc=doc,
                            leaf_layer=CS.leaf_layer(publics))
@@ -308,8 +311,8 @@ def _by_hand(written, W: dict) -> dict:
 
 
 def _check(written, W: dict, R: dict):
-    """R1-R7 on ``R`` against the verifier's own window, tied to ``W`` as records_audit ties it (`tie_of`, no prefix)."""
-    tied, _pins = RA.tie_of(written.doc, W, None)
+    """R1-R7 on ``R`` against the verifier's own window, tied to ``W`` as the window's audit ties it (`window_tie.tie_of`)."""
+    tied, _pins = WT.tie_of(written.doc, W)
     mine = written.mine
     return REG.check(R, mine.program, mine.query, SAMPLING_DESIGN, CS.SCHEME, CS.expected_ports(mine), written.leaf_layer, (),
                      tied["log"], registered=tied["registered"], outputs=tied["outputs"], schemas=tied["schemas"],
@@ -378,7 +381,7 @@ def _v1_case(one, written, W: dict, R: dict) -> dict:
     verifier's params): `_check`'s params; a stratified sample's first proof blocks of each stratum, the verifier's
     receipt of R, and a verdict of record that accepted, reporting R's values' roots as the ones its readers opened
     against, standing in for their proofs."""
-    mine, (tied, _pins) = written.mine, RA.tie_of(written.doc, W, None)
+    mine, (tied, _pins) = written.mine, WT.tie_of(written.doc, W)
     program, query = mine.program, mine.query
     drawn = D.derive(program, query, SAMPLING_DESIGN)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])

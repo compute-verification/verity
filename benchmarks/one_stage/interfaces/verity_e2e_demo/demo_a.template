@@ -22,7 +22,7 @@ Every value is committed under a hiding leaf.
 
 **What was checked.** A handful: k = ⟨DRAWN_UNITS⟩ units, drawn uniformly over the whole partition (⟨UNITS_TOTAL⟩
 units across ⟨SUBCIRCUIT_COUNT⟩ subcircuits, PoUW's tiles among them) by the challenger's live coins
-(⟨CHALLENGER_RUN⟩). Every drawn unit but the visible failures was proved by C-Flock --zk behind the firewall, in
+(⟨CHALLENGER_RUN⟩). Every drawn unit but the visible failures was proved by C-Flock --zk behind the ZK server, in
 ⟨ZK_SESSIONS⟩ sessions (⟨PROVE_RUN⟩). The Lean verifier answered **⟨LEAN_VERDICT⟩**.
 With one bit of a drawn unit's committed values flipped, it answered **⟨FLIP_VERDICT⟩** (⟨FLIP_RUN⟩).
 

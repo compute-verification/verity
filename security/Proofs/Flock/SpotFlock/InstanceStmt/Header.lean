@@ -6,6 +6,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Inputs
 public import Proofs.Flock.Recursive.ZkServerJson
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Spot.SecondStage
+public import Spot.SecondStagePass
 import Flock.Comp
 import Flock.JsonParse
 import Flock.ZkServer

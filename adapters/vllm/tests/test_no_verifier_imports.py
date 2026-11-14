@@ -156,8 +156,8 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "accounting.certifier.verifier.head_check", "accounting.certifier.verifier.io_tie",
             "accounting.certifier.verifier.replay_chain",
         ),
-        "verity_vllm/protocols/remote_bandwidth/binder.py": ("accounting.poub.verifier.audit.Tiles",),
-        "verity_vllm/protocols/remote_bandwidth/remote.py": (
+        "verity_vllm/protocols/poub/binder.py": ("accounting.poub.verifier.audit.Tiles",),
+        "verity_vllm/protocols/poub/remote.py": (
             "accounting.poub.verifier.audit", "accounting.poub.verifier.codec",
         ),
     },

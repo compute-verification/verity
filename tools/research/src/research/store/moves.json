@@ -4476,6 +4476,37 @@
       "paths": {
         "verity/protocols/accounting/pous/prover/wipe_on_node.py": "benchmarks/pous/streamed_wipe/wipe_on_node.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/acquire/fa2_tap_src/apply_v8.py": "adapters/vllm/verity_vllm/acquire/fa2_tap_src/apply_fa2_tap.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/prover/tests/test_pearltie.py": "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py",
+        "verity/protocols/proofs/spot/prover/tests/test_remotetie.py": "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/": "adapters/vllm/verity_vllm/protocols/poub/",
+        "adapters/vllm/tests/protocols/remote_bandwidth/": "adapters/vllm/tests/protocols/poub/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/serving/h1/draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/sample.py",
+        "verity/protocols/accounting/pouw/prover/serving/h1/drawn.py": "verity/protocols/accounting/pouw/prover/serving/h1/sampled.py",
+        "verity/protocols/accounting/pouw/prover/serving/h1/drawn_rows.py": "verity/protocols/accounting/pouw/prover/serving/h1/sampled_rows.py",
+        "verity/protocols/accounting/pouw/prover/serving/h1/serve_draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/serve_sample.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Definitions/Pouw/TS/Drawn.lean": "security/Definitions/Pouw/TS/Sampled.lean",
+        "security/Proofs/Pouw/TS/Drawn.lean": "security/Proofs/Pouw/TS/Sampled.lean"
+      }
     }
   ]
 }

@@ -34,7 +34,7 @@ from verity.protocols.accounting.poub.tests.test_remote_session import (
 from verity.protocols.accounting.poub.verifier import audit, coins, memory_map
 from verity.protocols.accounting.poub.verifier.session import verifier, wire
 
-from verity_vllm.protocols.remote_bandwidth import remote
+from verity_vllm.protocols.poub import remote
 
 VLLM = Path(__file__).resolve().parents[3]
 
@@ -320,7 +320,7 @@ def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_
     the next window); the audit run's record tags each pass with the step the verifier's record has for it, a step of
     the map; the calibration's pass times carry ``step_ms``, so the allowance covers the step.  The Commit's store is
     the weights and filler (the KV outside it), so its steps write no registered chunk, every pass reads all N, and the
-    declared line is undecided until the γ terms' Lean answer is written."""
+    declared line is undecided: the verifier's Lean answer for the γ terms isn't written yet (`coins.undecided`)."""
     pace = verifier.pace_of("1:1000:4096:2", 1000 / 3)
     assert pace["groups"] == 3
     rec, r, cs, _ = lockstep(tmp_path, monkeypatch, 40, pace=pace, step_ms=2.5, served=True)
@@ -333,8 +333,6 @@ def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_
     assert list(memory_map.parse((tmp_path / "memory_map.jsonl").read_text().splitlines(keepends=True))[1]) == []
     assert {p.length for _, p in cs.backend.plans} == {4}
     assert rec["step_ms"] == 2.5 and cs.backend.calibrate()["step_ns"] == 2_500_000
-    # memory-accounting/lean-decides-memory-verdicts: until its Lean answers the γ terms, Python never accepts them,
-    # and the declared memory line (snapshot and time-held) waits on that goal
     assert r["ledger"]["declared"] == {"undecided": coins.undecided("γ terms")}
 
 
@@ -398,7 +396,7 @@ FAILING = '''
 import os
 from pathlib import Path
 
-from tests.protocols.remote_bandwidth import test_commit_session as C
+from tests.protocols.poub import test_commit_session as C
 from verity.protocols.accounting.poub.tests import test_remote_session as T
 
 
