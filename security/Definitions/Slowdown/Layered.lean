@@ -39,10 +39,10 @@ inductive KeyPath {N : ℕ} (key : Fin N → Option (Fin N)) (stop : Finset (Fin
   | step {a k u : Fin N} : a ∉ stop → key a = some k → KeyPath key stop k u → KeyPath key stop a u
 
 /-- **A keyed reference circuit**: every computed thread value outside the roots and lookups has a key in its thread;
-each root has at least `d` fan-in reads whose key paths are disjoint; at most `e` counted multiplications have an activation
-whose key path reaches any one value, and at most `eLk` one that reaches any one lookup; each lookup reads an input of
-its thread and a column of fresh inputs at least `b` bits wide, disjoint from the columns of its thread's other lookups;
-and no thread value is baseline. -/
+each root has at least `d` fan-in reads whose key paths are disjoint; at most `e` counted multiplications have an
+activation whose key path reaches any one value, and at most `eLk` one that reaches any one lookup; each lookup reads an
+input of its thread and a column of fresh inputs at least `b` bits wide, disjoint from the columns of its thread's other
+lookups; and no thread value is baseline. -/
 structure Layered {c : RegisteredCircuit} (T : Threading c) (d e eLk b : ℕ) where
   /-- The key of a value: one of its reads, in its thread. -/
   key : Fin c.D.N → Option (Fin c.D.N)

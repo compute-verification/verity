@@ -7,12 +7,12 @@ public import Proofs.Slowdown.Threads
 # Proofs that keyed circuits are threaded
 
 Fix a small subcircuit `R` and a thread `t`. Following keys from any value of `t` in `R` reaches either a value of `t`
-that `R` reads (where the path leaves `R`) or a stop in `R` (`walk`). Each fan-in read of a root in `R` does so too, and two fan-in
-reads never reach the same value, so a root of `t` in `R` gives `d ≤ #(t's reads) + #(t's lookups in R)`, by induction down
-the roots (`root_reads`). The lookups of `t` in `R` read disjoint columns of fresh inputs, so `R` holds at most `E` of
-them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircuit that reads fewer than `d − E` values of
-`t` thus holds no root of `t`, and each of `t`'s counted multiplications in `R` is charged to a read (at most `e` each)
-or to a lookup (at most `eLk` each), with a lookup costing a read of its token (`threaded_of_layered`).
+that `R` reads (where the path leaves `R`) or a stop in `R` (`walk`). Each fan-in read of a root in `R` does so too, and
+two fan-in reads never reach the same value, so a root of `t` in `R` gives `d ≤ #(t's reads) + #(t's lookups in R)`, by
+induction down the roots (`root_reads`). The lookups of `t` in `R` read disjoint columns of fresh inputs, so `R` holds
+at most `E` of them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircuit that reads fewer than
+`d − E` values of `t` thus holds no root of `t`, and each of `t`'s counted multiplications in `R` is charged to a read
+(at most `e` each) or to a lookup (at most `eLk` each), with a lookup costing a read of its token (`threaded_of_layered`).
 -/
 
 @[expose] public section
