@@ -34,7 +34,7 @@ from verity_vllm.protocols.pouw.h1 import receipts as RC
 
 HERE = Path(__file__).resolve().parent
 _ws_spec = importlib.util.spec_from_file_location(
-    "dither_j10r_ws", Path(__file__).resolve().parents[2] / "hash" / "dither" / "j10r_ws.py")
+    "dither_j10r_ws", HERE.parents[2] / "benchmarks" / "hash" / "dither" / "j10r_ws.py")
 WS = importlib.util.module_from_spec(_ws_spec)
 _ws_spec.loader.exec_module(WS)
 
