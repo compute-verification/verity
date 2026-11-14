@@ -19,8 +19,8 @@ first of sections 1 to 4 that applies. Four habits:
 - **What you learn goes where the next agent meets it:** a check, else a tool's default or message, else a skill.
 - **Look ahead:** rehearse what will stall next, before it does.
 
-Two gotchas. A `research` command or node ssh that fails for missing credentials: rerun it from a fresh tmux login shell,
-since a long-lived tool shell can lose the injected secrets. A `git push` refused for a lapsed GitHub token: hand over a
+Two gotchas. A `research` command or node ssh that fails for missing credentials: rerun it from a fresh tmux login shell;
+a tool shell can lose secrets the tmux server keeps (`research doctor`). A `git push` refused for a lapsed GitHub token: hand over a
 bundle (`git bundle create B origin/BASE..BRANCH`, `research data put --kind evidence/v1 --file B --preserve`) with the
 art id, the branch and its head sha.
 
@@ -113,7 +113,7 @@ What an agent may change:
   transition names its end state. The admin audits for splits and tells Daniel when an abstraction fails or turns into
   red tape.
 - A protocol importing another protocol is the importing protocol's owner's call, told to the imported one's
-  owner, and the edges stay acyclic (`ALLOWED` in `tests/test_boundaries.py`).
+  owner, and the edges stay acyclic (`loads` in `tests/import_order.toml`).
 - The Lean lane changes `tools/verity/lean`, the lean-proofs skill, `check`'s Lean steps, shared Lean foundations
   and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. A changed record in another lane's
   package goes through that lane.
