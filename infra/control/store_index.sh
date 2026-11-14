@@ -4,8 +4,9 @@
 # has one, else r2.env's, which also writes that bucket (fixtures_export.sh). Code: /data/infra/store-index-src, a
 # tools/research tree whose COMMIT file names it. The credentials go only into the environment: r2.env is sourced, and the
 # unquoted lines of store-index.env (its URL has `&`) and store-export.env are read with sed. Log: /data/infra/store-index.log
-# Each pass's start, end, exit code and commit go to $PASS as it ends, and the watchers tree's loop_metrics.py sends its length to
-# the metrics door in the background: a send that fails or hangs is a line in the log, and the loop goes on.
+# Each pass's start, end, exit code and commit replace $PASS as it ends, and the watchers tree's loop_metrics.py sends its length
+# to the metrics door in the background, under `timeout 60` and without the lock's descriptor; the next pass reaps it, and a send
+# that failed or was killed by its timeout is a line `metrics send rc=N` in the log then. The loop never waits on a send.
 LOG=/data/infra/store-index.log
 CONF=/root/.config/verity
 PASS=/data/infra/store-index-pass.json
@@ -40,7 +41,9 @@ while :; do
   commit=$(cat /data/infra/store-index-src/COMMIT 2>/dev/null)
   echo "$(date -u +%FT%TZ) pass rc=$rc $commit" >> "$LOG"
   printf '{"start": %s, "end": %s, "rc": %s, "commit": "%s"}\n' "$start" "$end" "$rc" "$commit" > "$PASS.tmp" && mv "$PASS.tmp" "$PASS"
-  [ -n "$sending" ] && wait "$sending"    # the last pass's send, ended within its 60 s: reaped, never waited on
+  if [ -n "$sending" ]; then    # the last pass's send, ended within its 60 s: reaped, never waited on
+    wait "$sending" || { sent=$?; echo "$(date -u +%FT%TZ) metrics send rc=$sent" >> "$LOG"; }
+  fi
   PYTHONPATH=$WATCHERS_SRC/tools/research/src timeout 60 python3.12 -s "$WATCHERS_SRC/infra/control/loop_metrics.py" index \
     --pass "$PASS" >> "$LOG" 2>&1 9>&- &
   sending=$!
