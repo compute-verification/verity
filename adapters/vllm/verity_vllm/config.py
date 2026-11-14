@@ -168,7 +168,7 @@ class RowId:
             pfx = _ROW_INT_PREFIX.get(name)
             if pfx is None:
                 vals[name] = tok
-            elif tok.startswith(pfx) and tok[len(pfx):].isdigit():
+            elif tok.startswith(pfx) and tok[len(pfx):].isdecimal():
                 vals[name] = int(tok[len(pfx):])
             else:
                 raise ValueError(f"row id {row!r}: field {name} is {tok!r}, expected {pfx}<N>")
@@ -376,7 +376,7 @@ def _fetch(paths: list[Path]) -> None:
         if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
             raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "
-                               "is reachable, or name the public export with $RESEARCH_PUBLIC_URL")
+                               "is reachable, or name the store's public half with $RESEARCH_PUBLIC_URL")
 
 
 def workload_file(path: str | Path) -> Path:

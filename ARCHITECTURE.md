@@ -210,7 +210,7 @@ verity/
   config.py        reads the one public file a run starts from
   runtime/         runs parties over channels: sockets, randomness and clock, transcripts
   protocols/       each protocol with verifier/ (its Lean check), prover/ (with the GPU code it runs) and device/
-    proofs/        flock, spot, recursion: what the other protocols call to prove
+    proofs/        flock, spot, recursion, spot_flock: what the other protocols call to prove
     accounting/    registration, then pouw, pous, poub, certifier. Registration runs once, before any challenge:
                    the hardware against its data sheets, the circuit compiler, the commitments to other
                    information, every device accounted for. The others: compute, memory and network
@@ -239,7 +239,7 @@ The rules that keep the parts apart. A test enforces each one:
 4. `party.py`, `channel.py` and `device.py` use nothing. `protocol.py` uses only those three. `config.py` uses only `protocol.py`.
 5. `circuits/` uses nothing. `commitments/` uses only `circuits/`.
 6. An adapter uses a protocol's workload side, which is one call over GPU buffers (for PoUW: "run this matrix multiply"). A protocol never uses an adapter.
-7. Inside `protocols/`: two layers, accounting (registration, pouw, pous, poub, certifier) and policy (inference_only), with policy on accounting and compose on top of both. Both layers use the proofs (flock, with spot and recursion on it), and the proofs use neither layer, so they read no registration: a protocol that calls them passes in the circuit, its pieces and the sampling rule. Registration is the base of `accounting/`: it uses the shared files and `commitments/` and no other protocol, and the other accounting protocols, the policy and compose read the registration it accepted. Each group is a directory of its own: `proofs/`, `accounting/` and `policy/`.
+7. Inside `protocols/`: two layers, accounting (registration, pouw, pous, poub, certifier) and policy (inference_only), with policy on accounting and compose on top of both. Both layers use the proofs (flock, with spot and recursion on it and spot_flock on those), and the proofs use neither layer, so they read no registration: a protocol that calls them passes in the circuit, its pieces and the sampling rule. Registration is the base of `accounting/`: it uses the shared files and `commitments/` and no other protocol, and the other accounting protocols, the policy and compose read the registration it accepted. Each group is a directory of its own: `proofs/`, `accounting/` and `policy/`.
 8. A verifier uses no prover code.
 9. Nothing uses a benchmark, and nothing in the repository reads the dashboard. A measurement reaches a guarantee one way only: a person writes it into a data sheet with its source, marked as a measurement, and the guarantee takes the sheet as a parameter.
 10. The tree above is one file in the repository, and a test fails on anything that is not in it. Both are on `main`. The file also lists the 36 places `main` still holds that the tree does not, each with its owner and its day (the last is Tue 24 Nov), and that list only shrinks.

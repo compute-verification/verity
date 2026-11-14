@@ -52,7 +52,7 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   then `Stream.register` (R1-R7 and the receipt), `select`, `deliver` (the sampled proof blocks' session records' SHA-512, once)
   and `outcome` (final), and publishes exactly `pouw.window.PUBLIC`.  A Spec fixes one sampling design and K′ is a function of the
   level, so the challenger holds one Stream per level.
-- **Of record** (`of_record`): the challenger's checks are Lean's.  PoUW's rule (`core_check.registered`, which
+- **Of record** (`of_record`): the challenger's checks are Lean's.  PoUW's rule (`core_check.registered_twin`, which
   `public_problem` mirrors for the committer), R1-R6, the pass's execution phase, the sample, PoUW's check over the stream's outcome
   (`core_check.case_twin` the Python) and a unit's opening each run Lean's port and Python's reference on one input; Lean's verdict
   decides and is the published items', both go in the execution phase's witness (``outcome.json``'s ``of_record``, the opening
@@ -341,7 +341,7 @@ class Deployment:
     """What a certified execution phase's verifier pins of its deployment: the network certifier's public key and its run's id,
     the only ones whose answers the challenger takes (its client, `certifier.active.CertifierClient`, must be for them,
     and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the execution phase's
-    coin record and the sample's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
+    coin record and the sample's check of record verifies it (`core_check.draw_twin`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
 
     # TODO: the auditor's deployment record is to give the certifier's key and run id; nothing writes it yet, so
@@ -654,7 +654,7 @@ def core_params(params: dict) -> dict:
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
           record: OR.Record | None = None, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered execution phase root, else why not: PoUW's
-    rule on the opening (`core_check.opening`, the unit sampled unless not `drawn`), of record (`record`, Lean's by
+    rule on the opening (`core_check.opening_twin`, the unit sampled unless not `drawn`), of record (`record`, Lean's by
     default), beside this reading of the registration (its level the execution phase's, its entries' domain the execution phase's served
     one), which may refuse only what the rule refuses (`Record.prelude`).  `salt` is a certified execution phase's salt, the one
     its pass was checked against (`core_check.certified_salt`, which `Challenger.check` passes); the opening refuses
@@ -805,7 +805,7 @@ class Recorded:
 def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) -> tuple[Ch.LiveCommitment, dict]:
     """A certified execution phase's trusted coin commitment, which the challenger reads itself from the record its challenger
     signed and wrote at `path` under the verifier's `key` (`challenger.trusted_commitment`), and the record with the key
-    as the sample's check of record reads them (`core_check.draw` verifies the record again).  Raises `ValueError` when
+    as the sample's check of record reads them (`core_check.draw_twin` verifies the record again).  Raises `ValueError` when
     there is no such record, or it isn't a live execution phase's sampling session's."""
     if path is None or not isinstance(key, Ch.ChallengerKey):
         raise ValueError("a certified window's challenger reads its coin commitment from its challenger's signed record "
@@ -831,7 +831,7 @@ def _pd():
 
 
 class Challenger:
-    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`core_check.registered`), the pass's
+    """The challenger of one deployment's execution phases over P1's `Stream`: PoUW's rule (`core_check.registered_twin`), the pass's
     execution phase under its own coins, then the stream's, each of PoUW's checks of record in `record` (Lean's, by default).  `coins` is the execution phase's coin challenger (`pouw.coins.Challenger`, or
     `Recorded` in a replay); the execution phase's sampling coin keys `sampler` (Lean's sample, or its twin `python_sampler`).  A Spec
     fixes one sampling design and K′ is a function of the registered level, so it holds one Stream per (stream name, level); each
@@ -921,7 +921,7 @@ class Challenger:
 
     def _coins_json(self) -> dict:
         """The coins the checks of record read: a certified execution phase's challenger record and the key it is signed under
-        (`core_check.draw` verifies it), or the seeded execution phase's commitment."""
+        (`core_check.draw_twin` verifies it), or the seeded execution phase's commitment."""
         return self.coins.commitment.to_json() if self.signed is None else self.signed
 
     def open(self, label: str, after: bytes) -> CoinOpening | Ch.LiveOpening:
@@ -960,7 +960,7 @@ class Challenger:
             self.witness.setdefault(name, []).extend(self.record.witness[at:])
 
     def registered(self, name: str, rec: Mapping[str, Any]) -> None:
-        """PoUW's rule over the registration (`core_check.registered`), of record.  Raises `Refused`."""
+        """PoUW's rule over the registration (`core_check.registered_twin`), of record.  Raises `Refused`."""
         try:
             x = {"params": self.core, "commitment": OR.hexed(rec)}
         except TypeError as e:
@@ -974,7 +974,7 @@ class Challenger:
     def pass_epoch(self, raw: bytes | None, recorded: bool = False, name: str = "", **bound: bytes) -> str:
         """How the pass's salt was had (``coin``, ``recorded beacon`` for a recorded replay's, or ``certifier``), its
         manifest `raw` re-started under the challenger's own coin commitment, or a certified execution phase's `bound`
-        (`core_check.pass_epoch`'s ``reveal``, ``committed``, ``stream`` and ``prover``), and named by the execution phase's
+        (`core_check.pass_epoch_twin`'s ``reveal``, ``committed``, ``stream`` and ``prover``), and named by the execution phase's
         parameters, of record.  Raises `Refused`."""
         out = self._of_record(name, self.record.pass_epoch, {
             "coins": self._commitment().to_json(), "raw": None if raw is None else raw.hex(),
