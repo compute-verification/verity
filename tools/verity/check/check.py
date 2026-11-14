@@ -49,7 +49,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             and one of TRAIN_GB or more when it runs pytest, lean-suites,
                                                             circuit-check, flock-circuit-build, lean-build or lean-audit
                                                             (`train_gb`: a machine without one is skipped or refused, exit 75),
-                                                            booking what its shard's steps take (`shard_ask_gib`);
+                                                            booking what its shard's steps take (`shard_ask_gib`), or a
+                                                            whole check what its shards together take (`whole_ask_gib`);
                                                             --agreement sends the upstream build's URLs whatever it changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
@@ -463,8 +464,9 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 #: what a train check's shard books in its slot (`shard_ask_gib`), in GiB as a slot's mem= and book= are: the first row all of
 #: whose names the shard's parts hold (a name with a colon is that part, one without any part of that job; lean-agreement
 #: counts only where it runs), each the most such a shard's check scope held (its memory.peak) plus 15%, up to the next 10
-#: GiB, or where a row says so the memory its suites' workers need. ci.toml's plans place the parts; slot.py books the larger
-#: of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
+#: GiB, or where a row says so the memory its suites' workers need. ci.toml's plans place the parts, and a whole train check
+#: books the sum of a plan's shards' (`whole_ask_gib`); slot.py books the larger of this and the slot line's book= (`booked`),
+#: and no grant passes the booking (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
     (("lean-agreement",), 390),                                  # the agreement beside lean-build, Flock suite: 339 + 15%
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
@@ -482,15 +484,25 @@ SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
 )
 
 
-def shard_ask_gib(parts: list[str] | None, need: list[str]) -> int | None:
+def shard_ask_gib(parts: list[str], need: list[str]) -> int | None:
     """The GiB a train check's shard of ``parts`` books (`SHARD_ASKS_GIB`), lean-agreement counting only when ``need`` (the
-    steps the run is sent what they need for) holds it; None for a whole check or a shard no row covers, where the slot
-    line's book= stands."""
-    if parts is None:
-        return None
+    steps the run is sent what they need for) holds it; None for a shard no row covers, where the slot line's book= stands."""
     held = {p for p in parts if p != "lean-agreement" or p in need}
     held |= {p.partition(":")[0] for p in held}
     return next((gib for names, gib in SHARD_ASKS_GIB if all(n in held for n in names)), None)
+
+
+def whole_ask_gib(need: list[str], cache: bool = True) -> int | None:
+    """The GiB a whole train check books: it runs every group at once (`run`), so the shards of each of ci.toml's plans, of the
+    parts it runs (those on the merge gate, every part without ``cache``), run beside one another, and the sum of their asks
+    (`shard_ask_gib`) bounds its peak.  The least such sum over the plans; a plan with a shard no row covers bounds nothing,
+    and with none left the slot line's book= stands (None)."""
+    sums = []
+    for n in sorted(DECLARATION.plans()):
+        asks = [shard_ask_gib(p, need) for k in range(1, n + 1) if (p := shard(f"{k}/{n}", gated=cache)["parts"])]
+        if asks and None not in asks:
+            sums.append(sum(asks))
+    return min(sums, default=None)
 
 
 def ask_gb(gib: int) -> str:
@@ -1394,13 +1406,20 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
+    ask = None
+    if on and min_mem:
+        try:
+            ask = shard_ask_gib(parts, need) if parts is not None else whole_ask_gib(need, "--no-cache" not in rest)
+        except DECLARATION.DeclarationError as e:
+            print(f"check: {e}", file=sys.stderr)
+            return 2
     # an after-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
            "--cwd", "clone" if on else "source", *(x for p in DECLARED for x in ("--declared-output", p)), *pooled,
            *(["--env", f"{SLOT.MIN_MEM_ENV}={min_mem}"] if on and min_mem else []),
-           *(["--env", f"{SLOT.RUN_MEM_ENV}={ask_gb(ask)}"] if on and min_mem and (ask := shard_ask_gib(parts, need)) else [])]
+           *(["--env", f"{SLOT.RUN_MEM_ENV}={ask_gb(ask)}"] if ask else [])]
     env = dict(os.environ)
     d = Path(tempfile.mkdtemp(prefix="check-lean-deps-"))
     if "lean-agreement" in need:

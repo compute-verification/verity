@@ -1162,6 +1162,7 @@ def test_drive_s_rank_reaches_slot_py_from_record(monkeypatch):
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(check, "whole_ask_gib", lambda need, cache=True: None)
     monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
     monkeypatch.delenv("RESEARCH_LANE", raising=False)
     monkeypatch.setenv("CHECK_SLOT_RANK", "15")
@@ -1268,6 +1269,7 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(check, "whole_ask_gib", lambda need, cache=True: None)
     monkeypatch.delenv("RESEARCH_AGENT_URL", raising=False)
     monkeypatch.delenv("RESEARCH_LANE", raising=False)
     monkeypatch.delenv("CHECK_SLOT_RANK", raising=False)
@@ -1293,6 +1295,7 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_circuit_check_or_l
     calls = []
     monkeypatch.setattr(check.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(check, "lean_deps_url_file", lambda d: None)
+    monkeypatch.setattr(check, "whole_ask_gib", lambda need, cache=True: None)
     want = f"{SLOT.MIN_MEM_ENV}={check.TRAIN_GB}"
 
     def sent(*argv: str) -> bool:

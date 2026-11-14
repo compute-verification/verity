@@ -3,6 +3,7 @@ where a plan doesn't name it), each shard holds what its jobs need or runs it be
 packages, lean-suites on its suites), and its result names what it ran."""
 from __future__ import annotations
 
+import functools
 import importlib.util
 import json
 import shlex
@@ -770,11 +771,10 @@ def test_record_of_the_records_step_launches_it_alone_with_circuit_checks_memory
     assert f"{CHECK.SLOT.MIN_MEM_ENV}={CHECK.TRAIN_GB}" in head and tail[0] == "slot" and tail[-2:] == ["--keep-going", "--cc-records"]
 
 
-def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch):
-    """Each train shard asks for its kind's memory (`check.SHARD_ASKS_GIB`) as the run's ask beside the train slot's minimum,
-    so slot.py books it over a lowered book= (`slot.booked`): the 5-shard plan's pytest shard, whose parts are by suite, asks
-    too, a reused audit lowers its shard's ask, lean-agreement raises one only where it runs, and a lane's check and a whole
-    train check, which no shard row measures, ask nothing."""
+@pytest.fixture
+def launch(monkeypatch):
+    """`record --base HEAD --on vy-x --keep-going ARGS...`'s `--env NAME=VALUE`s, as a dict, with nothing launched, signed or
+    fetched; `shard` cached, since a whole check's ask resolves every plan's shards on each launch."""
     real, launched = subprocess.run, []
 
     def run(cmd, *a, **k):
@@ -783,18 +783,32 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
+    def agreement_url_file(d):
+        (p := d / CHECK.AGREEMENT_URLS).write_text(json.dumps({k: {"art": f"art:{k[0]}", "bytes": 1} for k in ("upstream", "inputs")}))
+        return p
+
     monkeypatch.setattr(subprocess, "run", run)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
+    monkeypatch.setattr(CHECK, "agreement_url_file", agreement_url_file)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
     monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     monkeypatch.setattr(CHECK, "slot_wrap", lambda priority: ["slot"])
+    monkeypatch.setattr(CHECK, "shard", functools.lru_cache(CHECK.shard))
 
     def env(*args: str) -> dict[str, str]:
         launched.clear()
         assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--keep-going", *args]) == 0
         head = launched[0][:launched[0].index("--")]
         return dict(head[i + 1].split("=", 1) for i, x in enumerate(head) if x == "--env")
+    return env
 
+
+def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(launch):
+    """Each train shard asks for its kind's memory (`check.SHARD_ASKS_GIB`) as the run's ask beside the train slot's minimum,
+    so slot.py books it over a lowered book= (`slot.booked`): the 5-shard plan's pytest shard, whose parts are by suite, asks
+    too, a reused audit lowers its shard's ask, lean-agreement raises one only where it runs, and a lane's check asks
+    nothing."""
+    env = launch
     steps = "flock-circuit-build,lean-build,lean-audit,lean-suites,pytest,circuit-check,flock-rust-tests"
     reused = steps.replace("lean-audit,", "")
     for args, gib in ((["--deferred", steps, "--shard", "1/3"], 330), (["--deferred", reused, "--shard", "1/3"], 240),
@@ -807,7 +821,35 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
         assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB), args
         assert sent[CHECK.SLOT.RUN_MEM_ENV] == CHECK.ask_gb(gib) and CHECK.SLOT.gib(float(CHECK.ask_gb(gib))) == gib, args
     assert CHECK.SLOT.RUN_MEM_ENV not in env("--deferred", steps, "--shard", "1/3"), "a lane's check books its slot line alone"
-    assert CHECK.SLOT.RUN_MEM_ENV not in (whole := env("--priority")) and CHECK.SLOT.MIN_MEM_ENV in whole
+    assert CHECK.SLOT.RUN_MEM_ENV not in env(), "a lane's whole check books its slot line alone"
     build = ["lean-build", "lean-audit:security/Properties", "lean-agreement"]
     assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 390 and CHECK.shard_ask_gib(build, []) == 130
     assert all(CHECK.SLOT.gib(float(CHECK.ask_gb(g))) == g for _, g in CHECK.SHARD_ASKS_GIB)
+
+
+@pytest.mark.slow
+def test_a_whole_train_check_asks_what_a_plans_shards_ask_together(launch, monkeypatch):
+    """A whole train check runs every group at once (`check.run`), so the shards of a plan, of what it runs, run beside one
+    another in it: it asks the sum of what each shard asks as its own launch, the least of those sums over ci.toml's plans,
+    and so more than any one shard asks (lean-agreement's row at least where that runs); circuit-check counts only under
+    --no-cache, which runs it; and a row that changes moves the whole check's ask with it."""
+    env = launch
+
+    def gib(sent: dict[str, str]) -> int:
+        return CHECK.SLOT.gib(float(sent[CHECK.SLOT.RUN_MEM_ENV])) if CHECK.SLOT.RUN_MEM_ENV in sent else 0
+
+    every = ",".join(j.name for j in CHECK.JOBS)
+    asked = {}
+    for whole, each in (([], []), (["--agreement"], ["--agreement"]), (["--no-cache"], ["--no-cache", "--deferred", every])):
+        shards = {n: [gib(env("--priority", *each, "--shard", f"{k}/{n}")) for k in range(1, n + 1)]
+                  for n in sorted(D.plans())}
+        asked[whole[0] if whole else ""] = got = gib(sent := env("--priority", *whole))
+        assert sent[CHECK.SLOT.MIN_MEM_ENV] == str(CHECK.TRAIN_GB)
+        assert got == min(sum(a) for a in shards.values()), (whole, shards)
+        assert got > max(max(a) for a in shards.values()), (whole, shards)
+    rows = dict(CHECK.SHARD_ASKS_GIB)
+    assert asked["--agreement"] >= rows[("lean-agreement",)] and asked["--agreement"] > asked[""]
+    assert asked["--no-cache"] > asked[""], "circuit-check runs beside the rest only under --no-cache"
+    monkeypatch.setattr(CHECK, "SHARD_ASKS_GIB", tuple((names, g + 100 if names == ("lean-agreement",) else g)
+                                                       for names, g in CHECK.SHARD_ASKS_GIB))
+    assert gib(env("--priority", "--agreement")) == asked["--agreement"] + 100 and gib(env("--priority")) == asked[""]
