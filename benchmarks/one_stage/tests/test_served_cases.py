@@ -445,7 +445,7 @@ def test_a_host_that_makes_no_scope_starts_no_check_unless_it_says_so(tmp_path, 
 
 def test_a_v2_case_in_the_per_member_form_is_not_asked(tmp_path, capsys, scope):
     """A v2 case whose proofs are several members' statements, not one statement's sessions, is the form one-stage v2
-    refuses once it has read every blob: neither sampled proofs' check nor the bare v2 check is started on it, each
+    refuses once it has read every blob: neither SPOT's check nor the bare v2 check is started on it, each
     line saying so beside the blobs' sum and the limit, and no answer is written in the Lean's place."""
     program, query = toy()
     v1 = v1_case(program, query)
