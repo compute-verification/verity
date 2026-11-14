@@ -22,6 +22,12 @@ there when the workload exits and publishes to the store:
   once lanes declare their outputs). The rest are listed in `meta.trimmed` by path, size and sha256, and custody prints
   `custody trimmed N undeclared file(s)`; a trimmed file is still pinned by hash, so changing it breaks `.custody`.
 
+A run that ended without custody preserving it (the upload failed, custody was off, its runner died) is only its directory
+on the machine: the retention collector lists such runs apart, and where a machine's collector takes them
+(`research retention gc --unpreserved-runs`) the directory goes 7 days after its last write, unless
+`research keep RUNDIR ...` before then or `research data custody RUN --publish` keeps it (the research README,
+"Retention of node data").
+
 A local `research run` (no `--on`) publishes only its telemetry and the files its `result.json` lists, unless
 `--run-record` gives it custody's selection; the Nebius Sky templates with a free-form `CMD` (`port-capture`,
 `prover-bench`, `prover-dev`) pass it.

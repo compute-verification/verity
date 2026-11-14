@@ -8,9 +8,13 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import itertools
 import json
+import shutil
 import sys
+import tempfile
 import threading
+import weakref
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace as NS
@@ -89,7 +93,7 @@ def _interior(layout: BR.Layout, previous: str, program: Program | None = None) 
 
 def _samples_q(got: TS.First) -> bool:
     """The first stage sampled Q of the class's spans, a subset."""
-    return got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+    return got.sample.draw["law"] == "subset" and len(got.sample.units) == Q
 
 
 def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
@@ -102,12 +106,12 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
     assert _samples_q(got) and got.read
     handoff = json.loads(json.dumps(got.stage1()))
-    assert handoff["units"] == list(got.draw.units) and handoff["spec"] == got.stream.spec.digest()
+    assert handoff["units"] == list(got.sample.units) and handoff["spec"] == got.stream.spec.digest()
     again = TS.resume(handoff, PAIR, FC.Challenger("second"))
-    assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
     ireg, second = again.second(*_interior(again.layout, again.registration.digest))
     assert ireg.order == again.registration.order and again.coins.live
-    assert second.replay_sample == again.draw and len(second.units) == Q * K
+    assert second.replay_sample == again.sample and len(second.units) == Q * K
     assert [u // N_RHO for u in second.units] == list(range(Q))
 
 
@@ -118,7 +122,7 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     got = TS.first(_class(WRAP, inline=True).public(), WRAP, RULE, FC.Challenger("first"))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
     again = TS.resume(json.loads(json.dumps(got.stage1())), WRAP, FC.Challenger("second"))
-    assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
     _, second = again.second(*_interior(again.layout, again.registration.digest))
     assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
 
@@ -151,7 +155,7 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     again = TS.resume(handoff, BOTH, FC.Challenger("second"))
     assert again.stream.spec.selection == S.TwoStage(c.layout.grain, RULE.replay, ks)
     _, second = again.second(*_interior(again.layout, again.registration.digest, again.stream.interior_program(Q)))
-    assert second.law == S.second_law(again.draw.units, (2 * N_RHO, N_RHO), (3, 1))
+    assert second.law == S.second_law(again.sample.units, (2 * N_RHO, N_RHO), (3, 1))
     pairs = [u for u in second.units if u < Q * 2 * N_RHO]
     assert sorted(u // (2 * N_RHO) for u in pairs) == [0, 0, 0, 1, 1, 1] and len(second.units) - len(pairs) == Q
 
@@ -211,9 +215,22 @@ def test_resume_refuses_another_rule_registration_or_sample():
         TS.resume({**stage1, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
     with pytest.raises(ValueError, match="registers to another digest"):
         TS.resume({**stage1, "registration": "00" * 64}, PAIR)
-    others = [u for u in range(N) if u not in got.draw.units][:Q]
+    others = [u for u in range(N) if u not in got.sample.units][:Q]
     with pytest.raises(ValueError, match="other spans"):
         TS.resume({**stage1, "units": others}, PAIR)
+
+
+def test_a_hand_off_that_names_no_window_root_resumes_under_its_commitments_run():
+    """The first stage registers under the window's open root, the commitment's ``run`` (`_first_all`), which the
+    outcome holds its session's evidence to. A hand-off that names the root resumes under it; one that names none
+    resumes under the commitment's ``run``, to the same registration and sample."""
+    pub = _class().public()
+    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"), window_root=pub["run"])
+    stage1 = json.loads(json.dumps(got.stage1()))
+    assert "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
+    assert TS.first_root({**stage1, "window_root": "ab" * 64}) == "ab" * 64
+    again = TS.resume(stage1, PAIR, window_root=TS.first_root(stage1))
+    assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
 
 
 def test_the_second_stages_coins_follow_the_whole_first_stage():
@@ -273,7 +290,7 @@ def test_a_class_of_verdicts_declares_and_registers_its_blocks_return(layers):
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
     assert _samples_q(got)
     again = TS.resume(json.loads(json.dumps(got.stage1())), SAME, FC.Challenger("second"))
-    assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
@@ -302,7 +319,7 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
         assert sig["root"] == sig["domain"] == Array(q, RG.DIGEST)
         assert [sig[x.value] for x in opening] == [Array(2 * q, Array(x.words, Bits(16))) for x in opening]
     assert not [v for v in TS.first(pub, PAIR, RULE, FC.Challenger("first")).stream.spec.values if v.registered]
-    names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.draw.units]
+    names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.sample.units]
     bodies = {"m0": b"the interior's public body"}
     hist = got.history(1, {n: [bc.hex() for bc in hs[n].bcs] for n in names}, bodies)
     assert [t["name"] for t in hist["tables"]] == names and c == 8
@@ -367,11 +384,11 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     assert {(x.template, x.port, SS._port_of(named, key, x.value), per, tuple(SS.row_at(rs, j) for j in range(cells)))
             for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in links}
 
-    names = [BT.name(layout.run, prompt, outputs, int(u), 0) for u in got.draw.units]
+    names = [BT.name(layout.run, prompt, outputs, int(u), 0) for u in got.sample.units]
     sampled = [hs[n] for n in names]
     toks = ((1, 5, 0, 2), (0, 4, 3, 2))
     it = IR.interior([IR.Span(f"s{k}", member, IR.table_reads(t, toks[k]), [[0, cells]], "p" * 64)
-                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.draw.units,
+                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.sample.units,
                      row="two-stage-driver-test", tables=sampled, served=got.record, positions=c, links=links)
     entries = {e["value"]: e for e in it.record["registered"]}
     assert list(entries) == [x.value for x in links]
@@ -388,7 +405,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
         assert {k: entries[v.value][k] for k in v.entry()} == v.entry()
 
     part = SS.Part(tid, 0, cells)
-    own = SS.Own(tuple(got.draw.units), (part,), it.record, got.record, (),
+    own = SS.Own(tuple(got.sample.units), (part,), it.record, got.record, (),
                  links=tuple(SS.Link(x.template, x.port, SS._port_of(named, key, x.value)) for x, _per, _rs in runs),
                  rows=tuple(SS.Rows(x.template, x.port, per, rs) for x, per, rs in runs))
     for x in table:
@@ -403,6 +420,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
 
 def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_interior_ones():
     assert TS.Rule.from_json(json.loads(json.dumps(RULE.to_json()))) == RULE
+    assert TS.Rule.from_json({k: v for k, v in RULE.to_json().items() if k != "span_values"}) == RULE
     with pytest.raises(ValueError, match="rate law"):
         TS.Rule(f"subset:{Q}", K, INTERIOR, 60.0)
     spec = TS.stream_of(_class().layout, RULE, FC.Challenger()).spec
@@ -422,7 +440,7 @@ def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_
     got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"), stop=stop)
     assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
     assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
-    assert got.registration.record["population"] == N and len(got.draw.units) == Q
+    assert got.registration.record["population"] == N and len(got.sample.units) == Q
 
 
 #: a serve's stop rule: one stop id, a model of 64 ids, responses of at most 4
@@ -439,20 +457,60 @@ def _stop_class(held: bool = True) -> BR.Committed:
     return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
 
 
-class OneSession(FC.Challenger):
-    """`fake_challenger.Challenger` with every commitment on one session, as a window's first stage has: its signed
-    release log holds each commitment's coins in the order they were read."""
+class OneSession(CC.ChallengerCoins):
+    """One in-process challenger session of the window's family and ``ranks`` ranks' (`a5_coins.families`), as a
+    window's first stage has: the session's client (`open`, `open_many`, `close`), whose signed release log holds every
+    family's roots and releases in the order they were asked for; and coins that take the ranks' families in order, a
+    commitment each."""
 
-    def commit(self, after: bytes) -> CC.Segment:
-        if not self.sessions:
-            return super().commit(after)
-        self.sessions[bytes(after)] = next(iter(self.sessions.values()))
-        return CC.ChallengerCoins.commit(self, after)
+    def __init__(self, seed: str, ranks: int = 6, coins: int = 64) -> None:
+        layout = AC.families(dict.fromkeys(range(ranks), coins))
+        self.directory = Path(tempfile.mkdtemp(prefix="one-session-"))
+        weakref.finalize(self, shutil.rmtree, self.directory, True)
+        self.ledger = FC.Ledger(self.directory / "windows.jsonl", FC.at(0, 3))
+        self.ledger.open("s-1", FC.WINDOW, withheld=True)
+        self.live = Ch.LiveChallenger(FC.SCHEME, 0, layout, FC.entropy(f"{seed}/s-1"))
+        self.session = FC.R.open_session(self.live, FC.pinned_key(), f"{FC.HOST}.s-1", FC.at(1, 2), self.directory,
+                                         "s-1", withhold=True)
+        (self.directory / FC.R.HELLOS).write_text("")
+        self.commitment, self.families = self.live.commitment, self.live.families
+        self._lines: list[str] = []
+        self._clock, self._files = itertools.count(), None
+        super().__init__(*(Ch.LiveRecord(self, AC.family(r)) for r in range(ranks)))
+
+    def open_many(self, requests: list[tuple[str, int, bytes]]) -> list[Ch.LiveOpening]:
+        out = []
+        for label, index, after in requests:
+            root = {"event": "root", "index": index, "label": label, "received_at": next(self._clock),
+                    "root": bytes(after).hex()}
+            out.append(self.live.open(label, index, after))
+            release = {"after": bytes(after).hex(), "event": "release", "index": index, "label": label,
+                       "released_at": next(self._clock)}
+            self._lines += [FC.canonical_json_text(root), FC.canonical_json_text(release)]
+        return out
+
+    def open(self, label: str, index: int, after: bytes) -> Ch.LiveOpening:
+        return self.open_many([(label, index, after)])[0]
+
+    def close(self) -> None:
+        pass
+
+    def files(self) -> dict:
+        """The session's published files under the verifier's key, the auditor's ledger and the host's pins; the first
+        call closes the session."""
+        if self._files is None:
+            with open(self.directory / FC.R.RELEASES, "a", encoding="utf-8") as log:
+                log.write("".join(line + "\n" for line in self._lines))
+            self.session.lines.extend(self._lines)
+            FC.R.close_session(self.session, None)
+            self.ledger.end(self.session.id, self.session.directory, True)
+            self._files = {"key": FC.pinned_key().to_json(), "ledger": self.ledger.lines, "main": FC.MAIN,
+                           "pins": FC.HOST_PINS, "session": FC.R.session_files(self.directory)}
+        return self._files
 
     def evidence(self, digest: str) -> dict:
-        """`coins.coins_reason`'s evidence for the sample after ``digest``; the first call closes the session."""
-        closed = super().evidence(next(iter(self.sessions)).hex())
-        return {**closed, "segment": next(s for s in self.segments if s.after == bytes.fromhex(digest)).to_json()}
+        """`coins.coins_reason`'s evidence for the sample after ``digest``."""
+        return {**self.files(), "segment": next(s for s in self.segments if s.after == bytes.fromhex(digest)).to_json()}
 
 
 def _start(one: OneSession):
@@ -470,14 +528,12 @@ def _start(one: OneSession):
                 turns.refuse(f"{why}: the root's one session was not opened")
                 turns.publish({"error": f"the challenger's session was not opened: {why}", "plan": plan})
                 return
-            turns._client, turns._coins = NS(close=lambda: None, commitment=None), one
-            turns._pre = one.commit(bytes.fromhex(root))
-            one(Ch.COIN_BYTES)
+            turns._client, turns._window = one, CC.ChallengerCoins(Ch.LiveRecord(one, AC.WINDOW_FAMILY))
+            turns._pre = turns._window.commit(bytes.fromhex(root))
+            turns._window(Ch.COIN_BYTES)
             turns._opened.set()
             turns.wait_closed()
-            closed = one.evidence(root)
-            turns.publish({**{k: closed[k] for k in ("key", "ledger", "main", "pins", "session")},
-                           "segments": [s.to_json() for s in one.segments], "trusted": {}, "plan": plan})
+            turns.publish({**one.files(), "segments": turns.released()["segments"], "trusted": {}, "plan": plan})
         finisher = threading.Thread(target=finish, daemon=True)
         finisher.start()
         return NS(shutdown=lambda: None), turns, finisher
@@ -507,7 +563,8 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     assert s["sample"]["population"] == N and len(s["units"]) == Q and set(s["units"]) <= set(range(N))
     assert s["spec"] == TS.stop_spec(got.layout, f"rate:{Q}/{N}").digest() != got.stream.spec.digest()
     read, after = bytes.fromhex(s["read"]), bytes.fromhex(s["registration"])
-    assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, after, read, AC.lms_verify) is None
+    assert s["family"] == FC.LABEL
+    assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, FC.LABEL, after, read, AC.lms_verify) is None
     other = TS.first(json.loads(json.dumps(_stop_class().public())), PAIR, RULE, FC.Challenger("other"), stop=STOP)
     with pytest.raises(ValueError, match="not this commitment's values"):
         TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("x"), other.record)
@@ -519,39 +576,55 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
 
 def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
     """`stop_order` on a session's published evidence: it holds when the log shows the boundary registration's coins,
-    then the stop registration's, and the stop sample read exactly the latter. It names why otherwise: no published
-    log; a coin released after the stop registration left unread, or bytes that are not those coins'; the boundary
-    registration's coins handed in as the stop sample's; another window's root; a log the challenger's close does not
-    sign (a prover's own ordering of the same lines); the stop registration's coins released first; and no coin after
-    the boundary registration at all."""
+    then the stop registration's, each in a family of its own, and the stop sample read exactly the latter. It names
+    why otherwise: no published log; no family; a coin released after the stop registration left unread, or bytes that
+    are not those coins'; the boundary registration's coins handed in as the stop sample's, or the stop sample's held
+    to the boundary registration's family; another window's root; a log the challenger's close does not sign (a
+    prover's own ordering of the same lines); the stop registration's coins released first; no coin after the boundary
+    registration at all; and a stop sample whose family holds the boundary registration's coins before its own, the
+    one family a prover that registers again after reading would use."""
     b, s = "b0" * 64, "c0" * 64
 
-    def session(seed: str, *commitments: str) -> tuple[OneSession, bytes]:
-        one, read = OneSession(seed), {}
+    def session(seed: str, *commitments: str) -> tuple[OneSession, bytes, dict[str, str]]:
+        one, read, family = OneSession(seed), {}, {}
         for c in commitments:
             one.commit(bytes.fromhex(c))
-            read[c] = one(2 * Ch.COIN_BYTES)
-        return one, read[s]
+            read[c], family[c] = one(2 * Ch.COIN_BYTES), one.label
+        return one, read[s], family
 
-    def order(evidence: dict | None, read: bytes, root: str = ROOT) -> str | None:
-        return TS.stop_order(evidence, root, b, s, read, AC.lms_verify)
+    def order(evidence: dict | None, read: bytes, family: str | None, root: str = ROOT) -> str | None:
+        return TS.stop_order(evidence, root, family, b, s, read, AC.lms_verify)
 
-    one, read = session("order", b, s)
+    one, read, family = session("order", b, s)
+    assert family == {b: AC.family(0), s: AC.family(1)}
     ev = one.evidence(s)
-    assert order(ev, read) is None
-    assert "published no signed log" in order(None, read)
-    assert "a coin opened and not read" in order(ev, read[:Ch.COIN_BYTES])
-    assert "are not its coins'" in order(ev, bytes(len(read)))
-    assert "not opened after the prover's commitment the verifier holds" in order(one.evidence(b), read)
-    assert order(ev, read, "22" * 64) is not None
+    assert order(ev, read, family[s]) is None
+    assert "published no signed log" in order(None, read, family[s])
+    assert "no coins of a challenger's family" in order(ev, read, None)
+    assert "a coin opened and not read" in order(ev, read[:Ch.COIN_BYTES], family[s])
+    assert "are not its coins'" in order(ev, bytes(len(read)), family[s])
+    assert f"not the challenger's {family[s]} family's" in order(one.evidence(b), read, family[s])
+    assert f"not the challenger's {family[b]} family's" in order(ev, read, family[b])
+    assert order(ev, read, family[s], "22" * 64) is not None
     log = ev["session"]["log"]
     assert len(log) == 9
     forged = {**ev, "session": {**ev["session"], "log": [log[0], *log[5:], *log[1:5]]}}
-    assert "release log" in order(forged, read)
-    early, read = session("early", s, b)
-    assert "the boundary registration's coins come first" in order(early.evidence(s), read)
-    alone, read = session("alone", s)
-    assert "no coin released after the class's boundary registration" in order(alone.evidence(s), read)
+    assert "release log" in order(forged, read, family[s])
+    early, read, family = session("early", s, b)
+    assert "the boundary registration's coins come first" in order(early.evidence(s), read, family[s])
+    alone, read, family = session("alone", s)
+    assert "no coin released after the class's boundary registration" in order(alone.evidence(s), read, family[s])
+
+    shared = FC.Challenger("shared")
+    shared.commit(bytes.fromhex(b))
+    shared(2 * Ch.COIN_BYTES)
+    again = shared.record
+    shared.record = NS(label=again.label, roots=[])
+    segment = CC.ChallengerCoins.commit(shared, bytes.fromhex(s))
+    shared.record, segment.start = again, len(again.roots)
+    shared.sessions[bytes.fromhex(s)] = shared.sessions[bytes.fromhex(b)]
+    read = shared(2 * Ch.COIN_BYTES)
+    assert order(shared.evidence(s), read, FC.LABEL) == f"the stop sample's coins: {CC.FAMILY_ROOT}"
 
 
 def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order_refuses_the_window(tmp_path, monkeypatch):

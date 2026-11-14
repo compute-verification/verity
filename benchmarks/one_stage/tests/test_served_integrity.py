@@ -66,9 +66,12 @@ def record(accepted: bool, **checks) -> dict:
             "wrong_units": {"delta": 0.5, "of": 1024, "bound": 3} if accepted else None}
 
 
+#: the summary of an audit that refused nothing before its sample
+SUMMARY = {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}
+
+
 def test_an_accepted_audit_is_an_accept(tmp_path):
-    out = write(tmp_path / "a", {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}},
-                record(True))
+    out = write(tmp_path / "a", SUMMARY, record(True))
     a = I.answer(out, REG)
     assert check_answer(a) == a
     assert a["verdict"] == "accept" and a["protocol"] == "verity/sampled-proofs/one-stage/v1"
@@ -94,9 +97,6 @@ def test_refusals_reject_by_name(tmp_path, summary, rec, why):
     assert check_answer(a) == a
     assert a["verdict"] == "reject" and a["reason"].startswith(why)
     assert a["commitment"] == R.digest(REG)
-
-
-SUMMARY = {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}
 
 
 @pytest.mark.parametrize("coins", [

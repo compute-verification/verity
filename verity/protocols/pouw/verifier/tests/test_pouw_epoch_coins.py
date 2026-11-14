@@ -4,6 +4,7 @@ early or other-execution phase coin is refused, for the salt and for the sample;
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 import json
 import os
@@ -16,13 +17,13 @@ import pytest
 
 import epoch_coins as E
 import epoch_coins_vectors as V
+from verity.protocols.pouw.prover.schemes import ncp
 from verity.protocols.pouw.verifier import coins as EC
 from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.spot.device import challenger as Ch
 from verity.protocols.pouw.verifier.audit import Epoch, Workload, salt_of, weights_root
 from verity.protocols.pouw.verifier.protocol import DomainError, Matmul, Shape
-from verity.protocols.pouw.prover.schemes import ncp
+from verity.protocols.spot.device import challenger as Ch
 
 # the clear audit is a reference tool (verity/protocols/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
@@ -182,7 +183,6 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     """No PoUW or proof-system module reads `os.urandom`, `os.getrandom`, `secrets` or `random.SystemRandom` but those
     `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier's `coins` on
     the served path."""
-    import ast
     verity = Path(EC.__file__).resolve().parents[3]
     found = set()
     for d in ("protocols/pouw/verifier", "protocols/spot", "protocols/pouw/prover"):

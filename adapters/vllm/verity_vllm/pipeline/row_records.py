@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import glob
 import gzip
-import hashlib
 import json
 import os
 import time
@@ -16,21 +15,23 @@ from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
+from verity_vllm.pipeline.row_json import load_json, read_json, write_json
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.query.manifest.format import components_fold_digest
+from verity_vllm.target_family import declared_profile
 
-
-def load_json(path: str) -> Any:
-    """The JSON document at ``path``, None when it is absent or unreadable."""
-    try:
-        return json.load(open(path))
-    except (OSError, ValueError):
-        return None
+__all__ = ["COMPOSE_PEAK_RATIO", "FOLD_PART_MIN_S", "applicable_taps", "build_jobs_auto", "compose_bytes", "composed_ok", "declared_target", "decomp_rc",
+           "derived_ok", "fold_phase_s", "fold_plan", "load_json", "longest_first", "manifest_timeout", "missing_tap_build", "model_layers",
+           "tap_policy_flags", "tap_source_args", "tp_build_digests", "tp_build_summary", "tp_check_line", "tp_commit_line", "tp_commit_passed",
+           "tp_fold_line", "tp_manifest_complete", "tp_manifest_line", "tp_manifest_not_of_record", "tp_match_summary", "tp_passed", "tp_rank_workload_digest",
+           "tp_served_shapes", "tp_shape"]
 
 
 def tail(path: str, n: int = 300) -> str:
     """The last line of the log at ``path``, at most ``n`` characters ("" when it is absent or empty)."""
     try:
-        lines = open(path, errors="replace").read().splitlines()
+        with open(path, errors="replace") as f:
+            lines = f.read().splitlines()
     except OSError:
         return ""
     return (lines[-1] if lines else "")[:n]
@@ -44,13 +45,15 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     stochastic row's request Program carries the split count of the request its shape identifies, so its default shape
     is the first declared request's (prompt_len, max_tokens - 1), and it snapshots every engine step (the sampler value
     check is complete only over every sampled row); greedy rows keep the envelope and snapshot the two X-09 steps."""
-    w = json.load(open(wl)); s = w["sweep"]
-    lp = max(s["input_lengths"]); t = max(s["output_caps"]) - 1
+    w = read_json(wl)
+    s = w["sweep"]
+    lp, t = max(s["input_lengths"]), max(s["output_caps"]) - 1
     sp = s.get("sampling_params") or {}
     snap = "0,1"
     if float(sp.get("temperature", 0) or 0) > 0 and w.get("requests"):
         r0 = w["requests"][0]
-        lp = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or [])); t = int(r0["max_tokens"]) - 1
+        lp = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or []))
+        t = int(r0["max_tokens"]) - 1
         snap = "all"
     ck = checkpoint_dir(w["model"], RowConfig.of(w).engine.revision, hf_home, checkpoints)
     return {"B": int(s["batch"]), "I": int(s["max_input"]), "O": int(s["max_output"]), "LP": lp, "T": t, "snap": snap, "ck": ck}
@@ -60,8 +63,7 @@ def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str 
     """The row's declared TargetProfile block as sorted JSON (Build's ``--target``), "" when it declares none: the workload's, over
     the device-class profile of ``row``'s id (`target_family.declared_profile`); ``protocols`` (the row's set,
     `protocol_options.at_row`) is laid over it as the target's ``protocols``."""
-    from verity_vllm.target_family import declared_profile
-    t = declared_profile(row, json.load(open(wl))) or None
+    t = declared_profile(row, read_json(wl)) or None
     if protocols:
         t = {**(t or {}), "protocols": list(protocols)}
     return json.dumps(t, sort_keys=True) if t else ""
@@ -70,7 +72,8 @@ def declared_target(wl: str, protocols: tuple[str, ...] | None = None, row: str 
 def request_shapes(wl: str) -> set[tuple[int, ...]]:
     """Every distinct (prompt length, cap - 1) of the manifest's requests, with the cached prefix C of a request vLLM's prefix cache
     serves from row C (`program.prefix_plan.shape`): the shapes the workload Program composes."""
-    w = json.load(open(wl)); s = w["sweep"]
+    w = read_json(wl)
+    s = w["sweep"]
     cached = PP.cached_of(w) if PP.prefix_caching(w) else [0] * len(s["input_lengths"])
     return {PP.shape(int(p), int(c) - 1, k) for p, c, k in zip(s["input_lengths"], s["output_caps"], cached)}
 
@@ -91,7 +94,7 @@ def longest_first(shapes: Any) -> list[tuple[int, ...]]:
 def derived_ok(d: str) -> bool:
     """A derived Program dir whose derive SUCCEEDED (derive_step writes result.json {"ok": false} on a crash too)."""
     try:
-        return json.load(open(f"{d}/result.json")).get("ok") is True
+        return read_json(f"{d}/result.json").get("ok") is True
     except (OSError, ValueError, AttributeError):
         return False
 
@@ -134,8 +137,10 @@ MANIFEST_COMPONENT_S = 1200
 #: limit is 350 s a GiB (3x that), at least 7200 s
 FOLD_GM_SUM_RATIO = 5.5
 FOLD_SUM_RATIO = 0.6
-FOLD_LEG_S_PER_GIB = 350
-FOLD_LEG_MIN_S = 7200
+FOLD_PART_S_PER_GIB = 350
+FOLD_PART_MIN_S = 7200
+#: the older name of `FOLD_PART_MIN_S`, which `pipeline/row_tp.py` reads
+FOLD_LEG_MIN_S = FOLD_PART_MIN_S
 
 
 def derive_bytes(lp: int, t: int, layers: int) -> int:
@@ -166,7 +171,7 @@ def fold_plan(shapes: list[tuple[int, ...]], layers: int, world: int, mem_bytes:
     rw = max(1, min(world, (mem - max(1, folds) * fold) // gm))
     return {"gm_bytes": gm, "fold_bytes": fold, "mem_bytes": mem, "rank_workers": rw,
             "fold_workers": folds or max(1, min(world, (mem - rw * gm) // fold)), "fits": mem >= gm + fold,
-            "leg_s": max(FOLD_LEG_MIN_S, int(FOLD_LEG_S_PER_GIB * s / 2**30))}
+            "leg_s": max(FOLD_PART_MIN_S, int(FOLD_PART_S_PER_GIB * s / 2**30))}
 
 
 def fold_phase_s(leg_s: int, world: int, rank_workers: int, fold_workers: int) -> int:
@@ -191,12 +196,15 @@ def _memory_headroom(proc: str = "/proc/self/cgroup", root: str = "/sys/fs/cgrou
     of `proc` under `root`; v1: the memory controller's mount): a research queue scope's MemoryMax is its own cgroup's, not the root's."""
     def rd(p: str) -> int | None:
         try:
-            v = open(p).read().strip(); return int(v) if v.isdigit() else None
+            with open(p) as f:
+                return int(v) if (v := f.read().strip()).isdigit() else None
         except OSError:
             return None
-    kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in open(meminfo) if ln.split()[1].isdigit()}
+    with open(meminfo) as f:
+        kv = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in f if ln.split()[1].isdigit()}
     try:
-        rel = next((ln.strip().split(":", 2)[2] for ln in open(proc) if ln.startswith("0::")), "")
+        with open(proc) as f:
+            rel = next((ln.strip().split(":", 2)[2] for ln in f if ln.startswith("0::")), "")
     except OSError:
         rel = ""
     parts = [p for p in rel.split("/") if p]
@@ -247,26 +255,26 @@ def build_summary(d: str) -> str:
     out: dict[str, Any] = {}
     for w in ("step", "request"):
         p = f"{d}/build_{w}/result.json"
-        r = json.load(open(p)) if os.path.exists(p) else {"ok": False, "message": "no result.json"}
+        r: dict[str, Any] = read_json(p) if os.path.exists(p) else {"ok": False, "message": "no result.json"}
         art = f"{d}/build_{w}/artifact.json"
-        a = json.load(open(art)) if os.path.exists(art) else {}
+        a = read_json(art) if os.path.exists(art) else {}
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "exception": r.get("exception"), "message": (r.get("message") or "")[:300],
                   "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "census_digest": census_digest(r),
                   "identity": a.get("identity"),
                   "correspondence_digest": (r.get("program") or {}).get("correspondence_digest") or a.get("correspondence_digest"),
                   "target": (a.get("target_profile") or {}), "applicability": a.get("applicability"), **_ir(r)}
     for p in sorted(glob.glob(f"{d}/build_request_LP*_T*/result.json")):
-        r = json.load(open(p)); w = os.path.basename(os.path.dirname(p))
+        r, w = read_json(p), os.path.basename(os.path.dirname(p))
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": (r.get("program") or {}).get("digest"),
                   "census_digest": census_digest(r), "correspondence_digest": (r.get("program") or {}).get("correspondence_digest"), **_ir(r)}
-    json.dump(out, open(f"{d}/build_summary.json", "w"), indent=1, default=str)
+    write_json(out, f"{d}/build_summary.json")
     return "PASS" if all(v["ok"] for v in out.values()) else "FAIL"
 
 
 def workload_digest(d: str) -> str:
     """GP-01's workload digest from ``build_workload/workload_program.json`` ("" when absent)."""
     try:
-        w = json.load(open(f"{d}/build_workload/workload_program.json"))
+        w = read_json(f"{d}/build_workload/workload_program.json")
     except (OSError, ValueError):
         return ""
     return w.get("workload_digest") or w.get("program_digest") or w.get("digest") or ""
@@ -275,7 +283,7 @@ def workload_digest(d: str) -> str:
 def compose_reason(d: str) -> str:
     """The reason and message a failed workload Program compose recorded ("" when unreadable)."""
     try:
-        w = json.load(open(f"{d}/build_workload/workload_program.json"))
+        w = read_json(f"{d}/build_workload/workload_program.json")
     except (OSError, ValueError):
         return ""
     return f"{w.get('reason')} {w.get('message') or ''}"
@@ -284,19 +292,19 @@ def compose_reason(d: str) -> str:
 def add_workload(d: str, wd: str, rc: int) -> None:
     """Record the workload Program (GP-01) in ``build_summary.json``: its digest is the row's Program digest; a refusal
     of its declared applicability is a named Build FAIL, not a compose error."""
-    s = json.load(open(f"{d}/build_summary.json"))
-    W = json.load(open(f"{d}/build_workload/workload_program.json")) if os.path.exists(f"{d}/build_workload/workload_program.json") else {}
+    s = read_json(f"{d}/build_summary.json")
+    W = read_json(f"{d}/build_workload/workload_program.json") if os.path.exists(f"{d}/build_workload/workload_program.json") else {}
     s["workload"] = {"ok": rc == 0 and bool(wd), "workload_digest": wd or None, "mechanism": "GP-01 cb_a.global_program", "artifact": "build_workload/workload_program.json",
                      "reason": W.get("reason"), "message": W.get("message"), "applicability": W.get("applicability"),
                      "stop_rule": W.get("stop_rule")}
-    json.dump(s, open(f"{d}/build_summary.json", "w"), indent=1, default=str)
+    write_json(s, f"{d}/build_summary.json")
 
 
 def build_line(d: str) -> tuple[str, str]:
     """The step Program digest and ``<manifest digest> <identities>`` (``none``) for the Build stage's stages.txt line."""
-    digest = (json.load(open(f"{d}/build_summary.json"))["step"].get("program_digest") or "")[:16]
+    digest = (read_json(f"{d}/build_summary.json")["step"].get("program_digest") or "")[:16]
     try:
-        m = json.load(open(f"{d}/manifest.json"))
+        m = read_json(f"{d}/manifest.json")
         man = f"{str(m.get('manifest_digest'))[:16]} {m.get('populations', {}).get('identities')}"
     except (OSError, ValueError):
         man = "none"
@@ -305,7 +313,7 @@ def build_line(d: str) -> tuple[str, str]:
 
 def missing_derived(d: str) -> list[tuple[int, ...]]:
     """The request shapes X-09 named as not derived (``match_decomp.json`` missing_derived): (LP, T), or (LP, T, C) for a cached prefix."""
-    return [PP.shape(*(int(x) for x in s)) for s in json.load(open(f"{d}/match_decomp.json"))["missing_derived"]]
+    return [PP.shape(*(int(x) for x in s)) for s in read_json(f"{d}/match_decomp.json")["missing_derived"]]
 
 
 def decomp_rc(d: str) -> int:
@@ -313,7 +321,7 @@ def decomp_rc(d: str) -> int:
     derived shapes, 3 otherwise."""
     p = f"{d}/match_decomp.json"
     try:
-        v = json.load(open(p)).get("verdict") if os.path.exists(p) else None
+        v = read_json(p).get("verdict") if os.path.exists(p) else None
     except (OSError, ValueError):
         return 3
     return 0 if v == "PASS" else 4 if v == "MISSING_DERIVED" else 3
@@ -322,14 +330,15 @@ def decomp_rc(d: str) -> int:
 def fold_steps(d: str, default: int) -> int:
     """The served decode steps of a B=1 fold (``match/fold_summary.json`` n_steps - 1), ``default`` when unreadable."""
     try:
-        return int(json.load(open(f"{d}/match/fold_summary.json")).get("n_steps") or 0) - 1
+        return int(read_json(f"{d}/match/fold_summary.json").get("n_steps") or 0) - 1
     except (OSError, ValueError, TypeError):
         return default
 
 
 def is_stochastic(wl: str) -> bool:
     """The workload's sampling variant has temperature > 0."""
-    w = json.load(open(wl)); v = str((w.get("sampling") or {}).get("variant", "greedy"))
+    w = read_json(wl)
+    v = str((w.get("sampling") or {}).get("variant", "greedy"))
     p = (w.get("variants") or {}).get(v) or {"temperature": 0.0}
     return float(p.get("temperature", 0.0)) > 0.0
 
@@ -341,14 +350,14 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
     B>1: the X-09 batch decomposition) and the global Match (GM-01) pass, the control and instrumented tokens are equal,
     the record was produced by this attempt (or is an explicit complete ``resumed`` CPU-phase record), and a stochastic
     row's sampler value check passes (``rcs`` -1 = a greedy row)."""
-    cmp = json.load(open(f"{d}/match_compare.json")) if os.path.exists(f"{d}/match_compare.json") else {}
+    cmp = read_json(f"{d}/match_compare.json") if os.path.exists(f"{d}/match_compare.json") else {}
     c = cmp.get("compare") or {}
     tot = c.get("totals") or {}
     steps_a, steps_b = (c.get("a") or {}).get("steps"), (c.get("b") or {}).get("steps")
     canon = (c.get("canonical_sha256") or {}).get("equal")
     # PASS = canonical instance sequences equal (spec sequence + operand wiring per step), same step count, no differing operands
     verdict = None
-    decomp = json.load(open(f"{d}/match_decomp.json")) if os.path.exists(f"{d}/match_decomp.json") else None
+    decomp = read_json(f"{d}/match_decomp.json") if os.path.exists(f"{d}/match_decomp.json") else None
     if decomp is not None:
         # B>1: the batch decomposition is the verdict -- every request canonical-equal to its own (LP_r, T_r) Program, every instance
         # attributed, no cross-request reads, no missing derivation
@@ -370,7 +379,7 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
     stages = {}
     sp = f"{d}/match/stages.json"
     if os.path.exists(sp):
-        for s in json.load(open(sp)).get("stages", []):
+        for s in read_json(sp).get("stages", []):
             stages[s.get("name") or s.get("stage")] = {"rc": s.get("returncode", s.get("rc")), "status": s.get("status"), "reason": (s.get("reason") or "")[:200]}
     # the record this verdict is about must have been PRODUCED BY THIS ATTEMPT: when the row dir is reused and the GPU capture fails, the
     # Match keeps the previous attempt's capture/control record, the fold + GM-01 run on that stale record and this stage would report
@@ -395,7 +404,7 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
                          f"capture/control stage failed: capture rc={(stages.get('capture') or {}).get('rc')} control rc={(stages.get('control') or {}).get('rc')}")}
     tok_eq = None
     try:
-        ct = json.load(open(f"{d}/match/control/tokens.json")); it = json.load(open(f"{d}/match/capture/tokens.json"))
+        ct, it = read_json(f"{d}/match/control/tokens.json"), read_json(f"{d}/match/capture/tokens.json")
         # tokens.json = {requests: [{request_id, prompt_token_ids, generated_token_ids, ...}], per_step_sampled, timing, observer, ...}:
         # compare the TOKENS per request (prompt + generated ids), not the whole document (timing / observer / profile_id always differ).
 
@@ -403,13 +412,13 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
             if isinstance(doc, dict) and "requests" in doc:
                 return [(r.get("request_id"), r.get("prompt_token_ids"), r.get("generated_token_ids")) for r in doc["requests"]]
             return doc.get("tokens", doc) if isinstance(doc, dict) else doc
-        a = toks(ct); b = toks(it)
+        a, b = toks(ct), toks(it)
         tok_eq = (a == b) and len(a) > 0
     except (OSError, ValueError, TypeError, KeyError, AttributeError):
         tok_eq = None
     fold_ok = os.path.exists(f"{d}/match/program.json") and os.path.exists(f"{d}/match/instances.jsonl")
     # the global check is the Match criterion; the per-request comparison above is evidence inside it
-    G = json.load(open(f"{d}/global_match.json")) if os.path.exists(f"{d}/global_match.json") else {}
+    G = read_json(f"{d}/global_match.json") if os.path.exists(f"{d}/global_match.json") else {}
     gm_verdict = G.get("verdict")
     gm_ok = gm_verdict == "PASS" and rcg == 0
     if not G:
@@ -432,7 +441,7 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
     # the sampler value check (stochastic rows only; rcs == -1 -> a greedy row, not applicable)
     stoch = None
     if rcs != -1:
-        sr = json.load(open(f"{d}/match_stoch.json")) if os.path.exists(f"{d}/match_stoch.json") else {}
+        sr = read_json(f"{d}/match_stoch.json") if os.path.exists(f"{d}/match_stoch.json") else {}
         ss = sr.get("summary") or {}
         stoch = {"rc": rcs, "verdict": ss.get("verdict", "NOT-RUN"), "rows": ss.get("rows"), "device_facts_all_match": ss.get("device_facts_all_match"),
                  "masked_rows_all_equal": ss.get("masked_rows_all_equal"), "reasons": (sr.get("reasons") or [])[:6], "variant": sr.get("variant")}
@@ -441,20 +450,21 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
     ok = (verdict == "PASS") and fold_ok and (tok_eq is not False) and gm_ok and record["fresh"] and (rcs in (-1, 0))   # the sampler value check must pass on a stochastic row
     if not record["fresh"] and verdict == "PASS":
         verdict = f"FAIL record: {record['reason']}"
-    shape = json.load(open(f"{d}/match_shape.json")) if os.path.exists(f"{d}/match_shape.json") else None  # served (LP, T_r) at B=1
-    json.dump({"run_config_rc": rcm, "compare_rc": rcc, "compare_verdict": verdict, "canonical_equal": canon, "steps": [steps_a, steps_b], "totals": tot,
+    shape = read_json(f"{d}/match_shape.json") if os.path.exists(f"{d}/match_shape.json") else None  # served (LP, T_r) at B=1
+    write_json({"run_config_rc": rcm, "compare_rc": rcc, "compare_verdict": verdict, "canonical_equal": canon, "steps": [steps_a, steps_b], "totals": tot,
                "request_shape": shape, "record": record, "stoch_value_check": stoch,
                "histogram_diff_T_normalised": cmp.get("histogram_diff_T_normalised"), "fold_ok": fold_ok,
                "comparator": (G.get("comparator") or "cb_a.global_match/v1") + (" (X-09 batch_decomp inside)" if decomp is not None else " (cb_a.compare inside)"),
                "per_request_comparator": "cb_a.batch_decomp (X-09)" if decomp is not None else "cb_a.compare",
                "global_match": gm,
-               "control_vs_instrumented_tokens_equal": tok_eq, "stages": stages, "pass": ok}, open(f"{d}/match_summary.json", "w"), indent=1, default=str)
+               "control_vs_instrumented_tokens_equal": tok_eq, "stages": stages, "pass": ok}, f"{d}/match_summary.json")
     return "PASS" if ok else "FAIL"
 
 
 def match_line(d: str) -> str:
     """The Match stage's stages.txt detail, from ``match_summary.json``."""
-    s = json.load(open(f"{d}/match_summary.json")); g = s.get("global_match") or {}
+    s = read_json(f"{d}/match_summary.json")
+    g = s.get("global_match") or {}
     return " ".join(map(str, ("verdict", s["compare_verdict"], "global", g.get("verdict"), g.get("failed_checks") or "", g.get("within_step_criterion") or "",
                               "concurrency", (g.get("achieved_concurrency") or {}).get("observed_max"), "tokens_equal",
                               s["control_vs_instrumented_tokens_equal"], "fold", s["fold_ok"])))
@@ -463,7 +473,7 @@ def match_line(d: str) -> str:
 def served_shape(d: str) -> str:
     """``LP=.. T_r=.. cap_T=..`` when a B=1 request stopped before its cap (``match_shape.json``), else ""."""
     try:
-        s = json.load(open(f"{d}/match_shape.json"))
+        s = read_json(f"{d}/match_shape.json")
         lp, t, cap = int(s["LP"]), int(s["T"]), int(s["cap_T"])
     except (OSError, ValueError, KeyError, TypeError):
         return ""
@@ -503,7 +513,7 @@ def manifest_not_of_record(doc: Any, program_digest: str, ck: Any) -> tuple[str,
     reason); ("", "") when it is: built under the query of record with a partition, of the Build's Program digest (`program_digest`,
     the one the Commit is keyed by; unknown is not a match), under the row's tap policies, and recording the word check it passed (the
     Commit refuses one without: `commit.partition.word_check_refusal`)."""
-    q = doc.get("query") if isinstance(doc, dict) and isinstance(doc.get("query"), dict) else {}
+    q = doc["query"] if isinstance(doc, dict) and isinstance(doc.get("query"), dict) else {}
     qid = str(q.get("query_id") or "")
     if qid != QUERY_OF_RECORD:
         return "other-query", f"is not built under the query of record {QUERY_OF_RECORD} (query.query_id={qid or 'none'})"
@@ -525,7 +535,7 @@ def applicable_taps(path: str, ck: Any) -> list[str]:
     """The taps the row runs that apply to it: on, and the manifest names at least one identity of the tap's family (a dense model has
     no router, a TP1 row no vocabulary range).  The row passes a tap's Commit source for these only."""
     try:
-        fams = {r.get("family") for r in json.load(open(path)).get("identities") or []}
+        fams = {r.get("family") for r in read_json(path).get("identities") or []}
     except (OSError, ValueError, AttributeError):
         fams = set()
     return [field for field, _flag, key in TAP_POLICIES if getattr(ck, field, "0") == "1" and key in fams]
@@ -548,20 +558,21 @@ def missing_tap_build(taps: list[str], env: Any) -> str:
 def program_digest_of_record(d: str, batch: int) -> str:
     """The Build's Program digest of record, read from ``build_summary.json``, never from the manifest: B=1 the declared
     (cap-shape) request Program's digest; B>=2 GP-01's workload digest, else the fold of the per-shape request digests."""
-    b = json.load(open(f"{d}/build_summary.json")); wd = ""
+    b, wd = read_json(f"{d}/build_summary.json"), ""
     if batch <= 1:
         return (b.get("request") or {}).get("program_digest") or ""
     wp = f"{d}/build_workload/workload_program.json"
     if os.path.exists(wp):
-        w = json.load(open(wp)); wd = w.get("workload_digest") or w.get("program_digest") or w.get("digest") or ""
+        w = read_json(wp)
+        wd = w.get("workload_digest") or w.get("program_digest") or w.get("digest") or ""
     comps = sorted(v["program_digest"] for k, v in b.items() if k.startswith("build_request_LP") and isinstance(v, dict) and v.get("program_digest"))
-    return wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode()).hexdigest() if comps else "")
+    return wd or (components_fold_digest(comps) if comps else "")
 
 
 def snapshot_steps_of_record(d: str) -> str:
     """The Match record's snapshot steps (``match/run.json``), comma-joined; "" when unreadable."""
     try:
-        s = json.load(open(f"{d}/match/run.json")).get("snapshot_steps") or []
+        s = read_json(f"{d}/match/run.json").get("snapshot_steps") or []
     except (OSError, ValueError, AttributeError):
         return ""
     return ",".join(map(str, s)) if s else ""
@@ -572,18 +583,18 @@ def wor_component(d: str) -> str:
     ``build_request_LP<LP>_T<T>``, or ``build_request`` when its own result.json declares that shape.  The record is bound
     to the of-record set (workload digest + manifest component digests), so it must come from a component; the weights
     struct is model-level, so any component gives the same fields and root."""
-    m = json.load(open(os.path.join(d, "manifest.json")))
+    m = read_json(os.path.join(d, "manifest.json"))
     comps = m.get("components") or {}
     for rid in sorted(comps, key=lambda r: (len(r), r)):
         c = comps[rid] or {}
         lp, t = c.get("LP"), c.get("T")
         if lp is None or t is None:
             continue
-        for cand in (os.path.join(d, "build_request_LP%d_T%d" % (int(lp), int(t))), os.path.join(d, "build_request")):
+        for cand in (os.path.join(d, f"build_request_LP{int(lp)}_T{int(t)}"), os.path.join(d, "build_request")):
             rj = os.path.join(cand, "result.json")
             if os.path.exists(rj):
                 try:
-                    r = json.load(open(rj))
+                    r = read_json(rj)
                 except (OSError, ValueError):
                     continue
                 if r.get("ok") and int(r.get("LP", -1)) == int(lp) and int(r.get("T", -1)) == int(t):
@@ -595,10 +606,10 @@ def wor_stale(record: str, result: str, schema: str) -> str:
     """Why an existing weights-of-record file beside a component may not be reused ("" = reuse it): built for another
     Program, predating the engine-assumptions stamp, of another schema than this tree derives, or incomplete."""
     try:
-        rec = json.load(open(record))
+        rec = read_json(record)
     except Exception as e:  # noqa: BLE001
-        return "unreadable record (%s)" % str(e)[:80]
-    res = json.load(open(result)) if os.path.exists(result) else {}
+        return f"unreadable record ({str(e)[:80]})"
+    res = read_json(result) if os.path.exists(result) else {}
     # the component Program digest as a real result.json carries it (artifact.program_digest / program.digest; a top-level key on the
     # synthetic ones), else the instances.json.gz digest the derivation itself falls back to -- an empty value here would skip the check
     rd = str(res.get("program_digest") or (res.get("artifact") or {}).get("program_digest") or (res.get("program") or {}).get("digest") or "")
@@ -606,36 +617,37 @@ def wor_stale(record: str, result: str, schema: str) -> str:
         ig = os.path.join(os.path.dirname(result), "instances.json.gz")
         if os.path.exists(ig):
             try:
-                rd = str(json.load(gzip.open(ig, "rt")).get("digest") or "")
+                with gzip.open(ig, "rt") as f:
+                    rd = str(json.load(f).get("digest") or "")
             except (OSError, EOFError, ValueError, AttributeError):
                 rd = ""
     pd = str(rec.get("program_digest") or "")
     if rd and pd != rd:
-        return "built for Program %s, this component is %s (stale)" % (pd[:16] or "?", rd[:16])
+        return f"built for Program {pd[:16] or '?'}, this component is {rd[:16]} (stale)"
     if not isinstance(rec.get("engine_assumptions"), dict):
-        return "predates MAN-09c (no engine_assumptions; %d engine constant(s) unpinned by name)" % len(rec.get("unpinned") or [])
+        return f"predates MAN-09c (no engine_assumptions; {len(rec.get('unpinned') or [])} engine constant(s) unpinned by name)"
     if schema and str(rec.get("schema") or "") != schema:
-        return "schema %s, this tree derives %s (root formula differs: the analytic entry is keyed by its inputs, not the host)" % (rec.get("schema") or "?", schema)
+        return f"schema {rec.get('schema') or '?'}, this tree derives {schema} (root formula differs: the analytic entry is keyed by its inputs, not the host)"
     if rec.get("complete") is not True:
-        return "incomplete (%d unresolved field(s))" % len(rec.get("unresolved") or [])
+        return f"incomplete ({len(rec.get('unresolved') or [])} unresolved field(s))"
     return ""
 
 
 def commit_line(d: str) -> str:
     """``runs .. failed .. checks name=outcome ...`` from ``verdict.json`` for the Commit stage's stages.txt line."""
     try:
-        v = json.load(open(f"{d}/verdict.json"))
+        v = read_json(f"{d}/verdict.json")
     except (OSError, ValueError):
         return ""
     r = v.get("runs") or {}
-    return "runs %s failed %s checks %s" % (r.get("instrumented"), r.get("failed"),
-                                            " ".join("%s=%s" % (c["name"], c["outcome"]) for c in v.get("checks") or [] if c.get("rule") is None))
+    checks = " ".join(f"{c['name']}={c['outcome']}" for c in v.get("checks") or [] if c.get("rule") is None)
+    return f"runs {r.get('instrumented')} failed {r.get('failed')} checks {checks}"
 
 
 def manifest_verify_ok(d: str) -> str:
     """``commit/manifest_verify.json`` ok as text, ``not-run`` when absent."""
     try:
-        return str(json.load(open(f"{d}/commit/manifest_verify.json")).get("ok"))
+        return str(read_json(f"{d}/commit/manifest_verify.json").get("ok"))
     except (OSError, ValueError):
         return "not-run"
 
@@ -648,7 +660,7 @@ _READ = (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError)
 def _field(path: str, fn: Any) -> str:
     """``fn(document)`` as text, "" when the document or a key it reads is absent."""
     try:
-        return str(fn(json.load(open(path))))
+        return str(fn(read_json(path)))
     except _READ:
         return ""
 
@@ -661,7 +673,8 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     ``max_num_seqs`` requests, longer than ``max_model_len``, and FlashAttention's varlen kernel then faults (an illegal memory access
     on sm_120 at TP2 for head_dim > 64: 2048 tokens in one request of max_model_len 288 for Qwen3-4B, Phi-3-mini, Mistral-7B; plain
     vLLM does the same, and passes at 288)."""
-    w = json.load(open(wl)); s = w["sweep"]
+    w = read_json(wl)
+    s = w["sweep"]
     cfg = RowConfig.of(w)
     req = cfg.engine.args
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
@@ -675,7 +688,7 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
 def tp_world(wl: str) -> int:
     """The manifest's ``sweep.tp`` (2 when it names none or does not read)."""
     try:
-        return int((json.load(open(wl)).get("sweep") or {}).get("tp") or 2)
+        return int((read_json(wl).get("sweep") or {}).get("tp") or 2)
     except _READ:
         return 2
 
@@ -683,21 +696,24 @@ def tp_world(wl: str) -> int:
 def tp_build_summary(b: str, world: int) -> str:
     """PASS | FAIL; writes ``build_summary.json`` beside ``b`` (per rank: step + request Programs, each with its construction, the AOT
     Build's or the trace's, + GP-01)."""
-    out: dict[str, Any] = {"tp": {"world": world}, "ranks": {}}; ok = True
+    out: dict[str, Any] = {"tp": {"world": world}, "ranks": {}}
+    ok = True
     for r in range(world):
-        rd = f"{b}/rank{r}"; rk: dict[str, Any] = {}
+        rd = f"{b}/rank{r}"
+        rk: dict[str, Any] = {}
         for p in [f"{rd}/build_step"] + sorted(p for p in glob.glob(f"{rd}/build_request_LP*_T*") if os.path.isdir(p)):   # not the .log/.rc beside each dir
-            res = json.load(open(f"{p}/result.json")) if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
+            res: dict[str, Any] = read_json(f"{p}/result.json") if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
             rk[os.path.basename(p)] = {"ok": bool(res.get("ok")), "unsupported": res.get("unsupported"), "message": (res.get("message") or "")[:300],
                                        "program_digest": (res.get("program") or {}).get("digest"), "census_digest": census_digest(res),
                                        "construction": "aot" if res.get("aot") else "trace"}
             ok &= bool(res.get("ok"))
-        wp = f"{rd}/build_workload/workload_program.json"; W = json.load(open(wp)) if os.path.exists(wp) else {}
+        wp = f"{rd}/build_workload/workload_program.json"
+        W = read_json(wp) if os.path.exists(wp) else {}
         rk["workload"] = {"ok": bool(W.get("workload_digest")), "workload_digest": W.get("workload_digest"), "reason": W.get("reason"), "message": W.get("message"), "mechanism": "GP-01 cb_a.global_program"}
         ok &= bool(W.get("workload_digest"))
         out["ranks"][f"rank{r}"] = rk
     out["step"] = {"program_digest": (out["ranks"]["rank0"].get("build_step") or {}).get("program_digest")}    # research_result reads step.program_digest
-    json.dump(out, open(f"{os.path.dirname(b)}/build_summary.json", "w"), indent=1, default=str)
+    write_json(out, f"{os.path.dirname(b)}/build_summary.json")
     return "PASS" if ok else "FAIL"
 
 
@@ -730,7 +746,7 @@ def tp_manifest_not_of_record(d: str, ck: Any) -> str:
     doc = load_json(f"{d}/manifest.json")
     if not isinstance(doc, dict) or doc.get("complete") is not True:
         return "absent or not complete"
-    q = doc.get("query") if isinstance(doc.get("query"), dict) else {}
+    q = doc["query"] if isinstance(doc.get("query"), dict) else {}
     if q.get("query_id") != QUERY_OF_RECORD or not isinstance(q.get("partition"), dict):
         return f"not built under the query of record {QUERY_OF_RECORD} with a partition"
     mismatch = policy_mismatch(q, ck)
@@ -763,12 +779,12 @@ def tp_fold_line(m: str) -> str:
 
 def tp_match_summary(m: str, rc_cap: int, rc_ctl: int, rc_chk: int, rc_fold: int, ok: str, prof: str) -> None:
     """``match_summary.json`` beside ``m``: the collective-level check and the fold Match's stages."""
-    tm = json.load(open(f"{m}/tp2_match.json")) if os.path.exists(f"{m}/tp2_match.json") else {}
-    fm = json.load(open(f"{m}/fold_match/tp2_fold_match.json")) if os.path.exists(f"{m}/fold_match/tp2_fold_match.json") else None
-    json.dump({"pass": ok == "PASS", "level": "fold (D90 per-rank fold Match + collective-level)" if prof else "collective-level (tp.match check; no TP rank profile)",
+    tm = read_json(f"{m}/tp2_match.json") if os.path.exists(f"{m}/tp2_match.json") else {}
+    fm = read_json(f"{m}/fold_match/tp2_fold_match.json") if os.path.exists(f"{m}/fold_match/tp2_fold_match.json") else None
+    write_json({"pass": ok == "PASS", "level": "fold (D90 per-rank fold Match + collective-level)" if prof else "collective-level (tp.match check; no TP rank profile)",
                "capture_rc": rc_cap, "control_rc": rc_ctl, "check_rc": rc_chk, "fold_rc": None if rc_fold < 0 else rc_fold, "fold_profile": prof or None,
                "tp2_match": {k: tm.get(k) for k in ("pass", "structure", "provenance", "tokens") if k in tm}, "tp2_fold_match": None if fm is None else {k: fm.get(k) for k in ("pass", "legs", "problems", "seconds")}},
-              open(f"{os.path.dirname(m)}/match_summary.json", "w"), indent=1, default=str)
+               f"{os.path.dirname(m)}/match_summary.json")
 
 
 def tp_commit_line(d: str) -> str:

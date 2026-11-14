@@ -14,15 +14,14 @@ import types
 import pytest
 
 import pouw_rows_vectors as V
+from verity.circuits.evaluation import evaluate
 from verity.commitments.frame_v3 import vectors_sha512 as FV
 from verity.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2, bit_row,
                                         nvfp4_row_bytes, row_bytes, sha512_row_seg_digest, sha512_row_seg_word_digest,
                                         sha512_row_v2_digest)
-from verity.circuits.evaluation import evaluate
 from verity.definitions.ops.scalar import BitAnd, SelectBf16
-
 from verity.protocols.pouw.prover.circuit import leaves as L
-from verity.protocols.pouw.prover.circuit import pc4, pc8, rowk
+from verity.protocols.pouw.prover.circuit import cap, pc4, pc8, rowk
 from verity.protocols.pouw.prover.schemes import pearl_c as C
 
 PINNED = json.loads(V.OUT.read_text())
@@ -86,8 +85,6 @@ def test_every_per_call_row_but_ok_the_tile_the_caps_and_the_cuts_is_a_row_seg_r
     digest, the cap's rows and the cut's six: A_i, A′_i ‖ P_A,i of both checks and A's salt-dead counts.  Every other row,
     each registered row (role W) and the cap's chunk digests and strip row (64 words, one whole block, so a unit that reads
     or writes one hashes a block before its last) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
-    from verity.protocols.pouw.prover.circuit import cap
-
     used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, {"side": pc8.SIDE_PORTS}, cap.PORTS, rowk.PORTS4,
                                       rowk.PORTS8)
             for unit in ports.values() for row, role, _ in unit["rows"]}
@@ -143,8 +140,6 @@ def test_advice_is_in_no_read_set():
     `pc8`'s units names its advice apart from its rows and regions; a tile with the cap's advice has the same statement
     rows as without, so no committed row (and no link, which reads one) holds a bit of it; and advice that is also a
     row's port or a public input region, or that names an output, is refused."""
-    from verity.protocols.pouw.prover.circuit import cap
-
     for role, unit in pc8.PORTS.items():
         bound = {p for _r, _rl, ps in unit["rows"] for p in ps} | set(unit["regions"])
         assert not set(unit["advice"]) & bound and all(isinstance(p, str) for p in unit["advice"]), role

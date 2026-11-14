@@ -7,14 +7,18 @@ weight, stay its own). So no peer Input is left, and the node reads only its pro
 
 from __future__ import annotations
 
-import pytest
+import gzip
+import json
 
+import pytest
+from verity.circuits.codec import canonical_json
 from verity.circuits.program import RUN, input_id, is_input, is_registered
+
+from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
-from verity_vllm.program.predict.node import build_node_program, check_ranks
+from verity_vllm.program.predict.node import build_node_program
 from verity_vllm.program.predict.phi import Phi
-from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 
 
 def _at(phi: Phi, rank: int) -> Phi:
@@ -100,16 +104,6 @@ def test_the_root_is_the_input_nodes_and_one_call_of_the_body(wrapper, shape):
     assert len(callee["body"]["nodes"]) == len(node.node_fn.body.nodes) == sum(hi - lo for _r, lo, hi in node.spans)
 
 
-def test_check_ranks_holds_each_ranks_run_of_the_body_to_its_own_program():
-    phi = _phi(TINY, tp={"world": 2, "rank": 0})
-    node = build_node_program(phi, "request", with_desc=False, LP=4, T=2)
-    got = check_ranks(phi, node, LP=4, T=2)
-    ranks = [build_program(_at(phi, r), "request", with_desc=False, LP=4, T=2) for r in range(2)]
-    assert [(g["rank"], g["nodes"]) for g in got] == [(r, len(rp.program.fn.body.nodes)) for r, rp in enumerate(ranks)]
-    with pytest.raises(AssertionError, match="rank 0: the node's run of"):
-        check_ranks(phi, node, LP=4, T=1)
-
-
 @pytest.mark.slow
 def test_the_node_reads_only_its_prompt_besides_theta():
     """The root's input nodes are the prompt's 4 x 32 bits, then θ, each node bound at registration: no peer Input is left."""
@@ -125,6 +119,23 @@ def test_a_world_of_one_has_no_node_program():
     from verity_vllm.program.predict.common import Unexpressible
     with pytest.raises(Unexpressible, match="φ's world is 1"):
         build_node_program(_phi(TINY), "step")
+
+
+def test_the_node_command_writes_the_descriptor_and_prints_the_summary(tmp_path, monkeypatch, capsys):
+    """`predict node` (`verity_vllm.program.predict.cli`) writes the node Program's descriptor and, in `node.json`, its summary, θ
+    and spans; the summary is the last line on its stderr."""
+    pytest.importorskip("torch")  # `predict.cli` loads `predict.compiled`, which imports torch; this file is collected without it
+    from verity_vllm.program.predict import cli as CLI
+    phi = _phi(TINY, tp={"world": 2, "rank": 0})
+    monkeypatch.setattr(CLI.A, "phi_at", lambda row, rank, config: phi)
+    assert CLI.node_main(CLI.NodeOptions(row="row", config="config.json", wrapper="step", out=str(out := tmp_path / "node"))) == 0
+    node = build_node_program(phi, "step", M=1, pos0=8)
+    assert gzip.decompress((out / "node_descriptor.json.gz").read_bytes()) == canonical_json(node.desc)
+    doc = json.loads((out / "node.json").read_text())
+    timings = doc.pop("timings")
+    assert doc == {"schema": "verity-predict/node/v1", "row": "row", "context_digest": phi.digest(),
+                   **{k: v for k, v in node.summary().items() if k != "timings"}, "theta": list(node.theta), "spans": [list(s) for s in node.spans]}
+    assert json.loads(capsys.readouterr().err.splitlines()[-1]) == {**node.summary(), "timings": timings}
 
 
 def _first_layers(phi: Phi, n: int) -> Phi:

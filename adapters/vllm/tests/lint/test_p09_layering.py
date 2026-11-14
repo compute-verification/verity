@@ -223,7 +223,7 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
                 tgt = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else None
                 emit("repo-path", node, symbol, tgt.id if isinstance(tgt, ast.Name) else type(node).__name__.lower())
         # runtime patches
-        targets: list[ast.AST] = []
+        targets: list[ast.expr] = []
         value = None
         if isinstance(node, ast.Assign):
             targets, value = list(node.targets), node.value

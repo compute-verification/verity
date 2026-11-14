@@ -69,10 +69,12 @@ Open premises (`open`):
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
-    is withheld;
+    is withheld. The Python each is held to (`network/tests`) is `audit.Audit` for the first two and the mirror in
+    `network/tests/period_case.py` for the third;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
-  - `network-check-difftest INSTANCES PYTHON N`.
+  - `network-check-difftest INSTANCES PYTHON N`, which holds `certificate.py`'s encodings to
+    `NetworkCheck.Certificate`'s.
 - **Lean beside it**: `../device/program/lean/`, the certifier program, is the Lake package `certifier_program`, whose
   library `NetworkCertifier` the packages at `lean`, `../device/lean` and `security/Proofs` require by path. Its
   executables (`lake exe`): `certifier-difftest`, `certifier-charge-difftest` and `certifier-window-difftest`, each
@@ -187,25 +189,18 @@ A spec-level reference for network accounting's timing channel:
   carry-in to its carry-out, for one window. It holds the charge to the declared one and the step rows to its committed
   ``srv`` row, the served rows. The evictable and returned counts are a stand-in held at 0
   (`protocol/compile-slice.md`);
-- the compile slice with the block pool (`compile_slice_v2`): `CompileSlice_v2`, `CompileSlice_v1` with its prefix cache
-  replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
-  each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
-  are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the advice decoder's block pool,
-  `verity_vllm.pipeline.advice_code.pool.BlockPool`, over whole traces);
-- the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
-  checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
-  lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
-  evictable count, return and stamp where `ReplayStep_v1` reads it, and holds them to the registered ``srv`` and
-  ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
-  (`free_width`), and the charge is ℓ_w;
-- the compile slice over the memory-checked pool (`compile_slice_v4`): `CompileSlice_v4`, `CompileSlice_v3` with its
-  pool calls records on a bus to `CacheStep_v3`'s stream, which runs in the unit from the empty pool with request keys
-  the arrivals' `BlockKey_v1` chains printed under a live coin. The hits, evictable counts and returns the steps read,
-  and the stream's slots and touched list, are checked witness, unique and bound by live coins. Until a Lean lemma
-  shows that uniqueness, the witness counts as free input at its width, so the free
-  input is the advice and the checked witness (`free_width`). A window costs its stream's slots, whatever the pool's size. Its served rows are CompileSlice_v3's, and
-  `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds its calls to the replay's `_KV`;
+- the compile slice over the memory-checked pool (`compile_slice_v4`): `CompileSlice_v4` computes its schedule rather
+  than checking it. From the advice (DA decisions and the step count), the arrivals' ingress fields and their
+  registered output lengths and tokens, it computes the served rows and the state, window and slot rows the window
+  leaves, each hit, evictable count and return where `ReplayStep_v1` reads it, and holds them to the registered ``srv``
+  and ``cout`` it reads; its one output is the 16-bit verdict. Its pool calls, in vLLM's order, are records on a bus to
+  `CacheStep_v3`'s stream, which runs in the unit from the empty pool with request keys the arrivals' `BlockKey_v1`
+  chains printed under a live coin, so eviction, preemption and a leaving request's returns are in the slice. The
+  hits, evictable counts and returns the steps read, and the stream's slots and touched list, are checked witness,
+  unique and bound by live coins. Until a Lean lemma shows that uniqueness, the witness counts as free input at its
+  width, so the free input is the advice and the checked witness (`free_width`). A window costs its stream's slots,
+  whatever the pool's size. `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds its calls
+  to the advice decoder's block pool, `verity_vllm.pipeline.advice_code.pool.BlockPool`, over whole traces;
 - the compile slice at its window's activity (`compile_slice_v5`): `CompileSlice_v5`, `CompileSlice_v4` with the
   arrivals' tokens registered in ``req`` as one ragged row of the NRK blocks the window keys (a keyed block count a
   slot, and one key a block), RB's touched list the NRB addresses the stream touches, and each running slot's request
@@ -250,14 +245,11 @@ A spec-level reference for network accounting's timing channel:
   whole cached units (an engine step's calls are `scan_step` and, as a circuit, `build_scan_step`), which checks the
   row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1");
-- the block pool (`cache_step_v2`): `CacheStep_v2`, one call's pass over vLLM's prefix-cache block pool: which slots
-  hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
-  leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
-  cumulative pool bound too, in N = NB − 1 entries. `compile_slice_v2` wires it into the compile slice;
 - the block pool as memory-checked RAM (`cache_step_v3`): `CacheStep_v3`, a window's pool calls as one stream of NS
   access slots over the five memories vLLM's `BlockPool` is made of (blocks, keys, key copies, request blocks, request
   keys), checked by `MemCheck_v1`'s fingerprint under live coins, with a bus product of the calls' records for
-  `ReplayStep_v1`. A window's price is NS slots and NE list entries from a public ladder, whatever the pool's size;
+  `ReplayStep_v1`. So a lookup's hit and evictable count and a free's returns are derived past the cumulative pool
+  bound too. A window's price is NS slots and NE list entries from a public ladder, whatever the pool's size;
   `Stream` is its specification, held to the replay's pool by `benchmarks/mempool/stream.py`;
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
@@ -303,9 +295,11 @@ A spec-level reference for network accounting's timing channel:
 - the network certifier's connection rows (`connection_rows`), in a schedule with lengths rows
   (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
   and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
-  (`content_rows`: its request, response and end rows), all committed as the cells' rows are and listed under one
+  (`content_rows`: its request, response and end rows; under form 2 a class's held rows alone, whose count the head
+  makes public), all committed as the cells' rows are and listed under one
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
-  `--registered` port of the proof blocks that read a table, one a row (`port`);
+  `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
+  that an execution phase has no head (`check_no_head`);
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
@@ -323,17 +317,18 @@ A spec-level reference for network accounting's timing channel:
   grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
   stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
-- the transfer rows (`transfer_rows`): every value that crosses a server block's boundary, the weights' load, a
-  window's request bytes in and generated bytes out, and a wire between two servers, committed as a registered value
-  under the network certifier's own salts at the reading port's leaf width and row format, its root in a head the
-  certifier signs for the execution phase (`TransferHead`, `registration`). `check_registration` is the verifier's read of
-  it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
-  (the load relayed and committed as it crosses, `benchmarks/network_traces/load_relay.py`);
+- the transfer rows (`transfer_rows`): a host's load, each value of the weights it loads once a session (the one kind,
+  ``load``, ingress), committed as a registered value under the network certifier's own salts at the reading port's
+  leaf width and row format, its root in a head the certifier signs for the session's first execution phase
+  (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
+  `check_registration` is the verifier's read of it for the transfer it expects, and `port` the verifier's own
+  `--registered` port of the value at the signed root (the load relayed and committed as it crosses,
+  `benchmarks/network_traces/load_relay.py`);
 - the class circuit's check (`blocks`): a circuit record is one host's class window circuit, and which host runs which
   units, and which request occupies which slot and step, are private, placed by the scan inside the zero-knowledge
-  proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public. `check` refuses a
-  record whose ``blocks`` state a server, server time or transfers (`PRIVATE`), an ``ingress`` declaration, a
-  registered read or table of no registered parameter, a load (every registered parameter but the scan's state) read
+  proof; the class circuit and its padded counts (proof blocks per host, bits per link) are public, and its ``blocks``
+  state no placement (the window interface's `Blocks`). `check` refuses an ``ingress`` declaration, a registered read
+  or table of no registered parameter, a load (every registered parameter but the scan's state) read
   in other than whole rows of one width, by no unit, at an external port or by a table over part of it, and an external
   input port whose rows aren't each read exactly once from the scan's state (`blocks.SCAN_STATE`), the host's one
   ingress. `pins` gives the verifier's pinned roots of the loads from their certificates alone (`certified`: each
@@ -408,8 +403,7 @@ A spec-level reference for network accounting's timing channel:
 
 The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `lengths_row`, `response_tie`, `served_statics`, `served_tie`, `window_charge`) are in
+The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `compile_slice_v7`, `egress`, `ingress_scan`, `io_ids`, `lengths_row`, `response_tie`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.protocols.certifier.prover`, stated over the ones here.
 From `verity`, `advice_check`, `compile_slice` and `served_statics` take the circuits and their evaluator, `served_tie`
 those and the hm96 leaves, and `charge_chain` and `window_charge` those and hm96, and from SPOT the produced rows.

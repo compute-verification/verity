@@ -11,9 +11,13 @@ own memory is its card's ``store.dram``, whole, and no clock or peak of a card i
 number is an entry ``{value, unit, mark, source}`` under the cards' rules (``verity.hardware.cards``), so what is not
 a number is not written as one, and a leaf or an interface with no read on record has no table. A kind is the card
 and its count, never a host's name, and a file names no machine, no address and no provider: whoever registers a node
-gives its host's id (``verity.hardware.site.Registration.node_entry``, which gives no entry of a file with no ``dram``
+gives its host's id (``verity.device.Registration.node_entry``, which gives no entry of a file with no ``dram``
 or no ``disk`` leaf, none of a file with no interface, and none of a file with no way out that has a rate).
 Stdlib and the cards only.
+
+The readers of node files (``kinds``, ``load``) take ``directory``, and every reader that reads a card file (``load``,
+``leaves``, ``ways_out``) takes ``cards_directory``, the directories the files are in, so that a reader whose copy of
+them is not in this package names where it is; ``None`` is ``NODES`` or ``cards.CARDS``, read when the reader is called.
 
 **A leaf's rate** is the tightest bound on record that holds whatever the node runs. The DRAM leaf's is the host
 card's ``memory.bandwidth_max``, the server's channels. A disk's is its own interface's where the disk states one (a
@@ -33,7 +37,7 @@ the one that bounds the node's disks together, ``leaves``'s for ``disk``. A serv
 
 ~~~python
 from verity.hardware import cards, nodes
-from verity.hardware.site import Auditor, Registration, check
+from verity.device import Auditor, Registration, check
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")
@@ -92,25 +96,27 @@ class Way(NamedTuple):
     """Whether a network certifier may split it: an interface, yes; the storage path, no."""
 
 
-def kinds() -> list[str]:
-    """The kinds of node with a file."""
-    return sorted(p.stem for p in NODES.glob("*.toml"))
+def kinds(*, directory: Path | None = None) -> list[str]:
+    """The kinds of node with a file in ``directory`` (``NODES`` when ``None``)."""
+    return sorted(p.stem for p in (NODES if directory is None else directory).glob("*.toml"))
 
 
-def load(kind: str) -> dict:
-    """The node file of ``kind`` as parsed TOML, refused unless every number in it is an entry and each card it names
-    is a card of its kind."""
-    path = NODES / f"{kind}.toml"
+def load(kind: str, *, directory: Path | None = None, cards_directory: Path | None = None) -> dict:
+    """The node file of ``kind`` in ``directory`` (``NODES`` when ``None``) as parsed TOML, refused unless every number
+    in it is an entry and each card it names is a card of its kind in ``cards_directory`` (``cards.CARDS`` when
+    ``None``)."""
+    directory = NODES if directory is None else directory
+    path = directory / f"{kind}.toml"
     if not path.is_file():
-        raise KeyError(f"no node {kind!r}: the nodes are {kinds()} (verity/hardware/nodes/<kind>.toml)")
+        raise KeyError(f"no node {kind!r}: the nodes are {kinds(directory=directory)} ({directory}/<kind>.toml)")
     node = tomllib.loads(path.read_text(encoding="utf-8"))
     if node.get("node") != kind:
         raise InvalidArtifact(f"{path.name}: node = {node.get('node')!r}; set it to the file's name, {kind!r}")
     cards.check(node, path.name)
     for table, card in CARD.items():
-        sku = node.get(table, {}).get("sku")
-        if sku not in cards.skus(card):
-            raise InvalidArtifact(f"{path.name}: {table}.sku = {sku!r}; name a {card} card, one of {cards.skus(card)}")
+        sku, named = node.get(table, {}).get("sku"), cards.skus(card, directory=cards_directory)
+        if sku not in named:
+            raise InvalidArtifact(f"{path.name}: {table}.sku = {sku!r}; name a {card} card, one of {named}")
     return node
 
 
@@ -138,8 +144,8 @@ def _bytes(entry: Any, what: str) -> int:
     return int(size)
 
 
-def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = None
-           ) -> tuple[tuple[Leaf, ...], dict[str, int]]:
+def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = None, *,
+           cards_directory: Path | None = None) -> tuple[tuple[Leaf, ...], dict[str, int]]:
     """**A node's memory leaves and their read rates.** For a node file's table (``load(kind)``) registered as host
     ``host``: each ``memory.NAME`` as a ``Leaf`` (its id ``host/NAME``, its tier, its bytes, and ``bw``, its ``rate``
     in whole bits a second, rounded up), in the file's order; and, by tier, the rate that bounds the host's leaves of
@@ -147,12 +153,13 @@ def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = 
     ``disk.read_max`` for ``disk``. The host reads a tier at no more than the smaller of its leaves' rates summed and
     the tier's.
 
-    ``card`` is the host card's table: the card the file names by ``host.sku`` when none is given. A leaf is refused
+    ``card`` is the host card's table: the card the file names by ``host.sku``, in ``cards_directory``
+    (``cards.CARDS`` when ``None``), when none is given. A leaf is refused
     when it states no ``rate``, a rate that is no ceiling in ``B/s`` above 0, a tier that is neither, or a rate above
     its tier's, since no leaf is read faster than the host's leaves of its tier together. A ``dram`` leaf's rate is
     its tier's exactly: DRAM has no interface narrower than the server's channels."""
     try:
-        card = cards.load(node["host"]["sku"]) if card is None else card
+        card = cards.load(node["host"]["sku"], directory=cards_directory) if card is None else card
         stated = [(name, leaf["tier"], leaf["bytes"], leaf.get("rate"))
                   for name, leaf in node.get("memory", {}).items()]
         together = {tier: _ceiling(card[table][key], f"the host card's {table}.{key}")
@@ -191,18 +198,20 @@ def _line_rate(entry: Any, what: str) -> int:
     return math.ceil(rate)
 
 
-def ways_out(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = None) -> tuple[Way, ...]:
+def ways_out(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = None, *,
+             cards_directory: Path | None = None) -> tuple[Way, ...]:
     """**A node's ways out.** For a node file's table (``load(kind)``) registered as host ``host``: each
     ``interface.NAME`` as a ``Way`` a network certifier may split (its id ``host/NAME``, and ``bw``, its ``rate`` in
     whole bits a second, rounded up, or ``None`` where the table states its ``driver`` and the ``source`` of a read
     that found no rate), in the file's order; then, where the file states a ``storage`` table, the storage path as a
     ``Way`` no certifier may split, ``host/storage``, at the rate that bounds the node's disks together
-    (``leaves(node, host, card)``'s for ``disk``, where ``card`` is the host card's table as there). The file writes
+    (``leaves(node, host, card, cards_directory=cards_directory)``'s for ``disk``, where ``card`` is the host card's
+    table as there). The file writes
     that rate once, on the host card, and nowhere else.
 
     An interface is refused when it states neither a rate in ``bit/s`` above 0 nor what was read of it, the storage
     path when it does not name, each once, disk leaves of the file's, and a leaf or an interface named ``storage``,
-    the path's own name. What registers each way as a link is ``verity.hardware.site.Registration.node_entry``."""
+    the path's own name. What registers each way as a link is ``verity.device.Registration.node_entry``."""
     ports, memory, path = node.get("interface", {}), node.get("memory", {}), node.get(STORAGE)
     if not isinstance(ports, Mapping) or not isinstance(memory, Mapping):
         raise InvalidArtifact("a node file's interface and memory are tables, one table a name")
@@ -236,4 +245,4 @@ def ways_out(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None 
         raise InvalidArtifact(f"a node's {STORAGE}.leaves is {ride!r}; {fix}")
     if not isinstance(source, str) or not source.strip():
         raise InvalidArtifact(f"a node's {STORAGE}.source is {source!r}; {fix}")
-    return (*out, Way(f"{host}/{STORAGE}", leaves(node, host, card)[1]["disk"], False))
+    return (*out, Way(f"{host}/{STORAGE}", leaves(node, host, card, cards_directory=cards_directory)[1]["disk"], False))

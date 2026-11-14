@@ -108,27 +108,36 @@ record the same `RECORD`.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import functools
 import gc
 import gzip
-import resource
 import hashlib
 import importlib.util
 import json
 import os
+import resource
 import shlex
 import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+from verity.protocols.pouw.verifier import verifier
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import salt_of
+from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
+from verity.protocols.spot.device.challenger import LiveRecord
 
 from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS
 from tests.engine.int8_exact_gpu import generate, pin, scratch_checkpoints
+from verity_vllm import protocols as PO
+from verity_vllm.engine.hooks import patched
 
 SCHEMA = "verity-vllm/pouw-h1-gpu/v1"
 RECORD = "pouw_h1_gpu.json"
@@ -164,6 +173,7 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
         return None
     from verity.protocols.pouw.prover.circuit import h1tile as HT
     from verity.protocols.pouw.prover.circuit import h1window as HW
+
     from verity_vllm.protocols.pouw import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
@@ -288,7 +298,19 @@ def gate_command(argv: list[str]) -> Any:
     return gate
 
 
-def window_sessions(gate: Any, peer: str, steps: int) -> Any:
+@dataclasses.dataclass(frozen=True)
+class WindowSessions:
+    """What `window_sessions` answers. Called with a window's name it is ``answer(name)``, that window's reserve answer;
+    ``held`` maps each window served so far to that answer, and the other map each to its sample session's."""
+    answer: Callable[[str], dict[str, Any]]
+    held: dict[str, dict[str, Any]]
+    draws: dict[str, dict[str, Any]]
+
+    def __call__(self, name: str) -> dict[str, Any]:
+        return self.answer(name)
+
+
+def window_sessions(gate: Any, peer: str, steps: int) -> WindowSessions:
     """With ``--peer``: each window the run serves gets a challenge phase of its own, reserved at the gate (``gate.reserve``) just
     before the window is installed, since the auditor host's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
@@ -313,8 +335,7 @@ def window_sessions(gate: Any, peer: str, steps: int) -> Any:
         held[name] = fresh(name, steps, "session")
         draws[name] = fresh(name, None, "draw session")
         return held[name]
-    sessions.held, sessions.draws = held, draws
-    return sessions
+    return WindowSessions(sessions, held, draws)
 
 
 def session_end(gate: Any, reserved: dict[str, Any]) -> dict[str, Any]:
@@ -405,10 +426,6 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "draw_session": draw_session, "gate": gate,
                          "runner": eng.runner, "rows": rows, "steps": steps, **kw}}
-    from verity.protocols.pouw.verifier import verifier
-    from verity.protocols.pouw.verifier import window as Wd
-    from verity.protocols.pouw.verifier.coins import Challenger
-    from verity.protocols.spot.device.challenger import LiveRecord
     rounds = LiveRecord(Wd.live_challenger(0, steps, verifier.coins), Wd.ROUND)
     return {"pouw": {"coins": Challenger(0, verifier.coins), "runner": eng.runner, "rounds": rounds, "rows": rows,
                      "steps": steps, **kw}}
@@ -453,7 +470,6 @@ def requests_check(h1: Any, requests: int) -> dict[str, Any]:
 
 
 def run(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm import protocols as PO
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -562,11 +578,15 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
 
 #: candidates for `fill_prompts`: each word's first token (no BOS) is one prompt
-FILL_WORDS = ("The capital France def Water Once In A To Photosynthesis Columbus Light Gold Tea Autumn Square Planet Primary Speed "
-              "Village Number Return Import Class If When Why How What Where Who My Our Your Their This That These Those Every "
-              "Some Many Most All Each Today Yesterday Tomorrow Science History Music Art Math Code Data River Mountain Ocean "
-              "Forest City Market Doctor Teacher Engine Garden Winter Summer Spring Morning Evening Night Story Letter Question "
-              "Answer Problem").split()
+FILL_WORDS = [
+    "The", "capital", "France", "def", "Water", "Once", "In", "A", "To", "Photosynthesis", "Columbus", "Light",
+    "Gold", "Tea", "Autumn", "Square", "Planet", "Primary", "Speed", "Village", "Number", "Return", "Import", "Class",
+    "If", "When", "Why", "How", "What", "Where", "Who", "My", "Our", "Your", "Their", "This", "That", "These",
+    "Those", "Every", "Some", "Many", "Most", "All", "Each", "Today", "Yesterday", "Tomorrow", "Science", "History",
+    "Music", "Art", "Math", "Code", "Data", "River", "Mountain", "Ocean", "Forest", "City", "Market", "Doctor",
+    "Teacher", "Engine", "Garden", "Winter", "Summer", "Spring", "Morning", "Evening", "Night", "Story", "Letter",
+    "Question", "Answer", "Problem",
+]
 
 
 def fill_prompts(tokenizer: Any, n: int) -> list[int]:
@@ -610,7 +630,6 @@ def tokens_digest(gen: list[dict[str, Any]]) -> str:
 
 
 def fill(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm import protocols as PO
     from verity_vllm.engine.build import build_engine
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -1156,9 +1175,6 @@ def record_reason(record: dict[str, Any]) -> str | None:
     """`pouw_h1_challenger.manifest_reason` of a window's record, its Program salt read from in-process coins too: their
     coin commitment is `coins.CoinCommitment`'s rather than the live challenger's, and their salt coin opens after the
     weights' root `pouw` keys it on (`audit.Epoch.start`'s, the opening's ``after``), not the served one."""
-    from verity.protocols.pouw.verifier.audit import salt_of
-    from verity.protocols.pouw.verifier.coins import CoinCommitment, CoinOpening
-    from verity_vllm.engine.hooks import patched
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     c = record["commitment"]
@@ -1411,7 +1427,8 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
 def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
                      window_file: str | None = None, period: str | None = None, descriptor: bytes | None = None,
                      pins: list[str] | None = None, main: list[str] | None = None, statements: Any = (),
-                     live: Any = None, draw_directory: str | None = None) -> dict[str, Any]:
+                     live: Any = None, draw_directory: str | None = None,
+                     lean_answers: str | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
     every head the gate published of the auditor's signed ledger, `pins` every head of the host's pins log (the host's
@@ -1429,9 +1446,13 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     (`pouw_h1_served.descriptor`; none refuses it), the sampled calls' `statements` (`pouw_h1_challenger.statement`'s) and
     the window's `live` evidence (`credit.LIVE_STATEMENTS`, ``h1_prove/live.py evidence``'s; none refuses it).
     `draw_directory` is the window's sample session as `directory` is its session (its ``out/`` with `window_file`, else
-    its tree), from which its sampling coin is read (none refuses it)."""
+    its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
+    verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
+    and its ``lean_answers`` says how many."""
     from verity.protocols.spot.device import remote
+
     from verity_vllm.protocols.pouw import h1 as PH
+    from verity_vllm.protocols.pouw.h1 import answers as A
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
@@ -1462,8 +1483,12 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     doc["manifest"] = PHC.manifest_reason(rec)
     if key is not None:
         win = doc.get("window") or {"root": (rec["commitment"].get("session") or {}).get("root")}
-        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, statements, pins=pins, main=main,
-                                          live=live, draw_directory=draw_out)
+        run = None if lean_answers is None else A.Answers(Path(lean_answers), by="the challenger check")
+        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, statements, run=run, pins=pins,
+                                          main=main, live=live, draw_directory=draw_out)
+        if run is not None:
+            doc["lean_answers"] = {"ran": run.ran, "taken": run.taken, "unkeyed": run.unkeyed}
+            print(f"LEAN-ANSWERS {run.summary()}", flush=True)
     if period is not None:
         try:
             if key is None:
@@ -1562,6 +1587,9 @@ def main(argv: list[str] | None = None) -> int:
                                                             "h1_prove/live.py evidence's {descriptor, statements}")
     ap.add_argument("--main", metavar="FILE", help="with --check-challenger: the auditor's own `git rev-list --first-parent "
                                                    "origin/main`, a commit a line; none refuses every session")
+    ap.add_argument("--lean-answers", metavar="DIR", help="with --check-challenger: the verifier's memo of its verifier "
+                                                          "runs' answers (answers.Answers), shared by key with the "
+                                                          "period's check")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
     ap.add_argument("--skip-register", action="store_true", help="fill with --served: record the window's entries but "
@@ -1679,7 +1707,7 @@ def main(argv: list[str] | None = None) -> int:
         statements = json.loads(Path(a.statements).read_text()) if a.statements else ()
         live = json.loads(Path(a.live_evidence).read_text()) if a.live_evidence else None
         return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
-                                     a.pins, main, statements, live, a.draw_dir)["ok"] else 1
+                                     a.pins, main, statements, live, a.draw_dir, a.lean_answers)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1

@@ -143,7 +143,6 @@
         "verity/hardware/world/",
         "verity/hardware/record.py",
         "verity/hardware/registration.py",
-        "verity/hardware/site/",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
         "benchmarks/definitions/numerics/cuda/",
@@ -207,7 +206,8 @@
         "adapters/vllm/tests/program/",
         "adapters/vllm/tests/commit/",
         "adapters/vllm/tests/acquire/",
-        "adapters/vllm/tests/query/"
+        "adapters/vllm/tests/query/",
+        "benchmarks/definitions/"
       ],
       "branch_suffixes": [
         "8c79",
@@ -264,7 +264,7 @@
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-        "fixtures/bench-instances/",
+        "benchmarks/numerical/bench-instances/",
         "benchmarks/census/",
         "security/Definitions/Accounting/CoinFlow.lean",
         "security/Definitions/Accounting/Filler.lean",
@@ -345,7 +345,7 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/configuration/deploy/",
+        "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime/README.md", "verity/runtime/__init__.py", "verity/runtime/channels.py", "verity/runtime/process.py", "verity/runtime/pyproject.toml", "verity/runtime/runner.py", "verity/runtime/sources.py", "verity/runtime/stream.py", "verity/runtime/tests/", "verity/runtime/transcript.py",
         "security/Definitions/Pous/",
         "security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -378,10 +378,10 @@
         "security/Definitions/Accounting/Memory.lean",
         "security/Definitions/Accounting/RateAudit.lean",
         "security/Definitions/Accounting/RateAuditDeployed.lean",
-        "security/Definitions/Accounting/RateAuditHorizon.lean",
         "security/Definitions/Accounting/RateAuditInteractive.lean",
         "security/Definitions/Accounting/RateAuditJoint.lean",
         "security/Definitions/Accounting/RateAuditPartial.lean",
+        "security/Definitions/Accounting/RateAuditPooled.lean",
         "security/Definitions/Accounting/RateAuditRemote.lean",
         "security/Definitions/Accounting/RateAuditSketch.lean",
         "security/Definitions/Accounting/RateAuditSketchDeployed.lean",
@@ -406,9 +406,9 @@
         "security/Definitions/Accounting/Guarantees/Memory.lean",
         "security/Definitions/Accounting/Guarantees/RateAudit.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
-        "security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
+        "security/Definitions/Accounting/Guarantees/RateAuditPooled.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
         "security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
         "security/Definitions/Accounting/Guarantees/Requirement.lean",
@@ -516,8 +516,11 @@
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
       "linear": "CI",
+      "staffs": [
+        "review-*"
+      ],
       "owns": [
-        "verity/configuration/config/",
+        "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
@@ -525,7 +528,8 @@
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
-        "tools/research/src/research/merge.py"
+        "tools/research/src/research/merge.py",
+        "benchmarks/landing/"
       ],
       "branch_suffixes": [
         "4292",
@@ -666,7 +670,6 @@
         "benchmarks/exfiltration/",
         "benchmarks/harness/specs/",
         "infra/cluster/kinds/benchmarks.toml",
-        "benchmarks/judge.py",
         "benchmarks/README.md"
       ],
       "branch_suffixes": [

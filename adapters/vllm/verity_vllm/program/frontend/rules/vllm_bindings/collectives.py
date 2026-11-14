@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
-from verity_vllm.program.frontend.derive import StaticIndex
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import from_rows, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import (active_allreduce_settings, active_target_profile,
-                                                                           launch_tokens_of)
 from verity.definitions.registry import tp_allreduce
 
+from verity_vllm.program.frontend.derive import StaticIndex
+from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    from_rows,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_allreduce_settings,
+    active_target_profile,
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 
 # -- tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
 
@@ -149,7 +156,7 @@ def _coverage(parts, node, ctx, *, fused: bool = False):
     M = launch_tokens_of(node, n)
     setting, route = tp_allreduce.served_route(settings, M, N)
     if fused:
-        route = "fused" if bool(settings.get("flashinfer")) and M <= tp_allreduce.fused_max_tokens(N, W) else "unfused"
+        route = "fused" if bool(settings.get("flashinfer")) and tp_allreduce.fused_max_tokens(N, W) >= M else "unfused"
     if setting is None:
         return None, f"tp_allreduce.covered(): switches {settings!r} do not name a captured setting"
     target = active_target_profile()

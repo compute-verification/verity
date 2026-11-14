@@ -33,6 +33,8 @@ def test_a_writers_record_loads_and_dumps_back_to_itself():
     verdicts = _doc() | {"verdicts": True}
     assert BoundaryCommit.of(verdicts, "w").dump() == verdicts and rec.verdicts is None and "verdicts" not in rec.dump()
     assert BoundaryCommit.of(tables | verdicts, "w").dump() == tables | verdicts
+    ids = _doc() | {"ids": True}
+    assert BoundaryCommit.of(ids, "w").dump() == ids and rec.ids is None
 
 
 @pytest.mark.parametrize("field", sorted(KINDS))

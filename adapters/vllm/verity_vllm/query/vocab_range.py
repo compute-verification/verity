@@ -12,10 +12,14 @@ committed token id and the rank's static range.  The Match record holds no value
 """
 from __future__ import annotations
 
-import hashlib
 from collections import Counter
-from functools import lru_cache
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from functools import cache
+from typing import Any
+
+from verity_vllm.query.manifest.format import identity_rows
+
+from verity_vllm.query.manifest.format import query_id_digest
 
 FAMILY = "vocab_range"
 MEMBER = "vocab_range"
@@ -43,16 +47,18 @@ def values(tok: int, start: int, vs: int) -> tuple[int, int, int]:
 
 
 def shard_fn(VS: int, H: int, START: int) -> Any:
+    # inside the function: importing this module loads neither numpy nor the core `verity`
     from verity.circuits.defs import bind
     from verity.definitions.registry import b1_tp2
 
     return bind(b1_tp2.EmbeddingShard, VS=VS, H=H, START=START)
 
 
-@lru_cache(maxsize=None)
+@cache
 def slots(VS: int, H: int, START: int) -> tuple[int, ...]:
     """The shard Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i of a
     row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
+    # inside the function: importing this module loads neither numpy nor the core `verity`
     from verity.definitions import word as W
 
     G = W.Graph(shard_fn(VS, H, START))
@@ -97,7 +103,7 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     if stats is None:
         return q
     text = f"{q['query_text']}; {POLICY_TEXT}"
-    out = dict(q, query_text=text, query_id_digest=hashlib.sha256(text.encode()).hexdigest(),
+    out = dict(q, query_text=text, query_id_digest=query_id_digest(text),
                required_families=[*q.get("required_families", []), FAMILY])
     out["vocab_range"] = {"family": FAMILY, "member": MEMBER, "layout": [n for n, _p in LAYOUT], **stats}
     return out
@@ -123,7 +129,7 @@ def policy_of(manifest: Mapping[str, Any] | None) -> bool:
 def manifest_sites(manifest: Mapping[str, Any] | None) -> dict[str, dict[str, int]]:
     """op_path -> {"start", "shard_rows"} of every `vocab_range` identity of a manifest; a site named with two ranges is refused."""
     out: dict[str, dict[str, int]] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         g = {"start": int(r["start"]), "shard_rows": int(r["shard_rows"])}

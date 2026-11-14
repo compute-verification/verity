@@ -150,9 +150,10 @@ registration to itself and the prover (`registration.check`'s `binding`). An out
 one-stage's audit record (null for `late` and `halted`). A `halted` outcome adds `"halt"`, the halt's cause, and
 its `draw` is null when the registration was not sampled. `Outcome.record` is its SHA-512.
 
-**Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
-check with no proof deadline, and under a two-stage design more than one round. After R1 to R7, `register` refuses a `bernoulli` sampling design at any `p` (`bernoulli`), and `select` refuses a
-closure map (`closure`), which the sampled audit's soundness statement doesn't cover either.
+**Not built yet.** A stream refuses a window statement, a timed session and a check with no proof deadline, and under a
+two-stage design more than one round. After R1 to R7, `register` refuses a `bernoulli` sampling design at any `p`
+(`bernoulli`), and `select` refuses a closure map (`closure`), which the sampled audit's soundness statement doesn't cover
+either.
 """
 from __future__ import annotations
 
@@ -197,7 +198,6 @@ _RECORD_KEYS = {"format", "protocol", "program", "query", "partition", "populati
                 "anchors", "window", "previous", "registered"}
 _LAYOUT = {"roots": ("leaves", "domain"), "registered": ("leaves", "words", "domain", "word_bits")}
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")
-_UNIFORM = re.compile(r"^uniform:[1-9][0-9]*$")
 
 
 def _sha512(obj: Any) -> str:
@@ -323,24 +323,6 @@ class Law:
         return {"rule": "law", "law": self.text}
 
 
-@dataclass(frozen=True)
-class Sequential:
-    """A timed session's sample, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
-    `population`. A `Stream` refuses it until the memory challenger's timed mode lands (§6 step 5)."""
-
-    law: str
-    population: str
-
-    def __post_init__(self) -> None:
-        if not _UNIFORM.match(str(self.law)):
-            raise ValueError(f"a sequential rule's law is uniform:k, not {self.law!r}")
-        if not (isinstance(self.population, str) and self.population):
-            raise ValueError("a sequential rule names its population's public item")
-
-    def to_json(self) -> dict[str, Any]:
-        return {"rule": "sequential", "law": self.law, "population": self.population}
-
-
 def _grain(g: Any) -> bool:
     """`Select.grain?`: `partition.template_instance_query`'s form, exactly `{name, version, params: {template}}`."""
     return (isinstance(g, Mapping) and set(g) == {"name", "version", "params"} and g["name"] == "Q_template_instance"
@@ -384,7 +366,7 @@ class TwoStage:
                 "k": self.k if type(self.k) is int else dict(self.k)}
 
 
-Selection = All | Law | Sequential | TwoStage
+Selection = All | Law | TwoStage
 
 
 def boundary_values(values: Sequence[Value]) -> tuple[Value, ...]:
@@ -470,8 +452,8 @@ class Spec:
         names = [v.name for v in self.values]
         if len(set(names)) != len(names):
             raise ValueError("a spec's values have distinct names")
-        if not isinstance(self.selection, (All, Law, Sequential, TwoStage)):
-            raise ValueError(f"a selection rule is All, Law, Sequential or TwoStage, not {self.selection!r}")
+        if not isinstance(self.selection, (All, Law, TwoStage)):
+            raise ValueError(f"a selection rule is All, Law or TwoStage, not {self.selection!r}")
         interior = [v.name for v in self.values if v.phase == "interior"]
         if isinstance(self.selection, TwoStage):
             if not interior or not any(v.phase == "serve" and not v.registered for v in self.values):
@@ -500,8 +482,6 @@ class Spec:
         for o in self.check.public_outputs:
             if o not in items or items[o].kind != "output":
                 raise ValueError(f"public output {o!r} needs a public item of kind 'output', with its reason")
-        if isinstance(self.selection, Sequential) and self.selection.population not in items:
-            raise ValueError(f"a sequential rule's population {self.selection.population!r} is a declared public item")
         if not isinstance(self.context, bytes):
             raise ValueError("a spec's context is bytes")
 
@@ -534,7 +514,7 @@ class Outcome:
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
     sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the
     verifier reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
-    delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds."""
+    delivered sessions, the audit record and, for a sample a `ProofRun` covers, the session's rounds."""
 
     accepted: bool
     verdict: Verdict
@@ -597,7 +577,7 @@ class Draw:
 
 
 @dataclass(frozen=True)
-class Session:
+class ProofRun:
     """One proof session over the samples of consecutive registrations of the stream `stream` (its digest), in order: each
     covered round's registration is its own tables of the session's statement. The challenger opens it once
     (`Stream.session`), after the last covered sample; the first covered sample's proof deadline spans it."""
@@ -993,12 +973,14 @@ class _Entry:
     seed_salt: str | None = None
     history: Mapping[str, Any] | None = None
     read: bytes | None = None
+    #: the challenger's family the sample's coins were read from (`coins.ChallengerCoins.label`), None when it read none
+    family: str | None = None
     closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
     drawn_at: float | None = None
     sessions: list[str] | None = None
     outcome: Outcome | None = None
-    session: Session | None = None
+    session: ProofRun | None = None
     #: under a two-stage design: the interior registration, its population program and what `register_interiors`
     #: handed R1-R8 (as `copies`, `seed_salt` and `history`), then the second stage's sample and the coins it read
     interior: WindowCommitmentRecord | None = None
@@ -1008,6 +990,7 @@ class _Entry:
     interior_history: Mapping[str, Any] | None = None
     second: Draw | None = None
     second_read: bytes | None = None
+    second_family: str | None = None
 
 
 def _reading(x: Any) -> float | None:
@@ -1507,12 +1490,14 @@ class Stream:
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
     verifier's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
-    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
+    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `ProofRun` covers) are
     public parameters of the stream. `coins` is
     the auditor's challenger's coins, a `coins.ChallengerCoins` (n bytes a call, read in order by `OwnRandomness`), which
     the stream's digest names: the verifier has no coins of its own, so there is no default, and a stream whose
     selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
-    coins' evidence (`outcome`'s `coins`), refusing a sample without it. A stream that reads no coins (`All`, or one a
+    coins' evidence (`outcome`'s `coins`), refusing a sample without it, and holds it to the family the stream read the
+    sample from (`family`: the coins' `label` at the sample; a family's coins follow one registration, so each
+    registration's sample, and a second stage's, reads a family of its own). A stream that reads no coins (`All`, or one a
     `sampler` samples for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
     their own. `sampler`, when given, samples instead of the coins (`flock-verify draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
@@ -1571,8 +1556,6 @@ class Stream:
                  values: Sequence[tuple[str, int, int | Sequence[int]]] = (), log: Sequence[Mapping[str, Any]] = (),
                  replay: SpecializedDefinition | None = None, program: Program | None = None,
                  span_values: Sequence[tuple[str, int, int | Sequence[int]]] = ()) -> None:
-        if isinstance(spec.selection, Sequential):
-            raise ValueError("the service doesn't run a Sequential selection yet")
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
         if spec.check.proof_deadline is None:
@@ -2193,7 +2176,24 @@ class Stream:
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
         e = self._entries[registration.order]
         e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
+        e.family = self._family(e.read)
         return e.draw
+
+    def _family(self, read: bytes | None) -> str | None:
+        """The challenger's family a sample that read `read` took its coins from: the stream's own coin source's at the
+        sample (`coins.ChallengerCoins.label`), which the verifier's run holds the coins' evidence to, so the evidence
+        names no family of its own; None for a sample that read none."""
+        return self._coins.label if read and isinstance(self._coins, ChallengerCoins) else None
+
+    def family(self, draw: Draw) -> str | None:
+        """The challenger's family the stream read `draw`'s coins from (the second stage's own for a second-stage
+        sample), as it names it to the verifier's run with the coins' evidence (`outcome`); None for a sample that read
+        none, and for one the stream doesn't hold."""
+        o = draw.registration.order
+        e = self._entries[o] if _nat(o) and o < len(self._entries) else None
+        if e is None:
+            return None
+        return e.second_family if draw.replay_sample is not None else e.family
 
     def _select_second(self, e: _Entry) -> Draw:
         first, reg = e.draw, e.interior
@@ -2226,9 +2226,10 @@ class Stream:
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
         e.second, e.second_read = got["draw"], got["read"]
+        e.second_family = self._family(e.second_read)
         return e.second
 
-    def session(self, draws: Sequence[Draw]) -> Session:
+    def session(self, draws: Sequence[Draw]) -> ProofRun:
         """Open one proof session over `draws`, the samples of 1 to `rounds` consecutive registrations in order, each
         round's registration its own tables of the session's statement: once, after the last covered sample. Its proof
         deadline is the first covered sample's (`Check.proof_deadline` from that sample), for every round it covers. Raises
@@ -2237,12 +2238,12 @@ class Stream:
         another session covers: nothing reopens it) or `order` (not consecutive registrations in order)."""
         draws = tuple(draws)
         self._held(self._decide({"op": "session", "draws": [_covered(d) for d in draws]}))
-        s = Session(self.digest, draws)
+        s = ProofRun(self.digest, draws)
         for d in draws:
             self._entries[d.registration.order].session = s
         return s
 
-    def _deliver_session(self, session: Session, sessions: Sequence[str]) -> tuple[Outcome, ...] | None:
+    def _deliver_session(self, session: ProofRun, sessions: Sequence[str]) -> tuple[Outcome, ...] | None:
         draws = tuple(session.draws) if isinstance(session.draws, Sequence) else ()
         d = self._held(self._decide({"op": "deliver_session",
                                      "stream": session.stream if isinstance(session.stream, str) else "",
@@ -2255,16 +2256,16 @@ class Stream:
             return None
         return self._reported(tuple(self._finish(e, LATE, None, {}) for e in entries))
 
-    def deliver(self, draw: Draw | Session, sessions: Sequence[str]) -> Outcome | tuple[Outcome, ...] | None:
+    def deliver(self, draw: Draw | ProofRun, sessions: Sequence[str]) -> Outcome | tuple[Outcome, ...] | None:
         """The ZK server delivers the sample's proof, once: `sessions` are its session records' SHA-512, which the outcome
         binds. A proof after the proof deadline is a reject (`late`), returned at once; otherwise None, and the outcome waits
-        on the verifier (`outcome`). A `Session`'s proof is delivered as the session, once, for every sample it
+        on the verifier (`outcome`). A `ProofRun`'s proof is delivered as the session, once, for every sample it
         covers (`covered`, delivering one of them alone): each binds the same `sessions`, and past the first covered
         sample's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
         didn't open. Under a two-stage design the proof is the second stage's sample's, and the deadline counts from the
         first stage: before it, the first stage's sample is refused (`second` before the second stage, `not-drawn`
         after)."""
-        if isinstance(draw, Session):
+        if isinstance(draw, ProofRun):
             return self._deliver_session(draw, sessions)
         d = self._held(self._decide({"op": "deliver", **self._drawn_op(draw), "sessions": _session_digests(sessions)},
                                     {"now": lambda: float(self._clock())}))
@@ -2282,18 +2283,18 @@ class Stream:
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
         `verifier.check_verdicts`); then one-stage's audit record by the verifier
         (`verifier.audit_record`; `proved_units` and `instances` default to the sample's, `served` and `session_roots` are
-        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A sample a `Session` covers is decided alone, on the session's delivered records and its own
+        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A sample a `ProofRun` covers is decided alone, on the session's delivered records and its own
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
         never another round's. On a sample from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The verifier has
         no coins of its own, so the Lean's run refuses every sample that read coins unless `coins` is their evidence
         (`coins.coins_reason`'s `{key, ledger, main, pins, segment, session}`) and the bytes it read are exactly the
-        coins the session the ledger opens for the
+        coins of the family the stream read them from (`family`) that the session the ledger opens for the
         registration's window (`register`'s `window_root`), from main's code (`challenger.pinned_session`), released
         after the registration's digest, each checked against its
-        commitment and every one read; missing evidence, or a registration without its window root, is a reject failing
-        `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
+        commitment and every one read, the family's log showing no other root; missing evidence, or a registration
+        without its window root, is a reject failing `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
         other sessions, public outputs the verdicts of record don't report alike, or `coins` for a sample that read no
         coins.
 
@@ -2401,7 +2402,7 @@ class Stream:
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
                       value_outputs=given, seed_salt=e.seed_salt, tied=self.spec.check.tied or None,
-                      history=e.history)
+                      history=e.history, family=e.family)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2468,14 +2469,15 @@ class Stream:
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
                       held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt, history=e.history,
-                      tied=self.spec.check.tied or None,
+                      tied=self.spec.check.tied or None, family=e.family,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
                                 "seed_salt": e.interior_seed_salt, "history": e.interior_history,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,
-                                "coins": interior_coins, "proved_units": proved_units, "instances": instances,
+                                "coins": interior_coins, "family": e.second_family, "proved_units": proved_units,
+                                "instances": instances,
                                 "served": served, "session_roots": session_roots, "statements": statements,
                                 "proofs": proofs})
             if not v.ok:
@@ -2562,7 +2564,7 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
-           "PHASES", "Pending", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES",
-           "Selection", "Sequential", "Session", "Spec", "Stream", "Terms", "TwoStage", "Value",
+           "PHASES", "Pending", "ProofRun", "Public", "REJECT", "REPLAY", "ROOTS", "ROUNDS", "Refused", "SCHEME",
+           "SOURCES", "Selection", "Spec", "Stream", "Terms", "TwoStage", "Value",
            "WindowCommitmentRecord", "boundary_values", "check_public", "check_verdicts", "interior_values",
            "replay_cells", "second_counts", "second_law", "select_draw", "select_second", "selection_law"]

@@ -27,31 +27,45 @@ import os
 import re
 import sys
 import time
+from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Protocol
+
+from verity.definitions import cross_call
+from verity.definitions import word as word_query
 
 from verity_vllm.config import option, workload_arg
-from verity_vllm.program import prefix_plan as PP
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.query.program_view import from_instances, iter_instance_rows
-from verity_vllm.query.compose import compose_global, merge_ranks
-from verity_vllm.query.required import QUERIES, QUERY_OF_RECORD, Q_WORD_ID, request_manifest
-from verity.definitions import cross_call
+from verity_vllm.program import prefix_plan as PP
 from verity_vllm.query import norm_scales as NS
 from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
-from verity.definitions import word as word_query
+from verity_vllm.query.compose import compose_global, merge_ranks
+from verity_vllm.query.program_view import from_instances, iter_instance_rows
+from verity_vllm.query.required import (
+    Q_WORD_ID,
+    QUERIES,
+    QUERY_OF_RECORD,
+    request_manifest,
+)
 
-__all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
-           "build_global_ranks", "cross_call_check", "main"]
+__all__ = ["COMMANDS", "build", "build_global", "cpus", "incomplete_rc", "main", "taps_of"]
 
 #: `--jobs`'s variable
 JOBS_ENV = "VERITY_MANIFEST_JOBS"
 
+
+class _TapPolicy(Protocol):
+    """What `build` reads of a tap policy: the word class of each identity it adds."""
+
+    @property
+    def tap_words(self) -> Mapping[str, Any]: ...
+
+
 #: the tap policies whose identities are Call-interior values, by name (`request_manifest(taps=...)`)
-TAPS = {RS.FAMILY: RS.POLICY, VR.FAMILY: VR.POLICY}
+TAPS: dict[str, _TapPolicy] = {RS.FAMILY: RS.POLICY, VR.FAMILY: VR.POLICY}
 #: the tap policies every manifest is built under (each adds nothing to a Program without its Calls)
 DEFAULT_TAPS = (SP.POLICY,)
 
@@ -106,14 +120,14 @@ def recorded_program_digest(program_dir: str, res: dict[str, Any]) -> str | None
     """The Program's digest (`verity.circuits.codec.program_digest`): the Build's record (`result.json` program.digest), else
     recomputed from its `descriptor.json.gz`; None when the Build has neither.  A Build recorded before the SHA-512 re-baseline
     (ad58900df) names its Program by SHA-256 under `digest` and by today's digest under `sha512`; its `digest` is not read."""
-    prog = res.get("program") or {}
-    s = prog.get("sha512") or (prog.get("digest") if re.fullmatch(r"[0-9a-f]{128}", str(prog.get("digest"))) else None)
-    if s:
+    prog = res.get("program")   # the Build's record of its Program; a Build that wrote none is read from its descriptor
+    if prog and (s := prog.get("sha512") or (prog.get("digest") if re.fullmatch(r"[0-9a-f]{128}", str(prog.get("digest"))) else None)):
         return s
     p = os.path.join(program_dir, "descriptor.json.gz")
     if not os.path.exists(p):
         return None
     import gzip
+
     from verity.circuits.codec import program_digest
     with gzip.open(p, "rt") as f:
         return program_digest(json.load(f))
@@ -364,7 +378,7 @@ def _owner(path: str) -> str:
 def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Callable[[int, dict[str, Any]], None], head: int,
                   log) -> list[dict[str, Any]]:
     import multiprocessing
-    from multiprocessing.connection import wait
+    from multiprocessing.connection import Connection, wait
     ctx = multiprocessing.get_context("fork")
     budget = int(head * HEADROOM_SHARE)
     need = [e if (e := _peak(d)) is not None else budget + 1 for d, _kw in tasks]
@@ -386,7 +400,7 @@ def _build_forked(tasks: list[tuple[str, dict[str, Any]]], jobs: int, after: Cal
             send.close()
             running[recv] = (i, p)
             used += need[i]
-        for conn in wait(list(running)):
+        for conn in (c for c in wait(list(running)) if isinstance(c, Connection)):   # the pipes' read ends: all `running` holds
             i, p = running.pop(conn)
             try:
                 results[i] = conn.recv()
@@ -422,7 +436,7 @@ def _program_dirs_for(fx: dict[str, Any], programs_root: str) -> dict[str, str]:
                 if os.path.isdir(cand) and os.path.exists(rj):
                     try:
                         res = _load_json(rj)
-                    except Exception:  # noqa: BLE001
+                    except (OSError, ValueError, RecursionError):   # unreadable, not JSON, or nested past the parser: not a request Program's result
                         continue
                     if res.get("ok") and PP.declares(res, sh):
                         hits = [cand]
@@ -590,10 +604,16 @@ def incomplete_rc(man: dict[str, Any]) -> int:
     an incomplete manifest, so the row's Build fails here instead of passing with it."""
     if man.get("complete") is not False:
         return 0
-    um = man.get("unmodelled") or {}
-    print(f"manifest INCOMPLETE: {len(um)} unmodelled key(s), first {sorted(um)[:3]}; tp_peer_binding n_unbound "
-          f"{(man.get('tp_peer_binding') or {}).get('n_unbound')}", file=sys.stderr)
+    um = man.get("unmodelled")   # the keys no rule models, each with its count; an incomplete manifest may state none
+    print(f"manifest INCOMPLETE: {len(um) if um else 0} unmodelled key(s), first {sorted(um)[:3] if um else []}; tp_peer_binding n_unbound "
+          f"{_unbound_peers(man)}", file=sys.stderr)
     return 4
+
+
+def _unbound_peers(man: dict[str, Any]) -> int | None:
+    """How many peer values a manifest leaves unbound (`tp_peer_binding.n_unbound`); None where it states no peer binding."""
+    binding = man.get("tp_peer_binding")
+    return binding.get("n_unbound") if binding else None
 
 
 COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions}
@@ -602,7 +622,8 @@ COMMANDS = {"build": BuildOptions, "build-global": BuildGlobalOptions}
 def main(a: Any) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     if a.cmd in ("build", "build-global"):
-        from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+        # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+        from verity_vllm.gc_tuning import tune as _gc_tune
         _gc_tune()
         word_query.use_rule_cache(a.unit_rule_cache)
     if a.cmd == "build":
@@ -623,6 +644,6 @@ def main(a: Any) -> int:
         _write(man, a.out)
         print(json.dumps({"identities": man["populations"]["identities"], "manifest_digest": man["manifest_digest"], "program_digest": man["program_digest"],
                           "complete": man["complete"], "by_family": man["populations"]["by_family"],
-                          "tp_peer_binding_n_unbound": (man.get("tp_peer_binding") or {}).get("n_unbound"), "out": a.out}))
+                          "tp_peer_binding_n_unbound": _unbound_peers(man), "out": a.out}))
         return incomplete_rc(man)
     return 2

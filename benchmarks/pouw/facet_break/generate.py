@@ -189,9 +189,8 @@ def expect_of(g: dict) -> tuple[str, str, int]:
 def vertices(x_class: str, form_kind: str = "IMMA16832", epoch: str | None = None) -> list[tuple[float, float]]:
     """The vertices of Π's section in (x_MMA, x_X): every row the MMA form or X loads, intersected pairwise and with the
     axes, kept where every row holds."""
-    from verity_machine_model.model import census, model
-    sys.path.insert(0, str(HERE))
     from loads import facet_loads
+    from verity_machine_model.model import census, model
     m = model()
     c = census(m, epoch or m.current)
     am = facet_loads({form_kind: 1.0}, c, m.cycle_u)

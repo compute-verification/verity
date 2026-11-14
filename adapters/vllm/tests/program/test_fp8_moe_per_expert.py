@@ -29,26 +29,24 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.bits import evaluate_bits
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.commitments import row_table as RT
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import bit_row
+from verity.commitments.windows import interface as WI
+from verity.definitions.ops.boolean import gemm as BG
+from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
+from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as HP
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import boolean_moe as BMOE
 from verity.definitions.registry import fp8_moe as FM
 from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry import moe as MOE
-from verity.commitments.windows import interface as WI
-
 
 # --- the cut computes the gather form --------------------------------------------------------------------------------------------
 
@@ -194,22 +192,23 @@ def _cut(layers: int, tokens: int, fused: bool = False) -> tuple[WI.Circuit, dic
     templates: list[tuple[object, int]] = [(ROUTER, L * T)]
     wires: list[WI.Wire] = []
     params: dict[str, int] = {}
+    roots: list
     tables, roots, openings = [], [], []
 
     def read(name: str, H: int, B: int, fn=None, routed: bool = False) -> str:
         fn = fn or EMB.read(E, H)
         tid = descriptor_id(fn)
         templates.append((fn, L * B * TOPK * T))
-        for l in range(L):
+        for layer in range(L):
             for b in range(B):
-                at, param = (l * B + b) * TOPK * T, f"moe.{l}.{name}.{b}@{H}/table"
+                at, param = (layer * B + b) * TOPK * T, f"moe.{layer}.{name}.{b}@{H}/table"
                 params[param] = H * E
                 tables.append(WI.Table(param, param, 0, H, E))
                 roots.extend(WI.TableRead(tid, p, param, p, at, TOPK * T) for p in ("root", "domain"))
-                openings.append(WI.Opening(tid, param, "tok", ("row", "salt", "path"), "o1", at, TOPK * T))
-                wires.extend(WI.Wire(tid, "tok", rid, f"o{TOPK + k}", at + k * T, (T,), l * T, (1,)) for k in range(TOPK))
+                openings.append(WI.TableOpening(tid, param, "tok", ("row", "salt", "path"), "o1", at, TOPK * T))
+                wires.extend(WI.Wire(tid, "tok", rid, f"o{TOPK + k}", at + k * T, (T,), layer * T, (1,)) for k in range(TOPK))
                 if routed:
-                    wires.extend(WI.Wire(tid, "g", rid, f"o{k}", at + k * T, (T,), l * T, (1,)) for k in range(TOPK))
+                    wires.extend(WI.Wire(tid, "g", rid, f"o{k}", at + k * T, (T,), layer * T, (1,)) for k in range(TOPK))
         return tid
 
     for proj, sh in (("up", UP), ("down", DOWN)):
@@ -229,7 +228,7 @@ def _cut(layers: int, tokens: int, fused: bool = False) -> tuple[WI.Circuit, dic
         else:
             wires += [WI.Wire(gid, "w", rows, "o0", 0, (L, TOPK, B, T), 0, (B * TOPK * T, T, TOPK * T, 1)),
                       WI.Wire(gid, "ws", scales, "o0", 0, (L, TOPK, NBG, per, T), 0, (NBG * TOPK * T, T, TOPK * T, 0, 1))]
-            wires += [WI.Wire(gid, "g", rid, f"o{k}", (l * TOPK + k) * B * T, (B, T), l * T, (0, 1)) for l in range(L)
+            wires += [WI.Wire(gid, "g", rid, f"o{k}", (layer * TOPK + k) * B * T, (B, T), layer * T, (0, 1)) for layer in range(L)
                       for k in range(TOPK)]
     reg = WI.Registered(params, tuple(tables), (), tuple(roots), tuple(openings))
     return WI.Circuit("glm53-moe-per-expert", tuple(templates), wires=tuple(WI.coalesce(wires)), registered=reg), params

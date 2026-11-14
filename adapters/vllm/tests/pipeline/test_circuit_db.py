@@ -6,37 +6,40 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
+import tarfile
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
-
 from research.store.local import LocalStore
 from verity.circuits import encode_program, program_digest
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation.reference import evaluate
+
+from tests.program.test_running_example import make_program
 from verity_vllm import glue
 from verity_vllm.commit import capture_map as CM
 from verity_vllm.config import WORKLOADS, RowId, UsageError
-from verity_vllm.pipeline import circuit_db
+from verity_vllm.pipeline import circuit_db, cli, epoch
 from verity_vllm.pipeline import config_record as CR
-from verity_vllm.pipeline import epoch
 from verity_vllm.pipeline import research_outputs as ro
 from verity_vllm.pipeline import row_records as RR
 from verity_vllm.properties.record import REGISTRY, seal
-
-from tests.program.test_running_example import make_program
 
 ROW = "llama32-1b__bf16__l40s__tp2__b1__i256__o32__mixed__greedy__bi-eager"
 REPO = "meta-llama/Llama-3.2-1B"
 PARTS = ("build_step", "build_request_LP9_T2", "build_workload")
 PROP = "glm53_bf16_gemm_capture"
-SUMMARY = {"schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1, "commit_pass": [True], "tp_run_roots": ["ab" * 32],
-           "per_rank_roots": [{"0": "c0" * 32, "1": "c1" * 32}], "openings": 64, "weights_pin": {"result": True},
-           "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
-           "required_manifest": {"manifest_digest": "mm", "identities": 7},
-           "sampled_replay": {"result": True, "sample": {"picked": 4, "evaluated": 4, "equal": 4, "mismatch_n": 0},
-                              "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}},
-           "served": {"schema": "verity-vllm/served-switches/v1", "ok": True, "problems": []}}
+SUMMARY: dict[str, Any] = {
+    "schema": "verity/commit-integ/delta-tp/v1", "pass": True, "pairs": 1, "commit_pass": [True], "tp_run_roots": ["ab" * 32],
+    "per_rank_roots": [{"0": "c0" * 32, "1": "c1" * 32}], "openings": 64, "weights_pin": {"result": True},
+    "value_check": {"verdict": "PASS"}, "match_oracle": {"0": {"verdict": "PASS"}, "1": {"verdict": "PASS"}},
+    "required_manifest": {"manifest_digest": "mm", "identities": 7},
+    "sampled_replay": {"result": True, "sample": {"picked": 4, "evaluated": 4, "equal": 4, "mismatch_n": 0},
+                       "per_rank": {"0": {"result": True, "grade": "complete"}, "1": {"result": True, "grade": "complete"}}},
+    "served": {"schema": "verity-vllm/served-switches/v1", "ok": True, "problems": []}}
 
 
 def test_index_names_rows_of_record():
@@ -46,6 +49,7 @@ def test_index_names_rows_of_record():
         assert e["record"] is None or circuit_db.ART.fullmatch(e["record"]), (row, e["record"])
         assert "aot" not in e or (circuit_db.RUN.fullmatch(e["aot"]["comparison"]) and circuit_db.ART.fullmatch(e["aot"]["trace"])
                                   and RowId.parse(row).world > 1), (row, e["aot"])
+        assert e["manifest_digest"] is None or re.fullmatch(r"[0-9a-f]{128}", e["manifest_digest"]), (row, "a whole SHA-512 manifest digest")
 
 
 def _w(p: Path, doc) -> None:
@@ -481,3 +485,213 @@ def test_a_job_reads_the_programs_from_a_bundle_with_no_store(tmp_path, store, m
     with pytest.raises(RuntimeError, match=r"no remote configured.*a research run job has no store.*records fetch ROW --to FILE.*"
                                            r"--send FILE.*--bundle"):
         circuit_db.fetch(build)
+
+
+def test_a_bundle_whose_record_is_not_a_file_is_refused(tmp_path):
+    b = tmp_path / "job.tar"
+    with tarfile.open(b, "w") as tf:
+        member = tarfile.TarInfo(CR.NAME)
+        member.type = tarfile.DIRTYPE
+        tf.addfile(member)
+    with pytest.raises(UsageError, match=f"its {CR.NAME} is not a file"):
+        circuit_db.record(ROW, b)
+
+
+def test_each_records_subcommand_runs_its_own_function_with_its_options(tmp_path, monkeypatch, capsys):
+    """`records SUBCOMMAND ...`, parsed as the command line parses it, reaches that subcommand's function and no other."""
+    cmp = tmp_path / "comparison.json"
+    _w(cmp, {"row": ROW})
+    calls: list[tuple] = []
+
+    def stand_in(name, result):
+        def call(*args, **kw):
+            calls.append((name, args, kw))
+            return result
+        monkeypatch.setattr(circuit_db, name, call)
+
+    ev, tar = {"build": "art:b"}, tmp_path / "job.tar"
+    for name, result in (("switch", {"aot": {"run": "r1"}}), ("evidence_of", ev), ("publish", "art:rec"), ("pull", ROW),
+                         ("capture", {PROP: "art:p"}), ("record", {"config": {"row": ROW}}), ("index", {ROW: {"record": "art:rec"}}),
+                         ("bundle", tar), ("staged", "staged\n"), ("parts", {1: {"workload": "ab" * 32}}),
+                         ("programs", {1: {"workload": SimpleNamespace(gates=7, defs={"Mul16_v1": None})}})):
+        stand_in(name, result)
+    cases = [
+        (["switch", ROW, "--comparison", str(cmp), "--run", "r1", "--trace", "art:t"],
+         [("switch", (ROW, {"row": ROW}), {"run": "r1", "trace": "art:t", "tier": None})], '{"run": "r1"}'),
+        (["publish", "DIR", ROW, "--build", "art:b", "--tree", "x@1", "--by", "circuits", "--gap", f"{PROP}=no capture yet"],
+         [("evidence_of", ("art:b",), {"manifest": None, "match": None, "match_run": None, "commit": None, "commit_run": None,
+                                       "conformance": {}, "gaps": {PROP: "no capture yet"}}),
+          ("publish", ("DIR", ROW), {"evidence": ev, "tree": "x@1", "by": "circuits", "summary": None, "tier": None, "newest": False})],
+         "art:rec"),
+        (["pull", "art:1", "art:2", "--tier", "fast"], [("pull", ("art:1", "fast"), {}), ("pull", ("art:2", "fast"), {})],
+         f"{ROW} art:1\n{ROW} art:2"),
+        (["capture", "r1", "--property", PROP], [("capture", ("r1", [PROP]), {})], f"{PROP}=art:p"),
+        (["show"], [("index", (), {})], json.dumps({ROW: "art:rec"}, indent=1, sort_keys=True)),
+        (["show", ROW], [("record", (ROW,), {})], json.dumps({"config": {"row": ROW}}, indent=1, sort_keys=True)),
+        (["fetch", ROW, "--to", str(tar), "--rank", "1"], [("bundle", (ROW, tar, [1]), {"part": None})], str(tar)),
+        (["staged", REPO, "abc", "--at", "2026-01-01T00:00:00Z", "--ref", "r1", "--by", "circuits"],
+         [("staged", (REPO, "abc"), {"at": "2026-01-01T00:00:00Z", "ref": "r1", "by": "circuits"})], "staged"),
+        (["programs", ROW, "--part", "workload", "--bundle", str(tar)],
+         [("record", (ROW, tar), {}), ("parts", ({"config": {"row": ROW}},), {}),
+          ("programs", (ROW, [1]), {"part": ["workload"], "bundle": tar})],
+         f"rank 1  {'workload':28s} {'ab' * 8}  gates 7  definitions 1"),
+    ]
+    assert {c[0][0] for c in cases} == set(circuit_db.COMMANDS)
+    for argv, want, printed in cases:
+        calls.clear()
+        assert circuit_db.main(cli.parse("records", argv, {})) == 0
+        assert calls == want, argv
+        assert capsys.readouterr().out.rstrip("\n") == printed, argv
+
+
+# What each reader makes of a document that leaves an optional field out, or holds it null or empty.
+
+@pytest.mark.parametrize("build", [{}, {"programs": None}, {"programs": {}}, {"per_rank": None}, {"per_rank": {}, "programs": {}}])
+def test_a_record_whose_build_names_no_program_has_rank_0_alone_with_no_part(build):
+    rec = {"build": {**build, "workload_digest": "w"}, "evidence": {"build": "art:b"}, "tree": "x@1234567"}
+    assert circuit_db.parts({"build": build}) == {0: {}} and circuit_db.parts(rec) == {0: {"workload": "w"}}
+    assert circuit_db.entry(rec, "art:r", "fast")["programs"] == {"0": {"step": None, "workload": "w", "requests": {}}}
+
+
+@pytest.mark.parametrize("rank", [{}, {"programs": None}, {"programs": {}}])
+def test_a_rank_that_names_no_program_has_its_workload_program_alone(rank):
+    assert circuit_db.parts({"build": {"per_rank": {"1": {**rank, "workload_digest": "w"}, "0": rank}}}) == {1: {"workload": "w"}, 0: {}}
+
+
+@pytest.mark.parametrize("attempt", [{}, {"outputs": None}, {"outputs": {}}, {"outputs": {"run_record": None}}])
+def test_a_run_whose_attempt_states_no_run_record_is_refused(attempt, monkeypatch):
+    monkeypatch.setattr(circuit_db, "data", lambda *args: json.dumps(attempt))
+    with pytest.raises(UsageError, match=r"r1: no run record \(outputs\.run_record"):
+        circuit_db.capture("r1")
+
+
+@pytest.mark.parametrize("source", ["absent", None, {}])
+def test_a_run_whose_attempt_states_no_source_is_preserved_with_no_commit(source, tmp_path, store, monkeypatch):
+    run, real = _capture_run(store, tmp_path), circuit_db.data
+
+    def data(*args: str) -> str:
+        out = real(*args)
+        if args[:2] != ("show", run):
+            return out
+        attempt = {k: v for k, v in json.loads(out).items() if k != "source"}
+        return json.dumps(attempt if source == "absent" else {**attempt, "source": source})
+
+    monkeypatch.setattr(circuit_db, "data", data)
+    assert store.get_manifest(circuit_db.capture(run)[PROP]).meta["commit"] is None
+
+
+@pytest.mark.parametrize("unstated", [{}, {"meta": None}, {"meta": {}}])
+def test_an_artifact_whose_manifest_states_no_meta_is_no_capture_and_no_record_to_pull(unstated, monkeypatch):
+    held = {"id": "art:a", "manifest": {"kind": circuit_db.PROPERTY_KIND, **unstated}}
+    monkeypatch.setattr(circuit_db, "data", lambda *args: json.dumps([held] if args[0] == "select" else held))
+    with pytest.raises(UsageError, match=rf"--conformance {PROP}=art:a: a property-record/v1 of None at None \(ok None\), not a holding"):
+        circuit_db.check_capture(PROP, "art:a")
+    assert circuit_db.newest_capture(PROP) is None
+    held = {"id": "art:a", "manifest": {"kind": CR.KIND, **unstated}}
+    with pytest.raises(UsageError, match=r"art:a: a vllm-config-record/v1 \(None\), not a PASS vllm-config-record/v1"):
+        circuit_db.pull("art:a")
+
+
+def test_the_newest_capture_is_one_that_holds_though_it_names_no_run(monkeypatch):
+    held = [{"id": "art:a", "manifest": {"meta": {"ok": True, "schema": "another/v0", "run_id": "r9"}}},
+            {"id": "art:b", "manifest": {"meta": {"ok": True, "schema": REGISTRY[PROP].schema}}},
+            {"id": "art:c", "manifest": {"meta": {"ok": False, "schema": REGISTRY[PROP].schema, "run_id": "r9"}}}]
+    monkeypatch.setattr(circuit_db, "data", lambda *args: json.dumps(held))
+    assert circuit_db.newest_capture(PROP) == "art:b"
+
+
+def _construction(tmp_path: Path, monkeypatch, doc: dict) -> list[str]:
+    """The listing of a Build whose one construction manifest is `doc`, which `due` fetches from under `tmp_path`."""
+    p = f"build_step/{circuit_db.CONSTRUCTION}"
+    _w(tmp_path / "fetched" / p, doc)
+    monkeypatch.setattr(circuit_db, "fetch", lambda art, to, paths: tmp_path / "fetched")
+    return [p]
+
+
+@pytest.mark.parametrize("doc", [{}, {"model": None, "tp": None}, {"model": {}, "tp": {}}, {"model": {"pin": None}, "tp": {"world": None}},
+                                 {"model": {"pin": {}}, "tp": {"world": 0}}, {"model": {"pin": {"model": None}}, "tp": {"world": 1}}])
+def test_a_construction_manifest_that_states_no_checkpoint_has_no_map_and_nothing_due(doc, tmp_path, monkeypatch):
+    assert circuit_db.due("art:b", _construction(tmp_path, monkeypatch, doc)) == {"map": None, "due": {}}
+
+
+@pytest.mark.parametrize("histogram", [{}, {"spec_histogram": None}, {"spec_histogram": {}}])
+def test_a_construction_manifest_that_states_no_definition_has_its_map_and_nothing_due(histogram, tmp_path, store, monkeypatch):
+    _map(tmp_path)
+    doc = {"model": {"pin": {"model": REPO}}, "tp": {"world": 2}, **histogram}
+    assert circuit_db.due("art:b", _construction(tmp_path, monkeypatch, doc)) == {"map": "llama-test-tp2", "due": {}}
+    used = {**doc, "spec_histogram": {"Mul16_v1": 3}}
+    assert circuit_db.due("art:b", _construction(tmp_path, monkeypatch, used)) == {"map": "llama-test-tp2", "due": {PROP: ["mul"]}}
+
+
+def test_a_row_the_index_holds_nothing_of_needs_its_tier(monkeypatch):
+    monkeypatch.setattr(circuit_db, "index", lambda: {"null": None, "empty": {}, "tiered": {"tier": "heavy"}})
+    for row in ("new", "null", "empty"):
+        with pytest.raises(UsageError, match=rf"{row}: a row new to records\.json needs --tier"):
+            circuit_db._tier(row, None)
+        assert circuit_db._tier(row, "fast") == "fast"
+    assert circuit_db._tier("tiered", None) == "heavy" and circuit_db._tier("tiered", "fast") == "fast"
+
+
+@pytest.mark.parametrize("manifest", ["absent", None, {}])
+def test_publish_holds_a_commit_that_states_no_manifest_to_no_build(manifest, tmp_path, store, monkeypatch):
+    """The summary's manifest is another Build's, which `publish` refuses when the record's Commit states it."""
+    d, real = _row_dir(tmp_path), CR.record
+
+    def record(*args, **kw) -> dict:
+        rec = real(*args, **kw)
+        commit = {k: v for k, v in rec["commit"].items() if k != "manifest"}
+        return {**rec, "commit": commit if manifest == "absent" else {**commit, "manifest": manifest}}
+
+    build = _build_art(store, d, tmp_path / "run")
+    served = {**_served(d), "required_manifest": {"manifest_digest": "other", "program_digest_per_rank": {"0": "0" * 128}}}
+    with pytest.raises(UsageError, match="not the one served"):
+        circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=served)
+    monkeypatch.setattr(CR, "record", record)
+    art = circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=served)
+    assert circuit_db.index()[ROW]["record"] == art
+
+
+def test_publish_reads_the_record_s_build_before_what_its_commit_served(tmp_path, store, monkeypatch):
+    """A Build whose Programs are no mapping raises where its parts are read, also where the Commit's manifest is no mapping."""
+    d, real = _row_dir(tmp_path), CR.record
+
+    def record(*args, **kw) -> dict:
+        rec = real(*args, **kw)
+        return {**rec, "commit": {**rec["commit"], "manifest": "no mapping"}, "build": {"per_rank": {"0": {"programs": ["no mapping"]}}}}
+
+    build = _build_art(store, d, tmp_path / "run")
+    monkeypatch.setattr(CR, "record", record)
+    with pytest.raises(AttributeError, match="'list' object has no attribute 'items'"):
+        circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
+
+
+@pytest.mark.parametrize("unstated", [{}, {"conformance": None, "gaps": None}, {"conformance": {}, "gaps": {}}])
+def test_publish_reads_evidence_that_states_no_conformance_and_no_gap_as_citing_nothing(unstated, tmp_path, store):
+    _map(tmp_path)
+    d = _row_dir(tmp_path)
+    ev = {"build": _build_art(store, d, tmp_path / "run"), **unstated}
+    with pytest.raises(UsageError, match=f"need {PROP} .*which the record neither cites nor names a gap"):
+        circuit_db.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
+    new = circuit_db.capture(_capture_run(store, tmp_path))[PROP]
+    art = circuit_db.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d), newest=True)
+    assert circuit_db.record(ROW)["evidence"] == {**ev, "conformance": {PROP: new}} and store.get_manifest(art).refs == {"build": ev["build"], PROP: new}
+
+
+@pytest.mark.parametrize("entry", [None, {}])
+def test_pull_reads_an_index_entry_that_holds_nothing_as_a_row_on_the_trace(entry, tmp_path, store, monkeypatch):
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    art = circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="heavy",
+                          summary=_served(d))
+    pod = circuit_db.index()
+    monkeypatch.setattr(circuit_db, "INDEX", tmp_path / "checkout.json")
+    _w(circuit_db.INDEX, {"schema": CR.INDEX_SCHEMA, "rows": {ROW: entry}})
+    assert circuit_db.pull(art) == ROW and circuit_db.index() == pod
+
+
+def test_a_row_dir_whose_build_summary_states_no_rank_has_no_construction(tmp_path):
+    assert circuit_db.constructions(tmp_path) == {}
+    unstated: list[dict] = [{}, {"ranks": None}, {"ranks": {}}]
+    for summary in unstated:
+        _w(tmp_path / "build_summary.json", summary)
+        assert circuit_db.constructions(tmp_path) == {}

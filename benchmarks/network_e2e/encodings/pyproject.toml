@@ -1,8 +1,8 @@
 # The advice's encodings (network certification for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the certifier's
-# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `cache_pool_vectors.py`: CacheStep_v2 against
-# the advice decoder's block pool (`verity_vllm.pipeline.advice_code.pool.BlockPool`), and its difftest vectors;
-# `compile_slice_pool.py`: CompileSlice_v2's pool calls against `BlockPool` over whole traces; `arith_vectors.py`: the
+# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `replay_input.py`: a step trace or a
+# derived-format one as the replay's input; `compile_slice_pool.py`: CompileSlice_v4's pool calls against the advice
+# decoder's block pool (`verity_vllm.pipeline.advice_code.pool.BlockPool`) over whole traces; `arith_vectors.py`: the
 # certifier's arithmetic encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from vLLM's own
 # scheduler, which the tests read as fixtures (it needs vLLM); `pool_row_trace.py`: vLLM's own block pool, driven by the
 # replay's over whole traces, and the carried pool's row the vLLM integration exports from it; `pool_cut.py`: a trace
@@ -42,4 +42,8 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           "verity/protocols/__init__.py", "verity/protocols/spot/__init__.py",
-          "verity/definitions/__init__.py", "verity/definitions/circuits/__init__.py", "verity/definitions/commitments/__init__.py", "verity/definitions/circuits/boolean/__init__.py", "verity/definitions/circuits/boolean/memcheck.py", "verity/definitions/commitments/gates/__init__.py", "verity/definitions/commitments/gates/block_key.py"]
+          "verity/definitions/__init__.py", "verity/definitions/circuits/__init__.py", "verity/definitions/commitments/__init__.py", "verity/definitions/circuits/boolean/__init__.py", "verity/definitions/circuits/boolean/memcheck.py", "verity/definitions/commitments/gates/__init__.py", "verity/definitions/commitments/gates/block_key.py",
+          # the certifier's `head_check` counts a Definition's ANDs with the census (`census.BooleanWork`), and the
+          # advice code's codec imports it (`window_code`, the certifier's `window_charge`, `arith_encode`):
+          # test_arith_vectors, the first test to load v1.py, reads it
+          "verity/definitions/circuits/census.py"]

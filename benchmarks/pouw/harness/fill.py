@@ -5,6 +5,12 @@ from __future__ import annotations
 
 import numpy as np
 
+#: what the harness's modules and the tests read
+__all__ = [
+    "BF16", "E2M1", "E2M1_VALUES", "E4M3", "E4M3_VALUES", "F32", "F32_ONE", "INT8", "TERNARY", "UE4M3_ONE", "UE8M0_ONE",
+    "ZERO", "bf16_rne", "decode", "fill", "unit_bytes",
+]
+
 F32, BF16, E4M3, E2M1, INT8 = 0, 1, 2, 3, 4
 UE4M3_ONE, UE8M0_ONE, F32_ONE, ZERO = 5, 6, 7, 8
 F32_TERNARY, BF16_TERNARY, E4M3_TERNARY, E2M1_TERNARY, INT8_TERNARY = 12, 13, 14, 15, 16

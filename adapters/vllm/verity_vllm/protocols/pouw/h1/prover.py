@@ -20,8 +20,8 @@ never under a run's ``$OUT`` or any published path. The serving node keeps it (`
 * **Off the serving thread** (`Writer`, serve-openai's ``--h1-prover``). A window's directory is open on the server's writer
   from the window's open to its release (`writer_of`): each call's rows, scales and records are copied into the writer's
   ring of host memory, bounded by a window's bytes (`kept_bytes`), from the device on its current stream, and the writer's
-  thread writes the call's file, the bytes `keep_call` writes. The window's release waits for its files (`Writer.wait`),
-  and a file not written fails the window.
+  threads write the calls' files, the bytes `keep_call` writes, each taking the next call in the order kept. The window's
+  release waits for all its files (`Writer.wait`), and a file not written fails the window.
 """
 from __future__ import annotations
 
@@ -33,11 +33,13 @@ import threading
 import zipfile
 import zlib
 from collections import deque
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import numpy as np
+from verity.protocols.pouw.verifier.protocol import tagged
 
 from verity_vllm.protocols.pouw.h1 import records as ZR
 
@@ -106,15 +108,16 @@ def savez(path: Path, arrays: Mapping[str, Any]) -> Path:
             np.savez(f, **arrays)
             return path
         central, offset = [], 0
-        for name, head, data, crc in members:
+        for member, head, data, crc in members:
             size = len(head) + data.nbytes
             f.write(_LOCAL.pack(b"PK\x03\x04", zipfile.ZIP64_VERSION, 0, 0, zipfile.ZIP_STORED, 0, _DOS_DATE, crc, 0xFFFFFFFF,
-                                0xFFFFFFFF, len(name), _ZIP64.size) + name + _ZIP64.pack(1, _ZIP64.size - 4, size, size) + head)
+                                0xFFFFFFFF, len(member), _ZIP64.size) + member + _ZIP64.pack(1, _ZIP64.size - 4, size, size)
+                    + head)
             f.write(data)
             central.append(_CENTRAL.pack(b"PK\x01\x02", zipfile.ZIP64_VERSION, _SYSTEM, zipfile.ZIP64_VERSION, 0, 0,
-                                         zipfile.ZIP_STORED, 0, _DOS_DATE, crc, size, size, len(name), 0, 0, 0, 0, 0o600 << 16,
-                                         offset) + name)
-            offset += _LOCAL.size + len(name) + _ZIP64.size + size
+                                         zipfile.ZIP_STORED, 0, _DOS_DATE, crc, size, size, len(member), 0, 0, 0, 0,
+                                         0o600 << 16, offset) + member)
+            offset += _LOCAL.size + len(member) + _ZIP64.size + size
         cd = b"".join(central)
         f.write(cd + _END.pack(b"PK\x05\x06", 0, 0, len(central), len(central), len(cd), offset, 0))
     return path
@@ -161,6 +164,8 @@ def writer_of(directory: str | Path | None) -> Writer | None:
 
 @dataclass(frozen=True)
 class _Job:
+    #: its place in the order kept
+    seq: int
     directory: str
     index: int
     lo: int
@@ -173,27 +178,34 @@ class _Job:
 class Writer:
     """`keep_call` off the serving thread: `keep` copies a call's rows, scales and records into a ring of ``bound`` bytes of
     host memory (pinned when CUDA is up, so a CUDA tensor's copy is queued on its device's current stream, behind what the
-    stream has enqueued, and the caller never waits on the device), and one thread of the writer's own writes each call's
-    file from the ring, in the order kept, the bytes `keep_call` writes. The caller waits only while the ring is full: at
-    most ``bound`` bytes are in flight (serve-openai's is a window's, `kept_bytes` of each of its calls). A window's
-    directory is `open` on the writer until `wait` returns: once every call kept there is written, raising OSError when
-    any wasn't. A failure the writer doesn't expect stops it, raised on its thread: that call and each call queued or kept
-    after it fail their windows, so no `wait` waits on a call the writer won't write."""
+    stream has enqueued, and the caller never waits on the device), and ``threads`` threads of the writer's own write the
+    calls' files from the ring, the bytes `keep_call` writes, each taking the next call in the order kept (a file's CRC and
+    write release the GIL, so they overlap). A call's bytes stay in the ring until it and every call kept before it are
+    written. The caller waits only while the ring is full: at most ``bound`` bytes are in flight (serve-openai's is a
+    window's, `kept_bytes` of each of its calls). A window's directory is `open` on the writer until `wait` returns: once
+    every call kept there is written, raising OSError when any wasn't. A failure the writer doesn't expect stops it, raised
+    on the thread it struck: that call and each call no thread has taken, or kept after it, fail their windows, and a call
+    another thread is writing ends as it ends, so no `wait` waits on a call the writer won't write."""
 
-    def __init__(self, bound: int) -> None:
+    def __init__(self, bound: int, threads: int = 2) -> None:
         import torch
 
+        if threads < 1:
+            raise ValueError(f"a writer of {threads} threads: at least one")
         self.bound = _up(bound)
         self._pinned = torch.empty(self.bound, dtype=torch.uint8, pin_memory=True) if torch.cuda.is_available() else None
         self._ring = self._pinned.numpy() if self._pinned is not None else np.empty(self.bound, np.uint8)
         self._cv = threading.Condition()
+        #: the calls whose bytes are in the ring, in the order kept; the first ``_taken`` of them are being or were written
         self._jobs: deque[_Job] = deque()
+        self._taken, self._seq, self._written = 0, 0, set()
         self._head, self._closed = 0, False
-        #: the failure that stopped the writer's thread (None while it runs)
+        #: the first failure that stopped the writer's threads (None while it runs)
         self._stopped: str | None = None
         self._dirs: dict[str, dict[str, Any]] = {}
-        self._thread = threading.Thread(target=self._run, name="h1-keep", daemon=True)
-        self._thread.start()
+        self._threads = [threading.Thread(target=self._run, name=f"h1-keep-{i}", daemon=True) for i in range(threads)]
+        for t in self._threads:
+            t.start()
 
     def open(self, directory: str | Path) -> None:
         """Keep the calls of the window whose prover directory is ``directory`` here, until `wait`."""
@@ -232,7 +244,7 @@ class Writer:
                 st["waits"] += 1
                 self._cv.notify_all()
                 self._cv.wait()
-            if self._stopped is not None:
+            if self._stopped is not None or lo is None:
                 st["calls"] += 1
                 st["failed"].append(f"call {index}: the writer stopped at {self._stopped}")
                 return
@@ -256,7 +268,8 @@ class Writer:
 
                 copied = torch.cuda.Event(blocking=True)
                 copied.record(stream)
-            self._jobs.append(_Job(key, int(index), lo, tuple(spans), copied))
+            self._jobs.append(_Job(self._seq, key, int(index), lo, tuple(spans), copied))
+            self._seq += 1
             self._head = lo + n
             st["calls"] += 1
             st["bytes"] += sum(s for _at, s, _dtype, _shape in spans)
@@ -266,11 +279,12 @@ class Writer:
     def _run(self) -> None:
         while True:
             with self._cv:
-                while not self._jobs and not self._closed:
+                while self._taken == len(self._jobs) and not self._closed and self._stopped is None:
                     self._cv.wait()
-                if not self._jobs:
+                if self._stopped is not None or self._taken == len(self._jobs):
                     return
-                job = self._jobs[0]
+                job = self._jobs[self._taken]
+                self._taken += 1
             failed = None
             try:
                 if job.copied is not None:
@@ -283,22 +297,33 @@ class Writer:
                 failed = f"call {job.index}: {type(e).__name__}: {e}"
             except BaseException as e:
                 with self._cv:
-                    self._stopped = f"call {job.index}: {type(e).__name__}: {e}"
-                    for queued in self._jobs:
+                    mine = f"call {job.index}: {type(e).__name__}: {e}"
+                    if self._stopped is None:
+                        self._stopped = mine
+                    # this call and each call no thread took fail here; a call another thread took is that thread's to end
+                    untaken = [self._jobs.pop() for _ in range(len(self._jobs) - self._taken)][::-1]
+                    for queued in (job, *untaken):
                         st = self._dirs[queued.directory]
                         st["pending"] -= 1
-                        st["failed"].append(self._stopped if queued is job else
+                        st["failed"].append(mine if queued is job else
                                             f"call {queued.index}: the writer stopped at {self._stopped}")
-                    self._jobs.clear()
+                    self._done(job)
                     self._cv.notify_all()
                 raise
             with self._cv:
-                self._jobs.popleft()
+                self._done(job)
                 st = self._dirs[job.directory]
                 st["pending"] -= 1
                 if failed is not None:
                     st["failed"].append(failed)
                 self._cv.notify_all()
+
+    def _done(self, job: _Job) -> None:
+        """``job`` has ended (under the lock): the ring gives up the bytes of each call up to the first still being written."""
+        self._written.add(job.seq)
+        while self._jobs and self._jobs[0].seq in self._written:
+            self._written.remove(self._jobs.popleft().seq)
+            self._taken -= 1
 
     def wait(self, directory: str | Path) -> dict[str, int]:
         """Once every call kept under ``directory`` is written, the directory closed on the writer: its calls, their bytes
@@ -314,11 +339,12 @@ class Writer:
         return {k: st[k] for k in ("calls", "bytes", "waits")}
 
     def close(self) -> None:
-        """Every call kept so far written, and the writer's thread ended."""
+        """Every call kept so far written, and the writer's threads ended."""
         with self._cv:
             self._closed = True
             self._cv.notify_all()
-        self._thread.join()
+        for t in self._threads:
+            t.join()
 
 
 def locate(rows: Sequence[Mapping[str, Any]], unit: int) -> tuple[int, int]:
@@ -342,8 +368,6 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
     """Call `index` of the window `record` (`pouw_h1.CALLS_FILE`), its tables rebuilt from the prover's directory under
     the window's Program salt `salt` (`pouw_h1_challenger.program_salt_of` its commitment): refused (ValueError) when a
     rebuilt table's root isn't the one the call's manifest row carries."""
-    from verity.protocols.pouw.verifier.protocol import tagged
-
     from verity_vllm.protocols.pouw.h1 import records as ZR
     from verity_vllm.protocols.pouw.h1 import requests as RQ
 
@@ -359,7 +383,7 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
     def table(name: str, leaves: list[bytes]) -> Any:
         tree = RQ.hiding_rows(tagged(RQ.TABLE_TAGS[name], salt, index), index, leaves, key,
                               RQ.TABLES_NONCE + 3 * index + RQ.TABLE_NONCES[name])
-        if tree.commitment.root.hex() != (row.get("tables") or {}).get(name):
+        if tree.commitment.root.hex() != RQ.table_root(row, name):
             raise ValueError(f"call {index}'s {name} table, rebuilt from the prover's directory, is not the one its "
                              "manifest row carries")
         return tree

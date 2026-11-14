@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["SigmaDifftest"],
  "layers": {
   "SigmaDifftest": {
@@ -7,6 +8,7 @@
    "why": "the difftest port reaches the σ-lift check (Flock.Sigma) only through the harness, as a port does"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
  }
