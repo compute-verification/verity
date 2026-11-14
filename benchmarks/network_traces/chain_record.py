@@ -224,7 +224,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     from benchmarks.network_traces import certifier_serve as cs
     from verity.protocols.accounting.certifier.verifier.certificate import Direction
     from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
-    from verity.protocols.accounting.certifier.verifier.service import LinkWindows
+    from verity.protocols.accounting.certifier.verifier import service as SVC
     from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
     from verity.commitments.crypto import lms
     from verity.protocols.accounting.certifier.verifier import lean_audit
@@ -234,9 +234,9 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     setup, key = ar.Setup(report), RF.read_public(dep["certifier_key"])
     session, windows = bytes.fromhex(dep["session"]), plan["windows"]
     profile = plan.get("occupancy") or {}
-    lw = LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, key, dep["run_id"], session,
-                     ingress=setup.ingress_params, proof_deadline=RC.PROOF_DEADLINE_S,
-                     occupancy=(profile.get("egress"), profile.get("ingress")), served=cs.served_profile(plan))
+    lw = SVC.LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, key, dep["run_id"], session,
+                         ingress=setup.ingress_params, proof_deadline=RC.PROOF_DEADLINE_S,
+                         occupancy=(profile.get("egress"), profile.get("ingress")), served=cs.served_profile(plan))
     kept, kept_clocks = client / "certificates.jsonl", client / "clocks.jsonl"
     records = next((d / "certified.jsonl" for d in (run, client) if (d / "certified.jsonl").is_file()), None)
     clocks_file = run / "clocks.jsonl"
