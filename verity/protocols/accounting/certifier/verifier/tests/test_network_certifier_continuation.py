@@ -3,7 +3,7 @@ requests and their responses of id events, ticked through the network certifier'
 (`scan_traffic.serve`: built traffic, nothing served) over five execution phases of T = 8 buckets, r = 2 cells a
 bucket, D = 3. At each close b the stamps are the open responses' (q, N, e) in release order: every response released
 before b with no end cell before b, e its id cells in buckets before b, which is the schedule's count from its
-admission and `warden.audit`'s release order, two requests released in one bucket numbered by ordinal. The stamps read
+admission and `network_certifier.audit`'s release order, two requests released in one bucket numbered by ordinal. The stamps read
 no id and no request: the same traffic with other ids has the same stamps. The cases at a close:
 
 - a response still inside its delay at b is stamped e = 0, and its continuation is its request;
@@ -34,12 +34,12 @@ import scan_traffic as ST
 from verity.protocols.accounting.certifier.verifier import continuation as C
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
-from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier import network_certifier as W
 from verity.protocols.accounting.certifier.verifier.active import PAD, id_request
 from verity.protocols.accounting.certifier.verifier.grid import Reason, Status
 
 B = 512
-PARAMS = W.WardenParams(cell_bytes=B, slots=2, delay=3, lanes=4, window=8, egress_cells=64)
+PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, delay=3, lanes=4, window=8, egress_cells=64)
 T, R, D = PARAMS.window, PARAMS.slots, PARAMS.delay
 EOS = (2,)
 FAST = 1 << 20

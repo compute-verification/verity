@@ -5,7 +5,7 @@ which the unit sends to `certifier-run` alone, still ends it with its end; `load
 unless the store holds the shape as `weights-write` wrote it, its program, sink port, streams and shape check, and its
 minutes cover the load and then the rehearsal; its run opens a tunnel to the sink a stream beside the endpoint's, gives
 the rehearsal their local ends and the store, and publishes the load's signed registrations and the relay's counts,
-never a salt. `test_warden_serve` holds `warden_command`'s load flags to `warden_serve.py rehearse`'s, and
+never a salt. `test_network_certifier_serve` holds `network_certifier_command`'s load flags to `network_certifier_serve.py rehearse`'s, and
 `test_load_relay` the relay itself."""
 
 from __future__ import annotations
@@ -168,9 +168,9 @@ def test_a_key_that_reads_only_starts_no_load(stored):
     assert not stored.certifier.exists()
 
 
-def test_a_lane_key_starts_a_load_a_warden_rehearsal_with_its_load_whose_minutes_come_first(stored):
+def test_a_lane_key_starts_a_load_a_network_certifier_rehearsal_with_its_load_whose_minutes_come_first(stored):
     """The request is a network certifier rehearsal's with ``load``; a `--prompts` request's least minutes are its prompts' after
-    the load's, as `warden_prompts` counts them."""
+    the load's, as `network_certifier_prompts` counts them."""
     rc, out = gate(stored, LOAD)
     doc = json.loads(out)
     assert rc == 0 and doc == {"run": "c20261026T040000Z-ab12", "device": "warden", "peer": "vy-nebius-1",
@@ -215,7 +215,7 @@ def test_the_rehearsal_units_stop_signals_certifier_run_alone_and_gives_it_time_
 SALT = "5a" * 64
 LOAD_SUMMARY = {"values": 19, "registered": 19, "relayed": True}
 RELAY = {"shape": "tiny", "values": 19, "bytes": 34240, "streams": 4, "sinks": [{"accepted": True}] * 4}
-#: a stand-in for `warden_serve.py rehearse --load-store`'s files: public, then witness
+#: a stand-in for `network_certifier_serve.py rehearse --load-store`'s files: public, then witness
 LOAD_FILES = (
     '(out / "deployment.json").write_text(json.dumps({"upstream": url, "session": "00" * 32}))\n'
     '(out / "cells.jsonl").write_text("")\n'
@@ -272,12 +272,12 @@ def test_a_load_whose_sink_tunnel_doesnt_come_up_runs_nothing_and_its_end_says_w
     assert len(ups) == 3 and end["verdict"] is None and "load" not in end and set(end["files"]) == {"tunnel.log"}
 
 
-def test_a_loads_rehearsal_is_warden_serves_with_its_load_flags_after_the_rehearsals(tmp_path):
+def test_a_loads_rehearsal_is_network_certifier_serves_with_its_load_flags_after_the_rehearsals(tmp_path):
     req = {"device": "warden", "requests": 100, "load": {"shape": "tiny", "program": PROGRAM, "sink_port": 8021,
                                                          "streams": 2, "minutes": 16}}
     store = Path("/var/lib/vy-challenger/store")
-    plain = A.warden_command({k: v for k, v in req.items() if k != "load"}, tmp_path, "http://127.0.0.1:40001")
-    argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", sinks=[("127.0.0.1", 40002), ("127.0.0.1", 40003)],
+    plain = A.network_certifier_command({k: v for k, v in req.items() if k != "load"}, tmp_path, "http://127.0.0.1:40001")
+    argv = A.network_certifier_command(req, tmp_path, "http://127.0.0.1:40001", sinks=[("127.0.0.1", 40002), ("127.0.0.1", 40003)],
                             store=store)
     assert argv == [*plain, "--load-store", str(store), "--load-shape", "tiny", "--load-sinks",
                     "127.0.0.1:40002,127.0.0.1:40003", "--load-program", PROGRAM, "--load-ready-s", "900"]

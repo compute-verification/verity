@@ -1,5 +1,5 @@
-"""The lengths rows' form 2 (`warden`'s "The lengths rows", `connection_rows`' "The word that no head comes"), driven
-tick by tick on `test_network_certifier_warden`'s harness: every execution phase of a run ends once, in its hand or
+"""The lengths rows' form 2 (`network_certifier`'s "The lengths rows", `connection_rows`' "The word that no head comes"), driven
+tick by tick on `test_network_certifier`'s harness: every execution phase of a run ends once, in its hand or
 without releases, the run's last at its last close. The form is a value of its own digest, and a schedule at form 1
 leaves what it left. The network certifier admits no connection that may end past the run; it hands an execution
 phase only where it and the ones beside it were published complete, so no hand holds a byte of one that wasn't; a
@@ -23,8 +23,8 @@ from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier
     CON, GONE, HELD, LEN_DIGEST, LINK, leaves, leaving, mixed, registered)
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import (
     B, LEN, PLAIN, D, R, T, answer, id_req, traffic)
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import TAU, Server, records, run
-from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Warden, WardenParams, cells
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import TAU, Server, records, run
+from verity.protocols.accounting.certifier.verifier.network_certifier import LENGTHS_FORMS, NetworkCertifier, NetworkCertifierParams, cells
 
 #: the lengths tests' schedule at form 2, and the content tables tests' classes at it, each its two sizes
 TWO = dataclasses.replace(LEN, lengths=2)
@@ -47,16 +47,16 @@ LEN_REGISTERED = ("97a5a38d9ed904b94947425638fb0fd7c092d128f8940ecae204a25bff540
                   "4d2ed4043989d3d0b0a5930a550ba7c6e925ea78855b0955705c8519b28d5fba")
 
 
-def ends(device: Warden) -> list[tuple[int, bool]]:
+def ends(device: NetworkCertifier) -> list[tuple[int, bool]]:
     """Each execution phase the device ended, in the order it ended them, and whether it handed it."""
     return [(w, strides is not None) for w, strides in device.lengths]
 
 
-def handed(device: Warden) -> dict:
+def handed(device: NetworkCertifier) -> dict:
     return {w: strides for w, strides in device.lengths if strides is not None}
 
 
-def order_of(device: Warden) -> dict[int, int]:
+def order_of(device: NetworkCertifier) -> dict[int, int]:
     """Each released connection's place in the release order, by its ordinal, as the device's log has it."""
     return {e["ordinal"]: e["release"] for e in device.log if e["release"] is not None}
 
@@ -79,7 +79,7 @@ def test_form_2_is_a_value_of_its_own_digest_and_a_schedule_at_form_1_leaves_wha
         [(name, size) for name, _, size in CR.tables_of(CON)]
     assert (TWO.stride_releases, TWO.span) == (LEN.stride_releases, LEN.span)
     assert SPAN == D + (LEN.egress_cells - 1) // R
-    assert WardenParams(**json.loads(json.dumps(dataclasses.asdict(TWO_CON)))) == TWO_CON
+    assert NetworkCertifierParams(**json.loads(json.dumps(dataclasses.asdict(TWO_CON)))) == TWO_CON
     for bad in (0, 3, True, "2", 2.0):
         with pytest.raises(ValueError, match="lengths is 1 or 2"):
             dataclasses.replace(PLAIN, lengths=bad)
@@ -125,7 +125,7 @@ def test_a_connection_that_may_end_past_the_run_is_never_admitted():
     assert len(server.conns) == 3 and one.requests_released == 3
 
 
-def last_phase_most(params: WardenParams) -> tuple[int, int]:
+def last_phase_most(params: NetworkCertifierParams) -> tuple[int, int]:
     """The most connections form 2 admits in a run's last execution phase, and the most releases that execution phase
     holds. It admits in its first A = T − `span` buckets, and a lane admits every D + 1 buckets at the most. A lane
     may also release there a connection admitted in the `ingress_buckets` − 1 buckets before it, which holds the lane
@@ -255,11 +255,11 @@ def test_the_records_count_the_release_order_only_up_to_one_that_isnt_complete()
             CR.of_records(TWO, *records(whole)[:2], wrong)
 
 
-async def stopped(params: WardenParams, windows: int, ticks: int, **hooks) -> Warden:
+async def stopped(params: NetworkCertifierParams, windows: int, ticks: int, **hooks) -> NetworkCertifier:
     """A run of `windows` execution phases with no traffic, cancelled after `ticks` ticks, or ended by what its
     hooks raise."""
     clock = VirtualClock(-TAU / 2)
-    device = Warden(params, Server([]).connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+    device = NetworkCertifier(params, Server([]).connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
     running = asyncio.create_task(device.run())
     for t in range(ticks):
         clock.advance(t * TAU)

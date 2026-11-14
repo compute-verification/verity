@@ -1078,7 +1078,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                     help="a trace-corpus output's release time: its step's (engine) or its streamed chunk's (client)")
     ap.add_argument("--ingress", choices=("client", "warden"), default="client",
                     help="a trace-corpus request's certified ingress: the client's send time (client) or the engine's "
-                         "arrival stamp (warden: the floor a server admitting in the warden's release order would "
+                         "arrival stamp (network_certifier: the floor a server admitting in the warden's release order would "
                          "give; the warden certifies the release order, which a trace's .released view carries)")
     ap.add_argument("--span", help="of each step trace, only the requests whose id holds this, as a trace of their own: "
                                    "one load of a serve that ran others, begun with the engine drained and its prefix "

@@ -1,7 +1,7 @@
 """The compile slice (`compile_slice_v7.CompileSlice_v7`: CompileSlice_v1 that also charges each certified arrival's
 length term) proved in zero knowledge: one window of a few steps as one unit, proved by Flock `prove --zk` behind the
 Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--plain``), through the one-stage audit path
-(`warden_zk._one_stage`: its stager, ZK server and received-pieces scan).
+(`network_certifier_zk._one_stage`: its stager, ZK server and received-pieces scan).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--plain] [--dry]
@@ -711,7 +711,7 @@ def prove(a) -> int:
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         return 0 if all(expected(x, u.kind, u.case.flags) for u in units) else 1
-    import warden_zk as WZ
+    import network_certifier_zk as WZ
 
     M = WZ._one_stage()
     out = Path(a.out)
@@ -814,7 +814,7 @@ def rescan(a) -> int:
     each carry row. A salt is sampled by `prove` and not recomputed, so a salt the run found reads leaked."""
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())
-    import warden_zk as WZ
+    import network_certifier_zk as WZ
 
     vdir, M = src / "slice" / "verifier", WZ._one_stage()
     x = load(summary["slice"]["name"], summary["statics"].get("G"))

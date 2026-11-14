@@ -166,7 +166,7 @@ theorem certified_spec {c : Case} (h : certified c = true) : ExecutionPhaseCerti
 
 theorem synced_spec {c : Case} (h : synced c = true) : ExecutionPhaseSynced c := by
   cases hk : c.kind with
-  | warden => simp only [ExecutionPhaseSynced, hk]
+  | networkCertifier => simp only [ExecutionPhaseSynced, hk]
   | plain | served =>
     simp only [synced, hk] at h
     simp only [ExecutionPhaseSynced, hk]
@@ -241,7 +241,7 @@ theorem certified_of {c : Case} (h : ExecutionPhaseCertified c) : certified c = 
 
 theorem synced_of {c : Case} (h : ExecutionPhaseSynced c) : synced c = true := by
   cases hk : c.kind with
-  | warden => simp only [synced, hk]
+  | networkCertifier => simp only [synced, hk]
   | plain | served =>
     simp only [ExecutionPhaseSynced, hk] at h
     obtain ⟨s, hs, hd, r, hr, he⟩ := h
@@ -359,7 +359,7 @@ proved and opened whose two certificates the certifier's device signed under its
 parameters `Lms.Params.make` admits, the link's), whatever syncs it declares. -/
 theorem transferBlocksAcceptMeans_honest_certifier :
     ∀ (c : Case) (w : ByteArray) (N W H : Nat) (toy : Bool) (I seed : ByteArray) (k : Lms.PrivateKey),
-      c.kind = .warden w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
+      c.kind = .networkCertifier w → Lms.Params.make N W H toy = .ok c.lms → Lms.key c.lms I seed = .ok k →
       CertifierSigned c k → ExecutionPhaseProved c → ExecutionPhaseOpened c →
       (verdict c).map Verdict.accepted = .ok true ∧ ExecutionPhaseVerdict c := by
   intro c w N W H toy I seed k hk hmake hkey ⟨hpub, hsize, hall⟩ hp ho
@@ -403,7 +403,7 @@ def unproved (w : ByteArray) : Case where
   session := .empty
   egress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
   ingress := ⟨⟨0, 0, 0, 0, 0⟩, none⟩
-  kind := .warden w
+  kind := .networkCertifier w
 
 /-- **No verifier that accepts every link-window has `TransferBlocksAcceptMeans`' property** (its nontrivial lemma): such a
 verifier accepts a network certifier link-window with no findings (`unproved`), which isn't `ExecutionPhaseProved`. -/

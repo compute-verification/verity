@@ -51,7 +51,7 @@ the gaps; a mux of `at` and `O`; and the verdict's comparison of `at` with `O`. 
 
 Every array is of bits, least significant first. K is at least 1 and at most 2,730, so the outputs fit the widest
 public size class (32 + 96·K bits of at most `UNIT_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
-schedule with lengths rows is held to when its parameters are built (`WardenParams.stride_releases`). B is a cell
+schedule with lengths rows is held to when its parameters are built (`NetworkCertifierParams.stride_releases`). B is a cell
 size an id request's head and first prompt field fit (`io_request.layout`); 1 <= IW <= 32; 1 <= LW <= 32 with the
 longest prompt's request below 2^32 bytes.
 
@@ -77,10 +77,10 @@ from verity.circuits.types import Array, Tuple
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import io_request as Q
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import ID_FIELD_BYTES
 from verity.protocols.accounting.certifier.verifier.connection_rows import Rows, Table
-from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.accounting.certifier.verifier.network_certifier import NetworkCertifierParams
 
 BIT = HC.BIT
 U16 = Array(16, BIT)
@@ -152,10 +152,10 @@ class Shape:
                              f"no lengths slot holds: a smaller LW")
 
     @classmethod
-    def of(cls, params: WardenParams, IW: int, LW: int) -> Shape:
+    def of(cls, params: NetworkCertifierParams, IW: int, LW: int) -> Shape:
         """The shape that reads a schedule's rows: its K and B. ValueError for a schedule without lengths rows."""
         if params.lengths is None:
-            raise ValueError("the schedule has no lengths rows (WardenParams.lengths)")
+            raise ValueError("the schedule has no lengths rows (NetworkCertifierParams.lengths)")
         return cls(params.stride_releases, params.cell_bytes, IW, LW)
 
     @cached_property
@@ -424,7 +424,7 @@ class Refused(ValueError):
 
 class Read(NamedTuple):
     """One registered read of a statement: the row as u16 words, its salt (the prover's) and the header's `registered`
-    entry, `{"value", "positions", "paths"}` (`warden_rows.Cells.statement`'s form)."""
+    entry, `{"value", "positions", "paths"}` (`network_certifier_rows.Cells.statement`'s form)."""
 
     words: list[int]
     salt: bytes

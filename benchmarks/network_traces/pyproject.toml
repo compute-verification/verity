@@ -36,13 +36,13 @@ untraced = [
     "tests/test_wipe_gate.py",
 ]
 # record.py's mixes are workloads of the vLLM integration, which test_record loads; the auditor host's gate runs
-# warden_serve.py's rehearsal, which test_warden_serve holds it to. compile_slice_zk's engine class is vLLM 8eb1's trace
+# network_certifier_serve.py's rehearsal, which test_network_certifier_serve holds it to. compile_slice_zk's engine class is vLLM 8eb1's trace
 # header, read through the encodings' replay (with the modules `_encodings` loads beside it); the trace is in the
 # encodings' fixtures, one fetched tree, which is listed whole so that suites.py fetches it. leak_scan reads Flock's
 # proof format with its verifier's reader. A served run's Commit windows are the vLLM integration's window advice, which
 # window_chain joins for network-e2e's chain. scan_zk's draws take the challenger's coins through one_stage's a5_coins,
 # whose local session is live_challenger's auditor host and serve.py (under its tests' stub); its honest round on them
-# lowers and stages through one_stage's a0, a7, a8 and prove_leg (`warden_zk._one_stage`) and Flock's class statement, and
+# lowers and stages through one_stage's a0, a7, a8 and prove_leg (`network_certifier_zk._one_stage`) and Flock's class statement, and
 # its stream's verifier is the Lean package `core_spot`'s verifier executable, whose lakefile is the package it builds.
 # chain_record writes the block record's certifier entry by block_certifier's block_leg, which test_block_certifier
 # holds to the block record's schema, `block_record` and its period-0 fixture, and test_chain_record to the schema on
@@ -90,7 +90,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
           "verity/protocols/accounting/certifier/verifier/network/tests/period_case.py", "tools/difftest/python/verity_difftest",
           "verity/__init__.py", "verity/protocols/compose/__init__.py", "verity/protocols/compose/device/__init__.py"]
-# The Lean verifier, whose statement setup test_warden_zk and test_egress_zk run on their staged members (`check` builds
+# The Lean verifier, whose statement setup test_network_certifier_zk and test_egress_zk run on their staged members (`check` builds
 # it before this suite).
 artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify"]
 

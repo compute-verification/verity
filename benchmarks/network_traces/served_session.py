@@ -24,9 +24,9 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
 (`auditor.SCAN_CLASSES`: w63k4, the window circuit's 4,32,4, at 5 egress cells), whose KI and KO then bound
 ``--prompt-ids`` and ``--tokens``.
 
-* **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
+* **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.network_certifier_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
-  its prompts are checked by this tree's gate first (`auditor.parse_warden` and `warden_prompts` on a scratch host), so
+  its prompts are checked by this tree's gate first (`auditor.parse_network_certifier` and `network_certifier_prompts` on a scratch host), so
   a request the gate would refuse is refused here, with the gate's reason. A gate pinned at an older tree takes
   400 requests at most. Each run is on ``--auditor`` (`AUDITOR` by default) but ``endpoint``, which is on ``--peer``;
   the chain's command names an ``--auditor`` that isn't `AUDITOR` as its ``--coin-peer``.
@@ -55,7 +55,7 @@ is each request's max_tokens, at most KO. ``--scan-class`` asks the gate for ano
   the rest (exit 4 when either found one). A guard that fails or runs past its budget releases nothing (exit 5), nor
   does SIGTERM (exit 143): the files stay in the hold, out of the record. Exit 0 when the gate's check accepted the run,
   its rc (or 1) when it didn't, 2 when the gate refused the request.
-* **io** writes the kept network certifier run's certified I/O (`warden_chain.io`: each request's prompt and streamed ids as the
+* **io** writes the kept network certifier run's certified I/O (`network_certifier_chain.io`: each request's prompt and streamed ids as the
   network certifier's cells carry them) and its deployment.json to KEEP/RUN/certified-io.json (0600), on `AUDITOR`, and
   prints only its path and counts.
 * **endpoint** is the chain's endpoint step on the served node, where the endpoint's records stay: serve-openai's serve
@@ -184,7 +184,7 @@ KEY = Path.home() / ".ssh" / SITE["gate_key"]
 KEEP = Path(SITE["keep"])
 #: Llama 3's regular token ids; 128,000 and up are its special tokens
 VOCAB = 128_000
-#: the minutes past `auditor.warden_minutes` a session asks for
+#: the minutes past `auditor.network_certifier_minutes` a session asks for
 MARGIN = 3
 LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
@@ -281,8 +281,8 @@ def check(a: argparse.Namespace, data: bytes) -> dict:
         raise Refused(f"--vocab {a.vocab}: 2 to 2^{A.WARDEN_PROMPT_ID_BITS}, the scan's ids")
     with tempfile.TemporaryDirectory() as d:
         try:
-            req = A.parse_warden(words(a)[1:], scratch_host(Path(d), a.peer))
-            A.warden_prompts(req, data)
+            req = A.parse_network_certifier(words(a)[1:], scratch_host(Path(d), a.peer))
+            A.network_certifier_prompts(req, data)
         except A.Refused as e:
             raise Refused(f"the gate refuses it: {e}") from None
     return req
@@ -302,7 +302,7 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                + (f" --at {a.at}" if a.at else "") + (f" --scan-class {a.scan_class}" if a.scan_class else ""))
     ctx = a.prompt_ids + a.tokens
     return {"request": shlex.join(words(a)), "minutes": a.minutes,
-            "least_minutes": A.warden_minutes(a.requests, a.height),
+            "least_minutes": A.network_certifier_minutes(a.requests, a.height),
             "prompts": req["prompts"], "prompts_bytes": len(data),
             "endpoint": ENDPOINT.format(port=a.port) + (f" --max-model-len {ctx}" if ctx > CONTEXT else ""),
             "hand_start": HAND_START,
@@ -606,10 +606,10 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
 
 
 def certified_io(fetch: Path) -> tuple[dict, dict]:
-    """The kept network certifier run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch
+    """The kept network certifier run's deployment.json and certified I/O (`network_certifier_chain.io`), read in a scratch
     directory beside the fetch."""
     sys.path[:0] = [str(TREE), str(HERE)]
-    import warden_chain as WC
+    import network_certifier_chain as WC
     with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
         with tarfile.open(fetch, "r:gz") as tar:
             tar.extractall(d, filter="data")
@@ -739,7 +739,7 @@ def endpoint(a: argparse.Namespace) -> int:
     os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, sys.path))
     import chain_record as CR
     rep = CR.served_endpoint(dep, io, ep, eos) | {"at": CR.SERVED_NODE}
-    step = CR.warden_endpoint_step(rep)
+    step = CR.network_certifier_endpoint_step(rep)
     rep["verdict"] = step["verdict"]
     publish = {"report.json": (json.dumps(rep, indent=1, sort_keys=True, default=str) + "\n").encode(),
                **{f: (src / f).read_bytes() for f in RECORDS}}
@@ -851,7 +851,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.cmd == "endpoint":
             return endpoint(a)
         if a.minutes is None:
-            a.minutes = A.warden_minutes(a.requests, a.height) + MARGIN
+            a.minutes = A.network_certifier_minutes(a.requests, a.height) + MARGIN
         if a.cmd == "session" and a.gate == "local" and a.vocab > 256:
             raise Refused(f"--gate local: the stand-in serves byte ids, --vocab at most 256, not {a.vocab}")
         ps = prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))

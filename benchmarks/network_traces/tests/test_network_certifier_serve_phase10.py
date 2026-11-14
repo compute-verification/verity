@@ -21,13 +21,13 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import DATA, VirtualClock
 from verity.protocols.accounting.certifier.verifier.certificate import record_head
 from verity.protocols.accounting.certifier.verifier.grid import Reason
-from verity.protocols.accounting.certifier.verifier.warden import END, Shim, Warden, cells, read_cell
+from verity.protocols.accounting.certifier.verifier.network_certifier import END, Shim, NetworkCertifier, cells, read_cell
 
-from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
+from test_network_certifier_serve import PARAMS, SESSION, _response, _Writer, ws
 
 REQUESTS = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
 RESPONSES = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
@@ -89,16 +89,16 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
            kill_at: int | None = None, before_close=None, release_edit=None, transport=None) -> dict:
     """The network certifier for `WINDOWS` windows on a `VirtualClock` over `REQUESTS`, published by `PublisherProcess`
     (or by `ThreadPublisher`), written as `serve` and `client` write a run; `late[t]` puts tick t that late, `kill_at`
-    kills the process (by its pid) before tick t, `before_close(warden)` runs once every tick is done, before the
+    kills the process (by its pid) before tick t, `before_close(network_certifier)` runs once every tick is done, before the
     publisher's `close`, `release_edit(release)` stands in for the release the network certifier calls, and
     `transport(put)` for the put of every message to the process. Returns the network certifier, the records it closed,
     and what the run and `close` raised."""
     out.mkdir()
     tau, late = PARAMS.bucket_ms / 1000, late or {}
     if process:
-        import warden_serve
+        import network_certifier_serve
 
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, PARAMS, commit)
+        publisher = network_certifier_serve.PublisherProcess(out, key, SESSION, PARAMS, commit)
         release = publisher.release if release_edit is None else release_edit(publisher.release)
         if transport is not None:
             publisher.rows.put = transport(publisher.rows.put)
@@ -118,29 +118,29 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
         reader.feed_eof()
         return reader, _Writer()
 
-    def settled(w: Warden) -> bool:
+    def settled(w: NetworkCertifier) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
     async def main():
         clock = VirtualClock(-tau / 2)
-        warden = Warden(PARAMS, connect, origin=0.0, windows=WINDOWS, clock=clock, sleep=clock.sleep,
+        network_certifier = NetworkCertifier(PARAMS, connect, origin=0.0, windows=WINDOWS, clock=clock, sleep=clock.sleep,
                         publish=publish, release=release)
-        running = asyncio.create_task(warden.run())
+        running = asyncio.create_task(network_certifier.run())
         clients, tasks = [], []
         for request in REQUESTS:
             reader = asyncio.StreamReader()
             reader.feed_data(cells(request, PARAMS.cell_bytes))
             reader.feed_eof()
-            clients.append(_Writer(warden))
-            tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
-        await warden.until(lambda w: w.ordinals == len(REQUESTS))
+            clients.append(_Writer(network_certifier))
+            tasks.append(asyncio.create_task(network_certifier.handle(reader, clients[-1])))
+        await network_certifier.until(lambda w: w.ordinals == len(REQUESTS))
         for t in range(WINDOWS * PARAMS.window):
             if t == kill_at:
                 os.kill(publisher.process.pid, signal.SIGKILL)
                 publisher.process.join()
-            await warden.until(settled)
+            await network_certifier.until(settled)
             clock.advance(t * tau + late.get(t, 0.0))
-            ticked = asyncio.ensure_future(warden.until(lambda w, t=t: w.ticks > t))
+            ticked = asyncio.ensure_future(network_certifier.until(lambda w, t=t: w.ticks > t))
             await asyncio.wait({ticked, running}, return_when=asyncio.FIRST_COMPLETED)
             if not ticked.done():
                 ticked.cancel()
@@ -151,18 +151,18 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
         except (RuntimeError, EOFError) as e:
             failed = e
         await asyncio.gather(*tasks, return_exceptions=True)
-        return clients, warden, failed
+        return clients, network_certifier, failed
 
-    clients, warden, failed = asyncio.run(main())
+    clients, network_certifier, failed = asyncio.run(main())
     if before_close is not None:
-        before_close(warden)
+        before_close(network_certifier)
     close_error = None
     try:
         publisher.close()
     except (RuntimeError, EOFError) as e:
         close_error = e
     deployment = ws.deployment_record(PARAMS, publisher.key, SESSION, origin_unix=0.0, windows=WINDOWS,
-                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack)
+                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=network_certifier.slack)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log, B = [], PARAMS.cell_bytes
     for index, (request, client) in enumerate(zip(REQUESTS, clients)):
@@ -175,7 +175,7 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
         shim.outcome = "end" if shim.arrivals and END in [k for _, k in shim.arrivals] else "cut"
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0))
     (out / "client.json").write_text(json.dumps({"connections": log}))
-    return {"network_certifier": warden, "closed": closed, "failed": failed, "close_error": close_error}
+    return {"network_certifier": network_certifier, "closed": closed, "failed": failed, "close_error": close_error}
 
 
 def _heads(out: Path) -> dict:
@@ -254,8 +254,8 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
     process's end of the pipe reading as a message to `_receive`'s `poll` and `recv` hitting its EOF)."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, kill_at=PARAMS.window + 10)
-    warden = run["network_certifier"]
-    assert max(warden.lateness) <= warden.slack
+    network_certifier = run["network_certifier"]
+    assert max(network_certifier.lateness) <= network_certifier.slack
     for error in (run["failed"], run["close_error"]):
         assert type(error) is RuntimeError
         assert str(error) == f"the publisher process exited ({-signal.SIGKILL}) before its done"
@@ -277,8 +277,8 @@ def test_a_process_a_window_behind_moves_no_tick_and_keeps_every_record_whole(tm
     (key,) = _key(tmp_path, "process-key")
     seen = {}
 
-    def behind(warden):
-        seen["lateness"] = max(warden.lateness)
+    def behind(network_certifier):
+        seen["lateness"] = max(network_certifier.lateness)
         seen["heads"] = set(_heads(tmp_path / "run"))
         with open(fifo, "wb") as fh:
             fh.write(b"\x01")

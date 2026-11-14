@@ -1,4 +1,4 @@
-"""The network certifier's cells as registered rows (`warden_rows`): an execution phase is a row a bucket whatever the
+"""The network certifier's cells as registered rows (`network_certifier_rows`): an execution phase is a row a bucket whatever the
 load, each row is its bucket's cells in slot order, the wiring places each connection's cells where its client got them,
 each row opens the signed root at its position and only there, the registration reads back under the network certifier's
 key and session and the schedule, and refuses any field, key, session or certificate but its own, and the port reads
@@ -14,13 +14,13 @@ import pytest
 import signers
 from verity.commitments import hm96
 from verity.commitments.crypto import lms
-from verity.protocols.accounting.certifier.verifier import warden_rows as W
+from verity.protocols.accounting.certifier.verifier import network_certifier_rows as W
 from verity.protocols.accounting.certifier.verifier.active import DATA
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.accounting.certifier.verifier.grid import Reason, BlockGrid, Status
-from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import (B, EOF, P, PARAMS, cells, records,
+from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier import (B, EOF, P, PARAMS, cells, records,
                                                                                  request, run)
-from verity.protocols.accounting.certifier.verifier.warden import cell
+from verity.protocols.accounting.certifier.verifier.network_certifier import cell
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 T, R, S = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots
@@ -29,9 +29,9 @@ T, R, S = PARAMS.window, PARAMS.slots, PARAMS.lanes * PARAMS.slots
 def _traffic():
     reqs = [request(10, 1), request(2 * P + 3, 2), request(P, 3)]
     resps = [bytes(range(256)), b"", b"z" * (P + 1)]
-    warden, clients, _ = run([[(0, r), (0, EOF)] for r in resps],
+    network_certifier, clients, _ = run([[(0, r), (0, EOF)] for r in resps],
                              {1: [cells(reqs[0], B)], 2: [cells(reqs[1], B)], 4: [cells(reqs[2], B)]}, windows=2)
-    return warden, clients
+    return network_certifier, clients
 
 
 @pytest.fixture(scope="module")
@@ -48,9 +48,9 @@ def _attest(tmp_path, record, direction=Direction.EGRESS, session=signers.SESSIO
 
 def test_a_link_window_is_a_row_a_bucket_whatever_the_load(traffic):
     """T rows in every window, loaded or idle; row b is bucket b's S slots in slot order, an empty slot B zero bytes."""
-    warden, _ = traffic
+    network_certifier, _ = traffic
     idle, _, _ = run([], {}, windows=1)
-    for record in [*records(warden)[1], *records(idle)[1], *records(warden)[0]]:
+    for record in [*records(network_certifier)[1], *records(idle)[1], *records(network_certifier)[0]]:
         rows = W.window_rows(record, PARAMS)
         assert len(rows) == W.rows_of(PARAMS) == T and {len(r) for r in rows} == {W.row_bytes(PARAMS)} == {S * B}
         assert rows == [b"".join(bytes(B) if f is None else f for f in row) for row in record.grid]
@@ -63,9 +63,9 @@ def test_the_wiring_places_each_connections_cells_where_its_client_got_them(traf
     window, in order. Ordinals count connections from 1 in the order they reached the network certifier (the wire's
     ingress ordinal: the active certifier's `Requests` and the I/O tie's map number them so). A bucket's cells are
     sorted by stream."""
-    warden, clients = traffic
+    network_certifier, clients = traffic
     seen, ordinals, shared = 0, set(), 0
-    for record in records(warden)[1]:
+    for record in records(network_certifier)[1]:
         rows, first = W.window_rows(record, PARAMS), record.window * T
         wiring = W.wiring(record, PARAMS)
         for q, _, n in wiring.connections:
@@ -95,8 +95,8 @@ def test_the_wiring_is_the_schedules_and_only_a_record_laid_out_by_it_has_one(tr
             W.Wiring(bad, salt).live(PARAMS)
     with pytest.raises(ValueError, match="salt"):
         W.Wiring(good.connections, bytes(63)).live(PARAMS)
-    warden, _ = traffic
-    record = records(warden)[1][0]
+    network_certifier, _ = traffic
+    record = records(network_certifier)[1][0]
     t = next(t for t, row in enumerate(record.grid) if len({f[1:5] for f in row if f is not None}) > 1)
     swapped = record.grid[t][R:2 * R] + record.grid[t][:R] + record.grid[t][2 * R:]
     with pytest.raises(ValueError, match="laid out"):
@@ -107,8 +107,8 @@ def test_every_row_opens_the_signed_root_at_its_position_and_nowhere_else(traffi
     """A row's b‖c is the statement's (the `hm96-sha512/row/v2` x of its u16 words under its salt), climbs its path to the
     root under the verifier's own domain, and fails at another position, with a changed bit, under another salt or
     another root."""
-    warden, _ = traffic
-    _, cells_, cert = _attest(tmp_path, records(warden)[1][0])
+    network_certifier, _ = traffic
+    _, cells_, cert = _attest(tmp_path, records(network_certifier)[1][0])
     head = cells_.head
     assert cert.digest == head.digest()
     dom = W.domain(PARAMS, signers.SESSION, "responses", Direction.EGRESS, 0)
@@ -151,8 +151,8 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, t
     """The verifier's read takes the execution phase it expects and the schedule's parameters; any other field, an extra
     key, a root or wiring the certificate doesn't sign, another key, session or execution phase, or the wire record's
     certificate of the same execution phase, is refused."""
-    warden, _ = traffic
-    record = records(warden)[1][1]
+    network_certifier, _ = traffic
+    record = records(network_certifier)[1][1]
     issuer, cells_, cert = _attest(tmp_path / "a", record)
     doc = json.loads(json.dumps(W.registration(cells_.head, cert, PARAMS)))
     key = issuer.signer.public_key()
@@ -190,10 +190,10 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, t
 
 
 def test_a_refused_signer_gives_no_certificate(traffic, tmp_path):
-    warden, _ = traffic
+    network_certifier, _ = traffic
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
     issuer.signer.start(signers.OTHER_SESSION)
-    cells_, cert = W.attest(issuer, records(warden)[1][0], PARAMS, Direction.EGRESS)
+    cells_, cert = W.attest(issuer, records(network_certifier)[1][0], PARAMS, Direction.EGRESS)
     assert cert is None and issuer.refused == [("responses", Direction.EGRESS, 0)]
     assert len(cells_.rows) == T
 
@@ -203,8 +203,8 @@ def test_the_port_reads_the_rows_the_wardens_wiring_places_and_nothing_else(traf
     row under the wiring the head names, and names the head's root, domain and row format. A wiring the head doesn't
     name, a connection the wiring doesn't hold, a cell past its connection's or read twice, and a read that isn't
     (connection, cell) are refused."""
-    warden, _ = traffic
-    _, cells_, _ = _attest(tmp_path, records(warden)[1][0])
+    network_certifier, _ = traffic
+    _, cells_, _ = _attest(tmp_path, records(network_certifier)[1][0])
     head, wiring = cells_.head, cells_.wiring
     q, first, n = max(wiring.connections, key=lambda c: c[2])
     reads = [(q, k) for k in range(n)]
@@ -233,9 +233,9 @@ def test_the_bucket_port_reads_every_row_whole(traffic, tmp_path):
     idle window's rows too, whose slots `port` can't name, under the head's value. The statement for those rows is
     accepted by the host's read of Lean's registered reads (`refusal`), and one naming a proof blocks' wiring or with
     two rows swapped is refused. A head of another schedule is refused."""
-    warden, _ = traffic
+    network_certifier, _ = traffic
     idle, _, _ = run([], {}, windows=1)
-    for record in (records(warden)[1][0], records(idle)[1][0]):
+    for record in (records(network_certifier)[1][0], records(idle)[1][0]):
         _, cells_, _ = _attest(tmp_path / str(id(record)), record)
         p = W.bucket_port(cells_.head, PARAMS, reads_from=5)
         q = cells_.wiring.connections[:1]
@@ -265,8 +265,8 @@ def test_the_programs_units_name_their_wiring_and_a_statement_for_any_other_is_r
     its value, even where its rows are the same (two cells of a row swapped), and so is one that names no proof blocks'
     wiring; rows not the proof blocks' are refused by position. `Units` refuses no read, ordinal 0, and anything but
     (int, int)."""
-    warden, _ = traffic
-    _, cells_, _ = _attest(tmp_path, records(warden)[1][0])
+    network_certifier, _ = traffic
+    _, cells_, _ = _attest(tmp_path, records(network_certifier)[1][0])
     head, wiring = cells_.head, cells_.wiring
     q, first, n = max(wiring.connections, key=lambda c: c[2])
     units = W.Units.span(q, 0, n)

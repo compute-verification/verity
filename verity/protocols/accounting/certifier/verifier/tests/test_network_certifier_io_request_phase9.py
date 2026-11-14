@@ -22,11 +22,11 @@ import inspect
 import pytest
 
 from verity.protocols.accounting.certifier.verifier import io_request as Q
-from verity.protocols.accounting.certifier.verifier import warden as W
+from verity.protocols.accounting.certifier.verifier import network_certifier as W
 from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, id_request
 
 B = 512
-PARAMS = W.WardenParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
+PARAMS = W.NetworkCertifierParams(cell_bytes=B, slots=2, lanes=2, window=8, delay=1)
 SHAPE = Q.Shape(B, PARAMS.lanes, PARAMS.slots)
 #: request 1 (40 tokens, 2 cells) released one cell a bucket, over buckets 1 and 2
 SPAN_PL, ARRIVALS, RATES = (5, 40, 5), (0, 0, 1), (10 ** 6, 520, 10 ** 6)
