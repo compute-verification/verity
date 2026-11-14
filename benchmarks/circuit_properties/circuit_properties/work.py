@@ -1430,9 +1430,9 @@ def clique(edges) -> int:
 def min_cut():
     """The calculator's `min_cut`: its directory, one path from the repository's root, goes on `sys.path`, and
     `slowdown.min_cut` is imported from it."""
-    rho = str(Path(__file__).resolve().parents[3] / "benchmarks/slowdown")
-    if rho not in sys.path:
-        sys.path.append(rho)
+    calculator = str(Path(__file__).resolve().parents[3] / "benchmarks/slowdown")
+    if calculator not in sys.path:
+        sys.path.append(calculator)
     from slowdown import min_cut as mc
     return mc
 
