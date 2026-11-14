@@ -23,7 +23,7 @@ import importlib.machinery
 import inspect
 import socket
 import sys
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 import torch
 
@@ -288,10 +288,8 @@ def moe_ops_traced(model=None):
     ns = torch.ops.vllm
     packets = {}
     for name in _MOE_DISPATCH_OPS:
-        try:
+        with suppress(AttributeError, RuntimeError):
             packets[name] = getattr(ns, name)
-        except (AttributeError, RuntimeError):
-            pass
     h = hooks.Hooks()
     if model is not None:
         for m in model.modules():
