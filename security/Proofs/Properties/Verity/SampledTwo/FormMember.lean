@@ -477,7 +477,8 @@ theorem membersParams_apart {J : Json} {a : Spot.OneStageZk.Params}
 theorem members_apart {j : Json} {p : VStar.Recursive.SampledTwo.Params}
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
     ∀ m ∈ p.members, ∀ m' ∈ p.members, m.indices = m'.indices → m = m' := by
-  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+  replace h := (VStar.Recursive.SampledTwo.paramsOfJson_ok h).1
+  unfold VStar.Recursive.SampledTwo.paramsParsed at h
   do_walk h to p
   all_goals
     cases h
