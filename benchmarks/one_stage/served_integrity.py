@@ -135,6 +135,15 @@ def unproved(rec: Mapping[str, Any]) -> str:
     return f" (drawn units not proved: {'; '.join(named) or ','.join(map(str, missing))})"
 
 
+def exact_delta(delta: float | str | Fraction) -> Fraction:
+    """δ as the ratio it was given as, never a nearby one (`limit_denominator` takes any δ under about 5·10^-13 to 0,
+    which one-stage refuses): a float's shortest decimal or its exact binary value, whichever has the smaller
+    denominator, so 0.01 is 1/100 and 2.0 ** -64 is 1/2^64; a string or a ratio as it is."""
+    if isinstance(delta, float):
+        return min(Fraction(repr(delta)), Fraction(delta), key=lambda f: f.denominator)
+    return Fraction(delta)
+
+
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
@@ -189,7 +198,7 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         return _refusal(f"the case for the compiled check (window/case-v2.json) names a challenger key with SHA-512 {named}, "
                         f"and the audit's coins verified under the key with SHA-512 {coins['key_sha512']} (coins.verified)",
                         R.digest(reg), "undecided")
-    delta = Fraction(wrong["delta"]).limit_denominator(10**12)
+    delta = exact_delta(wrong["delta"])
     profile = A.profile(reg, draw, wrong["delta"]).to_json()
     profile["delta"] = str(delta)
     per_template = wrong.get("per_template")
@@ -199,4 +208,4 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
             "verdict": "accept"}
 
 
-__all__ = ["PROTOCOL", "answer", "case_key", "case_said", "whose_coins"]
+__all__ = ["PROTOCOL", "answer", "case_key", "case_said", "exact_delta", "whose_coins"]

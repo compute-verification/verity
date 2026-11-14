@@ -826,11 +826,14 @@ class Issuer:
         certificate on `link`'s marks link name (`marks_link`), or None when the signer refuses (that link name's
         execution phase is then listed in `refused`). Raises `MarkRefused`, before it takes a coin or asks its signer
         anything, on a mark an earlier signed mark certificate of this issuer is of, whatever the link and the
-        execution phase: it certifies a mark once. Raises `ValueError` on a mark or coins of another length and on
-        a salt the coins gave an earlier signed mark certificate of this issuer, under which two certificates of one
-        mark would sign one digest. A salt and a mark are taken once signed under: a refused one signed nothing, so
-        nothing public shares the salt, and the mark is certified when it is asked for again."""
-        if type(mark) is bytes and mark in self.marked:
+        execution phase: it certifies a mark once. Raises `ValueError`, before it takes a coin, on a mark that is not
+        64 `bytes`, and after it on coins of another length and on a salt the coins gave an earlier signed mark
+        certificate of this issuer, under which two certificates of one mark would sign one digest. A salt and a mark
+        are taken once signed under: a refused one signed nothing, so nothing public shares the salt, and the mark is
+        certified when it is asked for again."""
+        if type(mark) is not bytes or len(mark) != DIGEST_BYTES:
+            raise ValueError(f"a mark is {DIGEST_BYTES} bytes")
+        if mark in self.marked:
             raise MarkRefused("the network certifier has certified this mark, and it certifies a mark once: no second "
                               "certificate is signed over the same 64 bytes")
         salt = self.coins(SALT_BYTES)

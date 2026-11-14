@@ -66,6 +66,7 @@ from typing import BinaryIO
 
 import numpy as np
 
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
 from verity.commitments.windows.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
@@ -82,7 +83,7 @@ ROW_SCHEMA = "hm96-sha512/row/v1"
 INST_FORMAT = "flock-circuit-inputs"
 #: Each row tree's frame domain: owner ``OWNER``, binding ``identity_digest_sha512(BINDING_TAG, {set, lo, hi, port, schema})``
 #: (64 bytes), so a root is bound to its input set, its range of instances, its port and the port's row schema.
-BINDING_TAG = "verity/flock-circuit/binding/v2"
+BINDING_TAG = FLOCK_CIRCUIT_BINDING
 OWNER = -1
 #: The leaf-commitment scheme of the proof's own Merkle trees (Ligerito levels), pinned in the statement and the backend
 #: identity and swappable: ``hm96-sha512/v1`` (``verity.commitments.hm96.SHA512``, its PROTOCOL.md section 7) over the

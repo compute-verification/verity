@@ -408,8 +408,10 @@ def test_each_change_takes_its_path_on_both_sides(server):
 @pytest.mark.slow
 def test_the_rows_protocol_agrees_with_the_reference(server):
     """Lean and the reference agree on every case, and every change and every case of `SERVE_FILE_CASES` takes its
-    path at least once. Slow: what the cheaper test above can't reach is an accept, which only a circuit file of tens
-    of megabytes gives, its hex a line of over 100 MB, a few seconds a case on each side."""
+    path at least once. Slow: one case in `SERVE_FILE_ONE_IN` reads a real circuit file of tens of megabytes, its hex
+    a line of over 100 MB, a few seconds a case on each side. What it catches that the name-by-name test above cannot:
+    an accept and its profile, and `size` and `nci`, the rule in rows, decided on a real file's rows through `serve`
+    beside the reference, on random record cases rather than the first honest splits."""
     SEEN.clear()
     stats = D.run(PORT, examples=300, server=server)
     aims = {**{m: kind for m, (_, kind) in EXPECT.items() if kind != "code"}, **SERVE_FILE_CASES}

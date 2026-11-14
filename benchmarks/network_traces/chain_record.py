@@ -948,7 +948,7 @@ def report(a) -> dict:
     n2 = ({"verdict": "not given", "why": SCAN_ONLY, "in_the_clear": CLEAR["n2"]} if scan_only
           else n2_step(merged, cert, job))
     scan = ({"verdict": "not run", "why": STUBBED[0], "in_the_clear": CLEAR["scan"]} if certifier_only
-            else scan_step(_json(a.scan), a.warden_run, job))
+            else scan_step(_json(a.scan), a.network_certifier_run, job))
     certificates = {k: v for k, v in cert.items() if k != "rows"}
     tie = None
     if warden:
@@ -1054,13 +1054,13 @@ def main(argv=None) -> int:
     c.add_argument("--gates", required=True, type=Path)
     c.add_argument("--out", required=True, type=Path)
     v = sub.add_parser("certs", help="the client's kept certificates and clock certificates, verified")
-    v.add_argument("--warden-run", required=True, type=Path,
+    v.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
                    help="the network certifier path: an active network certifier's run (warden_chain)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
     e = sub.add_parser("endpoint",
                        help="the network certifier path: the endpoint's own advice bound to the network certifier's certified I/O")
-    e.add_argument("--warden-run", required=True, type=Path)
+    e.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path)
     e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (network-e2e chain.ENDPOINT)")
     e.add_argument("--eos", required=True,
                    help="the model's EOS token ids, comma-separated (a network certifier run records none)")
@@ -1071,7 +1071,7 @@ def main(argv=None) -> int:
     r.add_argument("--tie", help="the network certifier path: n2_tie_zk.py prove --class warden's summary")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
-    r.add_argument("--warden-run")
+    r.add_argument("--warden-run", dest="network_certifier_run")
     r.add_argument("--audit", nargs="*", help="the served proof blocks' compute audit windows (registration.json and "
                                               "circuit.json each), whose sample and free inputs d1's K counts")
     r.add_argument("--pins", help="the verifier's own pins, a JSON {param: root} of the roots it fixed before the run: "
@@ -1084,7 +1084,8 @@ def main(argv=None) -> int:
     r.add_argument("--server", help="the node the block ran on (the block record's server)")
     r.add_argument("--out", required=True, type=Path)
     k = sub.add_parser("leak", help="K per monitoring period on the network certifier run, for the scan's class and sample")
-    k.add_argument("--warden-run", required=True, type=Path, help="the fetched network certifier gate run (its end.json)")
+    k.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
+                   help="the fetched network certifier gate run (its end.json)")
     k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
     k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
@@ -1092,13 +1093,13 @@ def main(argv=None) -> int:
         doc = custody(a.gates)
     elif a.command == "certs":
         from benchmarks.network_traces import warden_chain as WC
-        doc = WC.certificates(a.warden_run, a.deployed) | {"in_the_clear": CLEAR["warden_certificates"]}
+        doc = WC.certificates(a.network_certifier_run, a.deployed) | {"in_the_clear": CLEAR["warden_certificates"]}
     elif a.command == "endpoint":
-        doc = warden_endpoint(a.warden_run, a.endpoint, [int(x) for x in a.eos.split(",")])
+        doc = warden_endpoint(a.network_certifier_run, a.endpoint, [int(x) for x in a.eos.split(",")])
         doc["verdict"] = warden_endpoint_step(doc)["verdict"]
         a.out.parent.mkdir(parents=True, exist_ok=True)
     elif a.command == "leak":
-        doc = leak(a.warden_run, _json(a.scan))
+        doc = leak(a.network_certifier_run, _json(a.scan))
         a.out.write_text(json.dumps(doc, indent=1, sort_keys=True))
         a.out.with_suffix(".md").write_text(leak_markdown(doc))
         print(leak_markdown(doc))

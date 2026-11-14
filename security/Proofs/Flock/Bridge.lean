@@ -26,6 +26,7 @@ public import Proofs.Flock.Bridge.BitsRows
 public import Proofs.Flock.Bridge.BitsLower
 public import Proofs.Flock.Bridge.BitsKeys
 public import Proofs.Flock.Bridge.BitsKeyProg
+public import Proofs.Flock.Bridge.BitsCopyGate
 public import Proofs.Flock.Bridge.Members
 public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.V5
@@ -61,6 +62,8 @@ Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridg
 Bits' row map is the bridge's: at an input gate (`Flock.Bridge.rowBit_keyRowOf`, `Flock.Bridge.rowBit_wire`) and at a
 returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). `UnitRows`: each copy
 of a unit of the parsed file holds the unit net's rows at the unit's local evaluation (`Flock.Bridge.rows_localEval`).
+`BitsCopyGate`: a copy's gate at a column is the gate Bits gives there, at an input port's bit
+(`Flock.Bridge.copyGate_inGate`) and at a returned output's (`Flock.Bridge.copyGate_outGate`).
 -/
 
 @[expose] public section

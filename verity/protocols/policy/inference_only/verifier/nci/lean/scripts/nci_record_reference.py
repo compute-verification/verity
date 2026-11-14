@@ -809,9 +809,10 @@ WORD = 128
 def unit_rows(file: bytes) -> int:
     """The rows of one unit of a circuit file's template, `Spot.FilePart.ofCircuit`'s `m`: META's `units_per_vu` times
     the unit circuit's computed rows, `constPos - nIn + 1` with `nIn = min(inWords * WORD, constPos)`, each read from
-    the unit circuit's `flock-ir-unit/v2` header (`Flock.Net.parse`'s fields). The Lean parses the whole file and
-    refuses one that is no circuit of the statement SPOT verifies; this reads the first lines alone, so it is held to
-    the Lean only on files the Lean takes. `ValueError` where the file is not a flat circuit file with such a header."""
+    the unit circuit's `flock-ir-unit/v2` header (`Flock.Net.parse`'s fields). It reads `m` from the header line and
+    holds none of the Lean parse's refusals (the Lean parses the whole file and refuses one that is no circuit of the
+    statement SPOT verifies), so the comparison runs only on files the Lean takes. `ValueError` where the file is not a
+    flat circuit file with such a header."""
     head, meta, rest = (file.split(b"\n", 2) + [b"", b""])[:3]
     if not head.startswith(b"flock-circuit ") or not meta.startswith(b"META "):
         raise ValueError("not a flat flock-circuit file")

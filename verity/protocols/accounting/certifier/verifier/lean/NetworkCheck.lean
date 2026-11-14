@@ -10,6 +10,7 @@ public import NetworkCheck.RecordsBytes
 public import NetworkCheck.ScanOk
 public import NetworkCheck.Period
 public import NetworkCheck.TransferBlocks
+public import NetworkCheck.RowsAudit
 public import NetworkCheck.Span
 
 /-!
@@ -29,7 +30,12 @@ as bytes, is v4's read as bits. `NetworkCheck.Period` is onsite's communication 
 with their clocks (the clock form) or the network certifier's own rows, registered under its one schedule and read by
 the scan (the rows form), beside its compute audits, and the bound `K` on what left the site, held to its Python mirror
 by `tests/test_network_period_protocol.py`. `NetworkCheck.ScanOk` is the rows form's constants: each scan member's ok
-bits' root, computed from the schedule's T, which the period check holds every scan's registration to. Code: it imports only Lean, Flock's verifier (`Flock.Hash`, `Flock.Bytes`,
+bits' root, computed from the schedule's T, which the period check holds every scan's registration to.
+`NetworkCheck.RowsAudit` audits a run of the active network certifier over
+the records it signed (`verity/network-rows/v1`, the `network-rows` executable): each record held to its certified
+head, then the certifier program's rows audit (`NetworkCertifier.Rows.audit`), which refuses cells cut, clocked or
+ordered otherwise than the schedule.
+Code: it imports only Lean, Flock's verifier (`Flock.Hash`, `Flock.Bytes`,
 `Flock.Canon`, `Flock.Public`'s frame-v3 hash and `Flock.RegKnown`'s leaves at known content), the core protocol
 interface, the certifier program and the LMS port.
 -/
