@@ -74,10 +74,10 @@ and its response cap `max_tokens_cap` when it has one, a u32 below `egress_cells
 an id request's `max_tokens` field, `maxTokensEnd`),
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
 descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. Its
-`cells` must be the schedule's caps over the period (`Schedule.caps`): `egress_cells` for each of the
-`lanes · m · window` connections the network certifier can carry in `m` link-windows, since it admits a connection at a
-bucket's start only while fewer than `lanes` are live and serves it in that bucket. Any other list, an empty one
-included, is refused, so `K`'s schedules and cells terms are never read off caps that miss a connection. Before
+`cells` must be the schedule's cells over the period (`Schedule.rowsCells`): `egress_cells` for each of the `lanes · m ·
+window` connections the network certifier can carry in `m` execution phases, since it admits a connection at a bucket's
+start only while fewer than `lanes` are live and serves it in that bucket. Any other list, an empty one included, is
+refused, so `K`'s schedules and cells terms are never read off cells that miss a connection. Before
 that, those `lanes · m · window` connections, the k-th at ordinal k + 1, must have distinct u32 ordinals, and a cell's
 `B` bytes must be under 2^32 (`rowsWf`): a frame names its connection and its payload's length by u32s, so past 2^32
 two frames would encode alike and the record would not read back (`NetTiming.RowsFormat.Wf`).
@@ -371,16 +371,16 @@ def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 /-- A window's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
 def Schedule.executionPhasePrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
-/-- The rows form's caps over `windows` link-windows (`WardenParams.caps`): `egressCells` for each of the
+/-- The rows form's cells over `windows` execution phases (`WardenParams.rows_cells`): `egressCells` for each of the
 `lanes · windows · window` connections the network certifier can carry, as at most `lanes` are live in a bucket and
 each is live in its admission bucket. -/
-def Schedule.caps (s : Schedule) (windows : Nat) : Array Nat :=
+def Schedule.rowsCells (s : Schedule) (windows : Nat) : Array Nat :=
   Array.replicate (s.lanes * (windows * s.window)) s.egressCells
 
 /-- **The rows form's frames read back** (`NetTiming.RowsFormat.Wf` at the network certifier's frames,
 `active.encode_frame`: kind u8, ordinal u32, payload length u32, payload, zero fill): a cell's `B` bytes are under
 2^32, so its payload's length is a u32, and the `lanes · windows · window` connections of a period of `windows`
-link-windows, the k-th at ordinal k + 1 (0 is a refusal's), have distinct u32 ordinals, so no two frames encode
+execution phases, the k-th at ordinal k + 1 (0 is a refusal's), have distinct u32 ordinals, so no two frames encode
 alike. -/
 def rowsWf (s : Schedule) (windows : Nat) : Bool :=
   s.cellBytes < 2 ^ 32 && s.lanes * (windows * s.window) < 2 ^ 32
@@ -907,9 +907,9 @@ def paramsOf (j : Json) : V Params := do
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
   if let .rows s _ _ := form then
     unless rowsWf s windows do throw (rowsWfRefusal s windows)
-    unless cells == s.caps windows do
-      throw s!"cells: the rows form's caps are egress_cells = {s.egressCells} for each of the lanes · windows · \
-        window = {s.lanes * (windows * s.window)} connections the schedule can carry (Schedule.caps), not these \
+    unless cells == s.rowsCells windows do
+      throw s!"cells: the rows form's cells are egress_cells = {s.egressCells} for each of the lanes · windows · \
+        window = {s.lanes * (windows * s.window)} connections the schedule can carry (Schedule.rowsCells), not these \
         {cells.size}"
   let circuit ← if keysOf j == paramsKeys then pure none else do
     let d ← Flock.J.str j "circuit" "the object"
@@ -1533,7 +1533,7 @@ def faultyEntries (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan
   if (tiedAudits c.audits reg).any fun i => (chargedOf p c as i).any (1 ≤ ·.wrong) then scan.entries
   else 0
 
-/-- The rows form's frames finding (`rowsWf`): `paramsOf` refuses such a period before its caps, and the check refuses
+/-- The rows form's frames finding (`rowsWf`): `paramsOf` refuses such a period before its cells, and the check refuses
 it too, so whatever parameters it accepts, its rows form's frames read back. None in the clock form. -/
 def rowsWfCheck (p : Params) : Option (Core.Verdict × String) := match p.form with
   | .rows s _ _ => if rowsWf s p.windows then none else some (.reject, rowsWfRefusal s p.windows)
@@ -1759,11 +1759,11 @@ def protocol : Core.Protocol where
         #[none, some true, none] &&
       (okChecksAt (.error "x") 0 #[r3, r3]).all (·.isSome) && (okChecksAt (ScanOk.consts 3) 0 #[]).isEmpty
   | _, _ => false
--- a schedule of 4 lanes over a 32-bucket link-window carries at most 128 connections, each capped at its 5 egress
--- cells, so the schedules and the cells each charge 128 · ⌈log2 6⌉ = 384 bits a link-window
+-- a schedule of 4 lanes over a 32-bucket execution phase carries at most 128 connections, each held to its 5 egress
+-- cells, so the schedules and the cells each charge 128 · ⌈log2 6⌉ = 384 bits an execution phase
 #guard
   let s : Schedule := ⟨100, 512, 27, 5, 16, 12, 47, 4, 4, 4, 32, none⟩
-  s.caps 1 == Array.replicate 128 5 && capsTerm (s.caps 1) == 384 && (s.caps 2).size == 256
+  s.rowsCells 1 == Array.replicate 128 5 && capsTerm (s.rowsCells 1) == 384 && (s.rowsCells 2).size == 256
 -- its frames, B = 512 and 128 connections a link-window, read back over 2^25 − 1 link-windows and not over 2^25,
 -- whose last connection's ordinal is 2^32; the check refuses that period
 #guard
