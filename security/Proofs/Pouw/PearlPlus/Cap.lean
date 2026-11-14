@@ -3,6 +3,7 @@ module
 public import Proofs.Pouw.PearlPlus.Draw
 public import Proofs.Pouw.PearlPlus.Debit
 public import Proofs.Pouw.PearlC.Cap.SaltDead
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl+'s bridge, part (c): a passed tile is within the game's inert-work bound

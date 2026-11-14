@@ -4,6 +4,7 @@ public import Proofs.Pouw.Period.Sort
 public import Proofs.Properties.Pouw.Check
 public import Proofs.Properties.Pouw.Draw
 public import Properties.Pouw.Check
+public import Properties.Pouw.Period.Witnesses
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 import all Init.Data.Ord.String
@@ -22,7 +23,8 @@ pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1
 `N = 144` sampled `subset:24`) with any service answer citing it that accepted 24 ascending distinct units below 144 at
 the profile the rule fixes (`h1Evidence`), and publishes level 39's work, `K′ = 24` and those units. `numbers_h1`: every
 window the check accepts at those parameters, registered at level 39, publishes `N = 144` and `K′ = 24`, the population
-and sample size `SampleIsCoin` reads at H1's instance.
+and sample size `SampleIsCoin` reads at H1's instance. The numbers themselves (`h1Params`, `h1Reg`, `h1Evidence`) are
+`Properties.Pouw.Period.Witnesses`'.
 -/
 
 @[expose] public section
@@ -33,68 +35,6 @@ open PouwCheck
 open Lean (Json)
 open PouwWindow (Work Sampling)
 open Properties.Pouw.Period.SecurityProofs.Sort
-
-/-- The pinned H1 tile (`core_check.TILES`' salted `PouwH1Tile_v1`, `K = 64`, `R = 4`, `C = 8`). -/
-def h1Tile : Tile := tiles[4]
-
-/-- The subprotocol's check item (`h1_check`): the pinned tile's template and work per tile (`64·32`), the scheme and the
-entries bound 1024, no coin mode. -/
-def h1Check : CheckItem :=
-  { entries := 1024, scheme := PouwCheck.scheme, template := h1Tile.template, tileWork := h1Tile.tileWork }
-
-/-- The subprotocol's check parameters (`h1_params`) in the period's context `context`. -/
-def h1Params (context : String) : Params where
-  check := h1Check
-  context := context
-  delta := ⟨1, 1000000⟩
-  eps := ⟨1, 2⟩
-  gridBits := PouwWindow.gridBits
-  query := h1Tile.query
-  lo := 1
-  hi := 65536
-  maxTokens := [2, 2, 2, 2]
-
-/-- What the loop's honest registration fixes: level 39 (128 credited tiles, padded to 144), the sampling item at
-`K′ = 24`, and no `W` root. -/
-def h1Fixed : Fixed := ⟨Work.at 3 39, ⟨toRat ⟨1, 2⟩, toRat ⟨1, 1000000⟩, 3, 24⟩, none⟩
-
-/-- Its registered items: the verifier's own at level 39 and the fixed length's. -/
-def h1ItemList : List (String × Json) :=
-  [("check", h1Check.toJson), ("length", PouwWindow.lengthItem [2, 2, 2, 2]), ("root_W", rootWJson none),
-   ("sampling", h1Fixed.sampling.toJson), ("work", h1Fixed.work.itemJson h1Check.tileWork)]
-
-def h1Items : Json := Json.mkObj h1ItemList
-
-/-- The loop's honest registration in context `context`, for any record bytes, format, Program and partition: a served
-window registering `h1Items`, the population 144 sampled `subset:24`, the check's query and scheme, and no roots. -/
-def h1Reg (context format program partition : String) (bytes : ByteArray) : WindowCommitmentRecord where
-  bytes := bytes
-  format := format
-  program := program
-  query := h1Tile.query
-  partition := partition
-  scheme := PouwCheck.scheme
-  population := 144
-  law := subsetLaw 24
-  roots := #[]
-  window := ⟨"served", context, h1Items, none, none⟩
-
-/-- The profile the rule fixes for it: the registered Program over one level, the partition's 144 units sampled
-`subset:24`, at δ = 10⁻⁶, 24 sampled. -/
-def h1Profile (program partition : String) : Core.Integrity where
-  programs := #[program]
-  prescribed := #[]
-  linked := true
-  covered := #[]
-  levels := #[{ name := unitLevel, query := some partition, size := 144, draw := some (.subset 24) }]
-  delta := ⟨1, 1000000⟩
-  drawn := #[(unitLevel, 24)]
-
-/-- One-stage's answer accepting registration `c` with the rule's profile and a `subset:24` sample of `units` over 144. -/
-def h1Evidence (c : WindowCommitmentRecord) (units : Array Nat) : Evidence where
-  protocol := oneStage
-  commitment := some (Flock.hexOf c.digest)
-  said := .accept (h1Profile c.program c.partition) { law := .subset 24, population := 144, units }
 
 /-! ## The registration's keys -/
 
