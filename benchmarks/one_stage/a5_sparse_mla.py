@@ -8,7 +8,7 @@ commits it (`pipeline.serving_rows.read_all` on the fixture's served values, eac
 ``stratified-rate:1/64``, a 64th of each template's units and at least one: the wiring check on the public bodies before the
 sample (`commit.wiring.check`), each template's circuit (`compose_circuit.py --template`; every one flat, `chunk_rows.reads`:
 a key block's EX2 is its body's gates, and the column end's and the combine's MUFU reads are inline), M0's `--zk` session of each
-sampled proof block (behind the ZK server under ``--firewall``), the Lean verifier, the stream's outcome and the negatives
+sampled proof block (behind the ZK server under ``--zk-server``), the Lean verifier, the stream's outcome and the negatives
 (`a5.wiring_negatives` among them). It stands in for a partition that names whole key blocks (step 16's 78 rows at T = 272:
 per head, four 64-key first blocks, one 16-key one, forty column ends and eight combines), whose units it does not prove. The
 run exits 0 only when the outcome is accepted and every negative refused. ``--out`` holds the window serving wrote
@@ -27,7 +27,7 @@ eight combines.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5_sparse_mla.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
-        [--firewall flock-firewall] [--units] --main FILE --out DIR
+        [--zk-server flock-zk-server] [--units] --main FILE --out DIR
 """
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ def parser() -> argparse.ArgumentParser:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+    ap.add_argument("--zk-server", help="a5.py's --zk-server: the core protocols' path, every session behind the ZK server; "
                     "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--out", required=True)

@@ -21,7 +21,7 @@ public import Proofs.Properties.InferenceOnly.RecordGrid
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 
 /-- A number written `P · k + r` with `r < P` has quotient `k` and rest `r` by `P`. -/
 private theorem div_mod_of_eq (P k r x : ℕ) (hr : r < P) (hx : x = P * k + r) : x / P = k ∧ x % P = r := by

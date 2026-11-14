@@ -29,7 +29,7 @@ the writer each choice gives.
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 open Spot.Wires (Wire accum prodR)
 
 /-! ## A box's rows -/

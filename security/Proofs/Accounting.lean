@@ -130,12 +130,12 @@ public import Definitions.Pous.P2.Cost
 # The proofs of resource accounting's guarantees
 
 `Accounting.SecurityProofs.X : Accounting.Guarantees.X` for the guarantees stated under
-`Security/Definitions/Accounting/Guarantees/` (`Bandwidth.SecurityProofs.X` for the bandwidth audit's own), the lemmas
+`security/Definitions/Accounting/Guarantees/` (`Bandwidth.SecurityProofs.X` for the bandwidth audit's own), the lemmas
 behind them, and the proofs of resource accounting's properties, the bridges that read each subprotocol's per-period
 guarantee as the joint period's input (`JointBridge/`, such as `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`,
-locked in `Security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
+locked in `security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
 `Sanity` shows the joint guarantee's hypotheses hold, and `Coverage` proves the inference-only policy's
-`Slowdown.SecurityProofs.CapabilityFloor`. `Security/lean-audit.json` pins each guarantee's theorem, so a
+`Slowdown.SecurityProofs.CapabilityFloor`. `security/lean-audit.json` pins each guarantee's theorem, so a
 change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where the top guarantees are proved
@@ -152,10 +152,10 @@ change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where to look
 
-* The statements and the vocabulary they read: `Security/Definitions/Accounting.lean`, whose module docstring lists the
+* The statements and the vocabulary they read: `security/Definitions/Accounting.lean`, whose module docstring lists the
   top guarantees with one line each.
-* The properties these proofs prove: `Security/Properties/Accounting/`.
-* Which of these statements protocol soundness rests on: `Security/README.md`.
+* The properties these proofs prove: `security/Properties/Accounting/`.
+* Which of these statements protocol soundness rests on: `security/README.md`.
 -/
 
 @[expose] public section

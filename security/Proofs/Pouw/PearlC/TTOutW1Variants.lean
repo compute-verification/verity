@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainInertBound
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
@@ -31,14 +31,14 @@ theorem ttOutPearlCDevRev1ChainOnly_of_w1 {dv : W1.W1Device} {salt : S → List 
     TTOutPearlCDevRev1ChainOnly (W1.w1Priced dv salt) d sem ρ :=
   ⟨w1Priced_queries dv salt, h⟩
 
-theorem ttOutPearlCDevChainCap_of_w1 {dv : W1.W1Device} {salt : S → List ℕ} {d : PearlCDevice}
-    {sem : PearlCSem Q R S} {ρ : ℚ} (h : TTOutPearlCDevChainCapW1 dv salt d sem ρ) :
-    TTOutPearlCDevChainCap (W1.w1Priced dv salt) d sem ρ :=
+theorem ttOutPearlCDevChainInertBound_of_w1 {dv : W1.W1Device} {salt : S → List ℕ} {d : PearlCDevice}
+    {sem : PearlCSem Q R S} {ρ : ℚ} (h : TTOutPearlCDevChainInertBoundW1 dv salt d sem ρ) :
+    TTOutPearlCDevChainInertBound (W1.w1Priced dv salt) d sem ρ :=
   ⟨w1Priced_queries dv salt, h⟩
 
-theorem ttOutTilePearlCDevChainCap_of_w1 {dv : W1.W1Device} {salt : S → List ℕ} {d : PearlCDevice}
-    {sem : PearlCSem Q R S} {ρ : ℚ} (h : TTOutTilePearlCDevChainCapW1 dv salt d sem ρ) :
-    TTOutTilePearlCDevChainCap (W1.w1Priced dv salt) d sem ρ :=
+theorem ttOutTilePearlCDevChainInertBound_of_w1 {dv : W1.W1Device} {salt : S → List ℕ} {d : PearlCDevice}
+    {sem : PearlCSem Q R S} {ρ : ℚ} (h : TTOutTilePearlCDevChainInertBoundW1 dv salt d sem ρ) :
+    TTOutTilePearlCDevChainInertBound (W1.w1Priced dv salt) d sem ρ :=
   ⟨w1Priced_queries dv salt, h⟩
 
 theorem ttOutUW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : Layout → Prop) (g₀ : ℝ)

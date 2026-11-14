@@ -10,8 +10,8 @@ import Mathlib.Basic.ENNReal.Real
 /-!
 # Receipts bound to the matmul: co-location and the link relay (trusted)
 
-The game is `Security/Definitions/Poub/BoundReceipt.lean`; proofs are in
-`Security/Proofs/Poub/BoundReceipt/`. No named assumption of its own: the generic-mix model (the mix a random
+The game is `security/Definitions/Poub/BoundReceipt.lean`; proofs are in
+`security/Proofs/Poub/BoundReceipt/`. No named assumption of its own: the generic-mix model (the mix a random
 oracle, the tile outputs uniform) is the game, and deployment premises carry it to the deployed receipt
 (`random-oracle` for the mix and the sketch inside it,
 `rate-codec-work` for `c_enc`, `bandwidth-instantiation` for the store), with the ideal tile's work half stated in

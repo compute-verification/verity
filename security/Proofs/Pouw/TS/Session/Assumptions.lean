@@ -45,7 +45,7 @@ the bridge's premise of that name, as a named `Prop`), the window's sampling des
 whose sampled proof blocks are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
 (`ServedChecksHold`), and the value layer is `pf`'s served opening, outside `δs` (`ServedRootsLinked`).
 
-They belong in `Security/Definitions/Pouw/Assumptions/TS`, but they read `RowsSession`, which is in the proofs package
+They belong in `security/Definitions/Pouw/Assumptions/TS`, but they read `RowsSession`, which is in the proofs package
 (the `security` package can't import it), so they are here until Flock's spec is extracted, as Flock's own
 assumptions are (`Proofs/Flock/Soundness/Assumptions`).
 -/

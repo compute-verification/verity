@@ -37,7 +37,7 @@ LAYER = {
     "verity_vllm.protocols": "acquire",                 # installs beside the taps; imports engine.hooks, commit, config
     "verity_vllm.observe": "observe|commit",
     "verity_vllm.commit": "observe|commit",
-    "verity_vllm.protocols.remote_bandwidth": "observe|commit",                     # PoUB's node store on the engine: the binder and the Commit's session
+    "verity_vllm.protocols.poub": "observe|commit",                     # PoUB's node store on the engine: the binder and the Commit's session
     "verity_vllm.engine": "engine",
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",
@@ -61,7 +61,7 @@ LAYER = {
 
 #: the packages a tree may not hold, a private protocol's driver (`verity_vllm.protocols.DRIVERS`) and the commitment scheme's
 #: reference: placed where present
-OPTIONAL = ("verity_vllm.protocols.remote_bandwidth", "verity_vllm.commitments")
+OPTIONAL = ("verity_vllm.protocols.poub", "verity_vllm.commitments")
 
 #: the packages whose modules are graph nodes
 LIBRARY_PACKAGES = ("verity_vllm",)

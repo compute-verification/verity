@@ -255,10 +255,10 @@ PUBLIC = {
                                         "LinearSite), which benchmarks/pouw's Pearl-C arms build",
     "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, and a Stack attached to them (discover, "
                                               "attach), which benchmarks/pouw's Pearl-C arms attach",
-    "verity_vllm.protocols.remote_bandwidth.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
+    "verity_vllm.protocols.poub.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
                                                      "weights it binds (model_weights, WeightRegion, Every), which "
                                                      "benchmarks/remote_session and benchmarks/vllm_encoded serve under",
-    "verity_vllm.protocols.remote_bandwidth.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
+    "verity_vllm.protocols.poub.remote": "I1: the Commit's PoUB session on its engine (CommitSession), which "
                                                      "pipeline.remote_session reaches through protocols.driver and "
                                                      "benchmarks/remote_session serves under",
     "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
@@ -414,28 +414,28 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
 })
 
-_CIR_293 = "CIR-293: the shared primitives move below both adapters after the close"
+_SHARED_WORDS = "until the shared word primitives move below both adapters"
 
 #: Single imports of a module neither PUBLIC nor KNOWN: (file, module) -> why it stands. Move the import and delete it.
 KNOWN_SITES = {
-    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _CIR_293,
-    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _CIR_293,
-    ("adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _CIR_293,
-    ("adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _CIR_293,
-    ("adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _CIR_293,
-    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _CIR_293,
-    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _CIR_293,
-    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train"): _CIR_293,
-    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/bindings/layer_norm.py", "verity_vllm.definitions.registry.layer_norm"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/training_emit.py", "verity_vllm.definitions.registry.torch_words"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/training_loss.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.torch_words"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.dsv4_decode_indices"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/training_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _CIR_293,
-    ("adapters/torch/verity_torch/frontend/rules/vocab.py", "verity_vllm.definitions.registry.value_inputs"): _CIR_293,
+    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_embedding.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_matmul.py", "verity_vllm.definitions.numerics.mhc_twin"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_quant.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_sdpa.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/tests/frontend/test_train_step.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/bindings/layer_norm.py", "verity_vllm.definitions.registry.layer_norm"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_attention.py", "verity_vllm.definitions.registry.fa2_train_bwd"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_emit.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_loss.py", "verity_vllm.definitions.registry.torch_embedding_f32"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.torch_words"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_masks.py", "verity_vllm.definitions.registry.dsv4_decode_indices"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/training_reduce.py", "verity_vllm.definitions.numerics.torch_kernels"): _SHARED_WORDS,
+    ("adapters/torch/verity_torch/frontend/rules/vocab.py", "verity_vllm.definitions.registry.value_inputs"): _SHARED_WORDS,
 }
 
 

@@ -15,10 +15,19 @@ import pytest
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_advice import FIXTURE, RANDOM, packed, rebuild
 
 from verity.protocols.accounting.certifier.verifier import advice as V
-from verity_vllm.compiler.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators, decodes,
+from verity_vllm.compiler.advice_check import (DEFERRED, _sort_net, ands, arguments, comparators,
                                                           evaluate, evaluate_bits, reference, size, unit)
 
 P, D = "prefill", "decode"
+
+
+def decodes(data: bytes) -> tuple[bool, str]:
+    """Whether `advice.decode` takes `data`, and its refusal's message when it doesn't."""
+    try:
+        V.decode(bytes(data))
+    except V.MalformedAdvice as e:
+        return False, str(e)
+    return True, ""
 
 
 def _raw(cls, *values):
