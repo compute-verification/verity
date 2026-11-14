@@ -1,0 +1,3 @@
+[2026-11-14T21:13Z] 1816a9e62de0
+LEAD: two more for the same test file (tests/test_vllm_public_api.py), from the frontend-rules worker run on tip 33cade6fc8d: (1) `test_the_allowlists_are_exact` is red on stale `verity.*` entries the moves left in the lists (e.g. verity.circuits.ops.boolean.versions): remove the stale ones (data only). (2) `benchmarks/ppl/int8_kscale_gpu.py:25` and `:41` (the GPU calibration job the engine worker moved out of the adapter today) import two adapter names that are not public: declare them public if the adapter should offer them, else name the public name; do not edit the benchmark file. After your item 1 the 14 `verity_vllm.definitions` lines should clear: say what is left in that test.
+
