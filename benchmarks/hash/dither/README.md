@@ -82,7 +82,7 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
 ## Tools
 
 - `pin.sh`, `pin_glm53.sh` (`pin_glm53.toml`): the int8 Llama-3.1-8B and GLM-5.3 pins in a node's HF cache.
-- `numabind.py`: runs a timed command on the leased GPU's NUMA node.
+- `benchmarks/kernels/numabind/numabind.py` runs each timed command here on the leased GPU's NUMA node.
 - `kernels.py`, `stepprof.py`: from an nsys capture's SQLite export, an arm's kernels and a decode step by part.
 - `picks.py`: each Inductor kernel's autotune choice in an engine's process, or a fixed one, so two processes compiling the
   same kernel run the same config.
@@ -91,6 +91,6 @@ loaded build's own flags (`workspace_bytes`). The other front ends and the scrip
 
 ## Tests
 
-`tests/` is the directory's suite, on the CPU (`pyproject.toml`): `numabind.py`'s plan on a fake sysfs, `dbw.py`'s report,
+`tests/` is the directory's suite, on the CPU (`pyproject.toml`): `dbw.py`'s report,
 J10-R's workspace sizes, `j10r_so.py`'s references, `live_audit.py`, and the settings registry. The GPU gates run in each
 bench's own run, before it times anything.
