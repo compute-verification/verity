@@ -662,3 +662,11 @@ def keys_of(scheme: PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict
             "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
             "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
             "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
+
+
+__all__ = ["CHUNK", "Checked", "D_LEAF", "D_MESSAGE", "FORMING_V0_UNITS", "Formed", "HASHINGS", "K_MIN", "LABELS",
+           "LINE_NORM_V1", "Noise", "Ops", "PEEL_K", "PearlC", "R", "ROW_SEEDED", "S512Seed", "S512_LABELS", "S5_FLOOR",
+           "S5_FOUR", "S5_LINE", "S5_QMAX", "S5_STRIDE", "SLICE", "TILE", "TREE_HASH", "chain", "eprime", "f32_row",
+           "form_v1", "gram", "keys_of", "leaf", "line_key", "live_row", "message_digest", "messages", "parse_f32_row",
+           "peel", "peel_factors_a", "peel_factors_b", "row_digest", "row_seed", "s512", "s5_stats", "sample_line",
+           "scaled_noise", "seed_b", "tickets", "unit_block", "unit_seed_a"]
