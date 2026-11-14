@@ -24,3 +24,30 @@ CROSSTICK to network-accounting (lead), Sat 14 Nov 12:00 AM PST.
 
 TIMER: none
 
+[2026-11-14T08:00Z] db8fe8e6997a
+network-accounting/POLICYROWS to the lead, Sat 14 Nov 12:00 AM PST. Step 1's first lemma elaborates. Your line of 11:48 PM PST is read and moves two of my days earlier.
+
+**Step 1 with the map elaborates at its first try, and its proof uses no axiom beyond the three. The whole of it is ready to open on Wed 18 Nov by noon PST.** Scratch head `c6372e1f19d`, pushed. [ran: `verity lean try` of the lemma's file on a CPU machine: "lean exit 0 in 101 s", "none of its 4 theorems uses an axiom beyond propext, Classical.choice and Quot.sound"]
+
+- **What is built.** The properties tree holds the map: `rowGate` and `outRowGate` (a row's bit to a gate, by `Spot.Bits`' own functions), `laidOutAs` (the file is laid out as the template, as `Spot.Bits.check` decides it) and `portsOf` (a reader's ports by its roles). The proofs tree holds the statement `PinnedReadBinds` as a lemma and its proof `pinnedReadBinds`. No lock lists it and nothing reads it.
+- **The tie is three equations**, as you ruled: the Definition's layout is the roles, the file is laid out as the template at the record's unit, and the ports are the map's. The valuation and `Holds` are gone from the statement.
+- **What it still takes as a hypothesis:** that the unit's gates compute the read at the mapped ports (`GatesRefine`). Three lemmas remove it, and they are what "the whole" means: a copy's gate at a row's column is the map's; the read template's columns are its Definition's parameters in order; so the map's ports are the ones the template check already proves the read at.
+- **The day rests on two things.** The `Spot.Bits.check` run must give no reason against both served files. If it gives one, the map's second equation is false for the deployed read and I come back with the reason the same hour. And the second lemma is the first proof in the tree that reads `Spot.Bits.check`: if it costs more than I size it at, you hear by Mon 16 Nov noon PST.
+- **It stands on `main`, not on #9547.** [ran: `git diff --stat origin/main...HEAD -- security`: my six files only] So it opens with `main` as its base.
+- **A question, and the answer I take.** Your order said "with no pull request", and your 11:48 PM PST line says to open unmarked when my own checks pass. I take it that step 1 opens unmarked on the day the three lemmas and the Lean check pass, and stays in scratch until then.
+
+**Of the witness's four facts, one can be proved outright and one more in half. The other two and a half are runs of code on a file, which the kernel does not evaluate.** [read: `TableReadBinding`'s honest lemma and the lock's `witnesses_assumed`; nothing built]
+
+| fact | proved or assumed | by whom |
+|---|---|---|
+| the honest transcript's verdict is 1 | **proved**: the unit computes the opening's check, an honest opening passes it, and a correct trace exists for any inputs | me, after the third lemma |
+| the record reads with its opening held | **half**: "held, with the policy's pin" follows from the check's acceptance once entry 11 is proved; that the check accepts one record stays a run of code | PROVENANCE for the proved half |
+| the check accepts the template | assumed. `ReadNet.check`'s half is the one fact the lock already allows (`ExpertReadAccepted`, at 256 × 3072). `Spot.Bits.check`'s half is new and of the same kind | lean, if anyone: its note says a proof needs each part's run and a bound on every generator's rows |
+| the circuit file parses as the template statement | assumed, unless a theorem says the parser reads back what the writer wrote. The tree has none | lean (the parser is Flock's) |
+
+- So the count falls from four to three at best, where the rule allows one. The three that stay could be stated as one fact, "the record on file is accepted, with its circuit file parsed and laid out", which one command witnesses. That is a choice for the listing, and it is soundness's to make.
+
+**The `row` role: by your 11:48 PM PST line it no longer waits for #9644 to be on `main`.** I build it on #9644's open head on a branch of its own and open it unmarked with #9644's branch as its base. Its day moves from Thu 19 Nov to **Mon 16 Nov 6 PM PST**. I still expect PROVENANCE's proof first and the role to carry its lemma 4, because PROVENANCE started tonight and the role follows the three lemmas in my order. Nothing is pushed to #9644.
+
+**The `Spot.Bits.check` run still waits for a slot** on its machine (launched 11:38 PM PST, 22 minutes in the line). Its verdict follows when it ends.
+
