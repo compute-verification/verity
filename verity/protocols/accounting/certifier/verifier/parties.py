@@ -11,6 +11,7 @@ network-certifier -> verifier   out-record {link, window}, the output value's re
                                 certificate {link, window}, a link-window's certificate its body
                                 registration {link, window}, the link-window's rows' registration its body
                                 load {}, the load's signed registrations its body
+                                deployment {}, the run's key, session, schedule and origin its body (structure)
 ~~~
 
 - **The network certifier** (`NETWORK_CERTIFIER`) is the auditor's device on a server's link, one a link. Its machine
@@ -39,10 +40,13 @@ The device's run hands out the rest, each a message of its kind on the same two 
   name and direction, or that execution phase refused. Public, as ``out-record`` is: what it signs is a hiding
   commitment.
 - ``registration`` carries a line of ``cells.jsonl``: the link-window's rows' signed head (`warden_rows.registration`),
-  or that execution phase refused, and its cost (the rows, a row's bytes, and the device's milliseconds to commit and
-  to sign). Public: its root is a hiding commitment.
+  or that execution phase refused, and its cost (the rows and a row's bytes). Public: its root is a hiding commitment.
+  It carries no device timing, which varies with what was committed: the device keeps those with its witness.
 - ``load`` carries ``load.json``: the load's registrations, one a value of its shape, under the key and session that
   then certify the run's windows. Public: each is a signed hiding commitment.
+- ``deployment`` carries ``deployment.json`` as the check reads it: the device's public key and session, the schedule's
+  parameters and their digest, the windows, the origin and the run id. It is protocol structure, so public. It holds no
+  address: where the device listened and what it relayed to are a local file beside it, which no party is handed.
 - ``records`` carries one of a link-window's three records (``record``: ``requests``, ``responses`` or ``fails``), packed
   as the device keeps it, and ``cells-salts`` the link-window's rows' salts and the wiring's (`warden_rows.read_witness`).
   Both are the prover's witness: private.
@@ -67,6 +71,7 @@ VERSION = 1
 NETWORK_CERTIFIER, WORKERS, VERIFIER = "network-certifier", SP.WORKERS, SP.VERIFIER
 OUT_OPENING, OUT_RECORD = "out-opening", "out-record"
 CERTIFICATE, REGISTRATION, LOAD, RECORDS, CELLS_SALTS = "certificate", "registration", "load", "records", "cells-salts"
+DEPLOYMENT = "deployment"
 #: a link-window's three records, by the name its ``records`` message's head gives
 RECORD_NAMES = ("requests", "responses", "fails")
 #: a frame's largest body (`channel.HEADER`: a u32 length) in whole salts: the most rows one opening carries
@@ -86,15 +91,16 @@ MANIFEST = Manifest(
     parties=(Role(NETWORK_CERTIFIER, "auditor", per="link", needs=("clock", "coins", "signing-key")),
              SP.MANIFEST.role(WORKERS), SP.MANIFEST.role(VERIFIER)),
     channels=(Channel(NETWORK_CERTIFIER, WORKERS, (OUT_OPENING, RECORDS, CELLS_SALTS)),
-              Channel(NETWORK_CERTIFIER, VERIFIER, (OUT_RECORD, CERTIFICATE, REGISTRATION, LOAD))),
+              Channel(NETWORK_CERTIFIER, VERIFIER, (OUT_RECORD, CERTIFICATE, REGISTRATION, LOAD, DEPLOYMENT))),
     messages=(Schema(OUT_OPENING, 1, "private", _HEAD, Body(max=MAX_OPENING, unit=O.SALT_BYTES)),
               Schema(OUT_RECORD, 1, "commitment", _HEAD, Body(max=MAX_RECORD)),
               Schema(RECORDS, 1, "private", _HEAD | {"record": Str(9, "|".join(RECORD_NAMES))}, Body(max=MAX_PACKED)),
               Schema(CELLS_SALTS, 1, "private", _HEAD, Body(max=MAX_SALTS, unit=WR.WIRING_SALT_BYTES)),
               Schema(CERTIFICATE, 1, "commitment", _HEAD, Body(max=MAX_RECORD)),
               Schema(REGISTRATION, 1, "commitment", _HEAD, Body(max=MAX_RECORD)),
-              Schema(LOAD, 1, "commitment", {}, Body(max=MAX_LOAD))))
+              Schema(LOAD, 1, "commitment", {}, Body(max=MAX_LOAD)),
+              Schema(DEPLOYMENT, 1, "structure", {}, Body(max=MAX_RECORD))))
 
-__all__ = ["CELLS_SALTS", "CERTIFICATE", "ID", "LOAD", "MANIFEST", "MAX_LOAD", "MAX_OPENING", "MAX_PACKED", "MAX_RECORD",
-           "MAX_SALTS", "NETWORK_CERTIFIER", "OUT_OPENING", "OUT_RECORD", "RECORDS", "RECORD_NAMES", "REGISTRATION",
+__all__ = ["CELLS_SALTS", "CERTIFICATE", "DEPLOYMENT", "ID", "LOAD", "MANIFEST", "MAX_LOAD", "MAX_OPENING", "MAX_PACKED",
+           "MAX_RECORD", "MAX_SALTS", "NETWORK_CERTIFIER", "OUT_OPENING", "OUT_RECORD", "RECORDS", "RECORD_NAMES", "REGISTRATION",
            "VERIFIER", "VERSION", "WORKERS"]

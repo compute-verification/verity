@@ -740,8 +740,8 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
     relay = asyncio.run(main())
     publisher.close()
     (out / "deployment.json").write_text(json.dumps(ws.deployment_record(
-        params, signer.public_key(), SESSION, origin_unix=0.0, windows=phases, listen=(CERTIFIER[0], 1),
-        upstream=SERVER, slack=relay.slack, run_id=relay.run_id)))
+        params, signer.public_key(), SESSION, origin_unix=0.0, windows=phases, slack=relay.slack,
+        run_id=relay.run_id)))
     log: dict = {"connections": relay.log}
     if watermark:
         log["watermark"] = {"last": relay.watermarked and list(relay.watermarked), "lost": relay.watermark_lost,

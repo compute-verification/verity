@@ -217,7 +217,8 @@ LOAD_SUMMARY = {"values": 19, "registered": 19, "relayed": True}
 RELAY = {"shape": "tiny", "values": 19, "bytes": 34240, "streams": 4, "sinks": [{"accepted": True}] * 4}
 #: a stand-in for `warden_serve.py rehearse --load-store`'s files: public, then witness
 LOAD_FILES = (
-    '(out / "deployment.json").write_text(json.dumps({"upstream": url, "session": "00" * 32}))\n'
+    '(out / "deployment.json").write_text(json.dumps({"session": "00" * 32}))\n'
+    '(out / "endpoints.json").write_text(json.dumps({"upstream": url}))\n'
     '(out / "cells.jsonl").write_text("")\n'
     f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT!r}}}) + "\\n")\n'
     '(out / "load.json").write_text(json.dumps({"format": "load/v1", "registrations": [{"root": "ab" * 64}]}))\n'
