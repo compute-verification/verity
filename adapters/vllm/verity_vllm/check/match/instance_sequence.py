@@ -12,6 +12,7 @@ from typing import Any
 
 from verity.circuits import codec, refs
 from verity.circuits.program import RUN, input_id
+from verity.definitions.registry import catalog
 
 from verity_vllm.check.match import compiler_form, split_selects
 from verity_vllm.check.match import prefix_reads as PX
@@ -50,8 +51,7 @@ def const_value(spec: str) -> tuple[int, int] | None:
 def _registry():
     """The registry every module loaded (`verity.definitions.registry.load`); a module that fails to import is named on stderr (its
     Programs, e.g. Hopper's under Python < 3.12, then fail to decode with that reason)."""
-    from verity.definitions.registry.catalog import load
-    reg, errors = load()
+    reg, errors = catalog.load()
     for e in errors:
         logger.warning("[compare] registry module unavailable (%s): Programs naming its Definitions will not decode", e)
     return reg
