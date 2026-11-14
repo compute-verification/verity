@@ -36,3 +36,7 @@ Back after the stop. r20261114-080031-8e5d at 3579b2f1c85b was cancelled by its 
 READY #10140 c75a9462e2a707029e524f521c861e53ca385fa0
 
 #10140 is change 4 (ruff by hand, with item I), opened unmarked. At 57d66cf1 its run r20261114-081858-03cd passed 20 of the 23 suites --changed selects, and the slot limit cut it before research, verity-numerical and verity-flock. The head moved to c75a9462 to put back test_artifact_applicability_independent_of_record.py and its entry, since the refactor line now deletes that file. Its suites run again split: r20261114-155348-9460 (verity-vllm), r20261114-155348-0603 (the other 20 and the ratchet), and r20261114-155348-cbca, -4bcf and -5289 (verity-flock in thirds). The four runs at 57d66cf1 that I launched at 15:50Z were cancelled as superseded.
+
+## 2026-11-14T16:17:26Z
+
+#9835 at 3579b2f1: r20261114-154809-8a4b (verity-vllm and verity-numerical) and verity-flock in thirds (r20261114-154810-d405, r20261114-154809-c616, r20261114-154809-ebb4) are running. #10140 at c75a9462: 0603, 4bcf and 5289 are running; 9460 and cbca are waiting. Change 5 (cursor/circuits-cir278-mypy-cures-6f04 at e06f2a98e1f49d829014ed302724e97054bb030e): r20261114-092046-2753 passed 21 of 24 suites and the ratchet gate (9264 -> 9256) before the slot limit cut it. Its remaining three are relaunched by suite: verity-numerical and the circuit-check suite in r20261114-161626-315f, and verity-flock in thirds. I run no subagent, timer or subscription.
