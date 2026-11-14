@@ -501,7 +501,7 @@ class Remote:
     #: the inference cut: the remote composition, `InferenceOnly.Guarantees.SlowdownRemote`, term for term, its envelopes'
     #: premises, and the registration
     CITES = ("InferenceOnly.Guarantees.SlowdownRemote",) + Pouw.CITES + Detection.CITES + ("InferenceOnly.Assumptions.ThetaRegistered",)
-    #: the server-block bound each of its cuts is an argument of: the inference cap alone
+    #: the server-block bound each of its cuts is an argument of: the inference-block yield alone
     BOUND = ("Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
     ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")

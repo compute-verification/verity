@@ -1,4 +1,4 @@
-"""The properties of the declared reference circuits: the Boolean GEMM against the gate-by-gate definitions, and one served
+"""The properties of the registered circuits: the Boolean GEMM against the gate-by-gate definitions, and one served
 layer (SmolLM2-135M's) against the shapes its GEMMs read and benchmarks/slowdown's for the model."""
 
 from __future__ import annotations

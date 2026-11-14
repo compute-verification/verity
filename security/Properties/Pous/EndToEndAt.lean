@@ -46,7 +46,7 @@ open scoped ENNReal
 /-- The session audits the setup `pub` at the point `pt`: the setup published `pt`'s blocks under a 24-byte salt, and
 the session audits every one of them in `pt.k` rounds, within `pt.limitNs`, with answers of `pt`'s block size, bound
 to the published root; `AuditsSetup` at `Run.DEPLOYED`. -/
-def AuditsSetupAt (pt : Run.Point) (pub : SetupProtocol.Public) (sc : SessionCommitment) : Prop :=
+def AuditsSetupAt (pt : Run.Point) (pub : SetupProtocol.Public) (sc : ChallengePhaseCommitment) : Prop :=
   pub.blocks = pt.params.blocks ∧ pub.salt.size = Run.SALT ∧ sc.blocks = pt.params.blocks ∧ sc.k = pt.k ∧
     sc.limitNs ≤ pt.limitNs ∧ sc.blockBytes = pt.params.blockBytes ∧ sc.binding = pub.root
 

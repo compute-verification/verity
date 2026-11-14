@@ -6,7 +6,7 @@ public import Definitions.InferenceOnly.Slowdown
 /-!
 # The slowdown's windows from the memory cap over threads (trusted)
 
-`InferenceOnly.Guarantees.SlowdownWindows` takes the monitored servers' windows as one hypothesis over real numbers: `n` servers
+`InferenceOnly.Guarantees.SlowdownExecutionPhases` takes the monitored servers' windows as one hypothesis over real numbers: `n` servers
 over a horizon of `H` ticks cut into `⌈H/L⌉` windows of `L` ticks, each starting from at most `R` bits of state and taking
 in at most `αF` bits a tick, hold `b_a (M_r + M_d) ≤ n ⌈H/L⌉ K Λ(K)` counted multiplications of the residual and the
 declared computation, `K = R + αF L`. `SlowdownServerBlocksCap` derives that hypothesis on the actual circuit from the memory
@@ -26,7 +26,7 @@ open Verity InferenceOnly Finset InferenceOnly.Slowdown
 /-- **The slowdown's windows from the memory cap over threads.** In `ThreadedRuntime`'s setting, with each
 location's link capacity at most `α F` bits a tick, a whole-tick window `ω > 0`, the horizon `t` and `K = R + α F ω`:
 when the residual's `M_r` and the declared computation's `M_d` counted multiplications number together at most those of
-one threading `T` of the reference circuit `c` (`M_r + M_d ≤ |T.M|`), they meet `InferenceOnly.Guarantees.SlowdownWindows`' bound
+one threading `T` of the reference circuit `c` (`M_r + M_d ≤ |T.M|`), they meet `InferenceOnly.Guarantees.SlowdownExecutionPhases`' bound
 on the servers' windows at `H = t`, `L = ω` and `T`'s reuse: `b_a (M_r + M_d) ≤ n ⌈t/ω⌉₊ K Λ(K)`.
 
 Reads are counted by width, as in `ThreadedRuntime`. -/

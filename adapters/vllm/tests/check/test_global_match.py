@@ -1521,7 +1521,7 @@ def _driver_stop_at(oracle, rid, n_answer, eos_step):
 
 def _driver_claims(oracle, rid=None, lag=None, **fields):
     """The driver's tokens.json record-schema claims: doc.lag.value (the resolved fact as the driver wrote it) and per request the
-    served_output_len / executed_prefix_len / cap_exhausted fields m1_capture writes."""
+    served_output_len / executed_prefix_len / cap_exhausted fields match_capture writes."""
     tp = os.path.join(oracle, "capture", "tokens.json")
     tk = json.loads(Path(tp).read_text())
     if lag is not None:
@@ -1745,7 +1745,7 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
     assert _r(resp, "r1")["served_output_len"] == 2 and _r(resp, "r1")["executed_prefix_len"] == 3 and _r(resp, "r1")["cap_exhausted"] is True
     assert _r(resp, "r1")["finish"] == "length" and resp["lag"]["exercised"] is False      # not an EOS stop: the lag rule is not what failed
 
-    # (11) the record schema (m1_capture's tokens.json): doc.lag.value + per-request served_output_len / executed_prefix_len are the driver's
+    # (11) the record schema (match_capture's tokens.json): doc.lag.value + per-request served_output_len / executed_prefix_len are the driver's
     # CLAIMS from the same recorded fact; claims that agree pass, a tokens.json lag disagreeing with the header is "not one attested execution",
     # a length claim disagreeing with the rows is named with both lengths
     gpc, oraclec = assemble([R0, R1_LAG], tmp_path / "claims", lag=1)

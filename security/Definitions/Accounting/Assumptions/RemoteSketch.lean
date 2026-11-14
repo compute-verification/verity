@@ -38,8 +38,7 @@ variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 /-- **The per-pass hash budget**: at every prover coin, earlier keys, candidate keys and store, pass `j`'s candidates'
 receipt-hash queries total at most `qtot j`. Grinding a seed reads no block, so the prover may compute its hashes off
 the node as well as on it: `Σ_j qtot j` is at most the SHA-512 compressions the prover can make over the session,
-`Q = F·C`, the node's `C` times the outside-compute factor `F` (`timing.sketch_failure`'s `compressions` and
-`outside`). -/
+`Q`, its budget on any hardware it reaches (`timing.sketch_failure`'s `queries`, `2^80` in `audit.QUERIES_LOG2`). -/
 def KeyBudget (A : Run β Hs P N m h S L q ks G) (qtot : Fin P → ℕ) : Prop :=
   ∀ b j η (κ : Fin (G j) → Key N m h ks) (D : Data N m 0 Sector),
     ∑ c, (((A.device b j η c).prog (κ c).1 D).queries (κ c).2 D).length ≤ qtot j

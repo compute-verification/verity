@@ -123,11 +123,10 @@ theorem round_one (b : ByteArray) (hb : b.size = 1) :
   rw [h]
   rfl
 
-theorem message_one (c : SessionCommitment) (e : String) (d : ByteArray) :
+theorem message_one (c : ChallengePhaseCommitment) (e : String) {d : ByteArray} (hd : d.size = 64) :
     ∃ m, message c e #[oneRecord d] = .ok m := by
-  unfold message recordsRoot
-  rw [Array.mapM_eq_mapM_toList]
-  exact ⟨_, rfl⟩
+  simp [message, recordsDigest, recordsStream, Round.value, oneRecord, hd, beN, Bind.bind, Except.bind, Pure.pure,
+    Except.pure]
 
 /-- The report `oneRound`'s device sends once its one round, of digest `d`, has completed the session. -/
 def oneReport (d : ByteArray) : Msg :=
@@ -137,7 +136,8 @@ def oneReport (d : ByteArray) : Msg :=
 theorem messages_one (b : ByteArray) (hb : b.size = 1) :
     (code oneRound).messages () [.round ⟨0, 0, b⟩] =
       [(Ch.challenge, Msg.index 0), (Ch.challenge, Msg.done), (Ch.report, oneReport (blockDigest b))] := by
-  obtain ⟨m, hm⟩ := message_one (oneRound.commitment ()) COMPLETE (blockDigest b)
+  obtain ⟨m, hm⟩ := message_one (oneRound.commitment ()) COMPLETE (d := blockDigest b)
+    (MemoryChallenger.Properties.SecurityProofs.Tree.hash_size _)
   show (Ch.challenge, Msg.index (oneCoins.indices[0]!)) ::
       oneRound.closing () (Recorded.round oneCoins 0 1 ⟨#[], none⟩ ⟨0, 0, b⟩) ++ [] = _
   rw [round_one b hb, List.append_nil]

@@ -51,7 +51,7 @@ REPLAY_SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
 #: a replay bundle's `context.json` and its manifest (`pipeline.replay_bundle.SCHEMA`), which `seal` writes;
 #: `open_bundle` refuses a manifest with any other
 REPLAY_BUNDLE_SCHEMA = "verity-vllm/replay-bundle/v1"
-#: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.m1_capture`'s `main`
+#: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.match_capture`'s `main`
 #: writes
 SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
 #: a row's admission plan, the host memory reserved for each part of the row (`pipeline.telemetry.admission.SCHEMA`),

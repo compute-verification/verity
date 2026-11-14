@@ -219,13 +219,13 @@ theorem LayeredTraining_nontrivial : Guarantees.LayeredTraining_nontrivial := by
   rw [bound_T0, size_D]
   norm_num
 
-theorem windowsHold_T1 : Assumptions.WindowsHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0 := by
-  unfold Assumptions.WindowsHold
+theorem executionPhasesHold_T1 : Assumptions.ExecutionPhasesHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0 := by
+  unfold Assumptions.ExecutionPhasesHold
   rw [bound_T1 _ (by norm_num), card_T1]
   norm_num
 
-theorem not_windowsHold_T0 : ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 := by
-  unfold Assumptions.WindowsHold
+theorem not_executionPhasesHold_T0 : ¬ Assumptions.ExecutionPhasesHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 := by
+  unfold Assumptions.ExecutionPhasesHold
   rw [bound_T0, show (T0 D).M.card = 0 from rfl]
   norm_num
 
@@ -239,7 +239,7 @@ theorem slowdown_T0_fails :
 
 theorem SlowdownThreaded_honest : Guarantees.SlowdownThreaded_honest := by
   refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
-    by norm_num [Assumptions.WindowLength], ?_, windowsHold_T1⟩
+    by norm_num [Assumptions.ExecutionPhaseLength], ?_, executionPhasesHold_T1⟩
   rw [show T1.reuse = 1 from rfl]
   norm_num
 
@@ -247,11 +247,11 @@ theorem SlowdownThreaded_nontrivial : Guarantees.SlowdownThreaded_nontrivial := 
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
     by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, slowdown_T0_fails⟩
+    by norm_num [Assumptions.ExecutionPhaseLength], by norm_num, not_executionPhasesHold_T0, slowdown_T0_fails⟩
 
 theorem SlowdownThreadedSlots_honest : Guarantees.SlowdownThreadedSlots_honest := by
   refine ⟨compliesRate_D, theta_id D, T1_threaded, T1_weightsSlots, by rw [size_D]; norm_num, by decide,
-    by norm_num [Assumptions.WindowLength], ?_, windowsHold_T1⟩
+    by norm_num [Assumptions.ExecutionPhaseLength], ?_, executionPhasesHold_T1⟩
   rw [show T1.reuse = 1 from rfl]
   norm_num
 
@@ -259,37 +259,37 @@ theorem SlowdownThreadedSlots_nontrivial : Guarantees.SlowdownThreadedSlots_nont
   refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num, by norm_num, compliesRate_D, theta_id D, T0_threaded _ _ _ _ _, T0_weightsSlots _ _ _ _ _,
     by rw [size_D]; norm_num, by decide, by norm_num, by norm_num, by norm_num, by norm_num,
-    by norm_num [Assumptions.WindowLength], by norm_num, not_windowsHold_T0, slowdown_T0_fails⟩
+    by norm_num [Assumptions.ExecutionPhaseLength], by norm_num, not_executionPhasesHold_T0, slowdown_T0_fails⟩
 
-theorem oneWindow_withinCompute : Assumptions.WithinCompute OneWindow.cap 2 := by
+theorem oneExecutionPhase_withinCompute : Assumptions.WithinCompute OneWindow.cap 2 := by
   norm_num [Assumptions.WithinCompute]
 
-theorem oneWindow_pouwSound : Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 :=
+theorem oneExecutionPhase_pouwSound : Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 :=
   fun _ => (prob_of_forall_not _ fun _ h => h).le
 
-theorem oneWindow_not_pouwSound : ¬ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.wrong 0 := by
+theorem oneExecutionPhase_not_pouwSound : ¬ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.incorrect 0 := by
   intro h
   have h1 := h 0
-  have h2 := prob_add_not (PMF.uniformOfFintype Bool) (fun ω => OneWindow.wrong ω 0)
-  rw [prob_of_forall_not (PMF.uniformOfFintype Bool) (E := fun ω => ¬ OneWindow.wrong ω 0) fun _ h => h trivial]
+  have h2 := prob_add_not (PMF.uniformOfFintype Bool) (fun ω => OneWindow.incorrect ω 0)
+  rw [prob_of_forall_not (PMF.uniformOfFintype Bool) (E := fun ω => ¬ OneWindow.incorrect ω 0) fun _ h => h trivial]
     at h2
   linarith
 
 theorem SlowdownRemote_honest : Guarantees.SlowdownRemote_honest :=
-  ⟨oneWindow_withinCompute, oneWindow_pouwSound, fun _ b => b.elim, fun b => b.elim, Cut.SecurityProofs.toy_complies,
+  ⟨oneExecutionPhase_withinCompute, oneExecutionPhase_pouwSound, fun _ b => b.elim, fun b => b.elim, Cut.SecurityProofs.toy_complies,
     Cut.SecurityProofs.toy_values, Cut.SecurityProofs.toy_noSharedPair, Cut.SecurityProofs.toy_hardness 2,
     Cut.SecurityProofs.toy_exports 2, by show 2 ≤ 0 + 0 + Cut.Toy.W.N + 0; rw [Cut.SecurityProofs.toy_N],
-    fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity]⟩
+    fun _ => by norm_num [Assumptions.ResidualAtMost, incorrectCapacity]⟩
 
 theorem SlowdownRemote_nontrivial : Guarantees.SlowdownRemote_nontrivial := by
-  refine ⟨by norm_num, by norm_num, fun _ => by norm_num, by simp [Assumptions.WithinCompute], oneWindow_not_pouwSound,
+  refine ⟨by norm_num, by norm_num, fun _ => by norm_num, by simp [Assumptions.WithinCompute], oneExecutionPhase_not_pouwSound,
     by norm_num, by norm_num, by norm_num, fun _ b => b.elim, fun _ b => b.elim,
     fun _ _ _ => by simp, by norm_num, fun b => b.elim, by norm_num, by norm_num, by norm_num,
     fun _ b => b.elim, fun b => b.elim, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num, by norm_num, Cut.SecurityProofs.toy_complies, Cut.SecurityProofs.toy_values,
     Cut.SecurityProofs.toy_noSharedPair, Cut.SecurityProofs.toy_hardness 2, Cut.SecurityProofs.toy_exports 2,
     by norm_num, by show 100 ≤ 0 + 100 + Cut.Toy.W.N + 0; omega, by norm_num,
-    fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity], by norm_num, ?_⟩
+    fun _ => by norm_num [Assumptions.ResidualAtMost, incorrectCapacity], by norm_num, ?_⟩
   intro h
   rw [prob_of_forall_not] at h
   · norm_num at h

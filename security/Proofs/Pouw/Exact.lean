@@ -157,7 +157,7 @@ theorem int7_sum_mem (k : ℕ) (a b : ℕ → ℤ) (hk : k ≤ 2 ^ 19 - 1) (ha :
   constructor <;> nlinarith [this.1, this.2]
 
 /-- **(e2)** int32 exactness of the noised transcript for `k ≤ 133144`. -/
-theorem int32Transcript : GameStatements.Int32Transcript := by
+theorem int32Trace : GameStatements.Int32Trace := by
   intro k A B i j hk hA hB
   have hmem : InInt32 (mm k A B i j) := noised_sum_mem k (fun l => A i l) (fun l => B l j) hk hA hB
   exact ⟨mmW_eq_of_mem hmem, hmem⟩
@@ -235,7 +235,7 @@ theorem d1Complete : GameStatements.D1Complete := by
     show mmW _ (P.refAct H s U u A) (P.refWt H s U u) i j = mm _ (P.noisedAct H s U u A) (P.noisedWt H s U u) i j
     have he := blockEnd_le P.d (U.layout.shape u).k t
     set e := D1.blockEnd P.d (U.layout.shape u).k t
-    have hex := (int32Transcript e (P.refAct H s U u A) (P.refWt H s U u) i j (by omega)
+    have hex := (int32Trace e (P.refAct H s U u A) (P.refWt H s U u) i j (by omega)
       (fun l hl => (refAct_eq P hN hA hi (by omega)).2)
       (fun l hl => (refWt_eq P hN hB (by omega) hj).2)).1
     rw [hex]

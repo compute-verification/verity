@@ -40,6 +40,6 @@ def GGapPerCoin [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM,
     (∀ (H : Q → R) (s : S), A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q) →
       pr (fun x : (Q → R) × S => CM.cost A.online x.1 U A.act (A.pre.eval x.1) x.2 ≤ T ∧
-        Wins P U g T (A.transcript U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
+        Wins P U g T (A.trace U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
 
 end Pouw.PearlC

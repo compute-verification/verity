@@ -20,7 +20,7 @@ public data registered at the start of the deployment, which the log's first rec
 What this does not give, and `ThetaRegistered` still assumes, is what no check sees, since commitments are hiding:
 that equal roots hold equal values (the binding premise the reduction would name, `InferenceOnly.Assumptions.RootsBind`, not
 stated in Lean yet), that the data the log's first record registers was public and not computed off the books, that
-the auditor knows which log is the deployment's, and how the reference circuit `c` takes its own `c.θ`.
+the auditor knows which log is the deployment's, and how the reference training circuit `c` takes its own `c.θ`.
 `theta-width` (the cited value's dimensions give the parameter's gates) is checked but not stated here: under the
 binding premise equal roots already give equal rows.
 
