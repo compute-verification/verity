@@ -10,11 +10,10 @@ import Mathlib.Data.Nat.Choose.Basic
 /-!
 # The period check's `K` at the terms of the failure forms
 
-`NetworkCheck.Period`'s terms charge every connection's cells (`capsTerm`), in `cells` and, in the rows form, again in
-`schedules`. `MonitoringPeriodLeakFailsAtMost`'s count has neither factor: it has the registered parameters' count and the fail
+`NetworkCheck.Period`'s terms charge every connection's cells (`capsTerm`), in `cells` and again in `schedules`.
+`MonitoringPeriodLeakFailsAtMost`'s count has neither factor: it has the registered parameters' count and the fail
 patterns of the period's failed connections. These lemmas say what the check's `K` bounds at the terms that count:
 
-* `clockKBoundsHeld`: the clock form's `terms` over no connections bounds the count with no cells factor;
 * `rowsTermsFails`: the rows form's `rowsTerms` with `schedules` the registered parameters' count and `cells` the
   failures' term (`failsTerm`: `⌈log2⌉` of `failsAtMost`, the patterns of at most `fails` of the connections at the
   widest bound, which is 0 with no failure);
@@ -54,22 +53,12 @@ def rowsTermsFails (facts : Array Facts) (scan : Scan) (scans : Array (Facts × 
   { rowsTerms facts scan scans cells jitter windows charged with
     cells := failsTerm cells fails, schedules := clog2 thetas }
 
-/-- **The clock form's `K` over no connections bounds the count with no cells factor**: `#Ss` at `syncs ^ windows`
-and each audit's factors at the check's numbers. -/
-theorem clockKBoundsHeld (jitter syncs windows : ℕ) {n : ℕ} (a : Fin n → Audit) (w : Fin n → Facts) :
-    syncs ^ windows * ∏ i, (2 ^ (a i).free * atMost (w i).units (w i).wrong *
-        2 ^ ((w i).wrong * (a i).bits) * jitter ^ (a i).steps) ≤
-      2 ^ (terms (Array.ofFn a) (Array.ofFn w) #[] jitter syncs windows).K := by
-  have h := clockKBoundsCount jitter syncs windows (fun j : Fin 0 => j.elim0) a w
-  rw [Finset.univ_eq_empty, Finset.prod_empty, one_mul, Array.ofFn_zero] at h
-  exact h
-
 theorem K_failsOfFn (facts : Array Facts) (scan : Scan) (jitter windows thetas fails : ℕ) {m n : ℕ} (bounds : Fin m → ℕ)
     (w : Fin n → Facts) (tied faulty : Fin n → ℕ) (charged : Array Facts) :
     (rowsTermsFails facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn bounds) thetas fails jitter
         windows charged).K =
       clog2 thetas + failsTerm (Array.ofFn bounds) fails + ∑ i, (scan.terms (w i) (tied i) (faulty i) jitter).bits := by
-  simp only [Public.K, rowsTermsFails, rowsTerms, Array.map_ofFn]
+  simp only [Public.K, rowsTermsFails, rowsTerms, Array.map_ofFn, Nat.add_zero]
   rw [foldl_ofFn]
   rfl
 
