@@ -160,7 +160,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   auditor's own, fixed before any lane's open. `policies` reads the registry.
 
 - **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
-  (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
+  (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `verity/protocols/accounting/certifier/device/warden_serve.py
   rehearse`, with the network certifier and its client here and the server the peer's endpoint, reached through a
   tunnel: client ──cells──▶ network certifier (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`
   (one of /etc/vy/peers), `--port` (the endpoint's on the peer's loopback), `--minutes` (1 to 170),
@@ -276,7 +276,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     it starts the ssh and holds it until the ssh has exited (`held_listener`), so the forward never ends at a port
     another process could take: a connection made while no relay accepts waits at the session's own socket, where the
     relay takes it as it starts, or the unit closes it unread, in no record, with the ssh. It then runs
-    `benchmarks/network_traces/warden_serve.py session` on that socket (`--listen-fd`): the key, the relay for exactly
+    `verity/protocols/accounting/certifier/device/warden_serve.py session` on that socket (`--listen-fd`): the key, the relay for exactly
     `--windows` execution phases, and the check.
   - *Where a client connects.* 127.0.0.1:CLIENT_PORT on the peer, one TCP connection a request, speaking the
     relay's cells both ways (the relay's module, named above: `cells` sending, `Shim` reading) at the schedule the
@@ -1744,8 +1744,8 @@ def _after_load(spent: int) -> str:
 
 
 def _load_relay():
-    """`benchmarks/network_traces/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
-    from benchmarks.network_traces import load_relay
+    """`verity/protocols/accounting/certifier/device/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
+    from verity.protocols.accounting.certifier.device import load_relay
     return load_relay
 
 
@@ -2581,7 +2581,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
     watermark = ["--watermark"] if req.get("watermark") else []
     if "client_port" in req:
-        return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "session",
+        return [sys.executable, str(tree / "verity" / "protocols" / "accounting" / "certifier" / "device" / "warden_serve.py"), "session",
                 "--upstream", url.removeprefix("http://"), "--listen", f"127.0.0.1:{listen}",
                 *([] if listen_fd is None else ["--listen-fd", str(listen_fd)]), "--out", str(out),
                 *height_argv(req), "--windows", str(req["windows"]), *scan[1:], *watermark]
@@ -2590,7 +2590,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     loaded = [] if not load else ["--load-store", str(store), "--load-shape", load["shape"], "--load-sinks",
                                   ",".join(f"{h}:{p}" for h, p in sinks), "--load-program", load["program"],
                                   "--load-ready-s", str(LOAD_READY_S)]
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "rehearse",
+    return [sys.executable, str(tree / "verity" / "protocols" / "accounting" / "certifier" / "device" / "warden_serve.py"), "rehearse",
             "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
             "--requests", str(req["requests"]),
             "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
@@ -2600,7 +2600,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
 def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> list[str]:
     """`load_relay.py write` of a `weights-write` request: its shape's stream into `store` over every core, its record
     (less the digests) to `store.json` in `out`, which the unit makes the run's `witness/` (`_weights_run`)."""
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "load_relay.py"), "write", "--store",
+    return [sys.executable, str(tree / "verity" / "protocols" / "accounting" / "certifier" / "device" / "load_relay.py"), "write", "--store",
             str(store), "--shape", req["shape"], "--workers", str(os.cpu_count() or 1),
             "--out", str(out / "store.json")]
 

@@ -163,7 +163,7 @@ BENCHMARKS_IMPORTERS = {
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
-        "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
+        "proofs: the relay's load (`verity/protocols/accounting/certifier/device/load_relay.py`), "
         "imported since before the move; goes when the session's code moves under `verity/`",
     "verity/protocols/accounting/poub/device/live_verifier/tests/stub_verifier.py":
         "memory-accounting: the remote session's in-process harness "

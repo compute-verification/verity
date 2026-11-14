@@ -11,8 +11,8 @@ its scans' δ. It is the one calculator of K, and it scales K in two ways:
 
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
 second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
-blocks, T buckets of τ seconds each way, every one proved as its own proof block, every proof block sampled, each sampling
-block's scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading
+blocks, T buckets of τ seconds each way, and the start unit the state they read is copied in, 2T + 1 proof blocks,
+every proof block sampled, each sampling block's scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading
 of the scan's statement:
 
 * the schedules and the fail cells, ⌈log2(cap + 1)⌉ each a request (`capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c +
@@ -370,7 +370,7 @@ class LinkLoad:
         if delta is None:
             return k
         f = fmax(delta)
-        return k + f * math.log2(self.blocks(period) * 2 * self.T + 1) + self.b * f
+        return k + f * math.log2(self.blocks(period) * (2 * self.T + 1) + 1) + self.b * f
 
 
 def seconds(period: str | float | Fraction) -> float | Fraction:
@@ -530,7 +530,7 @@ RESPONSE_IDS, ID_BITS, BUCKETS = 4096, 18, 1280
 #: the scan's slot stride in buckets, the scan class's default
 EVERY: int = IS.Class.__dataclass_fields__["EVERY"].default
 #: the lengths rows' cost runner, whose default schedule (`cost`'s) the count's inputs are read at
-COST_RUNNER = "benchmarks/network_traces/connection_rows_run.py"
+COST_RUNNER = "verity/protocols/accounting/certifier/device/connection_rows_run.py"
 #: that schedule: its content classes, its delay D in buckets, which its ingress buckets equal, its lanes and its
 #: execution phase's buckets. The count is at the first two where a caller names none; the last two are the schedule
 #: `render` prints the count at beside the command's own

@@ -240,7 +240,7 @@ One execution phase's certificates are registered through the proof system
   structural check runs in full.
 - **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system
   Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
-  `benchmarks/network_traces/scan_zk.py` proves in zero knowledge, outside this protocol.
+  `verity/protocols/accounting/certifier/prover/scan_zk.py` proves in zero knowledge, outside this protocol.
 - **Its verifier** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
   public inputs alone. It accepts when its own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
   circuit file the auditor committed) accepts every session, the sessions prove the link's registered proof block (every
@@ -756,7 +756,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
   request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
   `tests/test_network_certifier_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
   phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
-  `benchmarks/network_traces/n2_tie_zk.py` proves them live, its `warden` class the network certifier path's tie.
+  `verity/protocols/accounting/certifier/prover/n2_tie_zk.py` proves them live, its `warden` class the network certifier path's tie.
 - **The first negative** is the phase-6 attack's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 400 and 16 tokens take 2 cells and 1, released one a bucket (r = 1). The forged advice swaps them, keeping the
   total; its lanes aren't the release's, and built anyway they are refused by the proof block, which reads 400 fields in
@@ -2119,9 +2119,30 @@ Which execution phases have a head is the form's:
   - **The run's last execution phase** ends at the run's last close, with the one before it. The network certifier
     admits a connection only at a bucket s with s + `WardenParams.span` inside the run, `span` = D +
     ⌊(`egress_cells` − 1)/r⌋ buckets being the longest a connection lasts, so every release of the last execution
-    phase has ended by then: the run admits nothing in its last `span` buckets. A connection that arrives in them
-    waits in the queue and is cut at the run's end; the queue's bound holds there as anywhere, so arrivals past it
-    are refused and that execution phase's records withheld.
+    phase has ended by then: the run admits nothing in its last `span` buckets. A connection still queued when
+    they begin waits and is cut at the run's end with no cell.
+  - **An arrival in those buckets is turned away**, which is no refusal: it takes no ordinal, is never queued, and
+    no record is withheld for it, so a load that goes on to the run's end leaves the last execution phase its
+    certificates. The network certifier counts the arrivals it turned away apart from its refusals. Three things
+    hold of a turn-away, each held by a test of the network certifier (`test_network_certifier_phase_ends`):
+    - its one cell is a `REFUSED` cell on ordinal 0, the same bytes at every turn-away;
+    - the cell leaves with the next tick's bucket, as that bucket's cells do, through the pacer where the network
+      certifier is paced, and never at the arrival; its stream's end leaves with it, from the same hand;
+    - which arrivals are turned away is a function of the network certifier's tick count at each arrival, the
+      run's length and the schedule: nothing the queue or the lanes hold, so nothing a server does, moves the set.
+
+    On those three the cell is charged nothing and is in no record: no Lean states this. A network certifier of
+    which one failed would have the cell charged at its width, as any cell a server can move is. What a server
+    does set is what the queue holds when those buckets begin, and so which arrivals before them are admitted,
+    wait and are cut, or are refused, as at any run's end. A full queue before them refuses as anywhere, and that
+    execution phase's records are withheld.
+
+    The link stays open after the cell. The network certifier reads what the client still sends and drops it,
+    none of it reaching a server, and closes the link at the client's end of stream, when the client resets it,
+    which it counts, or at the run's end. It reads at most a byte past the cells a request may hold
+    (`ingress_cells`): a link that sends more is read no further, as an admitted connection's ingress past its
+    bound is not, and is closed at the run's end. A link closed with its client's request unread is reset, and a
+    reset client may lose the cell it has not read; a refusal's link, closed at the arrival, still can be.
   - **The word** is one certificate over SHA-512 of the link, the execution phase and the parameters' digest under a
     tag of its own (`connection_rows.no_head_digest`), for the session and under the key every certificate is. A
     reader tells the three cases apart from public values: a certificate over that digest is the word, a certificate
@@ -2153,8 +2174,10 @@ a slot in a size class of at most 262,144 bits, so one block returns a row of at
 (`connection_rows.check_slots`), and `WardenParams` refuses a schedule with lengths rows whose slot stride releases
 more, naming the longest stride that fits. The prover's side (`blocks`) builds each row's arguments, outputs and
 registered reads from the network certifier's opening and refuses request rows that give another row than the signed
-one. The period check reads schedules without lengths rows only: nothing yet ties the request row to the compute
-side's committed values or reads the block's verdict and failures.
+one. The period check reads a schedule with lengths rows, with content rows and with request words, as `WardenParams`
+builds it and at its digest, and refuses it by name in its parameters and in its check
+(`NetworkCheck.Period.connectionRowsRefusal`): it accepts periods under schedules without lengths rows only, since
+nothing yet ties the request row to the compute side's committed values or reads the block's verdict and failures.
 
 **The content rows** (`WardenParams.content`, with lengths rows only, none by default; `content_rows`) are three
 rows of a released connection that hold what it carried: its request (u32 bytes, the bytes, zeros to its class's
@@ -2247,7 +2270,7 @@ prompt ids and a size of ids released, each a power of two.
   cells' ids, as it cut and released them and never from the server's report, four bytes an id, from the release to
   the hand that carries it: the lengths rows' hand, at the close of the next execution phase, or under form 2 at
   the run's last close for its last. On its tick the device only hands. Whoever takes the hand lays the tables,
-  commits them and signs the head (`benchmarks/network_traces/warden_serve.py`: its publisher process, which holds
+  commits them and signs the head (`verity/protocols/accounting/certifier/device/warden_serve.py`: its publisher process, which holds
   the key). A connection whose client goes away after its release ends as its server does, in its `END` or a
   server's `FAIL`, and has its rows.
 - **An execution phase that is not handed** (the lengths rows' forms say which) has no content rows and no head: no
@@ -2348,7 +2371,7 @@ and the response row it returns ("The content rows"); no statement registers its
     certifier's pacer (above), which writes them to the connection's socket `paced` after the bucket's boundary, a
     time fixed before the bucket is made. A bucket that reaches the pacer after that time, or whose release starts
     past the slack, faults every record's window: the open one, or the records held until each of its buckets'
-    releases is reported. `benchmarks/network_traces/warden_serve.py` paces at 50 ms by default (`--paced-ms`).
+    releases is reported. `verity/protocols/accounting/certifier/device/warden_serve.py` paces at 50 ms by default (`--paced-ms`).
 - **The advice is not on the wire.** The network certifier sends no advice. Whatever the proofs need beyond the committed values
   travels on the proof side and is charged there (`A_c`).
 - **log2 of the schedule's public parameters**, once per deployment: log2 of the number of parameter sets it may
@@ -2414,7 +2437,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   certifier's parameters digest in the head. A head is witness, so no reason reaches the client.
 - `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
   the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
-- `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that the session's start
+- `verity/protocols/accounting/certifier/device/warden_serve.py` runs the network certifier live and checks that the session's start
   is certified and that each client got exactly its egress record's cells, each in its bucket. The auditor gate's
   `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs the same rehearsal on the auditor's
   device.
@@ -2570,7 +2593,7 @@ closes it.
 - Here the network certifier commits one row per bucket under its own domain and signs the head, so the certificate names the
   root in the clear. The opening is the verifier's registered-read check, and no gate of the proof block hashes.
 
-**Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy proof block, `WardenRowIdentity{B}` at B a row's S·B
+**Demonstration** (`verity/protocols/accounting/certifier/prover/warden_zk.py`). A toy proof block, `WardenRowIdentity{B}` at B a row's S·B
 bytes, takes one row's bits through two NOTs. Each proof block reads one of a connection's cells, so its row is that cell's
 bucket. Its port is registered against the network certifier's egress root of a `warden_serve` run, proved by Flock `prove --zk`
 behind the ZK server, and held by Lean `verify --zk --registered`. The members:

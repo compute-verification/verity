@@ -313,7 +313,7 @@ class Certifier:
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
     inference block runs on a single server (ruled). At the warden form's public parameters (the `WardenParams` of
-    `benchmarks/network_traces/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
+    `verity/protocols/accounting/certifier/prover/scan_zk.py`'s setups: `B` bytes a cell, `r` slots a lane, `lanes`, `C` cells a request,
     `IDB` bits an id, `D`, `T`) a request's declared input is at most
 
         requestBits = Σ REQUEST_HEAD + (K0 + (C − 1) K) IDB,   K0 = ⌊(B − 9 − 367) / 11⌋,   K = ⌊(B − 9) / 11⌋

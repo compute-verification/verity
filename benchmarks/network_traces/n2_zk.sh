@@ -38,7 +38,7 @@ for f in deployment.json cells.jsonl certified.jsonl check.json warden.json; do
   [ -f "$RUN/$f" ] && cp "$RUN/$f" "$OUT/run/"
 done
 log "n2zk: proving${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"
-"$PY" benchmarks/network_traces/n2_zk.py prove --warden-run "$RUN" \
+"$PY" verity/protocols/accounting/certifier/prover/n2_zk.py prove --warden-run "$RUN" \
   --bin "$BIN" --lean "$LEAN" --out "$W/n2zk" ${N2_ROUNDS:+--rounds "$N2_ROUNDS"} \
   ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 | tee -a "$OUT/n2zk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
