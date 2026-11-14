@@ -43,9 +43,9 @@ def places(monkeypatch, *, beside_torch=(), shipped=None, loads=None, package_ra
             return loads[name]
         raise OSError(f"{name}: cannot open shared object file: No such file or directory")
 
-    class Package(types.ModuleType):
+    class Package:                                   # stands for the package's module, of which the loader reads `__file__` alone
         @property
-        def __file__(self):                          # what the loader reads to find the package's `lib`
+        def __file__(self) -> str:                   # what the loader reads to find the package's `lib`
             if package_raises is not None:
                 raise package_raises
             return PACKAGE
@@ -55,10 +55,9 @@ def places(monkeypatch, *, beside_torch=(), shipped=None, loads=None, package_ra
     if shipped is None and package_raises is None:
         monkeypatch.setitem(sys.modules, "nvidia", None)
     else:
-        top = types.ModuleType("nvidia")
-        top.cuda_runtime = Package("nvidia.cuda_runtime")
-        monkeypatch.setitem(sys.modules, "nvidia", top)
-        monkeypatch.setitem(sys.modules, "nvidia.cuda_runtime", top.cuda_runtime)
+        package = Package()
+        monkeypatch.setitem(sys.modules, "nvidia", types.SimpleNamespace(cuda_runtime=package))
+        monkeypatch.setitem(sys.modules, "nvidia.cuda_runtime", package)
     return asked
 
 
