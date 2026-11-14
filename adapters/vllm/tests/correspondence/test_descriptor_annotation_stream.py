@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 
 import pytest
 
@@ -71,3 +72,82 @@ def test_read_program_dir_through_the_stream(tmp_path):
     assert table is not None and dg == digest and problem and "correspondence_digest" in problem
     (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "d"}}))
     assert RC.read_program_dir(str(tmp_path)) == (None, None, None)
+
+
+def test_the_plain_descriptor_is_read_where_no_gzipped_one_is(tmp_path):
+    desc = descriptor(3)
+    doc, digest = desc["annotations"][RC.NAMESPACE], RC.correspondence_digest(desc)
+    (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "d", "correspondence_digest": digest}}))
+    (tmp_path / "descriptor.json").write_text(json.dumps(desc))
+    assert RC.read_program_document(str(tmp_path)) == (doc, digest, None)
+    table, dg, problem = RC.read_program_dir(str(tmp_path))
+    assert problem is None and dg == digest and table is not None and table.doc == doc
+    other = descriptor(5)                                                          # beside a gzipped descriptor the plain one is not read
+    with gzip.open(tmp_path / "descriptor.json.gz", "wt") as f:
+        json.dump(other, f)
+    got, dg, problem = RC.read_program_document(str(tmp_path))
+    assert got == other["annotations"][RC.NAMESPACE] and dg == RC.correspondence_digest(other) != digest
+    assert problem and "correspondence_digest" in problem                          # the result records the plain one's digest
+
+
+def test_a_program_dir_with_no_descriptor_or_no_record_in_it(tmp_path):
+    assert RC.read_program_document(str(tmp_path)) == (None, None, None)           # nothing beside it: no record, and no problem
+    assert RC.read_program_dir(str(tmp_path)) == (None, None, None)
+    bare = tmp_path / "bare"                                                       # a descriptor that carries no record, and no result
+    bare.mkdir()
+    (bare / "descriptor.json").write_text(json.dumps({"schema": "x", "annotations": {"node_hints": {}}}))
+    assert RC.read_program_document(str(bare)) == (None, None, None)
+    # a result that records the record's digest is a problem where no descriptor is beside it, and where the descriptor carries no record
+    recorded = json.dumps({"program": {"digest": "d", "correspondence_digest": "0" * 64}})
+    (tmp_path / "result.json").write_text(recorded)
+    problem = f"{tmp_path}: result.json records a correspondence_digest but no descriptor is beside it"
+    assert RC.read_program_document(str(tmp_path)) == (None, None, problem)
+    assert RC.read_program_dir(str(tmp_path)) == (None, None, problem)
+    (bare / "result.json").write_text(recorded)
+    doc, digest, problem = RC.read_program_document(str(bare))
+    assert doc is None and digest is None
+    assert problem == f"{bare}: result.json records a correspondence_digest but the descriptor carries no {RC.NAMESPACE!r} annotation"
+
+
+@pytest.mark.parametrize("annotation", [{}, {"schema": "runtime-correspondence/v0", "calls": []}, [1, 2], "x", 7, True, {"annotations": {}}],
+                         ids=["empty", "another-schema", "list", "string", "number", "true", "annotations-without-a-record"])
+@pytest.mark.parametrize("recorded", ["0" * 64, 5], ids=["digest", "number"])
+def test_a_recorded_digest_beside_an_annotation_that_gives_none_is_not_read(tmp_path, annotation, recorded):
+    """The descriptor's `correspondence` annotation is no record, so it has no digest, and the result records one: the sentence
+    of the mismatch cuts the annotation's digest, which is None.  Neither reader returns."""
+    (tmp_path / "result.json").write_text(json.dumps({"program": {"digest": "d", "correspondence_digest": recorded}}))
+    (tmp_path / "descriptor.json").write_text(json.dumps({"schema": "x", "annotations": {RC.NAMESPACE: annotation}}))
+    assert RC.correspondence_digest(annotation) is None
+    for read in (RC.read_program_document, RC.read_program_dir):
+        with pytest.raises(TypeError, match="'NoneType' object is not subscriptable"):
+            read(str(tmp_path))
+
+
+def test_a_result_that_cannot_be_read_is_a_problem(tmp_path):
+    (tmp_path / "result.json").write_text("{not json")
+    doc, digest, problem = RC.read_program_document(str(tmp_path))
+    assert doc is None and digest is None
+    assert problem is not None and problem.startswith(f"{tmp_path / 'result.json'}: unreadable (")
+    assert RC.read_program_dir(str(tmp_path)) == (None, None, problem)
+
+
+@pytest.mark.parametrize(("text", "refusal"), [
+    ("", "descriptor: expected '{' at offset 0, found ''"),
+    ("[1, 2]", "descriptor: expected '{' at offset 0, found '['"),
+    ('{"annotations" 1}', "descriptor: expected ':' at offset 15, found '1'"),
+    ('{"annotations": {"correspondence": 1.5e}}', "descriptor: malformed number at offset 35"),
+    ('{"annotations": {"correspondence": 12e', "descriptor: malformed number at offset 35"),
+])
+def test_a_descriptor_that_is_no_json_object_is_refused(tmp_path, text, refusal):
+    p = tmp_path / "descriptor.json"
+    p.write_text(text)
+    with pytest.raises(ValueError, match=f"^{re.escape(refusal)}$"):
+        RC.read_descriptor_annotation(str(p))
+
+
+@pytest.mark.parametrize("text", ['{"annotations": ', '{"annotations": {"correspondence": 12', '{"definitions": [1, 2', '{"annotations": {"correspondence": -}}'])
+def test_a_descriptor_cut_short_or_garbled_raises_the_decoders_error(tmp_path, text):
+    p = tmp_path / "descriptor.json"
+    p.write_text(text)
+    with pytest.raises(json.JSONDecodeError):
+        RC.read_descriptor_annotation(str(p))
