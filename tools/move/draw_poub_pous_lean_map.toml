@@ -13,7 +13,7 @@ exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", 
            "tests/test_retired_terms.py", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
 
 [[words_in]]
-files = ["security/Proofs/Properties/Accounting/Remote/Run.lean"]
+files = ["security/Proofs/Properties/Compose/Remote/Run.lean"]
 words = { "drawnN" = "sampledN" }
 
 [[words_in]]
