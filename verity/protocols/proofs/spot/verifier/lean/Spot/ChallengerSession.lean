@@ -774,7 +774,7 @@ def auditedIn (wins : Array Win) (periods : Array MonitoringPeriod) (window : Js
   unless isDigest (getD b "commitment") && SEALED_FILES.all (fun f => (field? files f).isSome) do throw malformed
   let p := periods.find? (·.windows.contains s)
   if let some p := p then
-    if p.cap == Json.null || p.circuit == Json.null then
+    if p.cap.isNull || p.circuit.isNull then
       throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
   return ({ session := s, host := strOf (getD o.body "host"), prover := laneOf o.body, files, recordLeaf,
             commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
