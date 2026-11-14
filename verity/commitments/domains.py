@@ -184,6 +184,13 @@ VLLM_PEARL_C_RUN_V1 = "verity-vllm/pouw-pearl-c-run/v1"
 VLLM_PEARL_C_RUN = "verity-vllm/pouw-pearl-c-run/v2"
 VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 
+# The network certifier's mark certificate (`verity.protocols.accounting.certifier.verifier.certificate`)
+CERTIFIER_MARK = "verity-network-certifier/mark/v1"
+
+# The network certifier's count over a span between two marks (`verity.protocols.accounting.certifier.verifier.span`)
+CERTIFIER_SPAN = "verity-network-certifier/span/v0"
+CERTIFIER_SPAN_PROTOCOL = "verity/certifier/span/v0"
+
 # Not yet read from here: the commitments' own (`verity.commitments`)
 BLAKE3_KEYED_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
 BLAKE3_KEYED_ROW = "blake3-keyed/row/v2"
@@ -254,6 +261,7 @@ FIREWALL_COINS = "verity/firewall-coins/v0"
 FIREWALL_PUBLIC = "verity/firewall-public/v0"
 FIREWALL_RELEASE = "verity/firewall-release/v0"
 FIREWALL_TRANSCRIPT = "verity/firewall-transcript/v0"
+FLOCK_CIRCUIT_BINDING = "verity/flock-circuit/binding/v2"
 FLOCK_NETLIST_SIGMA = "verity/flock-netlist/sigma/v1"
 FLOCK_NETLIST = "verity/flock-netlist/v1"
 FLOCK_ZK_TAU = "verity/flock-zk/tau/v1"
@@ -364,6 +372,7 @@ CERTIFIER_RECORDS = "verity-network-certifier/records/v2"
 CERTIFIER_REVEAL_REQUEST = "verity-network-certifier/reveal-request/v1"
 CERTIFIER_REVEAL_RESPONSE = "verity-network-certifier/reveal-response/v1"
 CERTIFIER_ROW_SHA512 = "verity-network-certifier/row-sha512/v1"
+CERTIFIER_SCAN_OK_ROW_SALT = "verity-network-certifier/scan-ok-row-salt/v1"
 CERTIFIER_SERVICE_SPEC = "verity-network-certifier/service-spec/v0"
 CERTIFIER_SESSION = "verity-network-certifier/session/v0"
 CERTIFIER_START = "verity-network-certifier/start/v1"

@@ -1768,8 +1768,8 @@ them.
       to the Commit's sampled ids, a client's abort only where the Commit says so
       ([protocol/compact-finish.md](protocol/compact-finish.md)).
     - **What covers it.** The head model takes a frame as B opaque bytes, which a compact cell is. No Lean models
-      ordinal headers or compact records. The gate's rehearsal runs compact framing on the auditor's host
-      (`certifier-rehearse --traffic varied --compact B`).
+      ordinal headers or compact records. The proxy's rehearsal runs compact framing
+      (`certifier_serve.py rehearse --traffic varied --compact B`), off the gate's machine.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
@@ -2174,17 +2174,25 @@ prompt ids and a size of ids released, each a power of two.
   `lengths` and `fails`, in the schedule's order, and is signed once. Under the lengths rows' form 1 a class is
   (P, O, rows) and each of its tables is of `rows` rows whatever the load; `rows` is at most the lengths table's
   slots, since an execution phase releases no more. Under form 2 a class is (P, O) and each of its tables is its
-  held rows and no other. The schedule refuses a class of the other form's numbers, naming the change.
+  held rows and no other. The schedule refuses a class of the other form's numbers, naming the change. It also
+  refuses classes none of which, at the largest P, holds the most ids a response of the schedule releases
+  (`content_rows.most_released`: one `DATA` cell fewer than `egress_cells`, or what the schedule holds a request's
+  `max_tokens` to): the longest request it admits is one that only a class of that P holds.
 - **A row's place.** Row r of class i's tables is the execution phase's r-th release, in release order, among those
   filed in class i. A release has its three rows at one r.
 - **The filing** is one function with one caller (`content_rows.file`, which `connection_rows.tables` calls): the
   first listed class that holds the request's bytes and the ids released. It reads the release's own sizes and
   nothing the server says, and `content_rows.tables`, which lays the tables, takes each release's class as an
   argument. A release that fits no class, or under form 1 one whose class's rows are all held, has no content row,
-  and no later class takes it; its lengths slot holds its lengths all the same. Under form 2 a class's rows are all
-  held at R of them ("The bound", below), and a release filed in it past them is refused, naming the release, the
-  class and R (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none
-  of their tables is laid and no head is signed over them.
+  and no later class takes it; its lengths slot holds its lengths all the same. None is unfiled for its request's
+  length: the network certifier admits a request of at most the bytes the schedule's largest class holds (the
+  schedule's `request_bound`), and a longer one is ingress past its bounds, whose connection fails closed
+  (`ingress`) with nothing released. None is unfiled for its ids, which a class of the largest P holds ("The
+  classes"). So every release of a schedule's own network certifier fits a class, and one has no content row only
+  under form 1, where its class's rows are all held. Under form 2 a class's rows are all held at R of them ("The
+  bound", below), and a release filed in it past them is refused, naming the release, the class and R
+  (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none of their
+  tables is laid and no head is signed over them.
 - **A row of zero bytes** is what every row past the held ones is under form 1 (`content_rows.empty_rows`). As a
   request row it reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a
   response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held
