@@ -133,7 +133,8 @@ def test_select_stand_ins(program, window):
 def test_joined_with_select():
     """Every family set (`node_window`, `_dense`, `_sparse`, `_multimem`, `_embed`, `_select`) at a 43-id prompt, 2 outputs and
     one decoder layer: only the stop check is unlowered; no row is free of the token select, the decode's 32 shard reads taking
-    ``tok`` by one wire from the prefill select's combine unit; the prefill's 1,376 reads are still row 0 of the ``SIZE=192``
+    ``tok`` by one wire from the prefill select's combine unit, the prefill's taking it as the request's ingress (the prompt);
+    the prefill's 1,376 reads are still row 0 of the ``SIZE=192``
     combine's ``parts``, which `node_window_multimem` combines as rows of 192 words. The only test that builds the window with
     the select beside the other five sets."""
     families = {**FAMILIES, **NS.FAMILIES, **NM.FAMILIES, **NE.FAMILIES}
@@ -146,7 +147,8 @@ def test_joined_with_select():
     tok = [(x.writer, x.out, x.at, x.radix, x.base, x.step, x.cut)
            for x in circuit.wires if x.reader == read and x.port == "tok"]
     assert tok == [(combine, "o0", IDS * blocks, (blocks,), 0, (0,), (0, 1))]
-    assert {(f.kind, f.name, f.at, f.count) for f in w.free if f.tid == read} == {("param", "prompt", 0, IDS * blocks)}
+    assert not [f for f in w.free if f.tid == read]
+    assert [(g.reader, g.port, g.at, g.units, g.step) for g in circuit.ingress] == [(read, "tok", 0, IDS * blocks, 0)]
     parts = [x for x in circuit.wires if x.writer == read and x.reader.startswith("AllReduceMultimem_v1")]
     assert [(x.port, x.out, x.at, x.radix, x.base, x.step, x.cut[0]) for x in parts] == [
         ("parts", "o0", 0, (IDS, blocks), 0, (1, IDS), 0)]

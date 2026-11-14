@@ -1,7 +1,8 @@
 """verity_vllm.program.predict.node_window: the eight ranks' windows of GLM-5.3's request Program at TP8 and their join
 (`rank_window`, `join`). Every rank's window builds (the all-reduce's own segment and the select's own lanes are the rank's,
 `node_window_multimem.mine`); joined, every rank's units follow the rank before's, every peer input is wired from its
-writer rank's own partial, and only the prompt and the absorbed weights stay free. `_slice` cuts a pattern's indices.
+writer rank's own partial, every rank's prompt reads are the request's ingress, and only the absorbed weights stay free.
+`_slice` cuts a pattern's indices.
 """
 from __future__ import annotations
 
@@ -44,8 +45,9 @@ def test_slice():
 def test_eight_ranks_joined():
     """GLM-5.3's first decoder layer at each of the eight ranks, its window, and the eight joined: each rank as many units
     of each template; the joined circuit passes `interface.Circuit`'s checks and keeps every rank's units, wires every peer
-    input of every rank and leaves none unwired, and keeps free only each rank's prompt and its absorbed weights. About
-    90 s: the only test that builds a rank other than 0 and the join."""
+    input of every rank and leaves none unwired, takes each rank's prompt reads as the request's ingress at that rank's
+    units, and keeps free only each rank's absorbed weights. About 90 s: the only test that builds a rank other than 0 and
+    the join."""
     ranks = [NW.rank_window(r, glm_request(IDS, 1, rank=r).program.fn, FAMILIES) for r in range(WORLD)]
     assert len({tuple(sorted(x.circuit.units.items())) for x in ranks}) == 1
     assert len({x.census["digest"] for x in ranks}) == WORLD
@@ -54,6 +56,9 @@ def test_eight_ranks_joined():
     assert j.circuit.units == {t: WORLD * n for t, n in ranks[0].circuit.units.items()}
     peers = [(x.rank, f) for x in ranks for f in x.free if f.kind == "peer"]
     assert len(j.wired) == len(peers) and {(r, f.name) for r, f in j.wired} == {(r, f.name) for r, f in peers}
-    assert {(f.kind, f.family) for f in j.free} == {("param", "prompt"), ("param", "weights")}
+    assert {(f.kind, f.family) for f in j.free} == {("param", "weights")}
     assert {f.name.split("/")[0] for f in j.free} == {f"r{r}" for r in range(WORLD)}
+    assert [(g.reader, g.at, g.units) for g in j.circuit.ingress] == [
+        (g.reader, g.at + j.first[x.rank][g.reader], g.units) for x in ranks for g in x.circuit.ingress]
+    assert {g.port for g in j.circuit.ingress} == {"tok"} and len(j.circuit.ingress) == WORLD
     assert all(j.first[r][t] == r * n for r in range(WORLD) for t, n in ranks[0].circuit.units.items())
