@@ -27,8 +27,6 @@ public import Proofs.NetworkCertifier.Schedule
 public import Proofs.NetworkCertifier.PerWindow
 public import Proofs.NetworkCertifier.Sanity
 public import Proofs.NetworkCertifier.Code
-public import Proofs.NetworkCertifier.Accepted
-public import Proofs.NetworkCertifier.Causal
 public import Proofs.NetworkCertifier.Tap
 public import Proofs.NetworkCertifier.RecordRows
 public import Proofs.NetworkCertifier.Witnesses
@@ -91,10 +89,6 @@ nontrivial lemmas; `CountWitnesses` gives the counts', and `PeriodWitnesses` two
 monitoring period's guarantee, at the instances of `Definitions.NetworkCertifier.Witness`, from what `WitnessToys`
 proves there. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
-`Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
-check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
-`Causal` proves `ExpectedGridCausal` (a later window's sync never changes an earlier window's expected grid) and,
-from it, `EncardProgramRunsLeWindows`: the program's runs over their first `m` windows.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.

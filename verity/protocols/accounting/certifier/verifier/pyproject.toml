@@ -24,7 +24,6 @@ paths = ["verity/circuits", "verity/circuits/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = [
-    "tests/test_network_certifier_issuer_lean_difftest.py",
     "tests/test_network_certifier_lean_difftest.py",
     "tests/test_network_certifier_tie_service.py",
     "tests/test_network_check_lean_difftest.py",

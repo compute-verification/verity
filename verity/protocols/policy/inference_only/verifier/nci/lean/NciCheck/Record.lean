@@ -15,8 +15,8 @@ committed rows, and which unit reads which registered parameter and which unit f
 phase's circuit record (its wires, registered reads, table reads, openings and ingress), which SPOT checks unit by
 unit. This module does for such a record what `Baseline.evaluate` does for a Program: it reads the record
 (`read`), takes one summary of it (`summarize`), decides the rate rule on the summary (`rate`), and counts as θ only
-what the registration log registers at the start of the deployment (`isTheta`). It is a library with a difftest
-(`RecordDifftest`): no executable, protocol or verdict reads it.
+what the registration log registers at the start of the deployment (`isTheta`). It has a difftest (`RecordDifftest`),
+and the rows protocol (`RowsProtocol`) reads it.
 
 What the record's text declares is the module `RecordText`'s, functions of the Program and the text alone: the
 text's wiring, the templates, each unit's block and what each row is declared to hold. This module builds on them

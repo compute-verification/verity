@@ -1,8 +1,8 @@
-"""Theorems 1(b) and 3 on small grids. By name, the tests mirror three of their statements:
+"""Theorems 1(b) and 3 on small grids. By name, the tests mirror two of their statements:
 `SecurityProofs.EncardLeProdOfBranching` and `SecurityProofs.EncardObsDecodableLe` (`NetTiming.SecurityProofs`, proved
-in its `Counting`), and the check's count of accepted runs, `Properties.NetworkCertifier.EncardAcceptedObservationsLe`
-(`#Ac · #Σ_sync^W · D^(W·T)`). The rest check what the program's syncs give, which Lean's reference Program, over send
-ticks and execution blocks, doesn't state: the per-window prefixes and that a window's grid reads only earlier syncs.
+in its `Counting`). The rest check what the program's syncs give, which Lean's reference Program, over send ticks and
+execution blocks, doesn't state: the check's count over its W windows (`#Ac · #Σ_sync^W · D^(W·T)`,
+`capacity.accepted_bound_bits`), the per-window prefixes and that a window's grid reads only earlier syncs.
 
 The accepted observation sequences are the grids an accepted run can show. The tests enumerate every sender behaviour
 on a small horizon: every hand-time schedule, and every declared clock sync. They count what an accepted run can
@@ -75,8 +75,7 @@ def test_tree_lemma():
 
 
 def test_accepted_count_le_sync_advice():
-    """Properties.NetworkCertifier.EncardAcceptedObservationsLe: the check's accepted sequences ≤ #Σ_sync^W (content
-    fixed, J so D = 1)."""
+    """The check's accepted sequences ≤ #Σ_sync^W (content fixed, J so D = 1)."""
     sync_set = SyncSet((0, 1), (1, 2))
     windows = 2
     seen = accepted_observations(sync_set, windows)
@@ -142,8 +141,7 @@ def test_a_negative_logical_index_is_rejected():
 
 
 def test_fixed_clock_zero_capacity():
-    """Properties.NetworkCertifier.EncardAcceptedObservationsLe at one sync value, under J: with a fixed clock, every
-    accepted run shows the same grids."""
+    """The check's count at one sync value, under J: with a fixed clock, every accepted run shows the same grids."""
     sync_set = SyncSet((1,), (1,))
     seen = accepted_observations(sync_set, 2)
     assert len(seen) == 1

@@ -15,6 +15,7 @@ public import NciCheck.RecordChosen
 public import NciCheck.RecordDifftest
 public import NciCheck.BaselineDifftest
 public import NciCheck.Protocol
+public import NciCheck.RowsProtocol
 public import NciCheck.Count
 public import NciCheck.CountDifftest
 public import NciCheck.DefinitionDigest
@@ -23,7 +24,7 @@ public import NciCheck.DefinitionDigest
 # The NCI policy's check
 
 `NciCheck.Baseline.check` (the `nci-check` exe) is the verifier's check that a declared division of a declaration into
-isolation units meets `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`), for IUs aligned to the root's Calls, at
+inference blocks meets `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`), for IUs aligned to the root's Calls, at
 the cost of the descriptor: `NciCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
 deployment's registration log registers and never an earlier run's output, against the service's log
@@ -48,8 +49,13 @@ files, each template's rows of one unit from a table it is handed, and decides t
 `blockRows` is the one definition of a block's rows, which reads the templates' ids and units alone.
 `RecordChosen` counts the whole execution phase where those count a block: the record's input bits of each kind over
 every slot, and of them the bits the prover chose, which no wire, ingress or θ fills.
-All five are a library: no executable, protocol or verdict reads them. `RecordDifftest` holds them to the Python
-reference, and the wiring the form reads to the one SPOT's reader reads.
+`RecordDifftest` holds the five to the Python reference, and the wiring the form reads to the one SPOT's reader
+reads. `RecordCount` is a library: no protocol or verdict reads it.
+
+`RowsProtocol` is the check of a circuit record in rows as a core protocol, `verity/inference-only/rows/v1` (the
+`inference-only-rows` exe): `Record`'s reading of the record, `RecordRows`' rule on it and `RecordChosen`'s count,
+with each template's rows of one unit read from its circuit file, a blob named by its SHA-512 in the params, by the
+reader SPOT's one-stage check reads a file with (`Spot.OneStageZk`, `Spot.FilePart`). No system lists it.
 
 `NciCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):
 the inference-only policy's subprotocol of onsite and remote, on the core interface (`CoreProtocol`).

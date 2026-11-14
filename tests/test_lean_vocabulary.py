@@ -774,10 +774,6 @@ KNOWN: dict[str, str] = {
     "verity/commitments/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
     "verity/party.py::Record": "homonym, a party's log entry: rename (proofs)",
-    "verity/protocols/accounting/certifier/device/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
-    "verity/protocols/accounting/certifier/device/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
-        "homonym, a link's online state: rename (network-accounting)",
     "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "verity/protocols/accounting/certifier/verifier/audit.py::Verdict":

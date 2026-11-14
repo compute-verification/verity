@@ -7,7 +7,6 @@ public import Mathlib
 public import Mathlib.Algebra.Group.Nat.Defs
 public import Mathlib.Tactic.Attr.Core
 public import Mathlib.Tactic.ToDual
-public import Properties.NetworkCertifier.Device
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -51,7 +50,8 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # LMS, proved: a key's signatures verify
 
 Completeness, not guarantees: `LmsCorrect` (every signature `signAt` returns verifies) and `LmsSigns` (`signAt` returns
-at every leaf below `2^H`), each with a toy-key instance in `Proofs.CertifierNetwork.Instance`.
+at every leaf below `2^H`), each read at the deployed parameters where a device's proof signs with them
+(`Proofs.Properties.Pous.Component`, `Proofs.Properties.Pous.WipeSigned`).
 
 A key `Lms.key` derives holds its tree: node `2^H + q` is leaf q's hash of its one-time public key, and each interior node
 r is `interior r` of its children (`key_spec`). The signature `signAt` gives at leaf q reveals each chain `a_i` steps in,
@@ -451,8 +451,7 @@ theorem verify_signAt {N W H : Nat} {toy : Bool} {p : Params} {I seed : ByteArra
 
 /-- **LMS signatures verify** (completeness, not a guarantee): for a key `Lms.key` derives under parameters
 `Lms.Params.make` admits, every signature `Lms.signAt` returns verifies under the key's public key (`Lms.verify`), and its
-encoding decodes back to it. It pairs with the LMS-forgery disjunct of
-`Properties.NetworkCertifier.AcceptedRowsAreProgramRows`. -/
+encoding decodes back to it. -/
 def LmsCorrect : Prop :=
   ∀ (N W H : Nat) (toy : Bool) (p : Params) (I seed : ByteArray) (k : PrivateKey) (q : Nat) (message : ByteArray)
     (sig : Signature),
