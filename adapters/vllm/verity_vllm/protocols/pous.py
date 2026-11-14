@@ -24,10 +24,10 @@ vLLM's model, attaches the decode to its layers and holds the option.
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.
-* **The period** (`PousOption.audit`, `PousOption.leg`): `period_prover.audit` of what setup published, the prover answering
+* **The period** (`PousOption.audit`, `PousOption.subprotocol`): `period_prover.audit` of what setup published, the prover answering
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
-  point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
+  point no certificate covers).  In `PousOption.subprotocol` the memory challenger runs at ``period.json``'s ``challenger_host``
   (`side_of`, which the caller that starts the run hands in) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
@@ -168,7 +168,7 @@ class _Proxy:
 
 @dataclass(eq=False)
 class PousOption(Option):
-    """The installed option: `answer` is the prover's reply to a challenge, `audit` and `leg` a period's audit of what it
+    """The installed option: `answer` is the prover's reply to a challenge, `audit` and `subprotocol` a period's audit of what it
     holds; ``weights()`` (`Option.decoded`) is the released plaintext decoded from ``C*``."""
 
     store: ws.Store | None = None
@@ -194,16 +194,16 @@ class PousOption(Option):
         kw.setdefault("prover", self.prover)
         return ws.audit(self.store, node, coins, **kw)
 
-    def leg(self, period_dir: str | Path, node: str, out: str | Path, *, side_of: Callable[..., Any],
+    def subprotocol(self, period_dir: str | Path, node: str, out: str | Path, *, side_of: Callable[..., Any],
             schemes: Mapping[str, Any] | None = None, protocol: str | None = None) -> dict[str, Any]:
-        """One period's PoUS of what this option holds (`weight_store.leg`), the first this option's ``fresh``."""
+        """One period's PoUS of what this option holds (`weight_store.subprotocol`), the first this option's ``fresh``."""
 
         def audited(node: str, coins: bytes, **kw: Any) -> Any:
             got = self.audit(node, coins, **kw)
             self.periods += 1
             return got
 
-        return ws.leg(self.store, period_dir, node, out, audit=audited, side_of=side_of, fresh=self.periods == 0,
+        return ws.subprotocol(self.store, period_dir, node, out, audit=audited, side_of=side_of, fresh=self.periods == 0,
                       answered=lambda: self.answered, schemes=schemes, protocol=protocol)
 
 

@@ -12,7 +12,7 @@ premise (`h1_meets`); the instance they read is here, so their statements read o
 
 * The twin's circuit word, scheme and anatomy (`Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest`): one
   committed `S8Dot_v1` word, every kind credited with its operand luck pinned, `r_B = ½` and guess `½`, one word fixed.
-* The deployed check's numbers at the all-protocols PoUW leg (`Accept`): the pinned H1 tile's check item, its
+* The deployed check's numbers at the all-protocols PoUW subprotocol (`Accept`): the pinned H1 tile's check item, its
   parameters `h1Params`, the loop's honest registration `h1Reg` and one-stage's answer accepting it, `h1Evidence`.
 * H1's honest live-salt period (`HonestH1`): 128 committed words of no operands, one a unit, on `N_p = 144` tiles, one
   live round; its windows registering `h1Reg` and answered with the sample's units at `K_d = 24`; its salt the round's
@@ -69,12 +69,12 @@ open PouwWindow (Work Sampling)
 /-- The pinned H1 tile (`core_check.TILES`' salted `PouwH1Tile_v1`, `K = 64`, `R = 4`, `C = 8`). -/
 def h1Tile : Tile := tiles[4]
 
-/-- The leg's check item (`h1_check`): the pinned tile's template and work per tile (`64·32`), the scheme and the
+/-- The subprotocol's check item (`h1_check`): the pinned tile's template and work per tile (`64·32`), the scheme and the
 entries bound 1024, no coin mode. -/
 def h1Check : CheckItem :=
   { entries := 1024, scheme := PouwCheck.scheme, template := h1Tile.template, tileWork := h1Tile.tileWork }
 
-/-- The leg's check parameters (`h1_params`) in the period's context `context`. -/
+/-- The subprotocol's check parameters (`h1_params`) in the period's context `context`. -/
 def h1Params (context : String) : Params where
   check := h1Check
   context := context

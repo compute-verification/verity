@@ -34,7 +34,7 @@ commit phase's check (elsewhere no play is accepted) and SPOT's claim fails on t
   - at the units (`ex_off_le_units`), `p_u` is the probability of sampling `u`, and the majority at any bit of `u`'s
     wires weighs at least `p_u / 2` (`sampled_le_weight`), so `∑ a p ≤ 2K` and `(∑ a)² ≤ n ∑ a² ≤ 2nK`.
 
-The averaging is `Verity.Majority`'s, which the two-stage leg reads too: the session's plays are a `Majority.Plays`
+The averaging is `Verity.Majority`'s, which the two-stage subprotocol reads too: the session's plays are a `Majority.Plays`
 (`Dep.plays`), `Dep.weight` and `Dep.extract` are its weight and plurality, and each lemma above is the shared one at
 them.
 -/
