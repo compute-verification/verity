@@ -32,6 +32,7 @@ from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
+from verity.commitments.domains import FLOCK_CIRCUIT_BINDING
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
@@ -44,9 +45,9 @@ HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
 #: M0's set-bound frame domains (verity_flock.circuit.BINDING_TAG), each tag with its identity digest; v1 is M0's before
 #: 64-byte bindings, for a pinned tree that old (--binding)
-STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
+STAND_IN_BINDINGS = {FLOCK_CIRCUIT_BINDING: identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
-STAND_IN_BINDING = "verity/flock-circuit/binding/v2"
+STAND_IN_BINDING = FLOCK_CIRCUIT_BINDING
 STATEMENT_ID = "verity/flock-circuit"
 
 

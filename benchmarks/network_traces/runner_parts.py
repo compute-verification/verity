@@ -13,12 +13,12 @@ import sys
 import time
 import urllib.request
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 from verity.protocols.accounting.certifier.verifier import blob_files as bf, connection_rows as CR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
-from verity.protocols.accounting.certifier.verifier.connection_rows_check import NO_HEAD, ROWS, SALTS
+from verity.protocols.accounting.certifier.verifier.connection_rows_check import FILED, NO_HEAD, ROWS, SALTS
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, WardenParams
 
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
@@ -106,6 +106,7 @@ class Keeper:
             bf.write_blobs(self.out / SALTS, b"")
             with open(self.out / ROWS, "a") as fh:
                 fh.write(json.dumps(line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}) + "\n")
+            self._filed(CR.not_filed(self.link, window))
             return
         t0 = time.perf_counter()
         tables = CR.tables(self.params, strides)
@@ -124,6 +125,14 @@ class Keeper:
         bf.write_blobs(self.out / SALTS, rows.witness)
         with open(self.out / ROWS, "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
+        self._filed(CR.not_filed(self.link, window) if cert is None else CR.filed_record(head, self.params, strides))
+
+    def _filed(self, record: Mapping) -> None:
+        """An execution phase's line of `filed.jsonl`, in a schedule with content rows: written once its head is
+        signed, or its word that it has none, so the list is final where it is written."""
+        if self.params.content is not None:
+            with open(self.out / FILED, "a") as fh:
+                fh.write(json.dumps(record) + "\n")
 
 
 def peak_rss_mb() -> float:
@@ -139,9 +148,22 @@ def _quiet_runtime() -> None:
     resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))  # a live run holds two sockets per stream in flight
 
 
+def cpu_ranges(cpus) -> str:
+    """CPU indices in the kernel's list form, their runs joined by commas ("0-3,8,10-11"). One string: a record that
+    holds it writes no run of consecutive integers, which is the same bytes in any file that lists consecutive
+    integers, a verifier outcome's proved units among them."""
+    runs: list[list[int]] = []
+    for c in sorted(cpus):
+        if runs and c == runs[-1][1] + 1:
+            runs[-1][1] = c
+        else:
+            runs.append([c, c])
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in runs)
+
+
 def _usage() -> dict:
     return {"max_rss_mb": peak_rss_mb(), "cpu_s": sum(os.times()[:2]), "nice": os.getpriority(os.PRIO_PROCESS, 0),
-            "cpus": sorted(os.sched_getaffinity(0))}
+            "cpus": cpu_ranges(os.sched_getaffinity(0))}
 
 
 def _call(url: str, path: str, body: dict | None = None, key: str | None = None) -> dict:

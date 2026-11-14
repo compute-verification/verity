@@ -20,14 +20,15 @@ structure Tie where
   what : String
   names : List (String × (Case → Option (List ByteArray)))
 
-/-- Why the subprotocols of the tie `t` didn't all name one value on the cases `ev`: the first value that isn't the first
-one, with both; `none` when they all named it, or when one of them has no case or its case doesn't decode. -/
+/-- Why the subprotocols of the tie `t` didn't all name one value on the cases `ev`: the tie's name, the subprotocol that
+named the first value and the one that named the first value that isn't it, and nothing of either value, which can be
+witness; `none` when they all named it, or when one of them has no case or its case doesn't decode. -/
 def Tie.strays (t : Tie) (ev : List Case) : Option String :=
   let named (n : String × (Case → Option (List ByteArray))) : Option (List (String × ByteArray)) :=
     ((ev.find? fun (k : Case) => k.id == n.1).bind n.2).map fun ds => ds.map (n.1, ·)
   match (t.names.mapM named).map List.flatten with
   | some ((s, d) :: rest) => (rest.find? fun (x : String × ByteArray) => x.2 != d).map fun x =>
-    s!"{t.what}: {s} committed {Flock.hexOf d}, {x.1} committed {Flock.hexOf x.2}"
+    s!"{t.what}: {s} and {x.1} named different values"
   | _ => none
 
 /-- The outcome `o` on the cases `ev`, except that when it doesn't reject, the first tie of `ties` whose subprotocols

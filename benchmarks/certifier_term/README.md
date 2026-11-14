@@ -129,15 +129,202 @@ and each row says where it stands:
   length held to its Program's output count, with the release times taken once by the compute side's tick, and with
   the entries charged through the compute audit. The schedules' 0 under `lengths` and `all three` rests on a stop
   block, a proof block that checks where a response's ids stop, sampled on a served audit: it holds that output count
-  to the response's ids. The jitter's 0 under `timing` and `all three` rests on the set-time card, which is
-  simulated.
+  to the response's ids. Whether it does is read from a served run's verdict records, as the row `design`'s is (The
+  stop class's verdicts, below): with no record read, or one verdict lacking, each connection is charged its
+  schedule under these two rows too, as is each connection of an execution phase no registration was read for. The
+  jitter's 0 under `timing` and `all three` rests on the set-time card, which is simulated.
 - `design, no stop block` (no run behind it): the design, below, before a stop block has been sampled on a served
   audit. The lengths unit holds a response's length to its Program's output count, but until a stop block holds that
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
   Its failed connections' charge, its jitter, its count and its entries are the design's.
 - `design` (no run behind it): head checks, a lengths unit on the network certifier's records, and a stop block
-  sampled on a served audit. The lengths are held, the stop block holding a response's output count to its ids, and
-  the entries are the compute audit's, so its term is the jitter, the failed connections' charge and the count.
+  sampled on a served audit. How its stop class is charged is read from a served run's verdict records and from
+  nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths are held, the stop block
+  holding a response's output count to its ids, and its term is the jitter, the failed connections' charge and the
+  count. With no record read, or one verdict lacking, each connection is charged its schedule and the row is the
+  one before it; so is each connection of an execution phase no registration was read for. The entries are the
+  compute audit's either way.
+
+### The stop class's verdicts
+
+The rows that hold the lengths by a stop block, `lengths`, `all three` and `design`, are charged below their
+schedules only as the network certifier's own rule says (`verity.protocols.accounting.certifier.verifier.class_charge.charge`),
+from the signed head of an execution phase and the verdict records on a class of it:
+
+- a class that holds a row owes four verdicts, the stop record, the response tie, the certified read of the request's
+  three words and the compute audit's second stage, each accepted, complete and naming that head's digest;
+- with one missing, refused, not complete or decided under another head, another serve's among them, the class is
+  charged its whole schedule on every row; a verdict without `complete` reads as not complete;
+- so it is where the class's records on that head name two serves or two registrations: the head holds the network
+  certifier's rows to a serve, and these two names hold the values the verdicts judge to it;
+- so it is where the rule is not handed the schedule the head names, or that schedule can't be tied (each P listed
+  once, one O for every class and a response limit): with no schedule handed that word was not asked, and the
+  line says the schedule was not handed;
+- a class with a count of 0 owes none.
+
+`benchmarks/network_traces/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
+The records are in the evidence store, in the run files of the runs that carry
+`run_of_record=exfiltration-glm53-stop-verdicts`, each file one JSON object a line:
+
+- `out/*-verdicts.jsonl`: a verdict record as the verdict's own verifier writes it, `run`, `serve` (the served run
+  its class came from), `registration` (the digest of what that serve registered), `verifier` (its `module` and
+  the `commit` it ran at), `verdict` and `proved_by`. A record that names no run, serve, registration or verifier
+  doesn't read, and one that doesn't read holds no execution phase, in a run that no other replaces. Of its
+  `verdict` the rule reads `link`, `window`, `class`, `head`, `accepted` and `complete`. Which of the four verdicts
+  it is, is its verdict's `format`; a verdict whose verifier's format the reader doesn't list reads as missing. A
+  stop record's and a response tie's record name two things more, `stream_registration` and `rate` ("The rate",
+  below);
+- `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
+  its head's digest, from which a class's count is read. Its one writer is the offline check of the network
+  certifier's run, `benchmarks/network_traces/warden_serve.py check` with `--key-sha512 HEX --session HEX` and
+  `--registrations FILE`. The auditor hands that check the SHA-512 of the network certifier's public key and its
+  session, and the check holds the run's deployment record to them: a run made under another key or session, a
+  rehearsal's own, gets no file, and that problem is the first the check lists. The file's first line says what
+  it was checked under: one object with a `format` of its own, the word
+  `verity-network-certifier/checked-registrations/v1`, and `checked_under`, an object with `key_sha512` and
+  `session`, each in hex. Each line after it is a registration the check verified under that key and session and
+  laid again from the run's records. The check writes no file where it found a problem. A file whose line 1 is
+  not that line (it is blank, has no `format`, has another, or is a registration) gives no head: every class of
+  every run read with it is charged its whole schedule, and the line says the file does not say what it was
+  checked under. The mend is to run the offline check again, handed the key's hash and the session;
+- `out/*-controls.jsonl`: a control record, `run`, `verifier` (its `module` and `commit`), `control` (what was
+  changed), `verdict`, the verifier's own, whose `format` says which of the four it is a control of, and `reason`,
+  the verifier's own word for why it refused. A control without `reason`, or a refused one whose reason is no
+  text, doesn't read. Of a control record the reader reads these five fields and no other;
+- `out/serve-registrations.jsonl`: each registration record the verdict records name by its digest: the one a serve
+  registered its class under (`registration`), and the one of a verdict's own stream (`stream_registration`),
+  which follows it and registers the rate that stream's population is sampled at.
+
+The reader is handed no schedule and asks the rule without one. So as it stands it holds no execution phase,
+whatever a run's files hold: each class that holds a row is charged its whole schedule, and its line and the
+answer's first line say the schedule was not handed. The rest of this section is what the reader holds of a class
+the rule charges below.
+
+The reader holds what the rule charges below to two more things, which the rule doesn't read:
+
+- **A negative control.** An execution phase is held only where each verifier that accepted has, at the same commit,
+  a control of record that it refused: a run with the one thing changed that the verifier checks. The stop record's
+  owes `stop_word` (a stop word changed, the count off by one), the response tie's `id` (a released id changed), the
+  certified read's `max_tokens` (a request word changed) and the compute audit's `output` (a committed output
+  changed). A control counts only where it is refused for the reason its change aims at: its `reason` is held to
+  the control's own word, `stop_word`, `id`, `max_tokens` or `output`, which the reader declares
+  (`stop_verdicts.REASONS`). One control a verifier a commit serves every execution phase under that commit. A
+  control at another commit, by another verifier or of another thing serves none, and one the verifier did not
+  refuse, or refused for another reason, leaves it without, whatever other it refused. So does one whose accept
+  the verifier withheld, or whose command stopped: a control counts only where the verifier refused, and a verdict
+  that states a `withheld` or a `stopped` word is no refusal, whatever `reason` its record gives. The line names
+  the verifier that lacks its control, with the reason given beside the control's word; the class's line prints
+  the reason each verifier gave.
+- **The rate.** A class is held only where every block of the stop record's and the response tie's populations is
+  proved. Each of the two verdicts runs over a stream of its own, and its record names that stream's registration
+  record by digest (`stream_registration`). The reader is handed that record, holds it to follow the registration
+  the class's verdicts name (its `previous` is that digest), and reads the rate it registers: K of its
+  `population`, under a sampling design that is a `subset` of K, as `NUM/DEN` in lowest terms. The class is held
+  only where that is `1/1` for both, and each of the two records says in `rate` that it ran at the registered
+  rate. The rate is the registration's and never the verdict's own word, so a verdict that states `1/1` under a
+  registration that says otherwise is refused by name. So is a record that names no registration of its stream, a
+  registration that was not handed, one that follows another record, and one whose sampling design is no subset.
+  The stop record's `population` is held to the head's count of the class: the stop record is of every row of the
+  class and of no other, which `1/1` of a population of another size doesn't say.
+  A failure is final for what its verdict speaks for, one execution phase's class at `1/1`; a rate below `1/1`
+  widens the failure to the whole registered population, for when the reader takes one. The rate of the compute
+  audit's second stage is not held here.
+
+The reader is handed every run that carries the record, with those another run replaces. A superseded run adds no
+accept and takes away no refusal: its records that are accepted and complete fill no verdict, its controls that
+were refused count for nothing, and everything else it holds is read as any run's. An accept of its is still read
+on its head: the serve and the registration it names, the rate it states and its verifier are held to what holds
+any record's, so it can keep a class at its whole schedule and never helps hold one. A record is a superseded
+run's where that run's files hold it or it names that run as its `run` or its `serve`.
+
+The order of runs is read from their ids, which state the date and the time of a launch; a name that is no run id
+is launched after nothing, and nothing after it. Two rules read it:
+
+- a run has no accept on a serve launched after it: a verdict record that names such a serve and is accepted and
+  complete fills no verdict, and what such a record refused stands. A record's own run is the one whose files
+  hold it and the one it names as its `run`;
+- a record of a superseded run that doesn't read could have been a refusal, so an execution phase is held only
+  where its serve was launched after every superseded run that holds one: after the newest of them, which the
+  line names with how many such records there are. It is one rule for every line of the run's four kinds of file
+  that doesn't read, a line that is no JSON among them. A bad file is mended by a new serve with new verifier
+  runs, never by a second run over the old serve; a control record that doesn't read is mended, for the serves
+  launched after its run, by a new control run.
+
+So superseding a run raises what is held only on a serve launched after that run, and only where the run holds a
+record that doesn't read. In a run that no other replaces, a record that doesn't read holds no execution phase at
+all, and a line that is no JSON is named by its line, its file and its run. The ids are the tooling's, which is
+enough for the runs of record here; in a deployment the order comes from the auditor's own ledger, from something
+the prover cannot write.
+
+A verdict that doesn't count, refused or not complete, counts against the execution phase it names by its serve,
+its link and its number, whatever head it names: refused under one head, registered again under another and
+accepted would be a second try at a verdict. It keeps every class of that phase at its whole schedule, since two
+heads need not sort a phase's rows into the same classes; under the head read a verdict stays its class's. An
+accept under another head counts for nothing.
+
+A verdict states two fields more, and both names are its verifier's own: `withheld`, null or the one word for
+what the verifier held its accept back for (today `two-stage-form`, which only the compute audit's second stage
+states), and `codes`, a list of the verifier's own code words, empty on an accept. The charge reads neither: a
+verdict counts only where `accepted` is exactly true, and a withheld one leaves its class at its whole schedule
+as a refused one does, under any head. A line says "withheld" with the word of a verdict that is not accepted and
+states one, and "refused" where `withheld` is null; `codes` is handed on as written, beside the six fields. Every
+verdict states both, whatever its format, a control's among them: a verifier with nothing to say writes `withheld`
+null and `codes` empty, so no withheld verdict reads as refused because a line was left out. A record doesn't read
+where its verdict leaves either out, and the line says which field to add; where its `withheld` is neither null
+nor a word; where its `codes` is no list of words; and where its verdict is accepted and states a word or a code.
+
+A verifier's command that stopped with an error after its stream's session opened reached no verdict, and it was
+a try at one. Its record states `accepted` false, `withheld` null, `codes` empty and one field more, `stopped`, the
+command's own word for the error. The line says "stopped" with the word, the charge is a refusal's, and it is final
+as a refusal is, under any head and in a superseded run: a second run over the same serve fills nothing. A command
+that stopped before any challenge was sent writes no record. `stopped` may be absent. A record doesn't read where
+its verdict's `stopped` is neither null nor a word, where an accept states one, and where a verdict states a
+`withheld` word or a code too. What this does not close: a command that is killed writes nothing, and a second
+run then fills its verdict unseen. Only a record of the sessions opened, which the command does not write itself,
+closes that.
+
+An execution phase is one serve's: a serve, a link and the phase's number. A registration of connection rows names
+no serve, so a head's serve is the one its verdict records name, which is a run's word and no proof; the answer's
+second line says so. Two heads given for one number of a link are two execution phases only where the records of
+each name a serve and none is named for both. Where one is named for both, where no record names a serve for one of
+them, or where a table of one name has one domain in both (a domain binds the network certifier's session, the
+link, the number and the table's rows), they are one execution phase given two heads, which holds no execution
+phase at all. A head whose records name two serves is charged its whole schedule.
+
+The four verdicts count only as one class's: of one class, in one execution phase of a link, on one signed head,
+and of one serve under one registration, as their records name the two. Where each of the four was read and no
+class that holds a row has them so, the answer holds nothing and its first line reads `not one class: unchecked`,
+with what the four differ in: the class, the execution phase, the head, the serve or the registration.
+
+An execution phase is held where its head was read, some class of it holds a row and every class that holds one has
+its four verdicts, of the one serve its head's records name, at the registered rate, each by a verifier with its
+control, with no verdict of that serve refused or not complete under another head, and of a serve launched after
+each superseded run that holds a record that doesn't read. The answer is how many execution
+phases of a link are held (the document's `stop`'s
+`held_phases`), and a row is charged by it:
+
+- a row's execution phases are its scope's over its monitoring period, never the ones a run kept a registration for;
+- the held ones' share of the row's connections is charged below its schedule, at most all of them;
+- every other execution phase is charged each connection's whole schedule, one no registration was read for among
+  them. So a run's files with an execution phase left out charge what they would with that execution phase refused.
+
+The calculator takes the answer as an argument (`document`'s and `table`'s `stop`). The command has no option for it
+and no input holds it, and it reads no store itself: run alone it reads no record, charges the rows their whole
+schedules and says so. A caller that reaches the store names the runs and passes the answer.
+
+The lines print how the rows are charged, one line for each class of each head read, and each verdict read under the
+mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the
+record's `proved_by` says. A head is read as its registration lists it, held to the digest its certificate names; its
+signature is not checked here, but by the offline check that writes `out/registrations.jsonl`, and that file is
+unsigned: a head is as good as the run of that check, and as the hash and the session that run was handed. The
+lines print the hash and the session each registrations' file names; the reader holds neither and compares them
+with nothing, so a file checked under another key reads the same but for that line. Nothing but verdicts that name
+a head's digest holds an execution phase, so a registration no verdict names holds none.
+
+Where some execution phase is charged its whole schedule, the document holds apart what each row would be with every
+one held: its `stop`'s `with_verdicts`, in a row's own fields, and one line over the world's year. No record read
+supports those figures, and no row, sum or measurement holds them. The `stop`'s `below` is whether every execution
+phase of every scope and monitoring period is held, where nothing is held apart.
 
 Nothing a check counts by capacity is scaled by requests: twice the requests are twice the scan's schedules and fail
 cells, and nothing else. The count is by capacity too: with the lanes given it does not move with the requests, and
@@ -146,9 +333,10 @@ with none given it moves only as the least lanes that serve them do.
 ## The terms
 
 - **schedules**: for the scan, ⌈log2(cells + 1)⌉ bits a connection, where cells is the most cells a response takes,
-  one more than the most ids it holds; 0 where the lengths are held with a stop block (`lengths`, `all three`,
-  `design`), and the scan's where they are held without one (`design, no stop block`). For N2, ⌈log2 #Σ_sync^m⌉ over
-  a link's m execution phases (`--syncs`).
+  one more than the most ids it holds; 0 where the lengths are held with a stop block (`lengths`, `all three` and
+  `design`, on the execution phases whose verdict records charge the stop class below its schedule), and the scan's
+  where they are held without one (`design, no stop block`, and those three rows on every other execution phase). For N2, ⌈log2 #Σ_sync^m⌉ over a link's m execution
+  phases (`--syncs`).
 - **cells**: the fail cells, the same bits again a connection. Where the lengths are held, with a stop block or
   without, it is the failed connections' charge instead, pooled over the period: which connections failed and where
   each one's stream ended, at most F·(log2(e·N / F) + log2(cells + 1)) bits for F failures among N connections, and
@@ -175,6 +363,9 @@ with none given it moves only as the least lanes that serve them do.
     charge.
   - The rows `lengths` and `all three` are charged no count, and each says so in its own line: its tables are of
     the lengths rows' form 1, the schedule's rows whatever the load, so the head states none.
+  - The count's line is the count alone. The head's time is not held to a tick: nothing holds when the head of a
+    link's execution phase leaves, so the line says so, and prints no charge for a head that leaves late, of 0 or
+    of anything else.
 - **term**: the four summed, the network certifier's own term, at each D_j. The term of record is the one at
   D_j = 2. The one at D_j = 1 is printed beside it only as "with a simulated set-time card", never as the
   term.

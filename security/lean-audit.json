@@ -50,10 +50,18 @@
   }
  },
  "domain": {
+  "Accounting.AtLinkEnds": {
+   "owner": "@network-accounting",
+   "why": "A scope: the strategies placed at the places a registered link may end at, a host with everything in it one leaf; a run with a gate at a device or at a memory leaf is outside it, and the leak limit is not stated of one."
+  },
   "Accounting.JointBridge.PhaseLeaks": {
    "owner": "@lean",
    "digest": "937bce3d120eb67c95c25010a046778163f84256a3da9ae4111bf840c669b50b",
    "why": "The layer below's guarantee at each execution phase: the leak relation (LeakAt) at the incorrect set of the witness computed before the sample, which a live sampled leak guarantee would give, as PooledLeakAccepted takes it."
+  },
+  "Accounting.RecordsWithin": {
+   "owner": "@network-accounting",
+   "why": "What K is: a cap on each device's record over the window whatever the developer's hardware sends: across the strategy, device y's record cells placed in the window take at most 2 ^ K y values; a record of a stated format has it at its size in bits. The same c at a memory challenger that is a trusted device."
   },
   "Claims.Complete": {
    "owner": "@proofs",
@@ -310,6 +318,11 @@
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
+  "NetTiming.FaultyGate": {
+   "owner": "@network-accounting",
+   "digest": "bbc940eb0195b83903ed55053117b14b34c4ced8f375905ce44f5cb54f4afdc3",
+   "why": "A scope inside CheckedUnique, which the honest lemma concludes: the values a run holds sit only at committed gates of proof blocks of no class sampled all."
+  },
   "NetTiming.MonitoringPeriodAdaptive": {
    "owner": "@proofs",
    "digest": "bc15e8cbd72ea81e1bfbd100bd2997a34aaf2fbfa445ba155567691bcbd02bde",
@@ -319,6 +332,11 @@
    "owner": "@proofs",
    "digest": "07296f63b555d3b16b89a7486369e76cb4dc745281299361ac021ac00698f099",
    "why": "The monitoring period's channel: the certifier's schedules fit their record format, each secret's schedule is among Ss and its record decodes back to it, as PooledLeakAccepted takes them."
+  },
+  "NetTiming.MonitoringPeriodChannelReg": {
+   "owner": "@network-accounting",
+   "digest": "026bdd8b3470934387fe4985a28460616ca0d1b113da45232e01b3cff9636b5d",
+   "why": "The monitoring period's channel over registered parameters: each secret's schedule fits the record format and a registered parameter allows it, and its cells decode back to it, as MonitoringPeriodChannel states it over the schedules."
   },
   "NetTiming.MonitoringPeriodEscapes": {
    "owner": "@proofs",
@@ -335,10 +353,20 @@
    "digest": "c1281698ce1c924f21d0edd85fdad78a317bc854459f880bb520aa7b08d90cf2",
    "why": "A scope: each statement's opening gates are inputs of its circuit, where a run reads the row it opens; the pool circuit's honest witness concludes it."
   },
+  "NetTiming.RecordFormat.ReadsBy": {
+   "owner": "@network-accounting",
+   "digest": "cb86a3cd20c63474b029430dd96a62bf8016a2174dc2ad1cd6a47faddf91d883",
+   "why": "A property of the record format and the registered parameters: the client's cells read back from the record under a parameter alone, on every schedule the parameter allows; the format's own read-back is this at each schedule as its own parameter."
+  },
   "NetTiming.ResetsIn": {
    "owner": "@proofs",
    "digest": "f17496cd6b0bcd44de69fbfce427ecc3108c8dd849bc058ad04b6c0dc706ede3",
    "why": "A scope: where every audit accepts, the restarts serving picks are among the registered patterns Cs, whose number the count charges as advice; the record rule's restarts (the registration's first run, and at most one chosen reset a week) give it over the records with no probability."
+  },
+  "NetTiming.WindowsPlaced": {
+   "owner": "@network-accounting",
+   "digest": "49442b8de41bcaded25fc0d6c4dbd9c18fa33a57bf3a23d86b05e7e11cbcc9f8",
+   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline."
   },
   "Population.Dataflow.Checked": {
    "owner": "@proofs",
@@ -484,6 +512,14 @@
    "owner": "@lean",
    "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
    "why": "The recursion's interface: each session's witness is in the outer system's relation unless the stop fired, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
+  },
+  "Verity.Registration.Valid": {
+   "owner": "@network-accounting",
+   "why": "A scope: the registration log the auditor accepted, whose Site the subtree, its auditor's devices and its links are read off."
+  },
+  "Verity.Site.HostsWhole": {
+   "owner": "@network-accounting",
+   "why": "A scope: the subtrees of the Site that hold each host with every location in it or not at all, so that what leaves one crosses a registered link; a subtree at a device or a memory leaf is outside it."
   },
   "Verity.Sound": {
    "owner": "@proofs",
@@ -1398,37 +1434,37 @@
   "Accounting.ServingBlocks.OperationBodies": {
    "owner": "@training",
    "digest": "81ff50582db4448d937985a633ac98188152d74a6357bb74a71ce5cdbff705e6",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.Overlap": {
    "owner": "@training",
    "digest": "39ca4a60bde57a084d35293484eafdb933d63532bca41e07fc5779e234c73dcb",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.PerBlockCap": {
    "owner": "@training",
    "digest": "cbfac196e5ea1c52199fd7e327994c1e310e7b73776b2377f193be4b69d9e30d",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.ServingSizes": {
    "owner": "@training",
    "digest": "0bc5c1264f982a2a1ebb8a0aec6f85c37c14e060120967965bb2c362f6693cfb",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.UncertifiedCap": {
    "owner": "@training",
    "digest": "60d8c4b679a995ba4d2a6fcde0e0c8f8b429091b0f298ebc745f2186524375d1",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.ServingBlocks.WeightsAtMost": {
    "owner": "@training",
    "digest": "be8cdd72aa1fbaa879af6dd1d6c45d80e3961755905c109c9d89473025cf8dd8",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Accounting.SetupFixed": {
@@ -2184,7 +2220,7 @@
   "Nci.Assumptions.CheatingAtMost": {
    "owner": "@training",
    "digest": "89add569caacb16556501cbd98787134ad9098307d8b22fc10f53b164cd1ade2",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.Coverage": {
@@ -2196,13 +2232,13 @@
   "Nci.Assumptions.CoversEfficientMethods": {
    "owner": "@training",
    "digest": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.DescriptionHard": {
    "owner": "@training",
    "digest": "acf4d99142d8d1f6398750eb5cf307f3047dbec15dd21f5bc86041b38b7ea321",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.Fits": {
@@ -2220,13 +2256,13 @@
   "Nci.Assumptions.IdentitySchedule": {
    "owner": "@training",
    "digest": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.MinEntropyHard": {
    "owner": "@training",
    "digest": "ac056d32cda0731b25c07ec1e66d1dff9f413d1672320b350a7002582c48cab7",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.ParameterHard": {
@@ -2244,7 +2280,7 @@
   "Nci.Assumptions.PouwPerWindow": {
    "owner": "@training",
    "digest": "73c9272c6730698f6165c13cdc251d08c790d55adbdb9688fff024707355941a",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.PouwSound": {
@@ -2268,7 +2304,7 @@
   "Nci.Assumptions.Recovers": {
    "owner": "@training",
    "digest": "d9edc87f9d67a1e87668b32bf8eeaa3407c435c23af1795ffb1b1833af22309a",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.ReferenceLayered": {
@@ -2292,19 +2328,19 @@
   "Nci.Assumptions.SampledPerWindow": {
    "owner": "@training",
    "digest": "77104bd85c50c8f0996b5b055c8263f036328b6ed9d9730b5ec70e223843542d",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.SourceHard": {
    "owner": "@training",
    "digest": "b4b411c3d977a74a745755ede9735c9bce7b83e332c5c971637bfbed2f748260",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.SourcesCover": {
    "owner": "@training",
    "digest": "1b88f3a9f96ca3119443da4b877d624e82d0da310a960193c81efc048238d7bb",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.TerminalDetection": {
@@ -2322,7 +2358,7 @@
   "Nci.Assumptions.UnmonitoredAtMost": {
    "owner": "@training",
    "digest": "a2f3af521431f3a9eb4420c21e04149188f6bcfdb664984c54505a4d514502c2",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Assumptions.WeightsIncompressible": {
@@ -2358,31 +2394,31 @@
   "Nci.Capability.Consumers.OverlapWeights": {
    "owner": "@training",
    "digest": "67fd0381a6d22e3df9462d31aee8c2fb53d78a03ef3ccf7262ac549c65f30313",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Consumers.RequiresState": {
    "owner": "@training",
    "digest": "b6284d74c738e31004e961b08225fefd8fb49030b47739e363c502344ad442e8",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Consumers.Upstream": {
    "owner": "@training",
    "digest": "eb8367f381166e28864222741be0201193858a4010150fa5bd0e23acab48c757",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.HeldPriceAtMost": {
    "owner": "@training",
    "digest": "5344e552ed3f9d96c26f35e4ea3f5a00f624b7c37bfcdec70e169545364b78bd",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.Capability.Selects": {
    "owner": "@training",
    "digest": "a8aaaf2ed3716b7e44556a765256be878c94d4c0f5221c3f73ebb9c41c08eac0",
-   "issue": "LEAN-186",
+   "issue": "TRN-168",
    "due": "2026-11-30"
   },
   "Nci.CompliesRate": {
@@ -2394,25 +2430,25 @@
   "Nci.Cover.Assumptions.BlockFits": {
    "owner": "@training",
    "digest": "6c8a39590d5ed889ee6d76adba07cee9e4ce74f76ad35fd00388552b0cf4a1fd",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Cover.Assumptions.CapBelowDepth": {
    "owner": "@training",
    "digest": "4a59a4806a27c95100ab3b95c905c33acb34c61829b50f990a197d9ea06dc17d",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
    "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Cover.MulBlocks.Upstream": {
    "owner": "@training",
    "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c",
-   "issue": "LEAN-186",
+   "issue": "TRN-167",
    "due": "2026-11-30"
   },
   "Nci.Covering.Covers": {
@@ -2467,6 +2503,12 @@
    "owner": "@proofs",
    "digest": "2eebb5a2c66a215064e7296291ad05c2e4ff9d53f59ec8e916183afa4742814d",
    "issue": "CIR-190",
+   "due": "2026-11-30"
+  },
+  "NetTiming.ExecutionPhaseGoodChecked": {
+   "owner": "@network-accounting",
+   "digest": "80e8edda22a894cf2e2035452649c5d0fe5840b4f256aa77f1d938a6d8001bf3",
+   "issue": "NET-313",
    "due": "2026-11-30"
   },
   "NetTiming.JitterBounded": {
@@ -3536,7 +3578,6 @@
   "NciCheck.DefinitionDigest",
   "NetworkCheck",
   "NetworkCertifier",
-  "CertifierDevice",
   "RemoteAudit",
   "CircuitRequirement",
   "Evaluate.Scalar",
@@ -4777,6 +4818,10 @@
   "Verity.Sampled.remote_soundness_deployedReady": {
    "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
    "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
+  },
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakChecked": {
+   "honest": ["NetTiming.Witness.MonitoringPeriodLeakChecked_honest"],
+   "nontrivial": "NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial"
   }
  },
  "unwitnessed": {
@@ -7482,6 +7527,29 @@
    "type_hash": "0b217c8812262f71cd1d92dedfdfa361ea82bcda7daf976dcf1351d20fa42619",
    "unfolded_hash": "cd129e6a9ac7e687199282a47f67bb852ea6fca79a769eecc8742c246527db37"
   },
+  "Accounting.SecurityProofs.EgressRegistered": {
+   "owner": "@network-accounting",
+   "signature": ["Accounting.SecurityProofs.EgressRegistered : Accounting.Guarantees.EgressRegistered"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Accounting.Placed.Links"],
+    "reads": [
+     "Accounting.Placed",
+     "Accounting.Placed.egress",
+     "Accounting.Placed.mk",
+     "Accounting.Placed.readOn",
+     "Accounting.Placed.t",
+     "Accounting.Placed.toCircuit",
+     "Accounting.Placed.x",
+     "Accounting.boundary",
+     "Accounting.linkCapacity"
+    ]
+   },
+   "type_hash": "1a1d1c491b409290a9b3b6555b4893d17484ae60f91befb5cce499bfc2e0de12",
+   "unfolded_hash": "dc983e38a5ed38a59009565a547357f0506fec5d065a6e3f368bd90044e7362a"
+  },
   "Accounting.SecurityProofs.FillerLuck.FillerBlocksDeficit": {
    "owner": "@compute-accounting",
    "signature": [
@@ -8262,6 +8330,12 @@
    },
    "type_hash": "8ddbe820be5ee526c6b0591abcd1fb70f4139afa78a498283c181ba91c461d99",
    "unfolded_hash": "c0d6bd0ffe2b6dd82831ce8b37d620c41ddd0e060b03119e8c80a716ea25bd7d"
+  },
+  "Accounting.SecurityProofs.LeakParts": {
+   "owner": "@network-accounting"
+  },
+  "Accounting.SecurityProofs.LeakPartsRegistered": {
+   "owner": "@network-accounting"
   },
   "Accounting.SecurityProofs.LengthCode": {
    "owner": "@memory-accounting",
@@ -19410,6 +19484,34 @@
    "type_hash": "1af5ebd4c7e149600198539a16cce9712821d3cf8c439a62f76517cd999755bc",
    "unfolded_hash": "16b44efd2c5b76e02f6bf3d39ad731205ec663d1502d7c3b3202f6797f405919"
   },
+  "NetTiming.SecurityProofs.MonitoringPeriodLeakChecked": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.MonitoringPeriodLeakChecked : NetTiming.Guarantees.MonitoringPeriodLeakChecked"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "Claims.Sampling.CommitmentScheme.Binds",
+     "NetTiming.MonitoringPeriodChannelReg",
+     "NetTiming.RecordFormat.ReadsBy",
+     "NetTiming.WindowsPlaced"
+    ],
+    "open": [
+     "Claims.SamplingGeneric.Compiled.KS",
+     "NetTiming.CertifierRegisters",
+     "NetTiming.CheckedUnique",
+     "NetTiming.CheckedWitness",
+     "NetTiming.ExecutionPhaseGoodChecked",
+     "NetTiming.ScopeAcc",
+     "Verity.Assumptions.TrustedHost"
+    ],
+    "reads": ["NetTiming.RegisteredInputsHeld"]
+   },
+   "type_hash": "fa3270274579278ff66d020a5b50e9b329ae1d85bc2a6fb7c5d23395099b7455",
+   "unfolded_hash": "2c0ee7b6ea004260b0733d37324213a722ee42368261251f0c96a18672023abf"
+  },
   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe"],
@@ -20013,6 +20115,79 @@
     "reads": []
    },
    "type_hash": "cc127dbbecba53abb17d1cd7eb64cbc3bf629b79bf91c4dfc0d385d177db9bb1"
+  },
+  "NetTiming.Witness.MonitoringPeriodLeakChecked_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.MonitoringPeriodLeakChecked_honest :",
+    "  And",
+    "    (Claims.SamplingGeneric.Compiled.KS FlockDeploy.sha512",
+    "      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
+    "        List.nil))",
+    "    (And",
+    "      (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512",
+    "        (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
+    "            List.nil).commit)",
+    "      (And",
+    "        (NetTiming.WindowsPlaced",
+    "          (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode",
+    "              fun x x_1 x_2 => List.nil).partition",
+    "          0 Fin.elim0 Fin.elim0 Fin.elim0)",
+    "        (And",
+    "          (∀ (i : Fin 0),",
+    "            NetTiming.CheckedUnique i.elim0.prog i.elim0 i.elim0.design NetTiming.Witness.trivLay 1",
+    "              Finset.instEmptyCollection.emptyCollection fun x => And True True)",
+    "          (And (NetTiming.Witness.noFormat.ReadsBy (fun x x_1 c => c.elim) fun x x_1 => True)",
+    "            (NetTiming.MonitoringPeriodChannelReg NetTiming.Witness.noFormat (fun x x_1 => True) Set.univ Set.univ",
+    "              (fun x => { r := 0, D := 0, adm := Empty.elim, cells := Empty.elim }) (fun x => Unit.unit)",
+    "              (fun x => Unit.unit) fun p =>",
+    "              (NetTiming.recordingCode NetTiming.Witness.noFormat p.fst fun c => c.elim).fst)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["NetTiming.FaultyGate"],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "e5d728b16b07ec8845a4b694c1503fe2f91fafb37eea4cc5ed97f2fc8d582feb"
+  },
+  "NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.PrBad FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "        (NetTiming.RLeakCertifierChecked FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).commit",
+    "          (Claims.Witness.SamplingGeneric.certL Bool).parse (Claims.Witness.SamplingGeneric.certL Bool).partition 1 1 1",
+    "          (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
+    "          (fun s => NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection)",
+    "          (fun x x_1 => And True True) 1 fun x => NetTiming.Witness.certOps)",
+    "        (Claims.Witness.SamplingGeneric.certL Bool).E List.nil Claims.Witness.silentP)",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd",
+    "          (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd ((Claims.Witness.SamplingGeneric.certL Bool).κ 0 List.nil) 0) 0)",
+    "            (instHMul.hMul ((Claims.Witness.SamplingGeneric.certL Bool).γ List.nil)",
+    "                (Claims.PrB FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V Claims.Witness.silentP",
+    "                  List.nil)).sqrt)",
+    "          (Claims.Finder.Pr FlockDeploy.sha512",
+    "            (Claims.Sampling.Bext FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "              (Claims.Witness.SamplingGeneric.certL Bool).E Unit Claims.Witness.silentP List.nil)))",
+    "        (Claims.Finder.Pr FlockDeploy.sha512",
+    "          (NetTiming.Btap FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "            (Claims.Witness.SamplingGeneric.certL Bool).E (Claims.Witness.SamplingGeneric.certL Bool).commit",
+    "            (Claims.Witness.SamplingGeneric.certL Bool).parse (fun x => NetTiming.Witness.certOps) Unit",
+    "            Claims.Witness.silentP List.nil))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "a2e3c2d055b64a79c4efe5cf53e85cd98aa12a6933fab37ed85927a11f19aebf"
   },
   "NetTiming.Witness.PooledLeakAccepted_honest": {
    "owner": "@network-accounting",
@@ -27597,6 +27772,18 @@
    "NetTiming.SecurityProofs.ResponseCapped": {
     "function": "NetTiming.cappedCode",
     "outcome": "none"
+   },
+   "Accounting.SecurityProofs.EgressRegistered": {
+    "function": ["Accounting.Placed.egress", "Accounting.linkCapacity"],
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.LeakParts": {
+    "function": "Accounting.Actual.Run.acts",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.LeakPartsRegistered": {
+    "function": "Accounting.Actual.Run.acts",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -27614,10 +27801,10 @@
    "FlockSoundness.Audit.audit_work_floor": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Audit.audit_work_whole_stratum": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash): Scope now follows from acceptance, but it still takes the table finders' bounds as hypotheses, listed (TableCRZAt under --zk; TableCRAt, and LinkCRAt for the link, without it), and bounds the --zk link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes) and live-verifier custody, both listed: RecordCustodyExec (RecordCustodyExecH at hidden outputs) without --zk, RecordCustodyZKLaw (RecordCustodyZKHLaw, and RecordCustodyZKJLaw, RecordCustodyZKHJLaw at J tables) under --zk.",
-   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
+   "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressObsDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
    "Pous.SecurityProofs.BandMultiMeetsFamily": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and security/Definitions/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.BandMultiMeetsFamilyD0": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and security/Definitions/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
    "Pous.SecurityProofs.BandMultiMeetsFamilyD1": "frozen (no-function,hash): It is about the abstract m1p and chain-band models in the random-oracle model (security/Definitions/Pous/Game/Oracle.lean:82), not the PoUS setup check's code, and security/Definitions/Pous/Guarantees/P2.lean:15-16 says none states that the deployed P2 is secure.",
@@ -27660,15 +27847,15 @@
    "NetTiming.SecurityProofs.CardCountsEqLe": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardFree": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.CardLeftPacked": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts, not runs of the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
    "NetTiming.SecurityProofs.EncardFifoGrids": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
    "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable": "frozen (no-function): A count over the model's grids, occupancies or FIFO enqueue schedules (Proposition 2), with no input of the network check and no acceptance to restate; PROTOCOL.md's Capacity table cites it as the bound itself.",
-   "NetTiming.SecurityProofs.EncardIngressDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; AcceptedRunsAreProgramRuns now carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressDecodableLe": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContents": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
+   "NetTiming.SecurityProofs.EncardIngressObsDecodableLeContentsPerExecutionPhase": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction and takes JitterBounded and W2 (Regenerates) or W4 (Packed, Allocated) about it, not the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
    "NetTiming.SecurityProofs.ExpectedRowCausal": "frozen (no-function): A rule of the model's expectedRow (Definitions), which the network check's grid equals only through Code; restated over NetworkCheck's expected grids it would be a property of the check.",
    "Flock.SecurityProofs.PublicAudit": "restatable: (i), a probability statement whose event is its acceptance, takes beside its premises (_hCust, _hA3, _hbr) the recursive model's input fields Vs.hU, Vs.hscope, zr.hDraw, zr.hTags and zr.hown, the count curve's _hk, _hRw, _hM, _hρ and _hr, and the obligations _hob (VStarParses) and _hF (TagsFound), none a premise; it fits once the recursive model's inputs and count curve, and those two obligations, are restated as premises (constants of Proofs.Flock.Recursive.Premises).",
    "Flock.SecurityProofs.RanRegisteredRun": "frozen (obligation,no-function): It is about an abstract session (a game G and its acceptance acc) rather than a Lean function, and takes that session's soundness bound (prob (acc ∧ Q) ≤ B) as an open obligation, beside the commitment's binding (com.Binding, an extractor's pair, no hash assumed) and the registrant's opening. It stays here until RecursiveAudit is pinned.",
@@ -28046,7 +28233,7 @@
    "Flock.SecurityProofs.JointStratifiedHorizonMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each sampling block is played with on some run of the period) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.JointStratifiedMT": "frozen (hash,world-unlisted,scope): It is zk_session_soundHJ_custody's hidden-output session of J tables with the live stratified draw at every sampling block, so it takes what that takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy that plays the sampling block) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody at the stratified law, RecordCustodyZKJS), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block with carried state (Flock.Guarantees.IntegrityBlockCarried) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a monitoring period of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
-   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": "frozen (no-function,world-unlisted): It composes the sampled leak bound at the network certifier's rows (NetTiming.TapProof.sampledLeak_certifier: RLeakCertifier, the observations the network certifier registers at the transfer gates under the statement's roots, CertifierRegisters, with Claims.SamplingGeneric.Compiled.KS and CommitmentScheme.Binds at each compiled verifier) with the read-back of its record (certifier_cells_read), over the network certifier's code (recordingCode: the active warden's code certifierCode and the record of its cells, in any record format RecordFormat whose cells read back on the schedules it holds, RecordFormat.fits, which every schedule in Ss meets, hfit; the Python network certifier's rows are one, RowsFormat.recordFormat) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (CertifierRegisters, an antecedent), it counts the secrets whose every window meets its good event (ExecutionPhaseGood: RLeakCertifier at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
+   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": "frozen (no-function,world-unlisted): It is NetTiming.SecurityProofs.MonitoringPeriodLeakChecked at no checked input (NetTiming.monitoringPeriodLeak_of_checked: both checks the one every run passes, CheckedUnique at no checked input by causality, the record read back under its own schedule as the parameter), so it composes the sampled leak bound at the network certifier's rows (RLeakCertifier, the observations the network certifier registers at the transfer gates under the statement's roots, CertifierRegisters, with Claims.SamplingGeneric.Compiled.KS and CommitmentScheme.Binds at each compiled verifier) with the read-back of its record (certifier_cells_read), over the network certifier's code (recordingCode: the active warden's code certifierCode and the record of its cells, in any record format RecordFormat whose cells read back on the schedules it holds, RecordFormat.fits, which every schedule in Ss meets, hfit; the Python network certifier's rows are one, RowsFormat.recordFormat) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows: it bounds AccSeqsSampled at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled warden program, and, where the network certifier registers its observations at every window (CertifierRegisters, an antecedent), it counts the secrets whose every window meets its good event (ExecutionPhaseGood: RLeakCertifier at the extracted witness and the registration's values at the prover's registered inputs), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
    "Accounting.SecurityProofs.Bridge.CommOfMonitoringPeriodLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's period of sampled audits (RealizesCommOfMonitoringPeriodLeakAccepted), from MonitoringPeriodLeakAccepted's per-window conjunct and the union bound over the windows: the verdicts and the claim are fields of the run (security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): The union bound over a period played as a causal game (Verity.Game, R5): each audit's per-period guarantee, at an error that is a function of the strategy, is a hypothesis over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Pous.SecurityProofs.StreamedWipeMeetsFamily": "frozen (no-function): A bound in the streamed-label wipe's game (security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2152 reads, the figure verity/wipe/v0 publishes, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
@@ -28249,7 +28436,6 @@
    "Nci.Cut.Guarantees.HECharged_honest": "unstated: HECharged's premises holding together at the toy Nci.Cut.Toy, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_honest is proved and is listed with HECharged's once that is.",
    "Nci.Cut.Guarantees.HECharged_nontrivial": "unstated: the toy beating HECharged's bound once the total T is dropped, stated with HECharged; its theorem Nci.Cut.SecurityProofs.HECharged_nontrivial is proved and is listed with HECharged's once that is.",
    "Pouw.SecurityProofs.DitherInstance.WorkSoundAtTables": "frozen (verdict): as WorkSoundH200, over every card table, menu and host row; the statements at the two cards are its consequences.",
-   "NetTiming.Guarantees.MonitoringPeriodLeakChecked": "unstated: MonitoringPeriodLeakAccepted with each window's checked inputs left out of the count (the check held to the run at the network certifier's rows, CheckedWitness at certifierRun) and the client's view read from the records under a registered parameter (RecordFormat.ReadsBy), so the count is the registered parameters' times the windows'; stated first, and its theorem NetTiming.SecurityProofs.MonitoringPeriodLeakChecked is not proved yet.",
    "Accounting.SecurityProofs.Bridge.CommOfPooledLeakAccepted": "frozen (no-function): The network audit's PeriodRun.Sound on a run that realizes the network certifier's monitoring period of sampled audits, pooled (RealizesCommOfPooledLeakAccepted), from PooledLeakAccepted's first conjunct at the run's coins: the verdicts and the claim are fields of the run (security/Definitions/Accounting/JointPeriod.lean), not a Lean function, and it bounds a Pouw.pr event, which shape.events does not list.",
    "Verity.SecurityProofs.NaiveBeatsStrassenAny": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.NaiveBeatsStrassenAnySize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model rather than a Lean function's acceptance.",
@@ -28262,10 +28448,11 @@
    "Verity.SecurityProofs.TransportPassiveZk": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
    "Verity.SecurityProofs.ImprintRootHidden": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
    "Verity.SecurityProofs.TransportDelivers": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
-   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; no Lean carries an accepted run of the network check to NetTiming.Accepted, so this statement has no restatement path.",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
+   "NetTiming.SecurityProofs.MonitoringPeriodLeakChecked": "frozen (no-function,world-unlisted): It is MonitoringPeriodLeakAccepted's composition with each window's checked inputs left out of the count: the sampled leak bound at the network certifier's rows with a valid run (NetTiming.TapProof.monitoringPeriodChecked_first: RLeakCertifierChecked, the two checks held to the run at the network certifier's rows, CheckedWitness at certifierRun, with Claims.SamplingGeneric.Compiled.KS and CommitmentScheme.Binds at each compiled verifier) and the read-back of the record under a registered parameter (RecordFormat.ReadsBy), over the network certifier's code (recordingCode, in any record format RecordFormat) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows whose registrations are placed (WindowsPlaced) and whose checks pin their checked inputs (CheckedUnique): it bounds AccSeqsChecked at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled certifier program, and, where the network certifier registers its observations at every window at that window's operator, which reads the runs before it (CertifierRegisters at runsBefore, an antecedent), for the secrets whose every window meets its good event (ExecutionPhaseGoodChecked, an antecedent: RLeakCertifierChecked at the extracted witness, and the registration's values at the registered inputs as the named premise RegisteredInputsHeld, which no proof gives yet) it reads the client's cells from the windows' records under a registered parameter and counts those secrets by the registered parameters' number times the windows' count (windowsCount, the registered and the checked inputs pinned), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -30773,7 +30960,7 @@
    }
   },
   "Definitions.Accounting.Actual": {
-   "digest": "2241fc3fa5dcd268f46cc103eca05f356a4f25dec33b642cd4c623c52083e6a0",
+   "digest": "e7a00b8864fbbaa308c1bed27fd59bdc725c296d732e44ef7a5b7b3a93e4f34a",
    "definitions": {
     "Accounting.Cuts": "13afad32e3be90cdd3bf337bf435eec1509ed08d9e1e637dbcd75a2b2b3fae91",
     "Accounting.Cuts.J": "13ecd2c6554a6595c50f0c1f5b2eeeb2e6ecf3f69dee31f98c7456c0eca1248c",
@@ -30784,6 +30971,7 @@
     "Accounting.Placed.cell": "023af47cec2f181ace8b7830d2f1752d8b88a235bf777a56d7a8e279c403fe51",
     "Accounting.Placed.cut": "77cfb647f0b4a687f9b9e0b614eebd07ca9fcb63bb25cc721bcd1fa18b1a30ba",
     "Accounting.Placed.declaration": "73652ac74164e5fe1b1b31fee5f25104927bc888b71c7735d6e80bdd96ade483",
+    "Accounting.Placed.egress": "3788a01672b10c4ca75e581672614b282b74d8f05a01ea0516b97141c04583fe",
     "Accounting.Placed.ingress": "3340b0af72432101da54dfbed17f8014fa047f69c4e7940a355dc5cdcf057c96",
     "Accounting.Placed.region": "9a00e0b16d67d8bb6a52b3d1ecb4337ea0891720392913f218ce04de54c9efb9",
     "Accounting.Placed.state": "947a5efbb5f3e50de4ecc5bf17d54a8105af813f589323646b617947283c8b0e",
@@ -32191,6 +32379,12 @@
    "digest": "e7a3de5719728ebd3908e1e02104581efec784f34a9861d659d45e2d154febb1",
    "definitions": {
     "Accounting.Guarantees.RegisteredCircuitRequirement": "f6c259ea5b70857b3e7f6f0b4aeaee3e4c5ceefcc8770fa89b068d5db7cdaf6d"
+   }
+  },
+  "Definitions.Accounting.Guarantees.RegisteredSite": {
+   "digest": "3055ebb681e084c8738764e2fe10c3b509498726204ebe81e2df538e3059095d",
+   "definitions": {
+    "Accounting.Guarantees.EgressRegistered": "0f0c2a99060c144f23f163e584dec8855a6a7011e5715bafc82ac59cdb5f4c15"
    }
   },
   "Definitions.Accounting.Guarantees.RemoteBinding": {
@@ -36221,7 +36415,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "d7a2ae1043cc0959499c77b8ed4a55ed945dd728013571334cb63cc4a00602a1",
+   "digest": "b35928026dadddb813b8fcf197b6c751df2022c2dec992f25568112dca5557c7",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Builder": "330557dcf94849eb4e17a37f661f7dcf381868026d5c68952c525352731fbdad",
@@ -36247,6 +36441,7 @@
     "Verity.Registration.builder?": "db73d6d7ed0b9999bcdbf9fc8e0f13112d70dc47f282feae0943a265c7a216a2",
     "Verity.Registration.items": "d993e0f953c7ea5f4293ed172aa371168d27f7c37cf957882e986f85024de0d6",
     "Verity.Registration.theta": "7c0838a8b1b1426b2f24da6346bbe18eb4ce285ba459392fe9ab84f2c1d8cc79",
+    "Verity.Site": "7a180f057bf197cb5e1e44202d2c0d7a2916fcfbb6cb80bb5decc98e06b5556e",
     "Verity.Site.Entry": "eede2c2d387eb4a9f99d5ebf3aaeb8a876d36db8021ef093ad4c9f788a7e15a0",
     "Verity.Site.Kind": "25686527e2604e7940fabb1c28353e7124b3967540ba78b07037d43c4b5631f6",
     "Verity.Site.Kind.certifier": "71665d4207fc3aa3cc7ab58bb4975f605c752d0a974e289613969a5515666443",
@@ -36257,7 +36452,11 @@
     "Verity.Site.Kind.outside": "831eaf5e037a9ec38c07eaff5dff75fd3f92884d8a96707f4065be5ad609ae88",
     "Verity.Site.Kind.site": "da13405696114966c75713e4f0386c4c5ee83d232e51c9cd11ead140b56c610b",
     "Verity.Site.Link": "ef6fce8a8b9d2340739697d9f5dbf92c1cbc8f64cd6b897798563d0e978c667c",
+    "Verity.Site.Link.ends": "97a7be8c3fb6f856b0aa85929f32aa4c373ef4aaa4dca48b46b34ae1b79062da",
+    "Verity.Site.Link.β": "ed878142453c3da50689e6439dad34cce6d4e4d652e7b557de64187287c1fd63",
     "Verity.Site.Loc": "02890e0712936de452acaca15682c3bdd8e8c98c87acf37cd65923e04fcd2cc1",
+    "Verity.Site.Loc.id": "dddedc9fdad1f3cb9176e2280595125fed09427db703e42e0c60e1a92a669b9e",
+    "Verity.Site.Loc.parent": "15944e35c491f3bffd36655b9bb2aba43c2f83a526767412d15524a2bfbd5d7e",
     "Verity.Site.Owner": "3b54969c79f0c5bb04ee5be5d7aa4f7070f84c3270a4226ae5c8c543da1b0047",
     "Verity.Site.Owner.auditor": "3adf3b385218375bda24799f067a1c34a17e4927493cebd516530af6920651eb",
     "Verity.Site.Owner.prover": "67ff08251b819c0feecedcebd010a7005d157b55d030aaa36acea9d16cbda19f",
@@ -36265,7 +36464,24 @@
     "Verity.Site.Tier": "292703b61cb0987d095b46019fdd6cd3402b4525547fa7dc49fc376663a5d25e",
     "Verity.Site.Tier.disk": "caaa0c0516c05a35d09cc826c4711b6fc843e5edeb750426460742b233c891f0",
     "Verity.Site.Tier.dram": "8f447471011b33bfb52ef5ec0ae46169e087b579374ce64e18c49017fe1dd58e",
-    "Verity.Site.Tier.hbm": "aa95fe2b2bbfd0f2958e3693efb072e8e669f764ceda32a5534700038ad2307c"
+    "Verity.Site.Tier.hbm": "aa95fe2b2bbfd0f2958e3693efb072e8e669f764ceda32a5534700038ad2307c",
+    "Verity.Site.links": "18e947c3b314ecf0a0a6e5303b6cdecdc08fd7993f875408594b8d3c46f81594",
+    "Verity.Site.locs": "020c7e6a57378aedc8fdb08096b50dde014142d51956ecd21472c46e8058354a",
+    "Verity.Site.outside": "b73f92ebaa02b2c8d0f8f9772ef2a64e89c3a2ee1377a603fd373a0e8b6368e2"
+   }
+  },
+  "Definitions.Core.SiteSubtree": {
+   "digest": "1c9f33a21e08bfd613512a3a1622f403ab3b1cd1921f98b0703759bdb250abb2",
+   "definitions": {
+    "Verity.Site.Child": "18b72de5aed1d004ee637cfc23b2d2bd41727ec43df89f9b60c2b21cc992f660",
+    "Verity.Site.Place": "a3dfea269be22e1e83b5457f00df96bbdd214d1fa6855f526e4377522181b895",
+    "Verity.Site.instDecidableChild": "b8379beb45ec1ddf696091bb6559c31fc9540ecb40515d5f7547f1680b9865bb",
+    "Verity.Site.linkβ": "b5e92396e77cd219dc654dfb58938e386874234b6c87b3120cedde874f522df0",
+    "Verity.Site.place": "7aa4418b30cd96d655aa6ef276fa971eef86c8a46641b33c064051fcdcf6f036",
+    "Verity.Site.placeEnds": "cb3c789597050c13e01c0a1ce2bd028934715ff17cd478e57d90d06e88372fc0",
+    "Verity.Site.places": "2eafaf7de3bbede40be9dca53e2c5f9283e9288ba101688e8efd2306dbe8d294",
+    "Verity.Site.placesIn": "a5fd0bbfc42c682c8016123448950c4718e1e092d38d2af2918113ce7128e82e",
+    "Verity.Site.under": "20e74f3617d95719ee49a469eb42bf69d04018be5d234bd3b3d4c2dc04fe9aa2"
    }
   },
   "Definitions.Core.TC.Bridge": {
@@ -37967,6 +38183,12 @@
     "NetTiming.Regenerates": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
    }
   },
+  "Definitions.NetworkCertifier.Assumptions.RegisteredInputs": {
+   "digest": "2801acfe82101143a12112ba807ddf4231c2ee0cf702e6c4568d9008d4f6c181",
+   "definitions": {
+    "NetTiming.RegisteredInputsHeld": "cc323ff7646936e9a47ffe0e5ecfa89e25f863da08c30035c70aa6a82bb734b6"
+   }
+  },
   "Definitions.NetworkCertifier.Carried": {
    "digest": "c2e1d868d2f42b4d68bd46eb90378216d78b8fd3f9c6355eddf716ee33c570a3",
    "definitions": {
@@ -38059,6 +38281,13 @@
     "NetTiming.Guarantees.MonitoringPeriodLeakAccepted": "41de25b3444487593edcbd858f2daee2767204c6475b0aa1ae05516f315d1772"
    }
   },
+  "Definitions.NetworkCertifier.Guarantees.MonitoringPeriodChecked": {
+   "digest": "5cc5a0902cdff241c87b818058d5d56c665c7dff77e16a2ed66aca8545cdcc4b",
+   "definitions": {
+    "NetTiming.ExecutionPhaseGoodChecked": "80e8edda22a894cf2e2035452649c5d0fe5840b4f256aa77f1d938a6d8001bf3",
+    "NetTiming.Guarantees.MonitoringPeriodLeakChecked": "0514e091ba75381ca158bdce275897274510306ec1b95363b86eb56344a46ad9"
+   }
+  },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
    "digest": "54fea0a567a4758143eeefd5ddfa44f6ff75b5659e11d867439071d9d3d95129",
    "definitions": {
@@ -38104,6 +38333,22 @@
    "definitions": {
     "NetTiming.ExecutionPhaseGood": "c20385320775a41b35a2c55999d24fe65f2abeaf0b66b002b2291d548fe13d1f",
     "NetTiming.SameRegistration": "8429cc0f7aa35a113597b5d61becf814dd398483b71b3aa633f976567dc17395"
+   }
+  },
+  "Definitions.NetworkCertifier.MonitoringPeriodChecked": {
+   "digest": "be28dc91c83c150ea78dba58647d3a3f84630f0360bd35e28973949ae0626a06",
+   "definitions": {
+    "NetTiming.RLeakCertifierChecked": "12b3ad6bc5c82747fab7cb5caa7fce96bfa7bc6f15e245fc3abca3ff0a163a8c",
+    "NetTiming.certifierRun": "2560a26e13ea705b5d504cd775df468e6b4c17ee2792ec6389008467f2266ec7"
+   }
+  },
+  "Definitions.NetworkCertifier.MonitoringPeriodConditions": {
+   "digest": "ebe9eedcd17e5e13a3e32b717e56182c348a896e690e872b0b62ef1c78ac3754",
+   "definitions": {
+    "NetTiming.MonitoringPeriodChannelReg": "026bdd8b3470934387fe4985a28460616ca0d1b113da45232e01b3cff9636b5d",
+    "NetTiming.RecordFormat.ReadsBy": "cb86a3cd20c63474b029430dd96a62bf8016a2174dc2ad1cd6a47faddf91d883",
+    "NetTiming.WindowsPlaced": "49442b8de41bcaded25fc0d6c4dbd9c18fa33a57bf3a23d86b05e7e11cbcc9f8",
+    "NetTiming.windowsCount": "a8a5d1eed48debde81802ce4f07c6155717c55655b8800a6439815d221d4e399"
    }
   },
   "Definitions.NetworkCertifier.PooledLeak": {
@@ -38228,13 +38473,14 @@
    }
   },
   "Definitions.NetworkCertifier.TapRows": {
-   "digest": "b62d00035254be9c8162a3e34dd18779cbe153f4699f53317883b3b37191b8e3",
+   "digest": "9bd959494346ab2f72c957d5994f1a8ca25e6fddb5da3c7ac491a4e9c77d08fb",
    "definitions": {
     "NetTiming.Btap": "246d781adf04e8efd876044dad00a766c58d3a8c861390febdcd08342657bb35",
     "NetTiming.CertifierRegisters": "83a789fca1e42ae8389d318d47d4ef812d5b459ef08fe54ca39a07b83609fb9d",
     "NetTiming.RLeakCertifier": "303e979c81528fcf2604bf8bece9c269b86ab8f4646d1d3ae57786a6971b625e",
     "NetTiming.certifierLog": "391389f64c448493bd12b936293936342825de5925478b59dc78ac28562ed79a",
-    "NetTiming.certifierVal": "34ad827a7a46e2e88b13d83b35466e1c7b2c092ab03f727a83014785cc3ea14e"
+    "NetTiming.certifierVal": "34ad827a7a46e2e88b13d83b35466e1c7b2c092ab03f727a83014785cc3ea14e",
+    "NetTiming.fillTrace": "174efb84d6ea5c2f130794bc6fccf992b3d732221ca393d42d8c52ccd86afbf1"
    }
   },
   "Definitions.NetworkCertifier.Warden": {
@@ -38262,7 +38508,7 @@
    }
   },
   "Definitions.NetworkCertifier.Witness": {
-   "digest": "cdf3bb9d62ff641e7e39cd48cd35307f292a4bb35bb23afd179573971e4a5e88",
+   "digest": "46648c24dd27cbd618525a07bcb39f4eef95f38817400e3d895a726052a682dc",
    "definitions": {
     "NetTiming.Witness.AccSeqsAt": "a4b935cd0a15b7bcb7e73d84acde775ea5c575cfa53012bdeba14459226c0bde",
     "NetTiming.Witness.acceptAll": "f4b434627d8d726cba77c3d5d49b6f208742472654bbb76ba621802a074ba35f",
@@ -38275,6 +38521,7 @@
     "NetTiming.Witness.fxRate": "316db81557d061f63482e3b83c85e4b26945abaef4125a13c649cd5a9a3f7e55",
     "NetTiming.Witness.honestI": "d2b706286f13d1a91ffb58477a4162f545cf11b73db156a514fd0555b1263a49",
     "NetTiming.Witness.inI": "2acc2cfbc66daad48eb88868120f377aa56a8bb59d4de7143d5a49c675b9a4eb",
+    "NetTiming.Witness.noFormat": "8aeb9540414e29567650c22ccf8cb119ae2955fc0b2a5b61aeec96935650a6d9",
     "NetTiming.Witness.notLay": "b12c501c588a135dc1f9cb4168be2e565fcef30d74cfd9b3d0cae68e5f929b4c",
     "NetTiming.Witness.obs1": "57e339882f45ecf84055ab785c9ceee6462c6ea3797558d6709eb6fa2a6cd275",
     "NetTiming.Witness.oneRow": "9eb58a827ed3cd04b53a4402564a2ae3c4ea795070018dd01740d9b681528752",
@@ -46123,6 +46370,13 @@
     "Flock.Zk.reader": "ab869b90a567893048ce1ffd9265e03ad2fe88d0520b1d4d43b1f12947db4203"
    }
   },
+  "Identity.Domains": {
+   "digest": "5368344f7b86dd01ca9f433028b3d5fd8881161f7c4f5319765dce44c01343b2",
+   "definitions": {
+    "Domains.CERTIFIER_SCAN_OK_ROW_SALT": "c8d44c097f6d80b4048dbb18f0ef92e9a50ddf0ea1b80c2a31ec6e5a3c4d8381",
+    "Domains.FLOCK_CIRCUIT_BINDING": "13173bf21bd8d46a2f8fcf758cd37f534ccd39970a36c2a90362a84935411bbe"
+   }
+  },
   "Identity.Domains.Pouw": {
    "digest": "81cc57212edf6eca86c11207eee6faff8d44e19cf9163fe2c076840df60e67cb",
    "definitions": {
@@ -46775,7 +47029,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "506ace8a05e7c298e99f30ffc86cb4e74e26684f3ba4dfc8fe0a344c12c3133b",
+   "digest": "f03ffbd8c7a69b91be9c66ecbfe0713e3afedd3b4e059f74c4e363a2b4167bf8",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -46800,6 +47054,10 @@
     "NetworkCheck.Period.Commitment.audits": "8c04202f08dcecdb35f5ce70ecd6693187140c483e30c2630bebc82d43e650e6",
     "NetworkCheck.Period.Commitment.bytes": "d7629aa637b0b56546744d75d9c94b30c6d90a0979079502ccb3d422e9205e02",
     "NetworkCheck.Period.Commitment.windows": "479934c5312f05d931afaee50d70021407b33540d34d698efc8fc1a671bf7018",
+    "NetworkCheck.Period.Entry": "ad2c4567297c735ac0c0125ea75c6908449414009f0faf0ec71dfd4592eb34df",
+    "NetworkCheck.Period.Entry.key": "3ecfabc8d49eed839613bcb0ade04f58eb5f71f12bff35e13dc2d21249e827a3",
+    "NetworkCheck.Period.Entry.session": "73745778f6af1249c3ac85aacb82ae48fca4c27d164b3dc156d565931c523faf",
+    "NetworkCheck.Period.Entry.start": "f5c834143d26afd5ec36cfe5247740a8c6413ce54fcf21ca9f3c8bf990d7e3e0",
     "NetworkCheck.Period.Evidence": "079fa754e5c1ba69a37fad885f802c83d40c106641883abe958b318528e993db",
     "NetworkCheck.Period.Evidence.audits": "6fc39375016df2bea388b5273672ecb5d726f91cd1de6708b2eead5e92ff3016",
     "NetworkCheck.Period.Evidence.windows": "8b52467f8d82c54af09b85916486a10b581d86b08dbc1af8c7325d2ede3bacd6",
@@ -46816,22 +47074,23 @@
     "NetworkCheck.Period.Form": "1819ec54ed6d505a6686c4aa259732fcada2e795882da232cbec2b03872adcb7",
     "NetworkCheck.Period.Form.casesOn": "709477a8dcd9326608b328e374eb1692633948fb915c1a51b386476d11765517",
     "NetworkCheck.Period.Form.clock": "a80508543c675d596716b3f19ecab00c61cfeecbec807cd9d5be361e779c4541",
+    "NetworkCheck.Period.Form.ctorIdx": "100e0d1c2c1c590ead342298b8806f21c5a2c6d922d7df1062c126363e384091",
     "NetworkCheck.Period.Form.maxTokensCap": "eb96fce59e2ebe6935cf6f56a5eadf98e4c3e54f068782de7aa0d531b4734a08",
     "NetworkCheck.Period.Form.rec": "7202e78fa83b8a17d2c90acde5cd3a1d63237b8db962e6e9814245287b3bf9d3",
     "NetworkCheck.Period.Form.rows": "62dcb849716ab941c541e7b9bfb9cbbe3e729ef6f88737e4135277c572d7a5a2",
     "NetworkCheck.Period.Found": "19a8cc2c2dc1088009906342f531be8536539426bef2fff4dee25f8f0bac765e",
-    "NetworkCheck.Period.Params": "e0cadb2e1149cefd24992019a10061b307673470d273da1bb25c3f30edcc7770",
+    "NetworkCheck.Period.Params": "38b1a07e64e80db8770ff60eb869d877d29dd557c155e0b89ba4f1ab55aef4a2",
     "NetworkCheck.Period.Params.audits": "b14e2f9ecf29cd3af230dd0072c9bf44a5424038f400f4a92a6731cb964e81f4",
     "NetworkCheck.Period.Params.cells": "af04ea015e5a57f817d1dcfca6d8600d53b8a15207d87fa49a85d01e428f5115",
+    "NetworkCheck.Period.Params.circuit": "7a20cb273cc35a83631bd250e833a25b8f6cce80a36cbd66f5a5db795e9f8d37",
+    "NetworkCheck.Period.Params.entries": "fbdccf14e7636e97396292d4c004555e9494be5d1fea99a4cf09a1435eeb52b8",
     "NetworkCheck.Period.Params.first": "44823e7caf51ff9ab325fbc2b572a1dc56c74ce96d5ed9c0265ef0a95d279816",
-    "NetworkCheck.Period.Params.form": "a74fd5d78318df4812b3a814688b8c3ce19b802e9a55aaf63d3dc7dbcaced00c",
+    "NetworkCheck.Period.Params.form": "27ce1287fe7baf22d7828ede02a5285a00ae448fe645d82c703126b6cca03f1c",
     "NetworkCheck.Period.Params.jitter": "42dc0f6cd52e9e4e15eef6cbce3a9d0e304b6fcd7557c19b6c90dea9aab94c48",
-    "NetworkCheck.Period.Params.key": "27a006ef13ee93024fdf0e5f3ae29898821e54303341f1e8a95db419de24707f",
     "NetworkCheck.Period.Params.link": "55ec21aee28195cb8417f11460036ee9f560c4e8b37df90a6ab9ef018ca6c730",
     "NetworkCheck.Period.Params.lms": "0b1898a6ed6a4d9856f103e9c7b36d86830bb99963b0f0dee8c0420974e85b18",
-    "NetworkCheck.Period.Params.program": "6466e75e4fc37f2691da56ef9e788ee45b6b22bb8d099eeede15c6a2dbcfea65",
-    "NetworkCheck.Period.Params.session": "c62030689194cdbbb657d275b25366790991d137a031f40bc005fae0bb2c37ad",
-    "NetworkCheck.Period.Params.windows": "93e8263e7f565774fb0d636869fb18664259dbd3b678d55aa97209a01197e459",
+    "NetworkCheck.Period.Params.program": "0f81cb9aff7d7f92d2eb4753b0cb9f6dd351b338d02b6d28f6015c43cebc7f55",
+    "NetworkCheck.Period.Params.windows": "dfe14aa8dd61c7370fc20077745a7dfc9ab00f210cdeeb0e835bea2f1d82a88a",
     "NetworkCheck.Period.Profile": "5d5ed408053caf20f16f9bf0aa12d287008e19a3392efde9f39d161562193130",
     "NetworkCheck.Period.Profile.link": "9bdc87ad2940225e23d143d732b2565953d606275aa9487caf313670d4a3003c",
     "NetworkCheck.Period.Profile.windows": "7bbeb96debc010aff8ab0de8e2027c801742994d3f24f0d7b0daae18894618ea",
@@ -46888,6 +47147,7 @@
     "NetworkCheck.Period.Schedule.programSlots": "f9617c48831b91223ace07e3177dfa2dc386f18a1375737bbd3dea38e656d73a",
     "NetworkCheck.Period.Schedule.queue": "a96d60c3c2db4d053f6a7b60056abb9e0fe36df597b184ecb8ce2ac68499d95b",
     "NetworkCheck.Period.Schedule.reasons": "0103d70584aaf277b18bb468ca9faed4c97936c9863deb9fb1ae602841bae417",
+    "NetworkCheck.Period.Schedule.rowsCells": "678aee0a9cf55996b8ba5112f26af0f22dae4c023eb252c34bb597f7edc13dd6",
     "NetworkCheck.Period.Schedule.slots": "26d6f1253bf743fdaf535388059d269535fed30c9cc3be7cdb7557b3a6c18648",
     "NetworkCheck.Period.Schedule.window": "dce093e3dc053e8f2b807e669008a0e1430c9140331547c7d5c7f077a0931f55",
     "NetworkCheck.Period.Shown": "012cdf1ca8e80987207b681a2e53edae3ff06f50dc29275f0f56f88721ed4817",
@@ -46910,10 +47170,11 @@
     "NetworkCheck.Period.cellHeader": "f04237327101973963b6ee30720f48e4c16191271e40e8d0c30eb33c0132a99f",
     "NetworkCheck.Period.cellKinds": "54a38347034905047ffaf23a7063892af66ced1828ff4565358758a6db910fcd",
     "NetworkCheck.Period.cellsTag": "5c1846c4e213077be502c7cb56a4132a78981e389cc8a44d60555d954e5e6ea9",
+    "NetworkCheck.Period.certifierEntriesOf": "b8cb42e9ded5064fda8962a594f396750c3bef656a579a8d932475b29cb66432",
     "NetworkCheck.Period.certifies": "2803235f6ec55f07888c0a09fa51eace653cb90b35adadd4d5693235a1ee7ff5",
-    "NetworkCheck.Period.certifiesOn": "171f63a57032e389c2374de9f1d7e2990ea02fb0b34ba10c7c82090bd40ab411",
+    "NetworkCheck.Period.certifiesOn": "7992fac385ec1757441e208c147ad7eb96121ac5feb9584855c3a850270b01c2",
     "NetworkCheck.Period.chargedOf": "a67a4a83487d13967da813d8743969193df5c8ae786995cdf55573d5f8b24601",
-    "NetworkCheck.Period.check": "42e302cccc4d9f39fea54e83f352a0147b85617ed70ce03f66549559feb75fa5",
+    "NetworkCheck.Period.check": "e2d6a23cbb6151d12f03ea6bdc1a423386a458edadef9d6f6843726d1298dcce",
     "NetworkCheck.Period.clearClocks": "f3d5c8cc2493a8bbfa1d7bf161c066530730dbc6f6c6bf9575f1dfb6de5fcb34",
     "NetworkCheck.Period.clog2": "0b4eb09d5ca828e9a24744a2362203d629b3e35103d57bfb916d321bdfbe2dcc",
     "NetworkCheck.Period.commitmentOf": "5d00ba8f9de1190aa45ea23862aa25f5e19e9500354711d68dea94e0f5b49737",
@@ -46923,10 +47184,11 @@
     "NetworkCheck.Period.egressParams": "ea9cdedc049f493326d92d430445805d9484fe5bc751642907f15063b5138cb6",
     "NetworkCheck.Period.entriesPort": "8baffecc3c8205b3843c655dba49b391a5712f520a56a88576e8088133b0b951",
     "NetworkCheck.Period.entriesPortName": "ce4d9ab93a0621ddd2caf9d3959bfd49e9f1f10b1a6a6dbda4c21b7f2fdaeb15",
+    "NetworkCheck.Period.entryAt": "ea1fc1a1202bc4d1438b5de14cfff27a75182ed8f045de9855ea12bfc3528f3f",
     "NetworkCheck.Period.entryIds": "fe1576ab4e11b4fcab9c650dc93ff63ad65c21a4926408a7c306377df5931dc7",
     "NetworkCheck.Period.entryPins": "3c77f79fc3f65756147efadccb03cbed97df09e460c9d25d9e9ec87ed065ccd4",
     "NetworkCheck.Period.evidenceOf": "dc50446b12ffc338de03a4afc4fd6cb5e656b40b58545824ee400e387d800644",
-    "NetworkCheck.Period.executionPhaseCheck": "5a3ffd801a3578deb5a559a44c1011c041bd0c2a2b5edc346814b3dde1e0660c",
+    "NetworkCheck.Period.executionPhaseCheck": "46035523dfcd50b99cdf8e07b132c1e0ea3602c66b5fcc364390f434df013eaf",
     "NetworkCheck.Period.executionPhaseOf": "034ccce020c7d06679370911fc37585332b77febeff2d6637120636a0fc72a92",
     "NetworkCheck.Period.factsJson": "0b9370f335852edb82939bc930cb9609c85bcbf85842a16a6285e5dad8228bea",
     "NetworkCheck.Period.factsOf": "d6edc3686ad22012a2397978ff760dc4ac3f81c3e99404fae12ebd24735d2a8e",
@@ -46936,6 +47198,10 @@
     "NetworkCheck.Period.firstFinding": "12d99101ffb4b62140ec080cb2befe2fb893fec15201d5a7aa9f89a1da98e6ab",
     "NetworkCheck.Period.firstParams": "4cba5348252e0f6afd34f7a65d63e75da7fdce6dfdfec950f5c78753ef353225",
     "NetworkCheck.Period.headDigest": "b2484035200a5bef6a2c6423bc939b5aabb6fcb5e9ccbcc75594593704f70008",
+    "NetworkCheck.Period.held": "780ba0d45035091512491b9acc55e8f00c7bea7244df9fcc1e3f9aacee6be5b6",
+    "NetworkCheck.Period.heldCheck": "5b0f790aae632c44b70a665630f0dcab89e9b3b2e775c660b69f440cf085b19f",
+    "NetworkCheck.Period.heldChecks": "5e8c7c5450edb009110064b67fdfea1d2214355a9217c39f4865c5967fbeef02",
+    "NetworkCheck.Period.heldRefusal": "1012e33d9aea533fdd7560c34b92faf53b5fe5b98f0a48bc08c24cc48e6e534d",
     "NetworkCheck.Period.holds": "fa08d19be245e09652cf1792365f351a89cba4417ede184e8efdf81c04cb4ebc",
     "NetworkCheck.Period.indexChars": "4733aa2a82705604bed3cf1d8609ab65505dd9f486edb1f524d0ff5f918988ba",
     "NetworkCheck.Period.ingressParams": "68483bb6bb24f46819fbb2716ccaa3e98383d35b957eaf1166c469eb457e1c99",
@@ -46946,16 +47212,22 @@
     "NetworkCheck.Period.instBEqBucketSchedule": "cf2b38e621b4fb2439edd52f558dc33ae4681421f29d919324092851bce915c2",
     "NetworkCheck.Period.instBEqBucketSchedule.beq": "fcf65fbf6406b3a8ec0c648b1f52d811b4dfbfac1effd9477edd5aa8e4301307",
     "NetworkCheck.Period.isDigest": "4bbbff6f240a86c3b59e724f4c2fe37b2e5a7c8971040832a016b87918d0a7aa",
+    "NetworkCheck.Period.isRun": "79ab6d808fa39917b457d6df7b946cef599b810f65b6ce51267bfa6d3bbea914",
+    "NetworkCheck.Period.laneTied": "8f4f4994467338ca68ab9746c5289fc5ecab602ad9c018d9da227ded2f930647",
     "NetworkCheck.Period.maxTokensEnd": "17ce1f771b0eb7d865e7f6a3a1cc3f9e1ebb5f24241b016e1ff9a26f106a82c1",
     "NetworkCheck.Period.need": "0103a3cf32c7c34497a8adccf4f0e5b064737920bf3a1f8ac95c9ab8674c72fd",
     "NetworkCheck.Period.needSome": "4e663cdace37e782808238c7abea51d42e61d9de0ea61096ef1c88d2cc043e0e",
+    "NetworkCheck.Period.okCheck": "581fc61d7d20a58cc681b2cebae0e3c168d3524bedcc1f52ceddbc2a90d3fb7a",
+    "NetworkCheck.Period.okChecks": "8c8094cdae8d063ecfa3e955f3eb1c5965f2d6b6f245200362497c1fd21f4b97",
+    "NetworkCheck.Period.okChecksAt": "c19ca560ff5ef316e4b97b6675cbc120de86cf09e526139cc24c63c4c3d4c88c",
+    "NetworkCheck.Period.okRefusal": "6da6fbf1bc7711bd6e52978119c8c0ff5a1f485e52ba1d483712c3998c24505d",
     "NetworkCheck.Period.oneStage": "d6ae4748288085c1d2597552bfac4317f8523b7869d067c500cf5d1cd976f61b",
     "NetworkCheck.Period.outBits": "d1283a51b7265c0daa55ba3e38b8e545e0ef87d1c23bbecd128569e09a561ce5",
     "NetworkCheck.Period.outputPort": "eb21a7ea819d49fbbaa0eb0f1617cfb7752518a072d48caa0a4206896f6ff955",
     "NetworkCheck.Period.ownReturns": "b157c4746adb3ccd6b5c38d92f9b1efb215363b39c1a5d3788e3888d39fbfc32",
     "NetworkCheck.Period.paramBits": "c895c360193391ca37103a6c86d6f829392998170fb13da461cf5f5420f15f1e",
-    "NetworkCheck.Period.paramsKeys": "7d5b0e5d8d12289ceaf9defb3a2b927a08d97c2d83b049eb183fc5ed2b9ccf08",
-    "NetworkCheck.Period.paramsOf": "46830adfd0d1fd9f619cc9441ae437cdc62029e0243ecda1547449eee1a64dff",
+    "NetworkCheck.Period.paramsKeys": "826a6bfdb3f4d2918487edfd67378caa14e5d20c054aa33b095ba8bf9477f603",
+    "NetworkCheck.Period.paramsOf": "870d2815ab44a7a46252345cf90ae16f59db962e52daa0469d328da543c02c92",
     "NetworkCheck.Period.partNames": "badc9758e4738275c12fc353b4c979c3926245c8c6b126e3201254f2202a8cd6",
     "NetworkCheck.Period.profileJson": "b0c58e63ca7fb149271c3d878ecee533a50ac8914e70e41797c9efec66f76736",
     "NetworkCheck.Period.progName": "789d4cf7e6067c37c4ff4282a48e7b76e84cc8c2dd922b26d68f6250c33dd6e3",
@@ -46970,14 +47242,18 @@
     "NetworkCheck.Period.refuse": "98b441532a0acf294152e4a1e6423cb00123cf5b271ba7738085748378b43955",
     "NetworkCheck.Period.registrationOf": "9ec58192cfb78fd3f4b66c5c066ee40caeee112708dfdb7ccd6ae30bac22cdd4",
     "NetworkCheck.Period.rowSchema": "a1a5e44b385ce16297a572071652cbec050cb040f1f6f2780fbcd2916d10135a",
-    "NetworkCheck.Period.rowsCheck": "a80959725a634870fe668b9afbd6d3745d3a2c153b342e18764eec440ebb9cee",
+    "NetworkCheck.Period.rowsCheck": "80478701ac1bf928eaad43004363e9446f510333210c4b3f763af6d804d4b27c",
     "NetworkCheck.Period.rowsDomain": "229246d4935196701515eb5d41f1203ec7dd033d7050b6ac1ecc9969d57b3bc7",
-    "NetworkCheck.Period.rowsExecutionPhaseCheck": "9f80477fbfe83cd5f90a97ef19f14cc389b50d79fc3630dbaed04a35492d4ce1",
+    "NetworkCheck.Period.rowsExecutionPhaseCheck": "4f7dc6e78b5c46f2cecfe2d0a50e0327e5afcb38fca57f84a6269781d44c4dad",
     "NetworkCheck.Period.rowsFormat": "11bdb728facbd45997a856117c021217687a3138f0cbbae7fdc6c328d2d9c8b1",
     "NetworkCheck.Period.rowsOf": "ebcaaf0e7988f7648188c707acd29f031d4a33ddef2e98051ea7ceabfc62a92e",
-    "NetworkCheck.Period.rowsParamsKeys": "e0126b4ea0f80abeb35946a683b171b41fda04bacc51c24da1c1432931a0438f",
+    "NetworkCheck.Period.rowsParamsKeys": "077830086225c9a9156a33a80a0375c96462461a9f12326ce24519d52b70e1da",
     "NetworkCheck.Period.rowsPublic": "ce5484d462d8c2e47b7e563ca51148325bc8f79da719fb37623541bac55698ab",
     "NetworkCheck.Period.rowsTerms": "bd78324c0c9833a87d6ef80f5d4dc60dceb7d7292eb4e580fad443a6deb44270",
+    "NetworkCheck.Period.rowsWf": "9540316ff13b3fd09e301bf584d59de4c3ba14a401c894c1a6728c52dcb5f8d0",
+    "NetworkCheck.Period.rowsWfCheck": "4a0e1fa19da5855b63a4cd5a779751454bc165fcaef6f4ac963cf4de7d7672ff",
+    "NetworkCheck.Period.rowsWfRefusal": "23684a25587955e56641384f8e6053a2b4c717e73e28ae788280b352795a60cb",
+    "NetworkCheck.Period.runsCircuit": "54bb2f3b3cb6049d5148f28fab36372510790fededf5e017ece50355f24d91ea",
     "NetworkCheck.Period.sameLeaves": "acf7e2ca5544fb094dfcf3666d4d3f974c6786da659d8a6729b31076659b5ed3",
     "NetworkCheck.Period.scanOf": "fef6b10b0b0bb94937fbec69a2421f811085de451b11f816fc9fbed7a93cce6e",
     "NetworkCheck.Period.scheduleKeys": "ed8e9be4ea75f06aafbc09d33f48f43f8288446f88d26c9a90ecbb9dd8f32539",
@@ -46988,11 +47264,13 @@
     "NetworkCheck.Period.served": "ef9ff8d3fa5a13b4aa380c1997a2a551a358ad29367ee26d6ad8cc509ccac401",
     "NetworkCheck.Period.slotEntryId": "9cd4ed22d37dcc794e537408ce5ffe2cf351c6a5ecea47f495429916805274ff",
     "NetworkCheck.Period.slotEntryPins": "c6a2c0219235ee0e2d1b7f0b79cce264c3fa10e900c49591150b2558ad46161c",
-    "NetworkCheck.Period.stateCheck": "cc1cdffb73d99e10afac8977ddc91e974d84e3e999aff94d05ae187de66e7806",
+    "NetworkCheck.Period.stateCheck": "ab2e195b4430ae9a438dc745508f000d357287dd84b80f547769946ab86f624d",
     "NetworkCheck.Period.stateChecks": "fde48dfc588293e783a0b4e6de7b8c74646d65ac7949350318ce7724f6e8a8d4",
+    "NetworkCheck.Period.stateEmpty": "61837cb4bd6f863f1b39d66bc399829fbfae4cda463baa36f57f0837c65e3616",
     "NetworkCheck.Period.stateEntries": "8d4a7a66881c4242ff8c4369d24b6d4ee442ee704a1ea259e352723a10e6fef1",
     "NetworkCheck.Period.stateName": "d4a0d1b2f034d66eabb427424fdb2398ed17d6426b838438552f05fd58440d17",
-    "NetworkCheck.Period.stateTied": "f1d79a9330d88b39c42165765aea3d14a1f94fc5080817dd8261b7f8bee67aea",
+    "NetworkCheck.Period.stateRead": "97b90a46698d8eb4f232859b185cecac03fc8135fdebed629b08797d4675d9ce",
+    "NetworkCheck.Period.stateTied": "189ff757c459ae5966100492a86e15be54cec50c769423d7c427d0ba0a2d76ee",
     "NetworkCheck.Period.stateValue": "63dac99dda2ed22004eb242aca27e62efa0d2209fb416e4313afdd52cf162a76",
     "NetworkCheck.Period.syncSetOf": "346ada140c55631212c4cfbb0688fb06225626064c5a3af7fc2a43454e994155",
     "NetworkCheck.Period.templateNodes": "0e5acec667f1eb0086e977788a889c1e431b7b5d7bf77dcf7c57150c1d35ed33",
@@ -47000,11 +47278,45 @@
     "NetworkCheck.Period.termsJson": "348dbc98884f58d592b9d90d5e26b3fba251a06d95e0c8857830248f79cfc325",
     "NetworkCheck.Period.tiedAudits": "965ea282bd2f71068663611ab5a510835a1c116bf5bb0f151bffdc2714f25069",
     "NetworkCheck.Period.tiedIn": "c61a279d13da96e9f75ff03a75664ffcbdbe8c1709f4c79f26783c81d6ccb128",
+    "NetworkCheck.Period.tiedInputCheck": "3f8c4ff9c7f409c8d580134e98c2501e3ae5495cb48473ebe7cbca0f0141aad2",
+    "NetworkCheck.Period.tiedInputChecks": "9cfa0dd4e283739942f52ac1fedd09fefb92dbf44125b144cd4fe27cee4cebf1",
+    "NetworkCheck.Period.tiedInputWired": "2b72ab36327fa2efa5b54a35b04773e10db38d38e65dbecfc43bbbe6bae1da00",
+    "NetworkCheck.Period.tiedKey": "db98a5d1df91e2efac39068ef72ac1aec124e7274acb04ce508b5c8ea8702a10",
     "NetworkCheck.Period.tiedOf": "0cb27c1b526a7ad3cff170900af018046f3700a280c9c23a5c49d32538bae6dd",
+    "NetworkCheck.Period.tiedUnheld": "1614b8aa4316a0cdc7262c85c9486ae3c1fd6b32e3cb6203816046bb8242d4bc",
     "NetworkCheck.Period.unitLevel": "628450a5396d927976e8e4c9c94c1af776d9123759e78255c1aff8c85de87bb5",
+    "NetworkCheck.Period.unlisted": "df0e90758b14607776aa60e6ef4bb059b1adc993658d4180361b86f22b319ec3",
     "NetworkCheck.Period.wired": "9b332b3721c51ea105a6a8496159474d099c35caf0347c84b0b988dd4c52bb5d",
     "NetworkCheck.Period.wiredCheck": "09949f973a1e030512626d7119d8b67377172fa0d3eecea32c3929803ac0ce5d",
     "NetworkCheck.Period.wiredChecks": "59f78b132c6d397f4e3dcc5fc85397caac15284d723cc4e5c15753df95305d80"
+   }
+  },
+  "NetworkCheck.ScanOk": {
+   "digest": "2051fc33802aa54a648d952b9c59849a8828f9ec2baf3fd7fc9b23893140f22d",
+   "definitions": {
+    "NetworkCheck.ScanOk.Const": "f2e13ff8b1bf8c2150c29abfb35c295279697fa42745886bb0a15dbf8ea43ba3",
+    "NetworkCheck.ScanOk.Const.domain": "e86145aefb7b4d29e1ca88d28ab9e8677261abec62d67a78d0cca520f8145840",
+    "NetworkCheck.ScanOk.Const.leaves": "9b954639d81b8680ccce0ba67011b03f075d158f35ef581c61ddefa982ca9505",
+    "NetworkCheck.ScanOk.Const.port": "fda59647a44442bc07e561a3be1cc99fbc9044cbd833a9ea1c3960ab5cf946a8",
+    "NetworkCheck.ScanOk.Const.root": "549bd907cf9eb310853f8240983d027784eddc5fd44cce1017ca7a25590be78e",
+    "NetworkCheck.ScanOk.OK_ROW": "b92f155e7f08c4daf856cbcaeb8b5ee2c037810ae0b6ded69b2e0c76a2e6036b",
+    "NetworkCheck.ScanOk.PORT": "43ace19824f86dd53f086e71b8a561f2c7f3b56e3ee8326a55c82e15b8ca4bed",
+    "NetworkCheck.ScanOk.SALT_TAG": "1513a8ceae159af7fcf9b995b78fa9306113872af46e2d5adf5ce71ca3b9f693",
+    "NetworkCheck.ScanOk.WORD_BITS": "1cba406bcaccff632f65cd22d0495e33f8dd8d4157d76ed19215e0b50242e242",
+    "NetworkCheck.ScanOk.constOf": "1ef9f7822b2ea90dbd6808373419ecc7686e52a9ce64b78d7ab94198b11ec663",
+    "NetworkCheck.ScanOk.consts": "1c383edc610a7c21ced94fb0cae3276cad35e0fb2ccc209b38798bd6df3bed09",
+    "NetworkCheck.ScanOk.counted": "f69f0d751550a3191ca1fd36723ef41e2be26d4a3cb2b2bfb2e0181f8504ba31",
+    "NetworkCheck.ScanOk.domain": "556e8022adb4d59242762dc5356ac87b186ba8ab3663e1163469f6d4294a1c37",
+    "NetworkCheck.ScanOk.entryHeld": "0f8ca3c433d6431abddf6531f716b11082c4f8acb5b7b5cbf00c0a9cfffae72f",
+    "NetworkCheck.ScanOk.held": "2aa77e107c84f405d5fa0d799ba6790dde597475877f13b60c2a825745a7013f",
+    "NetworkCheck.ScanOk.known": "3be2ffa97ecde4e602e4e1d1f13a988cb2dd90e9ff5e5225bbc9e7a7d90de8d2",
+    "NetworkCheck.ScanOk.members": "1a3912aac7c65815c2bba79dffe3c892fa738ab4a3d70b8196d26120e3030264",
+    "NetworkCheck.ScanOk.named": "9be6e6eb8314febd80582f84f9ff1e059a217667fd6d060ebdb678fc67efc6af",
+    "NetworkCheck.ScanOk.okPort": "5938cbd6eca56fe3ae73e8268b4d9c1b7cb63bc48def15cbdaa9e541df8529dd",
+    "NetworkCheck.ScanOk.root": "0ee7a5b2b1a211e8bb7149703beb76c0d55710e11822146fec480a245d910f88",
+    "NetworkCheck.ScanOk.rootsOf": "1e536ebc1f4ccb8afcb4aedea5751735c00a2447ab31e86ed7d3c8d4eaff6515",
+    "NetworkCheck.ScanOk.salt": "de0878e665733ec947c890aff9fb0ca270c109d116b94e6b19040240996ca959",
+    "NetworkCheck.ScanOk.setOf": "8f02ac74287279fa3ec2afdb5e247d161ba0afe8e1f3024c1faf81f33df11379"
    }
   },
   "PousCheck.Certificate": {

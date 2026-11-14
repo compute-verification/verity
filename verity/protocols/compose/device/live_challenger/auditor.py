@@ -74,7 +74,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
   such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
-  `verity.protocols.accounting.certifier.verifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
+  `verity.protocols.accounting.certifier.device.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
   (`coin_link_argv`, `stop_link`), and a link that refuses to start, doesn't listen within `START_SECONDS` (it is
   killed: `first_line`) or ends first (its tunnel did) ends the session (`watch_link`). It listens on another port of this host's loopback, opens `ssh -N -R` from the peer's port to it,
   straight to the peer's own sshd, relays each connection to serve.py re-cut into cells and re-clocked on its grids,
@@ -202,12 +202,23 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
   `verify_ledger`'s).
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
-  with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
-  the check, all the prover's. Its unit publishes to `out/` only what isn't: `deployment.json` (the warden's key,
-  session and schedule), `cells.jsonl` (each link-window's registration, `warden_rows`, and its cost),
-  `certificates.jsonl` (the certificates alone) and a `--window-per-group` run's `groups.json`.
+  with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
+  the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
+  (each link-window's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
+  (`rehearse.log`, its stdout and stderr: free text, whose last line prints the registrations' cost) and its
+  tunnels' (`tunnel.log`, what each `ssh` prints: free text, a line for each connection the peer's port refused),
+  all the prover's. Its unit publishes to `out/` only what isn't:
+  `deployment.json` (the warden's key, session and schedule), `certificates.jsonl` (the records' certificates
+  alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row registration's certificate alone,
+  `ROW_CERTIFICATES`), `cells-registrations.jsonl` (each line of `cells.jsonl` as the witness writes it, key for
+  key in its order, less the registration's `wiring` and the line's cost, `ROW_REGISTRATIONS`: the keys published
+  are the one list `ROW_LINE`, each a hiding commitment, a certificate or the schedule's and the execution phase's
+  own structure, and a line with a key the list doesn't rule fails the rehearsal's end and publishes no
+  registration) and a `--window-per-group` run's `groups.json`. Of the connection rows' registrations and a load's,
+  `out/` and the end hold the certificates and nothing else: no root, domain or layout. Of the word that an
+  execution phase has no head, `out/` holds its certificate likewise.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
-  `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
+  `WARDEN_COUNTS` names) and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
 - **A relay session** (`relay-session`, a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with
   the rehearsals): the network certifier's relay kept up here, as the auditor's device, for a served run's own load.
@@ -265,7 +276,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     first execution phase, its key is sized to it and the check counts it. A unit stopped at `--minutes` first is a
     failed run, as a rehearsal's, and so is one whose unit is stopped (`systemctl stop`, its `RuntimeMaxSec`): the
     unit's SIGTERM goes to `certifier-run` alone (`KillMode=mixed`), which passes it to the runner and, once the runner
-    has exited, closes the ssh, then the listener, and writes `end.json` (`_Stop`).
+    has exited, closes the ssh, then the listener, and writes `end.json` (`_Stop`), its rc the runner's or 2 where
+    the runner exited 0.
   - *What it publishes* is a rehearsal's, by the same code (`warden_outcome`): to `out/`, the relay's key, session
     and schedule and each execution phase's certificates and registrations, and in `end.json` the check's verdict and
     counts; in `witness/`, for the run's own lane and vy-admin alone, the three records, their heads and salts, the
@@ -303,9 +315,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
-  `out/` publishes `load.json` (the load's registrations, which the block record pins) and `load-relay.json` (the
-  relay's counts and the sink's acknowledgements, or why it was refused), and the end carries the relay's and the
-  check's `load` (values and how many registered).
+  of the load `out/` publishes nothing, and the end's verdict carries the check's `load` (values and how many
+  registered). The load's registrations (`load.json`, which the block record pins) stay in `witness/`, as the row
+  registrations do, and so does `load-relay.json` (the relay's counts and the sink's acknowledgements, or why it was
+  refused), which varies with the load and which nothing decides on.
 - **A rehearsal's sampling** (`sampling`): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
@@ -316,12 +329,12 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
   request says otherwise; recorded in every request and passed on every one. `certifier_key.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
-  a rehearsal makes one, which
-  `warden_minutes` counts. A warden rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
-  after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
-  height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
-  scan's schedule take 13). The rehearsal samples each serve's session itself (32 fresh random bytes, `--session`), as
-  the challenger it plays: the challenger here samples none, since a rehearsal is none of its windows.
+  a rehearsal makes one, which `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its
+  session's start (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures a link-window, and its signer
+  refuses every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the
+  least height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal
+  samples each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger
+  here samples none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
@@ -414,6 +427,9 @@ WARDEN_REQUESTS = (4, 1700)
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
 #: (`warden_serve.Publisher.keep` and `attest`)
 WARDEN_WINDOW_LEAVES = 5
+#: the one-time signature that key gives its session's start, before its first execution phase's (`certify_start`
+#: there)
+START_LEAVES = 1
 #: a warden rehearsal's link-window without `--scan`: `warden_serve.py`'s default schedule's (`WardenParams`, 600
 #: buckets of 100 ms)
 WARDEN_WINDOW_MS = 60_000
@@ -453,11 +469,58 @@ WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
-#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
-#: `warden_serve.py rehearse` writes is witness and stays in `witness/`, which `fetch` gives the run's own lane alone.
+#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`)
+#: and the cells' registrations less their private keys (`ROW_REGISTRATIONS`);
+#: everything else `warden_serve.py rehearse` writes, what it prints (`rehearse.log`) and what the run's tunnels
+#: print (`tunnel.log`) are witness and stay in `witness/`, which `fetch` gives the run's own lane alone.
 #: `groups.json` (a `--window-per-group` run's) is each group's request indices and link-windows, the request's
-#: public counts and the scan's schedule alone
-WARDEN_PUBLIC = ("deployment.json", "cells.jsonl", "groups.json", "load.json", "load-relay.json")
+#: public counts and the scan's schedule alone. Of a load, nothing: its registrations (`load.json`, each value's
+#: whole) stay in `witness/`, as the connection rows' registrations do, and so does its relay's `load-relay.json`
+WARDEN_PUBLIC = ("deployment.json", "groups.json")
+#: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
+#: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
+#: registration, or the execution phase it was refused for, and its cost; of a connection rows' registration
+#: `out/` holds the certificate and nothing else, and of the word that an execution phase has no head
+#: (`ROWS_NO_HEAD`) the same
+ROW_CERTIFICATES = {"cells.jsonl": "cells-certificates.jsonl", "rows.jsonl": "rows-certificates.jsonl"}
+#: the cells' registrations' file of `witness/` with the file of `out/` that holds its lines as the witness writes
+#: them, line for line, less what `ROW_LINE` leaves out (`row_registration`). The connection rows' registrations
+#: aren't among them: `out/` holds their certificates alone
+ROW_REGISTRATIONS = {"cells.jsonl": "cells-registrations.jsonl"}
+#: how `ROW_LINE` rules a key: its value is published, or left in `witness/` alone
+PUBLIC, WITHHELD = "public", "withheld"
+#: every key of a line of `cells.jsonl` (`warden_serve.Publisher`: a registration, `warden_rows.registration`'s
+#: keys, or the execution phase it was refused for), each ruled, an object by its own keys. It is the one list of
+#: what `out/` publishes of a registration, so a key a writer adds is published only once it is written here:
+#: until then its line fails the gate (`row_registration`). What is public, and why it may be:
+#: - `root`: a hiding commitment, the root over the rows' `hm96` leaves, each row under a fresh salt at the pinned
+#:   key (the named assumption `hash-derived-key`);
+#: - `certificate`: the network certifier's signature over the head's digest, which `cells-certificates.jsonl`
+#:   publishes already;
+#: - every other key: protocol structure. `warden_rows.check_registration` holds each to the one value the
+#:   schedule, the session, the link, the direction and the execution phase give: the format and the rows' schema
+#:   (constants), the value's name, the parameters' digest (the schedule's, in `deployment.json`), the domain and
+#:   the rows' sizes and layout.
+#: What is left out: `wiring`, the salted digest of which connection's which cell each slot of a row holds, opened
+#: to the verifier alone; a line's `cost`, with its two measured times; and a refused line's `withheld`
+ROW_LINE = {
+    "registration": {
+        "format": PUBLIC, "value": PUBLIC, "link": PUBLIC, "direction": PUBLIC, "window": PUBLIC,
+        "parameters": PUBLIC, "cell_bytes": PUBLIC, "rows": PUBLIC, "words": PUBLIC, "word_bits": PUBLIC,
+        "row_schema": PUBLIC, "domain": PUBLIC, "wiring": WITHHELD, "root": PUBLIC,
+        "layout": {"buckets": PUBLIC, "slots": PUBLIC, "connection_slots": PUBLIC, "first_bucket": PUBLIC},
+        "certificate": {"key": PUBLIC, "digest": PUBLIC, "signature": PUBLIC}},
+    "refused": PUBLIC, "withheld": WITHHELD, "cost": WITHHELD}
+#: the direction a connection rows' certificate signs, which its registration doesn't name
+#: (`connection_rows.check_registration`)
+ROWS_DIRECTION = "egress"
+#: what a line of `rows.jsonl` holds in place of a registration where its execution phase ends in the network
+#: certifier's word that it has no head (the lengths rows' form 2): the word's record, which `connection_rows.no_head`
+#: calls public, under this key (`connection_rows_run.NO_HEAD`)
+ROWS_NO_HEAD = "no_head"
+#: of the check's `cell_rows`, what an end carries: how many of the cells' registrations it accepted, and of how
+#: many. Its other keys are the registrations' cost
+CELL_ROWS = ("registered", "of")
 WITNESS = "witness"
 #: the shapes of interface 1's weights a store holds and a load relays (`load_relay.SHAPES`)
 LOAD_SHAPES = ("h200", "tiny")
@@ -1429,9 +1492,15 @@ def warden_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bu
 
 
 def warden_height(windows: int, heads: int = 0) -> int:
-    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's) and then
-    `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
-    return max(REHEARSAL_HEIGHT[0], (heads + WARDEN_WINDOW_LEAVES * windows - 1).bit_length())
+    """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's), then the
+    session's start (`START_LEAVES`) and then `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
+    return max(REHEARSAL_HEIGHT[0], (key_signatures(windows, heads) - 1).bit_length())
+
+
+def key_signatures(windows: int, heads: int = 0) -> int:
+    """The one-time signatures a rehearsal of `windows` execution phases takes of its key: a load's `heads`, its
+    session's start and five an execution phase."""
+    return heads + START_LEAVES + WARDEN_WINDOW_LEAVES * windows
 
 
 def load_heads(shape: str) -> int:
@@ -1446,8 +1515,9 @@ def warden_key(windows: int, height: int, what: str, heads: int = 0) -> None:
     if height < (least := warden_height(windows, heads)):
         load = f" after the load's {heads} heads" if heads else ""
         raise Refused(f"--height {height}: {what} take {windows} link-windows, "
-                      f"{heads + WARDEN_WINDOW_LEAVES * windows} one-time signatures ({WARDEN_WINDOW_LEAVES} a "
-                      f"window{load}), past the key's {1 << height}: give --height {least} or more, or fewer --requests")
+                      f"{key_signatures(windows, heads)} one-time signatures (the session's start and "
+                      f"{WARDEN_WINDOW_LEAVES} a window{load}), past the key's {1 << height}: give --height {least} or "
+                      f"more, or fewer --requests")
 
 
 def scan_group_windows(tokens: int) -> int:
@@ -2411,18 +2481,80 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
 
 
 #: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: none is a cell's content or a
-#: connection's own (a load's are its values and how many registered)
+#: connection's own (a load's are its values and how many registered), and `cell_rows` is cut to `CELL_ROWS`
 WARDEN_COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates",
                  "signer_refused", "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms",
                  "load")
 
 
+def row_certificate(line: dict) -> dict:
+    """A row registration's line (`ROW_CERTIFICATES`) as `out/` holds it: its certificate, the key, digest and
+    signature under the link, direction and window its registration names (`certificate.Certificate`'s fields), or
+    the execution phase it was refused for. Nothing else of the registration, and not the line's cost. A connection
+    rows' line that holds the word in place of a registration (`ROWS_NO_HEAD`) gives the word's certificate in the
+    same fields, each one of the word's public record, and no cost: a reader tells it from a head's by its digest,
+    which is a function of the link, the execution phase and the schedule's digest."""
+    r = line.get("registration") or line.get(ROWS_NO_HEAD)
+    if r is None:
+        return {k: line[k] for k in ("refused",) if k in line}
+    c = r["certificate"]
+    return {"certificate": {"key_id": c["key"], "link": r["link"], "direction": r.get("direction", ROWS_DIRECTION),
+                            "window": r["window"], "digest": c["digest"], "signature": c["signature"]}}
+
+
+class Unruled(ValueError):
+    """A line of a row registrations' file that `out/` can't hold as `ROW_LINE` rules it."""
+
+
+def _ruled(doc: dict, keys: dict, at: str) -> dict:
+    """`doc` less the keys `keys` leaves out, in its own order; `Unruled` for a key `keys` doesn't name and for a
+    published value that isn't a string, an integer, a list of them or, where `keys` lists its keys, an object."""
+    out = {}
+    for k, v in doc.items():
+        rule = keys.get(k)
+        if rule is None:
+            raise Unruled(f"{at} holds the key {k!r}, which ROW_LINE names neither as published nor as left out. "
+                          f"Rule whether it is public, and write it there ({Path(__file__).name}) as PUBLIC or WITHHELD")
+        if rule == WITHHELD:
+            continue
+        if isinstance(rule, dict):
+            if not isinstance(v, dict):
+                raise Unruled(f"{at}'s {k} isn't an object of the keys ROW_LINE lists for it")
+            out[k] = _ruled(v, rule, f"{at}'s {k}")
+        elif all(isinstance(x, str) or type(x) is int for x in (v if isinstance(v, list) else [v])):
+            out[k] = v
+        else:
+            raise Unruled(f"{at}'s {k} is neither a string, an integer nor a list of them. A published key holds an "
+                          f"object only by the keys ROW_LINE ({Path(__file__).name}) lists for it: list them there")
+    return out
+
+
+def row_registration(text: str) -> str:
+    """A line of a cells' registrations' file (`ROW_REGISTRATIONS`) as `out/` holds it: the line as the witness
+    writes it, key for key in its order, less what `ROW_LINE` leaves out: the registration's `wiring` and the
+    line's cost, and of a refused line all but the execution phase it was refused for. So every byte of the line
+    in `witness/` that isn't of a left-out key or beside one is a byte of the public line. `Unruled`, with what
+    to change, for a line `ROW_LINE` doesn't rule whole, and for one that isn't `json.dumps`' own writing of
+    itself, which this couldn't cut to the same bytes."""
+    try:
+        line = json.loads(text)
+    except ValueError:
+        raise Unruled("the line isn't JSON") from None
+    if not isinstance(line, dict) or json.dumps(line) != text:
+        raise Unruled("the line isn't one JSON object as json.dumps writes it by default, so its public keys can't "
+                      "be published byte for byte: write the line so, or teach row_registration "
+                      f"({Path(__file__).name}) the writer's form")
+    return json.dumps(_ruled(line, ROW_LINE, "the line"))
+
+
 def warden_outcome(out: Path, witness: Path) -> dict:
     """A warden rehearsal's public outcome, from what `warden_serve.py rehearse` wrote to `witness`:
     `WARDEN_PUBLIC`'s files copied to `out`, `certified.jsonl`'s certificates without the heads and salts they sign
-    (`out/certificates.jsonl`), each registration's root by value, the check's verdict (`accepted`, how many problems,
-    `WARDEN_COUNTS`), each witness file by name and size alone, and a load's relay (`load-relay.json`: its counts and
-    the sink's acknowledgements, or why it was refused)."""
+    (`out/certificates.jsonl`), each row registration's certificate without its registration (`ROW_CERTIFICATES`),
+    each cells' registration less its private keys (`ROW_REGISTRATIONS`, `row_registration`),
+    the check's verdict (`accepted`, how many problems, `WARDEN_COUNTS`, its `cell_rows` less the registrations'
+    cost), and each witness file by name and size alone. A registrations' file with a line `ROW_LINE` doesn't rule
+    is not published, no line of it, and the outcome says which line and what to change (``unruled``)."""
     for name in WARDEN_PUBLIC:
         if (witness / name).is_file():
             shutil.copyfile(witness / name, out / name)
@@ -2431,8 +2563,23 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         (out / "certificates.jsonl").write_text("".join(
             json.dumps({k: doc[k] for k in ("certificate", "refused") if k in doc}, sort_keys=True) + "\n"
             for doc in docs))
-    cells = (out / "cells.jsonl").read_text().splitlines() if (out / "cells.jsonl").is_file() else []
-    registrations = {r["value"]: r["root"] for r in (json.loads(x).get("registration") for x in cells) if r}
+    for name, public in ROW_CERTIFICATES.items():
+        if (witness / name).is_file():
+            (out / public).write_text("".join(
+                json.dumps(row_certificate(json.loads(x)), sort_keys=True) + "\n"
+                for x in (witness / name).read_text().splitlines()))
+    unruled = None
+    for name, public in ROW_REGISTRATIONS.items():
+        if unruled is None and (witness / name).is_file():
+            lines = []
+            for i, x in enumerate((witness / name).read_text().splitlines(), 1):
+                try:
+                    lines.append(row_registration(x) + "\n")
+                except Unruled as e:
+                    unruled = f"{name} line {i}: {e}; out/{public} is not written"
+                    break
+            else:
+                (out / public).write_text("".join(lines))
     try:
         check = json.loads((witness / "check.json").read_text())
     except (OSError, ValueError):
@@ -2442,13 +2589,10 @@ def warden_outcome(out: Path, witness: Path) -> dict:
         summary = check.get("summary") or {}
         verdict = {"accepted": check.get("accepted"), "problems": len(check.get("problems") or []),
                    **{k: summary[k] for k in WARDEN_COUNTS if k in summary}}
+        if isinstance(verdict.get("cell_rows"), dict):
+            verdict["cell_rows"] = {k: verdict["cell_rows"][k] for k in CELL_ROWS if k in verdict["cell_rows"]}
     sizes = {str(p.relative_to(witness)): p.stat().st_size for p in sorted(witness.rglob("*")) if p.is_file()}
-    try:
-        load = json.loads((out / "load-relay.json").read_text())
-    except (OSError, ValueError):
-        load = None
-    return {"verdict": verdict, "registrations": registrations, "witness": sizes,
-            **({} if load is None else {"load": load})}
+    return {"verdict": verdict, "witness": sizes, **({} if unruled is None else {"unruled": unruled})}
 
 
 def forward_argv(ssh: list[str], local: int, remote: int, back: tuple[int, int] | None = None) -> list[str]:
@@ -2558,9 +2702,11 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     `tunnel_argv`'s third argument, and the session is stopped when that ssh exits), as `auditor`: open the tunnel to
     the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
-    `end.json`. A warden rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
-    end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
-    the store's record. A SIGTERM while either runs (its unit's stop, `stop`) still ends it so (`_Stop`)."""
+    `end.json`. A warden rehearsal writes to `witness/`, its own output (`rehearse.log`) and its tunnels'
+    (`tunnel.log`) with it, and its public outcome (`warden_outcome`) to `out/` and the end; a line of its cells'
+    registrations that `ROW_LINE` doesn't rule ends it nonzero, the end saying the line and the fix. A store's write
+    opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries the store's record. A
+    SIGTERM while either runs (its unit's stop, `stop`) still ends it so (`_Stop`)."""
     if not CERTIFIER_RUN.fullmatch(run):
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
@@ -2593,19 +2739,24 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
             back, command = ((req["client_port"], listen),), _listening(command, listen, held.fileno())
         argv = (tunnel_argv or
                 (lambda ssh, local, *back: forward_argv(ssh, local, req["port"], *back)))(ssh, local, *back)
-        with open(out / "tunnel.log", "wb") as log:
+        with open(work / "tunnel.log", "wb") as log:
             tunnels.append(subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
             for s in sinks:
                 tunnels.append(subprocess.Popen((sink_argv or forward_argv)(ssh, s, load["sink_port"]),
                                                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT))
         stop.armed = True
-        if not up(tunnels[0], local):
-            why = f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
-        elif not all(up(t, s) for t, s in zip(tunnels[1:], sinks)):
-            why = f"a tunnel to {req['peer']}'s sink at 127.0.0.1:{load['sink_port']} didn't come up (tunnel.log)"
-        else:
+        try:
+            if not up(tunnels[0], local):
+                why = f"the tunnel to {req['peer']}'s 127.0.0.1:{req['port']} didn't come up (tunnel.log)"
+            elif not all(up(t, s) for t, s in zip(tunnels[1:], sinks)):
+                why = f"a tunnel to {req['peer']}'s sink at 127.0.0.1:{load['sink_port']} didn't come up (tunnel.log)"
+        finally:
+            # inside the outer try: a stop up to this disarm is a `Stopped` its except takes, never one raised in its
+            # finally, which would leave the tunnels open and write no end
+            stop.armed = False
+        if why is None:
             to = {"sinks": [("127.0.0.1", s) for s in sinks], "store": host.store} if load else {}
-            with open(out / "rehearse.log", "wb") as log:
+            with open(work / "rehearse.log", "wb") as log:
                 proc = stop.start(lambda: subprocess.Popen(
                     command(req, work, f"http://127.0.0.1:{local}", **to), stdin=subprocess.DEVNULL, stdout=log,
                     stderr=subprocess.STDOUT, env=certifier_env(), start_new_session=True,
@@ -2614,7 +2765,7 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
                 threading.Thread(target=_stop_with, args=(tunnels[0], proc), daemon=True).start()
             rc = (wait or _wait)(proc, req["minutes"] * 60)
             if stop.signalled:
-                why = STOPPED
+                rc, why = rc or 2, STOPPED
             elif kept and tunnels[0].poll() is not None:
                 rc, why = rc or 2, (f"the tunnel to {req['peer']} closed before the session ended, and with it the "
                                     "clients' way to the relay and the relay's to the endpoint (tunnel.log)")
@@ -2623,15 +2774,18 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
     except Stopped:
         why = f"{STOPPED} before its runner started"
     finally:
-        stop.armed = False
         for tunnel in tunnels:
             tunnel.terminate()
             tunnel.wait()
         if kept:
             held.close()
+    outcome = {"device": "warden", **warden_outcome(out, work)}
+    unruled = outcome.pop("unruled", None)
+    if unruled is not None:
+        rc, why = rc or 2, unruled if why is None else f"{why}; {unruled}"
     if kept and why is None:
         why = "the session ended" if rc == 0 else f"the session exited {rc}"
-    return _end(d, rc, why, {"device": "warden", **warden_outcome(out, work)}, pinned=pinned, now=now)
+    return _end(d, rc, why, outcome, pinned=pinned, now=now)
 
 
 def _end(d: Path, rc: int, why: str | None, outcome: dict, *, pinned: str, now: Callable[[], datetime]) -> dict:
@@ -2658,7 +2812,7 @@ def _weights_run(host: Host, d: Path, req: dict, *, pinned: str, now: Callable[[
                                                    start_new_session=True))
     rc = (wait or _wait)(proc, req["minutes"] * 60)
     if stop.signalled:
-        why = STOPPED
+        rc, why = rc or 2, STOPPED
     elif rc == -signal.SIGTERM:
         why = f"stopped at {req['minutes']} minutes"
     try:

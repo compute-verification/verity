@@ -7,6 +7,11 @@ records enters the chain.
 * `deployment`: ``deployment.json``, a network certifier's (its link, its schedule and their digest, its key and
   session), never a certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
   (`CERTIFIER_FILES`).
+* `deployment_of`: the run's deployment held to the auditor's record of it (`RECORD`, ``CERTIFIER_KEY``'s form: the
+  gate's own ``out/deployment.json`` of the run as the auditor read it off the gate, its SHA-512, key and session):
+  every ``deployment.json`` the run holds must be the record's, whose deployment the checks then read, so the network
+  certifier's key and session are the auditor's, never a file the prover's node holds. `own_record` is the record a
+  job that ran the network certifier itself holds (a local rehearsal's, the job its own auditor).
 * `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the network certifier's link
   name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
   certifier runs no shaper clock and signs none, so no clock certificate enters N2 here).
@@ -15,33 +20,41 @@ records enters the chain.
 * `certificates`: the network certifier's own offline check (`relay_check.check`: every execution phase of the three
   records certified under the network certifier's key and session with its head the record's, its rows' registration,
   the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
-  `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
+  `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order. Of the check it writes
+  what the gate's end publishes and no more (`verdict`, `COUNTS`): whether it accepted, how many problems, and the
+  gate's own list of counts.
 * `io`: the certified I/O, read off the records' cells alone, in a certifier rehearsal's certified I/O's keys: each
   connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
   (`id_form.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
+* `rows_audit_case`: the run's records as ``network-rows check`` reads them (`NetworkCheck.RowsAudit`,
+  `verity/network-rows/v1`): the auditor's record's key, link, schedule, session and windows (`deployment_of`), and
+  each execution phase's three records (`warden_serve.CERTIFIED`'s order), each raw (`lean_audit.encode` of its grid)
+  and then certified. The schedule is the period check's (`scan_period.rows_case`'s: the id egress form's integer
+  fields, and `max_tokens_cap` when the run has one, which the rows audit refuses by name).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
-
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.accounting.certifier.verifier import lean_audit as LA
 from verity.protocols.accounting.certifier.verifier import service as SVC
 from verity.protocols.accounting.certifier.verifier import warden as W
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.schedule import SyncSet
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
 from verity.commitments.crypto import lms
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 PROXY = ("a certifier rehearsal's run (its records through active.Proxy in front of the endpoint): "
          "the warden path reads an active warden's own run (warden_serve.py's, or the gate's warden-rehearse)")
@@ -52,6 +65,19 @@ FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed
 #: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one
 #: value for the field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
+#: the auditor's record of a network certifier run, ``CERTIFIER_KEY``'s form: ``deployment``, the gate's own
+#: ``out/deployment.json`` of the run as the auditor read it off the gate, ``deployment_sha512`` its bytes' SHA-512 (hex),
+#: and ``key`` and ``session``, the deployment's; the fields the gate's run also gives it (``host``, ``run``, ``pinned``,
+#: ``peer``, ``request``, ``end``) the reader of its ``status`` checks, and no check here reads them
+RECORD = "certifier-key/v1"
+#: the counts of `warden_serve.check`'s summary `certificates` writes: the gate's own list of what a network certifier
+#: run's end publishes (`auditor.WARDEN_COUNTS`), key for key, with `cell_rows` cut as the gate cuts it
+#: (`auditor.CELL_ROWS`). The summary's other keys are made from the witness (a connection's bytes before padding, the
+#: requests' tokens and finish reasons, the certifier's clocks and stalls) and stay there. A key is added here only
+#: after the gate's list has it
+COUNTS = ("requests", "ended", "refused", "failed", "windows", "certified_windows", "certificates", "signer_refused",
+          "cell_rows", "cells", "wire_bits", "cells_in_their_bucket", "tick_lateness_ms", "load")
+CELL_ROWS = ("registered", "of")
 
 
 def found(run: Path, name: str, required: bool = True) -> Path | None:
@@ -86,6 +112,40 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
     return dep, params
 
 
+def deployment_of(run: Path, record: dict) -> tuple[dict, W.WardenParams]:
+    """The run's deployment (`deployment`) held to ``record``, the auditor's record of it (`RECORD`), never the kept
+    fetch's: the prover's node holds that, and could rewrite it and re-sign the records under another key
+    (`trusted-host` covers the device and its host, not a file there). The record's key and session must be its
+    deployment's, and every ``deployment.json`` the run holds (its own, its ``witness/``'s, its ``out/``'s) must be
+    that deployment in the bytes the record hashes, else SystemExit naming the copy and the first field it differs in.
+    The record's deployment and its schedule are what the checks then read."""
+    deployment(run)
+    dep = record.get("deployment") if isinstance(record, dict) else None
+    if (not isinstance(dep, dict) or record.get("schema") != RECORD
+            or (record.get("key"), record.get("session")) != (dep.get("key"), dep.get("session"))):
+        raise SystemExit(f"{run}: the auditor's record isn't a {RECORD} whose key and session are its deployment's")
+    for d in (run, run / "witness", run / "out"):
+        if not (f := d / "deployment.json").is_file():
+            continue
+        kept = json.loads(data := f.read_bytes())
+        if kept != dep or hashlib.sha512(data).hexdigest() != record.get("deployment_sha512"):
+            field = next((k for k in sorted({*kept, *dep}) if kept.get(k) != dep.get(k)),
+                         None) if isinstance(kept, dict) else None
+            raise SystemExit(f"{run}: {f.relative_to(run)} " + (
+                f"names another {field} than the auditor's record's" if field else
+                "isn't the bytes the auditor's record hashes"))
+    return dep, W.WardenParams(**dep["params"])
+
+
+def own_record(run: Path) -> dict:
+    """The record (`RECORD`) a job that ran the network certifier itself holds of the run: its own ``deployment.json``,
+    the job being its own auditor (a local rehearsal's, never a fetch the prover's node kept)."""
+    data = found(run, "deployment.json").read_bytes()
+    dep = json.loads(data)
+    return {"schema": RECORD, "key": dep["key"], "session": dep["session"],
+            "deployment_sha512": hashlib.sha512(data).hexdigest(), "deployment": dep}
+
+
 def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
     """N2's link on the run (the module docstring's `link`), its deployment and the network certifier's schedule."""
     dep, params = deployment(run)
@@ -108,9 +168,23 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
     return out, refused
 
 
+def verdict(check: dict) -> dict:
+    """What `certificates` writes of the network certifier's own check, the gate's end's verdict
+    (`auditor.warden_outcome`): whether it accepted, how many problems, and `COUNTS` of its summary. A problem's words
+    are made from the witness, as the summary's other keys are, so neither is written."""
+    summary = check.get("summary") or {}
+    out = {"accepted": check["accepted"], "problems": len(check["problems"]),
+           **{k: summary[k] for k in COUNTS if k in summary}}
+    if isinstance(out.get("cell_rows"), dict):
+        out["cell_rows"] = {k: out["cell_rows"][k] for k in CELL_ROWS if k in out["cell_rows"]}
+    return out
+
+
 def certificates(run: Path, deployed: bool = False) -> dict:
     """The certificates' check on the run (the module docstring's `certificates`), one row an execution phase: certified
-    when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`."""
+    when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`. A run
+    the network certifier's own check refuses is refused with how many problems the check found:
+    ``warden_serve.py check`` on the witness says them."""
     dep, _ = deployment(run)
     wit = witness(run)
     check = RC.check(wit)
@@ -130,13 +204,13 @@ def certificates(run: Path, deployed: bool = False) -> dict:
                    "deployed": tuple(key["params"]) == (lms.DEPLOYED.N, lms.DEPLOYED.W, lms.DEPLOYED.H)},
            "parameters": dep["digest"], "records_file": "certified.jsonl",
            "public_file": None if public is None else public.name, "clock_certificates": 0, "sync_bits": 0.0,
-           "warden_check": {"accepted": check["accepted"], "problems": check["problems"][:20],
-                            "summary": check["summary"]},
+           "warden_check": verdict(check),
            "certified_windows": sum(r["certified"] for r in rows), "issuer_refused": refused,
            "public_is_the_records": None if public is None else theirs == mine, "rows": rows}
     why = ("the key isn't LMS at lms.DEPLOYED" if deployed and not out["key"]["deployed"]
            else "the public certificates.jsonl isn't the certified records' certificates" if public and theirs != mine
-           else f"the warden's own check refuses the run: {'; '.join(check['problems'][:3])}" if not check["accepted"]
+           else (f"the network certifier's own check refuses the run: {len(check['problems'])} problems, which "
+                 "warden_serve.py check says on the witness") if not check["accepted"]
            else None)
     return out | {"verdict": "refused" if why else "accepted", "why": why}
 
@@ -197,3 +271,31 @@ def io(run: Path) -> dict:
                     position += 1
     return {"accepted": not violations and bool(requests), "requests": len(requests),
             "tokens": sum(len(r["output"]) for r in requests), "violations": violations[:20], "records": requests}
+
+
+def rows_audit_case(run: Path, record: dict) -> dict:
+    """The run's ``network-rows`` case (the module docstring's `rows_audit_case`) as `scan_period.lean_check` writes
+    it: the params, the auditor's ``record``'s (`deployment_of`), and the commitment and evidence hex (no evidence:
+    ``{}``). SystemExit naming an execution phase's record or certified record the run lacks, a deployment.json of
+    the run that isn't the record, or a schedule in another egress form than the id form."""
+    dep, params = deployment_of(run, record)
+    if params.egress != "id":
+        raise SystemExit(f"{run}: the rows audit's schedule is the id egress form's, not {params.egress!r}'s")
+    wit = witness(run)
+    key = RF.read_public(dep["key"])
+    certified, _ = RC.read_certified(wit / "certified.jsonl")
+    raw = {(name, r.window): r for name, rs in RC.read_records(wit, params).items() for r in rs}
+    body = []
+    for w in range(dep["windows"]):
+        for name, (link, direction) in RC.CERTIFIED.items():
+            r, c = raw.get((name, w)), certified.get((link, direction, w))
+            if r is None or c is None:
+                raise SystemExit(f"{run}: {name} window {w} has no {'record' if r is None else 'certified record'}")
+            body += [LA.encode(r), LA.encode(c)]
+    p = key.params
+    lms = {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy}
+    limit = params.max_tokens_cap
+    schedule = {k: dep["params"][k] for k in W.INTEGER_FIELDS} | ({} if limit is None else {"max_tokens_cap": limit})
+    return {"params": {"key": key.public.hex(), "link": dep["link"], "lms": lms, "schedule": schedule,
+                       "session": dep["session"], "windows": dep["windows"]},
+            "commitment": b"".join(body).hex(), "evidence": b"{}".hex()}

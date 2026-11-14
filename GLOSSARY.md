@@ -166,7 +166,7 @@ identifiers a clause saying "until renamed" lists) in any file it doesn't alread
 | `hm96-sha256/v1`, until it is deleted | the hiding leaf `hm96-sha512/v1` |
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean`, until a format version | the challenger's live-coin part |
 | "network transparency"; the `network-transparency/` paths the `NetworkCertifier` Lean cites | network accounting |
-| "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
+| "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; what a format fixes, until the network certifier's next format version: its domain tags `verity-network-warden/` (`cells-domain/v2`, `cells/v2`, `parameters/v3`, `registration/v2`, `units/v1`, `wiring/v1`) and a stand-in's (`verity/a5/warden-stand-in/v1`, `a5-warden/rest/`), the circuit `WardenRowIdentity` and the names its units are staged under (`unit/warden-row`, `unit/a5-warden`), a link window's kind and key `warden`, a row registration's value `warden/<direction>/<w>` and a fails certificate's link `warden-fails`; what a caller outside the tree gives, until its callers change with it: the auditor gate's verb `warden-rehearse`, the variables `A5_WARDEN_RUN`, `CR_WARDEN_RUN`, `N2_WARDEN_RUN`, `SC_WARDEN_RUN`, `A5_WARDEN_UNITS` and `WARDEN_SERVE_C_ALLOCATOR`, the flags `--warden-run` and `--warden`, the class `--class warden` (`N2_CLASS=warden`), the path `CR_PATH=warden` and the subcommand `negatives.py warden`; what recorded data holds: a kept run's log `warden.json`, its directory `warden/` and its reports' key `warden_run`, which programs read back, the trace corpus's labels `warden-heavy` and `warden-smallkv`, its keys `warden.*` and `meta['warden']`, its watch label `warden:PID` and its value `ingress="warden"`, and the store label value `replay_set=warden/re-verify`; network steganography's own terms, an active warden and a passive warden, stay | the network certifier; "the warden's records" are network certificates |
 | "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`), until a format version | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the ZK server |
@@ -388,6 +388,21 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   T egress proof blocks chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
   one with one liveness bit. The signed `fails` record is the certifier's own. A certifier's *attachment* to a link (its
   32-byte id) is one key and schedule on it across many periods.
+- **Subtree (of the Site)** and **place** (`ARCHITECTURE.md`'s Glossary, "Site"): a subtree of the Site is a registered
+  location with every location registered under it (`Site.under`; in code, `Core.Site.within`), and at a site location
+  it is that site's registered hardware, the auditor's devices at it among them; "of the Site" because a commitment tree
+  has subtrees too. A place is a registered location or the outside (`Site.places`), and the actual circuit's leaf where
+  the Site is read as its hardware model: a gate is placed at one, a device or a memory leaf as much as a host. A link
+  ends only at a host, a certifier, a challenger or the outside: the place a link may end at is its host for a device
+  or a memory leaf, and itself for any other place (`Site.linkEnd`). The egress limit of a subtree that holds each
+  host whole (`Site.HostsWhole`) is the capacity of the registered links with exactly one end in it
+  (`Accounting.Guarantees.EgressRegistered`); a subtree at a device or a memory leaf has none.
+- **Record limit** and **sealed sink** (`Accounting.Guarantees.LeakParts`, `LeakPartsRegistered`): a device's record
+  limit `K` is a cap on the values its record takes over a window, whatever the developer's hardware sends
+  (`Accounting.RecordsWithin`); a record of a stated format has it at its size in bits. A subtree's leak limit sums it
+  over the subtree's trusted devices. A sealed sink is a memory challenger every registered link of which ends in the
+  subtree: it is part of the location, nothing is asked of what it does, and it adds no term. A memory challenger linked
+  outside the subtree as well is shared, and is a trusted device with a record limit of its own.
 - **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,
   and they change freely while every guarantee proves the same statement.
 - **Spec**: all of a Lean package that a reader must trust to read its guarantees (`AGENTS.md`, "Lean").

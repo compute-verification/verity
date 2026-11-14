@@ -15,7 +15,7 @@
 #    meanwhile, other programs' among them, so it stays in the job's temporary directory, which is deleted.
 # 2. The run: the rehearsal, with its offline check; its run directory is $OUT/run.
 # 3. What is kept of the capture: $OUT/run.pcap, its packets on the run's two ports, the stand-in front's and the
-#    relay's (`deployment.json`), headers alone. The filter reads a packet's ports in the 54 bytes kept of it: it
+#    relay's (`endpoints.json`), headers alone. The filter reads a packet's ports in the 54 bytes kept of it: it
 #    finds IPv4's there, under at most 16 bytes of IP options, and never IPv6's, so it keeps no IPv6 packet. The
 #    front and the relay listen on IPv4's loopback.
 # 4. The reader: `capture_flows.py` on $OUT/run.pcap and $OUT/run. The front and the relay share the loopback's address,
@@ -65,9 +65,9 @@ while now=$(stat -c %s "$W/lo.pcap") && [ "$now" != "$size" ]; do size=$now; sle
 kill -INT "$CAPTURE_PID"; wait "$CAPTURE_PID"; CAPTURE_PID=
 
 ends=$("$PY" -c 'import json, sys
-d = json.load(open(sys.argv[1]))
-print(*d["upstream"], *d["listen"], d["params"]["egress"])' "$OUT/run/deployment.json") \
-  || { log "the rehearsal left no deployment"; exit 1; }
+e, d = (json.load(open(p)) for p in sys.argv[1:])
+print(*e["upstream"], *e["listen"], d["params"]["egress"])' "$OUT/run/endpoints.json" "$OUT/run/deployment.json") \
+  || { log "the rehearsal left no deployment or no endpoints"; exit 1; }
 read -r front port relay listen ran <<< "$ends"
 [ "$ran" = "$EGRESS" ] || { log "the run's egress form is $ran, not EGRESS's ($EGRESS)"; exit 1; }
 tcpdump -r "$W/lo.pcap" -w "$OUT/run.pcap" "tcp port $port or tcp port $listen" 2> /dev/null \

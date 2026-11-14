@@ -53,6 +53,8 @@ STUB = r'''#!PYTHON
 import io, json, os, signal, sys, tarfile
 from pathlib import Path
 d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
+if any("${" in w for w in sys.argv[1:-1]):
+    sys.exit(f"stub ssh: an unfilled destination in {sys.argv[1:-1]!r}")
 if cmd.startswith("warden-rehearse "):
     (d / "prompts.json").write_bytes(sys.stdin.buffer.read())
     (d / "request").write_text(cmd)
@@ -69,7 +71,7 @@ elif cmd == "fetch RUN":
              "out/certificates.jsonl": b"", "witness/prompts.json": (d / "prompts.json").read_bytes(),
              "witness/certified.jsonl": b"PLANTED\n", "witness/stalls.json": STALLS}
     if (d / "leak").exists():
-        files["out/cells.jsonl"] = (d / "prompts.json").read_bytes()
+        files["out/cells-certificates.jsonl"] = (d / "prompts.json").read_bytes()
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name, data in files.items():
@@ -312,11 +314,11 @@ def test_at_waits_on_the_clock_and_a_late_launch_sends_nothing():
 def test_public_is_the_bundle_less_witness():
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        for name in ("r/end.json", "r/out/cells.jsonl", "r/witness/check.json", "r/witness/x/salts.bin"):
+        for name in ("r/end.json", "r/out/certificates.jsonl", "r/witness/cells.jsonl", "r/witness/x/salts.bin"):
             info = tarfile.TarInfo(name)
             info.size = 1
             tar.addfile(info, io.BytesIO(b"x"))
-    assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/cells.jsonl"]
+    assert sorted(SS.members(SS.public(buf.getvalue()))) == ["r/end.json", "r/out/certificates.jsonl"]
 
 
 def _serve_dir(d: Path, ps: list[list[int]]) -> Path:

@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 from verity.protocols.accounting.certifier.verifier import (blob_files as bf, connection_rows_check as CRC,
     load_check as LK, record_files as RF, warden_rows as WR)
-from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction, LmsKey, record_head
+from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, CertifiedStart, Direction, LmsKey,
+    record_head)
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
 from verity.protocols.accounting.certifier.verifier.record_files import certified_from_json, unpack_record
@@ -20,6 +21,14 @@ INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
 CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
              FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
+#: the local file beside `deployment.json` that holds the run's two addresses (`endpoints_record`), never published
+ENDPOINTS = "endpoints.json"
+#: a deployment's fields that are addresses, which `ENDPOINTS` holds and the published deployment never does
+ADDRESSES = ("listen", "upstream")
+#: the witness file beside `cells.salts` that holds each registration's commit and sign milliseconds
+CELLS_TIMING = "cells-timing.jsonl"
+#: the device's timings, which a registration (`cells.jsonl`) never carries: a commit's time varies with what it commits
+TIMINGS = ("commit_ms", "sign_ms")
 
 
 def _quantiles(xs: list[float]) -> dict:
@@ -78,19 +87,30 @@ def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, l
             ok = False
             if doc is not None and w in by_window:
                 costs.append(doc["cost"])
+                timed = [k for k in TIMINGS if k in doc["cost"]]
                 try:
                     head, _ = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
                     ok = WR.Cells.of(link, direction, by_window[w], params, session, salts, wiring_salt).head == head
                 except ValueError as e:
                     problems.append(f"{name} window {w}'s cells: {e}")
+                if timed:
+                    ok = False
+                    problems.append(f"{name} window {w}'s registration carries the device's {', '.join(timed)}: "
+                                    f"its timings go in {CELLS_TIMING}")
             ok_n += ok
             if not ok:
                 problems.append(f"{name} window {w}'s cells aren't registered")
     summary = {"registered": ok_n, "of": 2 * dep["windows"], "rows": sorted({c["rows"] for c in costs}),
-               "row_bytes": sorted({c["row_bytes"] for c in costs}),
-               "commit_ms": _quantiles([c["commit_ms"] for c in costs]),
-               "sign_ms": _quantiles([c["sign_ms"] for c in costs])}
+               "row_bytes": sorted({c["row_bytes"] for c in costs})}
     return summary, problems
+
+
+def cell_timing(run: Path) -> dict:
+    """The quantiles of each registration's commit and sign milliseconds (`CELLS_TIMING`, witness), which the check's
+    summary holds apart from `cell_rows`, the counts a run's end carries."""
+    path = run / CELLS_TIMING
+    lines = [json.loads(x) for x in path.read_text().splitlines()] if path.is_file() else []
+    return {k: _quantiles([d[k] for d in lines]) for k in TIMINGS}
 
 
 def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
@@ -102,6 +122,24 @@ def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, li
                 if f is not None:
                     out.setdefault(int.from_bytes(f[1:5], "big"), []).append((record.window * params.window + b, f[0]))
     return out
+
+
+def start_from_json(doc: dict) -> CertifiedStart:
+    return CertifiedStart(doc["base_ms"], doc["ordinal"], bytes.fromhex(doc["schedule"]),
+                          RF.certificate_from_json(doc["certificate"]))
+
+
+def check_start(dep: dict, key: LmsKey, session: bytes, params: WardenParams) -> tuple[dict, list[str]]:
+    """The deployment's start's certificate read as a verifier reads it: under the deployment's key and session, for
+    its link and its schedule's parameters digest (`CertifiedStart.refusal`). A deployment without one, or with one
+    that doesn't hold, has no certified start."""
+    try:
+        start = start_from_json(dep["start"])
+    except (KeyError, TypeError, ValueError):
+        return {"base_ms": None, "certified": False}, ["the session's start isn't certified (no start's certificate)"]
+    why = start.refusal(key, session, LINK, params.digest)
+    return ({"base_ms": start.base_ms, "certified": why is None},
+            [] if why is None else [f"the session's start isn't certified ({why})"])
 
 
 def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict | None, list[str]]:
@@ -129,16 +167,29 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
     return summary | {"relayed": relayed}, problems + found
 
 
-def check(run: Path) -> dict:
+def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None) -> dict:
     """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
     each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
-    gives as ``audit: PROBLEM`` without their execution phase, among its first 50."""
+    gives as ``audit: PROBLEM`` without their execution phase, among its first 50. ``under`` is what the auditor hands
+    it: the SHA-512 of the network certifier's public key (`connection_rows_check.key_sha512`) and its session, which the
+    run's deployment record is held to, a problem of it the first of the problems. With ``registrations`` it leaves
+    the registrations' file there: what it was checked under and each registration of connection rows it held,
+    where it found no problem at all, and no file where it found one or didn't end. ValueError, before the run is
+    read, for ``registrations`` without ``under``; a file already there is removed first."""
+    CRC.open_registrations(registrations, under)
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
-    problems = [] if params.digest.hex() == dep["digest"] else ["the deployment's digest isn't its parameters'"]
+    # first what the whole check is held under: a reader that cuts the problems' list must not lose it
+    problems = [] if under is None else CRC.not_under(dep, under)
+    if params.digest.hex() != dep["digest"]:
+        problems.append("the deployment's digest isn't its parameters'")
+    problems += [f"the deployment holds {k}, an address: it goes in {ENDPOINTS}, which is never published"
+                 for k in ADDRESSES if k in dep]
+    start, start_problems = check_start(dep, key, session, params)
+    problems += start_problems
     load, load_problems = check_load(run, dep, key, session)
     problems += load_problems
     windows = []
@@ -158,8 +209,7 @@ def check(run: Path) -> dict:
                 problems.append(f"{name} window {w}: {r.status.reason.value}")
     cells_summary, cells_problems = check_cells(run, dep, params, records)
     problems += cells_problems
-    rows_summary, rows_problems = CRC.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK)
-    problems += rows_problems
+    rows_at = len(problems)
     verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
     if not verdict["accepted"]:
         problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
@@ -196,14 +246,16 @@ def check(run: Path) -> dict:
         "requests": len(rows), "ended": sum(r["outcome"] == "end" for r in rows),
         "refused": sum(r["outcome"] == "refused" for r in rows),
         "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
-        "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
+        "start": start, "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
         "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
+        "cell_timing": cell_timing(run),
         "cells": verdict["cells"], "wire_bits": {k: n * B * 8 for k, n in verdict["cells"].items()},
         "data_bytes": {"ingress": sum(c["ingress_bytes"] for c in verdict["connections"]),
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
         "cells_in_their_bucket": [sum(r["in_bucket"] for r in served), sum(r["cells"] for r in served)],
         "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": warden_log.get("lateness_ms"),
+        "clocks": warden_log.get("clocks"),
         "ticker_stalls": None if not warden_log.get("stalls") else
         warden_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
         "completion_tokens": sum(r.get("completion_tokens") or 0 for r in served),
@@ -212,7 +264,13 @@ def check(run: Path) -> dict:
         "finish_reasons": {f: sum(r.get("finish_reason") == f for r in served)
                            for f in sorted({str(r.get("finish_reason")) for r in served})},
         **({} if load is None else {"load": load}),
-        **({} if rows_summary is None else {"connection_rows": rows_summary}),
     }
+    # the connection rows last, their problems at their old place: the registrations' file is written only where
+    # the whole check found no problem, so nothing of the check comes after it
+    rows_summary, rows_problems = CRC.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK,
+                                            registrations, problems, under)
+    problems[rows_at:rows_at] = rows_problems
+    if rows_summary is not None:
+        summary["connection_rows"] = rows_summary
     return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
             "audit_windows": verdict["windows"], "connections": rows}

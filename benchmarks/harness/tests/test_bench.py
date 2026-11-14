@@ -1934,6 +1934,43 @@ def test_a_requeued_point_deletes_its_earlier_attempts_verdict_before_it_runs(tm
     assert not (tmp_path / "result.json").exists()
 
 
+def test_a_timed_point_records_its_numbers_in_its_runs_result(tmp_path, monkeypatch):
+    """`_vllm-point` on one timed point, run on the fake engine at the test's preset and arms, writes its result and
+    then each of the point's numbers into it through the kit's writer (`result.record`), named ``ARM.METRIC``."""
+
+    root = Path(__file__).resolve().parents[3]
+    plan = jobs.make_plan("llama31-8b-fp8-1gpu", root=root, commit="a" * 40, lookup=lambda identity, commit: None)
+    item = plan.points[0]
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "a" * 40)
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    monkeypatch.delenv("OUT", raising=False)
+    monkeypatch.chdir(root)
+    preset, _, arms = inputs()
+    ran = []
+
+    def timed(_preset, _arms, points, **_kwargs):
+        ran.append(points)
+        return run_benchmark(preset, arms, points, sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+
+    monkeypatch.setattr(cli, "run_benchmark", timed)
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
+    assert cli.main(["_vllm-point", "--spec", "llama31-8b-fp8-1gpu", "--point", item.point.id,
+                     "--identity", item.identity]) == 0
+    assert ran == [(item.point,)]
+    held = json.loads((tmp_path / "result.json").read_text())
+    assert held["run_id"] == "r20261114-000000-0000" and held["validation"]["status"] == "passed"
+    got = {m["name"]: m for m in held["measurements"]}
+    doc = json.loads((tmp_path / "out" / "benchmark.json").read_text())
+    (row,) = doc["points"]
+    assert got and {m["point"] for m in got.values()} == {item.point.id} == {row["point"]["id"]}
+    assert {m["mark"] for m in got.values()} == {"measured"}
+    for arm, a in row["arms"].items():
+        for metric, m in a["metrics"].items():
+            assert got[f"{arm}.{metric}"]["value"] == m["mean"]
+            assert (f"{arm}.{metric}.ratio" in got) == (arm != doc["baseline"])
+
+
 def test_the_readme_states_the_contract_the_code_keeps():
     """The README is the harness's contract: every metric, gate kind, mode, schema and kind it names is the
     code's, and the code has none it doesn't name."""

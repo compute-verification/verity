@@ -112,6 +112,21 @@ theorem disjoint_of_mem_faultySets {d : Design} {P : Partition} {δ : ℝ} {F : 
   simp only [faultySets, Finset.mem_filter] at h
   exact h.2.2
 
+/-- **With no checked input, every check pins the rows**: where the layout fits, two runs whose ingress agrees through
+step `t`, on one set of other inputs and held values, give step `t` one egress row, by causality
+(`inputOf_eq_of_causal`): `CheckedUnique` at `chk = ∅`, at any check. -/
+theorem checkedUnique_empty {L S : ℕ} {C : Prog} (P : Partition) (d : Design) {lay : BoundaryGates L S} {n : ℕ}
+    (hfits : lay.Fits C n) (valid : (ℕ → Bool) → Prop) : CheckedUnique C P d lay n ∅ valid := by
+  intro t ht ins ins' a a' free hl hl' hpre ha _ _ _ ℓ
+  obtain rfl : a = a' := funext fun g => ha g (Finset.notMem_empty g)
+  refine rowOf_congr fun σ e he => valOver_congr_inp C free e fun i hi => ?_
+  have hmid : ∀ js : List (List Bool), js.length = n → (∀ j ≤ t, ins.getD j [] = js.getD j []) →
+      lay.inputOf n (ingressUpTo (fun j (_ : List (Obs L 0 S)) => ins.getD j []) [] t) a i =
+        lay.inputOf n js a i :=
+    fun js hjs hj => inputOf_eq_of_causal hfits ht he (length_ingressUpTo _ _ t) (by omega) (le_of_eq hjs)
+      (fun j hjt => (ingressUpTo_getD _ _ [] hjt).trans (hj j hjt)) a hi
+  exact (hmid ins hl fun _ _ => rfl).symm.trans (hmid ins' hl' hpre)
+
 /-! ### The count -/
 
 /-- **One incorrect set's count with a valid run.** At a check that pins `chk` and an incorrect set `F` of proof blocks of
@@ -342,6 +357,17 @@ theorem checkedWitness_traceRun {Coin : Type} [Fintype Coin] [Nonempty Coin] [In
             ¬valid s (valOver s.prog (traceVal s.prog (w.val H D.commit s))
               (heldAdv s.prog Pt (faulty H D.commit s Pt w) (w.val H D.commit s)))) ≤ εchk x := by
   simp only [CheckedWitness, PrCheckMiss, traceRun, Set.mem_singleton_iff, exists_eq_left]
+
+/-- **A check every run passes misses with probability `0`**, at every compiled sampled verifier and statement, on any
+runs. -/
+theorem checkedWitness_true {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A)
+    (runs : AuditStatement → Partition → Wit → Set (ℕ → Bool)) (x : Msg) :
+    CheckedWitness H D runs (fun _ _ => True) (fun _ => 0) x := by
+  intro Ω _ _ P
+  unfold PrCheckMiss
+  refine le_of_eq ((Pr_congr fun r => iff_false_intro ?_).trans Pr_false)
+  simp
 
 /-- **`KSLinOn` moves from `RAcc δ` to the leak relation with a valid run**, on the statements where the check holds on
 the trace's run except with probability `εchk` (`CheckedWitness` at `traceRun`), at `κ + εchk`. -/

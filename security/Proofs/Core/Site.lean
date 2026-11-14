@@ -21,6 +21,9 @@ import all Init.Data.ToString.Basic
   `Site.kind?_ofLog_prefix`), so a later entry changes nothing already registered.
 * `Registration.Valid.ids_nodup` and `Registration.Valid.parents`: a valid log registers each id once, and its Site is a
   tree, each location under a registered parent of a kind its own allows.
+* `Registration.Valid.linkKinds`, `Registration.Valid.ends_known` and `Registration.Valid.ends_ne`: a valid log's
+  links join kinds a link may join (`Site.LinkKinds`), end at something registered and each join two different ends;
+  so the other end of a memory challenger's link is a host (`Site.host_of_challenger`).
 * A small onsite site and a later entry for each check, each refused by that check's name
   (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
   onsite site refuses (`Registration.Example.remote_refusals`); a device's model read off the Site
@@ -93,6 +96,28 @@ theorem loc?_ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {i : St
 theorem kind?_ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {i : String} {k : Kind}
     (hk : (ofLog l₁).kind? i = some k) : (ofLog l₂).kind? i = some k :=
   kind?_of_prefix (ofLog_prefix h).2.1 hk
+
+/-- **Every registered link joins kinds a link may join**: what the entry check `kind` (`Entry.Kinds`) asks of each
+new link, at the whole Site. A valid log's Site has it (`Registration.Valid.linkKinds`). -/
+def LinkKinds (S : Site) : Prop := ∀ k ∈ S.links, ∃ p ∈ Kind.links, S.Joins k p.1 p.2
+
+instance instDecidableLinkKinds (S : Site) : Decidable S.LinkKinds := by unfold LinkKinds; infer_instance
+
+/-- **A memory challenger's links end at hosts**: at a Site whose links join kinds a link may join, the other end of
+a link with a memory challenger at one end is a host. -/
+theorem host_of_challenger {S : Site} (hk : S.LinkKinds) {k : Link} (hmem : k ∈ S.links) :
+    (S.kind? k.ends.1 = some .challenger → S.kind? k.ends.2 = some .host) ∧
+      (S.kind? k.ends.2 = some .challenger → S.kind? k.ends.1 = some .host) := by
+  obtain ⟨p, hp, hj⟩ := hk k hmem
+  have hp' : p = (Kind.host, Kind.host) ∨ p = (Kind.host, Kind.outside) ∨ p = (Kind.certifier, Kind.host) ∨
+      p = (Kind.certifier, Kind.outside) ∨ p = (Kind.challenger, Kind.host) := by
+    simpa [Kind.links] using hp
+  simp only [Joins, Prod.mk.injEq] at hj
+  constructor
+  · intro h
+    rcases hp' with rfl | rfl | rfl | rfl | rfl <;> simp_all
+  · intro h
+    rcases hp' with rfl | rfl | rfl | rfl | rfl <;> simp_all
 
 end Site
 
@@ -245,6 +270,66 @@ theorem Valid.parents {l : Registration} (h : Valid D A c l) :
         obtain ⟨k, hk'⟩ := Option.isSome_iff_exists.mp (Site.kind?_isSome_of_known (hk p (by simp [hpar])))
         simpa [hpar, hk', Site.kind?_of_prefix hpre hk'] using hp
     · exact ⟨he.2.1.1 x hx, (he.2.2.1.1 x hx).1⟩
+
+/-- **A valid log's links join kinds a link may join**: the entry check `kind` holds each new link to it at the Site
+as the entry extends it, and a later entry changes no registered id's kind. -/
+theorem Valid.linkKinds {l : Registration} (h : Valid D A c l) : (Site.ofLog l).LinkKinds := by
+  unfold Site.LinkKinds
+  induction l using List.reverseRecOn with
+  | nil => simp
+  | append_singleton l e ih =>
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
+    have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
+    rw [Site.ofLog_concat, Entry.added]
+    intro k hk
+    rcases List.mem_append.mp hk with hk | hk
+    · obtain ⟨p, hp, hj⟩ := ih hl k hk
+      refine ⟨p, hp, ?_⟩
+      simp only [Site.Joins, Prod.mk.injEq] at hj ⊢
+      rcases hj with ⟨h1, h2⟩ | ⟨h1, h2⟩
+      · exact Or.inl ⟨Site.kind?_of_prefix hpre h1, Site.kind?_of_prefix hpre h2⟩
+      · exact Or.inr ⟨Site.kind?_of_prefix hpre h1, Site.kind?_of_prefix hpre h2⟩
+    · exact (he.2.2.1.2.1 k hk).2.1
+
+/-- **A valid log's links end at something registered**: the entry check `unknownRef` holds each new link's ends to
+registered ids, and a registered id stays registered. -/
+theorem Valid.ends_known {l : Registration} (h : Valid D A c l) :
+    ∀ k ∈ (Site.ofLog l).links, (Site.ofLog l).Known k.ends.1 ∧ (Site.ofLog l).Known k.ends.2 := by
+  induction l using List.reverseRecOn with
+  | nil => simp
+  | append_singleton l e ih =>
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
+    have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
+    rw [Site.ofLog_concat, Entry.added]
+    intro k hk
+    rcases List.mem_append.mp hk with hk | hk
+    · exact ⟨Site.known_of_prefix hpre (ih hl k hk).1, Site.known_of_prefix hpre (ih hl k hk).2⟩
+    · exact he.2.1.2 k hk
+
+/-- **A valid log's links each join two different ends**: the entry check `kind` holds each new link to it. -/
+theorem Valid.ends_ne {l : Registration} (h : Valid D A c l) :
+    ∀ k ∈ (Site.ofLog l).links, k.ends.1 ≠ k.ends.2 := by
+  induction l using List.reverseRecOn with
+  | nil => simp
+  | append_singleton l e ih =>
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
+    rw [Site.ofLog_concat, Entry.added]
+    intro k hk
+    rcases List.mem_append.mp hk with hk | hk
+    · exact ih hl k hk
+    · exact (he.2.2.1.2.1 k hk).1
 
 namespace Example
 

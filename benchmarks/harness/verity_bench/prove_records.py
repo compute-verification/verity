@@ -11,6 +11,7 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | `cut` | one `partition` card (`spot-card/v1`) | the block types it recuts (`prove.Census.recut`) |
 | `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
 | `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
+| `flock-warm` | any number of runs of `benchmarks/served_units/stage_prove.sh` | each group's `WARM_SUMMARY` (`prove_time.py`'s) with its `WARM_CONFIG`: a statement proved on one card, after WARM warm sessions the median of RUNS timed ones, every session accepted (`prove.Warm`, `warm_rows`) |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
 | `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds, its proof's bytes and its `label`, what the accept holds, which the Lean line prints word for word (`prove.LeanVerify`, `lean_verify`) |
 
@@ -77,6 +78,7 @@ it is read from. A table with every block proved records nothing.
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
@@ -150,7 +152,10 @@ TABLE = "out/prove.json"
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
 MISSING_NAMED = 8
 CENSUS, CUT, STEADY, SINGLE, SAMPLING = "census", "cut", "flock-steady", "flock-single", "spot-sampling"
-LEAN = "lean-verify"
+LEAN, WARMED = "lean-verify", "flock-warm"
+#: each card's group of a `stage_prove.sh` run: `prove_time.py`'s summary and `prove_time.sh`'s config, whose last
+#: fields are the warm and timed sessions it ran a statement (`warm=W runs=R`)
+WARM_SUMMARY, WARM_CONFIG = "out/gpu*/out/summary.json", "out/gpu*/out/config.txt"
 
 
 @dataclass(frozen=True)
@@ -543,6 +548,82 @@ def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanV
                           "measured")], refused
 
 
+def warm_rows(summary: Any, config: str, run: str) -> list[P.Warm | str]:
+    """A group's statements proved on one card from warm sessions (`WARM_SUMMARY`, `WARM_CONFIG`), each as the
+    statement it measured, or why it measures nothing: one on the CPU, one that names no census type (`word`), a
+    session not accepted, fewer timed sessions than the group's RUNS, or figures that aren't a statement's. A full
+    statement holds `prove.STATEMENT_BITS` over 2^k_log blocks."""
+
+    got = re.search(r"\bwarm=(\d+) runs=(\d+)\s*$", config)
+    statements = summary.get("statements") if isinstance(summary, Mapping) else None
+    if not got or not isinstance(statements, Mapping):
+        return [f"its `{WARM_CONFIG}` states no `warm=W runs=R`, or its `{WARM_SUMMARY}` no `statements`"]
+    warm, runs = int(got[1]), int(got[2])
+    out: list[P.Warm | str] = []
+    for key, st in sorted(statements.items()):
+        name = key.partition("/")[2]
+        if not isinstance(st, Mapping) or st.get("device") != "gpu":
+            out.append(f"`{name}`: not proved on a card")
+        elif not isinstance(st.get("word"), str):
+            out.append(f"`{name}`: names no census type (`word`)")
+        elif not (isinstance(st.get("accepted"), list) and st["accepted"] and all(a is True for a in st["accepted"])):
+            out.append(f"`{name}`: not every session was accepted ({st.get('accepted')})")
+        elif st.get("timed") != runs or len(st["accepted"]) != warm + runs:
+            out.append(f"`{name}`: {st.get('timed')} timed of {len(st['accepted'])} sessions, not RUNS={runs} after WARM={warm}")
+        elif not (_count(st.get("n")) and _count(st.get("k_log")) and isinstance(st.get("prove_total_s"), (int, float))
+                  and st["prove_total_s"] > 0 and st["n"] <= max(1, P.STATEMENT_BITS >> st["k_log"])):
+            out.append(f"`{name}`: its `n` ({st.get('n')}), `k_log` ({st.get('k_log')}) and `prove_total_s` "
+                       f"({st.get('prove_total_s')}) aren't a statement's blocks and seconds")
+        else:
+            out.append(P.Warm(P.definition_id(st["word"]), st["k_log"], st["n"], max(1, P.STATEMENT_BITS >> st["k_log"]),
+                              st["prove_total_s"], warm, runs, run, name))
+    return out
+
+
+def warm_run(store: Any, run: str) -> list[P.Warm | str]:
+    """A run of record's statements proved from warm sessions, every card's group (`warm_rows`), or why the run
+    measures nothing."""
+
+    if superseded := _superseded(store, run):
+        return [f"superseded by {', '.join(superseded)}"]
+    attempt = store.get_attempt(run) if not run.startswith("art:") else None
+    if attempt is None:
+        return ["not a run in the store or on its remote"]
+    out = attempt.get("outputs") or {}
+    files = out.get("run_files") or out.get("run_record")
+    if not files:
+        return ["kept no run files"]
+    held = {row["path"] for row in store.listing(files, [WARM_SUMMARY, WARM_CONFIG])}
+    groups = sorted(p.rsplit("/", 1)[0] for p in held if p.endswith("/summary.json") and
+                    p.rsplit("/", 1)[0] + "/config.txt" in held)
+    if not groups:
+        return [f"holds no `{WARM_SUMMARY}` with its `{WARM_CONFIG}`, which `stage_prove.sh` writes"]
+    tree = Path(store.fetch(files, paths=[f"{g}/{f}" for g in groups for f in ("summary.json", "config.txt")]))
+    return [x for g in groups
+            for x in warm_rows(json.loads((tree / g / "summary.json").read_text()), (tree / g / "config.txt").read_text(), run)]
+
+
+def warm(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.Warm], list[dict], list[dict]]:
+    """The statements of `census`'s block types proved from warm sessions, from the workload's `flock-warm` runs of
+    record; their input, where a run carries the label; and the statements and runs that measure nothing, with why."""
+
+    held = {P.definition_id(b.name) for b in census.blocks}
+    found, refused = [], []
+    for run in sorted(records(store).get(workload.record(WARMED), []), reverse=True):
+        for got in warm_run(store, run):
+            if isinstance(got, P.Warm) and got.definition not in held:
+                got = f"`{got.statement}`: its block type, `{got.definition}`, is no block type of the census under its cut"
+            if isinstance(got, str):
+                refused.append({"target": run, "record": workload.record(WARMED), "why": got})
+            else:
+                found.append(got)
+    if not found and not refused:
+        return [], [], []
+    return found, [_input(WARMED, workload, sorted({w.run for w in found}),
+                          f"{len({w.definition for w in found})} block type(s) proved on one card from warm sessions"
+                          if found else "none that measures a block type")], refused
+
+
 def plan(store: Any, workload: Workload, given: str | None) -> tuple[P.SamplingPlan, dict]:
     """The workload's sampling plan of record (`given` must be it), and its input."""
 
@@ -615,11 +696,12 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
     blocks, inputs = census(store, w)
     prover, more, refused = flock(store, w, blocks, provers, cores)
     timed, its, unread = lean(store, w, blocks)
-    prover = replace(prover, lean=tuple(timed))
+    warmed, its_warm, unwarmed = warm(store, w, blocks)
+    prover = replace(prover, lean=tuple(timed), warm=tuple(warmed))
     rate = serving(root, w)
     seconds = rate.gpu_seconds_per_token(blocks)
-    inputs += more + its
-    refused += unread
+    inputs += more + its + its_warm
+    refused += unread + unwarmed
     sampled = None
     priced: P.ProofSystem = prover
     if system == "spot":

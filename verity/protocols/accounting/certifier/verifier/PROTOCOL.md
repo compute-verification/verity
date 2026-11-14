@@ -30,7 +30,11 @@ Where each part is stated in Lean:
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
 - one execution phase's verdict of record: `NetworkCheck.TransferBlocks`;
-- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`).
+- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`);
+- an active network certifier's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
+  (`verity/network-rows/v1`), over the certifier program's `NetworkCertifier.Rows`. It does not hold an egress cell to
+  the id egress form, which the reference's `audit` does: that is the io tie's (`IoTieCell`, on every cell), and a
+  caller that runs no io tie holds it itself.
 
 ## Zero knowledge: what ties the checks, and the named gap
 
@@ -293,7 +297,36 @@ active network certifier's records, both ends at the network certifier's grid an
 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
-and the bound `K` it publishes. The period check reads the inference-only policy's layout check.
+and the bound `K` it publishes. Its parameters list the keys of the link's network certifier (`"keys"`), an entry
+for each certifier session: `{"key": hex, "session": hex, "start": a}`, its LMS public key, its session of 32 bytes,
+and the start of its stretch of execution phases, in the numbers the period's `first` is in. An entry's stretch runs
+from its start up to the next entry's, and the last entry's from its start on. Execution phase W of the period picks
+the one entry whose stretch holds it, and each certificate and rows registration for W is held to that entry: its key,
+its session, and that session's own number for the execution phase, W − a, since a session numbers its execution
+phases from 0. The developer's record, a clock-form registration's served window, is in the period's numbers.
+
+In the rows form the evidence shows each listed entry's session's signed start (`"starts"`, one for each entry in the
+entries' order: the start's certificate, below, as `deployment.json`'s `start` holds it), and the check holds each
+entry to it. The start shown is its session's certified start: under the entry's key, in its session, over the
+period's schedule's parameters digest. And an entry starts as many execution phases after its key's first listed entry
+as its session's signed base is after that entry's session's on the key's life, an execution phase being
+`window · bucket_ms` milliseconds. So a key may be listed there in several sessions. A key's first listed entry is
+held to no other entry: its `start` is the auditor's pin. A later entry of a key runs the session right after its key's
+entry listed before it: its signed ordinal is that entry's plus one. The key's device state gives each session it
+starts the next ordinal and moves the key's life on by the session's whole span, so a session of the key that no entry
+lists, run between two listed ones, is refused by name, and each of a key's entries before its last has its session's
+whole span as its stretch. A session that ends early has no certificates past where it stopped, and the period's
+execution phases there are refused. The clock form's certifier signs no start, so the clock form reads none, and a
+key's restart there is a new entry under a new key.
+
+Refused by name: no entry; entries out of order; two entries with one start, whose stretches would overlap; one key
+identifier (a key's first 16 bytes) and one session twice; two keys with one key identifier, and in the clock form two
+entries with one; a period that starts before the first entry's stretch; parameters that still name `"key"`,
+`"session"` or `"sessions"`; in the rows form, an entry whose start is not the one its session signed, an entry whose
+session is not the one after its key's entry listed before it, a shown start its session did not certify, and evidence that does not show one start for each listed entry, and in the clock form
+evidence that shows any; and, at an execution phase, a signer that is a listed key outside its stretch or is not
+listed. `certifierEntries` and `certifierLink` read the entries and the link off the parameters through the period's
+own decoder, for a composition that pins them. The period check reads the inference-only policy's layout check.
 
 ## A served link (`served`)
 
@@ -940,9 +973,8 @@ halt, and later windows are still checked.
 **One clock per spatial unit.** Every egress link of the unit reads the same sync in a window. The audit keeps each
 window's sync (`Audit.syncs`), set by the first egress link checked for that window. A link that declares a different
 sync for the window is an `advice` violation in that window, even if its sync is in Σ_sync. The reason is the bound:
-the accepted-runs bound charges one sync per window for all links. The check's count of accepted runs
-(`Properties.NetworkCertifier.EncardAcceptedObservationsLe`) takes the advice `Ac × (Fin W → Σ_sync)`, so its 7 bits per
-window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
+the accepted-runs bound charges one sync per window for all links. Its advice is `Ac × (Fin W → Σ_sync)`, so its 7 bits
+per window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
 would be advice of `#Σ_sync^(L·W)` over L egress links, L times the bits, and an audit that took each link's syncs on
 their own would accept it.
 
@@ -952,10 +984,7 @@ a schedule), and every other window is checked against them. A window's grid rea
 earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
 carries forward, for any clock-sync values, in the set or not (`expected_grids`, held to it by
 `test_network_certifier_capacity.py`). So a window before the violating one gets the same verdict whatever sync that window
-gave, and a later one is checked against the grid its advice gives it. Lean states it of the check's grid
-(`Properties.NetworkCertifier.ExpectedGridCausal`): the grid `expectedGrid` gives a link's window `w` is the same under
-any two lists of syncs that agree on windows `0 … w`, whatever either declares after them, and the rest of the window's
-verdict reads only that window's records and syncs.
+gave, and a later one is checked against the grid its advice gives it. No Lean states it of the check's grid.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
@@ -984,8 +1013,8 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Exactly M released | at most `binom(T + M − 1, M)` | `SecurityProofs.CardCountsEqLe` |
 | At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
-| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | `Properties.NetworkCertifier.EncardAcceptedObservationsLe`, the reference's constant-rate Program as one execution block of the W windows |
-| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `Properties.NetworkCertifier.EncardProgramRunsLeWindows`, at the Program an accepted run is a run of (`Properties.NetworkCertifier.AcceptedRunsAreProgramRuns`); for the check's accepted runs, `Proofs.NetworkCertifier.encard_acceptedObservations_take_le` |
+| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | `capacity.accepted_bound_bits`; no Lean statement |
+| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `test_network_certifier_capacity.py`; no Lean statement |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The reference schedule, per execution block | `k + g·T·log2 D` bits per execution block over any m whole execution blocks from block e₀ ((e₀ + m)·g·T ≤ E·g·T), given everything the run showed before block e₀: k bits under J | `SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase` |
@@ -1053,9 +1082,8 @@ monitoring period (the K charge, `k_charge.share_of_k_by_span` from each link's 
 `SecurityProofs.EncardIngressObsDecodableLe`) and per execution phase (`envelope_bits_per_window`,
 `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). Its egress per window
 (`clock_sync.bits_per_window`, `log2 #Σ_sync`, held by `test_network_certifier_calibration.py`) is the check's charge
-for each window opened, counted from the run's first window
-(`Properties.NetworkCertifier.EncardProgramRunsLeWindows`, a guarantee in `security/Properties/lean-audit.json` stated
-over the network check's code, as the table's two rows of the check's accepted runs are). The steps of their proofs are lemmas
+for each window opened, counted from the run's first window, which no Lean states, as no Lean states the table's two
+rows of the check's accepted runs. The steps of their proofs are lemmas
 (`security/Proofs/NetworkCertifier/Lemmas.lean`): proved and audited, with no record.
 
 The egress bounds are proved in Lean for `constantRate`, the reference Program of `schedule`: E
@@ -1067,16 +1095,14 @@ the audit checks. The bound is k bits per execution block, summed from the run's
 those m (`SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases`), and a decoder of the wire recovers no more
 (`SecurityProofs.EncardDecodableLeConstantRate`). The check, which reads one clock sync per window, is that Program as
 one execution block of its W windows, with the send ticks the program computes from the syncs: its accepted runs
-number at most `#Ac · #Σ_sync^W · D^(W·T)` (`Properties.NetworkCertifier.EncardAcceptedObservationsLe`), 7 bits per
-window at 16 × 8 sync values. At one execution block the reference's forms over the first m blocks and per block give
-nothing finer, so the check's bound over its first m windows comes from the program instead: a window's sync moves no
-hand tick before the window's start (`Properties.NetworkCertifier.ExpectedGridCausal`), so the first m windows' rows
-read only the content advice and those windows' syncs, and the Program's sequences over them number at most
-`#Ac · #Σ_sync^min(W, m) · D^(m·T)` (`Properties.NetworkCertifier.EncardProgramRunsLeWindows`); the check's accepted
-runs' first m ≤ W windows are among them (`Proofs.NetworkCertifier.encard_acceptedObservations_take_le`). The per-block
-form, a window's bits given everything the run showed before it, has no Lean statement for the check and need not hold
-of it: the queue and the hand ticks carry from one window into the next, so the run shown before a window need not fix
-the rows the window's sync gives.
+number at most `#Ac · #Σ_sync^W · D^(W·T)`, 7 bits per window at 16 × 8 sync values. At one execution block the
+reference's forms over the first m blocks and per block give nothing finer, so the check's bound over its first m
+windows comes from the program instead: a window's sync moves no hand tick before the window's start, so the first m
+windows' rows read only the content advice and those windows' syncs, and their sequences number at most
+`#Ac · #Σ_sync^min(W, m) · D^(m·T)`. No Lean states either count of the check; `test_network_certifier_capacity.py`
+holds both on small grids. The per-block form, a window's bits given everything the run showed before it, need not hold
+of the check: the queue and the hand ticks carry from one window into the next, so the run shown before a window need
+not fix the rows the window's sync gives.
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
@@ -1227,7 +1253,7 @@ Each assumption, and what breaks without it:
   - Each window's part is self-delimiting, and the windows' charges sum to the whole encoding.
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
     windows' charges bound the first m windows, which the per-window form needs, as `expected_grids` gives it for the
-    syncs (`Properties.NetworkCertifier.ExpectedGridCausal`). A prefill step that releases nothing is still charged.
+    syncs. A prefill step that releases nothing is still charged.
 - **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (D = 1
   is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
@@ -1746,12 +1772,8 @@ them.
       certifier commits whatever they say. The certified I/O and the I/O tie hold each response's length and finish
       to the Commit's sampled ids, a client's abort only where the Commit says so
       ([protocol/compact-finish.md](protocol/compact-finish.md)).
-    - **What covers it.** The Lean device port models ordinal headers and compact records (`CertifierDevice`'s
-      `Config.ordinals` and `Config.compact`), and its difftest holds it to this proxy on honest, salted and restarted
-      compact runs at B of 8, 12 and 48 and on each malformed form. The device's Lean properties are stated for every
-      configuration, compact ones included. The head model takes a frame as B opaque bytes, which a compact cell is.
-      The proxy's rehearsal runs compact framing (`certifier_serve.py rehearse --traffic varied --compact B`), off the
-      gate's machine.
+    - **What covers it.** The head model takes a frame as B opaque bytes, which a compact cell is. No Lean models
+      ordinal headers or compact records.
   - **Anchor, index and ready bucket.** A frame is anchored at the egress bucket in which ingress released its
     request's last frame. Its logical index is its position in its stream. Read at time s, it is ready at ⌊s/τ_b⌋ + 1.
   - **Handing.** `Shaper` hands it at `max(h(k), ready(k), last)`, `run_shaper`'s rule under the declared sync of its
@@ -1885,9 +1907,7 @@ them.
     records and closes the link. A run whose window w is the outage is then `Proxy(windows=w)`, nothing for window w,
     and `Proxy(start=w + 1, position=p)`. Its later windows are the full run's if nothing crosses into window w.
   - **Its limits.** An online prover declares from window 0's frames on, so a proxy back from maintenance takes its
-    syncs. The certifier's Lean device port (`verity/protocols/accounting/certifier/device/lean/`) models the restart (`initAt`), the
-    salt, a served link's admission, ordinal headers and compact records; the device's Lean properties (`security/Properties/NetworkCertifier/Device.lean`) are
-    stated from window 0 (`init`), so they don't cover a proxy back from maintenance yet.
+    syncs. No Lean models a proxy back from maintenance.
 - **Advice:** the declared syncs, one per window, are given before the run, or an online prover (`Proxy(prover=…)`,
   lag 1 … T − 1) declares each at its window's first tick, before anything is handed, from the frames the shaper has
   taken. The proxy never chooses on a tick: right after tick w·T − lag (window 0's before the first tick) it hands
@@ -2067,8 +2087,9 @@ the cut gives one event a `DATA` cell and the `END` holds the trailer; any other
 
 **The response cap** (`WardenParams.max_tokens_cap`, id form only, none by default) bounds every response in tokens. The
 network certifier reads each request's `max_tokens` from its first request cell (`id_form.id_request_max_tokens`) before
-cutting it. A request whose field isn't a u32 at its place, or exceeds the cap, is refused (`cap`): none of its bytes is
-cut into a cell or reaches the server, and it fails at once. It is never clamped. Every other response is held to its
+cutting it. A request whose field isn't a u32 at its place, is 0 or exceeds the cap is refused (`cap`): none of its
+bytes is cut into a cell or reaches the server, and it fails at once. It is never clamped, and a request that asks for
+no token is refused because the stop rule ends no response of it. Every other response is held to its
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
 certified response holds at most its request's `max_tokens` tokens, hence at most the cap
 (`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
@@ -2158,17 +2179,36 @@ prompt ids and a size of ids released, each a power of two.
   `lengths` and `fails`, in the schedule's order, and is signed once. Under the lengths rows' form 1 a class is
   (P, O, rows) and each of its tables is of `rows` rows whatever the load; `rows` is at most the lengths table's
   slots, since an execution phase releases no more. Under form 2 a class is (P, O) and each of its tables is its
-  held rows and no other. The schedule refuses a class of the other form's numbers, naming the change.
+  held rows and no other. The schedule refuses a class of the other form's numbers, naming the change. It also
+  refuses classes none of which, at the largest P, holds the most ids a response of the schedule releases
+  (`content_rows.most_released`: one `DATA` cell fewer than `egress_cells`, or what the schedule holds a request's
+  `max_tokens` to): the longest request it admits is one that only a class of that P holds.
 - **A row's place.** Row r of class i's tables is the execution phase's r-th release, in release order, among those
   filed in class i. A release has its three rows at one r.
-- **The filing** is one function with one caller (`content_rows.file`, which `connection_rows.tables` calls): the
+- **The filing** is one function called in one place (`content_rows.file`, in `connection_rows`, which lays the
+  tables by it and hands the prover each class's releases by it, `connection_rows`' "The filed releases"): the
   first listed class that holds the request's bytes and the ids released. It reads the release's own sizes and
   nothing the server says, and `content_rows.tables`, which lays the tables, takes each release's class as an
   argument. A release that fits no class, or under form 1 one whose class's rows are all held, has no content row,
-  and no later class takes it; its lengths slot holds its lengths all the same. Under form 2 a class's rows are all
-  held at R of them ("The bound", below), and a release filed in it past them is refused, naming the release, the
-  class and R (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none
-  of their tables is laid and no head is signed over them.
+  and no later class takes it; its lengths slot holds its lengths all the same. None is unfiled for its request's
+  length: the network certifier admits a request of at most the bytes the schedule's largest class holds (the
+  schedule's `request_bound`), and a longer one is ingress past its bounds, whose connection fails closed
+  (`ingress`) with nothing released. None is unfiled for its ids, which a class of the largest P holds ("The
+  classes"). So every release of a schedule's own network certifier fits a class. Under form 1 one has no content
+  row only where its class's rows are all held. Under form 2 one has no content row only where it ended in a `FAIL`
+  before any `DATA` cell: the rule files such a release in no class, since the network certifier released no id of
+  it, and its lengths and fails slots say how it ended. It reads the end as the network certifier cut it, which no
+  server can compute. Under form 2 a class's rows are all held at R of them ("The
+  bound", below), and a release filed in it past them is refused, naming the release, the class and R
+  (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none of their
+  tables is laid and no head is signed over them.
+- **A schedule that can be tied** (`content_rows.can_be_tied`) lists each P once, has one O for every class and
+  has a response limit (`max_tokens_cap`), which is then at most that O. It is a word about a schedule and no
+  refusal of one: a schedule that fails it is built and served as any other, and none of its classes is tied. The
+  response tie takes a shape from a schedule only by it (`response_tie.tied`), and the rule that charges a class
+  (`class_charge.charge`) charges one below its schedule only where it is handed the head's schedule and that
+  schedule can be tied: a class of a schedule that can't be is at its whole schedule, and so is every class where
+  no schedule is handed, since the word was then not asked.
 - **A row of zero bytes** is what every row past the held ones is under form 1 (`content_rows.empty_rows`). As a
   request row it reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a
   response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held
@@ -2208,10 +2248,10 @@ prompt ids and a size of ids released, each a power of two.
   - **The count of prompt ids is at most the class's P.** A canonical id request's length grows with its prompt's
     count alone, and a release is filed only in a class that holds its request's bytes.
   - **A hand the rule doesn't read** is no execution phase's of the schedule: `content_rows.tables` refuses it,
-    naming the release, and no head is signed over it. So is one with a `max_tokens` past `max_tokens_cap` or with
-    more ids released than its `max_tokens`. These are `tables`' own checks of what the device already holds:
-    under every signed head a words row's `max_tokens` is at most the schedule's and at least its response row's
-    count.
+    naming the release, and no head is signed over it. So is one with a `max_tokens` of 0 or past `max_tokens_cap`,
+    or with more ids released than its `max_tokens`. These are `tables`' own checks of what the device already
+    holds: under every signed head a words row's `max_tokens` is from 1 to the schedule's and at least its response
+    row's count.
   - **Nothing more is public** than without them: the table's rows are the class's count and its row size is the
     schedule's.
 - **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`
@@ -2234,6 +2274,8 @@ prompt ids and a size of ids released, each a power of two.
     length in bytes are the schedule's whatever the load.
   - **The work under form 2** of laying and committing an execution phase's tables follows its counts, and so may
     the time its head is signed and published. Nothing here charges the counts or that time to a bound.
+  - **A run keeps the registration on its private side** under either form, and the auditor's gate publishes its
+    certificate alone.
 
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
 digest, records, heads and certificates. So do the request words, where a schedule has them: one without them
@@ -2315,10 +2357,38 @@ client's view read back from the certifier's record (`SecurityProofs.MonitoringP
 **Deployment requirement (`trusted-host`).** The bound holds only on a host that gives the network certifier's process:
 - CPU isolation from every co-tenant (its own cores), so that no co-resident process, the prover's above all, can
   make a tick late and so choose which windows fault (about 1 bit a window otherwise);
-- a monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from it.
+- a raw monotonic clock that nothing the prover runs can step or slew by more than the slack: buckets are read from
+  it.
 
 Both are part of the named assumption `trusted-host` (the auditor's host and its provider are trusted). Neither is
 checked here.
+
+**The clock.** The network certifier reads one clock, its host's raw monotonic clock, by its clock id
+(`pacer.raw_clock`): every tick's deadline, the wait before it and the pacer's release times. The host's time daemon
+steers its wall time and its monotonic clock, and not this one. A tick's wait that ends early waits again, so no
+tick runs before its deadline on that clock. A host that gives no raw clock runs no network certifier: there is no
+other clock to fall back on. How far the raw clock's second is from a true one is the host's hardware's, and no
+bound on it is stated here.
+
+**The device state and the session's start.** A registered key has one device state, a file of its own beside the
+key (`certificate.DeviceState`): the key's life so far, in milliseconds on the network certifier's clock, and the ids
+of the sessions started under it.
+- A run holds the state's lock from before its first tick until its publisher has closed, so a key has one run at a
+  time; a second is refused.
+- A session's base is the key's life when it starts, and its ordinal the number of sessions started under the key
+  before it. The state is moved on by the session's whole span, its execution phases of T ticks each, and written
+  through to disk before the base is signed, so a crash loses that time and no later session reuses it or its
+  ordinal. A session id already started is refused.
+- The network certifier then signs the start's certificate (`certificate.CertifiedStart`): a certificate of the
+  link's start name (`<link>-origin`), egress, window 0, over a tagged digest of the base, the ordinal and the
+  schedule's parameters digest. It is signed before the origin is set and is public (`deployment.json`'s `start`).
+- The start's tag says which clock the session's ticks are read on: `verity-network-certifier/start/v2` means the
+  host's raw clock, and a device whose ticks read any other clock signs its starts under another tag. The digest
+  names no clock, and that a device's ticks read the clock its tag means rests on `trusted-host`. A device that
+  signs no start is refused by a check that requires the session's certified start.
+- A state restored from an earlier copy is past what a file can see: that rests on `trusted-host`. The period
+  check's rows form reads each listed entry's session's start's certificate (A period, above); its clock form reads
+  none.
 
 **What it attests.** Each direction's records hold exactly the cells sent that way, padding included, so |T| is the
 wire's bits. The third record, `fails`, holds one reason a failed connection.
@@ -2326,9 +2396,10 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   certifier's parameters digest in the head. A head is witness, so no reason reaches the client.
 - `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
   the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
-- `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
-  record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`)
-  runs the same rehearsal on the auditor's host.
+- `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that the session's start
+  is certified and that each client got exactly its egress record's cells, each in its bucket. The auditor gate's
+  `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs the same rehearsal on the auditor's
+  host.
 - The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
   index among the ingress records' `END` cells, `x-verity-release-run:` the network certifier's `run_id` (in
@@ -2442,7 +2513,9 @@ signer (`Issuer.sign`: the certifier message for the key, the session and the ex
 record's own certificate of that execution phase signs its salted record digest, so neither verifies as the other.
 
 **The registration** (`registration`, `verity-network-warden/registration/v2`) is the head, the rows' format and order
-(`layout`: T, S, r and the first bucket w·T) and the certificate, as one public JSON object. `check_registration` is
+(`layout`: T, S, r and the first bucket w·T) and the certificate, as one JSON object. A run keeps it whole on its
+private side: the wiring is private, and the auditor's gate publishes the object less it (the root, a hiding
+commitment; the certificate; and the rest, which the schedule and the execution phase fix). `check_registration` is
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
 execution phase give, and the certificate verifies over the head under the network certifier's key in the session.
 

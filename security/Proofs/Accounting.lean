@@ -42,6 +42,7 @@ public import Proofs.Accounting.ReadUnit.Select
 public import Proofs.Accounting.ReadUnit.Check
 public import Proofs.Accounting.ReadUnit.Deployed
 public import Proofs.Accounting.ReadUnit.Binding
+public import Proofs.Accounting.ReadUnit.BitsPorts
 public import Proofs.Accounting.ReadUnit.Witnesses
 public import Proofs.Accounting.BoundReceipt
 public import Proofs.Accounting.Capacity

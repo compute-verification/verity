@@ -5356,3 +5356,23 @@ def test_the_pods_wrapper_hands_the_watch_the_read_token_s_command_and_the_file_
     assert " --gh-env /root/.config/verity/relay.env " in sh
     assert not re.search(r"(^|[\s;(])(\.|source)\s+\S*relay\.env", sh), "never sourced"
     assert "GH_TOKEN" not in sh and "GH_TOKEN" not in open(W.__file__).read()
+
+
+def test_a_file_that_does_not_parse_reads_as_empty_and_says_so_while_a_missing_one_says_nothing(tmp_path, capsys):
+    assert W.read_json(tmp_path / "none.json") == {} and capsys.readouterr().err == ""
+    (tmp_path / "bad.json").write_text("{")
+    assert W.read_json(tmp_path / "bad.json") == {}
+    assert f"{tmp_path / 'bad.json'}: unreadable, read as empty (JSONDecodeError" in capsys.readouterr().err
+
+
+def test_a_time_that_does_not_parse_is_none_and_said_while_no_time_is_none_quietly(capsys):
+    assert W.epoch(None) is None and W.epoch("") is None and capsys.readouterr().err == ""
+    assert W.epoch("yesterday") is None
+    assert "time 'yesterday' does not parse; read as none" in capsys.readouterr().err
+
+
+def test_a_doorbell_without_its_last_is_skipped_by_name(tmp_path, capsys):
+    p = tmp_path / "doorbells.json"
+    p.write_text(json.dumps({"t": "2026-10-18T22:00:00Z", "inboxes": {"top": {"last": "1.5"}, "infra": {}}}))
+    assert W.doorbells(p, W.epoch("2026-10-18T22:00:00Z")) == ({"top": 1.5}, "fresh")
+    assert f"{p}: @infra's doorbell skipped, its `last` unread (KeyError" in capsys.readouterr().err

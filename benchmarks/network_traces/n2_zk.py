@@ -490,7 +490,7 @@ def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    run = Path(a.warden_run)
+    run = Path(a.network_certifier_run)
     summary: dict = {"run": str(run), "debug_clear": a.debug_clear, "gpu": a.gpu, "received": RECEIVED}
     t = time.time()
     members = {"honest": link_windows(run), "tampered": link_windows(run, edit=every_count if a.draw else one_count)}
@@ -593,8 +593,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="command", required=True)
     p = sub.add_parser("prove", help="each execution phase's proof block proved --zk and decided by N2's verifier of "
                                      "record")
-    p.add_argument("--warden-run", type=Path, required=True, help="an active network certifier's run (warden_serve.py's, "
-                   "or the gate's warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
+    p.add_argument("--warden-run", dest="network_certifier_run", type=Path, required=True,
+                   help="an active network certifier's run (warden_serve.py's, or the gate's warden-rehearse's): "
+                        "its own certified records, no certifier rehearsal (warden_chain)")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
     p.add_argument("--bin")
     p.add_argument("--lean")
