@@ -63,7 +63,7 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     inputs (CheckedUnique) and misses at most εchk on given runs (CheckedWitness, traceRun),
     and the monitoring
     period's good event and named inputs (PooledGoodChecked, MonitoringPeriodChannel, MonitoringPeriodAdaptive,
-    MonitoringPeriodEscapes, MonitoringPeriodLeaksChecked)
+    MonitoringPeriodMissProb, MonitoringPeriodLeaksChecked)
 ../../Definitions/NetworkCertifier/Guarantees/Checked.lean  trusted: the leak bound with checked inputs
     (SampledLeakChecked)
 ../../Definitions/NetworkCertifier/Carried.lean  trusted: runs chained through the pool's root: the record rule over a
@@ -76,8 +76,8 @@ content and order. Conventions follow POUS's package (`tools/pous_grader/`): the
     the leak relation at the rows its trace holds (OpensAtInputs, RLeakCarried)
 ../../Definitions/NetworkCertifier/Guarantees/Carried.lean  trusted: the leak bounds over a carried pool
     (SampledLeakCarried, PooledLeakCarried)
-../../Definitions/NetworkCertifier/MonitoringPeriodConditions.lean  trusted: a period statement's conditions (WindowsPlaced,
-    RecordFormat.ReadsBy, MonitoringPeriodChannelReg) and the windows' count (windowsCount)
+../../Definitions/NetworkCertifier/MonitoringPeriodConditions.lean  trusted: a period statement's conditions (ExecutionPhasesPlaced,
+    RecordFormat.ReadsBy, MonitoringPeriodChannelReg) and the windows' count (executionPhasesCount)
 ../../Definitions/NetworkCertifier/Assumptions/RegisteredInputs.lean  trusted: RegisteredInputsHeld, an open premise
 ../../Definitions/NetworkCertifier/MonitoringPeriodChecked.lean  trusted: the run at the network certifier's rows
     (certifierRun) and the leak relation there (RLeakCertifierChecked)
@@ -189,7 +189,7 @@ Accepted.lean   an accepted run of the network certificate check is a run of the
     each unless the run yields a SHA-512 collision or an LMS forgery
 Causal.lean     a later window's sync never changes an earlier window's grid (`ExpectedGridCausal`, from
     the program's hand ticks), and the count over the first `m` windows of the
-    Program's runs (`EncardProgramRunsLeWindows`, with its honest and nontrivial
+    Program's runs (`EncardProgramRunsLeExecutionPhases`, with its honest and nontrivial
     lemmas) and of the check's accepted runs (encard_acceptedObservations_take_le)
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
 ~~~
@@ -298,7 +298,7 @@ theorems whose bounds the calibration reports (`verity.protocols.accounting.cert
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerExecutionPhase`.
 
 The calibration's egress bits per window (`clock_sync.bits_per_window`, held by `test_network_certifier_calibration.py`)
-are the check's bound over its first `m` windows, `security_properties`' `EncardProgramRunsLeWindows` (`Causal.lean`),
+are the check's bound over its first `m` windows, `security_properties`' `EncardProgramRunsLeExecutionPhases` (`Causal.lean`),
 not one of these: the check is the reference Program as one execution block of its `W` windows, where the per-block
 forms give only the `W`-window total, `EncardAcceptedObservationsLe`'s, so the finer count comes from the program's
 hand ticks, which a window's sync moves only at or after the window's start (`ExpectedGridCausal`). A window's bits
@@ -401,7 +401,7 @@ The other 25 are the rest of the Capacity table's bounds and the schedule's caus
     and leaves one at its closing gates. Its count charges `freeInputs \ (reg ∪ chk ∪ prow)` at a fixed opened row.
   - `PooledLeakCarried` is `PooledLeakAccepted` with each run's leak relation so taken (`LeakAtCarried`), over runs
     that open the row the run before left (`PoolChained`). Its period inputs are named (`MonitoringPeriodChannel`,
-    `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes`, `MonitoringPeriodLeaksCarried`), and the escape is at `(1 − q)^Fmax` plus a collision
+    `MonitoringPeriodAdaptive`, `MonitoringPeriodMissProb`, `MonitoringPeriodLeaksCarried`), and the escape is at `(1 − q)^Fmax` plus a collision
     term per opening. At the empty pool it gives the bound over windows that each hold a pool of their own, at their
     leak relations with a valid run (`LeakAtChecked`, `MonitoringPeriodLeaksChecked`; `pooledLeakChecked_of_carried`).
   - `CheckedUnique` and `CheckedWitness` are open premises of all three: a deployed check proved to pin its inputs and

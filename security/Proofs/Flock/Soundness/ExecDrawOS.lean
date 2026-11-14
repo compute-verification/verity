@@ -23,14 +23,14 @@ probability space `Ω`, uniform by assumption A3 (`Assumptions.UniformRandomByte
   stream so far is the tape's first bytes, so a sample it returns is the sampler's on the whole tape.
 * `stratifiedWith_tape`: a stratified run on unread streams returns `Flock.Draw.stratified`'s sample on the whole tapes.
 * `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`: the live sample misses `B` with
-  probability at most the model's escape, `Law.subset`'s or `Law.stratified`'s, for every number of bytes `L` read,
+  probability at most the model's missProb, `Law.subset`'s or `Law.stratified`'s, for every number of bytes `L` read,
   through `subset_exec_escape_le` and `stratified_exec_escape_le`.
 * `execOS`: the live sample as a sampling design, a run that would read past the source's bytes sampling every unit.
-  `execOS_escape_le`, `execOS_work_escape_le` and `execOS_subset_escape_le` bound its escape, and `execOS_miss_le` its
+  `execOS_escape_le`, `execOS_work_escape_le` and `execOS_subset_escape_le` bound its missProb, and `execOS_miss_le` its
   count curve.
 
 The live sample reads as many bytes as its reruns need. On a run that reads at most `L i` bytes of each stream it returns
-what `runOS` does on those bytes, and these runs exhaust every run as `L` grows, so its escape is the limit of the ones
+what `runOS` does on those bytes, and these runs exhaust every run as `L` grows, so its missProb is the limit of the ones
 bounded here, each at most the model's. A3 is what makes those bytes uniform. The limit itself is measure theory the
 theorems don't state.
 
@@ -406,10 +406,10 @@ def runOS {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 2
   | some (some d, _) => some d
   | _ => none
 
-/-- **The sample's escape test at `B`**: on the bytes `f`, the live sample runs and samples no unit of `B`. The soundness
+/-- **The sample's missProb test at `B`**: on the bytes `f`, the live sample runs and samples no unit of `B`. The soundness
 bounds read the verifier's bytes only through it (`execOS_escape_le_of`), so A3 per test
 (`Assumptions.UniformRandomBytesTest`) is taken at it, at every `B`. -/
-def escapeTest {L : Fin m → ℕ} (law : Flock.Draw.Law) (pop : ℕ) (B : Finset (Fin n))
+def missProbTest {L : Fin m → ℕ} (law : Flock.Draw.Law) (pop : ℕ) (B : Finset (Fin n))
     (f : (i : Fin m) → Fin (L i) → Fin 256) : Prop :=
   ∃ d, runOS f law pop = some d ∧ ∀ u ∈ B, u.val ∉ d.units
 
@@ -441,7 +441,7 @@ theorem drawOS_stratified_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) {Ω : Type} [Fintype Ω] (L : Fin m → ℕ)
     (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
     prCoin (fun ω => ∃ d, runOS (t ω) (.stratified K (Array.ofFn S)) pop = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤
-      (stratified σ k hk).escape B := by
+      (stratified σ k hk).missProb B := by
   rw [ht fun f => ∃ d, runOS f (.stratified K (Array.ofFn S)) pop = some d ∧ ∀ u ∈ B, u.val ∉ d.units]
   refine le_trans (prCoin_mono fun f ⟨d, hd, hmiss⟩ => ⟨d.units, ?_, hmiss⟩) (stratified_exec_escape_le σ k hk S hS L B)
   exact runOS_strata f _ _ pop d (fun get s => ⟨_, fun _ => rfl, drawWith_stratified_run get K pop _ s⟩) hd
@@ -452,7 +452,7 @@ theorem drawOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : �
     (hW : W.map (·.toStratum) = Array.ofFn S) {Ω : Type} [Fintype Ω] (L : Fin m → ℕ)
     (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
     prCoin (fun ω => ∃ d, runOS (t ω) (.work K W) pop = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤
-      (stratified σ k hk).escape B := by
+      (stratified σ k hk).missProb B := by
   rw [ht fun f => ∃ d, runOS f (.work K W) pop = some d ∧ ∀ u ∈ B, u.val ∉ d.units]
   refine le_trans (prCoin_mono fun f ⟨d, hd, hmiss⟩ => ⟨d.units, ?_, hmiss⟩) (stratified_exec_escape_le σ k hk S hS L B)
   refine runOS_strata f _ _ pop d (fun get s => ⟨fun D => { law := .work K W, population := pop, units := D },
@@ -462,7 +462,7 @@ theorem drawOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : �
 /-- **The live subset sample escapes no more often than the uniform `k`-subset**, on a uniform byte source (A3). -/
 theorem drawOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
-    prCoin (fun ω => ∃ d, runOS (t ω) (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤ (subset n k hk).escape B := by
+    prCoin (fun ω => ∃ d, runOS (t ω) (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤ (subset n k hk).missProb B := by
   classical
   rw [ht fun f => ∃ d, runOS f (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units]
   calc prCoin (fun f : (i : Fin 1) → Fin (L i) → Fin 256 => ∃ d, runOS f (.subset k) n = some d ∧ ∀ u ∈ B, u.val ∉ d.units)
@@ -493,7 +493,7 @@ theorem drawOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype 
           ∃ D, Flock.Draw.subset k n (streamOf g) = some D ∧ ∀ u ∈ B, u.val ∉ D) :=
         prCoin_pi_forall (Ω := fun s => Fin (L s) → Fin 256) univ (fun _ (g : Fin (L _) → Fin 256) =>
           ∃ D, Flock.Draw.subset k n (streamOf g) = some D ∧ ∀ u ∈ B, u.val ∉ D)
-    _ ≤ (subset n k hk).escape B := by
+    _ ≤ (subset n k hk).missProb B := by
         rw [Fin.prod_univ_one]
         exact subset_exec_escape_le n k (L 0) hk B
 
@@ -511,7 +511,7 @@ theorem execOS_escape_le_of {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} {L 
     (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (law : Flock.Draw.Law) (pop : ℕ) (B : Finset (Fin n)) (e : ℝ≥0∞)
     (h0 : B = ∅ → 1 ≤ e)
     (h : prCoin (fun ω => ∃ d, runOS (t ω) law pop = some d ∧ ∀ u ∈ B, u.val ∉ d.units) ≤ e) :
-    (execOS (n := n) t law pop).escape B ≤ e := by
+    (execOS (n := n) t law pop).missProb B ≤ e := by
   classical
   rcases B.eq_empty_or_nonempty with rfl | ⟨b, hb⟩
   · exact (DrawExec.prCoin_le_one _).trans (h0 rfl)
@@ -525,7 +525,7 @@ theorem execOS_escape_le_of {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} {L 
     · exact absurd hb (Finset.disjoint_left.1 hd (Finset.mem_univ b))
 
 theorem stratified_escape_empty (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) :
-    (stratified σ k hk).escape ∅ = 1 := by
+    (stratified σ k hk).missProb ∅ = 1 := by
   rw [stratified_escape]
   refine Finset.prod_eq_one fun s _ => ?_
   simp only [Finset.filter_empty, Finset.card_empty, Nat.sub_zero]
@@ -537,7 +537,7 @@ theorem execOS_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s,
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (L : Fin m → ℕ) (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t)
     (B : Finset (Fin n)) :
-    (execOS (n := n) t (.stratified K (Array.ofFn S)) pop).escape B ≤ (stratified σ k hk).escape B :=
+    (execOS (n := n) t (.stratified K (Array.ofFn S)) pop).missProb B ≤ (stratified σ k hk).missProb B :=
   execOS_escape_le_of t _ pop B _ (fun h => by rw [h, stratified_escape_empty])
     (drawOS_stratified_escape_le σ k hk S hS K pop L t ht B)
 
@@ -547,14 +547,14 @@ theorem execOS_work_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : �
     (S : Fin m → Flock.Draw.Stratum) (hS : ExecStrata σ k S) (K pop : ℕ) (W : Array Flock.Draw.WorkStratum)
     (hW : W.map (·.toStratum) = Array.ofFn S) {Ω : Type} [Fintype Ω] [Nonempty Ω] (L : Fin m → ℕ)
     (t : Ω → (i : Fin m) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
-    (execOS (n := n) t (.work K W) pop).escape B ≤ (stratified σ k hk).escape B :=
+    (execOS (n := n) t (.work K W) pop).missProb B ≤ (stratified σ k hk).missProb B :=
   execOS_escape_le_of t _ pop B _ (fun h => by rw [h, stratified_escape_empty])
     (drawOS_work_escape_le σ k hk S hS K pop W hW L t ht B)
 
 /-- **The live subset sample, as a sampling design, escapes no more often than the uniform `k`-subset**, on a uniform byte source (A3). -/
 theorem execOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (L : Fin 1 → ℕ)
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
-    (execOS (n := n) t (.subset k) n).escape B ≤ (subset n k hk).escape B :=
+    (execOS (n := n) t (.subset k) n).missProb B ≤ (subset n k hk).missProb B :=
   execOS_escape_le_of t _ n B _ (fun h => by rw [h, subset_escape]; simp [ENNReal.div_self,
     (Nat.choose_pos hk).ne'])
     (drawOS_subset_escape_le n k hk L t ht B)

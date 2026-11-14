@@ -15,7 +15,7 @@ public import PouwWindow.Length
 * `Params`: the verifier's own parameters of the execution phase: the check item, ε and δ, the grid's bits, the declared range
   of tile counts, the execution phase's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
   that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
-* `WindowCommitmentRecord`: the execution phase's execution phase commitment record, one-stage's record of it
+* `ExecutionPhaseCommitmentRecord`: the execution phase's execution phase commitment record, one-stage's record of it
   (`registration.record`), canonical JSON, with what PoUW's rule reads; its digest is the record's own,
   `registration.digest`. It is the execution phase's commitment, not the registration log (`Core.Registration`), which
   registers the Site, θ and the registered compiler and declares each day's circuit.
@@ -160,7 +160,7 @@ structure ExecutionBlockItem where
 
 /-- The execution phase's execution phase commitment record: the canonical bytes its digest hashes, and the record's fields
 PoUW's rule reads. -/
-structure WindowCommitmentRecord where
+structure ExecutionPhaseCommitmentRecord where
   bytes : ByteArray
   format : String
   program : String
@@ -172,7 +172,7 @@ structure WindowCommitmentRecord where
   roots : Array Root
   window : ExecutionBlockItem
 
-def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
+def recordOf (b : ByteArray) : V ExecutionPhaseCommitmentRecord := do
   let rec_ ← Core.canonicalJson b
   let some format := (str? (get rec_ "format")).filter (formats.contains ·)
     | throw s!"format is not {" or ".intercalate formats}"
@@ -203,7 +203,7 @@ def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
 
 /-- `registration.digest`: the execution phase record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
 bytes it was read from. -/
-def WindowCommitmentRecord.digest (c : WindowCommitmentRecord) : ByteArray :=
+def ExecutionPhaseCommitmentRecord.digest (c : ExecutionPhaseCommitmentRecord) : ByteArray :=
   Flock.WindowRecord.digestOf c.format c.bytes
 
 /-! The service's sample, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitDraw`, decoded with this check's own
@@ -281,7 +281,7 @@ def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
       pure (.work k (strata.map fun (s, work, floor) => { toStratum := s, work, floor }), closure)
   pure ⟨l, population, ← natsOf d "units" ctx, closure⟩
 
-/-- A live execution phase's `salt` among the public outputs, an object (`windowSaltReason` reads it), or `none`. -/
+/-- A live execution phase's `salt` among the public outputs, an object (`executionPhaseSaltReason` reads it), or `none`. -/
 def saltOf (j : Json) : V (Option Json) :=
   match PouwWindow.field? j "salt" with
   | none => pure none

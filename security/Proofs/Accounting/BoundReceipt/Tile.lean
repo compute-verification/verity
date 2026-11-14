@@ -55,7 +55,7 @@ theorem tileUnpredictable_of_total {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
     (h : ∀ U : Pouw.Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Pouw.Adversary CM,
       A.Bounded U T q →
         Pouw.pr (fun x : (Q → R) × S =>
-          T / (1 - γ₀) < ∑ u ∈ Pouw.checkedSet P U x.1 x.2 (A.transcript U x.1 x.2), credit (U.layout.shape u))
+          T / (1 - γ₀) < ∑ u ∈ Pouw.checkedSet P U x.1 x.2 (A.trace U x.1 x.2), credit (U.layout.shape u))
           ≤ ε q U.layout.N) :
     TileUnpredictable CM P credit D γ₀ ε := by
   intro U hU T hT q hq A hA u hu
@@ -90,8 +90,8 @@ theorem TileUnpredictablePearlCOfTTOut : Accounting.Guarantees.TileUnpredictable
   classical
   intro Q R S _ _ _ _ dv salt P credit D g₀ ε hc hTT U hU T hT q hq A hA u hu
   refine (Pouw.pr_mono (fun x hx => ?_)).trans (hTT U hU T hT q hq A hA)
-  have hcorrect : ∀ v ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2), ∃ c : Pouw.PearlC.Commit,
-      Pouw.PearlC.actOf (A.transcript U x.1 x.2) v = c.act ∧ Pouw.PearlC.Correct P U x.1 x.2 v c := by
+  have hcorrect : ∀ v ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.trace U x.1 x.2), ∃ c : Pouw.PearlC.Commit,
+      Pouw.PearlC.actOf (A.trace U x.1 x.2) v = c.act ∧ Pouw.PearlC.Correct P U x.1 x.2 v c := by
     intro v hv
     rw [Pouw.PearlC.correctSet, Finset.mem_filter] at hv
     obtain ⟨-, c, hτ, hcor⟩ := hv
@@ -100,7 +100,7 @@ theorem TileUnpredictablePearlCOfTTOut : Accounting.Guarantees.TileUnpredictable
   refine hu.trans_le ((hc x.1 x.2 U u c hcor).2.trans ?_)
   rw [← hact]
   refine Finset.single_le_sum
-    (f := fun v => P.credit x.1 x.2 U v (Pouw.PearlC.actOf (A.transcript U x.1 x.2) v)) (fun v hv => ?_) hx
+    (f := fun v => P.credit x.1 x.2 U v (Pouw.PearlC.actOf (A.trace U x.1 x.2) v)) (fun v hv => ?_) hx
   obtain ⟨c', hact', hcor'⟩ := hcorrect v hv
   simpa only [hact'] using (hc x.1 x.2 U v c' hcor').1
 

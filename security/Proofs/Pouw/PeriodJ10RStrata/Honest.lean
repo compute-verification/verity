@@ -44,7 +44,7 @@ The twins of `Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata`,
 one-stratum statement.
 
 *Honest* (`strata_meets_period`, `strata_meets_stratum`, `strata_credit`). Over any sampling block `σ` with sample `k` and
-any finite set `S` of its strata, `1 ≤ k s` at each `s ∈ S`, take a period of `n ≥ 1` windows whose registration is a
+any finite set `S` of its strata, `1 ≤ k s` at each `s ∈ S`, take a period of `n ≥ 1` executionPhases whose registration is a
 function of the window's round coin (`regOf`) and the rest of whose inputs a function of its round coin and the block's
 sample (`evOf`). Given three facts of those inputs, the witness meets every premise of the statement:
 
@@ -55,12 +55,12 @@ sample (`evOf`). Given three facts of those inputs, the witness meets every prem
 
 At each stratum `s` the instance is `HonestJ10R`'s at `N_s = |stratum σ s|` with the rest of the block's sample as `Ξ`:
 `N_s` one-word proof blocks, one live round, `ρ = 1`, the twin's lucks, `δ_bind = δ_ks = 0`, `N_s` words fixed and folded a
-window. The accepted prefix is all `n` windows and stratum `s`'s live words are `N_s·n` (`stratumLive_all`), so
+window. The accepted prefix is all `n` executionPhases and stratum `s`'s live words are `N_s·n` (`stratumLive_all`), so
 `strata_credit` is the statement's bound at `∑_{s ∈ S} N_s·n` live words.
 
 *Nontrivial* (`strata_nontrivial`). The statement reads its verdict in its conclusion only through the accepted prefix
 and the strata's live words; `StrataBoundBy` is the conclusion at any verdict `acc`, and at `Credit.window`'s it is the
-statement's own (`strataBound_window`). At the verdict that credits every window, over the honest instance's circuits,
+statement's own (`strataBound_executionPhase`). At the verdict that credits every window, over the honest instance's circuits,
 scheme, periods and rates, the provers that fix no word (`idlePlay`, accepted on every path) break it: once
 `Λ_s·ln(1/δ_s(s)) < n` at each `s ∈ S` and `S` is non-empty, the summed credit is positive on every path, so the event's
 probability is `1`, above any `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s))) < 1`.
@@ -89,10 +89,10 @@ abbrev View (s : Fin mB) : Type := Coin Bool (Rest σ s) (HonestJ10R.circuit (ti
 theorem rounds1 (N : ℕ) : (HonestJ10R.circuit N).rounds = 1 :=
   rfl
 
-/-- The period's windows as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
+/-- The period's executionPhases as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
 its inputs are `evOf` of its round coin and the block's sample. -/
-def windows (regOf : Bool → PreDraw) (evOf : Bool → BlockDraw σ → Answered) (n : ℕ) :
-    CreditWindows (StrataCoin Bool 1 σ) n where
+def executionPhases (regOf : Bool → PreDraw) (evOf : Bool → BlockDraw σ → Answered) (n : ℕ) :
+    CreditExecutionPhases (StrataCoin Bool 1 σ) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩)
   ev x w := evOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩) (coinAt x w).2
 
@@ -106,32 +106,32 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
 
 /-- **The period-wide premises**, and the accepted prefix is every window: the registration reads only the round coin,
 which the splice at window `w` after its one round keeps; the salt is the round coin's bytes; the sample is the strata's. -/
-theorem strata_meets_period (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem strata_meets_period (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u) (n : ℕ) :
-    RegisteredBeforeDraw (windows σ regOf evOf n) ∧ StrataSampleIsCoin σ k hk S unitOf (windows σ regOf evOf n) ∧
-    Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf (windows σ regOf evOf n)) enc ∧
-    ∀ x, (windows σ regOf evOf n).prefixLen x = n := by
+    RegisteredBeforeDraw (executionPhases σ regOf evOf n) ∧ StrataSampleIsCoin σ k hk S unitOf (executionPhases σ regOf evOf n) ∧
+    Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf (executionPhases σ regOf evOf n)) enc ∧
+    ∀ x, (executionPhases σ regOf evOf n).prefixLen x = n := by
   classical
   refine ⟨fun x z w => ?_, fun _ _ _ => hdraw _ _, fun _ _ => hsalt _, fun x => ?_⟩
   · show regOf (coinAt (coinAt (spliceAt w.val 1 x z) w).1 ⟨0, Nat.one_pos⟩) =
       regOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩)
     rw [Accounting.SecurityProofs.TS.Keyed.coinAt_spliceAt]
     rfl
-  · unfold CreditWindows.prefixLen
-    have h : ∀ w ∈ (Finset.univ : Finset (Fin n)), (windows σ regOf evOf n).AcceptedUpTo x w :=
+  · unfold CreditExecutionPhases.prefixLen
+    have h : ∀ w ∈ (Finset.univ : Finset (Fin n)), (executionPhases σ regOf evOf n).AcceptedUpTo x w :=
       fun _ _ _ _ => hacc _ _
     rw [Finset.filter_true_of_mem h, Finset.card_univ, Fintype.card_fin]
 
 /-- **Stratum `s`'s live words are `N_s·n`**: every window credited, every tile live, one word each. -/
-theorem stratumLive_all (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (s : Fin mB)
+theorem stratumLive_all (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β)) (n : ℕ) (s : Fin mB)
     (x : Paths (StrataCoin Bool 1 σ) n) :
     stratumLive Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (rounds1 _) σ s
-      (HonestJ10R.period (View σ s) (tileCount σ s) n) (windows σ regOf evOf n) x = tileCount σ s * n := by
+      (HonestJ10R.period (View σ s) (tileCount σ s) n) (executionPhases σ regOf evOf n) x = tileCount σ s * n := by
   unfold stratumLive
   calc _ = ∑ _w : Fin n, (tileCount σ s : ℝ) := Finset.sum_congr rfl fun w _ => by
-          have hw : (windows σ regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
+          have hw : (executionPhases σ regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
           rw [if_pos hw, HonestJ10R.liveAt_period n _ w]
           simp only [HonestJ10R.liveWords_true]
           exact HonestJ10R.sum_tileWords _
@@ -158,18 +158,18 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
     (HonestJ10R.period (View σ s) (tileCount σ s) n).EveryExecutionPhase
       (fun live _ => DeadConeDead Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) live) ∧
     PrefixOf (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf
-      (windows σ regOf evOf n) HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
+      (executionPhases σ regOf evOf n) HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
       (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).game ∧
     (∀ w, prob (fun y => (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf
-      (windows σ regOf evOf n) HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile).MovedIn y w) ≤ 0) ∧
-    TileServiceSound σ s unitOf (creditAt (rounds1 (tileCount σ s)) σ s (windows σ regOf evOf n)) (pullAt (rounds1 (tileCount σ s)) σ s HonestJ10R.opened)
-      (relAt (rounds1 (tileCount σ s)) σ s (windows σ regOf evOf n) HonestJ10R.place HonestJ10R.tile) 0 ∧
+      (executionPhases σ regOf evOf n) HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile).MovedIn y w) ≤ 0) ∧
+    TileServiceSound σ s unitOf (creditAt (rounds1 (tileCount σ s)) σ s (executionPhases σ regOf evOf n)) (pullAt (rounds1 (tileCount σ s)) σ s HonestJ10R.opened)
+      (relAt (rounds1 (tileCount σ s)) σ s (executionPhases σ regOf evOf n) HonestJ10R.place HonestJ10R.tile) 0 ∧
     SharedNoiseLucks Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n) ∧
     UnitFixed (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n)
-      (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (windows σ regOf evOf n)
+      (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (executionPhases σ regOf evOf n)
         HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)
       (monitoringPeriodMode (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.period (View σ s) (tileCount σ s) n)
-        (runAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (windows σ regOf evOf n)
+        (runAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf (executionPhases σ regOf evOf n)
           HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile))
       (fun _ t => (tileWords Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) t : ℝ))
       (fun _ => (tileCount σ s : ℝ)) := by
@@ -219,7 +219,7 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
 /-- **`H1J10RCheckedCreditPeriodStrata`'s conclusion at the honest J10-R period over `S`**: `strata_meets_period` and
 `strata_meets_stratum` give the instance every premise, so except with probability `∑_{s ∈ S} δ_s(s)` its fixed words,
 summed over `S`, are at least the sum over `S` of `(1 − ε_s(n))₊` of stratum `s`'s `N_s·n` live words. -/
-theorem strata_credit (hKd : ∀ s ∈ S, 1 ≤ k s) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem strata_credit (hKd : ∀ s ∈ S, 1 ≤ k s) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ s ∈ S, ∃ b ∈ tileDraw σ k hk s (β s), unitOf b = u)
@@ -228,15 +228,15 @@ theorem strata_credit (hKd : ∀ s ∈ S, 1 ≤ k s) (hacc : ∀ c β, WindowAcc
       (∀ s ∈ S, (HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).accepts (pathsAt Bool (rounds1 (tileCount σ s)) σ s n x)) ∧
       n * ∑ s ∈ S, ((HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n).run (pathsAt Bool (rounds1 (tileCount σ s)) σ s n x)).fixed <
         ∑ s ∈ S, creditPrefix Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s)
-          ((windows σ regOf evOf n).prefixLen x)
+          ((executionPhases σ regOf evOf n).prefixLen x)
           (stratumLive Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (rounds1 _) σ s
-            (HonestJ10R.period (View σ s) (tileCount σ s) n) (windows σ regOf evOf n) x) 1 1 (j10rRate (k s) 1)
+            (HonestJ10R.period (View σ s) (tileCount σ s) n) (executionPhases σ regOf evOf n) x) 1 1 (j10rRate (k s) 1)
           (δs s)) ≤
       ∑ s ∈ S, (δs s + n * (0 + 0)) := by
   obtain ⟨hReg, hDraw, hSalt, -⟩ := strata_meets_period σ k hk S unitOf regOf evOf enc hacc hsalt hdraw n
   have hm := fun s (hs : s ∈ S) => strata_meets_stratum σ k hk unitOf regOf evOf enc s (hKd s hs) n hn (hδs s hs)
   exact h1J10RCheckedCreditPeriodStrata σ k hk S unitOf Honest.scheme (fun s => HonestJ10R.circuit (tileCount σ s)) hn
-    (fun _ _ => le_rfl) (fun _ => HonestJ10R.hr1 _) (fun s => rounds1 (tileCount σ s)) hKd (windows σ regOf evOf n) HonestJ10R.opened enc
+    (fun _ _ => le_rfl) (fun _ => HonestJ10R.hr1 _) (fun s => rounds1 (tileCount σ s)) hKd (executionPhases σ regOf evOf n) HonestJ10R.opened enc
     (fun _ => HonestJ10R.place) (fun _ => HonestJ10R.tile) (fun s => HonestJ10R.period (View σ s) (tileCount σ s) n)
     (fun s => HonestJ10R.play (Rest σ s) (tileCount σ s) (k s) n) (fun s _ => (tileCount σ s : ℝ)) (fun _ => 1) δs
     (fun _ => 0) (fun _ => 0) hReg hDraw hSalt (fun s hs => (hm s hs).1) (fun _ _ => ⟨one_pos, le_rfl⟩)
@@ -258,7 +258,7 @@ def UpToBy (acc : Paths Ω n → Fin n → Prop) (x : Paths Ω n) (w : Fin n) : 
   ∀ w' : Fin n, w' ≤ w → acc x w'
 
 open Classical in
-/-- **The accepted prefix at verdict `acc`**: `CreditWindows.prefixLen` with `acc` for `Credit.window`'s verdict. -/
+/-- **The accepted prefix at verdict `acc`**: `CreditExecutionPhases.prefixLen` with `acc` for `Credit.window`'s verdict. -/
 noncomputable def prefixLenBy (acc : Paths Ω n → Fin n → Prop) (x : Paths Ω n) : ℕ :=
   (Finset.univ.filter fun w : Fin n => UpToBy acc x w).card
 
@@ -288,16 +288,16 @@ def StrataBoundBy {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB
 
 /-- **At `Credit.window`'s verdict it is the statement's conclusion**, so `strata_nontrivial`, `StrataBoundBy` at the
 verdict that credits every window, is the conclusion with that verdict in place of `Credit.window`'s. -/
-theorem strataBound_window {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
+theorem strataBound_executionPhase {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
-    (ws : CreditWindows (StrataCoin C 1 σ) n)
+    (ws : CreditExecutionPhases (StrataCoin C 1 σ) n)
     (Wp : (s : Fin mB) → ExecutionPhasePlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U) (ρ δs : Fin mB → ℝ) (δ : ℝ) :
     prob (fun x : Paths (StrataCoin C 1 σ) n => (∀ s ∈ S, (Pl s).accepts (pathsAt C (hM s) σ s n x)) ∧
       n * ∑ s ∈ S, ((Pl s).run (pathsAt C (hM s) σ s n x)).fixed <
         ∑ s ∈ S, creditPrefix Sc (Cd s) (tileCount σ s) (ws.prefixLen x)
           (stratumLive Sc (Cd s) (hM s) σ s (Wp s) ws x) 1 1 (j10rRate (k s) (ρ s)) (δs s)) ≤ δ ↔
-      StrataBoundBy σ k S Sc Cd hM Wp Pl (fun x w => WindowAccepts (ws.reg x w) (ws.ev x w)) ρ δs δ :=
+      StrataBoundBy σ k S Sc Cd hM Wp Pl (fun x w => ExecutionPhaseAccepts (ws.reg x w) (ws.ev x w)) ρ δs δ :=
   Iff.rfl
 
 /-- **The prover that does nothing at stratum `s`**: the honest play's game, accepted on every path, fixing no word. -/

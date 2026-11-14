@@ -195,16 +195,16 @@ theorem prCoin_prod {C D : Type} [Fintype C] [Fintype D] (p : C × D → Prop) :
   unfold prCoin
   exact avg_prod_eq _
 
-/-- **The nested law's escape, in `ℝ≥0∞`.** Each replay unit `i` contributes its Bernoulli factor (`Law.bernFactor`)
-at the escape, under the uniform `k`-subset, of its own wrong proof blocks: its two coins are independent of the
+/-- **The nested law's missProb, in `ℝ≥0∞`.** Each replay unit `i` contributes its Bernoulli factor (`Law.bernFactor`)
+at the missProb, under the uniform `k`-subset, of its own wrong proof blocks: its two coins are independent of the
 other replay units'. -/
 theorem nested_escape (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) (hab : a ≤ b) (B : Finset (Fin (R * N))) :
-    (nested R N k a b hk).escape B =
+    (nested R N k a b hk).missProb B =
       ∏ i, Law.bernFactor a b
-        ((Law.subset N k hk).escape (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B)) := by
+        ((Law.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B)) := by
   classical
   set Bi : Fin R → Finset (Fin N) := fun i => univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B
-  set E : Fin R → ℝ≥0∞ := fun i => (Law.subset N k hk).escape (Bi i)
+  set E : Fin R → ℝ≥0∞ := fun i => (Law.subset N k hk).missProb (Bi i)
   have hdisj : ∀ ω : (Fin R → Fin b) × (Fin R → (Law.subset N k hk).Ω),
       Disjoint ((nested R N k a b hk).draw ω) B ↔
         ∀ i ∈ (univ : Finset (Fin R)), (ω.1 i).val < a → Disjoint (ω.2 i).1 (Bi i) := by
@@ -247,8 +247,8 @@ theorem NestedEscape : Guarantees.NestedEscape := by
   have hb : (0 : ℝ) < b := by exact_mod_cast NeZero.pos b
   have hT : (0 : ℝ) < N.choose k := by exact_mod_cast Nat.choose_pos hk
   have hfac : ∀ i, (Law.bernFactor a b
-      ((Law.subset N k hk).escape (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B))).toReal =
-      1 - (a / b : ℝ) + (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ) := by
+      ((Law.subset N k hk).missProb (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B))).toReal =
+      1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ) := by
     intro i
     rw [Law.subset_escape]
     have hE : (((N - (univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B).card).choose k : ℕ) : ℝ≥0∞) /
@@ -259,11 +259,11 @@ theorem NestedEscape : Guarantees.NestedEscape := by
       (ENNReal.natCast_ne_top _), ENNReal.toReal_mul, ENNReal.toReal_div]
     simp only [ENNReal.toReal_natCast]
     rw [Nat.cast_sub hab]
-    unfold wrongIn
+    unfold incorrectIn
     field_simp
     ring
-  have hprod : ((nested R N k a b hk).escape B).toReal =
-      ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ)) := by
+  have hprod : ((nested R N k a b hk).missProb B).toReal =
+      ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ)) := by
     rw [nested_escape R N k a b hk hab B, ENNReal.toReal_prod]
     exact Finset.prod_congr rfl fun i _ => hfac i
   refine ⟨hprod, fun hlt => ?_⟩
@@ -272,7 +272,7 @@ theorem NestedEscape : Guarantees.NestedEscape := by
   rw [Real.exp_sum]
   refine Finset.prod_congr rfl fun i _ => (Real.exp_log ?_).symm
   have hp : (a : ℝ) / b < 1 := (div_lt_one hb).2 (by exact_mod_cast hlt)
-  have : 0 ≤ (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ) := by positivity
+  have : 0 ≤ (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ) := by positivity
   linarith
 
 end Nested

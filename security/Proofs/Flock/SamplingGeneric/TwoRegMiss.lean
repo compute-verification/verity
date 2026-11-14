@@ -20,7 +20,7 @@ escapes at the committed boundary trace's footprint (`secondDraws`), each at mos
 
 * **`CompilerMissTwo` is proved** (`compilerMissTwo`): at rates `r₁` and `r₂`, `P̄_a ≤ (1 − r₁·r₂)^m` at the footprint's
   `m` marked replay blocks (`Design.Two.Pa_le_pow`), which include every replay block wrong at the boundary
-  (`wrongAtBoundaryAt_subset`).
+  (`incorrectAtBoundaryAt_subset`).
 * **The threshold form from the event** (`CompiledTwo.ksRegTwo_of_event`): a run that accepts with no interiors putting
   the footprint in `M̄_δ` either samples a proof block of the committed incorrect set, which the event bounds, or
   misses it, with probability at most `δ` at each tape. At the event's bound (`CompiledTwo.eventTwo_le`),
@@ -48,18 +48,18 @@ theorem exists_best_interiorAt (s : AuditStatement) (Pt : Partition) (d : Design
     ∃ ι : ℕ → Bool, ∀ ι' : ℕ → Bool,
       d.esc Pt (footprintAt s Pt d.part val fun _ => ι') ρ ≤ d.esc Pt (footprintAt s Pt d.part val fun _ => ι) ρ := by
   have hf : ∀ ι' : ℕ → Bool, d.esc Pt (footprintAt s Pt d.part val fun _ => ι') ρ =
-      d.esc Pt (fun ρ t => ((wrongAllAt s Pt d.part val fun _ => ι') ∩ cell Pt d.part ρ t).card) ρ := by
+      d.esc Pt (fun ρ t => ((incorrectAllAt s Pt d.part val fun _ => ι') ∩ cell Pt d.part ρ t).card) ρ := by
     intro ι'
     refine prod_congr rfl fun t ht => ?_
-    show escCell _ _ (wrongInAt s Pt d.part val ρ t ι').card =
-      escCell _ _ ((wrongAllAt s Pt d.part val fun _ => ι') ∩ cell Pt d.part ρ t).card
-    rw [inter_cell_wrongAllAt s Pt d.part val _ hρ (mem_range.1 ht)]
-  have hA : ∀ ι' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι') ∈
+    show escCell _ _ (incorrectInAt s Pt d.part val ρ t ι').card =
+      escCell _ _ ((incorrectAllAt s Pt d.part val fun _ => ι') ∩ cell Pt d.part ρ t).card
+    rw [inter_cell_incorrectAllAt s Pt d.part val _ hρ (mem_range.1 ht)]
+  have hA : ∀ ι' : ℕ → Bool, (incorrectAllAt s Pt d.part val fun _ => ι') ∈
       (range Pt.blocks.length).powerset.filter fun wa =>
-        ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = wa :=
-    fun ι' => mem_filter.2 ⟨mem_powerset.2 (wrongAllAt_subset s Pt d.part val _), ι', rfl⟩
+        ∃ ι'' : ℕ → Bool, (incorrectAllAt s Pt d.part val fun _ => ι'') = wa :=
+    fun ι' => mem_filter.2 ⟨mem_powerset.2 (incorrectAllAt_subset s Pt d.part val _), ι', rfl⟩
   obtain ⟨wa, hwa, hmax⟩ := ((range Pt.blocks.length).powerset.filter fun wa =>
-      ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = wa).exists_max_image
+      ∃ ι'' : ℕ → Bool, (incorrectAllAt s Pt d.part val fun _ => ι'') = wa).exists_max_image
     (fun wa => d.esc Pt (fun ρ t => (wa ∩ cell Pt d.part ρ t).card) ρ) ⟨_, hA fun _ => false⟩
   obtain ⟨ι, hι⟩ := (mem_filter.1 hwa).2
   refine ⟨ι, fun ι' => ?_⟩
@@ -89,8 +89,8 @@ theorem exists_best_interiorsAt (s : AuditStatement) (Pt : Partition) (d : Desig
 open Classical in
 /-- **The replay blocks wrong at the boundary are marked at every interior**: each holds an incorrect proof block at
 every interior, so the footprint at any interiors marks it. -/
-theorem wrongAtBoundaryAt_subset (s : AuditStatement) (Pt : Partition) (d : Design.Two) (val : ℕ → Option Bool)
-    (ι : ℕ → ℕ → Bool) : wrongAtBoundaryAt s Pt d.part val ⊆ d.wrongBlocks Pt (footprintAt s Pt d.part val ι) := by
+theorem incorrectAtBoundaryAt_subset (s : AuditStatement) (Pt : Partition) (d : Design.Two) (val : ℕ → Option Bool)
+    (ι : ℕ → ℕ → Bool) : incorrectAtBoundaryAt s Pt d.part val ⊆ d.incorrectBlocks Pt (footprintAt s Pt d.part val ι) := by
   intro ρ hρ
   obtain ⟨hρl, hw⟩ := mem_filter.1 hρ
   obtain ⟨t, ht, hne⟩ := hw (ι ρ)
@@ -101,8 +101,8 @@ end Claims.Sampling
 namespace Claims.SamplingGeneric
 
 open Claims Finset
-open Claims.Sampling (AuditStatement Partition InScopeTwo forkOn cell escCell footprintAt wrongAtBoundaryAt
-  wrongAllAt inter_cell_wrongAllAt footprintAt_le_card wrongAtBoundaryAt_subset exists_best_interiorsAt)
+open Claims.Sampling (AuditStatement Partition InScopeTwo forkOn cell escCell footprintAt incorrectAtBoundaryAt
+  incorrectAllAt inter_cell_incorrectAllAt footprintAt_le_card incorrectAtBoundaryAt_subset exists_best_interiorsAt)
 
 namespace CompiledTwo
 
@@ -119,18 +119,18 @@ theorem pr_missTwo_fork_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
       d.esc Pt (footprintAt s Pt d.part val ι') ρ ≤ d.esc Pt (footprintAt s Pt d.part val ι) ρ)
     (r : Fin (L.V.k x) → Coin) :
     Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r e),
-        u ∉ wrongAllAt s Pt d.part val (L.iregVal H P x ω (forkOn (L.stage2 x) r e))) ≤
+        u ∉ incorrectAllAt s Pt d.part val (L.iregVal H P x ω (forkOn (L.stage2 x) r e))) ≤
       ∏ ρ ∈ (range d.part.blocks.length).filter (· ∈ L.replaySample x r),
         d.esc Pt (footprintAt s Pt d.part val ι) ρ := by
   simp only [iregVal_forkOn]
-  refine (hS.secondDraws x s Pt d hs hPt hd hin r (wrongAllAt s Pt d.part val (L.iregVal H P x ω r))).trans ?_
+  refine (hS.secondDraws x s Pt d hs hPt hd hin r (incorrectAllAt s Pt d.part val (L.iregVal H P x ω r))).trans ?_
   refine prod_le_prod₀ (fun _ _ => prod_nonneg fun _ _ => Claims.Sampling.escCell_nonneg _ _ _) fun ρ hρ => ?_
   have hρl : ρ < d.part.blocks.length := mem_range.1 (mem_filter.1 hρ).1
   refine le_trans (le_of_eq ?_) (hι ρ hρl (L.iregVal H P x ω r))
   simp only [Sampling.Design.Two.esc]
   refine prod_congr rfl fun t ht => ?_
-  show _ = escCell _ _ (Claims.Sampling.wrongInAt s Pt d.part val ρ t (L.iregVal H P x ω r ρ)).card
-  rw [inter_cell_wrongAllAt s Pt d.part _ _ hρl (mem_range.1 ht)]
+  show _ = escCell _ _ (Claims.Sampling.incorrectInAt s Pt d.part val ρ t (L.iregVal H P x ω r ρ)).card
+  rw [inter_cell_incorrectAllAt s Pt d.part _ _ hρl (mem_range.1 ht)]
 
 /-- **The miss at best interiors**, at boundary values `val`: on a statement in scope, the run's sample holds no proof
 block incorrect at `val` and the committed interiors with probability at most the design's `P̄_a` at `val`'s footprint
@@ -142,7 +142,7 @@ theorem pr_missTwo_le_Pa (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sess
     (hι : ∀ ρ < d.part.blocks.length, ∀ ι' : ℕ → ℕ → Bool,
       d.esc Pt (footprintAt s Pt d.part val ι') ρ ≤ d.esc Pt (footprintAt s Pt d.part val ι) ρ) :
     Pr (fun r : Fin (L.V.k x) → Coin =>
-        ∀ u ∈ L.checked x r, u ∉ wrongAllAt s Pt d.part val (L.iregVal H P x ω r)) ≤
+        ∀ u ∈ L.checked x r, u ∉ incorrectAllAt s Pt d.part val (L.iregVal H P x ω r)) ≤
       d.Pa Pt (footprintAt s Pt d.part val ι) := by
   rw [Claims.SamplingGeneric.Pr_forkOn (L.stage2 x)]
   exact (Ex_mono fun r => pr_missTwo_fork_le H L hS hs hPt hd hin P ω val ι hι r).trans
@@ -150,27 +150,27 @@ theorem pr_missTwo_le_Pa (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sess
 
 /-- **The miss bound, at boundary values `val`**: on the contract, at rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂ ≤ 1`, the miss
 at best interiors (`pr_missTwo_le_Pa`) is at most `(1 − r₁·r₂)` to the footprint's marked replay blocks
-(`Design.Two.Pa_le_pow`), which include those wrong at the boundary (`wrongAtBoundaryAt_subset`). -/
+(`Design.Two.Pa_le_pow`), which include those wrong at the boundary (`incorrectAtBoundaryAt_subset`). -/
 theorem pr_missTwo_le_pow (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H) {r₁ r₂ : ℝ} (hr₁ : 0 ≤ r₁)
     (hr₁' : r₁ ≤ 1) (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1) {x : Msg} {s : AuditStatement} {Pt : Partition}
     {d : Sampling.Design.Two} (hx : L.Scope x) (hs : L.parse x = some s) (hPt : L.partition s = some Pt)
     (hd : L.two s = some d) (h1 : d.FirstRate r₁) (h2 : d.SecondRate Pt r₂) {Ω : Type} (P : Prover Ω) (ω : Ω)
     (val : ℕ → Option Bool) :
     Pr (fun r : Fin (L.V.k x) → Coin =>
-        ∀ u ∈ L.checked x r, u ∉ wrongAllAt s Pt d.part val (L.iregVal H P x ω r)) ≤
-      (1 - r₁ * r₂) ^ (wrongAtBoundaryAt s Pt d.part val).card := by
+        ∀ u ∈ L.checked x r, u ∉ incorrectAllAt s Pt d.part val (L.iregVal H P x ω r)) ≤
+      (1 - r₁ * r₂) ^ (incorrectAtBoundaryAt s Pt d.part val).card := by
   have hin := L.inScopeTwo_of hx hs hPt hd
   obtain ⟨ι, hι⟩ := exists_best_interiorsAt s Pt d val
   have hx0 : 0 ≤ 1 - r₁ * r₂ := by nlinarith
   have hx1 : 1 - r₁ * r₂ ≤ 1 := sub_le_self _ (mul_nonneg hr₁ hr₂)
   calc Pr (fun r : Fin (L.V.k x) → Coin =>
-        ∀ u ∈ L.checked x r, u ∉ wrongAllAt s Pt d.part val (L.iregVal H P x ω r))
+        ∀ u ∈ L.checked x r, u ∉ incorrectAllAt s Pt d.part val (L.iregVal H P x ω r))
       ≤ d.Pa Pt (footprintAt s Pt d.part val ι) := pr_missTwo_le_Pa H L hS hs hPt hd hin P ω val ι hι
-    _ ≤ (1 - r₁ * r₂) ^ (d.wrongBlocks Pt (footprintAt s Pt d.part val ι)).card :=
+    _ ≤ (1 - r₁ * r₂) ^ (d.incorrectBlocks Pt (footprintAt s Pt d.part val ι)).card :=
         d.Pa_le_pow Pt (fun _ => r₁) (fun T hT => (h1 T hT).trans_eq (prod_const _).symm)
           (fun _ _ => ⟨le_rfl, hr₁'⟩) hr₁ hr₂ h2 (footprintAt_le_card s Pt d.part _ ι)
-    _ ≤ (1 - r₁ * r₂) ^ (wrongAtBoundaryAt s Pt d.part val).card :=
-        pow_le_pow_of_le_one hx0 hx1 (card_le_card (wrongAtBoundaryAt_subset s Pt d _ ι))
+    _ ≤ (1 - r₁ * r₂) ^ (incorrectAtBoundaryAt s Pt d.part val).card :=
+        pow_le_pow_of_le_one hx0 hx1 (card_le_card (incorrectAtBoundaryAt_subset s Pt d _ ι))
 
 /-- **The miss bound**: `pr_missTwo_le_pow` at the committed boundary trace, whose incorrect proof blocks over the
 grid are the committed incorrect set (`FregTwo_eq`). -/
@@ -190,19 +190,19 @@ theorem threshold_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (val : Ω → ℕ → Option Bool) {ε : ℝ}
     (hev : Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-      ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2)) ≤ ε) {δ : ℝ}
+      ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2)) ≤ ε) {δ : ℝ}
     (hδ : 0 ≤ δ) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
       ∀ ι : ℕ → ℕ → Bool, footprintAt s Pt d.part (val p.1) ι ∉ d.M Pt δ) ≤ δ + ε := by
   rw [add_comm]
   refine Claims.Sampling.Pr_or_le
     (q := fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-      ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2))
+      ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2))
     (r := fun p : Ω × (Fin (L.V.k x) → Coin) =>
       (∀ ι : ℕ → ℕ → Bool, footprintAt s Pt d.part (val p.1) ι ∉ d.M Pt δ) ∧
-        ∀ u ∈ L.checked x p.2, u ∉ wrongAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2))
+        ∀ u ∈ L.checked x p.2, u ∉ incorrectAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2))
     (fun p hp => ?_) hev ?_
-  · by_cases hu : ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2)
+  · by_cases hu : ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2)
     · exact Or.inl ⟨hp.1, hu⟩
     · exact Or.inr ⟨hp.2, fun u hu' hF => hu ⟨u, hu', hF⟩⟩
   · rw [Claims.Sampling.Pr_prod_eq_Ex]
@@ -214,11 +214,11 @@ theorem threshold_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Se
         simp only [Sampling.Design.Two.M, Set.mem_ofPred_eq, not_lt] at h
         exact h
       exact (Pr_mono fun r (hr : (∀ ι : ℕ → ℕ → Bool, footprintAt s Pt d.part (val ω) ι ∉ d.M Pt δ) ∧
-          ∀ u ∈ L.checked x r, u ∉ wrongAllAt s Pt d.part (val ω) (L.iregVal H P x ω r)) => hr.2).trans
+          ∀ u ∈ L.checked x r, u ∉ incorrectAllAt s Pt d.part (val ω) (L.iregVal H P x ω r)) => hr.2).trans
         ((pr_missTwo_le_Pa H L hS hs hPt hd hin P ω (val ω) ι hι).trans hPa)
     · exact ((Pr_mono (q := fun _ => False) fun r (hr : (∀ ι : ℕ → ℕ → Bool,
           footprintAt s Pt d.part (val ω) ι ∉ d.M Pt δ) ∧
-          ∀ u ∈ L.checked x r, u ∉ wrongAllAt s Pt d.part (val ω) (L.iregVal H P x ω r)) => hM hr.1).trans_eq
+          ∀ u ∈ L.checked x r, u ∉ incorrectAllAt s Pt d.part (val ω) (L.iregVal H P x ω r)) => hM hr.1).trans_eq
         Pr_false).trans hδ
 
 /-- **The threshold form from the event**: on the contract, the event's bound gives `KSRegTwo`
@@ -242,17 +242,17 @@ theorem headline_of_event (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Ses
     (hPt : L.partition s = some Pt) (hd : L.two s = some d) (hin : InScopeTwo Pt d s) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (val : Ω → ℕ → Option Bool) {ε : ℝ}
     (hev : Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-      ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2)) ≤ ε) (pb : Ω → ℝ)
+      ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2)) ≤ ε) (pb : Ω → ℝ)
     (hpb : ∀ ω ι, d.Pa Pt (footprintAt s Pt d.part (val ω) ι) ≤ pb ω) :
     Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc) ≤ Ex pb + ε := by
   rw [add_comm]
   refine Claims.Sampling.Pr_or_le
     (q := fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
-      ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2))
+      ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2))
     (r := fun p : Ω × (Fin (L.V.k x) → Coin) =>
-      ∀ u ∈ L.checked x p.2, u ∉ wrongAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2))
+      ∀ u ∈ L.checked x p.2, u ∉ incorrectAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2))
     (fun p hp => ?_) hev ?_
-  · by_cases hu : ∃ u ∈ L.checked x p.2, u ∈ wrongAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2)
+  · by_cases hu : ∃ u ∈ L.checked x p.2, u ∈ incorrectAllAt s Pt d.part (val p.1) (L.iregVal H P x p.1 p.2)
     · exact Or.inl ⟨hp, hu⟩
     · exact Or.inr fun u hu' hF => hu ⟨u, hu', hF⟩
   · rw [Claims.Sampling.Pr_prod_eq_Ex]

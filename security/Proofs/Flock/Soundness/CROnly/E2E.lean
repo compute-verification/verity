@@ -67,7 +67,7 @@ theorem flock_e2e_count
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict P H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) +
         P.linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
@@ -87,7 +87,7 @@ theorem flock_e2e_drawn
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict P H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
   P.flock_e2e_drawn H E plan tab hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
@@ -112,7 +112,7 @@ theorem flock_e2e_count_hm96
     (tr : StrictCR.TreeRewind H (audit L Reg (batchedSession H E plan)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + StrictCR.ksAvgStrict plan L k qF qS (reg σ) +
         P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
@@ -139,7 +139,7 @@ theorem flock_e2e_drawn_hm96
     (tr : StrictCR.TreeRewind H (audit L Reg (batchedSession H E plan)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       StrictCR.ksAvgStrict plan L k qF qS (reg σ) +
         P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
@@ -169,7 +169,7 @@ theorem flock_e2e_drawn_exec_hm96
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
         P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
@@ -198,7 +198,7 @@ theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       (Law.stratified σs ks hks).miss K + StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
         P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ (strictRunCost t' q) +
@@ -233,7 +233,7 @@ theorem prog_e2e_count
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict (p.partition outs) H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros ((p.partition outs).Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) +
@@ -255,7 +255,7 @@ theorem prog_e2e_drawn
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCRs : LinkCRStrict (p.partition outs) H E plan tab vb (reg σ) (cont σ) k Rw M t' q) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.partition outs).wrong
+        ¬ Disjoint ((p.partition outs).incorrect
           (Xpub ones zeros ((p.partition outs).Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) +
@@ -296,7 +296,7 @@ theorem flock_headline
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H512 qT) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros ((p.partition outs).Xplur H512 enc512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSession H512 enc512 plan)) σ ≤
       (Law.stratified σs ks hks).miss K +

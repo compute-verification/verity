@@ -5,33 +5,33 @@ public import Definitions.Flock.Audit.Law
 import Proofs.Flock.Soundness.Audit.Law
 
 /-!
-# The pooled escape: incorrect proof blocks that escape every period's sample
+# The pooled missProb: incorrect proof blocks that missProb every period's sample
 
 A monitoring period is `T` periods, each audited by a fresh uniform `kd`-subset of the same `N` units
-(`Law.subset N kd`), independent of the past. An adaptive adversary (`Pooled`) fixes period `t`'s wrong set `W_t` from
-the samples before `t`, before sample `t` is made. It escapes when no period's sample hits its wrong set (`Pooled.Escapes`),
+(`Law.subset N kd`), independent of the past. An adaptive adversary (`Pooled`) fixes period `t`'s incorrect set `W_t` from
+the samples before `t`, before sample `t` is made. It escapes when no period's sample hits its incorrect set (`Pooled.MissProb`),
 and its total is `Σ_t |W_t|` (`Pooled.total`), the incorrect proof blocks that went unaudited over the monitoring period, pooled.
 
 * `pooled_escape_prod`: when period `t`'s set has at least `w_t` units whatever the history, the adversary escapes
   with at most `∏_t C(N − w_t, kd)/C(N, kd)`, each period's own `subset_escape`.
 * `choose_div_le_one_sub_pow`, `prod_choose_div_le_pow`: `C(N − w, kd)/C(N, kd) ≤ (1 − kd/N)^w`, so the product is
   at most `(1 − kd/N)^M` once `Σ_t w_t ≥ M`.
-* `pooled_escape`: with the set sizes adaptive too, `Pr[escape ∧ Σ_t |W_t| ≥ M] ≤ (1 − kd/N)^M`.
-* `pooled_escape_adapted`: the same for a wrong-set map on whole runs that doesn't look ahead
+* `pooled_escape`: with the set sizes adaptive too, `Pr[missProb ∧ Σ_t |W_t| ≥ M] ≤ (1 − kd/N)^M`.
+* `pooled_escape_adapted`: the same for a incorrect-set map on whole runs that doesn't look ahead
   (`Periods.Predictable`), which is a `Pooled` (`Pooled.ofAdapted`).
 
 These are in `prCoin`. No theorem states them in `Claims.Pr` or at `δ` (with `q = kd/N`, since
-`(1 − q)^M ≤ e^{−qM}`, the total reaches `ln(1/δ)/q` on an escape with probability at most `δ`).
+`(1 − q)^M ≤ e^{−qM}`, the total reaches `ln(1/δ)/q` on an missProb with probability at most `δ`).
 
-Proof: these are the monitoring-period step (`Periods.lean`) at uniform `kd`-subset samples. Period `t`'s escape is
-adapted and its wrong set predictable (`Pooled.adapted_escapes`, `Pooled.predictable`), and given any history period
-`t` escapes with `subset_escape` of its wrong set (`Pooled.escape_update`): `pooled_escape_prod` is
+Proof: these are the monitoring-period step (`Periods.lean`) at uniform `kd`-subset samples. Period `t`'s missProb is
+adapted and its incorrect set predictable (`Pooled.adapted_escapes`, `Pooled.predictable`), and given any history period
+`t` escapes with `subset_escape` of its incorrect set (`Pooled.escape_update`): `pooled_escape_prod` is
 `Periods.prCoin_forall_le_prod` at those escapes, and `pooled_escape` is `Periods.prCoin_forall_sum_le_pow` at the
 weights `|W_t|` and `ρ = 1 − kd/N`.
 
 The network certifier's leak bound, `(ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`, adds each
 window's error once per window, so its second term grows with the number of windows in the monitoring period. It is
-`PooledLeakAccepted`'s, which bounds its own pooled escape (`pr_adaptive_add_le`), not with this file's theorems.
+`PooledLeakAccepted`'s, which bounds its own pooled missProb (`pr_adaptive_add_le`), not with this file's theorems.
 -/
 
 @[expose] public section
@@ -50,7 +50,7 @@ def past {α : Type} {T : ℕ} (ω : Fin T → α) (t : Fin T) : Fin t → α :=
   fun i => ω (Fin.castLE t.isLt.le i)
 
 /-- **An adaptive adversary over a monitoring period**: before period `t`'s sample, from the samples before `t`, period
-`t`'s wrong set. -/
+`t`'s incorrect set. -/
 abbrev Pooled (N kd : ℕ) (hk : kd ≤ N) (T : ℕ) : Type :=
   (t : Fin T) → (Fin t → (subset N kd hk).Ω) → Finset (Fin N)
 
@@ -58,56 +58,56 @@ namespace Pooled
 
 variable {hk : kd ≤ N} {T : ℕ}
 
-/-- Period `t`'s wrong set on the run `ω`. -/
-def wrong (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) (t : Fin T) : Finset (Fin N) :=
+/-- Period `t`'s incorrect set on the run `ω`. -/
+def incorrect (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) (t : Fin T) : Finset (Fin N) :=
   A t (past ω t)
 
-/-- Every period's sample misses its wrong set. -/
-def Escapes (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) : Prop :=
-  ∀ t, Disjoint (ω t).1 (A.wrong ω t)
+/-- Every period's sample misses its incorrect set. -/
+def MissProb (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) : Prop :=
+  ∀ t, Disjoint (ω t).1 (A.incorrect ω t)
 
 /-- The incorrect proof blocks over the monitoring period, pooled, `Σ_t |W_t|`. -/
 def total (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) : ℕ :=
-  ∑ t, (A.wrong ω t).card
+  ∑ t, (A.incorrect ω t).card
 
-/-- Period `t`'s wrong set is fixed before sample `t`. -/
+/-- Period `t`'s incorrect set is fixed before sample `t`. -/
 theorem predictable (A : Pooled N kd hk T) :
-    Periods.Predictable (Ω := fun _ => (subset N kd hk).Ω) fun t ω => A.wrong ω t :=
+    Periods.Predictable (Ω := fun _ => (subset N kd hk).Ω) fun t ω => A.incorrect ω t :=
   fun t _ _ h => congrArg (A t) (funext fun i => h _ (show (Fin.castLE t.isLt.le i).val < t.val from i.isLt))
 
-/-- Period `t`'s escape reads the samples up to `t`. -/
+/-- Period `t`'s missProb reads the samples up to `t`. -/
 theorem adapted_escapes (A : Pooled N kd hk T) :
-    Periods.Adapted (Ω := fun _ => (subset N kd hk).Ω) fun t ω => Disjoint (ω t).1 (A.wrong ω t) :=
+    Periods.Adapted (Ω := fun _ => (subset N kd hk).Ω) fun t ω => Disjoint (ω t).1 (A.incorrect ω t) :=
   fun t ω ω' h => congrArg₂ (fun x y => Disjoint (Subtype.val x) y) (h t le_rfl) (A.predictable.adapted t ω ω' h)
 
-/-- Given any history, period `t` escapes with its sample's escape of its wrong set. -/
+/-- Given any history, period `t` escapes with its sample's missProb of its incorrect set. -/
 theorem escape_update (A : Pooled N kd hk T) (ω : Fin T → (subset N kd hk).Ω) (t : Fin T) :
-    prCoin (fun a => Disjoint (Function.update ω t a t).1 (A.wrong (Function.update ω t a) t)) =
-      (subset N kd hk).escape (A.wrong ω t) := by
-  have hw : ∀ a, A.wrong (Function.update ω t a) t = A.wrong ω t := fun a =>
+    prCoin (fun a => Disjoint (Function.update ω t a t).1 (A.incorrect (Function.update ω t a) t)) =
+      (subset N kd hk).missProb (A.incorrect ω t) := by
+  have hw : ∀ a, A.incorrect (Function.update ω t a) t = A.incorrect ω t := fun a =>
     A.predictable t _ _ fun i hi => Function.update_of_ne (ne_of_lt hi) _ _
   simp only [Function.update_self, hw]
   rfl
 
 end Pooled
 
-/-- A wrong-set map on whole runs that doesn't look ahead, as a `Pooled` adversary: the history is padded with an
+/-- A incorrect-set map on whole runs that doesn't look ahead, as a `Pooled` adversary: the history is padded with an
 arbitrary sample, which `W t` doesn't read. -/
 noncomputable def Pooled.ofAdapted {hk : kd ≤ N} {T : ℕ}
     (W : Fin T → (Fin T → (subset N kd hk).Ω) → Finset (Fin N)) : Pooled N kd hk T :=
   fun t h => W t fun i => if hi : i.val < t.val then h ⟨i.val, hi⟩ else Classical.arbitrary _
 
-theorem Pooled.wrong_ofAdapted {hk : kd ≤ N} {T : ℕ}
+theorem Pooled.incorrect_ofAdapted {hk : kd ≤ N} {T : ℕ}
     {W : Fin T → (Fin T → (subset N kd hk).Ω) → Finset (Fin N)}
     (hW : Periods.Predictable (Ω := fun _ => (subset N kd hk).Ω) W)
-    (ω : Fin T → (subset N kd hk).Ω) (t : Fin T) : (Pooled.ofAdapted W).wrong ω t = W t ω := by
+    (ω : Fin T → (subset N kd hk).Ω) (t : Fin T) : (Pooled.ofAdapted W).incorrect ω t = W t ω := by
   refine hW t _ _ fun i hi => ?_
   have hi' : i.val < t.val := hi
   show (if h : i.val < t.val then past ω t ⟨i.val, h⟩ else _) = ω i
   rw [dite_eq_left hi']
   rfl
 
-/-- **One period's escape against the Bernoulli rate**: `C(N − w, kd)/C(N, kd) ≤ (1 − kd/N)^w`. -/
+/-- **One period's missProb against the Bernoulli rate**: `C(N − w, kd)/C(N, kd) ≤ (1 − kd/N)^w`. -/
 theorem choose_div_le_one_sub_pow (hk : kd ≤ N) {w : ℕ} (hw : w ≤ N) :
     ((N - w).choose kd : ℝ≥0∞) / (N.choose kd : ℝ≥0∞) ≤ (1 - (kd : ℝ≥0∞) / N) ^ w := by
   rcases Nat.eq_zero_or_pos N with rfl | hN
@@ -135,33 +135,33 @@ theorem prod_choose_div_le_pow (hk : kd ≤ N) {T : ℕ} (w : Fin T → ℕ) (hw
     _ = (1 - (kd : ℝ≥0∞) / N) ^ ∑ t, w t := Finset.prod_pow_eq_pow_sum _ _ _
     _ ≤ (1 - (kd : ℝ≥0∞) / N) ^ M := pow_le_pow_of_le_one zero_le one_sub_div_le_one hM
 
-/-- **The product bound.** If period `t`'s wrong set has at least `w t` units whatever the history, the adversary
+/-- **The product bound.** If period `t`'s incorrect set has at least `w t` units whatever the history, the adversary
 escapes every period with at most `∏_t C(N − w_t, kd)/C(N, kd)`. -/
 theorem pooled_escape_prod {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (w : Fin T → ℕ)
     (hw : ∀ t h, w t ≤ (A t h).card) :
-    prCoin (fun ω => A.Escapes ω) ≤ ∏ t, ((N - w t).choose kd : ℝ≥0∞) / (N.choose kd : ℝ≥0∞) :=
+    prCoin (fun ω => A.MissProb ω) ≤ ∏ t, ((N - w t).choose kd : ℝ≥0∞) / (N.choose kd : ℝ≥0∞) :=
   Periods.prCoin_forall_le_prod (Ω := fun _ => (subset N kd hk).Ω) _ A.adapted_escapes _ fun t ω => by
     rw [A.escape_update, subset_escape]
     exact ENNReal.div_le_div_right (Nat.cast_le.2 (Nat.choose_le_choose kd (Nat.sub_le_sub_left (hw t _) N))) _
 
-/-- **The pooled escape.** An adaptive adversary escapes every period's sample with at least `M` incorrect proof blocks over the
+/-- **The pooled missProb.** An adaptive adversary escapes every period's sample with at least `M` incorrect proof blocks over the
 monitoring period, pooled, with probability at most `(1 − kd/N)^M`. -/
 theorem pooled_escape {hk : kd ≤ N} {T : ℕ} (A : Pooled N kd hk T) (M : ℕ) :
-    prCoin (fun ω => A.Escapes ω ∧ M ≤ A.total ω) ≤ (1 - (kd : ℝ≥0∞) / N) ^ M :=
-  Periods.prCoin_forall_sum_le_pow (Ω := fun _ => (subset N kd hk).Ω) _ (fun t ω => (A.wrong ω t).card)
+    prCoin (fun ω => A.MissProb ω ∧ M ≤ A.total ω) ≤ (1 - (kd : ℝ≥0∞) / N) ^ M :=
+  Periods.prCoin_forall_sum_le_pow (Ω := fun _ => (subset N kd hk).Ω) _ (fun t ω => (A.incorrect ω t).card)
     A.adapted_escapes (fun t ω ω' h => congrArg Finset.card (A.predictable t ω ω' h)) one_sub_div_le_one
     (fun t ω => by
       rw [A.escape_update, subset_escape]
-      exact choose_div_le_one_sub_pow hk (by simpa using Finset.card_le_univ (A.wrong ω t))) M
+      exact choose_div_le_one_sub_pow hk (by simpa using Finset.card_le_univ (A.incorrect ω t))) M
 
-/-- `pooled_escape` for a wrong-set map on whole runs that doesn't look ahead. -/
+/-- `pooled_escape` for a incorrect-set map on whole runs that doesn't look ahead. -/
 theorem pooled_escape_adapted {hk : kd ≤ N} {T : ℕ}
     (W : Fin T → (Fin T → (subset N kd hk).Ω) → Finset (Fin N))
     (hW : Periods.Predictable (Ω := fun _ => (subset N kd hk).Ω) W) (M : ℕ) :
     prCoin (fun ω => (∀ t, Disjoint (ω t).1 (W t ω)) ∧ M ≤ ∑ t, (W t ω).card) ≤
       (1 - (kd : ℝ≥0∞) / N) ^ M := by
   have h := pooled_escape (Pooled.ofAdapted W) M
-  simp only [Pooled.Escapes, Pooled.total, Pooled.wrong_ofAdapted hW] at h
+  simp only [Pooled.MissProb, Pooled.total, Pooled.incorrect_ofAdapted hW] at h
   exact h
 
 end Law

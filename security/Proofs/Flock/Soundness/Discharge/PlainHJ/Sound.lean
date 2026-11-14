@@ -26,7 +26,7 @@ set_option Elab.async false
 
 For any live prover `τ` of a hidden-output plain session of `J ≥ 1` tables
 (`flock-verify verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
-`Pr[flock-verify accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, each unit read at its site in the table
+`Pr[flock-verify accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, each unit read at its site in the table
 it is sampled into (`sitesPHJI`, `tabPHJ`) and bound to the rows it commits, outputs included, at the simulated prover
 `simAuditJ … τ` in the batched session of the `J` tables `planPHJ`:
 
@@ -94,7 +94,7 @@ theorem plain_session_soundHJ
       (planPHJ dj x₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (batchStratL H512 enc512 leaf512 (planPHJ dj x₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (planPHJ dj x₀)
               (tabPHJ dj x₀)
@@ -154,7 +154,7 @@ theorem plain_session_soundHJI
       (planPHJ dj x₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (batchStratL H512 enc512 leaf512 (planPHJ dj x₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (Xpub {instOneG (c := c) (n := n)} {instZeroG (c := c) (n := n)}
             (XplurL ((instProg c n).partition (outsOfI c n)) H512 enc512 leaf512 (planPHJ dj x₀) (tabPHJ dj x₀)
               ((rsPHJI dj x₀ ht hc hrf hpub hU hpr hw).binding (rsPHJI_computes dj x₀ ht hc hrf hpub hU hpr hw))

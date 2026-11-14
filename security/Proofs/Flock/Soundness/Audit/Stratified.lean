@@ -22,7 +22,7 @@ stratified law draws an independent uniform `k s`-subset inside each stratum (`L
 * `stratified_draw_full`, `stratified_full_miss`: **the full draw**. With every `k s` its stratum's size, the draw is every
   unit and `miss K = 0` for `K ≥ 1` (`Law.miss_eq_zero_of_draw_univ`).
 * The one-stage profile theorems hold for every law, so they instantiate here. `audit_whole_stratum` (oracle layer) and
-  `extraction_audit_whole_stratum` (compiled layer): an audit accepts while a whole floored stratum is wrong with
+  `extraction_audit_whole_stratum` (compiled layer): an audit accepts while a whole floored stratum is incorrect with
   probability at most the per-unit terms.
 -/
 
@@ -77,15 +77,15 @@ theorem filter_eq_inter_stratum (σ : Fin n → Fin m) (s : Fin m) (B : Finset (
   ext u
   simp [stratum]
 
-/-- **The stratified escape**: the product over strata of the hypergeometric escape of the stratum's count,
+/-- **The stratified missProb**: the product over strata of the hypergeometric missProb of the stratum's count,
 `∏ s C(n_s − m_s, k_s) / C(n_s, k_s)` with `n_s = |stratum s|` and `m_s = |B ∩ stratum s|`. -/
 theorem stratified_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) :
-    (stratified σ k hk).escape B =
+    (stratified σ k hk).missProb B =
       ∏ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
         ((stratum σ s).card.choose (k s) : ℝ≥0∞) := by
   classical
-  unfold Verity.Law.escape
+  unfold Verity.Law.missProb
   have hd : (fun ω : (stratified σ k hk).Ω => Disjoint ((stratified σ k hk).draw ω) B) =
       fun ω => ∀ s ∈ (univ : Finset (Fin m)), Disjoint (ω s).1 B := by
     funext ω
@@ -103,7 +103,7 @@ theorem stratified_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s
 /-- **A floor catches its whole stratum**: with `1 ≤ k s`, a set containing stratum `s` never escapes. -/
 theorem stratified_escape_floor (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (s : Fin m) (h : 1 ≤ k s) {B : Finset (Fin n)} (hB : stratum σ s ⊆ B) :
-    (stratified σ k hk).escape B = 0 := by
+    (stratified σ k hk).missProb B = 0 := by
   rw [stratified_escape]
   refine Finset.prod_eq_zero (mem_univ s) ?_
   have hc : (B.filter (σ · = s)).card = (stratum σ s).card := by
@@ -134,30 +134,30 @@ section Audits
 variable {n m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ} {hk : ∀ s, k s ≤ (Law.stratum σ s).card}
   {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
-/-- **A wholly wrong floored stratum is caught** (oracle layer): the audit accepts while every unit of stratum `s`
-is wrong with probability at most `ε_ks + δ_link`. -/
+/-- **A wholly incorrect floored stratum is caught** (oracle layer): the audit accepts while every unit of stratum `s`
+is incorrect with probability at most `ε_ks + δ_link`. -/
 theorem audit_whole_stratum (A : Analysis (Law.stratified σ k hk) Reg session) {εks δlink : ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (h : 1 ≤ k s)
     (σ' : Strategy (audit (Law.stratified σ k hk) Reg session)) :
-    prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
+    prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.incorrect (A.committedOf σ'))
         (audit (Law.stratified σ k hk) Reg session) σ' ≤ εks + δlink := by
   refine (audit_profile A hks hlink (fun B => Law.stratum σ s ⊆ B) σ').trans ?_
-  have h0 : (⨆ (B : Finset (Fin n)) (_ : Law.stratum σ s ⊆ B), (Law.stratified σ k hk).escape B) = 0 :=
+  have h0 : (⨆ (B : Finset (Fin n)) (_ : Law.stratum σ s ⊆ B), (Law.stratified σ k hk).missProb B) = 0 :=
     le_antisymm (iSup₂_le fun B hB => (Law.stratified_escape_floor σ k hk s h hB).le) (zero_le)
   rw [h0, zero_add]
 
-/-- **A wholly wrong floored stratum is caught** (compiled layer, randomized extractor): at most
+/-- **A wholly incorrect floored stratum is caught** (compiled layer, randomized extractor): at most
 `ε_ks(σ) + δ_link(σ)`. -/
 theorem extraction_audit_whole_stratum (A : ExtractionAnalysis (Law.stratified σ k hk) Reg session)
     {εks δlink : (R : Reg) → Cont (Law.stratified σ k hk) Reg session R → ℝ≥0∞}
     (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (h : 1 ≤ k s)
     (σ' : Strategy (audit (Law.stratified σ k hk) Reg session)) :
-    prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
+    prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.incorrect (A.committedOf σ'))
         (audit (Law.stratified σ k hk) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
-  refine (extraction_audit_le A hks hlink (fun X _ => Law.stratum σ s ⊆ A.wrong X) σ').trans ?_
-  have h0 : prCoin (fun ω => Law.stratum σ s ⊆ A.wrong (A.committedOf σ') ∧
-      Disjoint ((Law.stratified σ k hk).draw ω) (A.wrong (A.committedOf σ'))) = 0 := by
-    by_cases hB : Law.stratum σ s ⊆ A.wrong (A.committedOf σ')
+  refine (extraction_audit_le A hks hlink (fun X _ => Law.stratum σ s ⊆ A.incorrect X) σ').trans ?_
+  have h0 : prCoin (fun ω => Law.stratum σ s ⊆ A.incorrect (A.committedOf σ') ∧
+      Disjoint ((Law.stratified σ k hk).draw ω) (A.incorrect (A.committedOf σ'))) = 0 := by
+    by_cases hB : Law.stratum σ s ⊆ A.incorrect (A.committedOf σ')
     · exact le_antisymm ((prCoin_mono fun ω h => h.2).trans
         (Law.stratified_escape_floor σ k hk s h hB).le) (zero_le)
     · exact le_antisymm ((prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans prCoin_false.le) (zero_le)

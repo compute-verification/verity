@@ -7,16 +7,16 @@ soundness doesn't cover, are refused), the
 inference-only policy (`NciCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
-period's windows credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
+period's executionPhases credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
 by the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network certifier over the period
-(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the bound
+(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-executionPhases certified and proved, and the bound
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
 answer. The policy's commitment and sampled proofs' are the run's registration record (in either form, the one-stage
 one), and both must commit to the same one; every window of the period must name that record as its Commit record,
-remote's tie (`Core.Remote.windows`). Two records reject onsite whatever the subprotocols answer. PoUS and the remote
+remote's tie (`Core.Remote.executionPhases`). Two records reject onsite whatever the subprotocols answer. PoUS and the remote
 bandwidth audit must also be on one store (`store`): two stores reject onsite unless it rejects already.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
@@ -77,9 +77,9 @@ def store : Tie :=
       (RemoteAudit.P2Protocol.protocol.id,
         fun k => (RemoteAudit.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
-/-- Onsite's ties: every window of PoUW's period on the policy's record (remote's, `Core.Remote.windows`), and PoUS and
+/-- Onsite's ties: every window of PoUW's period on the policy's record (remote's, `Core.Remote.executionPhases`), and PoUS and
 the remote bandwidth audit on one store. -/
-def ties : List Tie := [Core.Remote.windows, store]
+def ties : List Tie := [Core.Remote.executionPhases, store]
 
 def protocol : BlobProtocol := tiedSameB "verity/onsite/v0" tied ties components
 
@@ -157,13 +157,13 @@ private def registration (n : Nat) : String := s!"\{\"format\":\"verity/registra
 
 private def executionPhaseOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
 
-/-- Onsite's cases, each refused, with the policy's committing to `policy` and the period's windows on the records
+/-- Onsite's cases, each refused, with the policy's committing to `policy` and the period's executionPhases on the records
 `rs`. -/
 private def executionPhasesOn (policy : String) (rs : List String) : List Case :=
   components.map fun P =>
     if P.id == NciCheck.Protocol.protocolId then { refused P with commitment := policy.toUTF8 }
     else if P.id == PouwCheck.Period.protocolId then
-      { refused P with evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
+      { refused P with evidence := ("{\"pins\":[],\"executionPhases\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
     else refused P
 
 /-- Why onsite's ties reject the outcome `o` its subprotocols reached on `executionPhasesOn policy rs`; `none` when they hold

@@ -12,7 +12,7 @@ slot served its max_tokens), a work level whose tiles lie in the declared range,
 population N = point(level + 1), the sampling design subset:K′ with K′ the execution phase's exact `k_prime`, and the check's query and
 scheme. `outcome` then holds the service's answer to it: one-stage's, for this record's digest, and on acceptance
 a profile and sample of the registered partition's N units sampled subset:K′ at the execution phase's δ, and a live execution phase's salt its
-live coin's (`windowSaltReason`; a seeded execution phase's answer carries none). Every refusal is the first rule it breaks, in
+live coin's (`executionPhaseSaltReason`; a seeded execution phase's answer carries none). Every refusal is the first rule it breaks, in
 this order, with `core_check.py`'s reason.
 
 The service's reject is a reject and its undecided is undecided. On acceptance PoUW publishes `window.PUBLIC` and the
@@ -65,7 +65,7 @@ def wrongItems (p : Params) (items : Json) (f : Fixed) : List String :=
   ((expected p f).filter fun (k, v) => cs (get items k) ≠ cs v).map (·.1)
 
 /-- PoUW's rule over the execution phase commitment record. -/
-def registered (p : Params) (c : WindowCommitmentRecord) : Except String Fixed :=
+def registered (p : Params) (c : ExecutionPhaseCommitmentRecord) : Except String Fixed :=
   let win := c.window
   let ks := (keys win.items).getD []
   let bits := p.gridBits
@@ -88,8 +88,8 @@ def registered (p : Params) (c : WindowCommitmentRecord) : Except String Fixed :
       | .error e => .error e
       | .ok s =>
         let f : Fixed := ⟨work, s, (c.roots.find? (·.port = "W")).map (·.root)⟩
-        let wrong := wrongItems p win.items f
-        if wrong ≠ [] then .error s!"public-value: {", ".intercalate wrong}"
+        let incorrect := wrongItems p win.items f
+        if incorrect ≠ [] then .error s!"public-value: {", ".intercalate incorrect}"
         else if c.population ≠ work.n then .error s!"population: registered {c.population}, the level's {work.n}"
         else if cs c.law ≠ cs (subsetLaw s.k) then
           .error s!"law: registered {cs c.law}, the window's {cs (subsetLaw s.k)}"
@@ -138,7 +138,7 @@ instance instDecidableUnitsOk (units : Array Nat) (k n : Nat) : Decidable (Units
 def drawnJson (drawn : Array (String × Nat)) : Json := Json.mkObj (drawn.toList.map fun (k, v) => (k, Json.num v))
 
 /-- The service's answer to an execution phase commitment record that keeps PoUW's rule. -/
-def outcome (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+def outcome (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fixed) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let d := Flock.hexOf c.digest
   let k := f.sampling.k
   let n := f.work.n
@@ -165,11 +165,11 @@ def outcome (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence)
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else
-      let why := windowSaltReason p c e.salt
+      let why := executionPhaseSaltReason p c e.salt
       if why.isSome then .reject s!"salt: {why.getD ""}"
       else .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof
 
-def check (p : Params) (c : WindowCommitmentRecord) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+def check (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   match registered p c with
   | .error r => .reject r
   | .ok f => outcome p c f e

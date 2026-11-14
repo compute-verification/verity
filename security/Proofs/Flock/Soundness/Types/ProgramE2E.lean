@@ -10,8 +10,8 @@ import Proofs.Flock.Soundness.Game
 `flock_e2e_count` and `flock_e2e_drawn` (`E2E.lean`) on a program of units (`Types.Program`):
 - the committed circuit is the program's rows circuit, `p.C`, where those theorems measure "wrong"; these forms measure it
   on its Boolean circuit, `p.CB`, read off the rows through `p.mapG`;
-- `UProg.rowsL1` (proved) carries one to the other: at values 1 on the constant's gate `one`, a unit wrong on the Boolean
-  circuit is wrong on its rows. The committed values are 1 on `one` and the plurality elsewhere (`Xpub`), and `hConst`
+- `UProg.rowsL1` (proved) carries one to the other: at values 1 on the constant's gate `one`, a unit incorrect on the Boolean
+  circuit is incorrect on its rows. The committed values are 1 on `one` and the plurality elsewhere (`Xpub`), and `hConst`
   says that only a unit's constant column sits on `one`.
 
 The other gaps stay named, as in `E2E.lean`: `hExec`, `dp` and `vb`. The `_classes` forms build `dp` from each sampled
@@ -54,7 +54,7 @@ variable {kIn one : ℕ} (hone : one < kIn) {outs : List ℕ} (p : FlockSoundnes
   {L : Law p.n}
 
 /-- **The end-to-end count curve on a program of units.** `flock_e2e_count`, carried by `UProg.rowsL1`:
-if `execAccept` holds, the probability that at least `K` units are wrong on the program's Boolean circuit, at the
+if `execAccept` holds, the probability that at least `K` units are incorrect on the program's Boolean circuit, at the
 committed values read through `mapG`, is at most `miss_L(K) + ε_ks(σ) + δ_link`, when only a unit's constant column sits
 on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_count
@@ -68,7 +68,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong
+        K ≤ ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
@@ -78,7 +78,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count
       (fun _ _ _ _ _ h => absurd h (Finset.notMem_empty _)) vb hk hRw hM hρ hr ht K σ hCR)
 
 /-- **The end-to-end drawn-unit bound on a program of units.** `flock_e2e_drawn`, carried by
-`UProg.rowsL1`: if `execAccept` holds, the probability that a sampled proof block is wrong on the program's Boolean circuit is at
+`UProg.rowsL1`: if `execAccept` holds, the probability that a sampled proof block is incorrect on the program's Boolean circuit is at
 most `ε_ks(σ) + δ_link`, when only a unit's constant column sits on the constant's gate. -/
 theorem _root_.FlockSoundness.UProg.flock_e2e_drawn
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
@@ -91,7 +91,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong
+        ¬ Disjoint ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
@@ -182,7 +182,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong
+        K ≤ ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
@@ -206,7 +206,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong
+        ¬ Disjoint ((p.PB hone).incorrect
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
@@ -235,7 +235,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_count_classes_zero
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.PB hone).wrong (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
+        K ≤ ((p.PB hone).incorrect (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
@@ -265,7 +265,7 @@ theorem _root_.FlockSoundness.UProg.flock_e2e_drawn_classes_zero
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : (p.P hone).LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.PB hone).wrong (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
+        ¬ Disjoint ((p.PB hone).incorrect (Xpub {p.oneOf hone} {⟨zer, Nat.lt_of_lt_of_le hzk p.k_le_rowsN⟩}
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=

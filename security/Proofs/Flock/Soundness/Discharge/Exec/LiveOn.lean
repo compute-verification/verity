@@ -128,7 +128,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_on {Lp : Merkle.Leaf (Lis
       (batchStratL H512 enc512 Lp (fun S R => [T S R])
         (cont (simAuditOn H512 enc512 Lp T I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp (fun S R => [T S R]) tab (rs.binding hHm)
               (reg (simAuditOn H512 enc512 Lp T I wr opn dg dec one fin capOf N hdec τ))
@@ -178,7 +178,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_onX {Lp : Merkle.Leaf (Li
       (batchStratL H512 enc512 Lp (fun S R => [T S R])
         (cont (simAuditOn H512 enc512 Lp T I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp (fun S R => [T S R]) tab (rs.binding hHm)
               (reg (simAuditOn H512 enc512 Lp T I wr opn dg dec one fin capOf N hdec τ))

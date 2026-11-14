@@ -180,7 +180,7 @@ theorem zk_session_soundHJR_custody
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZKR I own o ∧
-        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJS dj y₀ ht hc hscope hU hpub).bindingZ (rsZHJS_computes dj y₀ ht hc hscope hU hpub))
             (reg σ) (cont σ) k Rw)).card)

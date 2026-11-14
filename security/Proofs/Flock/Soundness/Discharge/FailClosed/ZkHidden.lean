@@ -118,7 +118,7 @@ theorem zk_session_composedHJ
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)
@@ -170,7 +170,7 @@ theorem zk_session_soundH
       (zcStrat execArith hs512 (planAtZKH dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hRec hDraw)) τ) ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZHSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hRec hDraw)) τ))
@@ -214,7 +214,7 @@ theorem zk_session_soundH_custody
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hCust.1
           (fun ω => drawOkZKH_of_execSt I hs.typed (hs.parseH hh) σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ) ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZHSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hCust.1
@@ -266,7 +266,7 @@ theorem zk_session_soundHJ
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)
@@ -314,7 +314,7 @@ theorem zk_session_soundHJ_custody
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hCust.1
           fun _ => drawOkZKHJ_of_fileSt I hs.typed (hs.parseH hh) kd n hdiv dj hCust.2 _)) τ
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)
@@ -365,7 +365,7 @@ theorem zk_session_soundHJ_custody_json
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec
           fun _ => drawOkZKHJ_of_fileSt I hs.typed (hs.parseH hh) kd n hdiv dj (drawFileZK_of_toJson_subset dj kd n hdj) _)) τ
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)

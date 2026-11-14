@@ -478,7 +478,7 @@ structure Win where
 /-- A monitoring period `verifyLedger` read: its name and lane, its windows' sessions, counted at their reserves (or
 one-step opens), whether it closed, and the cap and circuit its open committed (`null` both for a period opened before
 they were required). -/
-structure MonitoringPeriod where
+structure PeriodRecord where
   name : String
   lane : String
   windows : Array String := #[]
@@ -499,8 +499,8 @@ def laneOf (body : Json) : String := if truthy (getD body "for") then strOf (get
 
 /-- `_verify`'s `join`: lane `lane`'s open period, if any, takes window `session` at entry `i`, refused past its cap;
 the periods after it, and the period's name. -/
-private def join (periods : Array MonitoringPeriod) (current : Array (String × String)) (i : Nat) (lane session : String) :
-    V (Array MonitoringPeriod × Option String) := do
+private def join (periods : Array PeriodRecord) (current : Array (String × String)) (i : Nat) (lane session : String) :
+    V (Array PeriodRecord × Option String) := do
   let some (_, name) := current.find? (·.1 == lane) | return (periods, none)
   let some k := periods.findIdx? (·.name == name) | return (periods, none)
   let p := periods[k]!
@@ -558,12 +558,12 @@ def verifyDays (es : Array LedgerEntry) : V Unit := do
 
 /-- `_verify` (module docstring), over entries `ledgerEntry?` read: the ledger's windows and periods, or the first entry
 that fails, in `_verify`'s words. -/
-def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win × Array MonitoringPeriod) := do
+def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win × Array PeriodRecord) := do
   let I := key.pub.extract 0 16
   let mut wins : Array Win := #[]
   let mut leaves : Array Nat := #[]
   let mut records : Array (Nat × Nat) := #[]
-  let mut periods : Array MonitoringPeriod := #[]
+  let mut periods : Array PeriodRecord := #[]
   let mut current : Array (String × String) := #[]
   let mut reserves : Array Reserve := #[]
   let mut prev := ZERO
@@ -678,7 +678,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
 
 /-- `_checked`: `ledger` (its lines) as `verifyLedger` reads it under the pinned key `key`, each line first refused unless
 `ledgerEntry?` reads it and, opening a window or a period, it names no other key. -/
-def checked (ledger : Json) (key : ChallengerKey) : V (Array Win × Array MonitoringPeriod) := do
+def checked (ledger : Json) (key : ChallengerKey) : V (Array Win × Array PeriodRecord) := do
   if ledger == Json.null then throw NO_AUDIT
   let .arr lines := ledger | throw s!"the auditor's ledger is malformed: {LEDGER_FORM}"
   let pinned := Flock.hexOf (Flock.Sha512.hash key.pub)

@@ -38,7 +38,7 @@ each sampled proof block's place in its table (`UnitPlace`), with `C` the rows t
 bounded by the largest over the plan's tables, and averaged over the sample (`ksAvgB`), with no
 named assumption; `δ_link` stays named (`BindSound`).
 
-`flock_batched_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
+`flock_batched_count`: `Pr[accept ∧ at least K incorrect units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
 
 @[expose] public section
@@ -128,7 +128,7 @@ noncomputable def analysisB (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) (Kr : ℕ)
     (hlow : P.LoweringSoundB plan tab decode) : ExtractionAnalysis L Reg (batchedSession H E plan) where
   Tr := Fin C.N → Bool
-  wrong := P.wrong
+  incorrect := P.incorrect
   committed := Xc
   ks S R τ u := prob (acceptedB (plan S R)) (sessionB execArith H E (plan S R)) (batchStrat H E plan τ) *
     ENNReal.ofReal (failProbB execArith H E (plan S R) (tab S R u) Kr (batchStrat H E plan τ))
@@ -141,7 +141,7 @@ noncomputable def analysisB (decode : DecoderB (C := C) (Reg := Reg) plan tab)
       ⟨hc, fun M _ hsat => by
         by_contra hno
         push Not at hno
-        exact P.mem_wrong.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))⟩
+        exact P.mem_incorrect.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))⟩
     rw [prob_batchedSession, ← mul_add]
     exact le_mul_of_one_le_right zero_le
       (one_le_fail_add_B' execArith H E (plan S R) (tab S R u) Kr (batchStrat H E plan τ) _ hG)
@@ -173,7 +173,7 @@ theorem flock_batched_count
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
     (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).BindSound δlink) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgB H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_count (P.analysisB H E plan tab decode Xc Kr hlow)
@@ -187,7 +187,7 @@ theorem flock_batched_drawn
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
     (hlink : (P.analysisB H E plan tab decode Xc Kr hlow).BindSound δlink)
     (σ : Strategy (audit L Reg (batchedSession H E plan))) :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgB H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_drawn (P.analysisB H E plan tab decode Xc Kr hlow)

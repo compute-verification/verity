@@ -34,7 +34,7 @@ max_tokens (`lengthProblem`: stop mode fixed, the verifier's max_tokens, each sl
 low end and whose next level is at most the floor point of its high end; each item the verifier's own at that level
 (`expected`, compared canonically); the population `N = point(level + 1)`; the sampling design `subset:K′` with `K′` the window's
 exact `kPrime`; and the check's query and scheme. -/
-def RecordKeeps (p : Params) (c : WindowCommitmentRecord) (f : Fixed) : Prop :=
+def RecordKeeps (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fixed) : Prop :=
   (c.window.kind = "served" ∧ c.window.context = p.context) ∧
   (keys c.window.items).getD [] = registeredSorted ∧
   PouwWindow.lengthProblem (get c.window.items "length") p.maxTokens = none ∧
@@ -51,7 +51,7 @@ def RecordKeeps (p : Params) (c : WindowCommitmentRecord) (f : Fixed) : Prop :=
 /-- The service accepted this record (`e` is one-stage's answer for its digest) with `prof` and `draw`: the profile
 of the registered Program over one level, the registered partition's `N` units sampled `subset:K′`, at the window's δ,
 with `K′` units sampled; and a sample `subset:K′` over `N` of `K′` distinct units below `N`, ascending. -/
-def ServiceAccepted (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) (prof : Core.Integrity)
+def ServiceAccepted (p : Params) (c : ExecutionPhaseCommitmentRecord) (f : Fixed) (e : Evidence) (prof : Core.Integrity)
     (draw : Flock.Draw.UnitDraw) : Prop :=
   e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧ e.said = .accept prof draw ∧
   prof.programs = #[c.program] ∧
@@ -62,15 +62,15 @@ def ServiceAccepted (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : E
 
 /-- The salt the service's answer carries is the window's: a live window's (`coins` live) is its live coin's, taken
 from the salt-only session the auditor's ledger opened on the salt epoch root of the record's weights' root W, the
-root X of the activations it committed before its salt (`windowAnchors`) and the answer's epoch, after that root
-(`windowSaltReason`, `core_check.window_salt`), and a seeded window's answer carries none. -/
-def SaltKept (p : Params) (c : WindowCommitmentRecord) (e : Evidence) : Prop := windowSaltReason p c e.salt = none
+root X of the activations it committed before its salt (`executionPhaseAnchors`) and the answer's epoch, after that root
+(`executionPhaseSaltReason`, `core_check.window_salt`), and a seeded window's answer carries none. -/
+def SaltKept (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) : Prop := executionPhaseSaltReason p c e.salt = none
 
 /-- What the check accepts is a window commitment record that keeps PoUW's rule, which the service accepted as the rule fixes with
 the window's salt; it then publishes the check item, the level's work, the sampling item, the verifier's max_tokens, `root_W` and the sampled
 proof blocks, and the profile is the service's. -/
 def AcceptMeans : Prop :=
-  ∀ (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+  ∀ (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
       ∃ f draw, RecordKeeps p c f ∧ ServiceAccepted p c f e prof draw ∧ SaltKept p c e ∧
         pub = ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩
@@ -78,13 +78,13 @@ def AcceptMeans : Prop :=
 /-- An accepted window is credited a grid level inside the declared range: its credited tiles are at least `lo`, and
 the tiles it pads to at most `hi`. -/
 def AcceptedInRange : Prop :=
-  ∀ (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+  ∀ (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof → p.lo ≤ pub.work.credited ∧ pub.work.n ≤ p.hi
 
 /-- An accepted window's sample is `K′` distinct units of its `N`, `K′` the window's exact `kPrime` at its ε and δ, and the
 record was for that sampling design over that population. -/
 def AcceptedDraw : Prop :=
-  ∀ (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+  ∀ (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
       pub.work = Work.at p.gridBits pub.work.level ∧
       PouwWindow.kPrime (toRat p.eps) (toRat p.delta) ((pub.work.credited : Int) * p.check.tileWork) pub.work.n
@@ -95,7 +95,7 @@ def AcceptedDraw : Prop :=
 /-- An accepted window's outcome is the service's, for this record: one-stage's answer citing its digest, and the
 profile published is the one the service gave. -/
 def AcceptedIsTheService's : Prop :=
-  ∀ (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+  ∀ (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     protocol.check p c e = .accept pub prof →
       e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf (protocol.digest c)) ∧
       ∃ draw, e.said = .accept prof draw ∧ pub.drawn = draw.units
@@ -112,7 +112,7 @@ def NeverNull : Prop :=
 /-- The check is undecided only when the service is, on a record that keeps PoUW's rule and an answer for it;
 the reason is the service's. -/
 def UndecidedOnlyFromService : Prop :=
-  ∀ (p : Params) (c : WindowCommitmentRecord) (e : Evidence) (r : String),
+  ∀ (p : Params) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (r : String),
     protocol.check p c e = .undecided r →
       (∃ f, RecordKeeps p c f) ∧ e.protocol = oneStage ∧ e.commitment = some (Flock.hexOf c.digest) ∧
         ∃ r₀, e.said = .undecided r₀ ∧ r = "service: " ++ r₀
@@ -122,10 +122,10 @@ def UndecidedOnlyFromService : Prop :=
 /-- The digest is one-stage's window record digest (`Flock.WindowRecord.digestOf`), SHA-512 of the format, a zero byte
 and the canonical record. -/
 def DigestIsOneStage's : Prop :=
-  ∀ c : WindowCommitmentRecord, protocol.digest c = Flock.WindowRecord.digestOf c.format c.bytes
+  ∀ c : ExecutionPhaseCommitmentRecord, protocol.digest c = Flock.WindowRecord.digestOf c.format c.bytes
 
 /-- A decoded window commitment record keeps the bytes it was read from, so its digest is of exactly those bytes. -/
 def CommitmentKeepsBytes : Prop :=
-  ∀ (b : ByteArray) (c : WindowCommitmentRecord), protocol.commitment b = .ok c → c.bytes = b
+  ∀ (b : ByteArray) (c : ExecutionPhaseCommitmentRecord), protocol.commitment b = .ok c → c.bytes = b
 
 end Properties.Pouw.Check

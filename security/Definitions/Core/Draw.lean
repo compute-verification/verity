@@ -11,8 +11,8 @@ import Mathlib.Basic.ENNReal.Real
 Every area reads these, and defines none of its own:
 
 * `Law U`: a sampling design over the units `U`, the verifier's uniform coins `Ω` and the unit set each coin samples. What a sampling design
-  gives a guarantee is its escape: `escape L B`, the probability that a sample misses every unit of `B`; `miss L K`, the
-  largest escape over sets of at least `K` units, the sampling term of a count curve `δ(K) = miss K + ε`; and
+  gives a guarantee is its missProb: `missProb L B`, the probability that a sample misses every unit of `B`; `miss L K`, the
+  largest missProb over sets of at least `K` units, the sampling term of a count curve `δ(K) = miss K + ε`; and
   `incl L u`, the probability that `u` is sampled;
 * `Draw s N`: `s` indices into `N` units, each uniform and independent of the others (`Draw.law`, its sampling design);
 * `Draw.Subset N k`: `k` of `N` units, without replacement, each `k`-subset one coin (the `subset:K` sampling design);
@@ -41,12 +41,12 @@ namespace Law
 variable {U : Type}
 
 /-- The probability that a sample misses every unit of `B`. -/
-noncomputable def escape (L : Law U) (B : Finset U) : ℝ≥0∞ :=
+noncomputable def missProb (L : Law U) (B : Finset U) : ℝ≥0∞ :=
   Game.prCoin fun ω => Disjoint (L.draw ω) B
 
-/-- The count curve's sampling term: the largest escape over sets of at least `K` units. -/
+/-- The count curve's sampling term: the largest missProb over sets of at least `K` units. -/
 noncomputable def miss (L : Law U) (K : ℕ) : ℝ≥0∞ :=
-  ⨆ (B : Finset U) (_ : K ≤ B.card), L.escape B
+  ⨆ (B : Finset U) (_ : K ≤ B.card), L.missProb B
 
 /-- The inclusion probability of a unit. -/
 noncomputable def incl (L : Law U) (u : U) : ℝ≥0∞ :=

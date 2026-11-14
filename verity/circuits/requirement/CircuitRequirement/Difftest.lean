@@ -22,11 +22,11 @@ gives, device by device, the tick at which it begins each engine step. A payload
 lowercase hex (Python writes no integer of more than 4,300 digits, a block's payload among them). It refuses an instance
 that isn't one (a field missing or of the wrong kind, a per-value list not of one entry per value, a registered value
 or run input that isn't one, a plan count that isn't `T`), an execution that doesn't follow its wiring, and, when it is
-asked for a window, a placement that doesn't place the execution (`Instance.places`). It returns whether the wiring is
+asked for a executionPhase, a placement that doesn't place the execution (`Instance.places`). It returns whether the wiring is
 topological; for each step `t < T` the live and read values, their bits, the blocks that hold them with the bits in
 each, those of them in complete blocks (`credited`, `creditedReads`) and their bits, the resident blocks, and whether
 the store and the plan are `W`'s (`storeMatches`, `planMatches`), with `held` and `read` over the `T` steps; and for each
-window, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its credits
+executionPhase, PoUW's over the placed execution: the region at its ticks and at its engine steps, its ingress and its credits
 at the pricing `price`.
 -/
 
@@ -87,9 +87,9 @@ def placement (j : Json) (n : Nat) : Flock.V Placement := do
     ticks := ← (← Flock.J.arr j "ticks" "input").mapM fun t => do
       return (← nats t "ticks").toArray }
 
-/-- A window of PoUW's: the devices `X`, the marked values, the ticks `[lo, hi)` and the engine steps
+/-- A executionPhase of PoUW's: the devices `X`, the marked values, the ticks `[lo, hi)` and the engine steps
 `[start, start + len)`. -/
-structure Window where
+structure ExecutionPhase where
   devices : List Nat
   marked : List Nat
   lo : Nat
@@ -97,10 +97,10 @@ structure Window where
   start : Nat
   len : Nat
 
-def window (j : Json) : Flock.V Window := do
+def executionPhase (j : Json) : Flock.V ExecutionPhase := do
   return {
-    devices := ← nats (← Flock.J.get j "devices" "window") "window.devices"
-    marked := ← nats (← Flock.J.get j "marked" "window") "window.marked"
+    devices := ← nats (← Flock.J.get j "devices" "window") "executionPhase.devices"
+    marked := ← nats (← Flock.J.get j "marked" "window") "executionPhase.marked"
     lo := ← Flock.J.nat j "lo" "window"
     hi := ← Flock.J.nat j "hi" "window"
     start := ← Flock.J.nat j "start" "window"
@@ -108,7 +108,7 @@ def window (j : Json) : Flock.V Window := do
 
 def natsJson (l : List Nat) : Json := .arr (l.map toJson).toArray
 
-def windowJson (i : Instance) (p : Placement) (price : Array Nat) (w : Window) : Json :=
+def executionPhaseJson (i : Instance) (p : Placement) (price : Array Nat) (w : ExecutionPhase) : Json :=
   Json.mkObj [("region", natsJson (i.region p w.devices w.lo w.hi)),
     ("step_region", natsJson (i.stepRegion p w.devices w.start w.len)),
     ("ingress", toJson (i.ingress p w.devices w.lo w.hi)),
@@ -136,14 +136,14 @@ def requirement (j : Json) : Flock.V Json := do
   if plans.size != T then throw s!"plans has {plans.size} entries, not one per step ({T})"
   let p ← placement j i.width.size
   let price ← perValue j "price" i.width.size Flock.J.asNat
-  let windows ← (← Flock.J.arr j "windows" "input").mapM window
+  let windows ← (← Flock.J.arr j "windows" "input").mapM executionPhase
   if !i.follows then throw "the execution does not follow its wiring (`Execution.Follows`)"
   if !windows.isEmpty && !i.places p then
     throw "the placement doesn't place the execution: a value it produces has no device, or a gate it computes no tick \
       at its step on its device"
   return Json.mkObj [("topological", toJson i.topological), ("held", toJson (i.held 0 T)), ("read", toJson (i.read 0 T)),
     ("steps", .arr ((List.range T).map fun t => stepJson i s (plans.getD t []) B t).toArray),
-    ("windows", .arr (windows.map (windowJson i p price)))]
+    ("windows", .arr (windows.map (executionPhaseJson i p price)))]
 
 def table := _root_.Difftest.table [("requirement", requirement)]
 

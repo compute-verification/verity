@@ -24,8 +24,8 @@ namespace MemoryChallenger
 open Flock
 
 /-- A closed session: its commitment, how it ended, its round records, and the one signature over them. -/
-structure SignedSession where
-  commitment : SessionCommitment
+structure SignedChallengePhase where
+  commitment : ChallengePhaseCommitment
   ended : String
   rounds : Array Round
   scheme : String
@@ -33,7 +33,7 @@ structure SignedSession where
   signature : ByteArray
   deriving BEq, Inhabited
 
-def SignedSession.message (s : SignedSession) : E ByteArray := MemoryChallenger.message s.commitment s.ended s.rounds
+def SignedChallengePhase.message (s : SignedChallengePhase) : E ByteArray := MemoryChallenger.message s.commitment s.ended s.rounds
 
 /-- `lms_verify(params)(public_key, session, record, signature)`: false for a key of the wrong size; a signature of the
 wrong size is refused (Python's `ValueError`, which `verdict` reads as no signature). -/
@@ -99,8 +99,8 @@ def Verdict.wrong (v : Verdict) : Nat := v.1.wrong
 /-- `verdict(signed, commitment, openings, expected, trusted=trusted, schemes=schemes)`: `expected i` is `block_digest` of
 block `i` of `C`, or none when the caller has no digest for it (no answer is then that block). Openings are looked up by
 `j`, a later one for the same `j` winning, as the Python's dict does. -/
-def verdict (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedSession)
-    (c : SessionCommitment) (openings : Array CoinOpening) : Verdict := Id.run do
+def verdict (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray) (s : SignedChallengePhase)
+    (c : ChallengePhaseCommitment) (openings : Array CoinOpening) : Verdict := Id.run do
   let mut reasons : Array String := #[]
   match schemes.lookup s.scheme with
   | none => reasons := reasons.push s!"signature scheme {pyRepr s.scheme} is not accepted"

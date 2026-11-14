@@ -430,12 +430,12 @@ def unitProgU (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R C
     (queryAll (P.qWt s (U.layout.fixedId u))).bind fun b => done (commitAnsU P β U u (act u) a b)
 
 /-- Route U's honest reference as an oracle program. -/
-def honestProgU (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
+def honestProgU (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Trace :=
   upTo (unitProgU P β U act s) U.layout.N
 
 theorem eval_honestProgU (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S) :
-    (honestProgU P β U act s).eval H = honestTranscript (P.toProtocolU β) H s U act := by
-  unfold honestProgU honestTranscript
+    (honestProgU P β U act s).eval H = honestTrace (P.toProtocolU β) H s U act := by
+  unfold honestProgU honestTrace
   rw [eval_upTo]
   funext u
   simp only [unitProgU, eval_bind, eval_queryAll, eval, commitAnsU_eq]

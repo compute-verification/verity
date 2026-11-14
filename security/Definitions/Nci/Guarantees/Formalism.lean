@@ -95,13 +95,13 @@ def Slowdown : Prop :=
 /-- **Fit, running `θ'`**: session blocks of at least `c - d` gates that read within `k`, `Δ + s τ ≤ k`, give
 `ρ ≤ c / (c - d)`. -/
 def FitServing : Prop :=
-  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (c k dg Δ s τ : ℕ), d.D.Boolean → SessionBlocks d P c dg Δ s τ →
+  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (c k dg Δ s τ : ℕ), d.D.Boolean → InferenceBlocks d P c dg Δ s τ →
     ServingFits Δ s τ k → slowdown d c k ≤ (c : ℝ≥0∞) / ((c - dg : ℕ) : ℝ≥0∞)
 
 /-- **Fit, honest serving**: with `Δ = 0` and no decoder, session blocks that read `s τ ≤ k` give exactly `ρ = 1`, one
 block per session. -/
 def FitHonestServing : Prop :=
-  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (c k s τ : ℕ), d.D.Boolean → SessionBlocks d P c 0 0 s τ →
+  ∀ (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (c k s τ : ℕ), d.D.Boolean → InferenceBlocks d P c 0 0 s τ →
     ServingFits 0 s τ k → 0 < B → 0 < c → slowdown d c k = 1
 
 /-- **Fit, training**: compute, reduction and update application blocks of at least `c - d` gates that each read

@@ -20,17 +20,17 @@ import Proofs.Flock.Soundness.Discharge.Tables.Headline
 /-!
 # `zk_session_soundJ_custody`, "wrong" measured against the public file
 
-`zk_session_soundJ_custody_reg`: `zk_session_soundJ_custody` with its event's "wrong" `wrongRegZ` at the prover's
+`zk_session_soundJ_custody_reg`: `zk_session_soundJ_custody` with its event's "wrong" `incorrectRegZ` at the prover's
 registration (`ZkLink.Public`) in place of `Partition.wrong`, at the same bound. A unit counts as wrong unless it is
 correct in the committed transcript and one opening per commit string makes the key program's evaluation on the committed
 inputs, on every committed wire the unit reads or computes, the bit of an opening of that wire's registered commit
 string: on its outputs, the program's output on the committed inputs opens the registered output commitments. Its
-incorrect proof blocks contain `zk_session_soundJ_custody`'s (`wrong_subset_wrongRegZ`), so its event implies that one's.
+incorrect proof blocks contain `zk_session_soundJ_custody`'s (`incorrect_subset_incorrectRegZ`), so its event implies that one's.
 
 * `Layout.keyProg_readsOwn`: the key program's units read only their own gates and input gates (from `keyProg_reads`),
   which `zk_flock_countC_reg` needs, so that on each unit's wires the key program's evaluation is the unit's own
   (`Partition.correct_eval`);
-* `rsZJ_wrongRegZ`: the registered commit strings are the public file's, so `wrongRegZ` is one set at every
+* `rsZJ_incorrectRegZ`: the registered commit strings are the public file's, so `incorrectRegZ` is one set at every
   registration.
 -/
 
@@ -74,23 +74,23 @@ open scoped ENNReal
 variable {n : ℕ} {Reg : Type}
 
 /-- **The registered commit strings are the public file's**: the rows' value binding (`rsZJ`) reads the registration
-only through the public file `pub` (`layZJ`'s population is `fun _ => pub`), so its `wrongRegZ` is one set at every
+only through the public file `pub` (`layZJ`'s population is `fun _ => pub`), so its `incorrectRegZ` is one set at every
 registration. -/
-theorem rsZJ_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts : ℕ} {S₀ : Finset (Fin n)}
+theorem rsZJ_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {mPts : ℕ} {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) {pub : Public}
     (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOk c = true) (R R' : Reg) (Xv : Fin (Layout.keyN c hU n) → Bool) :
-    wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
+    incorrectRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
         ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)) R Xv =
-      wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
+      incorrectRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
         ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)) R' Xv := by
-  apply wrongRegZ_congr
+  apply incorrectRegZ_congr
   intro p
   rfl
 
 /-- **One `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's custody.**
-`zk_session_soundJ_custody` with "wrong" `wrongRegZ` at the prover's registration `reg σ`, read through the rows'
+`zk_session_soundJ_custody` with "wrong" `incorrectRegZ` at the prover's registration `reg σ`, read through the rows'
 value binding (`rsZJ`): the registered commit strings are the public file's `b ‖ c` digests at rows and its output
 words' leaves elsewhere. -/
 theorem zk_session_soundJ_custody_reg
@@ -119,7 +119,7 @@ theorem zk_session_soundJ_custody_reg
     (∀ ω j, TableCRZ execArith hs512 (planZJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
+        K₀ ≤ (incorrectRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)) (reg σ)
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
             ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))

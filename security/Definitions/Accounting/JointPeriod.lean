@@ -10,7 +10,7 @@ A period is one window of one node's run, over one circuit (`Verity.Circuit`, co
 (`Accounting.Device`, the device model). Five audits decide it, each separately, on its own coins (`Audit`):
 
 * sampled proofs, on the integrity of the circuit's committed trace: at most a share `ε` of the units of its
-  partition are wrong (`Verity.Partition.wrong`);
+  partition are incorrect (`Verity.Partition.incorrect`);
 * PoUW, on work: the compute account did at least `W` of work at price `p`;
 * PoUS, on space: the capacity account held at least `S` bits of device memory on average;
 * PoUB, the bandwidth audit, on bandwidth: the bandwidth account read at least `Q` bits from device memory;
@@ -55,7 +55,7 @@ instance instFintypeAudit : Fintype Audit where
 
 /-- A period's certificates, one per audit. -/
 structure Certificates where
-  /-- integrity: at most this share of the circuit's units are wrong -/
+  /-- integrity: at most this share of the circuit's units are incorrect -/
   ε : ℝ
   /-- work: at least this much at the period's price (W_cert) -/
   W : ℝ
@@ -110,7 +110,7 @@ def read (ξ : (i : I) → Ω i) : ℕ := (r.schedule ξ).read r.win (r.acct .ba
 
 /-- The claim an audit certifies at certificates `c` and price `p`, on the run at the coins `ξ`. -/
 def Holds (c : Certificates) (p : Price) : Audit → ((i : I) → Ω i) → Prop
-  | .sampled, ξ => ((r.parts.wrong (r.trace ξ)).card : ℝ) ≤ c.ε * r.units
+  | .sampled, ξ => ((r.parts.incorrect (r.trace ξ)).card : ℝ) ≤ c.ε * r.units
   | .pouw, ξ => c.W ≤ (r.work p ξ : ℝ)
   | .pous, ξ => c.S * r.win.len ≤ (r.held ξ : ℝ)
   | .poub, ξ => c.Q ≤ (r.read ξ : ℝ)

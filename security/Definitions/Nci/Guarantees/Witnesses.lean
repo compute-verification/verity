@@ -32,7 +32,7 @@ witnesses at the toy circuit (`Nci.Capability.Toy`, with the instances of `Nci.W
 
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
 reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
-in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `WindowsHold`
+in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `ServerBlocksHold`
 for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener, whose witnesses take its declared
 computation at the min-cut toy (`Nci.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E). The cover theorem's join
 (`Nci.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
@@ -162,11 +162,11 @@ compute or fault, one counted multiplication (`M = 1`, the declared one), one se
 def DampenerThreaded_honest : Prop :=
   CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
     T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) ∧
-    (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 0 + T1.M.card + 0 ∧ Assumptions.WindowLength (1 / 2) 2 1 1 ∧
+    (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 0 + T1.M.card + 0 ∧ Assumptions.ServerBlockLength (1 / 2) 2 1 1 ∧
     ((0 : ℕ) : ℝ) ≤ T1.reuse * (2 * 1) / (4 * (1 : ℕ) * (1 / 2)) ∧
-    Assumptions.WindowsHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0
+    Assumptions.ServerBlocksHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0
 
-/-- **`DampenerThreaded` without `WindowsHold`**: at the threading `T0`, with no state (`R = 0`) and no rate (`F = 0`),
+/-- **`DampenerThreaded` without `ServerBlocksHold`**: at the threading `T0`, with no state (`R = 0`) and no rate (`F = 0`),
 one counted multiplication in the residual (`W = 0`, `M = M_r = 1`) is held by no window, and the efficiency `1`
 exceeds the bound `0`. -/
 def DampenerThreaded_nontrivial : Prop :=
@@ -176,9 +176,9 @@ def DampenerThreaded_nontrivial : Prop :=
     (T0 D).Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressible D (T0 D) 2 1 (1 / 2) (1 / 2) ∧
     (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 1 + (T0 D).M.card + 0 ∧
     ((0 : ℕ) : ℝ) ≤ 1 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 1 * (2 - 0) / 2 ∧ ((0 : ℕ) : ℝ) ≤ 1 * 0 * (2 + 0) / 2 ∧
-    ((1 : ℕ) : ℝ) * 0 * 1 ≤ 2 ∧ Assumptions.WindowLength (1 / 2) 0 1 0 ∧
+    ((1 : ℕ) : ℝ) * 0 * 1 ≤ 2 ∧ Assumptions.ServerBlockLength (1 / 2) 0 1 0 ∧
     ((0 : ℕ) : ℝ) ≤ (T0 D).reuse * (2 * 0) / (4 * (1 : ℕ) * (1 / 2)) ∧
-    ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
+    ¬ Assumptions.ServerBlocksHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
     ¬ (efficiency 1 1 2 0 ≤
         unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
@@ -189,11 +189,11 @@ parameter slot (`σ1`). -/
 def DampenerThreadedSlots_honest : Prop :=
   CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧
     T1.Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D T1 σ1 2 1 (1 / 2) (1 / 2) ∧
-    (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 0 + T1.M.card + 0 ∧ Assumptions.WindowLength (1 / 2) 2 1 1 ∧
+    (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 0 + T1.M.card + 0 ∧ Assumptions.ServerBlockLength (1 / 2) 2 1 1 ∧
     ((0 : ℕ) : ℝ) ≤ T1.reuse * (2 * 1) / (4 * (1 : ℕ) * (1 / 2)) ∧
-    Assumptions.WindowsHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0
+    Assumptions.ServerBlocksHold T1 0 1 (1 / 2) 2 1 1 1 (1 / 2) (1 / 2) 1 0
 
-/-- **`DampenerThreadedSlots` without `WindowsHold`**: `DampenerThreaded_nontrivial`'s instance, at `T0`'s one parameter
+/-- **`DampenerThreadedSlots` without `ServerBlocksHold`**: `DampenerThreaded_nontrivial`'s instance, at `T0`'s one parameter
 slot (`σ0`). -/
 def DampenerThreadedSlots_nontrivial : Prop :=
   (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) ≤ 1 / 2 ∧
@@ -202,9 +202,9 @@ def DampenerThreadedSlots_nontrivial : Prop :=
     (T0 D).Threaded 2 1 1 0 ∧ Assumptions.WeightsIncompressibleSlots D (T0 D) (σ0 D) 2 1 (1 / 2) (1 / 2) ∧
     (D.D.size D.D.computed : ℝ) ≤ 2 ∧ 1 ≤ 0 + 1 + (T0 D).M.card + 0 ∧
     ((0 : ℕ) : ℝ) ≤ 1 * 0 / 2 ∧ ((1 : ℕ) : ℝ) ≤ 1 * (2 - 0) / 2 ∧ ((0 : ℕ) : ℝ) ≤ 1 * 0 * (2 + 0) / 2 ∧
-    ((1 : ℕ) : ℝ) * 0 * 1 ≤ 2 ∧ Assumptions.WindowLength (1 / 2) 0 1 0 ∧
+    ((1 : ℕ) : ℝ) * 0 * 1 ≤ 2 ∧ Assumptions.ServerBlockLength (1 / 2) 0 1 0 ∧
     ((0 : ℕ) : ℝ) ≤ (T0 D).reuse * (2 * 0) / (4 * (1 : ℕ) * (1 / 2)) ∧
-    ¬ Assumptions.WindowsHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
+    ¬ Assumptions.ServerBlocksHold (T0 D) 1 1 (1 / 2) 0 1 1 0 (1 / 2) (1 / 2) 1 0 ∧
     ¬ (efficiency 1 1 2 0 ≤
         unregisteredShare 2 0 +
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +

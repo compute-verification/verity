@@ -129,7 +129,7 @@ holds of that code under the premises `SamplingDeploy.ksTwo_code` states.
 A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
 1 when every replay block is closed. S is at least the bits one replay block returns, which the verifier counts from its
 Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
-unit on 16-bit words of its own) and a two-stage registration carries (`WindowCommitmentRecord.returned`);
+unit on 16-bit words of its own) and a two-stage registration carries (`ExecutionPhaseCommitmentRecord.returned`);
 `plancheck.two` refuses a cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
@@ -318,7 +318,7 @@ The verifier holds the record to its own copies with R1 to R8 (`check`). The Lea
 
 It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only then samples. It also holds its own public
 file to the record (`matches_public`), which `FailClosed.flock_verify_public_ties` ties to the proved rows. The
-challenger's `service.WindowCommitmentRecord` is a record it admitted, with its receipt and its position in the
+challenger's `service.ExecutionPhaseCommitmentRecord` is a record it admitted, with its receipt and its position in the
 stream. The format, each check's rule and codes and the window domains (`window_domain`) are in
 `one_stage.registration`'s docstring.
 

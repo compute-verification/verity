@@ -7,9 +7,9 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.SessionZ
 /-!
 # The window's calls from Flock's analysis
 
-`WindowDelta` and Flock's soundness are stated over one game, core's (`Verity.Game`; `FlockSoundness.Game` is its
+`ExecutionPhaseDelta` and Flock's soundness are stated over one game, core's (`Verity.Game`; `FlockSoundness.Game` is its
 alias), so a Flock `ExtractionAnalysis` of a call's session is a `CallAnalysis` of that call in the window, with the same
-`ks`, `link` and `cover` (`CallAnalysis.ofFlock`), given that the window's incorrect proof blocks of the call are wrong in
+`ks`, `link` and `cover` (`CallAnalysis.ofFlock`), given that the window's incorrect proof blocks of the call are incorrect in
 Flock's transcript, and Flock's knowledge bound, pointwise in the session's state (`FlockKnowledgeSound`), is the call's
 `KnowledgeSound` (`CallAnalysis.ofFlock_knowledgeSound`). At main's `--zk` sessions `FlockKnowledgeSound` is proved
 (`flockKnowledgeSound_analysisZC`).
@@ -28,7 +28,7 @@ at the knowledge bound `ksBoundAccZ`, with its joint inequality discharged (`joi
 `ks S R τ u = ofReal (ksBoundAccZ_j(zcStrat τ) / (1 − rateZ_j))` at `u`'s table `j`, with `ksBoundAccZ = ε_c⁻ + √(k·adv₀)`
 the table's own terms and `rateZ = N₀/(ek) < 1`. So `FlockKnowledgeSound` holds with `κ = 0` and
 `g S R τ = ⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`, the state's collision finders' advantages, and
-these are the `κ_c` and `g_c` `WindowDelta` reads through `ofFlock_knowledgeSound`: the relative term sits in the
+these are the `κ_c` and `g_c` `ExecutionPhaseDelta` reads through `ofFlock_knowledgeSound`: the relative term sits in the
 denominator, not in `κ`. `ksJoint_le` (`Proofs/Flock/Soundness/Audit/FlockCompiled.lean`, `κ = 2^logLen/(e·Kr)`) is the
 non-ZK plain-leaf table's, which main's window doesn't run. The binding error `δlink_c` stays `BindSoundIn`, Flock's link
 finder at the window's state.
@@ -47,12 +47,12 @@ variable {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ}
 /-- **A call's analysis from Flock's.** Call `c`'s session is Flock's session `fsess`, and `AF` is Flock's
 randomized-extraction analysis of it (`FlockSoundness.Audit.ExtractionAnalysis`, at any sampling design `LF`, which its
 `ks`, `link` and `cover` don't read). `proj Xw` is the window transcript `Xw` read as Flock's transcript of the call, and
-`hwrong` says the window's units' statements are the session's: a unit of the call that is wrong in `Xw`
-(`UnitStmts.wrong`, at its seed inputs) is wrong in `proj Xw`. The window's `ks`, `link` and `cover` are Flock's. -/
+`hwrong` says the window's units' statements are the session's: a unit of the call that is incorrect in `Xw`
+(`UnitStmts.incorrect`, at its seed inputs) is incorrect in `proj Xw`. The window's `ks`, `link` and `cover` are Flock's. -/
 def CallAnalysis.ofFlock (U : UnitStmts Tr n) (c : Fin C)
     {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : FlockSoundness.Audit.Law (n c)}
     (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
-    (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.wrong Xw → u ∈ AF.wrong (proj Xw)) :
+    (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.incorrect Xw → u ∈ AF.incorrect (proj Xw)) :
     CallAnalysis U c fsess where
   ks := AF.ks
   link S R τ u Xw := AF.link S R τ u (proj Xw)
@@ -71,7 +71,7 @@ def FlockKnowledgeSound {m : ℕ} {fsess : Finset (Fin m) → Reg → Game Bool}
 theorem CallAnalysis.ofFlock_knowledgeSound (U : UnitStmts Tr n) (c : Fin C)
     {fsess : Finset (Fin (n c)) → Reg → Game Bool} {LF : FlockSoundness.Audit.Law (n c)}
     (AF : FlockSoundness.Audit.ExtractionAnalysis LF Reg fsess) (proj : Tr → AF.Tr)
-    (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.wrong Xw → u ∈ AF.wrong (proj Xw)) {κ : ℝ≥0∞}
+    (hwrong : ∀ Xw u, (⟨c, u⟩ : WUnit n) ∈ U.incorrect Xw → u ∈ AF.incorrect (proj Xw)) {κ : ℝ≥0∞}
     {g : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (fsess S R) → ℝ≥0∞}
     (h : FlockKnowledgeSound AF κ g) : (CallAnalysis.ofFlock U c AF proj hwrong).KnowledgeSound κ g :=
   h

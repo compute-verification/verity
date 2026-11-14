@@ -71,7 +71,7 @@ verifier loads (`pub`, whatever its header carries, a salt among it), in this or
 Then for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong or its rows are off}] \le
   \varepsilon_{ks} + \delta_{link} + \delta_{rows} + \delta_{reg},$$
-a sampled proof block `u` wrong as in `EndToEndRegisteredDrawn` (`wrongRegZ`), and its rows off unless, at the committed
+a sampled proof block `u` wrong as in `EndToEndRegisteredDrawn` (`incorrectRegZ`), and its rows off unless, at the committed
 transcript fixed at registration (`XplurZC`, the plurality of the rows extraction finds), on each of `u`'s committed
 wires `g` (`RowsRightZC`):
 * **input rows**: where `g`'s commit string is a registered read of `rd` that the verifier owns at the outcome's sample
@@ -150,7 +150,7 @@ def EndToEndRegisteredRows : Prop :=
     -- cr/sha-512 for the registered reads' finder: one play of the audit, and the extractor's pair at an off read
     (StrictCR.oneRun G τ fun o => rd.pick o.1 (regPathsHJ I D.unroll pub o.2.2 rd.port)).CR H512 qR →
     prob (fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+        u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw) ∨
         ¬ RowsRightZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
           (fun p => OwnReadsHJ I own D.unroll pub o.2.2 rd.isRead rd.port rd.readAt ∧ rd.isRead p) wo k Rw u)
@@ -218,7 +218,7 @@ def EndToEndRegisteredRowsFlat : Prop :=
     -- cr/sha-512 for the registered reads' finder: one play of the audit, and the extractor's pair at an off read
     (StrictCR.oneRun G τ fun o => rd.pick o.1 (regPathsHJ I c pub o.2.2 rd.port)).CR H512 qR →
     prob (fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+        u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw) ∨
         ¬ RowsRightZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
           (fun p => OwnReadsHJ I own c pub o.2.2 rd.isRead rd.port rd.readAt ∧ rd.isRead p) wo k Rw u)

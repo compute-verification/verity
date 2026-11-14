@@ -110,7 +110,7 @@ theorem flock_batched_count_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.Pu
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => o.1 = true ∧
-        K ≤ (P.wrong (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (flock_batched_countEL P H E Lf plan tab decode (fun R τ => Xpub ones zeros (XplurL P H E Lf plan tab vb R τ k Rw)) hk
@@ -127,7 +127,7 @@ theorem flock_batched_drawn_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.Pu
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => o.1 = true ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (flock_batched_drawnEL P H E Lf plan tab decode (fun R τ => Xpub ones zeros (XplurL P H E Lf plan tab vb R τ k Rw)) hk

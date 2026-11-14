@@ -194,7 +194,7 @@ end Layer
 `ecr/sha-512`, `κ` the unverified and split terms. -/
 theorem tile_binding {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] [Nonempty V] (Cd : Declared ι) {nB mB n : ℕ}
     (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-    (unitOf : Fin nB → ℕ) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+    (unitOf : Fin nB → ℕ) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
     [Nonempty (Paths (Coin C Ξ Cd.rounds σ sT) n)]

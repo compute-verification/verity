@@ -30,7 +30,7 @@ are the proof blocks, with `k = 1` and no interior registration.
    `M̄_δ = {w : P̄_a(w) > δ}` (`Design.Two.M`); and the relation `RTwo`: at some interiors, the extracted boundary
    trace's footprint is in `M̄_δ`. The cap reads two rates, a first stage that catches each replay block at rate `r₁`
    (`Design.Two.FirstRate`) and a second stage that samples each cell at rate `r₂` (`Design.Two.SecondRate`), and the
-   replay blocks a footprint marks incorrect (`Design.Two.wrongBlocks`).
+   replay blocks a footprint marks incorrect (`Design.Two.incorrectBlocks`).
 4. **The compiled verifier** (`CompiledTwo`): a `Compiled` with the statement's two-stage design (`two`) and the
    replay sample (`replaySample`). Its second stage is `Compiled.stage2`, and `iroots x v ρ` is the roots a run shows for
    replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
@@ -118,7 +118,7 @@ def footBits (Pt : Partition) (d : Design.Two) : ℕ :=
 open Classical in
 /-- **The incorrect proof blocks of cell `(ρ, t)` at the interior values `ι`**: each is incorrect on replay block `ρ`'s
 values, its boundary's the committed ones `w` opens and its interior's `ι` (`Prog.refIn` at the replay block). -/
-noncomputable def wrongIn (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
+noncomputable def incorrectIn (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
     (ρ t : ℕ) (ι : ℕ → Bool) : Finset ℕ :=
   (cell Pt Pρ ρ t).filter fun v => ¬ ∃ u r, Pt.blocks[v]? = some u ∧ Pρ.blocks[ρ]? = some r ∧
     s.prog.Correct (s.prog.refIn r (w.val H Cm s) ι) u
@@ -128,7 +128,7 @@ proof blocks on `ρ`'s boundary values, which the statement's roots commit at se
 stratum of `ρ` is read at the one interior `ι ρ`. -/
 noncomputable def footprint (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
     (ι : ℕ → ℕ → Bool) (ρ t : ℕ) : ℕ :=
-  (wrongIn H Cm s Pt Pρ w ρ t (ι ρ)).card
+  (incorrectIn H Cm s Pt Pρ w ρ t (ι ρ)).card
 
 /-! ## 3. The acceptance probability at the footprint -/
 
@@ -166,7 +166,7 @@ def Design.Two.SecondRate (d : Design.Two) (Pt : Partition) (r : ℝ) : Prop :=
 
 /-- **The replay blocks a footprint marks incorrect**: those with an incorrect proof block in the cell of some
 stratum. -/
-def Design.Two.wrongBlocks (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) : Finset ℕ :=
+def Design.Two.incorrectBlocks (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) : Finset ℕ :=
   (Finset.range d.part.blocks.length).filter fun ρ => ∃ t < Pt.strata.length, 0 < fp ρ t
 
 /-- **The two-stage relation** at `δ`, on the statement's bytes: it parses, its proof-block partition and two-stage

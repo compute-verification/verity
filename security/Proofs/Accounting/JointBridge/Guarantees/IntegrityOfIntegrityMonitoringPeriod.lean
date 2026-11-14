@@ -20,13 +20,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The integrity audit of a period is Flock's integrity audit over a monitoring period's sampling blocks (trusted)
 
 A period's sampled-proofs audit (`Audit.sampled`) is Flock's integrity audit over the period's sampling blocks
-(`Flock.Guarantees.IntegrityHorizon`): `T` sampling blocks `W t`, each a `--zk` session under hidden outputs with a
+(`Flock.Guarantees.IntegrityPooled`): `T` sampling blocks `W t`, each a `--zk` session under hidden outputs with a
 fresh live subset sample, against one adaptive prover. `RealizesIntegrityOfIntegrityMonitoringPeriod` ties a `PeriodRun` to it: the
 sampled audit's own coins drive the period's game at the prover's strategy, its verdict is flock-verify's on every
 sampling block, and the claim's units and incorrect proof blocks are the sampling blocks'. `IntegrityOfIntegrityMonitoringPeriod` is
 then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + δ_link,t)`, the monitoring period's.
 
-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityHorizon`, this module imports
+Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityPooled`, this module imports
 them.
 -/
 
@@ -47,7 +47,7 @@ open scoped ENNReal
   sampled coordinate is (A3, `FlockSoundness.Assumptions.UniformRandomBytes`, stays a hypothesis of the guarantee).
 * `accepts_iff`: the sampled audit accepts exactly when flock-verify accepts every sampling block.
 * `wrong_eq`: the incorrect proof blocks of the run's partition in its committed trace are, in number, the sampling blocks'
-  incorrect proof blocks (`SamplingBlock.wrongSet`: `wrongRegZ` in the trace fixed at registration, over the key program's
+  incorrect proof blocks (`SamplingBlock.incorrectSet`: `incorrectRegZ` in the trace fixed at registration, over the key program's
   partition). This is the program-from-circuit correspondence (M1: the key program and its partition are the circuit
   `C`'s lowering and `r.parts`), which the bridge PRs land as `Lowers`/`progOf`/`partOf`; until then it is this field.
 * `units_eq`, `gates_nonempty`: the partition's public unit-size property. Its units are the sampling blocks' units, and
@@ -68,7 +68,7 @@ structure RealizesIntegrityOfIntegrityMonitoringPeriod {ι : Type} {d : Device �
   /-- the sampled audit accepts exactly when flock-verify accepts every sampling block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the run's incorrect proof blocks are the sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.wrong (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
+  wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.incorrect).sum
   /-- the partition's units are the sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ Finset.range T, (W t).n
   /-- every unit of the partition has at least one gate -/
@@ -85,7 +85,7 @@ under A3 for every sampling block's sample bytes and `cr/sha-512` (`TableCRZ`) a
 strategy the node plays a sampling block with on some run (`Period.Plays`), at certificates whose share `ε` of the
 period's units is at least `ln(1/δ)/q`, the sampled audit has its per-period guarantee (`PeriodRun.Sound`) at error
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}),$$
-`Flock.Guarantees.IntegrityHorizon`'s, when that is finite. -/
+`Flock.Guarantees.IntegrityPooled`'s, when that is finite. -/
 def IntegrityOfIntegrityMonitoringPeriod : Prop :=
   ∀ (ι : Type) (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (I : Type) (Ω : I → Type)
     [DecidableEq I] [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) (W : ℕ → Flock.Guarantees.SamplingBlock) (T : ℕ)

@@ -13,7 +13,7 @@ others show only that the hypotheses can be met.
 
 * `W.lemma47` (`outputs_eq_of_separates`): a four-gate circuit, input `0`, gates `1 = ¬0` and `3 = ¬0` in unit `0`, gate
   `2 = ¬1` in unit `1`, outputs `{2, 3}`, delivered wires `D = {2}`. `K = {1}` separates `B = {0}` from `D`, and is
-  narrower than the exits `{1, 3}` (`W.three_mem_exits`). Two different transcripts that both get gate `1` wrong deliver
+  narrower than the exits `{1, 3}` (`W.three_mem_exits`). Two different transcripts that both get gate `1` incorrect deliver
   the same value on `D`. `W.count` is the count `card_delivered_le` gives.
 * `Gen.harm_witness`: the hypotheses of `card_influenceSet_le_harm` hold on any partition and law, with the exits as
   separators and `hb u = card (exits {u})` (`Gen.exits_card_le`).
@@ -117,8 +117,8 @@ theorem correct1 (Z : Fin C.N → Bool) (h1 : Z 1 = false) (h2 : Z 2 = true) : P
   rw [P.localEval_of_not_mem Z (show P.unit 1 ≠ some 1 by decide), h1, h2]
   rfl
 
-theorem wrong0 (Z : Fin C.N → Bool) (h0 : Z 0 = false) (h1 : Z 1 = false) : (0 : Fin 2) ∈ P.wrong Z := by
-  rw [P.mem_wrong]
+theorem incorrect0 (Z : Fin C.N → Bool) (h0 : Z 0 = false) (h1 : Z 1 = false) : (0 : Fin 2) ∈ P.incorrect Z := by
+  rw [P.mem_incorrect]
   intro hc
   have h := hc 1 (hK (by simp [K])) (by decide)
   rw [P.localEval_of_mem Z (show P.unit 1 = some 0 by decide)] at h
@@ -126,9 +126,9 @@ theorem wrong0 (Z : Fin C.N → Bool) (h0 : Z 0 = false) (h1 : Z 1 = false) : (0
   rw [P.localEval_of_not_mem Z (show P.unit 0 ≠ some 0 by decide), h0, h1] at h
   exact absurd h (by decide)
 
-theorem wrong_sub (Z : Fin C.N → Bool) (h1 : Z 1 = false) (h2 : Z 2 = true) : P.wrong Z ⊆ B := by
+theorem incorrect_sub (Z : Fin C.N → Bool) (h1 : Z 1 = false) (h2 : Z 2 = true) : P.incorrect Z ⊆ B := by
   intro u hu
-  rw [P.mem_wrong] at hu
+  rw [P.mem_incorrect] at hu
   fin_cases u
   · simp [B]
   · exact absurd (correct1 Z h1 h2) hu
@@ -137,16 +137,16 @@ def X : Fin C.N → Bool := ![false, false, true, false]
 def Y : Fin C.N → Bool := ![false, false, true, true]
 
 /-- **Lemma 4.7 is not vacuous**: two different transcripts, each with an incorrect proof block, agree on the delivered wire. -/
-theorem lemma47 : X 2 = Y 2 ∧ X ≠ Y ∧ P.wrong X ≠ ∅ := by
-  refine ⟨P.outputs_eq_of_separates hK hD hsep (inputs X rfl) (inputs Y rfl) (wrong_sub X rfl rfl)
-    (wrong_sub Y rfl rfl) ?_ 2 (by simp [D]), ?_, ?_⟩
+theorem lemma47 : X 2 = Y 2 ∧ X ≠ Y ∧ P.incorrect X ≠ ∅ := by
+  refine ⟨P.outputs_eq_of_separates hK hD hsep (inputs X rfl) (inputs Y rfl) (incorrect_sub X rfl rfl)
+    (incorrect_sub Y rfl rfl) ?_ 2 (by simp [D]), ?_, ?_⟩
   · intro g hg
     simp only [K, mem_singleton] at hg
     subst hg
     rfl
   · intro h
     exact absurd (congrFun h 3) (by decide)
-  · exact ne_empty_of_mem (wrong0 X rfl rfl)
+  · exact ne_empty_of_mem (incorrect0 X rfl rfl)
 
 theorem count : (P.delivered D a B).card ≤ 2 :=
   (P.card_delivered_le hK hD hsep a).trans (by simp [K])
@@ -174,8 +174,8 @@ theorem exits_card_le (P : Partition C n) (B : Finset (Fin n)) :
 hypothesis of `card_influenceSet_le_harm`. -/
 theorem harm_witness (P : Partition C n) {D : Finset (Fin C.N)} (hD : D ⊆ P.committed) (L : Law n)
     (a : Fin C.N → Bool) (δ : ℝ≥0∞) :
-    (P.influenceSet D L.escape a δ).card ≤
-      2 ^ (∑ u, (P.exits {u}).card) * (univ.filter fun B => δ ≤ L.escape B).card :=
+    (P.influenceSet D L.missProb a δ).card ≤
+      2 ^ (∑ u, (P.exits {u}).card) * (univ.filter fun B => δ ≤ L.missProb B).card :=
   P.card_influenceSet_le_harm hD (fun u => (P.exits {u}).card) P.exits (fun _ => filter_subset _ _)
     (fun B => P.separates_exits B hD) (exits_card_le P) (δ := δ) (H := ∑ u, (P.exits {u}).card)
     (fun B _ => by
@@ -222,7 +222,7 @@ theorem hin : Partition.AnchorsSound Xc a 0 := by
 
 /-- **`audit_influence` is not vacuous**: its hypotheses hold at `0`. -/
 theorem influence (δ : ℝ≥0∞) (σ : Strategy (audit L Unit session)) :
-    prob (fun o => o.1 = true ∧ Partition.out D (Xc (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)
+    prob (fun o => o.1 = true ∧ Partition.out D (Xc (reg σ) (cont σ)) ∉ P.influenceSet D L.missProb a δ)
       (audit L Unit session) σ ≤ δ + 0 + 0 + 0 :=
   P.audit_influence hks hlink hin δ σ
 

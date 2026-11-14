@@ -39,7 +39,7 @@ In place of `scopeOkH` and `pub.tables = none`, the circuit conditions are the r
 tables' runs, `runsZCJH_liveI`, read none) or on shared-row tables.
 
 * `instProg_readsOwn`: `instProg`'s units read only their own gates and input gates (`instProg_reads`).
-* `rsZHJI_wrongRegZ`: `wrongRegZ` at `rsZHJI` is one set at every registration.
+* `rsZHJI_incorrectRegZ`: `incorrectRegZ` at `rsZHJI` is one set at every registration.
 -/
 
 namespace FlockSoundness.Discharge.HiddenExec
@@ -97,7 +97,7 @@ theorem zk_session_soundHJI
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K₀ ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
             (reg σ) (cont σ) k Rw)).card)
@@ -148,7 +148,7 @@ theorem zk_session_soundHJ_custodyI
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K₀ ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
             (reg σ) (cont σ) k Rw)).card)
@@ -162,23 +162,23 @@ theorem zk_session_soundHJ_custodyI
     (fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
 /-- **The registered commit strings are the public file's**, at `instProg`: the rows' value binding (`rsZHJI`) reads
-the registration only through the public file `pub`, so its `wrongRegZ` is one set at every registration. -/
-theorem rsZHJI_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {S₀ : Finset (Fin n)}
+the registration only through the public file `pub`, so its `incorrectRegZ` is one set at every registration. -/
+theorem rsZHJI_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hrf : Hidden.Any.RowsFitS c) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hU : Built c.unit) (hpr : Layout.PortReads c hU)
     (hw : ProvedScope.wiresAcyclic c = true) (R R' : Reg) (Xv : Fin (instN c n) → Bool) :
-    wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+    incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
         ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw)) R Xv =
-      wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+      incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
         ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw)) R' Xv := by
-  apply wrongRegZ_congr
+  apply incorrectRegZ_congr
   intro p
   rfl
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's
 custody, at `instProg`.** `zk_session_soundHJ_custody_reg` with the template instance's program: "wrong" is
-`wrongRegZ` at the prover's registration `reg σ`, read through the rows' value binding (`rsZHJI`). -/
+`incorrectRegZ` at the prover's registration `reg σ`, read through the rows' value binding (`rsZHJI`). -/
 theorem zk_session_soundHJ_custody_regI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -206,7 +206,7 @@ theorem zk_session_soundHJ_custody_regI
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+        K₀ ≤ (incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           (reg σ)
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
@@ -233,7 +233,7 @@ theorem zk_session_soundHJ_custody_regI
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it samples, at `instProg`.**
 `zk_session_soundHJ_custody_drawn_reg` with the template instance's program: the executable verifier accepts and some
-unit the session drew is in `wrongRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
+unit the session drew is in `incorrectRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
 theorem zk_session_soundHJ_custody_drawn_regI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -260,7 +260,7 @@ theorem zk_session_soundHJ_custody_drawn_regI
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+        u ∈ incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           (reg σ)
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
@@ -272,7 +272,7 @@ theorem zk_session_soundHJ_custody_drawn_regI
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           k Rw M ρ t' (reg σ) (cont σ) := by
   intro σ hCR
-  let W := wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+  let W := incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
     ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw)) (reg σ)
     (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
       ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))

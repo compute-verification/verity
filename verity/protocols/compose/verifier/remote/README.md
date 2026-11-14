@@ -97,7 +97,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`
+   (`Flock.Guarantees.IntegrityPooled` for sampled proofs, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
 ## The security argument, end to end
@@ -168,7 +168,7 @@ commitments' hiding gap.
 
 - SHA-512 collision resistance (`cr/sha-512`, `ecr/sha-512`).
 - The verifier's coins are uniform. Part 1's statements pick them in their own sampling design; `SampledKSLiveV3` and
-  `IntegrityHorizon` take `FlockSoundness.Assumptions.UniformRandomBytes`.
+  `IntegrityPooled` take `FlockSoundness.Assumptions.UniformRandomBytes`.
 - The challenger's record the verifier reads is the live run's (`Zk.RecordCustodyZKJPLaw`).
 - The hiding commitments' gap at their pinned key, which is below 2^-193 for all but 2^-64 of keys but not proved small
   for the pinned one.
@@ -305,7 +305,7 @@ also needs δ_s below 2⁻¹⁰⁰.
 
 **Assumes.** Parts 1 to 4's assumptions.
 
-**Lean.** `Accounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game, inference-only not among them), `Flock.Guarantees.IntegrityHorizon`
+**Lean.** `Accounting.Guarantees.JointPooledLive` (onsite's five audits in one adaptive game, inference-only not among them), `Flock.Guarantees.IntegrityPooled`
 (sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` (PoUW): **proved**. `JointPooledLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
@@ -391,7 +391,7 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 |---|---|---|---|
 | Sampled proofs' accept rule | `Properties.Spot.AcceptMeans` (`security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
 | A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
-| Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
+| Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityPooled` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
 | The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from three open targets (the open gap, above) | — |
@@ -541,7 +541,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
   98%): the figures are the composition's, and with PoUW crediting nothing the same scenario gives 1.
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
   at once.
-- **The failure probability.** The δ is pooled over the monitoring period (`IntegrityHorizon`, `CircuitCreditMonitoringPeriod`),
+- **The failure probability.** The δ is pooled over the monitoring period (`IntegrityPooled`, `CircuitCreditMonitoringPeriod`),
   not per verification phase. The calculator prints its own beside them: `CertificateSlack`'s p/ε′ at ε′ = 10⁻⁴,
   PoUW's per-window p assumed at 3·2⁻⁴⁰ (δ_bind, δ_ks unnumbered, part 5), with no term growing with the period.
 

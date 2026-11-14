@@ -40,7 +40,7 @@ open Classical in
 wrong at the committed boundary trace. -/
 theorem regCount_cases (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) (P : Prover Unit) :
     regCount H L x P = 0 ∨ ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧
-      InScopeTwo Pt d s ∧ regCount H L x P = (wrongAtBoundaryAt s Pt d.part (L.regVal H P x ())).card := by
+      InScopeTwo Pt d s ∧ regCount H L x P = (incorrectAtBoundaryAt s Pt d.part (L.regVal H P x ())).card := by
   rcases hs : L.parse x with _ | s
   · exact Or.inl (by simp only [regCount, hs])
   rcases hPt : L.partition s with _ | Pt

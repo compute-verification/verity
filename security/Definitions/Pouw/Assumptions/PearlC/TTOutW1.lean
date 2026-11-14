@@ -68,8 +68,8 @@ def TTOutW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Devic
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
-        P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
+      T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2),
+        P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u))
       ≤ δ q U.layout.N
 
 /-- **TT_OUT(g₀) per tile at W1**: `TTOutTile`'s game at `CM := W1.w1Priced dv salt`, the good tiles of `TR` in place of
@@ -79,8 +79,8 @@ def TTOutTileW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1D
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
-        TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
+      T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.trace U x.1 x.2),
+        TR.credit x.1 x.2 U g (actOf (A.trace U x.1 x.2) ((TR.tiling U.layout).unit g)))
       ≤ δ q U.layout.N
 
 /-- **TT_OUT(1/400) for Pearl-C at a device record `d`, at W1 on `dv`**: `TTOutPearlCDev` with its cost model the term

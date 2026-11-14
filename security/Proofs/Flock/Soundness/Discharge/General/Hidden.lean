@@ -113,7 +113,7 @@ theorem flock_headline_exec_hidden_gen (hT : TagsOkHL I)
       (planAtH dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (Xpub {instOneG (c := c) (n := n)} {instZeroG (c := c) (n := n)}
             (XplurL ((instProg c n).partition (outsOfI c n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtG ht hc hgen dj x₀ hpub hU (Reg := Reg)).binding
@@ -164,7 +164,7 @@ theorem rsZG_computes {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : F
 
 /-- **One hidden-output `--zk` sampled session is sound, at the general form.** `ZkHidden.zk_session_soundH` at the
 template instance's program `instProg c n`: for any live prover `τ`,
-`Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`. Its circuit condition is
+`Pr[flock-verify --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`. Its circuit condition is
 `scopeGenH`; `RunsZC` at the sampling design's samples is `runsZC_liveHI`'s. -/
 theorem zk_session_soundH_gen
     (I : Inputs) (ht : I.tags.typed = false)
@@ -197,7 +197,7 @@ theorem zk_session_soundH_gen
         ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planAtZKH dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K₀ ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZG dj y₀ ht hc hgen hpub hU).bindingZ (rsZG_computes dj y₀ ht hc hgen hpub hU))
             (reg σ) (cont σ) k Rw)).card)
@@ -257,7 +257,7 @@ theorem zk_session_soundH_custody_gen
         ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planAtZKH dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K₀ ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZG dj y₀ ht hc hgen hpub hU).bindingZ (rsZG_computes dj y₀ ht hc hgen hpub hU))
             (reg σ) (cont σ) k Rw)).card)

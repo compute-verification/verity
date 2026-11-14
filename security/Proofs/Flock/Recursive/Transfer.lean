@@ -100,7 +100,7 @@ noncomputable def analysisCandZC
     (hj : JointZC A Hs planZ k a) :
     ExtractionAnalysis L Reg (batchedSessionZC A Hs planZ) where
   Tr := Fin C.N → Bool
-  wrong t := P.wrong t ∪ candWrongZ A P planZ tab vb Sk wv t
+  incorrect t := P.incorrect t ∪ candWrongZ A P planZ tab vb Sk wv t
   committed R τ := Xc R τ
   ks S R τ u := ENNReal.ofReal (a S R (zcStrat A Hs planZ τ) (tab S R u) / (1 - rateZ (planZ S R) (tab S R u) k))
   link := linkTermCandZC A Hs P planZ tab vb Sk wv k
@@ -110,7 +110,7 @@ noncomputable def analysisCandZC
       fun T hc => ⟨hc, fun M _ hsat => by
         rcases Finset.mem_union.1 hu with hw | hw
         · by_contra hno
-          refine P.mem_wrong.1 hw (P.correct_congr (fun g hg => ?_) (hlow S R u hS M hsat))
+          refine P.mem_incorrect.1 hw (P.correct_congr (fun g hg => ?_) (hlow S R u hS M hsat))
           by_contra hne
           exact hno ⟨g, hg, Or.inl (Ne.symm hne)⟩
         · obtain ⟨g, hg, hpos, hne⟩ := (Finset.mem_filter.1 hw).2
