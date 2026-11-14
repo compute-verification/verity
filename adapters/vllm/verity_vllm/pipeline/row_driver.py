@@ -41,6 +41,7 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
+from verity_vllm.pipeline.cli import write
 from verity_vllm.pipeline.row_json import load_json
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
@@ -279,14 +280,14 @@ class Row:
     # ------------------------------------------------------------------------------------------------ records
     def log(self, msg: str) -> None:
         line = f"{utc()} [row {self.row}] {msg}"
-        print(line, flush=True)
+        write(line)
         with open(f"{self.d}/row.log", "a") as f:
             f.write(line + "\n")
 
     def verdict(self, stage: str, status: str, detail: str, *, quiet: bool = False) -> None:
         line = f"{stage} {status} {utc()} {detail}"
         if not quiet:
-            print(line, flush=True)
+            write(line)
         with open(f"{self.d}/stages.txt", "a") as f:
             f.write(line + "\n")
 

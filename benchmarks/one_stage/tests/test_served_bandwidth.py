@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 sys.path.insert(0, str(ROOT / "benchmarks" / "one_stage" / "interfaces"))
 import served_bandwidth as SB  # noqa: E402
 import served_verdicts as S  # noqa: E402
-from p2_v1 import bandwidth as B  # noqa: E402
+from p2_v1 import bandwidth_toy as BT  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 from verity.protocols.accounting.poub.verifier import ledger, p2, p2_parties  # noqa: E402
@@ -94,7 +94,7 @@ def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
 
 def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(ROOT)
-    reg = B.toy(tmp_path / "toy")
+    reg = BT.toy(tmp_path / "toy")
     serve = _serve_dir(tmp_path / "serve")
 
     got = S.pieces(serve, 0, tmp_path / "honest", env=_env(tmp_path))

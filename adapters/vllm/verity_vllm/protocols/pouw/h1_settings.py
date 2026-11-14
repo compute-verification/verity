@@ -8,14 +8,14 @@ from typing import Any
 
 from verity.protocols.accounting.pouw.prover.serving import (
     ADMISSIONS,
-    Challenger,
-    challenger_address,
     COIN_ROUND,
     H1_SCHEME,
-    live_challenger,
-    live_epoch_reason,
     NO_DRAW_SESSION,
     PEARL_C_SCHEMES,
+    Challenger,
+    challenger_address,
+    live_challenger,
+    live_epoch_reason,
     period_reason,
     period_setting,
     reserved_of,
@@ -52,7 +52,7 @@ def of(raw: Mapping[str, Any]) -> tuple[Any, ...]:
     if runner is not None and not (callable(getattr(runner, "execute_model", None))
                                    and isinstance(getattr(runner, "decode_query_len", None), int)):
         raise ValueError("pouw setting 'runner' is the engine's loaded Model Runner V2 (VLLM_USE_V2_MODEL_RUNNER=1): its "
-                         "execute_model, and its decode_query_len, which orders a step's rows (pouw_h1_requests.batch_order)")
+                         "execute_model, and its decode_query_len, which orders a step's rows (h1_hooks.batch_order)")
     if rounds is not None:
         commitment = getattr(getattr(rounds, "challenger", None), "commitment", None)
         if not callable(getattr(rounds, "record", None)) or commitment is None:
