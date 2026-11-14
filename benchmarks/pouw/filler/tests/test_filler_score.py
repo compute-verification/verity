@@ -680,7 +680,11 @@ def test_record_limits_are_checked_when_the_arm_loads():
     assert problems(parent="art:" + "0" * 64) == [] and problems(parent="fill-v1") == []
     assert any("lineage.parent 5" in p for p in problems(parent=5))
     assert any("list of tags" in p for p in problems(mechanism="place:split"))
+    for tags in (["place:split", 5], ["place:split", " "]):  # one entry among the tags that is not a tag
+        assert any("list of tags" in p for p in problems(mechanism=tags))
+    assert problems(mechanism=("place:split", "prefill:none")) == []
     assert any("canonical JSON" in p for p in problems(approach={1, 2}))
+    assert any("past the store's meta limit" in p for p in problems(approach="a" * 300 * 1024))
     assert any("don't make a variant" in p for p in problems(sources=v1.sources + v1.sources[:1]))
     assert any("don't make a variant" in p for p in problems(sources=("/etc/hostname",)))
     assert any("filler.noise" in p for p in A.check_arm(dataclasses.replace(v1, filler=A.Filler(noise="gauss"))))
@@ -700,10 +704,39 @@ def test_arms():
     assert A.placed(v1, "decode", 8, 16384).fill_sms == 124  # B 32's longest L ≤ 16K: (32, 8K)
     assert S.honesty(v1, all_points(), S.points())["ok"]
     assert not S.honesty(v1, all_points(), S.points(), has_filler=True)["ok"]  # no positive control
-    with pytest.raises(A.ArmError):
-        A.Colocation("split", 0)
+    assert A.point_lookup({(1, 10): "a", (2, 10): "b", (4, 10): "c"}, 8, 10) == "c"  # past the largest B, the largest B's
+    assert A.Colocation("split", 1).fill_sms == 1 and A.Colocation("split", A.SMS - 1).fill_sms == A.SMS - 1
+    for sms in (0, A.SMS):  # a split's filler SMs are in (0, SMS)
+        with pytest.raises(A.ArmError):
+            A.Colocation("split", sms)
+    with pytest.raises(AttributeError):
+        A.NONE.fill_sms = 4  # the one `NONE` every arm returns can't be changed under them
     with pytest.raises(A.ArmError):
         A.load("no-such-arm")
+
+
+def test_an_arm_outside_its_contract_is_refused(monkeypatch):
+    """`check_arm` names what is wrong with an arm's name, lineage and sources, and `load` refuses the arm with every
+    problem in its message; an arm's module outside the filler's directory is refused before it is run."""
+    import dataclasses
+
+    v1 = A.FillV1()
+
+    def wrong(**kw):
+        return A.check_arm(dataclasses.replace(v1, **kw))
+
+    for name in ("Fill_V1", "-v1", "", 5):
+        assert wrong(name=name) == [f"name {name!r} is not [a-z0-9-]+"]
+    for lin in (None, {**v1.lineage, "hypothesis": ""}, {**v1.lineage, "mechanism": []}):
+        assert wrong(lineage=lin) == ["lineage names a hypothesis and mechanism tags"]
+    for srcs in ((), v1.sources + ("benchmarks/pouw/filler/no_such.cu",)):
+        assert wrong(sources=srcs) == [f"sources {srcs!r} are repository files"]
+    monkeypatch.setitem(A.ARMS, "two-wrong", lambda: dataclasses.replace(v1, name="Fill_V1", choice=None))
+    with pytest.raises(A.ArmError) as ex:
+        A.load("two-wrong")
+    assert str(ex.value) == "arm two-wrong: name 'Fill_V1' is not [a-z0-9-]+; choice is one line"
+    with pytest.raises(A.ArmError, match="an arm's module lives under"):
+        A.load("benchmarks/pouw/harness/ledger.py:Ledger")
 
 
 #: pf_absorb<NC>'s MMA word entries as the sm_120a builds compile them (c259a89b5): one 16832 IMMA's four
