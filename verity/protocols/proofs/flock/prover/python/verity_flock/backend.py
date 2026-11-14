@@ -4,7 +4,7 @@ One configured backend is one Table 1 row. :data:`FLOCK_FRAME_V3_BLAKE3` proves,
 subcircuit, that the output word committed in frame-v3 tree ``y`` is the subcircuit applied to the x row and W column
 committed as ``blake3-keyed/row/v2`` row leaves in trees ``a`` and ``b``. The keyed-BLAKE3 row digests are computed in
 the proof (Flock's BLAKE3 compression table, chunk chains wired in the circuit, chunk values public); the SHA-256
-frame-v3 trees and the BLAKE3 parent nodes are computed natively by the verifier from the instance set. The transition
+frame-v3 trees and the BLAKE3 parent nodes are computed natively by the verifier from the input set. The transition
 units are the pinned lowering of :mod:`verity_flock.lowering`, wired in the same circuit to the message words their
 bytes are hashed from. Coins are the live verifier's (flock-128-r2: Fast100, two reps on one root).
 

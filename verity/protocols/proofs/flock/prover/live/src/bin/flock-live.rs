@@ -548,10 +548,10 @@ fn main() {
     }
 }
 
-/// flock-link F2: the production statement verifiers, pinned from the verifier's configuration: the CPU census unit +
+/// flock-link F2: the deployed statement verifiers, pinned from the verifier's configuration: the CPU census unit +
 /// BLAKE3 union (registry digest of both table types, counts [n_blake3, n_units], Fast100 parameters) and the GPU unit
-/// table (the unit netlist's statement digest, Flock-CUDA's Fast100 / batch 6 / SHA-256 parameters). The GPU-shaped
-/// proofs here come from the CPU `prove_ligerito` (same protocol, same serialization); the H100 runs use Flock-CUDA.
+/// table (the statement digest of the unit's circuit description, Flock-CUDA's Fast100 / batch 6 / SHA-256 parameters). The
+/// GPU-shaped proofs here come from the CPU `prove_ligerito` (same protocol, same serialization); the H100 runs use Flock-CUDA.
 #[cfg(feature = "verity-unit")]
 mod f2 {
     use super::*;

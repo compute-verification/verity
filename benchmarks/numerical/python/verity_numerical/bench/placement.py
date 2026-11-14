@@ -52,8 +52,9 @@ import statistics
 import subprocess
 import sys
 import time
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 __all__ = [
     "GATE_RULES",

@@ -2,7 +2,9 @@
 # Network certification's side of a memory wipe: one network certifier session through the auditor's gate
 # (`warden-rehearse --scan --prompts`, the toy's class) spanning the wipe's session, under the lane's gate key
 # (GATE_KEY), inside a job on the machine that holds it (site.json's auditor), cwd = the source tree; everything into
-# $OUT. GATE_KEY, CHALLENGER, PEER and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep.
+# $OUT. GATE_KEY, CHALLENGER, PEER and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep; the
+# gate's host there is the ${NAME} of the environment variable that holds the challenger host's address, and with it
+# unset and no CHALLENGER nothing is sent.
 #
 # With AT (a UTC time) it first waits until then, so a run launched early fires on the clock with no VM awake: give the
 # run a time limit past AT, MINUTES, the fetch and the leak guard (below). Launched more than LATE_S (60) seconds
@@ -35,7 +37,12 @@
 # writes its `wipe-egress/v1` record.
 set -euo pipefail
 : "${OUT:?}"
-site() { python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' "$SITE" "$1"; }
+site() {   # KEY: site.json's KEY, each ${NAME} in it filled from the environment
+  python3 -c 'import json, os, re, sys
+value = json.load(open(sys.argv[1]))[sys.argv[2]]
+held = lambda m: os.environ.get(m[1]) or sys.exit(f"{m[1]} is unset: site.json names it for its {sys.argv[2]}, {value}")
+print(re.sub(r"\$\{(\w+)\}", held, value))' "$SITE" "$1"
+}
 SITE=$(dirname "${BASH_SOURCE[0]}")/site.json
 GATE_KEY=${GATE_KEY:-$HOME/.ssh/$(site gate_key)}
 CHALLENGER=${CHALLENGER:-$(site gate)}

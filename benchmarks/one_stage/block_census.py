@@ -6,10 +6,11 @@ A row's cut is its own Definition, or else a unit template for each slot of its 
 a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``STAGES`` row's stages are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width, and a ``CHAINS`` row's one slot is a way its key blocks are served
-(`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns, the way the
-served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
+(`serving_rows.chain_ways`): each key block its scores unit and values units of `CHAIN_COLS` columns and its key rows'
+writers, the way the served partition names, before whole key blocks. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
-row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
+row itself is taken when it fits and is no longer than its family's `WHOLE_UP_TO`, else each slot's coarsest fitting
+option (a fitting row past `WHOLE_UP_TO` whole when no option fits). A ``COLS`` or ``WIDE_COORDS`` row, and a
 split's ``COLS`` or ``WIDE_COORDS`` slot (the block-scaled FP8 GEMM's coordinates of c outputs), instead take the fitting
 width of least leakage-weighted proving cost (`width_pick`, the row's own width among them). A row
 with a slot that has none is a gap, with its finest option's reason. A row whose Definition has no gate (a gather) or no
@@ -47,6 +48,10 @@ WIDTH_FLOOR = 22
 #: the columns of a values unit where a ``CHAINS`` row's key blocks are served as scores and values units: the served
 #: partition's width, the combine's column block, so a split's end reads one values unit's row whole
 CHAIN_COLS = 64
+#: the longest row of a family taken whole, by a static of its spec: past it a row's whole statement, though its block is at
+#: most `K_MAX`, stages past a staging job's memory while its family's units stage, so it is cut like the family's longer
+#: rows (each slot's coarsest fitting option), and taken whole only when no option fits
+WHOLE_UP_TO = {"SparseMlaSplit_v1": ("T", 3), "DsaMqaLogits_v3": ("N", 36)}
 
 
 def misfit(e: dict) -> str | None:
@@ -69,7 +74,8 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     """The slots of a split of row ``spec`` over its sized units (``units``, the row's unit templates past itself): each a
     list of options coarse to fine, an option the units it takes.  A ``PARTS`` row's split is its ``PARTS`` cut when every part
     has units, else its ``FINAL`` cut (the norm whole: the census names no op_path to tell a layer's norm from the final one).
-    A ``CHAINS`` row's options are its key blocks as scores and values units of `CHAIN_COLS` columns, then whole."""
+    A ``CHAINS`` row's options are its key blocks as scores and values units of `CHAIN_COLS` columns with their key rows'
+    writers, then whole."""
     base = spec_base(spec)
     if base in ST.PARTS:
         for c in (ST.PARTS[base], ST.FINAL.get(base, ())):
@@ -90,6 +96,12 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
                 whole.append([u])
         return [whole + list(chunks.values())]
     return [[[u] for u in units]] if units else []
+
+
+def past_whole(spec: str) -> bool:
+    """Whether row ``spec`` is longer than its family's `WHOLE_UP_TO`."""
+    bound = WHOLE_UP_TO.get(spec_base(spec))
+    return bound is not None and spec_statics(spec)[bound[0]] > bound[1]
 
 
 def leak_cost(units: list[dict]) -> float:
@@ -126,13 +138,15 @@ def cut(spec: str, f: dict) -> tuple[str, list[dict], str | None]:
     ss = slots(spec, e.get("units", []))
     if widths(spec) and (pick := width_pick([whole, *(ss[0] if ss else [])])) is not None:
         return ("row" if pick == whole else "split"), pick, None
-    if why is None:
+    if why is None and not (ss and past_whole(spec)):
         return "row", whole, None
     got = []
     for opts in ss:
         wide = all(widths(u["spec"]) for o in opts for u in o)
         pick = width_pick(opts) if wide else next((o for o in opts if all(misfit(u) is None for u in o)), None)
         if pick is None:
+            if why is None:
+                return "row", whole, None
             worst = next((u for u in (opts[-1] if opts else []) if misfit(u) is not None), None)
             return "gap", [], f"{why}; finest split {worst['spec']}: {misfit(worst)}" if worst else why
         got += pick

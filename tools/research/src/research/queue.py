@@ -2,8 +2,10 @@
 PRs ready to land (marked ready at their heads, with a reviewer's land verdict or under the low-risk rule, drive.toml's
 `lowrisk_lane`) onto `main` as candidates, and moves `main` only to a candidate with no new failure (`research.vqueue`): each
 gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or fails on its base too, so
-`main`'s reds only shrink.  A failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the
-candidate and those above it are built again without them in the same tick.
+`main`'s reds only shrink; under the loop's `--gate verdict` a plain candidate lands on its members' land verdicts and the
+quick tier, and a red of `main`'s whole check after it reverts the one culprit (`vqueue_loop.Loop._plain`, `_main_red`).  A
+failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the candidate and those above it
+are built again without them in the same tick.
 
     research queue status [--json]                 each open PR as the verified queue admits it onto `main` (no `next`): what
                                                    it waits for, why it was refused, or that its head is on `main`;
@@ -11,7 +13,8 @@ candidate and those above it are built again without them in the same tick.
                                                    (`research.stale`); then
                                                    every open PR whose body names no Linear issue (`named_issue`: a key
                                                    after a Linear magic word, a bare key of a team main's Slack registry
-                                                   lists, or an `Issue: none: REASON` line); --json gives each its `issue`
+                                                   lists, or an `Issue: none: REASON` line); --json gives each its `issue`,
+                                                   stdout holding the JSON alone (the notices go to stderr)
     research queue sync [--dry-run]                rebuild `next` (Merges, below), refused unless `merge.on_drive` holds or with
                                                    --dry-run: the verified queue builds on `main`, never on `next`
     research queue eject PR --reason TEXT [--by HANDLE]
@@ -58,13 +61,15 @@ candidate and those above it are built again without them in the same tick.
                                                    fix: the queue refuses whichever of the two it merges second); a check it
                                                    couldn't run it names under "checks skipped";
                                                    --no-preflight skips it
-    research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
+    research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--over MINUTES] [--json]
                                                    without N: the open PRs onto `main` marked at their head and not on `main`
                                                    that no land verdict there lands, oldest mark first, those the verified
-                                                   queue waits on a reviewer for (number, head, owner, mark time, files, whether
+                                                   queue waits on a reviewer for (number, head, owner, mark time, minutes
+                                                   since it: `waited_min`, files, whether
                                                    it is a Lean change: `lean_change`, and why: a hold, no land verdict, or
                                                    `low-risk: lands on its mark` for a head the loop's low-risk rule takes on
-                                                   its mark alone, `lands_on_mark`); with N: a reviewer's verdict, a `reviewed` label on
+                                                   its mark alone, `lands_on_mark`); --over MINUTES: only those marked longer
+                                                   ago; with N: a reviewer's verdict, a `reviewed` label on
                                                    `pr:N@HEAD` (its head, or --sha, a full or short SHA), which the verified
                                                    queue counts unless LANE is the PR's owner, its handle or its ready mark's
                                                    author, refused here; without --sha, refused when GitHub has another head
@@ -100,13 +105,16 @@ candidate and those above it are built again without them in the same tick.
                                                    `open` does, keeping only the Cursor PR tool's markers and footer (`edit_pr`);
                                                    refuses a body that drops or changes the PR's `Lane NAME` owner; --dry-run
                                                    prints the body it would write
-    research queue stats [--json] [--short] [--rounds] [--until TS]
+    research queue stats [--json] [--short] [--rounds | --reds] [--until TS]
                                                    the queue's core numbers as one table, read live in under two minutes: mark to
                                                    `main`, the heads the loop leaves out, the review wait, the quick tier's wait
                                                    for a slot, a candidate's check by shard, a red's cost, the executor, cores and
                                                    slots (`research.queue_table`); --short leaves out the column saying how each
                                                    number is measured; --rounds prints one row a candidate instead: the Lean it
                                                    changed and was checked on top of, its first shard, its steps and its verdict;
+                                                   --reds prints each candidate being checked instead: its members above
+                                                   `main`, each shard's node, run, state and steps, and only its reds on the
+                                                   merge gate (a step off it in policy.toml is left out); --json has both;
                                                    --until ends the windows at a past time, for a day that is over
     research queue stats --log FILE [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`)
@@ -257,9 +265,10 @@ across a move, and a land verdict carries to the restacked head when its own cha
 
 Landing.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) is the one landing path: it builds each
 candidate from `main` and the PRs ready to land, commits the lock records the candidate's records run regenerates
-(`research.vqueue_records`), and fast-forwards `main` only to a candidate with no new failure; it tells each owner what it
-refuses.  What reaches `main` and changes what a guarantee says sends the spec-change DM of what
-changed (`spec_alert`, after each move of `main`: `Landing._on_main`).
+(`research.vqueue_records`), and fast-forwards `main` only to a candidate with no new failure (of the quick tier alone, for a
+plain candidate under `--gate verdict`, whose whole check follows on `main`); it tells each owner what it refuses.  What
+reaches `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`, after each move of
+`main`: `Landing._on_main`).
 
 Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, the loop counts a
 ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
@@ -304,6 +313,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import calendar
 import concurrent.futures
 import contextlib
 import dataclasses
@@ -758,8 +768,8 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
-#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, one file's path from the
-#: root (a `/` before its end, no glob), or a file name glob (no `/`)
+#: an entry of `DriveFlags.lowrisk_excludes` or `DriveFlags.verdict_excludes`: a directory from the repository's root ending
+#: in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
 #: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
 HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
@@ -840,6 +850,9 @@ class DriveFlags:
     #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
     #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
+    #: what the land verdicts gate (`research queue vqueue --gate verdict`, `vqueue_loop.Loop._plain`) keeps on the whole
+    #: check beyond `lowrisk_excludes`, written as it is: the gate reads both (`plain_excludes`); none, no candidate is plain
+    verdict_excludes: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
     #: of `drive.SLIM_STEPS` alone beside it
@@ -864,6 +877,15 @@ class DriveFlags:
     signed_verdicts: str = "off"
     #: the restacks across a move the syncs run at once in the background, each `restack.py` on one head (`Queue._restack`)
     restack_jobs: int = 3
+
+    @property
+    def plain_excludes(self) -> tuple[str, ...]:
+        """What keeps a candidate on the whole check where the land verdicts gate: `lowrisk_excludes`, then `verdict_excludes`,
+        each entry once, so a change the low-risk lane keeps off is never plain.  With either list empty, none: as `lowrisk`
+        reads no excludes, nothing is plain."""
+        if not (self.lowrisk_excludes and self.verdict_excludes):
+            return ()
+        return tuple(dict.fromkeys(self.lowrisk_excludes + self.verdict_excludes))
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -927,14 +949,14 @@ class DriveFlags:
             if type(doc["restack_jobs"]) is not int or doc["restack_jobs"] < 1:
                 raise bad("restack_jobs", "a whole number, 1 or more")
             got["restack_jobs"] = doc["restack_jobs"]
-        if "lowrisk_excludes" in doc:
-            v = doc["lowrisk_excludes"]
-            if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
-                                                         and ".." not in x.split("/") for x in v)):
-                raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
-                                              "files' paths from it and file name globs, as [\"*.lean\", \"verity/core/\", "
-                                              "\"verity/__init__.py\"]")
-            got["lowrisk_excludes"] = tuple(v)
+        for k in ("lowrisk_excludes", "verdict_excludes"):
+            if k in doc:
+                v = doc[k]
+                if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
+                                                             and ".." not in x.split("/") for x in v)):
+                    raise bad(k, "a non-empty list of directories from the repository's root, each ending in `/`, files' paths "
+                                 "from it and file name globs, as [\"*.lean\", \"verity/core/\", \"verity/__init__.py\"]")
+                got[k] = tuple(v)
         if "bottom_ring" in doc:
             v = doc["bottom_ring"]
             if not (isinstance(v, list) and v and all(isinstance(x, str) and HANDLE_RE.fullmatch(x) for x in v)):
@@ -3929,6 +3951,27 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
 
 
+def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | None = None, audit: list[str] | None = None,
+              by: str = "", project: str = "verity", wait_s: float = REMOTE_WAIT_S, timeout_s: float = REMOTE_TIMEOUT_S,
+              pool: str = "", priority: bool = False) -> list[str]:
+    """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
+    machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
+    ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
+    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`)."""
+    slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
+    job = Path(quick_tier.__file__)
+    args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
+            *(["--merged", merged] if merged else []), *(["--lean-audit", shlex.join(audit)] if audit else []),
+            "--", *QUICK_TIER]
+    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []), "--wait-max", f"{wait_s:g}",
+            "--run-max", f"{timeout_s:g}"]
+    return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
+            "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
+            "--timeout", f"{wait_s + timeout_s:g}", "--custody-ttl", str(math.ceil(wait_s + timeout_s + REMOTE_GRACE_S)),
+            "--declared-output", "out/*", "--", *slot, *opts,
+            "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}']
+
+
 class RemoteQuickTier(QuickTier):
     """The quick tier as a `research run` on machine ``on`` (`auto` or `M1,M2`: the one `place` picks when the tier starts): a
     worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as `QuickTier` does, is the run's `--source`, and the worktree's
@@ -3965,21 +4008,12 @@ class RemoteQuickTier(QuickTier):
                 return NotStarted(f"--on {on}: {why}")
             print(f"research queue: --on {on}: {got}: {why}", flush=True)
             on, _, pool = got.partition(":")
-        slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
-        job = Path(quick_tier.__file__)
         rid = R.new_run_id()
         try:
             with self._checkout(pr) as (wt, at, base):
-                audit = lean_audit(self.repo, base, at)
-                args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
-                        *([] if at == pr.head else ["--merged", pr.head]), *(["--lean-audit", shlex.join(audit)] if audit else []),
-                        "--", *QUICK_TIER]
-                opts = [*(["--by", self.by] if self.by else []), "--wait-max", f"{self.wait_s:g}", "--run-max", f"{self.timeout_s:g}"]
-                r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
-                                 "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
-                                 "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
-                                 "--declared-output", "out/*", "--", *slot, *opts,
-                                 "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}'], wt)
+                r = self.launch(quick_run(rid, on, wt, at, base, merged=None if at == pr.head else pr.head,
+                                          audit=lean_audit(self.repo, base, at), by=self.by, project=self.project,
+                                          wait_s=self.wait_s, timeout_s=self.timeout_s, pool=pool), wt)
         except TierRefused as e:
             return str(e)
         if r.returncode:
@@ -6263,10 +6297,20 @@ def _mark(store, pr: PR, by: str, failed: str | None, command: str) -> int:
     return 1 if lost else 0
 
 
+def waited_min(marked: str | None, now: float) -> int | None:
+    """Whole minutes from a mark's label time ``marked`` (`labelauth.TS_FORMAT`) to ``now``; None for no mark time."""
+    if not marked:
+        return None
+    return int((now - calendar.timegm(time.strptime(marked, "%Y-%m-%dT%H:%M:%SZ"))) // 60)
+
+
 def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | None, ref: str | None, by: str | None,
-           sha: str | None = None, as_json: bool = False) -> int:
+           sha: str | None = None, as_json: bool = False, over: float | None = None,
+           now: Callable[[], float] = time.time) -> int:
     """`research queue review`: without ``pr``, list the open PRs onto `main` marked ready at their head and not on `main` that no
-    land verdict at their head lands (`unreviewed`), oldest mark first: those the verified queue waits on a reviewer for, but
+    land verdict at their head lands (`unreviewed`), oldest mark first, each with the minutes since its mark (`waited_min`;
+    with ``over``, only those marked more than ``over`` minutes ago, or at a time not known): those the verified queue waits on a
+    reviewer for, but
     for one its loop takes on its mark alone, whose row says so (`LOWRISK_ROW`, by the loop's rule: `lands_on_mark` under
     drive.toml at `main`, of the files its row lists); with it, write ``verdict`` (`land` or `hold`, ``ref`` its note or
     reason) by ``by`` on the PR's head on `next` (or ``sha``, or its open head when it isn't on `next`), refusing its owner.  Under
@@ -6300,18 +6344,23 @@ def review(q: Queue, store, labels: StoreLabels, pr: int | None, verdict: str | 
             if refused := labels.refusals(p.number, p.head, vocab.REVIEWED):
                 why += f"; not authenticated: {'; '.join(refused)}"
             base = _out(q.workdir, "merge-base", main, p.head)
+            marked = q.marked_at(p.number, p.head) if q.marked_at else None
             rows.append({"pr": p.number, "head": p.head, "owner": p.owner, "lean": lean_change(q.workdir, p.head, base),
-                         "files": sorted(files), "why": why,
-                         "marked": q.marked_at(p.number, p.head) if q.marked_at else None})
+                         "files": sorted(files), "why": why, "marked": marked, "waited_min": waited_min(marked, now())})
         rows.sort(key=lambda r: (r["marked"] or "", r["pr"]))
+        lacking = len(rows)
+        if over is not None:
+            rows = [r for r in rows if r["waited_min"] is None or r["waited_min"] > over]
         if as_json:
             print(json.dumps(rows, indent=1))
         else:
             for r in rows:
                 shown = ", ".join(r["files"][:8]) + (f" (+{len(r['files']) - 8} more)" if len(r["files"]) > 8 else "")
+                ago = f" ({r['waited_min']} min ago)" if r["waited_min"] is not None else ""
                 print(f"#{r['pr']} {r['head'][:12]} {r['owner']} Lean change: {'yes' if r['lean'] else 'no'}, marked "
-                      f"{r['marked'] or '?'}: {r['why']}\n    {shown}")
-            print(f"research queue review: {len(rows)} marked PR(s) not on `main` lack a land verdict")
+                      f"{r['marked'] or '?'}{ago}: {r['why']}\n    {shown}")
+            print(f"research queue review: {lacking} marked PR(s) not on `main` lack a land verdict"
+                  + (f"; {len(rows)} of them marked over {over:g} min ago or at a time not known" if over is not None else ""))
         return 0
     q.fetch()
     chain = [] if land_into_key(q.workdir, "refs/remotes/origin/main") == "main" else q.chain()
@@ -6946,6 +6995,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--hold", metavar="REASON", help="review N: the verdict that keeps it, and every PR containing it, out of "
                                                      "the verified queue's candidates")
     ap.add_argument("--ref", help="review N --land: the note or reason the verdict rests on")
+    ap.add_argument("--over", type=float, metavar="MINUTES", help="review: list only the PRs marked more than MINUTES ago (or at "
+                                                                  "a time not known)")
     ap.add_argument("--head", help="open: the pushed branch to open a PR for")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
                                   "this head, refusing when GitHub still shows another after a few reads (push && ready, safely); "
@@ -6975,6 +7026,8 @@ def main(argv: list[str]) -> int:
                     "compare a check with the executor's verdicts (default 10)")
     ap.add_argument("--short", action="store_true", help="stats: the table without the column saying how each number is measured")
     ap.add_argument("--rounds", action="store_true", help="stats: one row for each candidate built in the window, instead of the table")
+    ap.add_argument("--reds", action="store_true", help="stats: each candidate being checked, its members above `main`, its shards' "
+                    "runs and steps, and only the reds on the merge gate, instead of the table")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
     ap.add_argument("--days", type=int, default=7, help="delegate: how long the delegation lasts (default 7, at most 14)")
     ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now); for the table, a past "
@@ -6990,7 +7043,9 @@ def main(argv: list[str]) -> int:
         if a.log is None:
             from . import queue_table
 
-            return queue_table.main(a.store, a.json, short=a.short, until=a.until, by_round=a.rounds)
+            if a.rounds and a.reds:
+                ap.error("stats: --rounds or --reds, not both")
+            return queue_table.main(a.store, a.json, short=a.short, until=a.until, by_round=a.rounds, by_red=a.reds)
         return _stats(a)
     if a.command == "checked-heads":
         return _checked_heads(a)
@@ -7080,6 +7135,8 @@ def main(argv: list[str]) -> int:
         ap.error(f"{a.command} writes the owner's ready mark: pass --by <lane> (or set $RESEARCH_LANE)")
     if (a.land or a.hold is not None or a.ref) and not (a.command == "review" and a.pr):
         ap.error("--land, --hold and --ref are for review N only")
+    if a.over is not None and not (a.command == "review" and not a.pr):
+        ap.error("--over is for the review listing only (review with no PR number)")
     if a.command == "review" and a.pr and (a.land == (a.hold is not None) or not a.by):
         ap.error("review N records one verdict: --land [--ref NOTE] or --hold REASON, with --by <reviewer lane> (or $RESEARCH_LANE)")
     if a.command == "delegate" and not (a.pr and a.by):
@@ -7140,8 +7197,10 @@ def main(argv: list[str]) -> int:
                 return lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
                                              lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep)
 
-            entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
-            teams = q.issue_teams()
+            # under --json, stdout is one JSON document a program parses: what the reading says goes to stderr
+            with contextlib.redirect_stdout(sys.stderr) if a.json else contextlib.nullcontext():
+                entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
+                teams = q.issue_teams()
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
                                    "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),
@@ -7157,7 +7216,8 @@ def main(argv: list[str]) -> int:
             if a.pr is None and here and signed_at(Path(here), main_ref) == "on":
                 labels.verify = label_verifier(Path(here), main_ref, keys, lambda s: print(f"research queue: {s}", file=sys.stderr))
             return review(q, label_signer(store, Path(here) if here else None) if a.pr else store, labels, a.pr,
-                          "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json)
+                          "land" if a.land else "hold" if a.pr else None, a.hold or a.ref, a.by, sha=a.sha, as_json=a.json,
+                          over=a.over)
         from .merge import off_drive, on_drive
 
         if a.command == "sync" and not (a.dry_run or on_drive()):

@@ -211,11 +211,39 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     return {"dir": d, "pid": p.pid}
 
 
+#: a quick tier's launch job (`quick_launch`): a worktree of its commit in its directory, the `research run` there, the worktree
+#: removed once the run has shipped it, and `RUN <id>` (`RUN_RE`, which `launched` reads) once the run registered
+QUICK_JOB = ('t=$1 c=$2 rid=$3; shift 3; git worktree add -q --detach "$t/tree" "$c" || exit; (cd "$t/tree" && "$@"); rc=$?; '
+             'git worktree remove --force "$t/tree"; rm -rf "$t"; git worktree prune; [ "$rc" = 0 ] && echo "RUN $rid"; exit "$rc"')
+#: how long a candidate's quick tier waits for a check slot, and runs in one
+QUICK_WAIT_S, QUICK_RUN_S = 3600, 3 * 3600
+
+
+def quick_launch(repo: Path, commit: str, base: str, machine: str, auth: tuple[str, ...] = ()) -> dict:
+    """The quick tier of candidate ``commit`` since ``base`` (`queue.QUICK_TIER`, as `research queue ready` runs it remotely:
+    `queue.quick_run`) launched detached (`detach`) as a `research run` on ``machine``, in a `--priority` check slot there, from
+    a worktree of ``commit`` of its own: the record `launched` reads, whose `RUN` line names the run."""
+    from . import runs as R
+    from .queue import quick_run
+
+    root = Path(tempfile.gettempdir()) / LAUNCHES
+    root.mkdir(parents=True, exist_ok=True)
+    t = tempfile.mkdtemp(prefix="quick-", dir=root)
+    rid = R.new_run_id()
+    argv = quick_run(rid, machine, Path(t) / "tree", commit, base, by="ci", wait_s=QUICK_WAIT_S, timeout_s=QUICK_RUN_S,
+                     priority=True)
+    env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0"}
+    return detach(repo, ["sh", "-c", QUICK_JOB, "sh", t, commit, rid, *argv], env)
+
+
 def _epoch(ts: object) -> float | None:
     """A UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) as seconds since the epoch, None when it isn't one."""
+    if ts is None or ts == "":
+        return None
     try:
         t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except ValueError:
+    except ValueError as e:
+        print(f"landing: {str(ts)[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
     return (t if t.tzinfo else t.replace(tzinfo=UTC)).timestamp()
 
@@ -246,9 +274,11 @@ def shard_machines(on: str, n: int) -> list[str]:
     """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: first its own, every Nth from the Kth for shard K, so
     no machine is the own of two shards (with fewer machines than shards, the ((K-1) mod M)th of the M, shared); then every
     other machine of ``on`` in its order from the Kth on, so each shard falls back on the next one's machines first.  check.py
-    places a check on the first machine of its list with a slot free for it, and twins it on every machine of the list only
-    when none has one: with slots free the shards keep to their own machines (and their warm caches), and a shard whose own
-    are busy takes a free slot anywhere rather than waiting in one machine's line."""
+    places a check on the first machine of its list with a slot free for it and twins it on the two others with the most
+    slots free, which join their lines only after a delay, and only if it hasn't started there by then (with no slot free
+    anywhere, on every machine of the list at once): with slots
+    free the shards keep to their own machines (and their warm caches), and a shard whose own are busy, or whose slot was taken
+    after its launch, takes a free slot anywhere rather than waiting in one machine's line."""
     ms = on.split(",")
     out = []
     for k in range(n):
@@ -302,7 +332,7 @@ AUTO_PLAN = "check-shard-plan.json"
 #: are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1),
 #: the worktree removed after; its venv kept between plans.  The job exits as check.py did: on an NFS TMPDIR (the control
 #: pod's) `git worktree remove` can stop at a directory a silly-renamed file keeps from emptying and exit 255, so `rm -rf`
-#: takes what it left, as train.sh does, and a worktree that won't go fails no plan
+#: takes what it left, and a worktree that won't go fails no plan
 PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
             'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
             'trap \'s=$?; set +e; cd "$r"; git worktree remove --force "$t" 2>/dev/null || rm -rf "$t" 2>/dev/null || '
@@ -355,20 +385,25 @@ def failing(run_dir: Path) -> str | None:
     """What has failed so far in a check still running under `--keep-going`, which fails it whatever else it finds, or None."""
     out = []
     try:
-        lines = (run_dir / PROGRESS[0]).read_text().splitlines()
-    except OSError:
+        lines = (run_dir / PROGRESS[0]).read_text().splitlines() if (run_dir / PROGRESS[0]).exists() else []
+    except OSError as e:
+        print(f"landing: {run_dir / PROGRESS[0]} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         lines = []
     for line in lines:
         try:
             rec = json.loads(line)
-        except ValueError:
+        except ValueError as e:
+            print(f"landing: a line of {PROGRESS[0]} is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if rec.get("status") == "failed":
             out.append(f"step {rec.get('step')}")
     for name in PROGRESS[1:]:
+        if not (run_dir / name).exists():
+            continue
         try:
             doc = json.loads((run_dir / name).read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"landing: {run_dir / name} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         for s in doc if isinstance(doc, list) else ():
             tests = s.get("failed_tests") or []
@@ -604,9 +639,12 @@ def _docs(run_dir: Path, *names: str) -> list[dict]:
     """The objects the JSON files ``names`` of ``run_dir`` hold: a list's, or the file's own; none of one missing or unreadable."""
     out = []
     for name in names:
+        if not (run_dir / name).exists():
+            continue
         try:
             doc = json.loads((run_dir / name).read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"landing: {run_dir / name} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else [doc] if isinstance(doc, dict) else []
     return out
@@ -642,7 +680,8 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
     r = _git(repo, "show", f"{commit}:{own}", check=False)
     try:
         return tomllib.loads(r.stdout) if not r.returncode else {}
-    except tomllib.TOMLDecodeError:
+    except tomllib.TOMLDecodeError as e:
+        print(f"landing: {own} at {commit[:12]} did not parse, read as empty ({e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -944,6 +983,9 @@ class Landing:
                                                         detached=True, rank=POSTLAND_SLOT_RANK,
                                                         bookkeeping_warn=takes_bookkeeping(repo)))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
+        #: a candidate's quick tier (`vqueue_slim.start_quick`): `quick_launch`, detached
+        self.launch_quick: Callable[[Path, str, str, str], tuple[list[str], str] | dict] = (
+            lambda repo, commit, base, machine: quick_launch(repo, commit, base, machine, auth=q.auth))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
         if launch is train_launch:
@@ -1142,7 +1184,8 @@ class Landing:
             r = _git(self.repo, "show", f"origin/main:{REGISTRY}", check=False)
             try:
                 reg = json.loads(r.stdout) if not r.returncode else {}
-            except ValueError:
+            except ValueError as e:
+                print(f"landing: origin/main's {REGISTRY} is not JSON, so no handle owns a path ({e})", file=sys.stderr, flush=True)
                 reg = {}
             self._reg = reg = reg if isinstance(reg, dict) and isinstance(reg.get("handles"), list) else {"handles": []}
         try:

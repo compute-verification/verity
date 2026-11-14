@@ -76,7 +76,10 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
     boundary record's roots and the output row at the stop record's, unit i at row i. Neither opens the class's
     directory nor calls the prover's half. Refused: another stop rule, another sampling design, a sample that is not
     the hand-off's, a hand-off with no stop sample, and a stop record on a boundary record the boundary stream never
-    logged (case 2)."""
+    logged (case 2). The stop sample's family and the session's root are `resume`'s to name, from the class's layout
+    and its record's window: a hand-off that names the boundary stream's family for the stop sample, or the stop
+    sample's for the boundary stream's, or another session root, is refused, and `link` hands Lean the layout's
+    whatever the hand-off names."""
     handoff = _handoff(tmp_path, monkeypatch, "resume")
 
     def prover(*_a: object, **_k: object):
@@ -107,6 +110,19 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
         _resume({**handoff, "stop": {"error": "refused"}})
     with pytest.raises(SA.Unlogged, match="no record of the class's boundary stream's log"):
         _resume(SMALL.unlogged(handoff, T.PAIR))
+
+    spans, blocks = T.TS.family_of(r.layout), T.TS.family_of(r.layout, blocks=True)
+    assert (handoff["family"], s["family"], handoff["window_root"]) == (spans, blocks, r.layout.run)
+    swapped = {**handoff, "stop": {**s, "family": spans}}
+    for named in (swapped, {**handoff, "family": blocks}):
+        with pytest.raises(ValueError, match="does not choose among the families the session reserved"):
+            _resume(named)
+    elsewhere = {**handoff, "window_root": "ab" * 64}
+    with pytest.raises(ValueError, match="the hand-off names the session root abababab"):
+        _resume(elsewhere)
+    for named in (swapped, elsewhere):
+        read = SA.link(named, r.first)
+        assert (read["window"], read["family"]) == (r.layout.run, blocks)
 
 
 def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_path, monkeypatch):
@@ -253,7 +269,9 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     coin opened and not read, no evidence, no family named, and the boundary stream's family named for the stop
     sample's coins, which are held to the family named and not to the one their evidence names; and the hand-off's
     own evidence read by a verifier that holds another challenger's key, no key, or another copy of main's history,
-    and evidence that names a key, the verifier's own. Case 3: the boundary
+    and evidence that names a key, the verifier's own. The family is the one `link` names, the stop blocks' place's;
+    a case that names its own gives it to Lean and to the Python by hand, since `link` takes none from a hand-off.
+    Case 3: the boundary
     stream's audit record missing, refused, and another registration's. Case 4: that audit record accepted with an
     entry that did not run."""
     handoff = _handoff(tmp_path, monkeypatch, "across")
@@ -266,7 +284,8 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     def handed(seed: str, *commits: tuple[str, int], read: int | None = None) -> dict:
         one, got, family = _released(seed, *commits)
         return {"evidence": one.evidence(later), "read": got[later][:read].hex(), "family": family[later]}
-    assert s["family"] == T.AC.family(1) != handoff["family"] == T.AC.family(0)
+    spans, blocks = (T.AC.family(rank) for rank in T._stop_places()[:2])
+    assert s["family"] == blocks != handoff["family"] == spans
     cases = {
         "accepted": (1, {}, None, accepted, None),
         "by hand": (1, handed("by-hand", (earlier, 1), (later, 2)), None, accepted, None),
@@ -300,10 +319,13 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
         key, main = holds.get(name, (ours, T.FC.MAIN))
         previous = mine["stop"]["record"]["previous"]
         logged = previous in [SA.R.digest(rec) for rec in log]
-        order = T.TS.stop_order(key, main, mine["stop"]["evidence"], r.layout.run, mine["stop"]["family"], previous,
+        read = SA.link(mine, NS(layout=r.layout, stream=NS(log=log, key=key, main=tuple(main))), outcome)
+        assert (read["window"], read["family"]) == (r.layout.run, blocks), name
+        family = stop.get("family", blocks)
+        order = T.TS.stop_order(key, main, mine["stop"]["evidence"], r.layout.run, family, previous,
                                 SA.R.digest(mine["stop"]["record"]), bytes.fromhex(mine["stop"]["read"]), T.AC.lms_verify)
         audit = SA.boundary_audit(previous, outcome)
-        lean = SA.across(mine, NS(layout=r.layout, stream=NS(log=log, key=key, main=tuple(main))), outcome)
+        lean = SA.V.lean("across", {**read, "family": family})
         assert "refused" not in lean, (name, lean)
         assert lean["logged"]["accepted"] is logged and lean["received"] == (0 if logged else None), (name, lean)
         assert lean["order"] == ({"accepted": True} if order is None else {"accepted": False, "why": _generic(order)}), (name, lean, order)

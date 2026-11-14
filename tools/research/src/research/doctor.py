@@ -214,7 +214,9 @@ def _git_root(where: Path) -> Path | None:
     try:
         p = subprocess.run(["git", "-C", str(where), "rev-parse", "--show-toplevel"], capture_output=True, text=True,
                            timeout=_left(LOCAL_TIMEOUT_S), check=False)
-    except (OSError, subprocess.SubprocessError):
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"research doctor: `git rev-parse` in {where} did not run, so it is no checkout here ({type(e).__name__})",
+              file=sys.stderr)
         return None
     return Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
 
@@ -404,9 +406,9 @@ def check_disk(root: Path | None) -> Check:
 
 def server_date(url: str = CLOCK_URL) -> float:
     """The time `url`'s Date header gives a HEAD, in seconds since the epoch; its one-second resolution is the caller's."""
-    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})
+    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "research-doctor"})  # noqa: S310 (CLOCK_URL, a literal https URL)
     try:
-        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:
+        with urllib.request.urlopen(req, timeout=PROBE_TIMEOUT_S) as r:  # noqa: S310 (CLOCK_URL, a literal https URL)
             date = r.headers.get("Date")
     except urllib.error.HTTPError as e:
         date = e.headers.get("Date")

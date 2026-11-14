@@ -60,3 +60,11 @@ def test_a_second_recorder_on_the_vm_steps_aside(monkeypatch, tmp_path):
         assert m.loop() == 0
     finally:
         os.close(fd)
+
+
+def test_a_log_that_does_not_parse_reports_every_kill_again_and_says_so(monkeypatch, tmp_path, capsys):
+    m = load(monkeypatch, tmp_path)
+    assert m.last_seq() == -1 and capsys.readouterr().err == ""
+    m.LOG.write_text("{\n")
+    assert m.last_seq() == -1
+    assert "every kill still in the ring buffer is reported again (JSONDecodeError" in capsys.readouterr().err

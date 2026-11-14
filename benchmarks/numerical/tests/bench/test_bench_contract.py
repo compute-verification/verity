@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -654,9 +656,6 @@ def test_no_writer_hardcodes_the_domain_and_new_fingerprints_use_the_vocab() -> 
     """Every cell once recorded ``domain: finite`` whatever it proved.  A
     fingerprint's domain is its statement's, one of the vocab's; the old hardcode is refused on new writes, still read on
     old results (as ``finite-only``, so identity comparisons with them hold)."""
-    import re
-    from pathlib import Path
-
     from research.store import vocab
 
     assert set(contract.DOMAINS) == set(vocab.DOMAINS)

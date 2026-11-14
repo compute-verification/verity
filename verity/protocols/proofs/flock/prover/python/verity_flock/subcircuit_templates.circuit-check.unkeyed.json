@@ -1,0 +1,8 @@
+{
+ "peaks": {
+  "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16": 14.02,
+  "rmsnorm-cuda-vec8/n6144-b768-eps1e-05/bf16": 13.87,
+  "rmsnorm-fused-cuda-vec8/n6144-b1024-eps1e-05/bf16": 13.45,
+  "rmsnorm-fused-cuda-vec8/n6144-b256-eps1e-05/bf16": 13.44
+ }
+}

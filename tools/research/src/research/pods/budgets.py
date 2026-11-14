@@ -39,6 +39,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import subprocess
+import sys
 import tomllib
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -65,13 +66,14 @@ def parse_time(s: Any) -> float | None:
         return s.timestamp() if s.tzinfo else None
     try:
         d = dt.datetime.fromisoformat(str(s).strip())
-    except ValueError:
+    except ValueError as e:
+        print(f"budgets: {str(s)[:40]!r} is not a time ({e})", file=sys.stderr)
         return None
     return d.timestamp() if d.tzinfo else None
 
 
 def iso(t: float | None) -> str | None:
-    return None if t is None else dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return None if t is None else dt.datetime.fromtimestamp(t, dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass(frozen=True)

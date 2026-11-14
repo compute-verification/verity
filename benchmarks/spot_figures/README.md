@@ -121,8 +121,8 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     comparison at one machine's verification phase that pays their measured tax (`REPLAYS`, `BATCH_INVARIANT`). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
     line only for a model with that card; (A″) is the same on the card `head-scores-values`'s cut (a sparse-attention
-    head's key block as its scores unit and its values units on column blocks), a cost model's lines and not a bound
-    while no unit writes the key rows those units each commit. A new configuration, such as another cut, is a new
+    head's key block as its scores unit and its values units on column blocks, which read the block's key rows from
+    their writers' committed rows). A new configuration, such as another cut, is a new
     entry with its own line.
   - A two-stage line's first stage is the one the verifier runs: a verification phase, one committed trace and the
     sample over it, samples a whole number K of its replay blocks, never fewer than one
@@ -316,9 +316,11 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
   `workload_card.py` writes it from the census file and nothing else, so no stratum is edited by hand. The 128k
   workload's sparse-MLA blocks are that card's, counted over the serve plan's requests as serving splits a row
-  (`breakeven/mla128.py`). The figure of record's driver (`breakeven/headline.py`) prices the head as that card's
-  whole key blocks and end block, the forms that verify; `--partition head-scores-values` cuts each head's key block
-  into its scores unit and its values units instead, a modeled cut whose rows carry that card's label.
+  (`breakeven/mla128.py`). The figure of record's driver (`breakeven/headline.py`) cuts the head as it is served, by
+  the `partition` card `head-scores-values`: each head's key block its scores unit and its values units on 64
+  columns, which read the block's key rows from their writers' committed rows (one writer a column block for all the
+  heads); its rows carry that card's label. `--whole` prices the head as the `workload` card's whole key blocks and end
+  block instead, for comparison.
 
 Limits of the model:
 - A replay re-runs its whole replay block from its edge at the `replay` card's factor. Each sampled request pays its
@@ -330,8 +332,12 @@ Limits of the model:
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
   only what it serves; the capped ones charge at most what it serves, the sets' form on
   `card_influenceTwo_le_served_min` and the patterns' form on `card_influenceTwo_le_patterns`.
-- The patterns' form takes each request to serve at most S bits and no proof block to be shared across requests: a
-  batched or routed block that several requests read needs the planner changed.
+- The patterns' form takes no proof block to be shared across requests and each request to serve exactly S bits.
+  Replay blocks that read one another's values (a batched or routed block that several requests read, a value
+  another replay block committed) are one request there, priced at the replay grain's fan-out F as serving F S bits
+  (`optimize.two_stage_exfil`'s `fanout`). Lean certifies that point only for a window whose groups each hold F replay
+  blocks, and `plancheck.two` writes it only for a caller that says they do (`whole_groups`). Every figure here is at
+  F = 1 (`figure1.FANOUT`).
 - A verification phase's statements are sized for the first stage's count alone: a Definition's blocks in a sampled
   replay block are its own count, and its sessions' padding to one size within a statement, not to one size across
   Definitions. A pod-wide or datacenter-wide verification phase needs one committer over its machines' boundary rows.
