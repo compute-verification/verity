@@ -659,7 +659,7 @@ def main(a: Options) -> int:
         if a.weights_of_record:
             serve = Path(a.run) / "serve.json"
             roots = registered_weights(json.loads(Path(a.weights_of_record).read_text()),
-                                       json.loads(serve.read_text()) if serve.exists() else None)
+                                       json.loads(M.read(serve, "ServingConfiguration")) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
                     compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered_roots=roots)
     except ValueError as e:

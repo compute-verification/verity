@@ -33,3 +33,13 @@ def test_run_totals_bytes_unchanged(tmp_path):
     (tmp_path / "after" / "summary.json").write_text(json.dumps({**got, "final": False}))
     assert A.stopped(tmp_path / "after") is False
     assert A.stopped(tmp_path / "none") is False
+
+
+def test_serving_configuration_bytes_unchanged(tmp_path):
+    record = {"engine": "vllm", "revision": "0.0", "flags": ["--seal"], "phi": {"layers": 2}, "path": tmp_path,
+              "clocks": {"perf_counter": 1.5, "time": 2.0}}
+    before, after = tmp_path / "before.json", tmp_path / "after.json"
+    before.write_text(json.dumps(record, indent=1, default=str))
+    M.write(after, "ServingConfiguration", json.dumps(record, indent=1, default=str).encode())
+    assert after.read_bytes() == before.read_bytes()
+    assert json.loads(M.read(after, "ServingConfiguration")) == json.loads(before.read_text())

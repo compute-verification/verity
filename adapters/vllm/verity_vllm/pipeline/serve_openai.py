@@ -740,7 +740,7 @@ def main(opts: Options) -> int:
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
-    (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
+    M.write(out / "serve.json", "ServingConfiguration", json.dumps(record, indent=1, default=str).encode())
     if mirror is not None:
         mirror()
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
