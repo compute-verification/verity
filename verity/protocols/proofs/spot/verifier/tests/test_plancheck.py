@@ -1,4 +1,4 @@
-"""Lean's check of the planner's designs (`plancheck`, the `sampled-proofs-plancheck` executable): it accepts the
+"""Lean's check of the planner's designs (`plancheck`, the `spot-plancheck` executable): it accepts the
 planner's one-stage leak and work designs at Figure 1's scales, certifying a little more than the planner's
 `b K + loc_bits(n, K)` in exact arithmetic, and refuses each design with its rate a hair below the planner's rule, so
 its acceptance is not vacuous; a two-stage point's bits bound its count by enumeration on a small design; a design it

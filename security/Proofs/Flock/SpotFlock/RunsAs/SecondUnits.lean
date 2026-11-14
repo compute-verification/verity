@@ -7,12 +7,13 @@ public import VStarRecursive.SampledTwo
 # What the two-stage form's last step accepts: the units, at the reads it hands the record's checks
 
 `Spot.OneStage.check` hands the record's checks (`Spot.Record.checks`) the reads the verdicts report for the
-registration's own values (`openedRoots`), and `UnitsProved` says what those checks hold. The two-stage form's last
-step (`VStar.Recursive.SampledTwo.secondChecked`) calls the same function at other reads: those, less the reads of the
-registration's own ports at their own roots (`Spot.Record.lessOwnReads`).
+registration's own values less the reads of its own ports at their own roots, with those of the window values its
+params name less the reads at their window entries' roots (`openedRoots`), and `UnitsProved` says what those checks
+hold. The two-stage form's last step (`VStar.Recursive.SampledTwo.secondChecked`) calls the same function at the
+registration's own reads less its own ports' at their own roots (`Spot.Record.lessOwnReads`), naming no window value.
 
 * `UnitsAt c e opened` is `UnitsProved`'s six clauses with the reads the registered check is handed a parameter;
-  `UnitsProved c e` is it at `openedRoots c.record e.verdicts` (`unitsProved_at`).
+  `UnitsProved named c e` is it at `openedRoots named c.record e.verdicts` (`unitsProved_at`).
 * `checksAt_nil`: none of the record's checks fails, the sample's aside, exactly where `UnitsAt` holds at the reads
   they are handed.
 * `secondChecked_units`: what `secondChecked` accepts keeps the registration's rules R1–R8, has its sample a sample
@@ -30,8 +31,8 @@ namespace Properties.Spot
 open OneStage (Params Commitment Evidence Public)
 
 /-- **The units, as the record holds them, at the reads `opened` the registered check is handed**: `UnitsProved`'s
-clauses, the last at `opened`: when the record registers values or `opened` holds reads, those reads were opened
-against exactly the record's `{value: root}` (`Record.registeredRoots`). -/
+clauses, the last at `opened`: each read in `opened` is of a value the record registers, opened against the record's
+root for it (`Record.registeredRoots`). -/
 def UnitsAt (c : Commitment) (e : Evidence) (opened : Option (Array (String × Json))) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
@@ -39,12 +40,11 @@ def UnitsAt (c : Commitment) (e : Evidence) (opened : Option (Array (String × J
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  ((field? c.record "registered").isSome ∨ opened.isSome →
-    SameRoots (opened.getD #[]) (Record.registeredRoots c.record))
+  OpenedRegistered (opened.getD #[]) (Record.registeredRoots c.record)
 
-/-- `UnitsProved` is `UnitsAt` at the reads the verdicts report for the registration's own values. -/
-theorem unitsProved_at (c : Commitment) (e : Evidence) :
-    UnitsProved c e ↔ UnitsAt c e (openedRoots c.record e.verdicts) := Iff.rfl
+/-- `UnitsProved` is `UnitsAt` at the reads the record's checks are handed (`openedRoots`). -/
+theorem unitsProved_at (named : Array String) (c : Commitment) (e : Evidence) :
+    UnitsProved named c e ↔ UnitsAt c e (openedRoots named c.record e.verdicts) := Iff.rfl
 
 /-- **None of the record's checks fails, the sample's aside, exactly where the units hold at the reads the checks
 are handed**: `recordChecks_nil` at any reads `opened`. -/
@@ -73,13 +73,15 @@ private theorem accept_of_ite {α β : Type} {b : Bool} {r : String} {x : Core.O
 /-- **What the two-stage form's last step accepts** (`VStar.Recursive.SampledTwo.secondChecked`): the registration
 keeps R1–R8 against the verifier `v`; the sample is a sample of the sampling design `samplingDesign` the step is handed, over the registered
 population; the units hold at the reads the step hands the record's checks, the verdicts' own for the registration's
-own values less the reads of its own ports at their own roots (`UnitsAt` at `Record.lessOwnReads` of `openedRoots`);
+own values less the reads of its own ports at their own roots (`UnitsAt` at `Record.lessOwnReads` of
+`Record.ownRegistered`);
 and the verdicts accept. -/
 theorem secondChecked_units {v : Docket.Verifier} {delta : Core.Ratio} {c : Commitment} {m : Nat} {samplingDesign : Json}
     {e : Evidence} {pub : Public} {prof : Core.Integrity}
     (h : VStar.Recursive.SampledTwo.secondChecked v delta c m samplingDesign e = .accept pub prof) :
     (∃ samplingDesign', Registered v c.record samplingDesign') ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
-      UnitsAt c e (Record.lessOwnReads c.record (openedRoots c.record e.verdicts)) ∧ VerdictsAccept e.verdicts := by
+      UnitsAt c e (Record.lessOwnReads c.record (Record.ownRegistered c.record (Record.sessionRegistered e.verdicts))) ∧
+      VerdictsAccept e.verdicts := by
   unfold VStar.Recursive.SampledTwo.secondChecked at h
   obtain ⟨h1, h⟩ := accept_of_ite h
   obtain ⟨h2, h⟩ := accept_of_ite h

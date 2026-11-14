@@ -1,4 +1,4 @@
-"""`serve.py` as its own process, with the Lean verifier's coins stubbed: a test doesn't build `sampled-proofs-verifier`, so
+"""`serve.py` as its own process, with the Lean verifier's coins stubbed: a test doesn't build `spot-verifier`, so
 `one_stage.verifier.coins` answers seeded bytes and appends each request's size to $COINS_LOG, or refuses as a Lean that
 can't answer when $COINS_REFUSE is set.  The stub stands in for the Lean, so it carries the Lean's claim instance
 (`one_stage.verifier.CLAIM`), unless $COINS_UNNAMED is set.  `--max-hellos N` lowers the cap on a session's refused

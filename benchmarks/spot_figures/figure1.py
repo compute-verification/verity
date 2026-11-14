@@ -1,4 +1,4 @@
-"""Figure 1's model and its bounds against proof overhead, derived from the sampled-proofs planner: what an adversary
+"""Figure 1's model and its bounds against proof overhead, derived from the SPOT planner: what an adversary
 serving a model on all of a scope's compute over a monitoring period can exfiltrate, infiltrate or skip while evading
 detection with probability above δ, against proof overhead, at each share of compute spent on verification.  Figure 1
 itself plots the same model against total cost (`total_cost.py`).

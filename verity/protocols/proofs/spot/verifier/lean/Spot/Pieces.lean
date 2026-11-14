@@ -1,6 +1,6 @@
 /-
-The one-stage audit's pieces as JSON functions, which `sampled-proofs-difftest` serves (`Difftest.serve`) for the
-difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proofs-one-stage serve`):
+The one-stage audit's pieces as JSON functions, which `spot-difftest` serves (`Difftest.serve`) for the
+difftest against `one_stage`'s Python, beside the whole protocol (`spot-one-stage serve`):
 
 * `decode`: a case's three decoders run independently (`answer` stops at the first refusal), the parameters and the
   evidence as parsed (`OneStage.paramsParsed`, `evidenceParsed`), before the protocol's refusals of what soundness
@@ -128,7 +128,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   to that root, each position's source from the program's runs, the strings at those sources from the writer's members'
   public bodies, and each table's root from bodies the leaf layer binds, held to the root the window registers.
 
-`sampled-proofs-verifier` serves those the verifier runs (`verifier`): `registration`, `matches_public`,
+`spot-verifier` serves those the verifier runs (`verifier`): `registration`, `matches_public`,
 `select` (the sample of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
 two-stage rule's second stage, on the coins after the interior registration), `check_draw`,
 `check_proved`, `record`, `across`, `across_all`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its

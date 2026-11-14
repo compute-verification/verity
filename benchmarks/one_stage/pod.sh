@@ -36,7 +36,7 @@ if [ "$(cat $W/bin/m0.sha 2>/dev/null)" != "$M0SHA" ]; then
 fi
 wait $LP || { tail -40 $O/build-lean.log; exit 1; }
 [ -x $W/bin/verity-verify-proof ] || { tail -40 $O/build-lean.log; exit 1; }
-# the drivers' verifier (one_stage.verifier) builds the sampled-proofs Lean in this tree on its first check
+# the drivers' verifier (one_stage.verifier) builds the SPOT Lean in this tree on its first check
 export PATH=$HOME/.elan/bin:$PATH
 sha256sum $W/bin/flock-circuit $W/bin/verity-verify-proof | tee $O/binaries.sha256
 

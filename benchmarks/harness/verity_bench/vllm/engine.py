@@ -108,7 +108,7 @@ def _pearl_c_run(llm: Any) -> Any | None:
     """The arm's Pearl-C device run, the owner of its option's ``end_pass``; None when the arm runs none. The adapter ends
     a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c.run_device import PearlCDeviceRun
+    from verity_torch.pouw.pearl_c.run_device import PearlCDeviceRun
 
     option = llm.protocols.get("pouw") if llm.protocols is not None else None
     run = getattr(getattr(option, "end_pass", None), "__self__", None)

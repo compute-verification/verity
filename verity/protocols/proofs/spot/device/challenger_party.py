@@ -30,12 +30,9 @@ from __future__ import annotations
 
 import json
 import socket
-import sys
 import threading
 from pathlib import Path
 from typing import Any
-
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")))
 
 from verity.protocols.proofs.spot.device import challenger_session as AC
 

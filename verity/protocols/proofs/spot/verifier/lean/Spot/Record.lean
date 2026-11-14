@@ -13,8 +13,10 @@ The one-stage audit record (`audit.audit_record`), whole, and what the drivers c
   each value the verifier holds a certified entry for has a reported read, when it fails;
 * `record`: the record, every field as `audit_record` writes it, the registered roots its checks read derived here from
   the verdicts (`sessionRegistered`, `ownRegistered`), never taken as input, and the certified values' names an input
-  (`certified`), less the reads of the registration's own ports at their own roots (`lessOwnReads`). `checks`,
-  `ownRegistered` and `lessOwnReads` run linear in the
+  (`certified`), less the reads of the registration's own ports at their own roots (`lessOwnReads`), with the reads of
+  the window values its caller names, less those at the roots of their entries in the registration's
+  `window.activations.values` (`windowReads`; `heldReads` is the whole). `checks`, `ownRegistered` and `lessOwnReads`
+  run linear in the
   registration's roots: each is compiled as its form on `lastRoots`, a hash map of `byPort` (`checks_eq_checksFast`,
   `ownRegistered_eq_ownRegisteredFast`, `lessOwnReads_eq_lessOwnReadsFast`), while every theorem reads the definitions above. Python writes `delta` as a float: here it is the double nearest
   the exact δ given, which `PyJson` writes as Python's `repr` does. `wrong_units.bound` is exact under every sampling design
@@ -298,6 +300,8 @@ structure Input where
   sessionRoots : Option (Array (String × Json))
   /-- the values the verifier holds certified entries for, by name -/
   certified : Array String := #[]
+  /-- the window values whose reads `checks` holds to their window entries' roots (`windowReads`) -/
+  windowValues : Array String := #[]
 
 private def need (ok : Bool) (what : String) : V Unit := if ok then pure () else throw what
 
@@ -308,7 +312,7 @@ private def ints? (j : Json) : Option (Array Int) := match j with
 private def INPUT_KEYS : Array String := sortStrings #["registration", "receipt", "draw", "law", "proved_units", "instances",
   "statement", "verdicts", "delta", "sessions", "served", "session_roots"]
 
-private def OPTIONAL_KEYS : Array String := #["certified"]
+private def OPTIONAL_KEYS : Array String := #["certified", "window_values"]
 
 private def strings (j : Json) (what : String) : V (Array String) := do
   let .arr xs := j | throw s!"{what} is not a list of strings"
@@ -321,14 +325,17 @@ canonical JSON is Python's (`pyCanonical`, so its digest is `registration.digest
 units (and closure) are integers, its population an integer and a subset's `k` present, integer proved units and
 instances, verdicts objects (the verifier that accepted reporting its registered reads as objects with a string
 `value` and a `root`), session digests as strings, served units integers, and δ an exact ratio in (0, 1); and
-optionally `certified`, a list of strings: the names of the values the verifier holds certified entries for
-(`record`). -/
+optionally `certified`, a list of strings: the names of the values the verifier holds certified entries for; and
+optionally `window_values`, a list of strings (`record`). -/
 def inputOf (j : Json) : V Input := do
   need ((keys? j).map (fun ks => ks.filter fun k => !OPTIONAL_KEYS.contains k) == some INPUT_KEYS)
-    s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}, and optionally certified"
+    s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}, and optionally certified and window_values"
   let certified ← match field? j "certified" with
     | none => pure (#[] : Array String)
     | some c => strings c "certified"
+  let windowValues ← match field? j "window_values" with
+    | none => pure (#[] : Array String)
+    | some w => strings w "window_values"
   let reg := getD j "registration"
   need (reg matches .obj _) "the registration is not an object"
   need (pyCanonical reg) "the registration holds a number that is not an integer"
@@ -379,7 +386,8 @@ def inputOf (j : Json) : V Input := do
   let delta ← Core.Ratio.ofString d "delta"
   need (delta.num != 0 && delta.num < delta.den) "delta is not in (0, 1)"
   return { registration := reg, receipt, draw, units, samplingDesign, provedUnits, instances := getD j "instances",
-           statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots, certified }
+           statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots, certified,
+           windowValues }
 
 private def strataSampled (draw : Json) (units : Array Int) : Json :=
   obj ((match getD draw "strata" with | .arr ss => ss | _ => #[]).toList.filterMap fun s =>
@@ -408,11 +416,41 @@ accept publishes under the same name (`OneStage.Public`). -/
 def allRan (verdicts : Array (String × Json)) : Bool :=
   (verdicts.filter fun (_, v) => !(getD v "accepted" matches .null)).size == verdicts.size
 
+/-- `opened`'s reads of the window values `named` that are not `reg`'s own (no port of its roots, no value of its registered
+entries), less each at the root of that value's entry in `reg`'s `window.activations.values` (an entry whose `value` is
+its key and whose root is a string): a named value's read at another root, or with no such entry, stays, to be held to
+the registered values. The caller names the values; one-stage names none of its own. -/
+def windowReads (named : Array String) (reg : Json) (opened : Option (Array (String × Json))) :
+    Option (Array (String × Json)) :=
+  let values := getD (getD (getD reg "window") "activations") "values"
+  let roots := match getD reg "roots" with | .arr rs => rs | _ => #[]
+  let regs := match getD reg "registered" with | .arr es => es | _ => #[]
+  let free := named.filter fun v =>
+    !roots.any (fun r => jeq (getD r "port") (.str v)) && !regs.any (fun e => jeq (getD e "value") (.str v))
+  let rootOf := fun (v : String) =>
+    let e := getD values v
+    if jeq (getD e "value") (.str v) then match getD e "root" with | .str w => some w | _ => none else none
+  opened.map (·.filter fun (v, r) => free.contains v && !((rootOf v).any fun w => jeq (.str w) r))
+
+/-- The registered reads `checks` holds: `opened`'s reads of `reg`'s own values less those of its own ports at their own
+roots (`ownRegistered`, `lessOwnReads`), then its reads of the window values `named` less those at their window entries'
+roots (`windowReads`). -/
+def heldReads (named : Array String) (reg : Json) (opened : Option (Array (String × Json))) :
+    Option (Array (String × Json)) :=
+  (lessOwnReads reg (ownRegistered reg opened)).map (· ++ (windowReads named reg opened).getD #[])
+
+/-- Naming no window value, `heldReads` holds exactly the record's own reads less its ports' at their own roots. -/
+theorem heldReads_nil (reg : Json) (opened : Option (Array (String × Json))) :
+    heldReads #[] reg opened = lessOwnReads reg (ownRegistered reg opened) := by
+  have h : ∀ a : Array (String × Json), a.filter (fun _ => false) = #[] := fun a => by
+    rcases a with ⟨l⟩; simp
+  cases opened <;> simp [heldReads, windowReads, h]
+
 def record (i : Input) : V Json := do
   let reg := i.registration
   let get := getD reg
   let digest ← Flock.WindowRecord.digestHex reg
-  let opened := lessOwnReads reg (ownRegistered reg (sessionRegistered i.verdicts))
+  let opened := heldReads i.windowValues reg (sessionRegistered i.verdicts)
   let cs := checks reg i.receipt i.draw i.samplingDesign i.units i.provedUnits i.instances digest i.served i.sessionRoots opened
     ++ certifiedCheck i.certified opened
   let accepted' := fun (v : Json) => jeq (getD v "accepted") (.bool true)

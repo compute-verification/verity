@@ -248,7 +248,7 @@ from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as RG
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.protocols.accounting.certifier.verifier.scan_answer import _found, window_answer
 

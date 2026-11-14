@@ -47,7 +47,7 @@ statement for each member with a session in the evidence), which the audit's che
 and decides by `OneStageZk.checkMembersAt` (`members.check`). `members_parsed` is what its parsers read of a case's
 parameters and evidence, with no check and no verdict.
 
-Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
+Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `spot-verifier`
 too, and two builds at once would rewrite one module's C under each other.
 """
 from __future__ import annotations
@@ -503,12 +503,12 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
 
 #: the one-stage audit on the proofs themselves (`Spot.OneStageZk`), which runs `verify`'s verifier on blobs
 V2 = "verity/sampled-proofs/one-stage/v2"
-V2_EXE = "sampled-proofs-one-stage-zk"
+V2_EXE = "spot-one-stage-zk"
 
 
 @functools.cache
 def v2_executable() -> Path:
-    """`lake build sampled-proofs-one-stage-zk`, once per process, under `BUILD_LOCK`; the executable's path."""
+    """`lake build spot-one-stage-zk`, once per process, under `BUILD_LOCK`; the executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -646,7 +646,7 @@ def members_parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tu
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
                 registered: Mapping[str, Any] | None = None, tables: Sequence[Path] = ()) -> tuple[list[Finding] | None, str | None]:
     """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
-    (`sampled-proofs-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
+    (`spot-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
     or None and Lean's refusal. `program` is the descriptor as JSON; `tables`, the MUFU tables a statement with lookups
     reads, blobs beside the files (`OneStageZk.tablesOf` finds them by SHA-512)."""
     pr, blobs = evidence_v2(proof)
@@ -671,7 +671,7 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
 
 def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
              circuit_sha512: str, public_sha512: str, registered: Mapping[str, Any] | None) -> dict:
-    """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
+    """The one-stage audit on `proof` itself (`spot-one-stage-zk check`): v1's `params` with ``proofs``, the
     auditor's circuit and public files' digests, committed before any coin, and the verifier's registered file, the
     docket `record`, and v1's `evidence` with its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`,
     under the evidence's ``sessions``); the outcome line. `params` must name the auditor's challenger and its window

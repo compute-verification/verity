@@ -273,7 +273,7 @@ def test_lgather_row_indexing():
     assert g.evaluate(5, *poisoned) == BOT16 == lazy(5, poisoned)  # reading the inactive row yields that row's ⊥
     assert g.evaluate(BOT32, *rows) == BOT16 == lazy(BOT32, rows)  # an inactive index yields ⊥, whatever the rows hold
     # out-of-range Active index: payload agreement with the ORIGINAL's registered total extension — `GatherBf16x{V}` (prims.py):
-    # "out-of-range or negative token -> 0x7FFF (a total, documented extension; production would fault)" — forced by A6/§3.3,
+    # "out-of-range or negative token -> 0x7FFF (a total, documented extension; serving would fault)" — forced by A6/§3.3,
     # nothing invented here; never INV ([P3]: range is a boundary fact).  Measured against the original, both evaluators.
     orig = P.gather_bf16(8)
     assert "out-of-range or negative" in orig.doc and "token -> 0x7FFF (a total, documented extension" in orig.doc
