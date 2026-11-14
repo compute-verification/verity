@@ -6,6 +6,7 @@ public import RemoteAudit.P2
 public import RemoteAudit.P2Session
 public import RemoteAudit.Registry
 public import RemoteAudit.Schedule
+public import RemoteAudit.Span
 public import RemoteAudit.Store
 public import RemoteAudit.Wire
 
@@ -27,6 +28,9 @@ so their reasons are compared, as are those of `schedule.py`'s schedule check (`
 `p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
 `p2_party.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
+The span's check (`RemoteAudit.Span`): on a session run to its draws, the rows the verifier derives for each draw
+(`span_public`), the window decided on public files taken as accepted (`span_held`), and decided from the statements
+the proof system's audit must accept (`span`).
 `remote-audit-difftest` serves them.
 -/
 
@@ -791,6 +795,57 @@ def p2SessionFn (j : Json) : V Json := do
     s := s'
   pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
 
+/-- The session `j` gives (`sessionFn`'s input) run through its events by `Session.run`, and its window `t`. -/
+private def drawnSession (j : Json) : V (Session.State × Int) := do
+  let reg ← registrationOf (← J.get j "registration" "input")
+  let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
+  let events ← (← J.arr j "events" "input").mapM eventOf
+  let (_, s) ← Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events
+  pure (s, ← int j "t")
+
+private def layoutOf (j : Json) : V Span.Layout := do
+  let ps ← (← J.arr j "layout" "input").mapM fun p => do
+    let xs ← J.asArr p "port"
+    if xs.size ≠ 2 then throw "a port is [name, bits]"
+    pure (← J.asStr xs[0]! "port", ← J.asNat xs[1]! "bits")
+  pure ⟨ps⟩
+
+private def instanceOf (j : Json) : V Span.Instance := do
+  pure { verdict := ← nat j "verdict", pubSalt := ← hex j "pub_salt", signsSalt := ← hex j "signs_salt",
+         verdictSalt := ← hex j "verdict_salt" }
+
+private def instancesOf (j : Json) : V (Array Span.Instance) := do (← J.arr j "instances" "input").mapM instanceOf
+
+private def spanResultJ (x : Session.Result × Session.State) : Json :=
+  Json.mkObj [("result", resultJ x.1), ("outcome", match x.2.outcome with | some o => .str o | none => .null)]
+
+/-- `{session…, "t"}`: window t's draws and, for each, the `pub` and `signs` rows the verifier derives
+(`Span.publicWords`, `Span.signWords`); refused for a window with no draws awaiting their check. -/
+def spanPublicFn (j : Json) : V Json := do
+  let (s, t) ← drawnSession j
+  let some (w, drawn) := s.awaiting t | throw "the window has no draws awaiting their check"
+  pure (Json.mkObj [("draws", .arr (drawn.map pairJ)), ("rows", .arr (drawn.map fun (i, p) =>
+    Json.mkObj [("pub", toJson (Span.publicWords s.reg w i p)), ("signs", toJson (Span.signWords s.reg w i))]))])
+
+/-- `{session…, "t", "layout", "held": [{"public", "instances"}]}`: window t decided by `Span.spanHeld` on the public
+files given, taken as accepted (`Session.verifyHeld`). -/
+def spanHeldFn (j : Json) : V Json := do
+  let (s, t) ← drawnSession j
+  let held ← (← J.arr j "held" "input").mapM fun h => do pure (← hex h "public", ← instancesOf h)
+  pure (spanResultJ (Session.verifyHeld s t (← layoutOf j) held))
+
+/-- `{session…, "t", "auditor": {"params", "layout"}, "span": {"statements": [{"pub", "record", "evidence",
+"instances"}], "blobs"}}`: window t decided from the span (`Session.verifySpan`). -/
+def spanFn (j : Json) : V Json := do
+  let (s, t) ← drawnSession j
+  let a ← J.get j "auditor" "input"
+  let x ← J.get j "span" "input"
+  let statements ← (← J.arr x "statements" "span").mapM fun st => do
+    pure { pub := ← J.str st "pub" "statement", record := ← hex st "record", evidence := ← hex st "evidence",
+           instances := ← instancesOf st : Span.Statement }
+  let sp : Span.Span := { statements, blobs := ← hexes x "blobs" }
+  pure (spanResultJ (Session.verifySpan s t { params := ← J.get a "params" "auditor", layout := ← layoutOf a } sp))
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("session", sessionFn), ("registration_digest", registrationDigestFn), ("register", registerFn),
   ("registry", registryFn), ("codec_decode", codecDecodeFn),
@@ -800,6 +855,6 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("store_salt", storeSaltFn), ("expected_root", expectedRootFn), ("hold", holdFn), ("binding", bindingFn),
   ("line", lineFn), ("line_record", lineRecordFn), ("pooled", pooledFn),
   ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
-  ("p2_session", p2SessionFn)]
+  ("p2_session", p2SessionFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
 
 end RemoteAudit.Difftest
