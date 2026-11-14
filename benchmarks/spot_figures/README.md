@@ -172,7 +172,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     blocks a verification phase samples, and the replay blocks whose first reads one commitment of the challenger's
     holds (`challenger.MAX_COINS` coins); Lean's bound on the chance the second stage then refuses an honest run at a
     first-stage coin the first stage accepts, K·Σ_t k_t·2^−64 (`SpotFlock.secondDraw_refused_le_first`); and that
-    bound added up over the replay blocks the scope samples. `total_cost.limits`' second draw is the same read with a
+    bound added up over the replay blocks the scope samples. `total_cost.limits`' second sample is the same read with a
     block type of under one proof block a replay block counted at the chance a replay block has it; `at_design`
     counts every cell, the theorem's condition.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling

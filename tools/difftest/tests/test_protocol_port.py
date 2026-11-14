@@ -31,13 +31,13 @@ def _evidence(b: bytes) -> tuple[int, int]:
 
 
 def _check(k: int, root: bytes, e: tuple[int, int], delta: str = "1/1000000") -> tuple:
-    drawn, passed = e
-    if passed < drawn:
-        return "reject", f"{drawn - passed} of {drawn} drawn units failed"
-    if drawn < k:
-        return "undecided", f"{drawn} of the {k} units drawn"
-    profile = {"covered": [], "delta": delta, "drawn": {"unit": drawn},
-               "levels": [{"draw": {"subset": k}, "name": "unit", "query": None, "size": drawn}],
+    sampled, passed = e
+    if passed < sampled:
+        return "reject", f"{sampled - passed} of {sampled} drawn units failed"
+    if sampled < k:
+        return "undecided", f"{sampled} of the {k} units drawn"
+    profile = {"covered": [], "delta": delta, "drawn": {"unit": sampled},
+               "levels": [{"draw": {"subset": k}, "name": "unit", "query": None, "size": sampled}],
                "linked": True, "prescribed": [], "programs": [root.hex()]}
     return "accept", {"passed": passed}, profile
 

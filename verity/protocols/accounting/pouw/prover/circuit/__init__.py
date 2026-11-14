@@ -121,7 +121,7 @@ class Traced:
         an = anchors.weight_inputs()
         return [list(b), an["salt"], an["weight"], an["colids"]]
 
-    def draw(self, law, anchors, ledger):
+    def draw(self, sampling_design, anchors, ledger):
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one, each
         stratum's subset keyed by the call's index (``anchors.call_index``) with its template, under the key of
         ``ledger``, the execution phase's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
@@ -137,7 +137,7 @@ class Traced:
         ledger.check_draw()
         ledger.admit(anchors, self.shape)
         index = anchors.call_index
-        return plan.draw(ledger.key, self.layout(), law, index if isinstance(index, tuple) else (index,))
+        return plan.draw(ledger.key, self.layout(), sampling_design, index if isinstance(index, tuple) else (index,))
 
     def check_openings(self, plan, anchors, ledger, domain, openings, limits=None) -> None:
         """Refuse the call's A-row openings unless they are the plan's A rows, once each, and each authenticates under

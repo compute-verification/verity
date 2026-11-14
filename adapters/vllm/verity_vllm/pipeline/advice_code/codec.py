@@ -7,7 +7,7 @@ the scheduler replay (`replay`) and the derived rules (`derived`) leave, in a pr
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`AdviceCodeError`),
 deterministically. A string longer than ℓ (`Registered.cap_bits`) is refused unread, and `encode` writes none.
 
-**Certified, 0 bits** (`Record`, from the network certifier's signed records; the compile unit holds them as witness):
+**Certified, 0 bits** (`Record`, from the network certifier's signed records; the compile slice's proof block holds them as witness):
 - the network certifier's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the

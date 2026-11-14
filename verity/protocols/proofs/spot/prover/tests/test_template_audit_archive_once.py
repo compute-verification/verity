@@ -272,4 +272,5 @@ def test_under_archive_link_a_circuit_that_cannot_be_linked_is_put_as_without_it
     assert f"{st['dir'] / 'circuit.txt'} not linked into {out / 'archive'}" in said and "Invalid cross-device link" in said
     assert [json.loads(x) for x in puts.read_text().splitlines()] == [["circuit.txt", "pub-8.bin"]]
     assert (out / "archive" / "sha512" / key).stat().st_ino != (st["dir"] / "circuit.txt").stat().st_ino
-    assert st["archived"] and next(iter(st["archived"].values()))[0] == key
+    files = [v for k, v in st["archived"].items() if k[:1] != ("archiving",)]  # `a0.archiving` keeps its locks there too
+    assert files and files[0][0] == key

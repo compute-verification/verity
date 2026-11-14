@@ -1,9 +1,9 @@
 module
 
-public import Flock.RegKnown
-public import CoreProtocol.Protocol
-meta import Flock.RegKnown
-meta import CoreProtocol.Protocol
+public import NetworkCheck.ScanOk
+public import NetworkCheck.Check
+meta import NetworkCheck.ScanOk
+meta import NetworkCheck.Check
 
 /-!
 # The scan's start

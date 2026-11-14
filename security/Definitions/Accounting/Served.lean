@@ -146,7 +146,7 @@ the fix of, and its round root covers the A and admit roots only. The admit word
 always-proved units are not in the per-call Program `Properties.Served.ServedUnits` names, so no gate of a served
 circuit is one. They are PADCREDIT's (R8, R9), and the round root's admit root stays a run-time check below.
 
-`Tie` is what a declared circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
+`Tie` is what a registered circuit (`Accounting.Compose.Declared`) must be to be the served window's: its call sites and
 rounds the shape's, each value's commit coin `commitCoin` of its class (a receipt's any coin after its round's, by
 the sample), and the IR facts that put each class's value at the cut `commitCoin` names (a weight registered, an A row or
 a `y` row a run input read only by its own call, a record a run input read only by its own call and unit, a public
@@ -160,7 +160,7 @@ is `Tie` with what useful-work credit needs of the circuit (`ValueChecked`): a n
 statement reads yet.
 
 What the verifier must check at run time for each class, so that a `Declared` meeting `Tie` is the run's (the
-statement is over the declared circuit; these are the checks that make its `commitRound` the code's):
+statement is over the registered circuit; these are the checks that make its `commitRound` the code's):
 * `registered`: the salt coin opened against the registration root, recorded before every round's coin; the weights'
   root equal to the served model's published one; each sampled proof block's B rows opened under its linear's root(B), and
   root(B) under the weights' root;
@@ -183,7 +183,7 @@ statement is over the declared circuit; these are the checks that make its `comm
   whatever the record calls them. `serve.py` builds `live_challenger` in the prover's process today
   (`window.py`'s `entropy=os.urandom`), so its runs establish only the order of roots and coins;
 * `receipt`: round `r`'s receipt roots under the root of one later round, recorded before that round's coin (round
-  `r + D − 1`'s in a ring of depth `D`), or under the manifest before the sampling coin, at the commit coin the declared
+  `r + D − 1`'s in a ring of depth `D`), or under the manifest before the sampling coin, at the commit coin the registered
   circuit gives them; each sampled proof block's receipt opened under it;
 * `check`: each sampled proof block's check words `1` in its accepted proof, a row of known content (`PouwH1TileZy_v1`'s `ok`,
   the one word `1` under the public `ok_salt`), committed with the unit's receipts;
@@ -424,7 +424,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   | .yOpen => True
   | .perCall => True
 
-/-- **Declared circuit `Cd`, its gates classed by `cls`, is served window `L` in form `F`**:
+/-- **Registered circuit `Cd`, its gates classed by `cls`, is served window `L` in form `F`**:
 * `calls`, `rounds`, `round`: its call sites are the window's `steps × calls` calls, numbered step by step, its rounds
   the form's (`Form.rounds`), and each call site's round its form's (`Form.roundOf`: its step's, or `perCall`'s own);
 * `inRange`: every gate's call site is one of them;
@@ -455,7 +455,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
 * `readers`: only gates of a receipt's or a check word's own unit read it, so it is in no other unit's late cone, and
   committing it after later coins leaves no reader in another unit (the module docstring; Compose's
   `LayerCommitted`, second case).
-The `commit`, `receipt` and `inner` fields are how the declared circuit is built from the shape; the others are facts
+The `commit`, `receipt` and `inner` fields are how the registered circuit is built from the shape; the others are facts
 of each call's Program, which no code checks yet (an extractor building `Cd` from the compiled Programs is to); the
 commit coins are the code's only if the verifier checks the run's round log (the module docstring's list). -/
 structure Tie {ι : Type} (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) : Prop where
@@ -492,7 +492,7 @@ structure Tie {ι : Type} (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ �
     ∀ j, j < Cd.dag.length → Cd.Reads j i → Cd.unit j = Cd.unit i
   inner : ∀ i, i < Cd.dag.length → cls i = .inner → Cd.commitRound i = Cd.cutOf i
 
-/-- **The tie gives the service's commit order**: a declared circuit that is a served window, in any form, meets
+/-- **The tie gives the service's commit order**: a registered circuit that is a served window, in any form, meets
 `LayerCommitted`. Every commit coin but a receipt's is then no later than its IR cut (the first case): a weight's `0`;
 an A row's or a `y` row's, its round, its first reader's; a `zTree` `z` word's, its round, the floor of its cut;
 `perCall`'s `z` or `y` word's, the round after its own, which its coin read reaches; an inner value's, its cut. A
@@ -620,7 +620,7 @@ def ValueChecked {ι : Type} (L : Shape) (dq : List ℤ → ℤ) (Cd : Declared 
 
 /-- **A tied window meets what useful-work credit needs of its circuit**: the tie, in any form, with every
 sampled proof block's served product value-checked at the Program's public dequant `dq` (`ValueChecked`). It is necessary, not
-sufficient: no credit statement reads it yet, and it is of the declared circuit, not of the prover's kernel. No gate
+sufficient: no credit statement reads it yet, and it is of the registered circuit, not of the prover's kernel. No gate
 checks it yet (SERVE-GATE's has no such check). -/
 def CreditTie {ι : Type} (L : Shape) (F : Form) (dq : List ℤ → ℤ) (Cd : Declared ι) (cls : ℕ → Cls) : Prop :=
   Tie L F Cd cls ∧ ValueChecked L dq Cd cls
@@ -631,7 +631,7 @@ def Llama31Shape : Prop :=
   llama31_8b.calls = 128 ∧ llama31_8b.perStep = 86016 ∧ llama31_8b.population = 1548288 ∧
     Form.rounds llama31_8b .perCall = 2304 ∧ llama31_8b.Wf
 
-/-- **An epoch of `W` served windows of one salt is tied**: each window's declared circuit is shape `L`'s in form `F`
+/-- **An epoch of `W` served windows of one salt is tied**: each window's registered circuit is shape `L`'s in form `F`
 (`Tie`, which fixes its live rounds at `F.rounds L`), and each window's timed run
 starts at the salt's release `release` (`Pouw.TimedRun.ts`; the service's `salted_at`, `spot.service`), so
 every window of the salt is accounted in one `(t_s, t_d]`. One salt spans an epoch's windows (`SaltWindows`,

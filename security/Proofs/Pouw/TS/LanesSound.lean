@@ -235,7 +235,7 @@ verifier's check of each file at `ownOf` (`roots`, `place`) and of the tile (`Po
 check), the served roots registered by the reads built from `own` and the one-read check
 (`RowsSession.servedRegistered_canon`), and `GroupRealizes` from the 33 circuits' lowerings (`groupRealizes_lanes32`). -/
 theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
-  intro Ω _ S nπ K nw sess₀ op sess out salts pub roots place right δ hCR hLaw hδ hδ0 hL hC
+  intro Ω _ S nπ K nw sess₀ op sess out salts pub roots place right δ hCR hSamplingDesign hδ hδ0 hL hC
   have h := Accounting.TS.Group.group_soundAt
     (leafLayer sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
       (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
@@ -246,7 +246,7 @@ theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.L
     sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
     (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
     (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (place x w i) (servedTile K) (k.map Fin.val))
-    (fun _ _ _ => PouwWindow.Lanes.Tile.check ⟨32, 32, K⟩ = .ok ()) "o0" δ hCR hLaw
+    (fun _ _ _ => PouwWindow.Lanes.Tile.check ⟨32, 32, K⟩ = .ok ()) "o0" δ hCR hSamplingDesign
     (fun x w i k h => (sess₀ x w i k).servedRegistered_canon (op x w i k) (PouwWindow.Lanes.checkOneRead_ok h))
     (fun x w i k => ⟨#[(PouwWindow.Lanes.okRow, salts x w i k "o0")], by
       cases k <;> simp [knownOf, PouwWindow.Lanes.knownRows]⟩) hδ hδ0

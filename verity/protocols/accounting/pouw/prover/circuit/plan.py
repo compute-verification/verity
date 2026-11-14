@@ -6,7 +6,7 @@ each sampled tile together with its **closure**: its X strip's unit, its strip's
 strip's path to D_A and the call's key unit, each proved once, and its Y strip's unit in the weight's own Program
 (`NcpWeight`), once per plan. Every other template is sampled at its floor, so a wholly wrong one is caught directly
 (`audit_work_whole_stratum`), and an incorrect proof block beneath no sampled tile is counted through the unsound tiles beneath it (Lean
-`harm_le_unsoundWork`, `closureLaw_escape`).
+`harm_le_unsoundWork`, `closure_escape`).
 
 **The sampling design is a seam** (`TileSamplingDesign`), so the plan switches sampling designs without changing:
 * `CountSamplingDesign` is one_stage's stratified sampling design: one stratum per template, a uniform k_s-subset
@@ -327,7 +327,7 @@ def template_strata(us: Sequence[ProofBlock], per_tile: int) -> tuple[StratumSpe
 
 @dataclass(frozen=True)
 class Plan:
-    law: str
+    sampling_design: str
     sizes: Mapping[str, int]
     drawn: tuple[int, ...]                   # the units the sampling design drew (tiles and floor units)
     proved: tuple[int, ...]                  # the sampled proof blocks and every sampled tile's closure, ascending, each once
@@ -336,14 +336,14 @@ class Plan:
     proved_b: tuple[int, ...] = ()           # a tile check's: the weight Program's row units the sampled tiles read, each once
 
 
-def draw(key: Key, lay: Layout, law: TileSamplingDesign, call: Sequence[int] = ()) -> Plan:
+def draw(key: Key, lay: Layout, sampling_design: TileSamplingDesign, call: Sequence[int] = ()) -> Plan:
     """The plan for one sample: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
     `DRAW_DOMAIN` after the receipt), then every sampled tile's closure.  ``call`` is the call's index (`anchors`'
     `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template),
     and the calls of an execution phase sampled under one key sample independently.  The verifier samples through
     `Traced.draw`, over its own layout."""
     lay.check()
-    sizes = law.sizes(lay.strata)
+    sizes = sampling_design.sizes(lay.strata)
     drawn: list[int] = []
     for s in lay.strata:
         context = ("call", *call, "stratum", s.name) if call else ("stratum", s.name)
@@ -353,7 +353,7 @@ def draw(key: Key, lay: Layout, law: TileSamplingDesign, call: Sequence[int] = (
     bs = {b for u in drawn if lay.b_rows and u in lay.b_rows for b in lay.b_rows[u]}
     for u in drawn:
         proved.update(lay.closure.get(u, ()))
-    return Plan(law.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)),
+    return Plan(sampling_design.name, sizes, tuple(sorted(drawn)), tuple(sorted(proved)), openings(lay, proved, ys), tuple(sorted(ys)),
                 tuple(sorted(bs)))
 
 
@@ -361,19 +361,19 @@ def draw(key: Key, lay: Layout, law: TileSamplingDesign, call: Sequence[int] = (
 _NO_FLOORS = WorkSamplingDesign()
 
 
-def work_table(lay: Layout, law: WorkSamplingDesign = _NO_FLOORS) -> dict[str, dict[str, int]]:
+def work_table(lay: Layout, sampling_design: WorkSamplingDesign = _NO_FLOORS) -> dict[str, dict[str, int]]:
     """The verifier's work table (its `--work-table`, `Draw.workTableOfJson`): every template of the call, with its W_ref
-    per unit (0 for units that do no PoUW work) and its floor f_s (`law.floors`). It refuses a call whose work is in more
+    per unit (0 for units that do no PoUW work) and its floor f_s (`sampling_design.floors`). It refuses a call whose work is in more
     than one stratum (`check_work_strata`, the execution phase pin's `hone`)."""
     check_work_strata(lay.strata)
-    return {s.name: {"work": s.work // len(s.units), "floor": law.floor(s.name)} for s in lay.strata}
+    return {s.name: {"work": s.work // len(s.units), "floor": sampling_design.floor(s.name)} for s in lay.strata}
 
 
-def design_object(lay: Layout, law: WorkSamplingDesign) -> dict:
+def design_object(lay: Layout, sampling_design: WorkSamplingDesign) -> dict:
     """The sampling design `verity-verify-proof draw --program P --partition Q --work K --work-table F` derives for this call
     (`Draw.deriveWork`, as `SamplingDesign.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
     (`WorkSamplingDesign.budget`)."""
-    sizes, table, k = law.sizes(lay.strata), work_table(lay, law), law.budget(lay.strata)
+    sizes, table, k = sampling_design.sizes(lay.strata), work_table(lay, sampling_design), sampling_design.budget(lay.strata)
     return {"law": "work", "k": k, "strata": [{"template": s.name, "units": s.ranges(), "work": table[s.name]["work"],
                                                "floor": table[s.name]["floor"], "k": sizes[s.name]} for s in lay.strata]}
 

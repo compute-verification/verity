@@ -626,7 +626,7 @@ def test_a_summary_states_the_stop_word_only_where_lean_refused_the_stop_relatio
     entry = got["audit"]["verdicts"][SA.LEAN]
     assert (entry["of_record"], entry["digest"], entry["why"]) == (True, UNSATISFIED["digest"], UNSATISFIED["why"])
     assert summary["reason"] == SA.reason({SA.LEAN: entry}) == SA.STOP_WORD
-    assert summary["accepted"] is False and summary["failed"] == ["registered", "roots"]
+    assert summary["accepted"] is False and summary["failed"] == ["roots"]
     _, summary = _audit(hand, SMALL.unaccepted(hand), **told)
     assert summary["reason"] == SA.STOP_WORD and summary["verdicts"][SA.BOUNDARY_AUDIT] is False
 

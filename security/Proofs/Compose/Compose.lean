@@ -13,7 +13,7 @@ public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Accounting.Lemmas.Compose
 
 /-!
-# PoUW's credit on an arbitrary declared circuit: proofs
+# PoUW's credit on an arbitrary registered circuit: proofs
 
 Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers`, `CircuitWork`, `CircuitWorkSeeded`,
 `BindingOfECR` and `WholeLuckOfEntropy` (steps 1–6, 9, 11 and 12, each in its own file under

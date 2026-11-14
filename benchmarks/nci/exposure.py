@@ -51,7 +51,7 @@ RANGES = {
     "tau": (10.0, 1e4, "about 860 from the network appendix's program format; the ends a guess"),
     "nic": (8e11, 6.4e12, "2 x 400 Gb/s to 8 x 800 Gb/s; 8 x 400 Gb/s today"),
     "share": (1e-3, 0.1, "guess, around the 1% budget"),
-    "overhead": (1.6e8, 1e13, "batched throughput 1.6e8; sparse draws today 4.8e12; high a guess"),
+    "overhead": (1.6e8, 1e13, "batched throughput 1.6e8; sparse samples today 4.8e12; high a guess"),
     "replay": (1e3, 1e6, "guess"),
     "step_flop": (1e3, 1e6, "guess"),
     "p_evade": (1e-15, 2.0 ** -20, "guess, around the planner's 2^-40"),

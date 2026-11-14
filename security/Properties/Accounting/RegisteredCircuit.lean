@@ -4,7 +4,7 @@ public import Definitions.Accounting.Guarantees.RegisteredCircuit
 public import Properties.Poub.Remote.Schedule
 
 /-!
-# A declared circuit's space and bandwidth at the committed steering cap
+# A registered circuit's space and bandwidth at the committed steering cap
 
 `Accounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` at the verifier's
@@ -26,7 +26,7 @@ open Accounting
 open Pous (pr)
 open scoped ENNReal
 
-/-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap.**
+/-- **A registered circuit's held and moved bits from an accepted stacked audit, at the committed steering cap.**
 
 `G` (`Accounting.Guarantees.RegisteredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
 the bound as it states them) at the verifier's layout, with its premise `SteeredLayout layout steer` replaced by the

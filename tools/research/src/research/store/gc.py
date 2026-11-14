@@ -38,7 +38,7 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
@@ -69,7 +69,7 @@ class GcError(Exception):
 
 
 def _epoch(iso: str) -> float:
-    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(timezone.utc).timestamp()
+    return datetime.fromisoformat(iso.replace("Z", "+00:00")).astimezone(UTC).timestamp()
 
 
 def named(text: str) -> tuple[set[str], set[str]]:
@@ -153,12 +153,12 @@ def scan_linear(gql: Callable[[str, dict], dict]) -> tuple[set[str], set[str], i
         if not conn["pageInfo"]["hasNextPage"]:
             break
         after = conn["pageInfo"]["endCursor"]
-    for field, sel in LINEAR_OTHERS.items():
+    for collection, sel in LINEAR_OTHERS.items():
         after = None
         while True:
             q = "query($after: String) { %s(first: %d, after: $after) { %s pageInfo { hasNextPage endCursor } } }" % (
-                field, LINEAR_PAGE, sel)
-            conn = pull(q, {"after": after})[field]
+                collection, LINEAR_PAGE, sel)
+            conn = pull(q, {"after": after})[collection]
             take(conn["nodes"])
             if not conn["pageInfo"]["hasNextPage"]:
                 break

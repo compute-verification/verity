@@ -280,7 +280,7 @@ def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_wind
         "k1": (2, "ab" * 64, [first, held]), "k2": (1, CIRCUIT, [last])}
 
 
-def test_a_period_open_commits_its_draw_k_when_given_and_none_otherwise(host, signer):
+def test_a_period_open_commits_its_sample_k_when_given_and_none_otherwise(host, signer):
     """PoUW's credit reads the period's sample K from its open (`draw_k`), signed before window 0's first coin."""
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27713", "hash"))
     assert opened["body"]["draw_k"] == 27713

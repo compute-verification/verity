@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 # PoUW's work over a monitoring period of `n` windows (trusted)
 
 The vocabulary of `Definitions.Compose.Guarantees.ComposeMonitoringPeriod`. `CircuitWork`'s one window reaches `ε < 1%` only
-at about 10,552 equal live rounds, and the served H1 window has 18. A period is up to `n` windows of one declared
+at about 10,552 equal live rounds, and the served H1 window has 18. A period is up to `n` windows of one registered
 circuit, run in order, each with its own live coins and its own sample, the cheater's play in each window any function
 of the earlier windows' coins. Each window is one round of the period's game, so `ServiceBudget`'s per-window budget
 composes over the period (`Guarantees.ComposeMonitoringPeriod.MonitoringPeriodBudget`) and the tail is taken once for the period: the
@@ -46,7 +46,7 @@ logical term is divided by the number of windows credited.
 Each window says which of its tiles are live. On a masked tile Definition a dead tile's receipt is the canonical empty
 receipt at every coin, so no guess bound holds of it. A dead tile's words count for nothing: its share weight is `0`
 (`liveCone`), the period's proofs read it as skipped whole (`monitoringPeriodMode`), and the conclusion counts live words only
-(`creditedLive`, `LiveWorkAt`). Weights stay over the declared circuit's words (`wordsOf`), so the static premises on
+(`creditedLive`, `LiveWorkAt`). Weights stay over the registered circuit's words (`wordsOf`), so the static premises on
 `ρ`, the stage share and the lucks are `CircuitWork`'s, and a period of unequal loads is bounded as a share of its
 total words.
 
@@ -156,7 +156,7 @@ def liveWords {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live 
   if live t then tileWords Sc Cd Np t else 0
 
 open Classical in
-/-- **A tile's late cone's live weight**: `tileCone` at live words, over the declared circuit's words (`wordsOf`), not
+/-- **A tile's late cone's live weight**: `tileCone` at live words, over the registered circuit's words (`wordsOf`), not
 the window's live words, so every window's shares are in one unit and the period's sum is a share of its total. -/
 noncomputable def liveCone {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool)
     (t : Fin Np) : ℝ :=
@@ -272,7 +272,7 @@ noncomputable def creditedLive {ι K C B V : Type} (Sc : Scheme K) (Cd : Declare
   ∑ w : Fin n, if pr.Credited x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
 
 /-- **Work on live words**: `WorkAt` with the live words `N_live` in place of `N_w`, the shares `d_F, d₀` still of the
-declared circuit's `N_w` words. All but `(d_F + d₀)·N_w` of the `N_live` live words are fixed right and all but
+registered circuit's `N_w` words. All but `(d_F + d₀)·N_w` of the `N_live` live words are fixed right and all but
 `d₀·N_w` folded, at cost `a·d_F + b·d₀ < r`. At `N_live = N_w` it is `WorkAt`. As a share of the live words the
 deficit is `(d_F + d₀)·N_w/N_live`. -/
 def LiveWorkAt (Nlive Nw a b r fixed folded : ℝ) : Prop :=

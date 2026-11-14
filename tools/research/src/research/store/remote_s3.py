@@ -80,7 +80,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -527,7 +527,7 @@ class S3Remote:
 
     @staticmethod
     def _now() -> str:
-        return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
 
     def _path(self, key: str) -> str:
         return f"{self.base_path}/{self.bucket}/{key}" if key else f"{self.base_path}/{self.bucket}"
