@@ -48,10 +48,15 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.accounting.poub.verifier import audit, ledger, timing  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, ledger  # noqa: E402
 from verity.protocols.proofs.spot.prover import costfit  # noqa: E402
 
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
+
+import sheets  # noqa: E402
+
+FIGURES = sheets.figures()
+"""The node's figures, from its data sheets (`sheets.figures`)."""
 
 LN = -math.log(audit.DELTA)
 BLOCK = 4096
@@ -252,7 +257,7 @@ def points(recorded: list[dict]) -> dict:
 
 def pass_s(p: dict) -> float:
     """A pass: each GPU reads its shard."""
-    return p["shard_bytes"] / timing.GPU_READ_BYTES_PER_S
+    return p["shard_bytes"] / FIGURES.gpu_read_bytes_per_s
 
 
 def c_at(p: dict, flight: int) -> float:
@@ -564,7 +569,7 @@ def main() -> None:
             meas = [arm for arm in MEMSAT["arms"] if arm[0] == r] if name.startswith("8B") else []
             sweep.append({"point": name, "r": r, "o": o, "k": k, "d": d, **two, "one_in_flight": one,
                           **costs(p, prices, o=o, r=r),
-                          "reads_over_R": r * p["blocks"] * BLOCK / timing.SPEC_BYTES_PER_S,
+                          "reads_over_R": r * p["blocks"] * BLOCK / FIGURES.spec_bytes_per_s,
                           "measured": {"serving_share": meas[0][0] * meas[0][1], "gamma_spec": meas[0][2],
                                        "tokens_per_s": meas[0][3]} if meas else None})
     def one(x: dict, cell: str) -> str:
