@@ -6,7 +6,8 @@ non-causal call, dropout, another scale and a read of the forward's state outsid
 too in a step not under deterministic algorithms and in a variable-length call; only the training rules at the capture's cc
 hold the rules; and a bf16 step traced as the GPU runs it (`export_step(..., gpu=True)`) holds the op and its backward where
 the trace holds the math path otherwise, and a call the flash kernel doesn't take, with a mask or in f32, the op of the kernel
-the card takes it to, which is refused, or a refusal at export where the trace can't name that kernel."""
+the card takes it to, which is refused, or a refusal at export where the trace can't name that kernel; and a step exported
+there with an attention backend switched off is refused at export."""
 from __future__ import annotations
 
 import math
@@ -15,6 +16,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 from torch.fx.experimental.proxy_tensor import make_fx
+from torch.nn.attention import SDPBackend, sdpa_kernel
 from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import fa2_train as FT
@@ -252,6 +254,20 @@ def test_gpu_export_takes_no_kernel_it_cannot_name() -> None:
     assert ops["bmm"] == 6 and ops["flash"] == ops["efficient"] == 0, ops
     ops = _attention_ops(_one_attention(unbatched=True)[0][0])
     assert ops["flash"] == ops["backward"] == 1 and ops["bmm"] == ops["efficient"] == 0, ops
+
+
+_BACKENDS = {"flash": SDPBackend.FLASH_ATTENTION, "mem_efficient": SDPBackend.EFFICIENT_ATTENTION, "math": SDPBackend.MATH,
+             "cudnn": SDPBackend.CUDNN_ATTENTION}
+
+
+@pytest.mark.parametrize("off", sorted(_BACKENDS))
+def test_gpu_export_refuses_a_step_with_a_backend_switched_off(off) -> None:
+    """A step exported at a cc with one of torch's attention backends switched off is refused at export, naming its switch: the
+    trace reads no switch of the step's own and takes every backend on. Exported without a cc, the step's math path, it isn't."""
+    with sdpa_kernel([b for n, b in _BACKENDS.items() if n != off]):
+        with pytest.raises(ValueError, match=rf"exported with torch\.backends\.cuda\.enable_{off}_sdp off"):
+            _one_attention()
+        export_step(_OneAttention(), _sum_of_squares, AdamW(**ADAMW), torch.empty(1, 2, 16, 32, device="meta"))
 
 
 class _TwoAttentions(torch.nn.Module):
