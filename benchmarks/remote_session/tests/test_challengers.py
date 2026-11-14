@@ -40,6 +40,7 @@ from verity.protocols.accounting.poub.verifier.remote_session import verifier_pr
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
+import lean_stands_in  # noqa: E402
 from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier  # noqa: E402
 from verity.protocols.proofs.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
@@ -241,8 +242,11 @@ def test_a_served_or_gate_verifier_needs_the_verify_and_the_challengers_process_
     with pytest.raises(ValueError, match=re.escape(f"--challenger {kind} checks the challenger's signatures with the "
                                                    "LMS verify its process's entry hands in")):
         challengers.of(kind, tmp_path / "out", key, None, **flags)
-    source = challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify)
-    assert source.verify is VP.lms_verify
+    if kind == "serve":
+        with pytest.raises(ValueError, match="reads its session with the LMS verify that asks the Lean"):
+            challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify)
+    source = challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify, served_verify=VP.verify)
+    assert source.verify is (VP.verify if kind == "serve" else VP.lms_verify)
     if kind == "serve":
         assert source.command == ("python", "serve.py")
         with pytest.raises(ValueError, match="starts the challenger's process its entry hands in"):
@@ -254,7 +258,7 @@ def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challeng
     monkeypatch.setattr(VP.verifier, "main", lambda argv, **kw: got.update(argv=argv, **kw) or 0)
     assert VP.main(["--port", "7781"]) == 0
     assert got == {"argv": ["--port", "7781"], "figures": VP.timing.RTX_PRO_6000_NODE, "verify": VP.lms_verify,
-                   "serve": (sys.executable, str(LIVE / "serve.py"))}
+                   "served_verify": VP.verify, "serve": (sys.executable, str(LIVE / "serve.py"))}
 
 
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
@@ -315,7 +319,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
     else:
         (tmp_path / "served").mkdir()
         serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
-        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.lms_verify)
+        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     pace = verifier.pace_of("1:4:160:2", 1.0)
     (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
                                         defer_openings=False)
@@ -601,6 +605,41 @@ def test_the_lines_ledger_and_credit_are_the_leans_and_the_python_alone_credits_
             continue
         credit = analysed(out, host, sessions, reg, desc)["sessions"][0]["credit"]
         assert not credit["ok"] and any(z.endswith(why) for z in credit["zero"]), (piece, lean, credit["zero"])
+
+
+def test_without_their_lean_the_ledger_complete_and_main_leave_an_honest_gate_session_undecided(host, tmp_path,
+                                                                                                 monkeypatch):
+    """With the real interfaces (`lean_stands_in.unwritten`), an honest gate session that the Python and the Lean pieces
+    written credit earns none: the ledger's windows and periods, *complete* and its verifier's commit on main are each
+    undecided, with the goal's id, and the line credits zero."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0, closed
+    lean_stands_in.unwritten(monkeypatch)
+    doc = analysed(out, host, sessions, reg, desc)
+    credit = doc["sessions"][0]["credit"]
+    assert doc["ledger"]["verify_ledger"] == "undecided" and coins.UNWRITTEN in doc["ledger"]["undecided"]
+    assert not credit["ok"] and credit["accepted"]["ok"] and credit["pinned"]["ok"]
+    on_main, read = coins.undecided("verifier's commit on main"), coins.undecided("ledger's windows and periods")
+    assert credit["zero"] == [f"not credited: {on_main}", f"not complete: {coins.undecided('completeness')}",
+                              f"not credited: {read}"]
+    assert doc["credit"]["credited_sessions"] == []
+
+
+def test_without_its_lean_a_served_sessions_lms_verify_leaves_an_honest_session_undecided(tmp_path, monkeypatch):
+    """`challengers.Serve` reads its session with `verifier_process.verify`: where the Python's LMS verify holds, the
+    Lean's (`lms_answer`) decides, and while that isn't written an honest session is undecided, with the goal's id,
+    and not refused as `coins`."""
+    lean_stands_in.unwritten(monkeypatch)
+    (tmp_path / "served").mkdir()
+    serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
+    source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
+    (honest,), _ = run_sessions("honest", paces=[verifier.pace_of("1:4:160:2", 1.0)], challenger=source,
+                                defer_openings=False)
+    assert not honest["accepted"] and honest["failure"]["failure"] == "undecided" and honest["challenger"]["undecided"]
+    assert honest["failure"]["reason"] == coins.undecided("served session's LMS signatures")
 
 
 def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
