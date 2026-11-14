@@ -126,7 +126,7 @@ def test_n2_on_a_network_certifier_run_expects_honest_accepted_and_tampered_refu
     run = gate_run(tmp_path)
     assert n2.main(["prove", "--warden-run", str(run), "--gpu", "--dry", "--out", str(tmp_path / "n2")]) == 0
     s = json.loads((tmp_path / "n2" / "summary.json").read_text())
-    assert s["warden_run"] == "00" * 32 and "no sync" in s["warden"]["syncs"] and s["gpu"] is True
+    assert s["warden_run"] == "00" * 32 and "no sync" in s["network_certifier"]["syncs"] and s["gpu"] is True
     honest, tampered = (s["members"][k]["reference"] for k in ("honest", "tampered"))
     assert [x["expect"] for x in honest] == [1] * sz.W63.windows and all(not any(x["failed"].values()) for x in honest)
     assert [x["expect"] for x in tampered] == [0] + [1] * (sz.W63.windows - 1)
