@@ -1,5 +1,7 @@
 """The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory challenger.
-`PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee.
+`PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee. This module holds the records,
+the derivations and the verdict; the challenger that runs a session is the device's `WipeMemoryChallenger`
+(`pous/device/wipe_challenger.py`).
 
 The memory challenger, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
 server with labels it derives itself, then reveals `k` indices sampled on live coins after the fill and checks each answer
@@ -57,9 +59,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -68,7 +69,7 @@ from verity.commitments.merkle import CommitmentDomain, tree_levels
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.commitments.randomness import derive
 
-from verity.protocols.accounting.pous.device.memory_challenger import CLOCK_RESOLUTION_NS, SCHEMES, SessionLog, Signer, Verify
+from verity.protocols.accounting.pous.device.memory_challenger import SCHEMES, Verify
 
 PROTOCOL = "verity-pous/streamed-wipe/v2"
 KEY_DOMAIN = "verity/pous/streamed-wipe-labels/v1"
@@ -294,143 +295,6 @@ def end_message(signed: SignedWipe) -> bytes:
     return _sha512(END_TAG, len(m).to_bytes(8, "big"), m, len(signed.signature).to_bytes(8, "big"), signed.signature)
 
 
-class WipeMemoryChallenger:
-    """The memory challenger's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
-    docstring).  The session id goes into `log` before anything else.  `coin_secret` is sampled from the OS when the fill
-    completes unless a test gives it.  `mark_source` takes the start message and returns the network certifier's start certificate for it, as bytes;
-    with none the session's start mark is empty.  `clock` is `raw_clock_ns` unless given.  The header names `CLOCK`
-    whatever `clock` reads, so a `clock` given outside a test reads the raw clock too."""
-
-    def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
-                 log: SessionLog, clock: Callable[[], int] = raw_clock_ns, resolution_ns: int | None = None,
-                 coin_secret: bytes | None = None, mark_source: Callable[[bytes], bytes] | None = None) -> None:
-        if resolution_ns is None:
-            resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC_RAW) * 1e9 if clock is raw_clock_ns else 1
-        if resolution_ns > CLOCK_RESOLUTION_NS:
-            raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
-        self.key = wipe_key(secret, server, session)
-        log.claim(session)
-        self.commitment = WipeCommitment(server, session, params)
-        self.signer, self.clock, self._coin_secret = signer, clock, coin_secret
-        self._mark_source = mark_source
-        self.start_certificate = b""
-        self.start_mark = b""
-        self.filled = 0
-        self.fill_start_ns: int | None = None
-        self.fill_end_ns: int | None = None
-        self.indices: tuple[int, ...] | None = None
-        self.batches: list[BatchRecord] = []
-        self.ended: str | None = None
-        self.signed: SignedWipe | None = None
-        self._open: tuple[int, int, tuple[int, ...], int] | None = None
-
-    @property
-    def params(self) -> WipeParams:
-        return self.commitment.params
-
-    def _hold_start_mark(self) -> None:
-        """With a mark source: hand it the start message, keep the start certificate's bytes it returns, and set the
-        start mark to their SHA-512.  The bytes are not verified.  A source that returns none raises."""
-        if self._mark_source is None:
-            return
-        certificate = self._mark_source(start_message(self.commitment))
-        if not isinstance(certificate, (bytes, bytearray)) or not certificate:
-            raise ValueError("the mark source returned no start certificate: the fill waits for its bytes")
-        self.start_certificate = bytes(certificate)
-        self.start_mark = _sha512(self.start_certificate)
-
-    def fill(self, chunk: int) -> Iterator[tuple[int, bytes]]:
-        """The labels in order, `chunk` at a time, as `(first index, bytes)`; once only.  The start mark is held
-        before the clock is read, so before any label."""
-        if self.fill_start_ns is not None:
-            raise RuntimeError("the fill streams once")
-        if chunk < 1:
-            raise ValueError("a chunk holds at least one label")
-        self._hold_start_mark()
-        self.fill_start_ns = self.clock()
-        n = self.params.labels
-        for start in range(0, n, chunk):
-            count = min(chunk, n - start)
-            yield start, labels(self.key, start, count)
-            self.filled = start + count
-        self.fill_end_ns = self.clock()
-
-    def fill_by(self, send: Callable[[bytes, int], Any]) -> Any:
-        """`fill`'s labels streamed by `send(K, N)`, which returns once it has sent the last; once only. Returns what
-        `send` returns. The answers are checked against this module's `label` whatever `send` streamed.  The start mark
-        is held before the clock is read, so before `send` is called."""
-        if self.fill_start_ns is not None:
-            raise RuntimeError("the fill streams once")
-        self._hold_start_mark()
-        self.fill_start_ns = self.clock()
-        out = send(self.key, self.params.labels)
-        self.filled = self.params.labels
-        self.fill_end_ns = self.clock()
-        return out
-
-    def challenge(self) -> tuple[int, ...]:
-        """Reveal the next batch's indices and read its send time; the coins are flipped at the first batch."""
-        if self.fill_end_ns is None:
-            raise RuntimeError("the challenges start once the fill is complete")
-        if self.ended is not None:
-            raise RuntimeError(f"the session has ended ({self.ended}): no batch is retried and no index redrawn")
-        if self._open is not None:
-            raise RuntimeError("the previous batch is unanswered")
-        if self.indices is None:
-            secret = self._coin_secret if self._coin_secret is not None else os.urandom(32)
-            c = self.commitment
-            self.indices = draw_indices(secret, c.server, c.session, self.params.labels, self.params.k)
-        b = len(self.batches)
-        first = b * self.params.batch
-        idx = self.indices[first:first + self.params.batch]
-        self._open = (b, first, idx, self.clock())
-        return idx
-
-    def receive(self, answers: bytes) -> BatchRecord:
-        """The open batch's answers, `LABEL_BYTES` an index in order: the receipt time first, then the check."""
-        receipt = self.clock()
-        if self._open is None:
-            raise RuntimeError("no batch is open")
-        b, first, idx, send = self._open
-        if len(answers) != LABEL_BYTES * len(idx):
-            raise ValueError(f"a batch of {len(idx)} is answered with {LABEL_BYTES * len(idx)} bytes, not {len(answers)}")
-        self._open = None
-        wrong = sum(answers[LABEL_BYTES * t:LABEL_BYTES * (t + 1)] != label(self.key, i) for t, i in enumerate(idx))
-        r = BatchRecord(b, first, len(idx), send, receipt, wrong, batch_digest(idx, answers))
-        self.batches.append(r)
-        if not 0 <= r.elapsed_ns <= self.params.limit_ns:
-            self.ended = LATE
-        elif wrong:
-            self.ended = WRONG
-        elif first + len(idx) == self.params.k:
-            self.ended = COMPLETE
-        return r
-
-    def run(self, respond: Callable[[tuple[int, ...]], bytes]) -> None:
-        """Drive the challenges against `respond(indices)` until the session ends."""
-        while self.ended is None:
-            self.receive(respond(self.challenge()))
-
-    def close(self) -> SignedWipe:
-        """Sign the ended session, once."""
-        if self.ended is None:
-            raise RuntimeError("the session has not ended")
-        if self.signed is None:
-            assert self.fill_start_ns is not None and self.fill_end_ns is not None
-            batches = tuple(self.batches)
-            m = message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, batches)
-            self.signed = SignedWipe(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns,
-                                     batches, self.signer.scheme, self.signer.public_key,
-                                     self.signer.sign(self.commitment.session, m))
-        return self.signed
-
-    def coins(self) -> tuple[int, ...]:
-        """The sampled indices, public once the session is signed (the verifier's samples)."""
-        if self.signed is None or self.indices is None:
-            raise RuntimeError("the coins are published after the session, once it is signed")
-        return self.indices
-
-
 EGRESS_UNIT_BITS = 8 << 20
 """The public egress count's unit: one MiB."""
 EGRESS_MAX_UNITS = (1 << 15) - 1
@@ -537,6 +401,6 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
 __all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
            "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
            "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord",
-           "SignedWipe", "Verdict", "WipeCommitment", "WipeMemoryChallenger", "WipeParams", "batch_digest",
+           "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest",
            "challenges_for", "draw_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of",
            "message", "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]

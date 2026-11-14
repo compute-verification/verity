@@ -3321,6 +3321,12 @@
         "adapters/vllm/tests/protocols/remote_bandwidth/test_memory_map.py": "verity/protocols/accounting/poub/tests/test_memory_map.py",
         "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py": "verity/protocols/accounting/poub/tests/test_remote_session.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pous/verifier/wipe_stream.py": "verity/protocols/accounting/pous/device/wipe_stream.py",
+        "verity/protocols/accounting/pous/verifier/wipe_stream.c": "verity/protocols/accounting/pous/device/wipe_stream.c"
+      }
     }
   ]
 }

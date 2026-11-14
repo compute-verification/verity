@@ -1,5 +1,5 @@
 """The wipe's memory challenger and prover as parties of the deployment layer (`wipe_challenger`, `wipe_prover`, over
-`wipe_parties`'s messages). On the coins, clock readings and key `wipe_party.serve` is given, the ported challenger
+`wipe_parties`'s messages). On the coins, clock readings and key `wipe_challenger.serve` is given, the ported challenger
 signs the same bytes, whatever its fill frames' size;
 an honest prover keeping the fill in host memory (`wipe_store.StoreProver`) is accepted by `verity/wipe/v0`'s verdict, one
 keeping foreign content is rejected and one that leaves is undecided; the challenger's transcript keeps each large fill
@@ -58,18 +58,18 @@ def verify(public: bytes, message: bytes, signature: bytes) -> bool:
     return lms.verify(KEY, public, message, lms.Signature.decode(KEY, signature))
 
 
-def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.WipeMemoryChallenger:
-    """`wipe_party.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins."""
+def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> WC.WipeMemoryChallenger:
+    """`wipe_challenger.serve` over a socket pair, its OS samples taken in order from `SEED`'s seeded coins."""
     coins = S.SeededCoins(SEED)
-    monkeypatch.setattr(WP, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
-    monkeypatch.setattr(sw, "os", types.SimpleNamespace(urandom=coins.draw))
+    monkeypatch.setattr(WC, "secrets", types.SimpleNamespace(token_bytes=coins.draw))
+    monkeypatch.setattr(WC, "os", types.SimpleNamespace(urandom=coins.draw))
     signer, log = ts.TestSigner(secret, 2), ts.session_log()
     a, b = socket.socketpair()
     got: dict = {}
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, reads=params.k,
+            got["c"] = WC.serve(f, WP.request_of("n0", params), signer=signer, log=log, reads=params.k,
                                 clock=itertools.count(T0, STEP).__next__)
 
     t = threading.Thread(target=side)

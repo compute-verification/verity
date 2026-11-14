@@ -19,9 +19,10 @@ from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.prover import wipe_run
 from verity.protocols.accounting.pous.prover import wipe_store as WS
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
 from verity.protocols.accounting.pous.verifier import wipe_period as W
-from verity.protocols.accounting.pous.verifier import wipe_stream as WN
+from verity.protocols.accounting.pous.device import wipe_stream as WN
 
 KEY = hashlib.sha512(b"wipe stream test").digest()[:32]
 SMALL = sw.WipeParams(1000, W.READS, 1, 1_000, (("gpu", 1000 * sw.LABEL_BYTES),))
@@ -88,7 +89,7 @@ def test_a_native_fill_is_judged_as_the_python_fill(wipe_streamer, store: str) -
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", SMALL), signer=signer, log=ts.session_log(),
+            got["c"] = WC.serve(f, WP.request_of("n0", SMALL), signer=signer, log=ts.session_log(),
                                 clock=Clock(10 ** 9, 1), fill=native)
 
     t = threading.Thread(target=side)

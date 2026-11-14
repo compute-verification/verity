@@ -44,15 +44,16 @@ import time
 import tomllib
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity import config as K
 from verity.config import Component, Workload
-from verity.protocol import Channel, ProtocolDef, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.accounting.poub.verifier import p2_parties as P2
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
@@ -131,6 +132,19 @@ def _served(params: Mapping[str, Any]) -> dict[str, Any]:
 
 _VERIFIER = Role(VERIFIER, "auditor", needs=("audit", "component", "product"))
 _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
+
+
+def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ...], tuple[Channel, ...]]:
+    """``manifest``'s parties and channels with each of its roles as the configuration names its party (``names``)."""
+    def n(role: str) -> str:
+        return names.get(role, role)
+
+    return (tuple(replace(r, name=n(r.name)) for r in manifest.parties),
+            tuple(replace(c, sender=n(c.sender), receiver=n(c.receiver)) for c in manifest.channels))
+
+
+#: PoUB's P2 parties and channels, its verifier the configuration's bandwidth verifier (its ``verifier`` is onsite's)
+_P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
               needs=frozenset({"windows"}), law=_law, default_law="rate:1/3481648"),
@@ -144,12 +158,8 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("pous", SP.IDS["pous"], parties=(*CS.MANIFEST.parties, _VERIFIER),
               channels=(*CS.MANIFEST.channels, Channel(MEMORY_CHALLENGER, VERIFIER, ("SignedRun",), after=("End",))),
               needs=frozenset({"store"}), params=_pous, default_params={"challenges": 320}),
-    Component("bandwidth", SP.IDS["bandwidth"],
-              parties=(Role(BANDWIDTH_VERIFIER, "auditor", needs=("clock", "coins")), _PROVER, _VERIFIER),
-              channels=(Channel(PROVER, BANDWIDTH_VERIFIER, ("Register", "Root", "Openings")),
-                        Channel(BANDWIDTH_VERIFIER, PROVER, ("Hold", "Run", "Open", "End"), carries_coins=True,
-                                after=("Register",)),
-                        Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
+    Component("bandwidth", SP.IDS["bandwidth"], parties=(*_P2_PARTIES, _VERIFIER),
+              channels=(*_P2_CHANNELS, Channel(BANDWIDTH_VERIFIER, VERIFIER, ("BandwidthAnswer",), after=("Openings",))),
               needs=frozenset({"receipts"})),
     Component("certifier", SP.IDS["certifier"], parties=NC.MANIFEST.parties, channels=NC.MANIFEST.channels,
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
@@ -249,13 +259,15 @@ class Session:
     each a ``module:attribute`` (`_protocol_def`), whose manifests are one; each configuration party's role in it
     (``roles``); for each role that reads a clock, the read and the name its header gives (``clocks``); the
     configuration party that listens (``listener``, the auditor's), and whether the run ends before the served window
-    starts (``before``) or runs beside it."""
+    starts (``before``) or runs beside it. ``reads`` gives a configuration party's start, beside its bindings, the state
+    directory of another party's run on the same machine: binding name -> (component, party)."""
 
     halves: tuple[str, ...]
     roles: Mapping[str, str]
     clocks: Mapping[str, tuple[Callable[[], int], str]]
     listener: str
     before: bool = False
+    reads: Mapping[str, Mapping[str, tuple[str, str]]] = field(default_factory=dict)
 
     def protocol(self) -> ProtocolDef:
         defs = [_protocol_def(h) for h in self.halves]
@@ -383,11 +395,12 @@ POUS = Session(("verity.protocols.accounting.pous.device.challenger_party:PROTOC
                {MEMORY_CHALLENGER: CS.CHALLENGER, PROVER: CS.PROVER}, {CS.CHALLENGER: (time.monotonic_ns, MONOTONIC)},
                MEMORY_CHALLENGER)
 #: onsite PoUB over PoUS's P2 store (`p2_parties`' verifier, `p2_party_prover`'s prover), beside the served window, on
-#: the verifier's monotonic clock
+#: the verifier's monotonic clock; the verifier reads the memory challenger's PoUS key from that party's run beside it
+#: on the auditor's host (``challenger``)
 POUB = Session(("verity.protocols.accounting.poub.verifier.p2_parties:PROTOCOLS",
                 "verity.protocols.accounting.poub.prover.p2_party_prover:PROTOCOL"),
-               {BANDWIDTH_VERIFIER: "verifier", PROVER: "prover"}, {"verifier": (time.monotonic_ns, MONOTONIC)},
-               BANDWIDTH_VERIFIER)
+               {BANDWIDTH_VERIFIER: P2.VERIFIER, PROVER: P2.PROVER}, {P2.VERIFIER: (time.monotonic_ns, MONOTONIC)},
+               BANDWIDTH_VERIFIER, reads={BANDWIDTH_VERIFIER: {"challenger": ("pous", MEMORY_CHALLENGER)}})
 
 
 #: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
@@ -536,7 +549,9 @@ def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], pi
     role = protocol.manifest.role(s.roles[piece.party])
     if role.name not in protocol.starts:
         raise NotImplementedError(NOT_YET)
-    here, bound = state / "runs" / piece.component / piece.party, piece._bindings(bindings)
+    here = state / "runs" / piece.component / piece.party
+    bound = {**piece._bindings(bindings),
+             **{k: str(state / "runs" / c / p) for k, (c, p) in s.reads.get(piece.party, {}).items()}}
     begun = protocol.starts[role.name](cfg, bound, here)
     h = held(piece, role)
     address, listener = bound["address"], s.roles[s.listener]

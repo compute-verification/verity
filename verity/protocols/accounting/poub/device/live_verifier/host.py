@@ -170,7 +170,7 @@ PRO 6000 has 96 GB of HBM)."""
 STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/protocols/accounting/pouw/verifier/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
-PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.verifier.wipe_party", 47611),
+PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.device.wipe_challenger", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
            "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_parties", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]}
