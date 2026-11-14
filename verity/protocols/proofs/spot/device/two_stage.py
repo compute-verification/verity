@@ -877,7 +877,7 @@ def _a5() -> Any:
     for d in (HERE.parent / "prove_path", HERE):
         if str(d) not in sys.path:
             sys.path.insert(0, str(d))
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
 
     return a5
 
@@ -930,7 +930,7 @@ def statements(audit_dir: Path, window: CS.Binding) -> list[dict]:
     """Each member session's statement as round 2 takes it (``{"template", "header", "draw", "registered"}``): its
     template, its public file's header, its session record's ``unit_draw`` and the reads it was verified against. A
     member the second stage drew nothing of has no session and no statement."""
-    import a0
+    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
 
     out = []
     for k, m in enumerate(window.members):
@@ -998,7 +998,7 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
     allowed, and the outcome is the stream's (`outcome_of`). The report names what the proof
     server refused, in flock-circuit's words, where a session never ran."""
     a5 = _a5()
-    import records_audit as RA
+    from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA
 
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec], **(tie or {})}
@@ -1134,7 +1134,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     the challenger's key and the verifier's copy of main's history as the session's start had them (`a5_coins.held`),
     and the order is read under them; a ``local`` challenger is kept where the second stage reopens it
     (`challenger_host`)."""
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     root = pubs[0]["run"]
     caught = (S.Refused, ValueError, KeyError, TypeError, OSError)
@@ -1256,7 +1256,7 @@ def challenger_host(a: argparse.Namespace, made: Path | None = None) -> Path | N
     it); None for a challenger on another machine, whose key the verifier has on record. `Ch.CoinError` (`NO_HOST`)
     for a ``local`` one with neither, or, where the command makes none (``made`` None), for a directory that holds no
     challenger."""
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     if a.challenger != "local":
         return None
@@ -1312,7 +1312,7 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     opens (`first_coins`). ``summary.json`` under ``--out`` says what happened, and what it cost (module docstring: the
     interior's commitment by ``clock``, the replay's own record's seconds); exit 0 when the second stage held
     (`held`)."""
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

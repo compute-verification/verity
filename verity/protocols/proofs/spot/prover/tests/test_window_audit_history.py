@@ -28,8 +28,8 @@ from verity.commitments.windows import history as HW, interface as I, rows as CS
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-import a0  # noqa: E402
-import a5 as A5  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)

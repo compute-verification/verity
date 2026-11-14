@@ -43,8 +43,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "adapters" / "vllm"))
 
-import a5  # noqa: E402
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 from tests.pipeline import test_serving_rows_splits as TS  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402

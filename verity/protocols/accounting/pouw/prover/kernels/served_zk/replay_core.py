@@ -57,7 +57,7 @@ from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import verifier as PV
 from verity.protocols.accounting.pouw.verifier import window as Wd
 
-REPO = Path(__file__).resolve().parents[3]
+REPO = Path(__file__).resolve().parents[7]
 LEAN = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"
 V2_ART = "art:08afd6b23db47295569411eb024868fb39e6dbae6a11a3835657be263321621d"
 V2_TILE = "Pc8TileSide_v1{K=4096,TM=1,TN=1,DEV='sm120'}"
