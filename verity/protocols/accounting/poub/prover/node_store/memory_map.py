@@ -221,7 +221,7 @@ class MemoryMap:
     """memory-map/v1 of ``store``'s KV pool beside ``header``'s store, built by ``lines``, its lines in ``path`` (appended
     as each closes) or, without one, kept (`text`).  ``replay`` is the map as the audit replays it, which refuses a line that breaks
     memory-map/v1 before it is written.  ``on_append(first, slots, digests, payloads)`` gets each append as it is made (the
-    remote session's, `verity_vllm.protocols.remote_bandwidth.remote`, which sends it and calls `encoded` once the device has encoded it
+    remote session's, `serving`, which sends it and calls `encoded` once the device has encoded it
     under its coin); without it, each append's encode lands at once, as when the coin is back before the next step's
     reads.  ``on_line(change)``, if given, gets each line's `Change` as it closes.  ``ahead`` is how many windows past the
     open one the pass after a line may fall in (1 for a serving session whose step can run past a boundary, its pass then
@@ -379,7 +379,7 @@ def audit_store(m: MemoryMap | None) -> requirement.Store:
 
 
 def agreement(backend: Any) -> dict[str, Any]:
-    """The memory map against the session and the store (``backend``, a `remote.StoreBackend`), once the session is done:
+    """The memory map against the session and the store (``backend``, a `serving.StoreBackend`), once the session is done:
     replayed from its header, its live indices (`audit_store`'s resident blocks after its last step) are the session's
     last plan's and its blocks the audit's appends, in order, up to those whose writes wait for their encodes (deferred
     residency); then, its open line closed, every slot it holds at an appended index holds bytes of that index's digest
