@@ -325,8 +325,6 @@
     {"file": "security/Definitions/Pouw/Guarantees/DitherInstance.lean", "count": 7},
     {"file": "security/Definitions/Pouw/Guarantees/Eps1.lean", "count": 2},
     {"file": "security/Definitions/Pouw/Guarantees/OnsiteFreed.lean", "count": 6},
-    {"file": "security/Definitions/Pouw/Guarantees/PearlC.lean", "count": 123},
-    {"file": "security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "count": 6},
     {"file": "security/Definitions/Pouw/Guarantees/ShaRealize.lean", "count": 3},
     {"file": "security/Definitions/Pouw/Guarantees/Window.lean", "count": 39},
     {"file": "security/Definitions/Pouw/H1Zy.lean", "count": 1},
@@ -5217,6 +5215,8 @@
     {"file": "security/Proofs/Flock/SpotFlock/AddressesWired.lean", "count": 1},
     {"file": "security/Proofs/Flock/SpotFlock/RevealsWired.lean", "count": 1},
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean", "count": 3},
-    {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordChosen.lean", "count": 3}
+    {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordChosen.lean", "count": 3},
+    {"file": "security/Proofs/Pouw/Lemmas/PearlCFlockTile.lean", "count": 6},
+    {"file": "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "count": 123}
   ]
 }
