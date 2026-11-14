@@ -15,6 +15,7 @@ record, the dir the weights of record come from, a weights record without its Pr
 """
 from __future__ import annotations
 
+import io
 import json
 import os
 from pathlib import Path
@@ -148,6 +149,21 @@ def test_a_build_summary_reads_each_derives_result_and_artifact_with_blocks_left
     assert s["step"]["target"] == {"protocols": ["pouw"]} and s["step"]["ir"] == {"root": "w"}
     assert s["build_request_LP8_T3"] == {"ok": True, "unsupported": None, "message": "", "program_digest": "p" * 64, "census_digest": "c" * 64,
                                          "correspondence_digest": "q" * 64, "ir": {"root": "w"}}
+
+
+def test_a_build_summary_states_what_each_derive_refused_and_what_its_artifact_says_it_is(tmp_path):
+    """A derive's refusal, its exception and its message cut at 300 characters are stated under its name, with its artifact's
+    identity and applicability; a request shape's derive states its refusal and its message."""
+    d = str(tmp_path)
+    refused = {"ok": False, "unsupported": "op x", "exception": "ValueError", "message": "m" * 310}
+    for part in ("build_step", "build_request", "build_request_LP8_T3"):
+        _put(tmp_path / part / "result.json", refused)
+    _put(tmp_path / "build_step" / "artifact.json", {"identity": {"model": "m"}, "applicability": {"B": [1]}})
+    assert R.build_summary(d) == "FAIL"
+    said = {"ok": False, "unsupported": "op x", "message": "m" * 300, "program_digest": None, "census_digest": None, "correspondence_digest": None}
+    assert _read(tmp_path / "build_summary.json") == {
+        "step": {**said, "exception": "ValueError", "identity": {"model": "m"}, "target": {}, "applicability": {"B": [1]}},
+        "request": {**said, "exception": "ValueError", "identity": None, "target": {}, "applicability": None}, "build_request_LP8_T3": said}
 
 
 @pytest.mark.parametrize(("workload", "stochastic"), [
@@ -589,6 +605,28 @@ def test_a_record_that_cannot_be_read_gives_its_named_default_and_one_that_can_g
         assert R.tp_manifest_complete(d) is said, complete
 
 
+def test_the_workload_digest_is_the_composes_workload_digest_else_its_program_digest_else_its_digest(tmp_path):
+    program = tmp_path / "build_workload" / "workload_program.json"
+    for doc, digest in (({"workload_digest": "w" * 64, "program_digest": "p" * 64, "digest": "g" * 64}, "w" * 64),
+                        ({"workload_digest": None, "program_digest": "p" * 64, "digest": "g" * 64}, "p" * 64), ({"program_digest": "p" * 64}, "p" * 64),
+                        ({"program_digest": "", "digest": "g" * 64}, "g" * 64), ({"digest": "g" * 64}, "g" * 64), ({"digest": None}, ""), ({}, "")):
+        _put(program, doc)
+        assert R.workload_digest(str(tmp_path)) == digest, doc
+
+
+def test_a_workload_program_is_ok_only_where_its_compose_exited_0_with_a_digest_and_its_refusal_is_stated(tmp_path):
+    """`add_workload` adds the workload Program to the Build's summary and leaves the rest as it was: ok only for a compose that
+    exited 0 and gave a digest, and its refusal, applicability and stop rule as `build_workload/workload_program.json` states them."""
+    _put(tmp_path / "build_summary.json", {"step": {"ok": True}})
+    refusal = {"reason": "applicability", "message": "B 9 is not declared", "applicability": {"B": [1, 8]}, "stop_rule": {"eos": [2]}}
+    _put(tmp_path / "build_workload" / "workload_program.json", refusal)
+    for rc, wd, ok in ((0, "w" * 64, True), (0, "", False), (1, "w" * 64, False), (2, "", False)):
+        R.add_workload(str(tmp_path), wd, rc)
+        assert _read(tmp_path / "build_summary.json") == {"step": {"ok": True}, "workload": {
+            "ok": ok, "workload_digest": wd or None, "mechanism": "GP-01 cb_a.global_program", "artifact": "build_workload/workload_program.json",
+            **refusal}}, (rc, wd)
+
+
 def test_the_memory_headroom_without_a_cgroup_file_is_the_roots_and_the_cpus_are_those_the_process_may_run_on(tmp_path, monkeypatch):
     meminfo, root = tmp_path / "meminfo", tmp_path / "cgroup"
     meminfo.write_text("MemTotal:       1000 kB\nMemAvailable:    500 kB\n")
@@ -605,6 +643,20 @@ def test_the_memory_headroom_without_a_cgroup_file_is_the_roots_and_the_cpus_are
     monkeypatch.delattr(R.os, "sched_getaffinity")
     monkeypatch.setattr(R.os, "cpu_count", lambda: None)
     assert R._cpus() == 1
+
+
+def test_the_memory_headroom_by_default_is_this_processs_cgroup_chain_under_the_mount_and_the_hosts_meminfo(monkeypatch):
+    """With no paths given, the headroom reads `/proc/self/cgroup`, the cgroup it names under `/sys/fs/cgroup` and `/proc/meminfo`:
+    the files are stood in by path, so no host file is read."""
+    files = {"/proc/meminfo": "MemAvailable:    500 kB\n", "/proc/self/cgroup": "0::/q/job\n",
+             "/sys/fs/cgroup/q/job/memory.max": "307200\n", "/sys/fs/cgroup/q/job/memory.current": "4096\n", "/sys/fs/cgroup/q/memory.max": "max\n"}
+
+    def stood_in(path: str) -> io.StringIO:
+        if path not in files:
+            raise FileNotFoundError(path)
+        return io.StringIO(files[path])
+    monkeypatch.setattr(R, "open", stood_in, raising=False)
+    assert R._memory_headroom() == 307200 - 4096
 
 
 def test_a_match_summary_compares_token_records_that_list_no_requests_by_their_tokens_or_whole(tmp_path):
