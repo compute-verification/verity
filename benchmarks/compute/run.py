@@ -106,8 +106,8 @@ from verity_bench import kit
 from verity_config.settings import SHARED
 
 __all__ = ["ABSENT", "ANSWER", "DELTA_S", "LEAN", "LEAN_CHECK", "METRIC", "MODELS", "NO_SITE", "NO_SPAN", "POLICY", "RECORDS",
-           "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable", "amounts",
-           "capacity", "from_run", "main", "model_macs"]
+           "ROWS", "SAMPLING_ALONE", "TERMS", "UNIT", "VERDICTS", "VERIFY", "EvidenceStore", "Shape", "Unreadable",
+           "amounts", "capacity", "from_run", "main", "model_macs", "uncredited_words"]
 
 UNIT = "share of the served model's MACs that Pearl+ credits, over the tokens served"
 #: the number's id in metrics.toml beside this file, the name result.json records it under
