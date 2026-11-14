@@ -17,7 +17,7 @@ from typing import Any
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent / "benchmarks" / "torch_gpu" / "sha512_rows")))
 
 import engine as E
 from verity.commitments import hm96

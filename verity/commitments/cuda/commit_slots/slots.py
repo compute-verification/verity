@@ -403,7 +403,7 @@ def edge_layout() -> CommitShape:
     return CommitShape("commit-slots/edge/v1", (g0, g1))
 
 
-FIXTURE = Path(__file__).resolve().parent.parent.parent.parent / "verity" / "commitments" / "tests" / "fixtures" / "commit-slots-v1.json"
+FIXTURE = Path(__file__).resolve().parent.parent.parent / "tests" / "fixtures" / "commit-slots-v1.json"
 
 
 def _layout_json(layout: CommitShape) -> dict[str, Any]:
@@ -449,7 +449,7 @@ def fixture() -> dict[str, Any]:
     return {
         "schema": "verity/commit-slots/fixture/v1",
         "about": "A step's unit outputs as hm96-sha512/row/v2 rows under hiding leaves in frame-v3-sha512 trees, "
-                 "step tree over slot trees over unit trees over rows (benchmarks/torch_gpu/commit_slots/README.md). The context "
+                 "step tree over slot trees over unit trees over rows (verity/commitments/cuda/commit_slots/README.md). The context "
                  "and salt key are public test values.",
         "tags": {"layout": LAYOUT_TAG, "unit": UNIT_TAG, "slot": SLOT_TAG, "step": STEP_TAG, "row_schema": ROW_SCHEMA,
                  "roots_schema": ROOTS_SCHEMA, "hm96": INST.name},
