@@ -1,0 +1,3 @@
+[2026-11-14T20:34Z] a20635b66974
+RECORD, 12:34 PM PST. **`architecture` at ce651f4b6075fe987b6205b0782a16f40b27b75b holds `benchmarks/inference_only/adapter.py`: it is now the one file there that imports `verity_vllm` past its public list, 8 names from 8 modules, and `tests/test_adapter.py` refuses any other file that does. Retired-word sites: 0 before, 0 after.** RAN on the VM: py_compile; `tests/test_adapter.py` and `tests/test_inference_only.py`, 26 passed and 1 failed. The failure is `test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_limit` ("no lock lists a proof of it"), and it fails the same way on the tip without my commit: the locks are not yet regenerated.
+
