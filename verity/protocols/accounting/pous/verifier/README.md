@@ -37,7 +37,7 @@ What code outside this directory may use. Everything else here is internal.
 | `streamed_wipe` (`streamed_wipe.py`) and `wipe_period.run(node: str, params: sw.WipeParams \| None = None, *, ...) -> Wipe` (`wipe_period.py`) | The streamed-label wipe. `streamed_wipe` is its Python, the reference its Lean verdict is held to: the memory challenger's side (`Challenger`), the honest server (`Prover`), the records (`WipeParams`, `WipeCommitment`, `SignedWipe`) and `verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] \| set[bytes], schemes: Mapping[str, Verify] = SCHEMES) -> Verdict`. `wipe_period.run` is one wipe of one node with the verifier's answer as `verity/wipe/v0` (`wipe_period.PROTOCOL`) and the case the Lean replays to it. |
 | `python -m verity.protocols.accounting.pous.verifier.wipe_period --period DIR --out DIR [--node NAME] [--expect VERDICT]` | One wipe of this node as `period.json`'s `wipe` says. It writes `wipe.json` and `wipe.case.json` under `--out`, prints a summary, and exits 0 when the verdict is the expected one. |
 | `python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--egress-bits N] [--streamer build\|PATH [--threads T]]` | The wipe's memory challenger as a process of its own, for the challenger host. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_parties.MANIFEST` declares the same two parties to the deployment layer (`verity.runtime`). |
-| `verity.protocols.accounting.pous.prover` (`verity/protocols/accounting/pous/prover/`) | PoUS's circuits, each a Definition with its parts in its module's `__all__`: `answer_circuit.PousAnswerOpens` (a round's answer and the store's hiding leaf open to the same label), `decode_circuit.PousP2Decode` (P2 v4's decode of one label), `verdict_circuit.PousVerdict` (the verdict over the timed rounds as one proof block) and `circuit.PousModSquare` (a square modulo P2's prime). |
+| `verity.protocols.accounting.pous.prover` (`verity/protocols/accounting/pous/prover/`) | PoUS's circuits, each a Definition with its parts in its module's `__all__`: `answer_circuit.PousAnswerOpens` (a round's answer and the store's hiding leaf open to the same label), `decode_circuit.PousP2Decode` (P2 v4's decode of one label), `verdict_circuit.PousVerdict` (the verdict over the timed rounds as one proof block), `session_circuit.PousSessionSig` (the memory challenger's signature verifies) and `session_circuit.PousRound` (a round's record holds its block's digest), and `circuit.PousModSquare` (a square modulo P2's prime). |
 
 ## The lifecycle in code
 
@@ -93,6 +93,13 @@ names it, is on time within `LIMIT` and holds the expected digest of its block (
 Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
 (`security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
+
+`verity.protocols.accounting.pous.prover.session_circuit` holds units of a session checked inside proofs, each with one
+output bit and each parameter one row: `PousSessionSig_v1{N, W, H}` is 1 iff the signature row (`lms.Signature.encode`'s
+bytes) is an LMS signature of the 64-byte message row under the key row (`I ‖ root`) with q below 2^H, as `lms.verify`
+decides (`PousSessionSig_v1{64,1,20}` at `lms.DEPLOYED`); `PousRound_v1{N, SLOT}` is 1 iff the record at slot SLOT of a
+records row (two records a row) names the public round j and index i and holds the N-byte store row's `sha512/row/v2`
+digest (R_even and R_odd at SLOT 0 and 1).
 
 ~~~python
 from verity.commitments.crypto import lms
