@@ -55,6 +55,9 @@ PUBLIC = {
     "verity_vllm.engine.sampler_capture": "I2: chosen requests' logits rows and ids at a replaying engine's sampler, held "
                                           "across ranks and written as a token select's span, which benchmarks/serve_tax's "
                                           "replay and rebuild take",
+    "verity_vllm.engine.moe_capture": "I2: chosen requests' rows of each fused-MoE launch of named modules at a replaying "
+                                      "engine's ranks, held to its step trace and read back by request, rank and module, "
+                                      "which benchmarks/serve_tax's replay takes",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
                                     "input loop and edges that act between two steps once nothing is in flight",
     "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
