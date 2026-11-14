@@ -75,16 +75,18 @@ def certificates(run: Path, w: int) -> list[dict]:
     return out
 
 
-def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
+def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None,
+              answers: Path | None = None) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
-    in place of ``answers.json``'s."""
+    in place of ``answers.json``'s. ``answers`` is the scan's ``answers.json`` where ``scan`` doesn't hold it: a chain
+    record keeps it on its private side (chain_record.sh), for the row registrations it carries whole."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     if dep["params"].get("egress", "id") != "id":
         raise SystemExit(f"{run}: the period check's schedule is the id egress form's, not {dep['params']['egress']!r}'s")
-    doc = json.loads((scan / "answers.json").read_text())
+    doc = json.loads((answers or scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [json.loads(v3c.read_text())]
     if len(doc["windows"]) != 1:

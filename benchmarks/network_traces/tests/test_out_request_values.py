@@ -2,7 +2,8 @@
 with a prompt planted in every file a request's values are in (the endpoint's requests.jsonl, advice_trace.jsonl,
 windows.jsonl and served rows, a rehearsal's plan.json, probe.json, io.json and out-witness.jsonl, a network certifier
 rehearsal's traffic.json and client.json): $OUT gets the public records and no file holding the prompt or a request's id
-fields."""
+fields. Nor does a row registration whole reach it, with its wiring's digest: the chain's copy of a step's files puts
+the files that hold one on its private side."""
 from __future__ import annotations
 
 import json
@@ -114,14 +115,47 @@ def test_n2_zk_publishes_the_runs_public_files_and_none_of_their_request_values(
         "calibration.json", "honest/deployment.json", "honest/certified.jsonl", "honest/check.json"))
 
 
-def test_scan_zk_publishes_a_warden_rehearsals_public_files_and_not_its_traffic_or_responses(tmp_path):
+def test_scan_zk_copies_six_files_of_its_own_rehearsal_and_not_its_traffic_or_responses(tmp_path):
+    """The six files the scan's job copies of its own rehearsal hold no request value. They are not public files:
+    `cells.jsonl` holds each registration whole with its cost, which a gate's run keeps on its private side (the
+    wiring and the cost's two times are private), and `certified.jsonl`, `check.json`, `warden.json` and `serve.log`
+    are the network certifier's own records."""
     w, out = tmp_path / "W", tmp_path / "OUT"
-    public = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
+    copied = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
               "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
               "warden.json": {"process": {}}, "serve.log": "serving\n"}
-    put(w / "warden", {**public, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
+    put(w / "warden", {**copied, "traffic.json": [{"at": 0, "body": {"prompt": PROMPT}}],
                        "client.json": {"connections": [{"index": 0, "response": {"ids": PROMPT}}]}})
     out.mkdir()
     got = run(block("scan_zk.sh", '  mkdir -p "$OUT/warden"', "  done"), W=w, OUT=out)
     assert got.returncode == 0, got.stderr
-    assert published(out) == sorted(f"warden/{f}" for f in public)
+    assert published(out) == sorted(f"warden/{f}" for f in copied)
+
+
+def test_the_chain_keeps_a_step_s_whole_registrations_on_its_private_side(tmp_path):
+    """chain_record.sh's copy of a step's files into $OUT, which the leak guard reads and custody uploads, leaves
+    out the files that hold a row registration whole, its wiring's digest with it: the registrations a verifier takes
+    (the tampered one too) and the scan's answers, which carry them, go to the chain's private side, the quarantine's
+    witness/STEP, under their own paths. The step's other files are copied as before, and a prover's file, a circuit
+    and an archive's files go to neither."""
+    step, out, q = tmp_path / "W" / "scan", tmp_path / "held", tmp_path / "q"
+    whole = {"wiring": "17" * 64, "root": "ab" * 64}
+    put(step, {"summary.json": {"ok": True}, "answers.json": {"windows": [{"registrations": [whole]}]},
+               "honest/registration.json": {"roots": [{"root": "ab" * 64}]}, "honest/registered.json": {"ports": {}},
+               "honest/verifier/warden-registration-egress-0.json": whole,
+               "honest/verifier/warden-registration-ingress-0.json": whole,
+               "tampered/verifier/warden-registration-egress-0-tampered.json": whole,
+               "egress/warden-registration.json": whole, "tie/w0-registration.json": {"roots": []},
+               "honest/circuit.txt": "c", "honest/inst-4.bin": "i", "honest/archive/answers.json": whole,
+               "honest/archive/session.json": {}})
+    copy = block("chain_record.sh", "WHOLE=(", "}")
+    got = run(copy + 'keep "$W/scan" "$OUT/scan"', W=step.parent, OUT=out, Q=q)
+    assert got.returncode == 0, got.stderr
+    private = ["scan/answers.json", "scan/egress/warden-registration.json",
+               "scan/honest/verifier/warden-registration-egress-0.json",
+               "scan/honest/verifier/warden-registration-ingress-0.json",
+               "scan/tampered/verifier/warden-registration-egress-0-tampered.json"]
+    assert sorted(p.relative_to(q / "witness").as_posix() for p in (q / "witness").rglob("*") if p.is_file()) == private
+    assert published(out) == ["scan/honest/registered.json", "scan/honest/registration.json", "scan/summary.json",
+                              "scan/tie/w0-registration.json"]
+    assert not [p for p in out.rglob("*") if p.is_file() and b"17" * 64 in p.read_bytes()]

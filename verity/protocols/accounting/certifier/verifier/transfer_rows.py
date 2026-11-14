@@ -23,7 +23,7 @@ certificate bind the link and the execution phase. `program` is the circuit's pr
 The salts are witness, which the certifier hands to the prover alone (`Transfer.witness`); the rows are what the host
 received, which the prover holds.
 
-**The signed head** (`TransferHead`) is public, as a hiding root is:
+**The signed head** (`TransferHead`):
 
     H = u16be len(link) ‖ link ‖ u8 direction ‖ u64be window ‖ u16be len(kind) ‖ kind ‖ u16be len(value) ‖ value
       ‖ program (64 bytes) ‖ u32be words ‖ u32be rows ‖ u8 word_bits ‖ u16be len(schema) ‖ schema ‖ domain (64 bytes)
@@ -38,7 +38,8 @@ so none verifies as another.
 **The kind** (`KINDS`) is ``load``, ingress: the registered parameters' leaves the load connection carries, once a
 session. The head keeps its kind and direction fields, so a head signed for anything else never reads as a load's.
 
-**The registration** (`registration`) is the head and its certificate as one public JSON object:
+**The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private
+side (of a load's registrations the auditor's gate publishes nothing):
 
     {"format": REGISTRATION, "link", "direction", "window", "kind", "value", "program", "words", "rows", "word_bits",
      "row_schema", "domain", "root", "certificate": {"key", "digest", "signature"}}
@@ -112,7 +113,7 @@ def bc(words: Sequence[int], salt: bytes, word_bits: int = WORD_BITS, schema: st
 
 @dataclass(frozen=True, slots=True)
 class TransferHead:
-    """What the certifier signs for a transfer value: public, since its root is hiding."""
+    """What the certifier signs for a transfer value. A run keeps it on its private side, in the registration."""
 
     link: str
     direction: Direction
@@ -211,7 +212,8 @@ def attest(issuer: Issuer, link: str, direction: Direction, window: int, kind: s
 
 
 def registration(head: TransferHead, certificate: Certificate) -> dict[str, Any]:
-    """The public record of a transfer value: its head, its rows' format, and the certificate."""
+    """The record of a transfer value: its head, its rows' format, and the certificate. A run keeps it on its private
+    side."""
     return {"format": REGISTRATION, "link": head.link, "direction": head.direction.value, "window": head.window,
             "kind": head.kind, "value": head.value, "program": head.program.hex(), "words": head.words, "rows": head.rows,
             "word_bits": head.word_bits, "row_schema": head.schema, "domain": head.domain.hex(), "root": head.root.hex(),
