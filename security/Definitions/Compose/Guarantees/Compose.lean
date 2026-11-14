@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Claims
-public import Definitions.Accounting.Guarantees.Sheet
+public import Definitions.Registration.Guarantees.Sheet
 public import Definitions.Compose.Assumptions.Compose
 
 /-!

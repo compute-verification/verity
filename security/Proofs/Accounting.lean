@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pous.Memory
-public import Proofs.Accounting.Device
+public import Proofs.Registration.Device
 public import Proofs.Accounting.Gates
 public import Proofs.Pouw.FillerLuck
 public import Proofs.Pouw.Headline
@@ -45,7 +45,7 @@ public import Proofs.Poub.ReadUnit.Binding
 public import Proofs.Poub.ReadUnit.BitsPorts
 public import Proofs.Poub.ReadUnit.Witnesses
 public import Proofs.Pouw.BoundReceipt
-public import Proofs.Accounting.Capacity
+public import Proofs.Registration.Capacity
 public import Proofs.Accounting.RegisteredCircuit
 public import Proofs.Accounting.RegisteredCircuit.Tiles
 public import Proofs.Accounting.RegisteredCircuit.Credit

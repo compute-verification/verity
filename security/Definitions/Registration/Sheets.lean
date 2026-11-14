@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Sheets.H200
-public import Definitions.Accounting.Sheets.B200
+public import Definitions.Registration.Sheets.H200
+public import Definitions.Registration.Sheets.B200
 
 /-!
 # The data sheets

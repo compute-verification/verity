@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Device
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Device
+public import Definitions.Registration.Physical
 
 /-!
 # The device's schedule, induced by the actual circuit (trusted)

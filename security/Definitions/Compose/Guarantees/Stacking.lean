@@ -13,7 +13,7 @@ import Mathlib.Basic.ENNReal.Real
 Stacking needs a carrier the audit counts: device memory whose contents were chosen after the seed (a credited KV page)
 and hold other blocks' encodings, so that one read serves several receipts. In the ideal encoding model a carrier's
 contents are a circuit's values, which depend on the encodings only through the circuit's inputs and its own encodes
-(`Definitions/Accounting/Carrier.lean`). Five guarantees, whose proofs are in
+(`Definitions/Registration/Carrier.lean`). Five guarantees, whose proofs are in
 `Security/Proofs/Compose/Stacking.lean`:
 
 * `CarrierBits`, the carrier lemma: memory holding a circuit's values holds at most its input and encoded bits about

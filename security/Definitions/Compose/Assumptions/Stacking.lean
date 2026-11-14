@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Carrier
+public import Definitions.Registration.Carrier
 public import Definitions.Assumptions.Accounting
 
 /-!

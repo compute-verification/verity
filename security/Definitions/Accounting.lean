@@ -8,14 +8,14 @@ public import Definitions.Poub.BandwidthAudit
 public import Definitions.Pouw.BoundReceipt
 public import Definitions.Pouw.BoundSketch
 public import Definitions.Certifier.Bridge
-public import Definitions.Accounting.Capacity
+public import Definitions.Registration.Capacity
 public import Definitions.Pouw.CoinFlow
-public import Definitions.Accounting.Carrier
+public import Definitions.Registration.Carrier
 public import Definitions.Compose.Compose
 public import Definitions.Compose.ComposeMonitoringPeriod
 public import Definitions.Pouw.Confidence
 public import Definitions.Pouw.CostModel
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Definitions.Pouw.Filler
 public import Definitions.Pouw.HMu
 public import Definitions.Accounting.Gates
@@ -33,7 +33,7 @@ public import Definitions.Compose.JointLive
 public import Definitions.Pous.Memory
 public import Definitions.Pouw.PerRun
 public import Definitions.Compose.PeriodBinding
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Definitions.Slowdown.Tasks
 public import Definitions.Pouw.Pouw
 public import Definitions.Pouw.PouwWitness

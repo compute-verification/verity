@@ -44,7 +44,7 @@ against its sheet (`Accounting.TS.Sheet`), the node's devices the stated ones by
 section, below). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's and §1.3's labelling, as
 `Definitions.Pouw.Assumptions.TS`'s are.
 
-What they give (`Definitions.Accounting.Guarantees.Sheet`): A1–A5 give (I1) `FacetCeilings` on the data-sheet machine; A6
+What they give (`Definitions.Registration.Guarantees.Sheet`): A1–A5 give (I1) `FacetCeilings` on the data-sheet machine; A6
 gives (I2)/(I4) `WordsWritten` and, with the labelling's split, (I3) `ScalarRoute` at `q, q_T ≤ ½`, `b_T ≤ 0`; A7 is
 (I5). With (I6)–(I8) they give Theorem D-ideal (2.7♭) on the data-sheet machine.
 

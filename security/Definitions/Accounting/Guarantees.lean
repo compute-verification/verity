@@ -10,7 +10,7 @@ public import Definitions.Poub.Guarantees.BandwidthAudit
 public import Definitions.Pouw.Guarantees.BoundReceipt
 public import Definitions.Pouw.Guarantees.BoundSketch
 public import Definitions.Pouw.Guarantees.Bridges
-public import Definitions.Accounting.Guarantees.Capacity
+public import Definitions.Registration.Guarantees.Capacity
 public import Definitions.Pouw.Guarantees.CoinFlow
 public import Definitions.Compose.Guarantees.Compose
 public import Definitions.Compose.Guarantees.ComposeMonitoringPeriod
@@ -56,7 +56,7 @@ public import Definitions.Accounting.Guarantees.Requirement
 public import Definitions.Accounting.Guarantees.Sketch
 public import Definitions.Compose.Guarantees.Stacking
 public import Definitions.Pouw.Guarantees.TS
-public import Definitions.Accounting.Guarantees.Sheet
+public import Definitions.Registration.Guarantees.Sheet
 public import Definitions.Pouw.Guarantees.TS.Stages
 public import Definitions.Pouw.Guarantees.TS.FoldFanIn
 public import Definitions.Pouw.Guarantees.TS.LowBit

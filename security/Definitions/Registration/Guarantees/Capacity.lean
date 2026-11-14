@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Capacity
+public import Definitions.Registration.Capacity
 public import Mathlib.Data.Fintype.Prod
 
 /-!
@@ -29,7 +29,7 @@ certificate does not count it. It is not free: it shares the capacity residual `
 of the capacity audit's own coins, not at the coin flipped: outside the error, some capacity coin leaves them within it. A
 per-run reading is not claimed yet; a proof by truncation is in progress.
 
-Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.Capacity`).
+Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Registration.Capacity`).
 -/
 
 @[expose] public section

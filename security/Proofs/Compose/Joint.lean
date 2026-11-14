@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Compose.Guarantees.Joint
-public import Proofs.Accounting.Device
+public import Proofs.Registration.Device
 public import Proofs.Accounting.Prob
 import Mathlib.Basic.ENNReal.Real
 import Mathlib.Tactic.Positivity.Finset

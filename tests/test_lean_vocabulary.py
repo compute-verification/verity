@@ -440,13 +440,13 @@ KNOWN: dict[str, str] = {
         "homonym, a two-party communication protocol (a tree of one-bit messages): rename (memory-accounting)",
     "security/Definitions/Pouw/CoinFlow.lean::Accounting.CoinFlow.Program":
         "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
-    "security/Definitions/Accounting/Device.lean::Accounting.Device":
+    "security/Definitions/Registration/Device.lean::Accounting.Device":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes `Verity.Device`, moved into security/Definitions/Core/ (lean)",
-    "security/Definitions/Accounting/Device.lean::Accounting.Window":
+    "security/Definitions/Registration/Device.lean::Accounting.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes `Verity.Period`, moved into security/Definitions/Core/ (lean)",
     "security/Definitions/Accounting/Gates/Codec.lean::Accounting.Gates.Draw":
         "homonym, a draw of a k-round key: rename (memory-accounting)",
-    "security/Definitions/Accounting/Physical.lean::Accounting.Hardware":
+    "security/Definitions/Registration/Physical.lean::Accounting.Hardware":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: the Site plus the device model (lean)",
     "security/Definitions/Pouw/PouwWork.lean::Accounting.PouwWork.Verdict":
         "duplicate of `Core.Verdict`: becomes a spec verdict over it, once the spec has one (compute-accounting)",

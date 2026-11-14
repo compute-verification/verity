@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Device
+public import Definitions.Registration.Device
 public import Definitions.Pouw.PearlC.W1
 public import Properties.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
 import Mathlib.Algebra.Order.Floor.Extended

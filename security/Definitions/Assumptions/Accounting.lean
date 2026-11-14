@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Carrier
+public import Definitions.Registration.Carrier
 public import Definitions.Compose.Remote.Sketch
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Game
