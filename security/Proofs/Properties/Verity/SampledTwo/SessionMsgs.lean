@@ -16,7 +16,7 @@ messages `SpotFlock.V h` reads: SpotFlock's tagged Flock messages, not the recor
   order the check reads their records, the member its statement names, found by name as
   `Spot.OneStageZk.heldStep` finds it, and the session's record on the blobs.
 * **Its statement** (`stmtRaw`, `stmtAtCase`): the statement the form verifies the session at
-  (`Member.statement`, then `step` at the record's sample): `flock-verify verify --zk` at `verity/flock-circuit`, the
+  (`Member.statement`, then `step` at the record's sample): `verity-verify-proof verify --zk` at `verity/flock-circuit`, the
   member's circuit and public file, the blobs' lookup tables, the record's sample (`drawBytes`), the member's partition
   object and program and its registered reads, each JSON value as `Flock.RecordText.printT` prints it. Its fields are
   `SpotFlock.HeldOf.memberRaw`'s, so `pinOk` compares it with template `t`'s reference statement like with like.
