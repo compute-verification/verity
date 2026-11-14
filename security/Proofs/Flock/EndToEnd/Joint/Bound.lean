@@ -19,7 +19,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.EndToEnd.Joint.Prod
 import Proofs.Flock.EndToEnd.Period.Union
 import Proofs.Flock.Soundness.Audit.HarmBound
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -55,7 +55,7 @@ theorem escape_prod_le (l : List (BlockRec W)) :
   | cons r l ih =>
       rw [List.map_cons, List.prod_cons, List.map_cons, List.sum_cons, neg_add, Real.exp_add,
         ENNReal.ofReal_mul (Real.exp_pos _).le]
-      exact mul_le_mul' (Law.stratified_escape_le_exp (W r.idx).sub (W r.idx).ks (W r.idx).hks r.wrong) ih
+      exact mul_le_mul' (SamplingDesign.stratified_escape_le_exp (W r.idx).sub (W r.idx).ks (W r.idx).hks r.wrong) ih
 
 end BlockRec
 
@@ -146,7 +146,7 @@ theorem JointStratifiedHorizon : Flock.Guarantees.JointStratifiedHorizon := by
   have hB := monitoringPeriod_prod (fun t => (W t).game) (StratifiedBlock.record W) (fun r => ¬ r.sampledWrong)
     BlockRec.escape (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨(W t).ideal.escape ((W t).wrongSet τ),
-      ne_top_of_le_ne_top ENNReal.one_ne_top (Law.escape_le_one _ _), fun _ => rfl,
+      ne_top_of_le_ne_top ENNReal.one_ne_top (SamplingDesign.escape_le_one _ _), fun _ => rfl,
       (W t).sampleMiss_le (hA3 t hτ.1) ((W t).wrongSet τ) τ⟩) T 0 s (ENNReal.ofReal δ) hs
   calc value (fun l => (∀ r ∈ l, r.accepted) ∧ ¬ Stratified.Within W δ ands bits l) (Stratified.run W T s)
       ≤ value (fun l => (∃ r ∈ l, r.accepted ∧ r.sampledWrong) ∨

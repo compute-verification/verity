@@ -134,13 +134,13 @@ def SampledKSLiveV3 : Prop :=
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     -- one opening's verification, in SHA-512 evaluations
     (v : ℝ) (_hv : 0 ≤ v)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     if hs : Bridge.KsScoped I D kd then
-      let L := Law.execOS (n := n) src (.subset kd) n
+      let L := SamplingDesign.execOS (n := n) src (.subset kd) n
       let P := (keyProg D.unroll hs.built n).partition (Discharge.Layout.outsOf D.unroll hs.built n)
       let vb := (rsZHJ dj y₀ hs.typed (Flock.Desc.parse_flat hD) hs.scope hs.built hpub hpt).bindingZ
         (rsZHJ_computes dj y₀ hs.typed (Flock.Desc.parse_flat hD) hs.scope hs.built hpub hpt)
@@ -181,7 +181,7 @@ def SampledKSLiveV3 : Prop :=
             (2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
     else
       prob (fun o => Bridge.LiveAcceptsScoped I o ∧ Bridge.RunPopOk desc qr n)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ = 0
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ = 0
 
 /-- **`SampledKSLiveV2` gives `SampledKSLiveV3`**: at a statement, files and a sample in `KsScoped`, V3's event is inside
 `Bridge.SampledKSLiveRoots`' at `KsScoped`'s five, and that follows from V2 (`Bridge.sampledKSLiveRoots_of`); outside

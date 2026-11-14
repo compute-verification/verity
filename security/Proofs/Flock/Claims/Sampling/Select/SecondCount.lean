@@ -13,7 +13,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 # How many proof blocks the second stage proves (`size_proved_selectSecond`)
 
 The second stage's sampling design has one cell per template `t` and sampled replay block, each sampling `k_t` of its `n_t` proof
-blocks (`flockLaw_second`); its sample returns each cell's count (`stratifiedWith_size`), and its sample object carries
+blocks (`flockSamplingDesign_second`); its sample returns each cell's count (`stratifiedWith_size`), and its sample object carries
 those units and no closure. So an accepted second stage proves exactly `|sample| · Σ_t k_t` proof blocks. At a
 registration the replay sample is `RegTwo.sample src₁`, the units the first stage proves, and this is the count
 `Kfirst · Σ_t k_t` of the sampled blocks whose gates the checked proof blocks need.
@@ -28,15 +28,15 @@ namespace Properties.Spot.SecurityProofs
 open Lean (Json)
 
 theorem getD_sample_closure (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :
-    getD (Json.mkObj ((entries (Select.secondLaw sample ns ks)).toList ++
+    getD (Json.mkObj ((entries (Select.secondSamplingDesign sample ns ks)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "closure" = Json.null := (rfl)
 
-/-- **An accepted second stage's sample object**: it passed `secondProblem`, drew `units` under `secondLaw`'s Flock sampling design
+/-- **An accepted second stage's sample object**: it passed `secondProblem`, drew `units` under `secondSamplingDesign`'s Flock sampling design
 over the `|sample|·Σ n_t` proof blocks, and carries those units and no closure. -/
 theorem selectSecond_units {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     Select.secondProblem sample ns ks = none ∧
-      ∃ parsed units, Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed ∧
+      ∃ parsed units, Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) = .ok parsed ∧
         Draw.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read) ∧
           getD draw "units" = natsJson units ∧ getD draw "closure" = Json.null := by
   unfold Select.selectSecond at h
@@ -156,7 +156,7 @@ theorem size_proved_selectSecond {sample ns ks : Array ℕ} {src : ByteArray} {d
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     (Draw.proved draw).size = sample.size * ks.toList.sum := by
   obtain ⟨hq, parsed, units, hp, hu, hdu, hdc⟩ := selectSecond_units h
-  obtain ⟨ws, rfl, hmap⟩ := flockLaw_second sample ns ks _ parsed hp
+  obtain ⟨ws, rfl, hmap⟩ := flockSamplingDesign_second sample ns ks _ parsed hp
   rw [size_proved_of_units hdu hdc, sampleUnits_work_size hu]
   have hk : ws.toList.map (·.k) = (cellPairs sample.size ns.size).map fun z => (cellOf sample.size ns ks z).2 := by
     have := congrArg (List.map Prod.snd) hmap

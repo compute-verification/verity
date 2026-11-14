@@ -2884,10 +2884,15 @@
         "benchmarks/one_stage/member_trees.py": "verity/protocols/proofs/spot/verifier/one_stage/member_trees.py",
         "benchmarks/one_stage/served_integrity.py": "verity/protocols/proofs/spot/verifier/one_stage/served_integrity.py",
         "benchmarks/one_stage/verdict_record.py": "verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py",
+        "benchmarks/one_stage/a5_memo.py": "verity/protocols/proofs/spot/verifier/one_stage/check_memo.py",
+        "benchmarks/one_stage/compose_circuit.py": "verity/protocols/proofs/spot/verifier/one_stage/compose_circuit.py",
+        "benchmarks/prove_path/records_audit.py": "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py",
         "benchmarks/one_stage/r2_population.py": "verity/protocols/proofs/spot/verifier/tests/other_population.py",
         "benchmarks/one_stage/tests/test_member_trees.py": "verity/protocols/proofs/spot/verifier/tests/test_one_stage_member_trees.py",
+        "benchmarks/one_stage/tests/test_a5_memo.py": "verity/protocols/proofs/spot/verifier/tests/test_check_memo.py",
         "benchmarks/one_stage/tests/test_r2_population.py": "verity/protocols/proofs/spot/verifier/tests/test_other_population.py",
         "benchmarks/one_stage/tests/test_verdict_record.py": "verity/protocols/proofs/spot/verifier/tests/test_verdict_record.py",
+        "benchmarks/prove_path/tests/test_records_audit.py": "verity/protocols/proofs/spot/verifier/tests/test_records_audit.py",
         "benchmarks/prove_path/tests/test_pearltie.py": "verity/protocols/proofs/spot/verifier/tests/test_pearltie.py",
         "benchmarks/prove_path/tests/test_remotetie.py": "verity/protocols/proofs/spot/verifier/tests/test_remotetie.py",
         "benchmarks/prove_path/tests/settings.py": "verity/protocols/proofs/spot/verifier/tests/settings.py",
@@ -2945,6 +2950,86 @@
         "benchmarks/sampling_plan/tests/test_recursion.py": "verity/protocols/proofs/spot/prover/tests/test_cost_recursion.py",
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/circuits/requirement/tests/test_census_and_memory_map.py": "adapters/vllm/tests/commit/test_census_and_memory_map.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/commitments/cuda/sha512_rows/settings.py": "benchmarks/torch_gpu/settings.py"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/program/test_broadcast_bias_add.py": "adapters/torch/tests/frontend/test_broadcast_bias_add.py",
+        "adapters/vllm/tests/program/test_composition.py": "adapters/torch/tests/frontend/test_composition.py",
+        "adapters/vllm/tests/program/test_derive_gate_path.py": "adapters/torch/tests/frontend/test_derive_gate_path.py",
+        "adapters/vllm/tests/program/test_derive_hf5_heldout.py": "adapters/torch/tests/frontend/test_derive_hf5_heldout.py",
+        "adapters/vllm/tests/program/test_derive_hf5b_realhf.py": "adapters/torch/tests/frontend/test_derive_hf5b_realhf.py",
+        "adapters/vllm/tests/program/test_derive_realhf.py": "adapters/torch/tests/frontend/test_derive_realhf.py",
+        "adapters/vllm/tests/program/test_frontend_analyses.py": "adapters/torch/tests/frontend/test_frontend_analyses.py",
+        "adapters/vllm/tests/program/test_program_identity.py": "adapters/torch/tests/frontend/test_program_identity.py",
+        "adapters/vllm/tests/program/test_refs_runs.py": "adapters/torch/tests/frontend/test_refs_runs.py",
+        "adapters/vllm/tests/program/test_rules_common.py": "adapters/torch/tests/frontend/test_rules_common.py",
+        "adapters/vllm/tests/program/test_strided_views.py": "adapters/torch/tests/frontend/test_strided_views.py",
+        "adapters/vllm/tests/program/test_train_draws.py": "adapters/torch/tests/frontend/test_train_draws.py",
+        "adapters/vllm/tests/program/test_train_embedding.py": "adapters/torch/tests/frontend/test_train_embedding.py",
+        "adapters/vllm/tests/program/test_train_log.py": "adapters/torch/tests/frontend/test_train_log.py",
+        "adapters/vllm/tests/program/test_train_matmul.py": "adapters/torch/tests/frontend/test_train_matmul.py",
+        "adapters/vllm/tests/program/test_train_patterns.py": "adapters/torch/tests/frontend/test_train_patterns.py",
+        "adapters/vllm/tests/program/test_train_quant.py": "adapters/torch/tests/frontend/test_train_quant.py",
+        "adapters/vllm/tests/program/test_train_reduce.py": "adapters/torch/tests/frontend/test_train_reduce.py",
+        "adapters/vllm/tests/program/test_train_reference.py": "adapters/torch/tests/frontend/test_train_reference.py",
+        "adapters/vllm/tests/program/test_train_sdpa.py": "adapters/torch/tests/frontend/test_train_sdpa.py",
+        "adapters/vllm/tests/program/test_value_types.py": "adapters/torch/tests/frontend/test_value_types.py",
+        "adapters/vllm/verity_vllm/program/frontend/boolean.py": "adapters/torch/verity_torch/frontend/boolean.py",
+        "adapters/vllm/verity_vllm/program/frontend/correspond.py": "adapters/torch/verity_torch/frontend/correspond.py",
+        "adapters/vllm/verity_vllm/program/frontend/derive.py": "adapters/torch/verity_torch/frontend/derive.py",
+        "adapters/vllm/verity_vllm/program/frontend/derive_context.py": "adapters/torch/verity_torch/frontend/derive_context.py",
+        "adapters/vllm/verity_vllm/program/frontend/derive_graph.py": "adapters/torch/verity_torch/frontend/derive_graph.py",
+        "adapters/vllm/verity_vllm/program/frontend/emit.py": "adapters/torch/verity_torch/frontend/emit.py",
+        "adapters/vllm/verity_vllm/program/frontend/errors.py": "adapters/torch/verity_torch/frontend/errors.py",
+        "adapters/vllm/verity_vllm/program/frontend/outcomes.py": "adapters/torch/verity_torch/frontend/outcomes.py",
+        "adapters/vllm/verity_vllm/program/frontend/program_identity.py": "adapters/torch/verity_torch/frontend/program_identity.py",
+        "adapters/vllm/verity_vllm/program/frontend/provenance.py": "adapters/torch/verity_torch/frontend/provenance.py",
+        "adapters/vllm/verity_vllm/program/frontend/registration.py": "adapters/torch/verity_torch/frontend/registration.py",
+        "adapters/vllm/verity_vllm/program/frontend/report.py": "adapters/torch/verity_torch/frontend/report.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/base.py": "adapters/torch/verity_torch/frontend/rules/base.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/common.py": "adapters/torch/verity_torch/frontend/rules/common.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/patterns.py": "adapters/torch/verity_torch/frontend/rules/patterns.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/ref_kinds.py": "adapters/torch/verity_torch/frontend/rules/ref_kinds.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/reference.py": "adapters/torch/verity_torch/frontend/rules/reference.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training.py": "adapters/torch/verity_torch/frontend/rules/training.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_attention.py": "adapters/torch/verity_torch/frontend/rules/training_attention.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_emit.py": "adapters/torch/verity_torch/frontend/rules/training_emit.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_loss.py": "adapters/torch/verity_torch/frontend/rules/training_loss.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_masks.py": "adapters/torch/verity_torch/frontend/rules/training_masks.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_matmul.py": "adapters/torch/verity_torch/frontend/rules/training_matmul.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_reduce.py": "adapters/torch/verity_torch/frontend/rules/training_reduce.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_softmax.py": "adapters/torch/verity_torch/frontend/rules/training_softmax.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_survey.py": "adapters/torch/verity_torch/frontend/rules/training_survey.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/training_views.py": "adapters/torch/verity_torch/frontend/rules/training_views.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/views.py": "adapters/torch/verity_torch/frontend/rules/views.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/layer_norm.py": "adapters/torch/verity_torch/frontend/rules/bindings/layer_norm.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/operands.py": "adapters/torch/verity_torch/frontend/rules/bindings/operands.py",
+        "adapters/vllm/verity_vllm/program/frontend/rules/vllm_bindings/views.py": "adapters/torch/verity_torch/frontend/rules/bindings/views.py",
+        "adapters/vllm/verity_vllm/program/frontend/strided_views.py": "adapters/torch/verity_torch/frontend/strided_views.py",
+        "adapters/vllm/verity_vllm/program/frontend/train_step.py": "adapters/torch/verity_torch/frontend/train_step.py",
+        "adapters/vllm/verity_vllm/program/frontend/value_types.py": "adapters/torch/verity_torch/frontend/value_types.py",
+        "adapters/vllm/verity_vllm/program/inputs.py": "adapters/torch/verity_torch/inputs.py",
+        "adapters/vllm/verity_vllm/program/prune.py": "adapters/torch/verity_torch/prune.py",
+        "adapters/vllm/verity_vllm/program/dsa_table.py": "adapters/torch/verity_torch/dsa_table.py",
+        "adapters/vllm/verity_vllm/correspondence/runtime.py": "adapters/torch/verity_torch/correspondence/runtime.py"
+      }
+    },
+    {
+      "paths": {
+        "security/Proofs/Flock/Bridge/SampledLaw.lean": "security/Proofs/Flock/Bridge/SampledDesign.lean",
+        "security/Proofs/Flock/Claims/Sampling/Select/SampleLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/SampleDesign.lean",
+        "security/Proofs/Flock/Soundness/Discharge/Exec/LawSample.lean": "security/Proofs/Flock/Soundness/Discharge/Exec/SamplingDesignSample.lean"
       }
     }
   ]

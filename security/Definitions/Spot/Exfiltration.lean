@@ -109,7 +109,7 @@ def TrustedModel {W H T : Type} (ρ : PMF W) (S : W → T) (hon : W → H) (g : 
 /-- The sample that catches each unit `u` independently, when its coin `p u` comes up `true`: a coin says, per unit,
 whether an incorrect `u` would be caught (sampled, and not lucky). -/
 noncomputable abbrev indepSample {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) : PMF (U → Bool) :=
-  Verity.Game.piLaw p
+  Verity.Game.piDistribution p
 
 /-- The coins of the independent sample on which the incorrect set `B` escapes: none of its units is caught. -/
 def acceptCoins {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=

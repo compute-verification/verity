@@ -139,7 +139,7 @@ session played alone at `τ`. -/
 theorem sampled_extend (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (S : Verity.Sampled.Widening)
     [Nonempty (w.extend S).EndΩ] (τ : Strategy (w.extend S).game)
     (hCR : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-      (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀ (((w.extend S).memberLaw τ k).draw ω)
+      (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀ (((w.extend S).memberSamplingDesign τ k).draw ω)
         (reg ((w.extend S).memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀)
         (cont ((w.extend S).memberSim τ k) ω))

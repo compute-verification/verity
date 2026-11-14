@@ -12,7 +12,7 @@ The proofs of the exfiltration statements of `Partitioning.Guarantees`.
 
 * `ExfiltrationOptimum`. A sampling design certifying `ℓ` below the `(K+1)`-th rung has `miss (K + 1) ≤ δ`
   (`Exfil.miss_le_of_certifies`), so `ConverseExact` at `K + 1` gives the lower bound; when `K ≥ n` it is at most `0`.
-  Independent samples just above `Λ/(K+1)` give the upper bound (`Exfil.exists_certifying_law`).
+  Independent samples just above `Λ/(K+1)` give the upper bound (`Exfil.exists_certifying_samplingDesign`).
 * `RefinementRule`. The unsplit side is `ExfiltrationOptimum`'s sampling design at `ε / (c(s) + 1)`. On the split partition, the
   width condition and the counting of `Exfil.locBits_succ_le` and `Exfil.locBits_succ_ge` put `ℓ` below the `(K+1)`-th
   rung of `r·n` units of width `b'`, so `ConverseAsymptotic` at `K + 1` applies there, and
@@ -30,7 +30,7 @@ open Finset
 
 theorem ExfiltrationOptimum : Guarantees.ExfiltrationOptimum := by
   intro n b K δ ℓ hδ0 hδ1 hlo hhi
-  refine ⟨fun L hL => ?_, fun ε hε => Exfil.exists_certifying_law n b K hδ0 hδ1 hlo hε⟩
+  refine ⟨fun L hL => ?_, fun ε hε => Exfil.exists_certifying_samplingDesign n b K hδ0 hδ1 hlo hε⟩
   have hmiss := Exfil.miss_le_of_certifies (J := K + 1) hδ0.le hL (by push_cast; exact hhi)
   rcases le_or_gt (K + 1) n with hKn | hKn
   · have h := ConverseExact n (K + 1) L δ (Nat.succ_pos K) hKn hmiss
@@ -51,7 +51,7 @@ theorem RefinementRule : Guarantees.RefinementRule := by
   have hc' : 0 ≤ unitCost f o (s / r) := add_nonneg hf (mul_nonneg ho (div_nonneg hs.le hr0.le))
   have hK0 : (0 : ℝ) < K + 1 := by positivity
   refine ⟨fun ε hε => ?_, fun L' hL' => ?_⟩
-  · obtain ⟨L, hL, hm⟩ := Exfil.exists_certifying_law n b K (ε := ε / (unitCost f o s + 1)) hδ0 hδ1 hlo
+  · obtain ⟨L, hL, hm⟩ := Exfil.exists_certifying_samplingDesign n b K (ε := ε / (unitCost f o s + 1)) hδ0 hδ1 hlo
       (div_pos hε (by linarith))
     refine ⟨L, hL, ?_⟩
     rw [Exfil.cost_const]

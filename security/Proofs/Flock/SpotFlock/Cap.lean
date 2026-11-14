@@ -27,7 +27,7 @@ namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Finset
 open Properties.Spot (bytesOf membersPart)
-open Properties.Spot.SecurityProofs (bind_eq_ok lawObj mem_checked flockLaw_subset deriveLaw_subset)
+open Properties.Spot.SecurityProofs (bind_eq_ok samplingDesignObj mem_checked flockSamplingDesign_subset deriveSamplingDesign_subset)
 open Lean (Json)
 
 /-! ## The first stage's count -/
@@ -36,9 +36,9 @@ open Lean (Json)
 def firstKOf (g : Reg) : Option ℕ :=
   match Spot.Partition.units g.program g.query with
   | .ok n =>
-    match g.rule.lawOver n with
+    match g.rule.samplingDesignOver n with
     | .ok named =>
-      match Spot.Draw.flockLaw named n with
+      match Spot.Draw.flockSamplingDesign named n with
       | .ok (.subset k) => some k
       | _ => none
     | .error _ => none
@@ -48,13 +48,13 @@ def firstKOf (g : Reg) : Option ℕ :=
 `All`, it has no closure map, and Flock reads its sampling design over the population as `subset K`. -/
 def firstK (g : Reg) : Option ℕ :=
   match g.closure, g.rule with
-  | none, .law _ => firstKOf g
+  | none, .samplingDesign _ => firstKOf g
   | none, .twoStage _ _ _ => firstKOf g
   | _, _ => none
 
 theorem firstK_some {g : Reg} {K : ℕ} (hK : firstK g = some K) :
     g.closure = none ∧ g.rule ≠ .all ∧ ∃ n named, Spot.Partition.units g.program g.query = .ok n ∧
-      g.rule.lawOver n = .ok named ∧ Spot.Draw.flockLaw named n = .ok (.subset K) := by
+      g.rule.samplingDesignOver n = .ok named ∧ Spot.Draw.flockSamplingDesign named n = .ok (.subset K) := by
   have h3 : g.closure = none ∧ g.rule ≠ .all ∧ firstKOf g = some K := by
     unfold firstK at hK
     cases hc : g.closure <;> cases hr : g.rule <;> simp [hc, hr] at hK <;> exact ⟨rfl, by simp, hK⟩
@@ -64,13 +64,13 @@ theorem firstK_some {g : Reg} {K : ℕ} (hK : firstK g = some K) :
   cases hn : Spot.Partition.units g.program g.query with
   | error e => simp [hn] at hK'
   | ok n =>
-    cases hl : g.rule.lawOver n with
+    cases hl : g.rule.samplingDesignOver n with
     | error e => simp [hn, hl] at hK'
     | ok named =>
-      cases hf : Spot.Draw.flockLaw named n with
+      cases hf : Spot.Draw.flockSamplingDesign named n with
       | error e => simp [hn, hl, hf] at hK'
-      | ok law =>
-        cases law <;> simp [hn, hl, hf] at hK'
+      | ok samplingDesign =>
+        cases samplingDesign <;> simp [hn, hl, hf] at hK'
         subst hK'
         exact ⟨n, named, rfl, hl, hf⟩
 
@@ -79,10 +79,10 @@ of `proved` when `cm` is none. -/
 theorem select_proved (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)
     (h : Spot.Select.select rule d query table cm src = .ok (draw, proved, read)) :
-    ∃ n named derived, Spot.Partition.units d query = .ok n ∧ rule.lawOver n = .ok named ∧
-      Spot.Draw.deriveLaw d query named table = .ok derived ∧
+    ∃ n named derived, Spot.Partition.units d query = .ok n ∧ rule.samplingDesignOver n = .ok named ∧
+      Spot.Draw.deriveSamplingDesign d query named table = .ok derived ∧
         ∃ units : Array ℕ, (cm = none → proved = units) ∧ ((rule = .all ∧ units = Array.range n) ∨
-          (rule ≠ .all ∧ ∃ parsed read', Spot.Draw.flockLaw (lawObj named derived) n = .ok parsed ∧
+          (rule ≠ .all ∧ ∃ parsed read', Spot.Draw.flockSamplingDesign (samplingDesignObj named derived) n = .ok parsed ∧
             Spot.Draw.sampleUnits (derived.getD parsed) n src = .ok (units, read'))) := by
   unfold Spot.Select.select at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
@@ -129,15 +129,15 @@ theorem select_subset_size {g : Reg} {K : ℕ} (hK : firstK g = some K) {src : B
   obtain rfl := Except.ok.inj hn'
   rw [hl] at hl'
   obtain rfl := Except.ok.inj hl'
-  obtain rfl : derived = none := deriveLaw_subset _ _ _ _ _ (flockLaw_subset _ _ _ hf).1 hder
+  obtain rfl : derived = none := deriveSamplingDesign_subset _ _ _ _ _ (flockSamplingDesign_subset _ _ _ hf).1 hder
   rw [hpu hc]
   rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
   · exact absurd hall hne
-  · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
+  · have hp' : Spot.Draw.flockSamplingDesign named n = .ok parsed := hp
     rw [hf] at hp'
     obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
     have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu
-    exact _root_.Flock.Bridge.sampleUnits_size (law := .subset K) (ns := [K]) (kd := K) ⟨rfl, by simp⟩ hu'
+    exact _root_.Flock.Bridge.sampleUnits_size (samplingDesign := .subset K) (ns := [K]) (kd := K) ⟨rfl, by simp⟩ hu'
 
 /-! ## The cap -/
 

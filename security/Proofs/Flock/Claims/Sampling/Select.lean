@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Layout
 public import Proofs.Flock.Claims.Sampling.Select.Steps
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
 public import Proofs.Flock.Claims.Sampling.Select.Misses
-public import Proofs.Flock.Claims.Sampling.Select.SampleLaw
+public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
 public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Claims.Sampling.Select.Scope
 public import Proofs.Flock.Claims.Sampling.Select.Refusals
@@ -19,11 +19,11 @@ public import Proofs.Flock.Claims.Sampling.Select.SecondFirst
 
 /-! The deployed sampled verifier's sample (`Spot.Slots.select`) against the claims' `P_a`: a sequential sample's
 stopping-time bound (`Select.Seq`); the sample's coins read in order and its sampling design's stages (`Select.Take`); a subset sample
-as the live sample `Law.runOS` on the same bytes, and its bound under A3 (`Select.OS`); the
+as the live sample `SamplingDesign.runOS` on the same bytes, and its bound under A3 (`Select.OS`); the
 verifier's partition as the claims' slots (`Select.Layout`); `Select.select`'s steps and the design it samples
 (`Select.Steps`); each sampling design's miss bound on its coins (`Select.Bounds`); `sampleMisses`, which proves
-`Properties.Spot.DrawMisses` (`Select.Misses`); `SampleLaw` at a deployment whose sample is `Slots.select`'s
-(`Select.SampleLaw`); `designWellFormed`, which proves `Properties.Spot.DesignWellFormed` (`Select.Design`); and
+`Properties.Spot.DrawMisses` (`Select.Misses`); `SampleDesign` at a deployment whose sample is `Slots.select`'s
+(`Select.SampleDesign`); `designWellFormed`, which proves `Properties.Spot.DesignWellFormed` (`Select.Design`); and
 `ScopeMatches` and `Refuses` from it, where the scope check is the readable scope's program part (`Select.Scope`); and that
 program part as five refusals of the verifier's evaluation, each needed (`Select.Refusals`); and `secondMisses`, which
 proves `Properties.Spot.SecondMisses`, the two-stage rule's second stage (`Select.Second`), with its honest

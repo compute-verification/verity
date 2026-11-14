@@ -25,7 +25,7 @@ open scoped ENNReal
 
 open Classical in
 /-- **Flock's one-stage audit, end to end.** The prover registers `R` (its roots); the challenger's coins sample a
-uniform `kd`-subset of the `n` proof blocks (`Flock.Draw.drawWith`, `Law.execOS` on the byte source `src`); one `--zk`
+uniform `kd`-subset of the `n` proof blocks (`Flock.Draw.drawWith`, `SamplingDesign.execOS` on the byte source `src`); one `--zk`
 session of `J = nTab I` tables proves the sampled proof blocks, `kd / J` in each; and the verifier,
 `verity-verify-proof verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{verity-verify-proof accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
@@ -86,9 +86,9 @@ def EndToEnd : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     -- the live prover
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     (qF qS : ℝ),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let P := (keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)
     let vb := (rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)
     let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))
@@ -112,7 +112,7 @@ def EndToEnd : Prop :=
 
 open Classical in
 /-- **`EndToEnd` at A3 per test**: `EndToEnd` with the verifier's bytes passing the sample's escape test
-(`Law.escapeTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
+(`SamplingDesign.escapeTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
 (`Assumptions.UniformRandomBytesTest`), in place of every event exactly, and `η` added to the miss term. -/
 def EndToEndPerTest : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -132,7 +132,7 @@ def EndToEndPerTest : Prop :=
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (_hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
+      Assumptions.UniformRandomBytesTest Lb src (SamplingDesign.escapeTest (.subset kd) n B) η)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
@@ -140,9 +140,9 @@ def EndToEndPerTest : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     -- the live prover
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     (qF qS : ℝ),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let P := (keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)
     let vb := (rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)
     let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))

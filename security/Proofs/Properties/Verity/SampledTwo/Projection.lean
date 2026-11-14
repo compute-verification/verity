@@ -21,7 +21,7 @@ that hold separately, each a `Prop` here and a theorem in a file of its own, and
   first stage's (round 0), the second stage's (rounds 1 to `stage`), the statements' (round `stage + 1`) and the
   sessions' (past it).
 * **The pieces**:
-  * `CoinMapLaw`: the coin map is uniform, and the device's releases agree with the run's coins (an agreement `Ag`),
+  * `CoinMapDistribution`: the coin map is uniform, and the device's releases agree with the run's coins (an agreement `Ag`),
     up to the device's coin trees' hiding; `DevAgrees`: on an accepted play whose log is the device's, coins `Ag` holds
     of agree with every release the log holds for a read round, as the check reads it.
   * `CoinsAgree` at each group of coins: on a play the form's check accepts (`Acc`) whose log the check read is the
@@ -114,7 +114,7 @@ def groupOf (A : Live₂) (i : ℕ) : Group :=
 frame's play at a uniform tape and uniform run coins, and there the device's releases agree with the run's coins
 (`Ag`), up to `hide`. The agreement holds only up to `hide`, not at every tape: an opening whose tree has no round
 beginning with the run's coin's elements releases a round of its own, and nothing in the log shows it. -/
-def CoinMapLaw (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+def CoinMapDistribution (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (Ag : Verity.Exchange → Coins A x → Prop)
     (hide : ℝ≥0∞) : Prop :=
   ∀ E : Verity.Exchange → Prop, Verity.Game.prob E (V.game θ F c) σ ≤
@@ -213,7 +213,7 @@ def ProjectionOf (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live�
   ∀ (Fr : Frame V A x θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop)
     (Ag : Verity.Exchange → Coins A x → Prop) (hide miss terms : ℝ≥0∞),
     (∀ o, o.params = θ → V.Verdict k .sampled o → Acc o) →
-    CoinMapLaw V A x θ F c σ Fr Ag hide → DevAgrees A x Rd Acc Good Ag →
+    CoinMapDistribution V A x θ F c σ Fr Ag hide → DevAgrees A x Rd Acc Good Ag →
     CoinsAgree A Rd Acc Good .first → CoinsAgree A Rd Acc Good .second →
       CoinsAgree A Rd Acc Good .sessions → StmtReadsNone A Rd → MessagesFixed V A x θ F c σ Fr Rd Acc Good miss →
       CutBound V k θ F c σ Good terms → AcceptsRun A x Rd Acc → StmtAt V A x θ F c σ Fr Rd Acc →
