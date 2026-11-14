@@ -23,7 +23,7 @@ DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
 CARD: dict[str, str] = {"NVIDIA H200": "h200-sxm-141gb", "NVIDIA RTX PRO 6000 Blackwell Server Edition": "rtx-pro-6000-server"}
 
 #: the served targets that have no card file yet, by the same name, each with its reason: these alone are held to no card
-NO_CARD: dict[str, str] = {"NVIDIA B200": "no card file yet: verity/hardware/cards has none for the B200"}
+NO_CARD: dict[str, str] = {"NVIDIA B200": "no card file yet: hardware/cards has none for the B200"}
 
 #: vLLM d9105ea80's tuned fused-MoE configs (model_executor/layers/fused_moe/configs/<file>, `get_config_file_name`), batch size ->
 #: (BLOCK_SIZE_M, BLOCK_SIZE_N, BLOCK_SIZE_K, GROUP_SIZE_M, num_warps, num_stages); the file below is sha256 ade035ab90cbce92...
