@@ -5,7 +5,7 @@ accounts for space, bandwidth and communication. Its subprotocols are integrity 
 blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, and the recursive audit, which SPOT's
 soundness doesn't cover, are refused), the
 inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
-`verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
+`verity/inference-only/v0`: the registered circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's execution phases credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
 by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
