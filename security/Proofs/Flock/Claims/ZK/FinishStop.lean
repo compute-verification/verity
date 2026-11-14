@@ -1,7 +1,7 @@
 module
 
 public import Batteries.Data.ByteArray
-public import Flock.Firewall.Finish
+public import Flock.ZkServer.Finish
 public import Proofs.Flock.Claims.ZK.FinishRep
 public import Proofs.Flock.Claims.ZK.PadFree
 public import Proofs.Flock.Claims.ZK.Worker
@@ -62,7 +62,7 @@ worker's rows hold (`Table.RowsAt`), so the switched view is the worker's own (`
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 /-- No constraint fails on the pads exactly where each vanishes there. -/
 theorem failingOn_eq_empty_iff {cons : Array (String × Zk.Lin)} {h : Array F128} :
@@ -71,7 +71,7 @@ theorem failingOn_eq_empty_iff {cons : Array (String × Zk.Lin)} {h : Array F128
   rw [Array.map_eq_empty_iff, Array.filter_eq_empty_iff]
   simp [bne]
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -98,21 +98,21 @@ theorem noFail_iff_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : Coi
     (cons : Array (String × Zk.Lin)) (hsz : cons.size = 7) (hlen : ∀ q ∈ cons, q.2.a.size = (layOf Tz st).len)
     (hform : ∀ k : Fin 7,
       (ofZk cons[k.val]!.2 : ZkSession.Lin 𝔽 (nE + 4)) = rowsOf Tz st c r v' sh T' (0, 0) (Fin.castAdd 3 k)) :
-    Flock.Firewall.Finish.failingOn cons (arrOf (padsAt hs hp)) = #[] ↔
+    Flock.ZkServer.Finish.failingOn cons (arrOf (padsAt hs hp)) = #[] ↔
       ∀ k : Fin 7, (rowsOf Tz st c r v sh T' (0, 0) (Fin.castAdd 3 k)).eval 0 = 0 := by
   have key : ∀ k : Fin 7, (rowsOf Tz st c r v sh T' (0, 0) (Fin.castAdd 3 k)).eval 0 =
-      fOf (Flock.Firewall.Finish.linAt cons[k.val]!.2 (arrOf (padsAt hs hp))) := fun k => by
+      fOf (Flock.ZkServer.Finish.linAt cons[k.val]!.2 (arrOf (padsAt hs hp))) := fun k => by
     have hk : k.val < cons.size := by omega
     have hmem : cons[k.val]! ∈ cons := by
       rw [getElem!_pos cons k.val hk]
       exact Array.getElem_mem hk
     have hl := hlen cons[k.val]! hmem
-    rw [Flock.Firewall.Finish.linAt_eq, ← linVal_eq_evalL _ _ hl, ← ofZk_eval hs, hform k,
+    rw [Flock.ZkServer.Finish.linAt_eq, ← linVal_eq_evalL _ _ hl, ← ofZk_eval hs, hform k,
       rowsOf_castAdd Tz st c r v' sh T' (0, 0)
         (innerEps Tz st c r * hp (ix nE (layOf Tz st).fa) + hp (ix nE (layOf Tz st).tx),
           hp (ix nE (layOf Tz st).fb) + hp (ix nE (layOf Tz st).ty)) k,
       rows_padFree Tz st c r v v' hp hE hvv hab htw sh T' (Fin.castAdd 3 k)]
-  rw [Flock.Firewall.Finish.failingOn_eq_empty_iff]
+  rw [Flock.ZkServer.Finish.failingOn_eq_empty_iff]
   constructor
   · intro hf k
     have hk : k.val < cons.size := by omega

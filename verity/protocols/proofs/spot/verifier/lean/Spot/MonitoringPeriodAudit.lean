@@ -42,7 +42,7 @@ one-stage v2 reads a sample's coins from are the period's own (`evidenceAt`), ne
 8. one-stage v2 accepts the case at those parameters (`audit`). A reject refuses the period; an undecided leaves the
    period undecided unless a later window refuses it. Step 5 reads no family's name, and one-stage v2 reads the
    sample's coins from the period's family alone (`AuditParams.ledger`'s `label`), every coin of it, each released
-   after the registration (`Challenger.drawCoins`, `Challenger.FAMILY_ROOT`). So a window whose own root shows in
+   after the registration (`Challenger.sampleCoins`, `Challenger.FAMILY_ROOT`). So a window whose own root shows in
    the period's family is rejected here with one-stage v2's reason, a coin of the family released after a root other
    than the registration; and so is a window whose one registration shows only in another family, whenever its
    sample reads a coin: the period's family released none after it.
@@ -446,7 +446,8 @@ audit is handed are run without a proof. -/
 def stubInner : Inner := fun p _ e _ =>
   match getD e.base.statement "stub" with
   | .str "accept" =>
-    .accept { drawn := #[], proved := #[], bound := p.base.verifier.log.size, perTemplate := none }
+    .accept { drawn := #[], proved := #[], bound := p.base.verifier.log.size, perTemplate := none,
+              complete := Spot.Record.allRan e.base.verdicts }
       { programs := #[], prescribed := #[], linked := false, covered := #[], levels := #[], delta := p.base.delta,
         drawn := #[] }
   | .str "undecided" => .undecided "the stand-in leaves it undecided"

@@ -6,7 +6,7 @@ two-stage audit (`VStar.Recursive.SampledTwo`) is read and checked, then refused
 (`SampledTwo.FORM`) is off (`SampledTwo.checkBlobs_refuses`): SPOT's soundness covers the one-stage form only, and the
 verifier refuses every form its soundness doesn't cover.
 
-`Core.Composition.product` reads every component's case, so sampled proofs is one component and the form is the params':
+`Core.Composition.product` reads every component's case, so SPOT is one component and the form is the params':
 
 * **params**: `{"form": "one-stage" | "recursive" | "two-stage", ...}`, the rest that form's params. The auditor fixes
   the form with the rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused; those
@@ -45,7 +45,7 @@ def RECURSIVE : String := "recursive"
 
 /-- The refusal of a one-stage statement naming no `proofs`, one-stage v1's. -/
 def V1_REFUSED : String :=
-  s!"one-stage v1 ({Registration.PROTOCOL}) is refused: SPOT's one-stage form is v2 " ++
+  s!"one-stage v1 ({Docket.PROTOCOL}) is refused: SPOT's one-stage form is v2 " ++
     s!"({OneStageZk.PROTOCOL}), whose verdicts are its own run of the verifier on the proofs"
 
 /-- The refusal of the recursive form: SPOT's soundness covers the one-stage form only, and the verifier refuses

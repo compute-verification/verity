@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-import slots as S
+from verity.commitments.cuda.commit_slots import slots as S
 from verity.commitments import hm96
 from verity.commitments import layout as L
 from verity.commitments.merkle import tree_levels
@@ -136,7 +136,7 @@ def test_families_shared_layout_round_trips_to_its_digest_and_roots(tmp_path: Pa
     fresh clone (gpu.sh on a GPU node) only after `research data fetch-fixtures`."""
     if not FAMILIES.is_file():
         pytest.skip(f"{LAYOUTS} is a fetched fixture this checkout does not hold, and the evidence store is not reachable "
-                    f"from a test: `research data fetch-fixtures {LAYOUTS}` fetches it (tools/verity/check/suites.py does "
+                    f"from a test: `research data fetch-fixtures {LAYOUTS}` fetches it (tools/check/suites.py does "
                     "before this suite)")
     raw = FAMILIES.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == FAMILIES_SHA256

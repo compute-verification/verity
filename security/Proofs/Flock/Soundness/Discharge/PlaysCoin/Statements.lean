@@ -178,7 +178,7 @@ def DecodesOnOfRuns : Prop :=
     (opn : Finset (Fin n) → Reg → Array ByteArray → Opens 𝔽 D × Salts Sl)
     (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg)
     (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-    (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (L : Law n),
+    (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (L : SamplingDesign n),
     (∀ ω R o, Accepts I (wr (L.draw ω) R o) → ∃ pend : PendL 𝔽 D × PendL 𝔽 D,
       RepRun (repsOf (D := D) execArith (T (L.draw ω) R) o.pts 0) (repSpine D (T (L.draw ω) R) o.pts)
         (dec (L.draw ω) R) o.rep0 (fin (L.draw ω) R 0 o.proofs) pend.1 ∧

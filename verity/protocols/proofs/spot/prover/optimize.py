@@ -18,12 +18,12 @@ whose incorrect output can forfeit downstream work (a noise or form proof block 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the sample meets it.  Everything is
 committed at serve time whatever the sample: every proof block's outputs (`commit_bits`, `commit_rows`),
-and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
+and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, PoUB's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
 one-stage design (`two_stage_design` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
 replay block of its `ReplayGrain` it lies in from the values the prover keeps, which commits nothing: a commitment is a
-hash, so unless serving retained intermediates a replay block starts at the external inputs and the registration's
+hash, so unless serving retained intermediates a replay block starts at the external inputs and the docket's
 constants.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
@@ -175,7 +175,7 @@ class ReplayGrain:
 class TensorCommit:
     """One tensor committed at serve time by one scale, whatever the sample: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
-    PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
+    PoUW's A rows or tile leaves, PoUB's receipts, a work block's pin) and `tensor` what; one tensor under two
     scales is an overlap (`overlaps`).  Decode is latency-bound: a decode step hashes `decode_bytes` of it, and `chain` is
     the dependent compressions its trees put on a step's critical path when its roots gate the step (a seed reads them
     before the next call), which they do when `gates`; a copy that doesn't gate trails the step."""
@@ -1302,7 +1302,7 @@ def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_block
 
 def registration_count(q: float, registration: float) -> int:
     """The replay blocks the first stage samples of a verification phase of `registration` of them at the rate q:
-    exactly ⌈q·registration⌉ (`Spot.Rate.count` at one table), so at least one at any positive rate and none at 0."""
+    exactly ⌈q·docket⌉ (`Spot.Rate.count` at one table), so at least one at any positive rate and none at 0."""
     if not 0 <= q <= 1 or not registration >= 1:
         raise ValueError(f"a count needs 0 <= q <= 1 and a verification phase of at least one replay block: "
                          f"{q}, {registration}")

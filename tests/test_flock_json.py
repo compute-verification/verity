@@ -1,4 +1,4 @@
-"""C-Flock's Lean, sampled proofs', the interface every protocol implements and the proofs of `Verity`'s properties read
+"""C-Flock's Lean, SPOT's, the interface every protocol implements and the proofs of `Verity`'s properties read
 JSON only through `Flock.JsonParse.parse`, the total parser the kernel can evaluate.
 
 `Lean.Json.parse` is a `partial def`, an opaque constant to the kernel, so no proof can show that a text it reads parses;
@@ -19,7 +19,7 @@ from test_repository import ROOT, _tracked
 TREES = ("verity/protocols/proofs/flock/verifier/", "verity/circuits/base/", "verity/circuits/lean/",
          "verity/commitments/lean/", "verity/protocols/proofs/spot/verifier/lean/", "verity/protocols/interface/",
          "security/Proofs/Properties/Verity/")
-NOT_READ = ("verity/protocols/proofs/recursion/verifier/firewall/", "verity/protocols/proofs/recursion/verifier/vstar_cli/")  # Lake packages of their own, not held to the total parser yet (proofs)
+NOT_READ = ("verity/protocols/proofs/recursion/verifier/zk_server/", "verity/protocols/proofs/recursion/verifier/vstar_cli/")  # Lake packages of their own, not held to the total parser yet (proofs)
 ALLOWED = {
     "verity/circuits/base/Base/JsonParse.lean": "the total parser, whose docstring names the source it mirrors",
     "verity/protocols/proofs/flock/verifier/Flock/Test/JsonParse.lean": "the test holding the total parser to Lean.Json.parse",

@@ -1,4 +1,4 @@
-"""CPU tests of the FP8 registry (`verity/definitions/registry/fp8.py`) on saved H100 operands.
+"""CPU tests of the FP8 registry (`adapters/vllm/verity_vllm/definitions/registry/fp8.py`) on saved H100 operands.
 
 Data (`tests/program/data/`, recorded on an H100):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
@@ -20,9 +20,9 @@ import numpy as np
 import pytest
 from verity.circuits import Program, bind
 from verity.circuits.evaluation import evaluate_region
-from verity.definitions.numerics import fp8_twins
-from verity.definitions.registry import fp8 as F
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.numerics import fp8_twins
+from verity_vllm.definitions.registry import fp8 as F
+from verity_vllm.definitions.registry import prims as P
 
 from tests.program.capture_check import coll_range as _coll_range
 
@@ -122,7 +122,7 @@ def test_scaled_mm_fp8_matches_cutlass(group: str) -> None:
 
 
 @pytest.mark.parametrize("t", [0, 63, 130])
-def test_quant_linear_fp8_on_served_row(t: int) -> None:
+def test_quant_linear_fp8_on_a_served_row(t: int) -> None:
     d = np.load(DATA / "fp8_production_row_l0_qkv.npz")
     x, xq, sx, y = d[f"t{t}_x"], d[f"t{t}_xq"], d[f"t{t}_sx"], d[f"t{t}_y"]
     cols, w_rows, sw, b = d["cols"], d["w_rows"], d["sw"], d["b"]

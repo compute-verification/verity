@@ -1,6 +1,6 @@
 """a5 on a window with a history table: the verifier, the Lean and its Python mirror, computes the table's
 root from its writer's public bodies, which the leaf layer binds (`ml.windows.history.params`), and accepts the root the
-window registers, in a5's check before the sample (`verifier.check`) and in its stream's registration, the run of record's
+window registers, in a5's check before the sample (`verifier.check`) and in its stream's docket, the run of record's
 (`a5.registering`); that root with a bit flipped (a5's negative) and the root over the same rows in another order are
 refused by both, `registration.HISTORY`. On the same window, a5's negatives that the verifier decides are refused while
 the Lean answers and none is under a Lean that can't run."""
@@ -17,19 +17,19 @@ import numpy as np
 import pytest
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.commitments import history as HT
-from verity.commitments.windows import history as HW, interface as I, rows as CS
+from verity.commitments.periods import history as HW, interface as I, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-import a0  # noqa: E402
-import a5 as A5  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 
 G8 = bind(G.Gemm, K=16, N=8, **G.GEMM_AMPERE)
@@ -45,7 +45,7 @@ VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "
 
 def _window(d: Path, n: int = 4):
     """``n`` units of ``Gemm_v2{K=16, N=8}``, two a member, their outputs history table ``latent``'s rows, the window
-    written to ``d``: -> the verifier's window, the circuit record, the registration, the members' public bodies and the
+    written to ``d``: -> the verifier's window, the circuit record, the docket, the members' public bodies and the
     table."""
     rng = np.random.default_rng(0)
 
@@ -68,7 +68,7 @@ def _window(d: Path, n: int = 4):
 
 
 def _verifier(mine, rec: dict):
-    """The verifier on the window, as a5 holds it: -> its check of the registration ``rec`` at given ports, leaf layer
+    """The verifier on the window, as a5 holds it: -> its check of the docket ``rec`` at given ports, leaf layer
     and history tables (`verifier.check`), and the sampling design it derives for the window's program and query from
     the window's own (`derive`), which R1 holds the registered one to."""
     own = mine.law
@@ -116,7 +116,7 @@ def test_the_verifier_of_record_holds_the_registered_history_root_to_the_writers
 
 def _negatives(mine, doc: dict, rec: dict, publics: dict) -> tuple[bool, dict[str, dict]]:
     """a5's negatives that the verifier decides, of each of their five kinds, on the window with one input altered as
-    a5 alters it: the registration held to ports bound to another run (R3) and to a leaf layer over a changed public
+    a5 alters it: the docket held to ports bound to another run (R3) and to a leaf layer over a changed public
     body (R4), the history root with a bit flipped, a sample naming a unit outside the partition, a proved set short of
     the sample, and the audit record's own (`a0.audit_negatives`), on the record of two units sampled and proved.
     The sampling design is the verifier's own for the window (`_verifier`), as a5 takes it.
@@ -136,18 +136,18 @@ def _negatives(mine, doc: dict, rec: dict, publics: dict) -> tuple[bool, dict[st
     return record["accepted"], {
         "R3": a0.negative(check(CS.expected_ports(replace(mine, run="00" * 64)), leaf)),
         "R4": a0.negative(check(want, CS.leaf_layer(flipped))),
-        "history-root": a0.history_negative(check(want, leaf, wrong)),
+        "history-root": a0.negative(check(want, leaf, wrong)),
         "sample": a0.negative(A5.outside_the_partition(sample, rec, design, n)),
         "proved": a0.negative(V.check_proved(sample, sample["units"][1:], 1)),
         **a0.audit_negatives(record, design, 0.5, registered)}
 
 
 def test_a_negative_is_refused_only_where_the_lean_answered(tmp_path, monkeypatch):
-    """While the Lean answers, the window's record accepts and each negative is refused: the registration's, the
+    """While the Lean answers, the window's record accepts and each negative is refused: the docket's, the
     sample's and the proved set's by the code both verifiers give, the history root's as `registration.HISTORY` with the
     Lean's reason the Python's, the record's with the two agreeing. Under a Lean that can't run the verifier fails the
-    same checks, the honest record's too, and still names the history root's refusal `registration.HISTORY`; no negative
-    is refused, a verdict's row saying what stood in the Lean's place, so a5's audit, which passes only with every
+    same checks, the honest record's too, each as a disagreement, the history root's among them; no negative is
+    refused, a verdict's row saying what stood in the Lean's place, so a5's audit, which passes only with every
     negative refused, fails."""
     mine, doc, rec, publics, _ = _window(tmp_path / "w")
     accepted, rows = _negatives(mine, doc, rec, publics)
@@ -163,7 +163,6 @@ def test_a_negative_is_refused_only_where_the_lean_answered(tmp_path, monkeypatc
     said = {"refused": "the Lean cannot run"}
     accepted, dead = _negatives(mine, doc, rec, publics)
     assert not accepted and dead.keys() == rows.keys() and not any(r["refused"] for r in dead.values()), dead
-    for k in ("R3", "R4", "sample", "proved"):
+    for k in ("R3", "R4", "history-root", "sample", "proved"):
         assert dead[k] == {"refused": False, "codes": [V.DISAGREE], "lean": said}, dead[k]
-    assert dead["history-root"]["codes"] == [R.HISTORY] and dead["history-root"]["reasons"]["lean"] == said["refused"]
     assert not any(r["agree"] for r in dead.values() if "agree" in r), dead

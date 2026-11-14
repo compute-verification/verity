@@ -20,7 +20,7 @@ import all Lean.Data.Json.Basic
 Remote's check is `Core.Composition.holdTies` of its tie over `Core.Composition.checkSame` over its components on the
 caller's blobs (`remote_check`), so an acceptance is `checkSame`'s with the tie held (`Properties.Composition.acceptTied`),
 and `checkSame`'s is `Core.Composition.check`'s (`checkSame_accept`), which `Properties.Composition.acceptMeans` reduces
-to each component accepting its own case, with sampled proofs' record the policy's (`strays_two`) and every
+to each component accepting its own case, with SPOT's record the policy's (`strays_two`) and every
 Commit record the period's windows name the policy's record too (`executionPhases_tied`). The policy's
 acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
 `NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
@@ -29,12 +29,14 @@ give the `(c, k)`-partitions, of the declaration with its constants registered, 
 Boolean or of positive fan-in; where it is, they are partitions of the declaration itself (`policyMet_old_clauses`).
 The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
-verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
+verdicts are about a parse, a layout, a baseline and a division). SPOT's acceptance is one-stage v1's check
 at the coins it read (`OneStage.checkAt`) at its params' form: in the one-stage form v2's, on the verdicts its own run of
 the verifier computed (`stage_zk_registered`), in the recursive form v1's live check on the inner statement's params
 after V*'s compiled check (`recursive_live`), so its record keeps R2 in either (`stage_registered_at`). Either form
 reads SPOT's acceptance through the caller's check (`VStar.Recursive.Caller.gate`), whose emptiness gives the caller's
-facts (`Properties.Spot.CallerHeld`) under `CallerCheckMeans`, which `stage_held` and `acceptInferenceOnly` take.
+facts (`Properties.Spot.CallerHeld`): `CallerCheckSound`, which `stage_held` and `acceptInferenceOnly` take, is the
+forward half of `CallerCheckMeans` (`callerCheckSound_of_means`), which `callerCheckMeans` proves from the check's
+steps.
 
 The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
 nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`. Both
@@ -163,7 +165,7 @@ theorem id_policy : NciCheck.Protocol.protocol.id = "verity/inference-only/v0" :
 theorem id_monitoringPeriod : PouwCheck.Period.protocol.id = "verity/pouw/period/v1" := rfl
 theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).id = "verity/sampled-proofs/v1" := rfl
 
-/-- Sampled proofs' commitment and digest are the one-stage registration record's, on any blobs. -/
+/-- SPOT's commitment and digest are the one-stage registration record's, on any blobs. -/
 theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
     Properties.Composition.digestOf (VStar.Recursive.Sampled.protocol.onBlobs bs) b =
       Properties.Composition.digestOf Spot.OneStage.protocol b := rfl
@@ -283,7 +285,7 @@ theorem stage_registered_at {p : Spot.OneStage.Params} {c : Spot.OneStage.Commit
   unfold Spot.OneStage.checkAt at h
   split at h
   · cases h
-  · obtain ⟨law, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
+  · obtain ⟨samplingDesign, d, n, hreg, -⟩ := Properties.Spot.acceptMeans _ _ _ _ _ h
     exact hreg.2.1
 
 /-- What one-stage v1's live check gives on acceptance: its record keeps R2 against the audit's own verifier. -/
@@ -474,30 +476,30 @@ theorem executionPhases_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitmen
 /-! ## The caller's check's steps -/
 
 /-- The declared day's code (`VStar.Recursive.Caller.declaredCode`) is none exactly when `DeclaredDay` holds. -/
-theorem declaredCode_none_iff (rec : Json) (v : Spot.Registration.Verifier) :
+theorem declaredCode_none_iff (rec : Json) (v : Spot.Docket.Verifier) :
     (VStar.Recursive.Caller.declaredCode (Spot.getD rec "program") v.declared).isSome = false ↔
       Properties.Spot.DeclaredDay rec v := by
   unfold Properties.Spot.DeclaredDay VStar.Recursive.Caller.declaredCode
   rcases v.declared with _ | ⟨day, ds⟩
   · simp
-  · rcases h : Spot.Registration.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
+  · rcases h : Spot.Docket.declaredOf day ds with _ | ⟨p, _ | ⟨q, l⟩⟩
     · simp [h]
     · by_cases hp : Spot.jeq (Spot.getD rec "program") (.str p) = true <;> simp [h, hp]
     · simp [h]
 
 /-- The pool chain (`VStar.Recursive.Caller.poolChained`) holds exactly when `PoolChained` does. -/
-theorem poolChained_iff (rec : Json) (v : Spot.Registration.Verifier) :
+theorem poolChained_iff (rec : Json) (v : Spot.Docket.Verifier) :
     VStar.Recursive.Caller.poolChained rec v = true ↔ Properties.Spot.PoolChained rec v := by
   unfold VStar.Recursive.Caller.poolChained Properties.Spot.PoolChained
   rcases hp : v.pool with _ | p
   · simp
-  · rcases he : Spot.Registration.entryOf rec p.pin with _ | e <;>
-      rcases ho : Spot.Registration.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
+  · rcases he : Spot.Docket.entryOf rec p.pin with _ | e <;>
+      rcases ho : Spot.Docket.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
     exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
 
 /-- The pool's codes (`VStar.Recursive.Caller.poolMarks`) add none exactly when the window names the pool's reset, week
 and spent mark and no reset falls where the week's is spent before it. -/
-theorem poolMarks_nil (w : Json) (pool : Option Spot.Registration.Pool) (log : Array Json) (c : Array String) :
+theorem poolMarks_nil (w : Json) (pool : Option Spot.Docket.Pool) (log : Array Json) (c : Array String) :
     VStar.Recursive.Caller.poolMarks w pool log c = #[] ↔ c = #[] ∧
       Spot.jeq (Spot.getD w "pool_reset") (match pool with | some p => .bool p.reset | none => .null) = true ∧
       Spot.jeq (Spot.getD w "pool_week") (match pool with | some p => Lean.toJson p.week | none => .null) = true ∧
@@ -511,13 +513,63 @@ theorem poolMarks_nil (w : Json) (pool : Option Spot.Registration.Pool) (log : A
 /-- The registered compiler's codes (`VStar.Recursive.Caller.compilerMarks`) add none exactly when the window names the
 log's compiler and advice within its length. -/
 theorem compilerMarks_nil (w : Json) (b : Option (Option (String × Nat))) (c : Array String) :
-    VStar.Recursive.Caller.compilerMarks w b c = #[] ↔ c = #[] ∧ Spot.Registration.compilerOk w b = true ∧
-      Spot.Registration.adviceOk w b = true := by
+    VStar.Recursive.Caller.compilerMarks w b c = #[] ↔ c = #[] ∧ Spot.Docket.compilerOk w b = true ∧
+      Spot.Docket.adviceOk w b = true := by
   rw [VStar.Recursive.Caller.compilerMarks, Properties.Spot.kept_nil, Properties.Spot.kept_nil, and_assoc]
 
-/-- What sampled proofs' accepted case gives, on any blobs: `StageHeld`, at the form its params name, where the caller's
-check finds nothing exactly where the record keeps the caller's facts (`CallerCheckMeans`). -/
-theorem stage_held (hm : CallerCheckMeans) {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
+/-- The declared day's codes (`VStar.Recursive.Caller.declaredMarks`) add none exactly when `DeclaredDay` holds. -/
+theorem declaredMarks_nil (rec : Json) (v : Spot.Docket.Verifier) (c : Array String) :
+    VStar.Recursive.Caller.declaredMarks (Spot.getD rec "program") v.declared c = #[] ↔
+      c = #[] ∧ Properties.Spot.DeclaredDay rec v := by
+  rw [← declaredCode_none_iff]
+  unfold VStar.Recursive.Caller.declaredMarks
+  cases VStar.Recursive.Caller.declaredCode (Spot.getD rec "program") v.declared with
+  | none => simp
+  | some code => simp [Properties.Spot.addCode_ne_nil]
+
+/-- The binding's codes (`VStar.Recursive.Caller.bindingMarks`) add none exactly when the window names the stream and
+the prover of the binding, if any. -/
+theorem bindingMarks_nil (w : Json) (b : Option (String × String)) (c : Array String) :
+    VStar.Recursive.Caller.bindingMarks w b c = #[] ↔ c = #[] ∧
+      (∀ sp, b = some sp → Spot.jeq (Spot.getD w "stream") (.str sp.1) = true ∧
+        Spot.jeq (Spot.getD w "prover") (.str sp.2) = true) := by
+  rcases b with _ | ⟨stream, prover⟩
+  · simp [VStar.Recursive.Caller.bindingMarks]
+  · rw [VStar.Recursive.Caller.bindingMarks, Properties.Spot.kept_nil, Properties.Spot.kept_nil]
+    constructor
+    · rintro ⟨⟨a, hs⟩, hp⟩
+      exact ⟨a, fun sp hsp => by cases hsp; exact ⟨hs, hp⟩⟩
+    · rintro ⟨a, h⟩
+      exact ⟨⟨a, (h _ rfl).1⟩, (h _ rfl).2⟩
+
+/-- The two codes the caller's check adds for a verifier that expects values registered (`R7-pool-chain`,
+`R7-output-refused`) are none exactly when, for such a verifier, `PoolChained` and `OutputPortsAccepted` hold. -/
+theorem v2Marks_iff (rec : Json) (v : Spot.Docket.Verifier) :
+    ((!v.v2 || VStar.Recursive.Caller.poolChained rec v) = true ∧ (!v.v2 || Spot.Docket.portsAccepted v) = true) ↔
+      (Properties.Spot.ExpectsV2 v → Properties.Spot.PoolChained rec v ∧ Properties.Spot.OutputPortsAccepted v) := by
+  rw [← poolChained_iff, ← Properties.Spot.portsAccepted_iff]
+  unfold Properties.Spot.ExpectsV2 Spot.Docket.Verifier.v2
+  cases v.registered.isEmpty && v.certified.isEmpty <;> simp
+
+/-- **`CallerCheckMeans`**: the caller's check finds nothing exactly where the record keeps the caller's facts. -/
+theorem callerCheckMeans : CallerCheckMeans := by
+  intro rec v
+  simp only [VStar.Recursive.Caller.check]
+  rw [Properties.Spot.kept_nil, Properties.Spot.kept_nil, and_assoc, v2Marks_iff, compilerMarks_nil, poolMarks_nil,
+    Properties.Spot.kept_nil, bindingMarks_nil, declaredMarks_nil]
+  unfold Properties.Spot.CallerHeld Properties.Spot.RunCompiler
+  exact ⟨fun ⟨⟨⟨⟨⟨⟨_, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, ck, ad⟩, v2⟩ => ⟨dd, bd, ss, r, wk, sp, o, ⟨ck, ad⟩, v2⟩,
+    fun ⟨dd, bd, ss, r, wk, sp, o, ⟨ck, ad⟩, v2⟩ => ⟨⟨⟨⟨⟨⟨rfl, dd⟩, bd⟩, ss⟩, r, wk, sp, o⟩, ck, ad⟩, v2⟩⟩
+
+/-- **`CallerCheckSound`**, `CallerCheckMeans`' forward half. -/
+theorem callerCheckSound_of_means (hm : CallerCheckMeans) : CallerCheckSound := fun rec v => (hm rec v).1
+
+/-- `CallerCheckSound`, from `callerCheckMeans`. -/
+theorem callerCheckSound : CallerCheckSound := callerCheckSound_of_means callerCheckMeans
+
+/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, at the form its params name, where the caller's
+check finds nothing only where the record keeps the caller's facts (`CallerCheckSound`). -/
+theorem stage_held (hm : CallerCheckSound) {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
     (h : Properties.Composition.DecodedAccepted (VStar.Recursive.Sampled.protocol.onBlobs bs) n.params.toUTF8
       k.commitment k.evidence) : StageHeld k := by
   obtain ⟨p, c, e, hp', hc, -, pub, prof, hchk⟩ := h
@@ -530,21 +582,21 @@ theorem stage_held (hm : CallerCheckMeans) {k : Case} {n : Named} {bs : Blobs} (
   · obtain ⟨hcall, hz⟩ := VStar.Recursive.Caller.gate_accept
       (show VStar.Recursive.Caller.gate c.record p.base.verifier (Spot.OneStageZk.checkBlobs p c e bs) =
         .accept pub prof from hchk')
-    exact Or.inl ⟨p, c, hp'', hc', stage_zk_registered hz, (hm _ _).1 hcall⟩
+    exact Or.inl ⟨p, c, hp'', hc', stage_zk_registered hz, hm _ _ hcall⟩
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
   · rcases q with q | q <;> rcases e with e | e
     · obtain ⟨hcall, e₀, he₀⟩ := recursive_live
         (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
-      exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀, (hm _ _).1 hcall⟩
+      exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀, hm _ _ hcall⟩
     · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
     · simp [VStar.Recursive.Sampled.checkBlobs] at hchk'
     · exact absurd hchk' (VStar.Recursive.SampledTwo.checkBlobs_refuses VStar.Recursive.SampledTwo.form_off q c e bs
         pub prof)
 
-/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and sampled proofs'
+/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and SPOT's
 records, which every Commit record the period's windows name has, the policy's case decoding to what the policy's
-check accepts, and sampled proofs' case decoding to what its check accepts on the blobs. -/
+check accepts, and SPOT's case decoding to what its check accepts on the blobs. -/
 theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}
     (h : (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof) :
     ∃ (kI kW kS : Case) (pI : NciCheck.Protocol.Params) (cI : NciCheck.Protocol.Commitment)
@@ -573,9 +625,9 @@ theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray
     (digestOf_sampled _ _).symm.trans ((digestOf_ok hcS).trans (congrArg some hdS)), hp, hcI, heI, hchkI,
     nS, hpS, hS⟩
 
-/-- `AcceptInferenceOnly`, where the caller's check finds nothing exactly where the record keeps the caller's facts
-(`CallerCheckMeans`, stated and not yet proved). -/
-theorem acceptInferenceOnly (hm : CallerCheckMeans) : AcceptInferenceOnly := by
+/-- `AcceptInferenceOnly`, where the caller's check finds nothing only where the record keeps the caller's facts
+(`CallerCheckSound`). -/
+theorem acceptInferenceOnly (hm : CallerCheckSound) : AcceptInferenceOnly := by
   intro blobs ps c ev pub prof h
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, hdI, hdW, hdS, hp, hc, he, ⟨pub', prof', hchk⟩, nS, hpS, hS⟩ := remote_accept h
   exact ⟨kI, kW, kS, NciCheck.Protocol.protocol.digest cI, hev, hdI, hdW, hdS, ⟨pI, cI, eI, hp, hc, he, policyHeld hchk⟩,

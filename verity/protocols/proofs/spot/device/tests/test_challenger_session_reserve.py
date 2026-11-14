@@ -26,7 +26,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5ReserveTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -122,7 +122,7 @@ def test_the_18_family_window_needs_more_coins_than_todays_reserve():
     assert AC.families({0: 25}) == layout(25)
 
 
-def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
+def test_todays_reserve_runs_out_on_the_18_family_sample_and_its_need_does_not():
     """On a challenger of one rank's old reserve (17 coins), the 18-family sample runs out of coins (`every sampling coin of the
     epoch is open`), as the 18-family run did. On its need's reserve (`families`) it samples, opening 24 coins after the
     rank's commitment, its family's first."""
@@ -134,7 +134,7 @@ def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
     assert len(drawn["units"]) == 18 and len(coins.segments[-1].openings) == 24 and coins.segments[-1].start == 0
 
 
-def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with():
+def test_a_work_laws_need_is_its_sample_under_the_work_table_the_rank_registers_with():
     """A window whose first template holds transfer gates (32 units at work 0 and floor 32, sampled whole) beside 8 sampled by
     ``work-rate:1/20`` (work:2): its sample reads 640 bytes for the whole stratum and 100 for the rest, so the need is 22 coins,
     and its reserve holds the sample. A work rate has no need without the table (`service.selection_table` refuses it)."""
@@ -154,7 +154,7 @@ def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_wi
     assert e.value.verdict.codes == ("rate",) and "work table" in e.value.verdict.detail["rate"]["reason"]
 
 
-def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve():
+def test_a_reserve_that_cant_cover_the_samples_is_refused_naming_need_and_reserve():
     """`reserve_reason` names the need (the coin after the root, then each rank's, a family each) and the reserve when
     the reserve is short in a family or lacks one, and the challenger's own limit when the layout is past it."""
     need = "the draws need {'window': 1, 'draw/0': 25} coins (1 after the window's root, then each rank's in its own family)"
@@ -185,7 +185,7 @@ def nothing_reserved(tmp_path: Path) -> bool:
     return not (host / "var" / "windows.jsonl").exists() and not any((host / "var" / "sessions").iterdir())
 
 
-def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
+def test_the_local_challenger_opens_on_the_needs_reserve_and_the_sample_holds(tmp_path, monkeypatch):
     """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins:
     the window family's one and 25 in the rank's own). The 18-family sample reads its 24 coins after the rank's
     commitment, and its coins' evidence, which names no key, holds at the rank's family under the key the session's

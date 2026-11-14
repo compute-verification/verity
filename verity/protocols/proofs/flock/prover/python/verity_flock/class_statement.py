@@ -458,7 +458,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.circuits.codec import definition_digest, descriptor_id
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.program import Program
-    from verity.definitions.encoding import encode_specialization
+    from verity_vllm.definitions.encoding import encode_specialization
 
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}

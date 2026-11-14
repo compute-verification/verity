@@ -173,11 +173,9 @@ WEIGHTS_OF_RECORD_SCHEMA = "verity/commit/weights-of-record/v2"
 #: writes it, and a row calls a record that carries it stale
 WEIGHTS_OF_RECORD_PRIOR_SCHEMA = "verity/commit/weights-of-record/v1"
 
-# --- the properties (`verity_vllm.properties`)
-#: the manifest of a difftest's cases, `manifest.json` in the directory `properties.admission.produce` writes them to
-DIFFTEST_PRODUCE_SCHEMA = "verity-gen/difftest-produce/v1"
-#: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which
-#: `properties.admission`'s `main` writes
+# --- the quarantine admission
+#: the quarantine admission, `quarantine.json`: the difftest report of each definition checked, which gate G4 reads;
+#: the records under `engine/profiles/quarantine/` hold it, and no code of the tree writes one
 QUARANTINE_ADMISSION_SCHEMA = "verity-gen/quarantine/v1"
 
 # --- the TP row (`verity_vllm.pipeline.tp`)
@@ -264,13 +262,6 @@ COMPILED_STEPS_SCHEMA = "verity-vllm/compiled-steps/v2"
 #: the workload Program's document, which `program.workload.WorkloadProgram.artifact` returns and
 #: `pipeline.global_program.build` writes as `workload_program.json`
 WORKLOAD_PROGRAM_SCHEMA = "verity/workload-program/v1"
-
-# --- PoUW's H1 (`verity.protocols.accounting.pouw.prover.serving.h1`)
-#: a served window's calls record, `pouw-h1-calls.json` (`protocols.pouw.h1.RECORD`), which `H1Run.finish` writes
-POUW_H1_CALLS_SCHEMA = "verity-vllm/pouw-h1-calls/v2"
-#: a suspended window's hand-off state (`protocols.pouw.h1.handoff.SCHEMA`), which `suspend` writes and `resume` refuses
-#: any other than
-POUW_H1_HANDOFF_SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
 
 # --- the protocol options (`verity_vllm.protocols`)
 #: the record of the options one stage installed (`protocols.RECORD_SCHEMA`), which `Composition.record` builds and

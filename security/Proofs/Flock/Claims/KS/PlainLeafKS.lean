@@ -404,7 +404,7 @@ theorem plainSimWD_all (x : Claims.Msg) : PlainSimWD x :=
 theorem plain_tableBoundθAt_all {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (V false) x) :
     Claims.Flock.TableBoundθAt sha512 (deployPlain Readable.relation) (wordLen false) (wide false) x := by
   obtain ⟨s, hs, hin⟩ := acc_inScope Readable.relation hno
-  obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_draw hno
+  obtain ⟨ins, spec, sts, d, hset, hd⟩ := acc_sample hno
   have h1 := plain_one hs hin hset
   have h0 : 0 < sts.size := by omega
   have hm := parse_m hs hset h0

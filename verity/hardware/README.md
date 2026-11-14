@@ -13,15 +13,15 @@ auditor's device reads, apart from the host it runs in). Each number is an entry
 - `source` names a data sheet, a document or an `art:` id (a run's evidence: its record, `research data show RUN`'s
   `outputs.run_record`), and a node by its kind, never its host name.
 
-| SKU | kind | file | Lean table |
-|---|---|---|---|
-| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `hardware/cards/rtx-pro-6000-server.toml` | `security/Definitions/Core/Accel/Sm120.lean` |
-| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `hardware/cards/h200-sxm-141gb.toml` | `security/Definitions/Core/Accel/H200.lean` |
-| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `hardware/cards/b200-sxm-180gb.toml` | none yet: `security/Definitions/Accounting/Sheets/B200.lean` is held to it |
-| Two Xeon 6776P, the RTX node's host | host | `hardware/cards/xeon-6776p-2s.toml` | none |
-| Two Xeon Platinum 8468, the H200 nodes' host | host | `hardware/cards/xeon-platinum-8468-2s.toml` | none |
-| NVIDIA DGX H200, a server none of our nodes is | server | `hardware/cards/dgx-h200.toml` | none |
-| `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `hardware/cards/nebius-vm-monotonic-raw.toml` | none |
+| SKU | kind | file |
+|---|---|---|
+| RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | gpu | `hardware/cards/rtx-pro-6000-server.toml` |
+| H200 SXM 141 GB (board 692-2G520-0280-001) | gpu | `hardware/cards/h200-sxm-141gb.toml` |
+| B200 SXM 180 GB (board 692-2G525-0220-000) | gpu | `hardware/cards/b200-sxm-180gb.toml` |
+| Two Xeon 6776P, the RTX node's host | host | `hardware/cards/xeon-6776p-2s.toml` |
+| Two Xeon Platinum 8468, the H200 nodes' host | host | `hardware/cards/xeon-platinum-8468-2s.toml` |
+| NVIDIA DGX H200, a server none of our nodes is | server | `hardware/cards/dgx-h200.toml` |
+| `CLOCK_MONOTONIC_RAW` in a Nebius virtual machine, a KVM guest on `kvm-clock` or `tsc` | timebase | `hardware/cards/nebius-vm-monotonic-raw.toml` |
 
 Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
@@ -29,8 +29,9 @@ device memory's, and `default`, the name of the reading of `readings(card)`, `sm
 is stated at unless it names the other: the higher tensor ceiling, `sm` on every card (CMP-438)),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds; `dram` is the device memory a program gets
-and `dram_installed` the memory on the board, a second reading at or above it; and, only where a run found them, the
-caches an SM serves code and constants from, `l15`, `l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
+and `dram_installed` the memory on the board, a second reading at or above it, which a registered sheet and a Lean
+table take as device memory; and, only where a run found them, the caches an SM serves code and constants from, `l15`,
+`l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
 units a MAC of each format uses), `price` (what an operation costs in tensor units, each operation charged in seconds at
@@ -98,29 +99,11 @@ its kind. `skus(kind=None)` lists the cards, or those of one kind.
 Lean's `card.ρ`, the SMs times the resource's rate times its clock (for the tensor `clock.tensor` where the card has one
 and `clock.sm` where it doesn't, for the rest `clock.sm`, or the clock `mhz` names), in MACs of operand format `fmt` when
 given, and device memory's `memory.bandwidth` in words. A benchmark that quotes a peak calls it rather than multiplying
-the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table. `readings(card, *, fmt=None) -> dict`
-is the tensor peak under each reading of its clock the card states (`READINGS`: `clock.tensor`, the card's own, then
-`clock.sm`), so a figure quoted under every reading names no clock itself, and the card's default is
-`readings(card)[card["clock"]["default"]]`.
+the card's numbers itself. `readings(card, *, fmt=None) -> dict` is the tensor peak under each reading of its clock the
+card states (`READINGS`: `clock.tensor`, the card's own, then `clock.sm`), so a figure quoted under every reading names no
+clock itself, and the card's default is `readings(card)[card["clock"]["default"]]`.
 
-**The Lean tables are generated** (`verity/hardware/lean.py`). A GPU card file that names a Lean table (`lean`) gives
-that module: `render(card)` is its text, the card file's numbers (`table(card)`) under the namespace, `clock`,
-`tensorClock` and `card` its importers read, and nobody edits it. The text's shape is fixed (the module's docstring
-gives it): the Lean check's record of a definition digests the term, so a number written another way, or an arm moved,
-is a changed record though no number changed. A division in a field of ℕ is exact, and `render` refuses a card file
-whose entry would make Lean's ℕ division truncate.
-
-**Changing a number:** change the card file, then write its table:
-
-~~~sh
-uv run python -m verity.hardware.lean --write
-~~~
-
-Without `--write` the command names each table its card file no longer gives and exits 1. `tests/test_lean.py` holds
-each committed table to `render` byte for byte; it also evaluates each `card` arm as an exact rational, independently
-of the generator, and fails on any number that differs from the card file's, and on a store, resource or format of
-`security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file, whose `lean` names its
-table.
+A new SKU is a new card file.
 
 ## The node files (`hardware/nodes/`, read by `verity.device`)
 
@@ -138,7 +121,7 @@ A file has `device` (`sku`, the GPU card, and `count`, how many of it the node c
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`), its
 `bytes` and its `rate`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves
 out what the kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read
-on record has no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole.
+on record has no table. A GPU's own memory is not stated: it is its card's `store.dram_installed`, whole.
 
 A leaf's `rate` is the most its bytes are read back at, in `B/s`, marked `ceiling`: the tightest bound on record that
 holds whatever the node runs. The DRAM leaf's is the host card's `memory.bandwidth_max`, the server's channels. A

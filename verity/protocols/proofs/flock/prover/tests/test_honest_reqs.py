@@ -1,9 +1,9 @@
-"""The honest worker's requests in an inner session, held to their Lean (`Flock.Firewall.honestReqs`, the port
-``firewall-honest-difftest`` in the release side's package): for what an honest worker brings (`Flock.Firewall.Honest`), the
+"""The honest worker's requests in an inner session, held to their Lean (`Flock.ZkServer.honestReqs`, the port
+``zk-server-honest-difftest`` in the release side's package): for what an honest worker brings (`Flock.ZkServer.Honest`), the
 requests `rec_live`'s encoder writes (`encode_req`, and `test_rec_live`'s frame writers for a round's content) are Lean's,
 byte for byte. On a real prover's recorded session the worker's data is read back out of its own requests (`honest_of`)
-and Lean writes those requests again, byte for byte, and they finish under `flock-firewall`; Hypothesis samples sessions
-around it, malformed ones included. `FirewallHonest` proves they finish for every schedule and every data that fits."""
+and Lean writes those requests again, byte for byte, and they finish under `flock-zk-server`; Hypothesis samples sessions
+around it, malformed ones included. `ZkServerHonest` proves they finish for every schedule and every data that fits."""
 from __future__ import annotations
 
 import hashlib
@@ -17,13 +17,13 @@ from hypothesis import strategies as st
 from verity_difftest.protocol import unhex
 from verity_flock import rec_live as RL
 
-from test_firewall_agreement import FLAT, SCHEDULE2, _bad_schedules, built, lean_run  # noqa: F401 (built: a fixture)
+from test_zk_server_agreement import FLAT, SCHEDULE2, _bad_schedules, built, lean_run  # noqa: F401 (built: a fixture)
 from test_rec_live import SCHEDULE, _bytes, _domain, _label, _obs, _sq
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 LEAN = Path(__file__).resolve().parents[3] / "recursion" / "verifier" / "firewall"
-#: the flat GEMM selftest's shape, whose recorded session `test_firewall_agreement` relays
+#: the flat GEMM selftest's shape, whose recorded session `test_zk_server_agreement` relays
 FLAT_SCHEDULE = RL.schedule_for({"dense_m": 25, "k_log": 22, "nbl": 3, "regions": 3})
 
 
@@ -64,7 +64,7 @@ def _at(a: list, i: int):
 
 
 def _item(j) -> bytes:
-    """An item's frames, as `Flock.Firewall.Absorb.frames` and `FirewallHonestDifftest.absorbOf` read it."""
+    """An item's frames, as `Flock.ZkServer.Absorb.frames` and `ZkServerHonestDifftest.absorbOf` read it."""
     a = _arr(j)
     tag = a[0] if a and isinstance(a[0], str) else ""
     if tag == "domain":
@@ -84,7 +84,7 @@ def _item(j) -> bytes:
 
 
 def _schedule(s) -> dict:
-    """`Flock.Firewall.schedule`: `rec_live.check_schedule`, and, since Lean's ZK server holds no registered top, a root for
+    """`Flock.ZkServer.schedule`: `rec_live.check_schedule`, and, since Lean's ZK server holds no registered top, a root for
     each table a stream without a parent or a copy of level 0's top names."""
     try:
         RL.check_schedule(s)
@@ -189,7 +189,7 @@ def honest_of(schedule: dict, reqs: list[bytes]) -> dict:
 
 
 def recorded() -> tuple[dict, list[bytes]]:
-    """The flat GEMM selftest's honest session (the fetched fixture `test_firewall_agreement` relays) at `schedule_for`'s
+    """The flat GEMM selftest's honest session (the fetched fixture `test_zk_server_agreement` relays) at `schedule_for`'s
     schedule of its shape, as `flock-circuit prove --verifier` sends it and `rec_live` encodes it: 30 Pings of 64 zero bytes
     measuring the link, Register, Hello (the record's text, without its coins), rep 0's Open (its challenger opens before
     level 0's tree is committed), Commit, Link, rep 0's rounds, rep 1's Open and rounds, both proofs, then Finish. The
@@ -281,7 +281,7 @@ INPUTS = st.one_of(
     CASES, CASES, st.tuples(CASES, st.sampled_from(SPOILS)).map(lambda c: _spoiled(*c)),
     st.tuples(st.sampled_from(REFUSED), _honest(SCHEDULE)).map(lambda c: {"schedule": c[0], "honest": c[1]}))
 
-PORT = D.Port("firewall-honest-difftest", "honest-reqs", reference=honest_reqs, inputs=INPUTS, package=LEAN)
+PORT = D.Port("zk-server-honest-difftest", "honest-reqs", reference=honest_reqs, inputs=INPUTS, package=LEAN)
 server = D.server_fixture(PORT)
 
 
@@ -294,8 +294,8 @@ def test_a_real_provers_session_is_honest_reqs_byte_for_byte(server):
     assert kind == "output" and json.loads(out) == [b.hex() for b in reqs]
 
 
-def test_lean_honest_reqs_of_a_real_session_finish_under_the_firewall(server, built):
-    """`flock-firewall` (`Flock.Firewall.run`) finishes on Lean's requests for the recorded session, salting one row for
+def test_lean_honest_reqs_of_a_real_session_finish_under_the_zk_server(server, built):
+    """`flock-zk-server` (`Flock.ZkServer.run`) finishes on Lean's requests for the recorded session, salting one row for
     each node of a committed top and each round's fresh top and message, as many as the schedule's."""
     schedule, reqs = recorded()
     kind, out = D.replay(PORT, {"schedule": schedule, "honest": honest_of(schedule, reqs)}, server)

@@ -15,7 +15,7 @@ commit_slots (the commit path beside this directory) runs on it: the calls below
 `engine.py`; digests are (…, 8) words, each the big-endian value of its 8 bytes (int64 tensors on the GPU):
 
 ```python
-E = engine.Engine()                                        # current CUDA device; Engine("host") is the host twin
+E = engine.Engine("cuda", build=DIR)                       # a CUDA device; Engine("host", build=DIR) is the host twin
 rows = E.rows(parts_of_each_row, tensors)                  # parts: (tensor, byte offset, bytes), at most 2 a row
 x = E.row_digests(rows, variant=None)                      # (G, S, 8)
 lt = E.leaf_table(dids, did_of_row, rank, position, salt_row)
@@ -46,7 +46,9 @@ an optional `s` for straight-line rounds (`engine.variant_flags`):
 - 3: none on the ALU (`rotr3`).
 
 The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds the row kernel in every variant in
-`VARIANTS`, and `SHA512_ROWS_V` (`settings.py`) sets the other kernels' variant.
+`VARIANTS`, and `Engine(..., default=)` sets the other kernels' variant. The engine reads no settings: builds are cached
+under the caller's `build` directory, and the benchmarks read both from their `SHA512_ROWS_BUILD` and `SHA512_ROWS_V`
+(`benchmarks/torch_gpu/settings.py`) and pass them in.
 
 ## Files
 
@@ -56,12 +58,13 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 - `rows.cu`: the kernels.
 - `rows_host.cpp`: the host twin.
 - `engine.py`: the call.
-- `settings.py`: the variables `engine.py` reads.
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
 - `tests/`: the host twin always, every variant on a CUDA device.
 
 What measures it is in `benchmarks/torch_gpu/sha512_rows/`:
 
+- `torch_engine.py`: the engine with the benchmarks' build directory and variant.
+- `check_gpu.py`: `check.py`'s checks on a CUDA device, into check.json.
 - `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 demo's shape.
 - `sass.py`: opcode counts per variant.
 - `gpu.sh`: one leased GPU run.

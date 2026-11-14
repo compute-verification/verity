@@ -1,18 +1,17 @@
 """A stop class's verdict records: what a verifier's command wrote of one class (its ``summary.json``) as one JSON
-object, a line of a run's ``verdicts.jsonl``, saying which verdict it is and which class, serve, registration and rate
+object, a line of a run's ``verdicts.jsonl``, saying which verdict it is and which class, serve, docket and rate
 it is of.
 
     python verity/protocols/proofs/spot/verifier/one_stage/verdict_record.py PIECE --first F --summary F --serve RUN --run RUN --out DIR \\
       [--stream F] [--commit SHA] [--control id|max_tokens]
 
 ``--first`` is the class's first-stage file, the one `two_stage.py first` writes for it: the class's boundary record
-and its digest and, for a stop class, its stop record and that one's (its ``stop``). ``--stream`` is the registration
-record of the verdict's own stream where the first-stage file does not hold it: the second stage's interior
-registration, which its command writes as ``interior/registration.json`` under its ``--out``.
+and its digest and, for a stop class, its stop record and that one's (its ``stop``). ``--stream`` is the docket of the verdict's own stream where the first-stage file does not hold it: the second stage's interior
+docket, which its command writes as ``interior/registration.json`` under its ``--out``.
 
 A stop class's response lengths are held by a verdict on each of its pieces, each accepted and complete, and a reader
 of those verdicts has to be able to refuse a set that is not one class's: verdicts of different classes, serves or
-registrations, or one that ran at another rate than its registration registers. So a record holds the fields
+dockets, or one that ran at another rate than its docket registers. So a record holds the fields
 `benchmarks/harness/verity_bench/exfiltration.py` reads (`VERDICT_FIELDS`: ``piece``, ``control``, ``run``,
 ``verifier``, ``verdict``, ``proved_by``, ``open``), four that say what the verdict is of, and two that hold the
 verdict's own stream to that class:
@@ -20,30 +19,30 @@ verdict's own stream to that class:
 * ``registration``: the digest of the class's boundary record (`registration.digest`), which the record of every later
   stream of the class names as its ``previous``. It is the same on every verdict of a class.
 * ``serve``: the id, in the evidence store, of the served run the class's files came from. It is the caller's word
-  (``--serve``): no file of a class names a run of the store. What a class's registration itself binds of its serve
+  (``--serve``): no file of a class names a run of the store. What a class's docket itself binds of its serve
   is its window's ``run`` (`boundary_rows.run_root`: the serve's nonce and the window's index).
 * ``class``: the class's place in its serve, ``w<window>/p<P>-o<O>``, ending ``-nostop`` for a class filed without a
   stop block under a stop rule: the directory `boundary_windows` writes the class to, read here from the boundary
   record's ``window`` (`class_of`).
 * ``rate``: the rate the verdict's population is registered at, never the verifier's own argument (`rate`): K of the N
-  proof blocks its registration record registers, which the verifier holds to its own sampling design and count (R1,
+  proof blocks its docket registers, which the verifier holds to its own sampling design and count (R1,
   R2), written NUM/DEN in lowest terms. A population whose every block is proved reads ``1/1``.
-* ``stream_registration``: the digest of the registration record of the verdict's own stream, the one its verifier
-  sampled and proved on: the stop record for the stop audit, the interior registration for the second stage. Null
+* ``stream_registration``: the digest of the docket of the verdict's own stream, the one its verifier
+  sampled and proved on: the stop record for the stop audit, the interior docket for the second stage. Null
   only on a second stage that refused before it registered an interior.
 * ``stream_names_boundary``: true where that record is the one with that digest and its ``previous`` is the class's
   boundary record, so the stream was registered after this class's boundary record and no other's; null beside a
   null ``stream_registration``. A stream registered after another record gets no verdict record: a verdict that
   named the right ``registration`` over a stream registered against another would be of no one class.
 
-**The pieces** (`PIECES`), each a verifier's command, its stream's registration and the record that registers its rate:
+**The pieces** (`PIECES`), each a verifier's command, its stream's docket and the record that registers its rate:
 
-* ``stop_record``: the stop audit (`stop_audit.py`), whose stream's registration is the stop record (the first-stage
+* ``stop_record``: the stop audit (`stop_audit.py`), whose stream's docket is the stop record (the first-stage
   file's ``stop.record``), which registers the rate too. ``accept`` when its audit record accepted and is complete,
   ``not complete`` when it accepted with entries that did not run, else ``refuse``.
-* ``second_stage``: the compute audit's second stage (`two_stage.py second`), whose stream's registration is the
-  interior registration (``--stream``), held to the digest its summary names. Its rate is the class's boundary
-  record's, the replay sample's: the interior registration registers every proof block of the sampled spans.
+* ``second_stage``: the compute audit's second stage (`two_stage.py second`), whose stream's docket is the
+  interior docket (``--stream``), held to the digest its summary names. Its rate is the class's boundary
+  record's, the replay sample's: the interior docket registers every proof block of the sampled spans.
   ``refuse`` unless the second stage held (`two_stage.held`). Then ``accept`` or ``not complete`` as its outcome
   accepted with or without ``complete`` (an outcome that carries no ``complete`` is not complete), and ``withheld``
   when its outcome did not accept: a second stage that held reaches that only where the verifier's own two-stage
@@ -52,11 +51,11 @@ verdict's own stream to that class:
 ``proved_by`` is null on both: no Lean guarantee covers either command, and ``open`` says what stands between its
 verdict and proved (`Piece.open`).
 
-**Refused** (`record`, `append`): a summary that does not name this class's registration, so a command that refused
+**Refused** (`record`, `append`): a summary that does not name this class's docket, so a command that refused
 before it registered gets no record, since nothing ties what it wrote to the class; a boundary or stop record that is
-not the one whose digest the first-stage file names; a stream's registration record that is not the one its summary
+not the one whose digest the first-stage file names; a stream's docket that is not the one its summary
 names, or whose ``previous`` is not the class's boundary record; a second stage that held and names no interior
-registration; and a second record on one piece and control in one file."""
+docket; and a second record on one piece and control in one file."""
 from __future__ import annotations
 
 import argparse
@@ -69,20 +68,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
+HERE = Path(__file__).resolve().parent
 #: a run's file of verdict records, one JSON object a line
 FILE = "verdicts.jsonl"
 #: the negative controls: a run on the same path with one thing changed (null on the honest run)
 CONTROLS = ("id", "max_tokens")
 ACCEPT, NOT_COMPLETE, REFUSE, WITHHELD = "accept", "not complete", "refuse", "withheld"
-#: a registration record's key for its sampling design, and that design's key for its kind
+#: a docket's key for its sampling design, and that design's key for its kind
 DESIGN = "law"
 
 
 def rate(registered: Mapping[str, Any]) -> str:
-    """The rate a registration record registers its population at: K of N as NUM/DEN in lowest terms for a subset
+    """The rate a docket registers its population at: K of N as NUM/DEN in lowest terms for a subset
     design, so K = N reads ``1/1``; any other design as itself (``work:K``), which is no rate and never ``1/1``.
     ValueError where the record registers no design, or a subset that is not 1 <= K <= N."""
     design, n = registered.get(DESIGN), registered.get("population")
@@ -165,8 +164,8 @@ def _second_stage(first: Mapping[str, Any], summary: Mapping[str, Any], boundary
 class Piece:
     """A verdict on a stop class. `module`: the verifier's command, as a record names it. `open`: what stands between
     its verdict and proved, in words. `read`: (the first-stage file, the command's ``summary.json``, the class's
-    boundary record, its digest, the stream's registration record where one is handed) -> the verdict's word, the
-    registration record that registers its rate, and the digest of its own stream's registration record, held to
+    boundary record, its digest, the stream's docket where one is handed) -> the verdict's word, the
+    docket that registers its rate, and the digest of its own stream's docket, held to
     name the boundary record as its ``previous`` (None where the command registered none)."""
 
     module: str
@@ -189,7 +188,7 @@ def record(piece: str, first: Mapping[str, Any], summary: Mapping[str, Any], *, 
     """The verdict record of ``piece`` on the class of ``first`` (its first-stage file) from the verifier's command's
     ``summary`` (the module docstring). ``run``: the run that produced the verdict. ``serve``: the served run the
     class came from. ``commit``: the commit the verifier ran at. ``control``: the negative control the run is, or
-    None on the honest run. ``stream``: the registration record of the verdict's own stream, where ``first`` does not
+    None on the honest run. ``stream``: the docket of the verdict's own stream, where ``first`` does not
     hold it (the module docstring's ``--stream``). ValueError for what the module docstring's "Refused" lists and an
     argument that names nothing."""
     if piece not in PIECES:

@@ -1,6 +1,5 @@
 """The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity`, other Definition
-modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/circuits/` as they are. Their twins and vocabulary live in the integration package:
-`properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
+modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/circuits/` as they are. Their vocabulary lives in the integration package:
 `program.frontend.gemm_targets`."""
 from __future__ import annotations
 
@@ -14,7 +13,7 @@ import pytest
 
 from tests.lint._imports import core_less_definitions as _core
 
-REGISTRY = "verity.definitions.registry"
+REGISTRY = "verity_vllm.definitions.registry"
 _SPEC = importlib.util.find_spec(REGISTRY)
 assert _SPEC is not None and _SPEC.origin is not None
 REGISTRY_DIR = Path(_SPEC.origin).parent
@@ -28,9 +27,8 @@ THIRD_PARTY = ("numpy",)
 #: which holds the kernels and the private circuits too
 CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.definitions.evidence"
-MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
-         "verity_vllm.program.frontend.gemm_targets")
+EVIDENCE = "verity_vllm.definitions.evidence"
+MOVED = ("verity_vllm.program.frontend.gemm_targets",)
 
 
 def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:

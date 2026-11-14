@@ -62,7 +62,7 @@ LEFT_OUT = ()
 SKIP = {
     GLOSSARY: "the term source: its table of older names says where each old name stays",
     "tools/move/": "the word maps name the words they retire",
-    "tools/verity/check/tests/test_move_check.py": "its toy moves rename the words the maps retire",
+    "tools/check/tests/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
@@ -80,7 +80,8 @@ LIVE = {
     "instance": "Lean's `instance`, Python's `isinstance` and a template instance are live",
     "slack": "the table keeps its other senses, Slack among them",
     "tap": "vLLM's capture taps are live; the certifier's are retired as \"uplink tap\" and \"the auditor's tap\"",
-    "remote audit": "Lean's `RemoteAudit` is the remote composite's audit; PoUB's old name is \"remote bandwidth audit\"",
+    "remote audit": "PoUB's Lean names keep the words until their rename, and the remote configuration's audit "
+                    "(`benchmarks/rho`'s `Remote`) is live; the docs' prose holds it at zero (`tests/test_retired_terms.py`)",
     "M0": "a label the code uses for other things", "M1": "a label the code uses for other things",
     "M2": "a label the code uses for other things",
     "layer 1": "a model's layers", "layer 2": "a model's layers", "layer 3": "a model's layers",
@@ -159,7 +160,10 @@ OWN_CAPS = {
     "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
     "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
     "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
+    "benchmarks/recursion_e2e/": "Flock's Merkle caps, the V* statements the recursion's benchmark proves and times",
+    "benchmarks/recursion_figures/": "Flock's Merkle caps, the V* parts the recursion's figures name",
     "security/Proofs/Flock/": "Flock's caps in its proofs: the Merkle cap, and its bounds on runs, tables and samples",
+    "security/Definitions/Claims/": "the bound on an extractor's reruns that Flock's claims state (`Deploy.cap`, `Arg.cap`)",
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
     **dict.fromkeys(REQUEST_CAPS, "a request's length cap, its `max_tokens`"),
     **dict.fromkeys(SOFTCAP_CAPS, "a logit soft cap, the softcapped attention chain's `CAP`"),
@@ -704,8 +708,8 @@ def test_vendor_kernel_and_isa_names_are_other_senses_and_pearl_s_cap_in_their_s
             ["CAP", "capOK", "cap check"]),
     }
     for sense, (theirs, pearls, pearl) in cases.items():
-        assert said(theirs, "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [], sense
-        assert said(f"{theirs}\n{pearls}\n", "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [(2, o) for o in pearl], sense
+        assert said(theirs, "benchmarks/pouw/harness/native/lt.cu") == [], sense
+        assert said(f"{theirs}\n{pearls}\n", "benchmarks/pouw/harness/native/lt.cu") == [(2, o) for o in pearl], sense
 
 
 def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spellings_there_are_not() -> None:
@@ -828,6 +832,25 @@ def test_pearl_s_debit_cap_still_counts_against_the_real_table() -> None:
     line = ("verdict rejects a run on a sampled row over its debit cap (over-cap rule `reject`, which "
             "`served_passes.py`\n")
     assert [w.split("'")[1] for _, w in sites(line, "benchmarks/one_stage/README.md")] == ["debit", "cap", "over-cap"]
+
+
+def test_a_cap_of_flock_s_claims_is_another_sense_and_pearl_s_beside_it_is_not() -> None:
+    """The bound on an extractor's reruns and a commitment's Merkle cap: any "cap" where Lean states Flock's claims and
+    proves its knowledge soundness and sampling over it. Pearl's spellings count there too, against the real table as
+    well, and so does every "cap" in the rest of Flock's Lean, beside a kept directory and in PoUW's proofs."""
+    theirs = "the cap: `D.cap`, `Numbers.cap`, cap₀, `Model.Cap D`, `IsCapTauZ`, recursiveCaps, capOfRoot, cap_pos; its caps"
+    pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
+    pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
+    for path in ("security/Definitions/Claims/SamplingTable.lean", "security/Proofs/Flock/Claims/KS/KSTable.lean",
+                 "security/Proofs/Flock/Claims/Numbers.lean", "security/Proofs/Flock/Claims/NumbersDeploy.lean",
+                 "security/Proofs/Flock/SamplingGeneric/KSTable.lean"):
+        assert said(theirs + pearls, path) == pearl, path
+        assert [w.split("'")[1] for _, w in sites(pearls, path)] == [o for _, o in pearl], path
+    counted = [(1, o) for o in ("cap", "cap", "cap", "cap", "Cap", "Cap", "Caps", "cap", "cap", "caps")]
+    for path in ("security/Definitions/Flock/Compiled.lean", "security/Definitions/ClaimsOf.lean",
+                 "security/Proofs/Flock/Claims/Aggregate.lean", "security/Proofs/Flock/Masked.lean",
+                 "security/Proofs/Pouw/Claims/KS/Bound.lean", "verity/protocols/flock/verifier/Flock/Merkle.lean"):
+        assert said(theirs + pearls, path) == counted + pearl, path
 
 
 def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:

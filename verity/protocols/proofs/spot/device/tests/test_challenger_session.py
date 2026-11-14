@@ -15,11 +15,11 @@ from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5CoinsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -78,7 +78,7 @@ def register(stream: S.Stream) -> S.WindowCommitmentRecord:
     return stream.register(_record(), _ports(), window_root=ROOT, counts=COUNTS)
 
 
-def test_a5s_stream_draws_on_no_coins_of_its_own():
+def test_a5s_stream_samples_on_no_coins_of_its_own():
     """The verifier's own coins (the Lean's `IO.getRandomBytes`, `verifier.coins`) or any callable but a challenger's are
     refused before the stream exists; the challenger's (`RankCoins`, `Replay`) are taken."""
     for own in (V.coins, lambda n: bytes([0x5a]) * n, None):
@@ -104,7 +104,7 @@ def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
                            AC.lms_verify) == CC.DRAW_FORM
 
 
-def test_the_replay_reads_no_more_than_the_honest_draw():
+def test_the_replay_reads_no_more_than_the_honest_sample():
     replay = AC.Replay(b"\x01\x02\x03")
     assert replay(2) == b"\x01\x02"
     with pytest.raises(AC.Ch.CoinError, match="past the honest draw"):

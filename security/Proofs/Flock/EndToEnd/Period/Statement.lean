@@ -65,7 +65,7 @@ structure SamplingBlock where
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
   wr : (S : Finset (Fin n)) → (R : Reg) →
     LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
@@ -102,7 +102,7 @@ open Classical
 variable (w : SamplingBlock)
 
 /-- The sampling block's sample: `Flock.Draw.drawWith`'s uniform `kd`-subset on the challenger's coins. -/
-def L : Law w.n := Law.execOS (n := w.n) w.src (.subset w.kd) w.n
+def L : SamplingDesign w.n := SamplingDesign.execOS (n := w.n) w.src (.subset w.kd) w.n
 
 /-- The sampling block's audit as it runs: `EndToEndHidden`'s game. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
@@ -123,7 +123,7 @@ noncomputable def sim (τ : Strategy w.game) :=
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ w.I w.wr _ _ _ _ _
       (runsZCJH_live w.I w.ht (Flock.Desc.parse_flat w.hD) (Discharge.Layout.scopeOkH_spec w.hU w.hscope).2.1 w.dj w.y₀
         w.wr _ w.hTags w.hCust.1
-        fun _ => drawOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
+        fun _ => sampleOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
 
 /-- **The sampling block's incorrect proof blocks** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
 registration (`XplurZC`), as in `EndToEndHidden`. -/
@@ -159,7 +159,7 @@ structure WindowRec where
   idx : ℕ
   accepted : Prop
   wrong : ℕ
-  drawnWrong : Prop
+  sampledWrong : Prop
 
 namespace SamplingBlock
 
@@ -224,7 +224,10 @@ cover at least a fraction `q > 0` of their units (`q ≤ kd_t/n_t`), with each s
 `K₀,t ≥ ln(1/δ)/q`, the probability that some sampling block is accepted with at least its `K₀` units wrong is at most
 $$\sum_t (\delta + \varepsilon_{ks,t} + \delta_{link,t}),$$
 each sampling block's sampling term `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀}` being at most `δ`. Its named assumptions are
-`IntegrityPeriod`'s. -/
+`IntegrityPeriod`'s.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
+holds falls as the prover pads a window's population. -/
 def IntegrityPeriodLog : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
@@ -244,7 +247,10 @@ def IntegrityPeriodLog : Prop :=
 block's sample covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling
 block is accepted and the incorrect proof blocks total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityPeriod`'s. -/
+Its named assumptions are `IntegrityPeriod`'s.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.pooledIntegrity_rate` is this statement at that rate), while
+under a fixed count the largest `q` that holds falls as the prover pads a window's population. -/
 def IntegrityHorizon : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →

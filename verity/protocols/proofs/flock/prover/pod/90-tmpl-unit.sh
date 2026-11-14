@@ -5,7 +5,7 @@
 # covers a templated statement only under --zk (`ProvedScope.scopeOkT`): the zk session, sampled (--draw subset:N, every
 # unit) and verified with the statement's partition and program (tmpl_statement.py's partition.json and program.json),
 # must be accepted, and the m0 one refused as a templated statement without --zk, by Lean and by the live server (its
-# LIVE line) alike. The zkfw session is the zk one proved behind the ZK server (FC_FIREWALL=1, Lean's flock-firewall
+# LIVE line) alike. The zkfw session is the zk one proved behind the ZK server (FC_ZK_SERVER=1, Lean's flock-zk-server
 # setting its Hello up at the templated statement with the partition and program), and must be accepted too. Each
 # session's coin tree is sampled and opened by its own challenger (challenger.sh: serve --tree-from,
 # the m0 session's under FC_COINS=tree), and its record held to that challenger's release log. Run from the
@@ -44,7 +44,7 @@ trap 'rm -rf $S' EXIT
 # Lean's verity-verify-proof, and beside it the prover's flock-tmpl-unit (tests/lean/TmplUnit.lean, which unrolls the unit and so
 # is no part of the verifier), built once per source, while the prover builds
 LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier $REPO/verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean)
-LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-firewall
+LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-unit; FW_BIN=$L/lean-$LSHA/flock-zk-server
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
@@ -53,9 +53,9 @@ LEAN_BIN=$L/lean-$LSHA/verity-verify-proof; UNIT_BIN=$L/lean-$LSHA/flock-tmpl-un
     rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
       && cp verity/protocols/proofs/flock/prover/tests/lean/TmplUnit.lean $LEAN_SRC/ \
       && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> $LEAN_SRC/lakefile.toml \
-      && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-firewall) && mkdir -p $L/lean-$LSHA \
+      && (cd $LEAN_SRC && lake build verity-verify-proof flock-tmpl-unit flock-zk-server) && mkdir -p $L/lean-$LSHA \
       && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN && cp $LEAN_SRC/.lake/build/bin/flock-tmpl-unit $UNIT_BIN \
-      && cp $LEAN_SRC/.lake/build/bin/flock-firewall $FW_BIN
+      && cp $LEAN_SRC/.lake/build/bin/flock-zk-server $FW_BIN
   fi
 ) > $O/build-lean.log 2>&1 &
 LP=$!
@@ -99,8 +99,8 @@ for mode in ${MODES:-m0 zk zkfw}; do
   Z=; [ $mode != m0 ] && Z=--zk
   C=(--coins tree); [ $mode != m0 ] && C=()
   DRAW=(); [ $mode != m0 ] && DRAW=(--draw subset:$N)
-  PENV=(); [ $mode = zkfw ] && PENV=(FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_LEAN=$FW_BIN
-    FC_FIREWALL_STATEMENT=verity/flock-circuit/tmpl "FC_FIREWALL_HELLO_ARGS=--partition $D/partition.json --program $D/program.json")
+  PENV=(); [ $mode = zkfw ] && PENV=(FC_ZK_SERVER=1 FC_HOST_WITNESS=1 FC_ZK_SERVER_LEAN=$FW_BIN
+    FC_ZK_SERVER_STATEMENT=verity/flock-circuit/tmpl "FC_ZK_SERVER_HELLO_ARGS=--partition $D/partition.json --program $D/program.json")
   U=(--circuit $D/circuit.txt --tmpl-unit $D/unit.placed --tables $D/tables)
   $B statement $Z "${U[@]}" --instances $D/pub-$N.bin > $O/statement-$mode.txt 2>&1
   challenger_start $O/challenger-$mode || exit 1

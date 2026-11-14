@@ -245,7 +245,7 @@ def staged_stacked(stage: Path) -> tuple[dict, str, dict]:
     """The circuit registration META binds in ``stage`` (`inner_registered.bound`), its digest, and the `rec_live.Proxy`'s
     ``registered`` opening of its `rec_live.STACKED` entry (`inner_registered.private`, its ``top`` the nodes' ``b || c``
     under their salts); refused when the record carries no ``stacked`` entry or the prover holds no opening of it."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     from . import inner_registered as IR
 

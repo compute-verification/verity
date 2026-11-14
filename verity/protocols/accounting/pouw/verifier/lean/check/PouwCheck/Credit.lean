@@ -42,7 +42,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   sample root. So a credit bit changed after the sampling coin is refused.
 * `drawn` is `credit.drawn`: the units the sampling coin samples from the window's own layout, `drawCheck`'s rule under the
   sampling design `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at the K the period's
-  open committed (`law`; `committedK`). Never a list the prover hands in. `established` is the ε that sample established
+  open committed (`samplingDesign`; `committedK`). Never a list the prover hands in. `established` is the ε that sample established
   over the window's credited served work at `DELTA` (`PouwWindow.epsAt` at the window's inputs, the credited work
   `creditedWork` and the window's `callWork`), which `periodCredit` reports.
 * `Internal.servedRows` is `credit.served_rows`: credit counts served rows, not slots. Every call has the window's M
@@ -451,10 +451,10 @@ def strata (layout : Json) : R (Array Flock.Draw.WorkStratum) := do
     at_ := at_ + size
   pure out
 
-/-- `credit.law`: the strata under the work sampling design `work:k` at the committed K `k`, each stratum's `k_s`
+/-- `credit.samplingDesign`: the strata under the work sampling design `work:k` at the committed K `k`, each stratum's `k_s`
 `Flock.Draw.workK`; else the refusal (`budget`): `k` isn't a positive integer at most `MAX_K`, or the window has fewer
 than K units. -/
-def law (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Stratum) := do
+def samplingDesign (ss : Array Flock.Draw.WorkStratum) (k : Json) : R (Array Flock.Draw.Stratum) := do
   let some k := (nat? k).filter (fun k => 1 ≤ k && k ≤ MAX_K) | throw ("budget", K_FORM)
   let n := ss.foldl (fun a s => a + s.size) 0
   if n < k then
@@ -722,7 +722,7 @@ def drawnOf (coin : ByteArray) (stream registration receipt : Json) (ss : Array 
         | .str s => if _root_.PouwCheck.plain x && _root_.PouwCheck.plain s then some (x, s) else none
         | _ => none
       | _, _, _, _ => none) | throw ("draw", DRAW_ARGS)
-  let some units ← port (workUnits coin st reg kvs (← law ss k)) | throw ("sampler", "the draw's stream ran out")
+  let some units ← port (workUnits coin st reg kvs (← samplingDesign ss k)) | throw ("sampler", "the draw's stream ran out")
   pure units
 
 /-- `credit._finding`: a session's registered finding (verity-verify-proof's `registered`, `{port: {value, root}}`: each
@@ -2289,6 +2289,6 @@ def periodRoots (_key _ledger _name _roots : Json) : R Unit := throw ("period", 
 
 /-- A Pearl-C credit period's credit over its passes (`credit.pearl_c_period_credit_twin`'s rule): refuses every period
 until its check is written. -/
-def pearlCPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
+def pearlCMonitoringPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
 
 end PouwCheck.Credit

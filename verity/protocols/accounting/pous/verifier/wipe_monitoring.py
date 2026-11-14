@@ -22,7 +22,7 @@ adaptive prover.
 No number here prices a PRF's advantage, and none assumes it away. The table says so beside each number that is short
 by it, in the same closing words (`UNPRICED`).
 
-`short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
+`short_sessions` is PoUB's too (`poub/verifier/monitoring.py` imports it). The periods and δs are the reporting grid's
 (`verity.protocol`'s `MONITORING_PERIODS` and `DELTAS`), and T is its `block_count`.
 
 An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`
@@ -104,13 +104,9 @@ def counted(answer: Mapping[str, Any], egress: Mapping[str, Any]) -> NoReturn:
 
 
 def memory(profile: Mapping[str, Any]) -> dict[str, Any]:
-    """The declared tiers, whether the wipe is of GPU memory alone, and the devices its prover's store names."""
+    """The declared tiers, by label and bytes, and whether the wipe is of GPU memory alone. It names no device."""
     tiers = [{"tier": t, "bytes": int(b)} for t, b in profile["tiers"]]
-    store = (profile.get("placement") or {}).get("prover_store") or {}
-    devices = [{k: s[k] for k in ("tier", "device", "uuid") if k in s}
-               for s in (store.get("parts") or [store]) if s.get("device")]
-    return {"tiers": tiers, "tier": "+".join(t["tier"] for t in tiers), "hbm_only": [t["tier"] for t in tiers] == [HBM],
-            "devices": devices}
+    return {"tiers": tiers, "tier": "+".join(t["tier"] for t in tiers), "hbm_only": [t["tier"] for t in tiers] == [HBM]}
 
 
 def each(public: Mapping[str, Any]) -> dict[str, Any]:

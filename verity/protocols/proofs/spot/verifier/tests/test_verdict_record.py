@@ -1,11 +1,11 @@
 """`verdict_record.py`: a stop class's verdict records. A record holds the seven fields the reader of the stop
 class's verdicts reads, the four that say what the verdict is of (``registration``, ``serve``, ``class``,
 ``rate``) and the two that hold its own stream to that class (``stream_registration``, ``stream_names_boundary``);
-its registration, class and rate are read from the registered records, the rate never from what the verifier's
+its docket, class and rate are read from the registered records, the rate never from what the verifier's
 summary says of its own design; each piece's word is its command's verdict; and a summary that does not name the
-class's registration, a record that is not the one the first-stage file or the summary names, a stream registered
+class's docket, a record that is not the one the first-stage file or the summary names, a stream registered
 after another record than the class's boundary record, and a second record on one piece and control are refused.
-The records are written ones, in the registration record's form; one test holds the writer to a stop class's first
+The records are written ones, in the docket's form; one test holds the writer to a stop class's first
 stage as the driver writes it and to the stop audit's own summary."""
 
 from __future__ import annotations
@@ -17,24 +17,24 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent))
-VR = importlib.import_module("verdict_record")
+VR = importlib.import_module("verity.protocols.proofs.spot.verifier.one_stage.verdict_record")
 
 NAMES = {"run": "r-verdict", "serve": "r-serve", "commit": "c0ffee"}
 STOP_RULE = {"ids": [3], "max_model_len": 64, "outputs": 4}
 
 
 def _design(kind: str, k: int | None = None, **more: object) -> dict:
-    """A registration record's sampling design under its key, with ``k`` where one is given."""
+    """A docket's sampling design under its key, with ``k`` where one is given."""
     return {VR.DESIGN: {VR.DESIGN: kind, **({} if k is None else {"k": k}), **more}}
 
 
 def _record(k: int, n: int, *, stopped: bool | None = True, previous: str | None = None, **window: object) -> dict:
-    """A registration record of ``k`` of ``n`` proof blocks, in the form `registration.record` writes: a class's
+    """A docket of ``k`` of ``n`` proof blocks, in the form `registration.record` writes: a class's
     boundary record, or with ``previous`` the record of a later stream of the class. ``stopped``: None for a serve
     under no stop rule."""
     rule = {} if stopped is None else {"stop": STOP_RULE, "stopped": stopped}
@@ -56,13 +56,13 @@ def _stop_summary(first: dict, accepted: bool = True, complete: bool = True, **m
 
 
 def _interior(first: dict, n: int = 8) -> dict:
-    """The interior registration a second stage registers after the boundary record of ``first``: every one of its
+    """The interior docket a second stage registers after the boundary record of ``first``: every one of its
     ``n`` proof blocks."""
     return _record(n, n, previous=first["registration"], interior=True)
 
 
 def _second_summary(first: dict, held: bool = True, interior: dict | None = None, **outcome: object) -> dict:
-    """A second stage's summary on ``first``, naming the interior registration ``interior`` where it registered one."""
+    """A second stage's summary on ``first``, naming the interior docket ``interior`` where it registered one."""
     named = {} if interior is None else {"second_stage": {"registration": R.digest(interior)}}
     return {"first_stage": {"registration": first["registration"]}, "held": held, "outcome": outcome, **named}
 
@@ -122,7 +122,7 @@ def test_the_second_stages_word_is_its_commands_and_its_rate_the_boundary_record
 
 
 def test_a_verdicts_own_stream_is_held_to_the_classs_boundary_record():
-    """A verdict names its own stream's registration, the record handed is the one its summary names, and that
+    """A verdict names its own stream's docket, the record handed is the one its summary names, and that
     record's ``previous`` is the class's boundary record: a second stage whose interior was registered after another
     record, however right the boundary record its summary names, gets no record."""
     first, other = _first(), _first(row=8)
@@ -239,7 +239,7 @@ def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it
     names the class's boundary record, the directory the class is filed under and the rate its stop record registers.
     No session is proved and Lean is not called."""
     T = importlib.import_module("test_two_stage_driver")
-    SA = importlib.import_module("stop_audit")
+    SA = importlib.import_module("verity.protocols.proofs.spot.prover.audit.stop_audit")
     pubs = [json.loads(json.dumps(T._stop_class().public()))]
     monkeypatch.setattr(T.AC, "start", T._start(T.OneSession("verdict-record")))
     (wrote,) = T.TS._first_all(T._args(tmp_path), pubs, T.PAIR, T.RULE, None, T.STOP)

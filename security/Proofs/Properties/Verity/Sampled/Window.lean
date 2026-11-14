@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Target
 public import Proofs.Flock.EndToEnd.Joint.V5.Bound
 
 /-!
-# Sampled proofs' leg over a window of several members, each its own session
+# SPOT's leg over a window of several members, each its own session
 
 `Verity.Vocab.SpotSound` where a window's one sample covers several members and one-stage v2 verifies each member in
 its own `--zk` session, one after another: the leg `Proofs.Properties.Verity.Sampled.Target` proves at one session, at
@@ -17,13 +17,13 @@ order (`JointAuditV5.sessions`, `seqG`); sessions run at once are not this leg's
   a field (`Member.toV5`): the registration is the window's joint one, the registration record's digest; the member's
   sample file at its part `S` of the window's sample is the `.subset |S|` print (`printedPart`); each round's digest is
   SHA-512; the writer is `wrZP`; and `live-verifier` holds at it with no premise (`recordCustodyZKJPLaw_part`).
-* **The window** (`Window`): the members in the registration's order, the registration's law on its strata over the
+* **The window** (`Window`): the members in the registration's order, the registration's sampling design on its strata over the
   population of all their proof blocks, the device's one byte stream the sample reads with A3 at it, each member's
   one link-point count at every sample (`JointAuditV5.hcls`), and the claim's share. `Window.joint` is Flock's window
   at `t` SHA-512 calls (the finders' budgets are `MemberV5`'s fields), and `Window.extend` the window with the sample's
   coins widened by the coins a projection reads.
 * **The bound** (`Window.sessionDelta`, `Window.delta`): the sample's own miss of any set of more than an `ε` share of
-  the population (`Window.drawMiss`) plus `JointAuditV5.eps`, the members' knowledge and binding terms summed,
+  the population (`Window.sampleMiss`) plus `JointAuditV5.eps`, the members' knowledge and binding terms summed,
   `Σ_m (ε_ks,m + ε_bind,m)`, plus each member's registration's roots term (`Window.rootsErr`, `Member.rootsErr`):
   its roots finder's SHA-512 calls over `2^256`, the form `Vocab.finderPr_le_crBound` gives the read finder; then one
   two-continuation term per round of every member's session, the record's and the bound digests', the coin trees'
@@ -96,7 +96,7 @@ structure Member (nJ : ℕ) where
   kd : ℕ
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  y₀ : SampleSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
   hTags : TagsOkZHJ I
   k : ℕ
   Rw : ℕ
@@ -224,7 +224,7 @@ theorem toV5_part (t : ℕ) (S : Finset (Fin nJ)) : (m.toV5 t).part S = m.part S
 end Member
 
 /-- **A window of several members, as v2 sets its sessions up**: the members in the registration's order; the
-registration's law on its strata over the population of all their `nJ` proof blocks, sampling `kd`; the device's one
+registration's sampling design on its strata over the population of all their `nJ` proof blocks, sampling `kd`; the device's one
 byte stream the sample reads, with A3 at it; each member's part of every sample at its session's link points (the
 registration check refuses a member whose fewest and most sampled proof blocks have different counts); the claim's
 share; and the SHA-512 calls of hashing one message a digest is taken of. -/
@@ -233,11 +233,11 @@ structure Window where
   nJ : ℕ
   /-- the members, in the registration's order -/
   ms : List (Member nJ)
-  law : Flock.Draw.Law
+  samplingDesign : Flock.Draw.SamplingDesign
   ns : List ℕ
   kd : ℕ
   hns : ns.sum = nJ
-  hlaw : Flock.Bridge.LawOn law ns kd
+  hlaw : Flock.Bridge.SamplingDesignOn samplingDesign ns kd
   /-- the device's bytes the sample reads -/
   Ω : Type
   [fΩ : Fintype Ω]
@@ -245,8 +245,8 @@ structure Window where
   Lb : Fin 1 → ℕ
   src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256
   hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src
-  hcls : ∀ m ∈ ms, ∀ ω : Ω, Flock.Guarantees.sampleEnded src law nJ ω = true →
-    mPtsOf m.D.unroll.g (m.part ((Flock.Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+  hcls : ∀ m ∈ ms, ∀ ω : Ω, Flock.Guarantees.sampleEnded src samplingDesign nJ ω = true →
+    mPtsOf m.D.unroll.g (m.part ((Flock.Bridge.execSel (n := nJ) src samplingDesign nJ).draw ω)).card =
       mPtsOf m.D.unroll.g (m.kd / nTab m.I)
   /-- the claim's share: at most an `ε` share of the population's proof blocks unbound -/
   ε : ℝ
@@ -260,12 +260,12 @@ namespace Window
 variable (W : Window)
 
 /-- **Flock's window at `t` SHA-512 calls**: the members as Flock's (`Member.toV5`), at the joint registration, the
-registration's law and strata and the device's bytes. -/
+registration's sampling design and strata and the device's bytes. -/
 noncomputable def joint (t : ℕ) : Flock.Guarantees.JointAuditV5 where
   Reg := ByteArray
   nJ := W.nJ
   ms := W.ms.map fun m => m.toV5 t
-  law := W.law
+  samplingDesign := W.samplingDesign
   ns := W.ns
   kd := W.kd
   hns := W.hns
@@ -291,9 +291,9 @@ noncomputable def extend (S : Widening) : Window where
   hA3 := uniform_fst W.hA3
   hcls := fun m hm ω hω => W.hcls m hm ω.1 hω
 
-/-- **The window's sample's law**: the registration's law over the population, as `Spot.Draw.drawUnits` samples it on
+/-- **The window's sample's sampling design**: the registration's sampling design over the population, as `Spot.Draw.sampleUnits` samples it on
 the device's bytes in order (`Flock.Bridge.execSel`); a sample that fails samples every proof block. -/
-noncomputable def L : FlockSoundness.Audit.Law W.nJ := Flock.Bridge.execSel (n := W.nJ) W.src W.law W.nJ
+noncomputable def L : FlockSoundness.Audit.SamplingDesign W.nJ := Flock.Bridge.execSel (n := W.nJ) W.src W.samplingDesign W.nJ
 
 /-- The window's sample is Flock's window's, at any budget. -/
 theorem joint_L (t : ℕ) : (W.joint t).L = W.L := rfl
@@ -315,11 +315,11 @@ noncomputable def hidingTerm (_ : Window) : ℝ≥0∞ := 2 * (maxLeaves : ℝ�
 
 /-- The sampling design's own miss of a set `B` of the population's proof blocks (`JointAuditV5.pa`). -/
 noncomputable def pa (B : Finset (Fin W.nJ)) : ℝ :=
-  (_root_.Properties.Spot.oneStageOf W.law).Pa W.ns (B.map Fin.valEmbedding)
+  (_root_.Properties.Spot.oneStageOf W.samplingDesign).Pa W.ns (B.map Fin.valEmbedding)
 
 /-- **The sample's term**: the most the sampling design misses of any set of more than an `ε` share of the
 population's proof blocks, `JointShareV5`'s. -/
-noncomputable def drawMiss : ℝ≥0∞ :=
+noncomputable def sampleMiss : ℝ≥0∞ :=
   ENNReal.ofReal (⨆ B : {B : Finset (Fin W.nJ) // W.ε * W.nJ < B.card}, W.pa B.1)
 
 /-- **Every member's roots fix their domains** (`Member.RootsFix`), the members with a proof block in the sample and
@@ -335,7 +335,7 @@ noncomputable def rootsErr : ℝ≥0∞ := (W.ms.map Member.rootsErr).sum
 /-- **The window's error at `t` calls**, `JointShareV5`'s under the roots guard: the sample's term, the members'
 knowledge and binding terms summed, `Σ_m (ε_ks,m + ε_bind,m)` (`JointAuditV5.eps`), each at its part's sampling
 design and the finders' budgets at `t`, and each member's registration's roots term (`rootsErr`). -/
-noncomputable def sessionDelta (t : ℕ) : ℝ≥0∞ := W.drawMiss + (W.joint t).eps + W.rootsErr
+noncomputable def sessionDelta (t : ℕ) : ℝ≥0∞ := W.sampleMiss + (W.joint t).eps + W.rootsErr
 
 /-- **The leg's δ at the window, `t` SHA-512 calls and the read finder's bound `cr`**: the window's error, each
 member's roots term in it, a two-continuation term per round opened after a digest in every member's session, its
@@ -365,7 +365,7 @@ session played alone at `τ`, at the member's budgets. -/
 structure JointFinderCR (w : Flock.Guarantees.JointAuditV5) [Nonempty w.EndΩ]
     (τ : FlockSoundness.Game.Strategy w.game) : Prop where
   table : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-    (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
+    (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
     (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
     (w.ms.get k).qF (w.ms.get k).qS
   link : ∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
@@ -402,8 +402,8 @@ theorem Window.ks (W : Window) (t : ℕ) (τ : FlockSoundness.Game.Strategy (W.j
     (hI : ∀ _ : Nonempty (W.joint t).EndΩ, W.RootsFix → W.ε * W.nJ < (((W.joint t).wrongSet τ).card : ℝ)) :
     Verity.Game.prob (fun o => (W.joint t).Accepts o) (W.joint t).game τ ≤ W.sessionDelta t := by
   by_cases he : Nonempty (W.joint t).EndΩ
-  · exact show _ ≤ W.drawMiss + (W.joint t).eps + (W.ms.map Member.rootsErr).sum from
-      le_add_rootsErr (Verity.Game.prob_le_one _ _ τ) W.ms (W.drawMiss + (W.joint t).eps) hcr fun hR =>
+  · exact show _ ≤ W.sampleMiss + (W.joint t).eps + (W.ms.map Member.rootsErr).sum from
+      le_add_rootsErr (Verity.Game.prob_le_one _ _ τ) W.ms (W.sampleMiss + (W.joint t).eps) hcr fun hR =>
         (Verity.Game.prob_mono (fun _ ho => ⟨ho, hI he hR⟩) _ τ).trans
           (Flock.SecurityProofs.JointShareV5 (W.joint t) W.hA3 τ (fun h => (hF h).table) (fun h => (hF h).link)
                 W.ε)

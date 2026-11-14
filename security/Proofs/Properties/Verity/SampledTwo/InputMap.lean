@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.Steps
 
 /-!
-# The last step's law is over the run of record's own second stage's cells and counts
+# The last step's sampling design is over the run of record's own second stage's cells and counts
 
 The two-stage form's last step holds the interior audit's sample to a sampling design it computes from its parameters
 (`secondDesignOf`): the replay block's cells under the interior's query, at the rule's counts. The run of record's second
@@ -14,9 +14,9 @@ parameters (`inputOf`), so the two are one:
   parameters, the commitment's record, none, and the first stage's bytes.
 * `inputOf_interior`: the input holds an interior whose parameters, replay block and bytes are the form's interior
   parameters, its replay block, and the second stage's bytes.
-* `secondLawOf_ok`: `secondDesignOf` returns `Select.secondLaw` of the proved units of the run's `draw`, over the cells
+* `secondSamplingDesignOf_ok`: `secondDesignOf` returns `Select.secondSamplingDesign` of the proved units of the run's `draw`, over the cells
   the replay block's program has under the interior's query, at the rule's counts.
-* `accepted_law_run`: where the two-stage check accepts, the sampling design of its last step is `Select.secondLaw` of the proved
+* `accepted_samplingDesign_run`: where the two-stage check accepts, the sampling design of its last step is `Select.secondSamplingDesign` of the proved
   units of the run of record's `draw`, over the cells of that run's interior's replay block under its query, at the
   counts of that run's rule.
 
@@ -74,13 +74,13 @@ theorem inputOf_interior (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : Byte
        cases rootsSplit c.record e.interior.base.sessionRoots
        exact ⟨_, rfl, rfl, rfl, rfl⟩)
 
-/-- **What `secondDesignOf` computed** where it returned: under a two-stage rule, `Select.secondLaw` of the proved units
+/-- **What `secondDesignOf` computed** where it returned: under a two-stage rule, `Select.secondSamplingDesign` of the proved units
 of the run's `draw`, over the replay block's cells under the interior's query, at the rule's counts over them. -/
-theorem secondLawOf_ok {p : Params} {run law : Json} (h : secondDesignOf p run = .ok law) :
+theorem secondSamplingDesignOf_ok {p : Params} {run samplingDesign : Json} (h : secondDesignOf p run = .ok samplingDesign) :
     ∃ grain replay k ns ids ks, p.rule = .twoStage grain replay k ∧
       Select.replayCells p.replay p.interior.verifier.query = .ok ns ∧
       Select.templateIds p.interior.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
-      law = Select.secondLaw ((Draw.proved (getD run "draw")).map Int.toNat) ns ks := by
+      samplingDesign = Select.secondSamplingDesign ((Draw.proved (getD run "draw")).map Int.toNat) ns ks := by
   unfold secondDesignOf at h
   split at h
   · try dsimp only at h
@@ -91,33 +91,33 @@ theorem secondLawOf_ok {p : Params} {run law : Json} (h : secondDesignOf p run =
     exact ⟨_, _, _, ns, ids, ks, by assumption, hns, hids, hks, h.symm⟩
   · cases h
 
-/-- **The last step's law, at the run of record's own second stage**: where the two-stage check accepts, the run of
+/-- **The last step's sampling design, at the run of record's own second stage**: where the two-stage check accepts, the run of
 record `run` of the input `i` names `accept`; `i` holds an interior `it` on the second stage's bytes `ξ₂` under a
-two-stage rule; and the sampling design the last step holds the interior audit's sample to is `Select.secondLaw` of the proved
+two-stage rule; and the sampling design the last step holds the interior audit's sample to is `Select.secondSamplingDesign` of the proved
 units of `run`'s `draw`, over the cells of `it`'s replay block under `it`'s query, at the rule's counts over them:
 the cells and counts the run's own second stage samples over. -/
-theorem accepted_law_run {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
+theorem accepted_samplingDesign_run {form : Bool} {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof) :
-    ∃ c₂ ξ₂ r i run law it grain replay k ns ids ks,
+    ∃ c₂ ξ₂ r i run samplingDesign it grain replay k ns ids ks,
       inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i) ∧ Spot.Run.run i true = .ok run ∧
       Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true ∧
-      secondCheck p.audit.base.verifier p.audit.base.delta c₂ law ξ₂ { e.interior.base with verdicts := r.out } =
+      secondCheck p.audit.base.verifier p.audit.base.delta c₂ samplingDesign ξ₂ { e.interior.base with verdicts := r.out } =
         .accept pub prof ∧
       i.interior = some it ∧ it.source = ξ₂ ∧ i.closure = none ∧ i.source = ξ ∧
       i.rule = .twoStage grain replay k ∧
       Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
-      law = Select.secondLaw ((Draw.proved (Spot.getD run "draw")).map Int.toNat) ns ks := by
-  obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, law, hl, htwo⟩ := accepted_steps h
+      samplingDesign = Select.secondSamplingDesign ((Draw.proved (Spot.getD run "draw")).map Int.toNat) ns ks := by
+  obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, samplingDesign, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, -, -⟩ := inputAt_ok hi
-  obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw⟩ := secondLawOf_ok hl
+  obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw⟩ := secondSamplingDesignOf_ok hl
   obtain ⟨it, hit, hp, hrep, hsrc⟩ :=
     inputOf_interior p { c with record := j₁ } ξ ξ₂
       { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e bs } received₂ vs
   obtain ⟨h1, -, -, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂
     { e with record := j₂, stmts := VStar.Recursive.SampledTwo.stmtsOwn p e bs } received₂ vs
-  refine ⟨c₂, ξ₂, r, i, run, law, it, grain, replay, k, ns, ids, ks, hi, hr, hj, htwo, ?_, hsrc, ?_, ?_, ?_, ?_, ?_,
+  refine ⟨c₂, ξ₂, r, i, run, samplingDesign, it, grain, replay, k, ns, ids, ks, hi, hr, hj, htwo, ?_, hsrc, ?_, ?_, ?_, ?_, ?_,
     hks, hlaw⟩
   · rw [hio]
     exact hit

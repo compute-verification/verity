@@ -29,8 +29,8 @@ import Proofs.Properties.Remote
 /-!
 # Remote's tie on an honest run: one record, one digest
 
-The honest lemma of `AcceptInferenceOnly`'s tie: a run commits the policy and sampled proofs to its one registration
-record, and whenever both commitment decoders accept that record's bytes (sampled proofs' is one-stage v1's), they
+The honest lemma of `AcceptInferenceOnly`'s tie: a run commits the policy and SPOT to its one registration
+record, and whenever both commitment decoders accept that record's bytes (SPOT's is one-stage v1's), they
 decode them to one digest (`one_digest`), so no record strays and both digests are the policy's record's
 (`acceptInferenceOnly_honest`).
 The record may name any registered circuit, a tiny one among them: the commitment decoders read only its `format`.
@@ -88,14 +88,14 @@ theorem policy_of {b : ByteArray} {c : NciCheck.Protocol.Commitment} (h : NciChe
   subst h
   exact ⟨rfl, hd⟩
 
-/-- The one-stage audit's commitment: the record its bytes are, and `Registration.digest` of it. -/
+/-- The one-stage audit's commitment: the record its bytes are, and `Docket.digest` of it. -/
 theorem stage_of {b : ByteArray} {c : Spot.OneStage.Commitment}
     (h : Spot.OneStage.commitmentOf b = .ok c) :
-    canonicalJson b = .ok c.record ∧ Spot.Registration.digest c.record = .ok c.digest := by
+    canonicalJson b = .ok c.record ∧ Spot.Docket.digest c.record = .ok c.digest := by
   unfold Spot.OneStage.commitmentOf at h
   rcases hj : canonicalJson b with e | j
   · simp [hj, Bind.bind, Except.bind] at h
-  rcases hg : Spot.Registration.digest j with e | d
+  rcases hg : Spot.Docket.digest j with e | d
   · cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   cases j <;> simp [hj, hg, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   subst h
@@ -113,7 +113,7 @@ theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : Spo
   exact Except.ok.inj (hdS.symm.trans hdI)
 
 /-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): the policy's and
-sampled proofs' cases committing to one record's bytes, which both commitment decoders accept, leave no stray among
+SPOT's cases committing to one record's bytes, which both commitment decoders accept, leave no stray among
 the components remote's check compares on any blobs `bs` (`remote_check_ids`), and both digests are the policy's
 record's. -/
 theorem acceptInferenceOnly_honest (bs : Blobs) {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}

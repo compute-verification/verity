@@ -63,7 +63,7 @@ theorem firstTreeless_of_check (C : CaseOf)
   refine firstTreeless_of_plain C ?_
   intro o hacc p c e key d₁ d₂ ls h1 _ h3 h6 hw hls
   have h6' := h6
-  unfold secondDraws at h6'
+  unfold secondSamples at h6'
   obtain ⟨c₂, hc₂, -⟩ := Verity.Sampled.Binding.obind_some h6'
   have h5 : interiorOf e = .ok c₂ := toOption_ok hc₂
   have hs := hS o hacc p c e c₂ h1 h5
@@ -72,10 +72,10 @@ theorem firstTreeless_of_check (C : CaseOf)
   have hpce : (p, c, e) = (p', c', e') := Except.ok.inj (h1.symm.trans hcase)
   obtain ⟨rfl, hce⟩ := Prod.mk.inj hpce
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj hce
-  obtain ⟨bp, hb, hw₁, -⟩ := firstDraws_window h3
+  obtain ⟨bp, hb, hw₁, -⟩ := firstSamples_window h3
   have hbp : bp = p.boundary := (Except.ok.inj hb).symm
   rw [hbp] at hw₁
-  have hw₂ := source_window (secondDraws_eq h5 h6)
+  have hw₂ := source_window (secondSamples_eq h5 h6)
   exact VStar.Recursive.SampledTwo.firstTreeless_lines (VStar.Recursive.SampledTwo.accepted_treeless hchk) hw₁ hw₂ hw
     (formLines_of hs hls)
 

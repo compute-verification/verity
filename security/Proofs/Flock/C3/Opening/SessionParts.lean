@@ -104,7 +104,7 @@ open FlockVBridge.Decode
 open FlockVBridge.AccChain (RegOut copyVal_regOut)
 
 variable {mPts nU J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nU} (zo : ZkOuter mPts nU J Reg' c hU hscope Lv)
 
 /-- **Copy `j` of unit `u` is opening part `p` of the groups `gs`, its outputs registered zero** (`ResZeroAt` at
 `RecOpening`): the unit `RecOpening.check` accepted for part `p` at `sh`, its row ports registered bits of `w` at

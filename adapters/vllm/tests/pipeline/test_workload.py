@@ -68,8 +68,8 @@ def test_every_workload_file_is_a_row_config_that_round_trips(p):
 
 
 def test_a_row_outside_workloads_is_the_one_file_of_its_name_in_a_directory_verity_workloads_names(tmp_path, monkeypatch):
-    """A demo keeps its own row beside it (demos/vllm/workloads/), which the integration never names: `row run` finds the
-    row's file through `$VERITY_WORKLOADS`, its Build, Match and Commit read it from the tree root (`row_path`), and a row id with
+    """The served run keeps its own row beside it (adapters/vllm/tools/served_run/workloads/), which the integration never
+    names: `row run` finds the row's file through `$VERITY_WORKLOADS`, its Build, Match and Commit read it from the tree root (`row_path`), and a row id with
     two files is refused."""
     doc = json.loads((WORKLOADS / f"{GLM}.json").read_text())
     (tmp_path / "a").mkdir()

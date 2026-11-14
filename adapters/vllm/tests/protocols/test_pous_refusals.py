@@ -15,8 +15,10 @@ from typing import Any
 
 import pytest
 import torch
-from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.runtime.stream import Side
+from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period, setup
+from verity.runtime.stream import Side
 
 from tests import fake_vllm
 from tests.protocols.test_pous_option import (
@@ -36,6 +38,7 @@ from tests.protocols.test_pous_option import (
 )
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
+from verity.protocols.accounting.pous.prover import weight_store as ws
 from verity_vllm.protocols import pous
 from verity_vllm.protocols.interface import Target
 
@@ -47,13 +50,13 @@ TOOLS = {"pous-run-protocol": "RUN", "pous-setup": "SETUP"}
 def toy(monkeypatch):
     """`test_pous_option`'s model at its small point, its stand-in linear type the option's."""
     monkeypatch.setattr(pous, "linear_types", lambda: (Linear,))
-    monkeypatch.setattr(pous, "_base", lambda scheme: SMALL)
+    monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
     return Model()
 
 
 @pytest.fixture
 def packages():
-    """Three package names for `pous._package`, each out of ``sys.modules`` again after the test, with its modules."""
+    """Three package names for `weight_store.load_package`, each out of ``sys.modules`` again after the test, with its modules."""
     names = ("pous_package_plain", "pous_package_with_init", "pous_package_broken")
     yield names
     for loaded in [m for m in sys.modules if m.split(".")[0] in names]:
@@ -148,7 +151,7 @@ def test_weights_on_two_devices_are_refused_before_anything_is_committed(toy):
 
 
 def test_an_encoder_whose_blocks_do_not_hold_w_is_caught_at_a_segments_first_block_and_leaves_nothing(toy, monkeypatch):
-    encoder = pous._p2("store").CpuEncoder
+    encoder = ws.p2_module("store").CpuEncoder
     encode = encoder.encode
     monkeypatch.setattr(encoder, "encode", lambda self, s, w_seg: encode(self, s, bytes(len(w_seg))))   # codewords of zeros
     before = hooks.live()
@@ -168,15 +171,15 @@ def test_the_stores_package_loads_from_its_files_with_or_without_an_init_and_nev
     (tmp_path / broken / "__init__.py").write_text("raise RuntimeError('half an init')\n")
 
     for name in (plain, with_init):
-        pous._package(name, tmp_path / name)
+        ws.load_package(name, tmp_path / name)
         module = sys.modules[name]
         assert importlib.import_module(f"{name}.reader").VALUE == 5                    # its modules import one another by its name
         assert list(module.__path__) == [str(tmp_path / name)]
-        pous._package(name, tmp_path / "nowhere")                                      # loaded once: a second call reads no file
+        ws.load_package(name, tmp_path / "nowhere")                                      # loaded once: a second call reads no file
         assert sys.modules[name] is module
     assert sys.modules[with_init].FROM_INIT == 1 and not hasattr(sys.modules[plain], "FROM_INIT")
     with pytest.raises(RuntimeError, match="half an init"):
-        pous._package(broken, tmp_path / broken)
+        ws.load_package(broken, tmp_path / broken)
     assert broken not in sys.modules and sys.path == path
 
 
@@ -196,13 +199,13 @@ def test_the_layers_pous_encodes_are_vllms_linear_layers_that_hold_a_weight(monk
             yield from self.modules.items()
 
     fake_vllm.install(monkeypatch).set("vllm.model_executor.layers.linear:LinearBase", LinearBase)
-    monkeypatch.setattr(pous, "_base", lambda scheme: SMALL)
+    monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
     assert pous.linear_types() == (LinearBase,)
     weight = torch.arange(32, dtype=torch.int8).reshape(2, 16)
     net = Net({"proj": LinearBase(weight), "bare": LinearBase(None), "other": Linear(weight.clone(), torch.ones(2, 1))})
     got = pous.commit_weights(P2, Target(model=net, context=_ctx(ENTRY)))
     assert (got["tensors"], got["bytes"]) == (1, 32)
-    layout = pous._layout(P2, {"proj": weight})
+    layout = ws.layout_of(P2, {"proj": weight})
     assert got["commitment"] == setup.commit(layout.params, layout.pack({"proj": weight.numpy().tobytes()})).hex()
 
 
@@ -211,7 +214,7 @@ def _lean(monkeypatch, tmp_path):
     `period.serve` answering for the tool named ``RUN`` as ``say["run"]`` makes of the Python's answer, and for any other
     as ``say["setup"]``.  Returns ``say``, the Python's runs and what was served, each in order."""
     session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
-    monkeypatch.setattr(CS, "session", session)
+    monkeypatch.setattr(CR, "session", session)
     audit, runs, served = period.audit, [], []
     say: dict[str, Any] = {"run": lambda answer: answer | {"reason": "the Lean's words"}, "setup": {"verdict": "accept"}}
 
@@ -234,7 +237,12 @@ def _subprotocol(opt, tmp_path, n):
     directory, out = _period_dir(tmp_path, n), tmp_path / f"out{n}"
     described = json.loads((directory / "period.json").read_text()) | {"tools": TOOLS}
     (directory / "period.json").write_text(json.dumps(described))
-    got = opt.leg(directory, NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+
+    def side_of(doc, node, key, local, what=None):
+        assert (key, what) == ("pous", None), "PoUS's side is period.json's challenger.pous"
+        return Side.of(doc, node, key, local, what)
+
+    got = opt.leg(directory, NODE, out, side_of=side_of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     return got, json.loads((out / "pous.json").read_text())
 
 

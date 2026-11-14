@@ -19,7 +19,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from tests.program.predict import test_steps as S
 from tests.program.predict.test_window_circuit import (

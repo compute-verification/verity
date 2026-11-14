@@ -8,7 +8,7 @@ public import Proofs.Flock.SpotFlock.HeldOf
 `HeldOf.heldOf` takes each template's reference session statement (`Unread.xs`). This module builds them from what the
 two-stage form's check holds: template `t`'s member (`memberOf`: the first of the interior audit's members whose
 circuit is the one the params name for `t`), its circuit and public files on the blobs, and the pinned lookup tables the
-blobs hold (`OneStageZk.tablesOf`), as the per-member form's `flock-verify verify --zk` reads them
+blobs hold (`OneStageZk.tablesOf`), as the per-member form's `verity-verify-proof verify --zk` reads them
 (`OneStageZk.inputsOf`: the statement `verity/flock-circuit` under `--zk`, one table, the member's partition object and
 program), at no sample and with the member's registered reads (`memberRaw`). A session statement of the member is this
 statement at its record's sample and its own public file and registered reads, which `pinOk` blanks.
@@ -28,7 +28,7 @@ namespace SpotFlock.HeldOf
 open Claims
 open Lean (Json)
 
-/-- **A member's session statement**, as `flock-verify verify --zk` reads it in the per-member form, at the circuit
+/-- **A member's session statement**, as `verity-verify-proof verify --zk` reads it in the per-member form, at the circuit
 and public files `circuit` and `pub`, the lookup tables `tables`, the sample `draw` and the registered reads
 `registered`. -/
 def memberRaw (m : Spot.OneStageZk.Member) (circuit pub : ByteArray) (tables : List (String × ByteArray))

@@ -16,6 +16,8 @@ set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 export D=verity/protocols/accounting/pouw/prover/kernels/edited_gemm
+# the references import their siblings as verity's modules, from the clone's root
+export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 export BIN=$(mktemp -d /tmp/apv.XXXXXX)
 trap 'rm -rf "$BIN"' EXIT
 PY=${CG_PYTHON:-python3}
