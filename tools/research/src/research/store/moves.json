@@ -2415,6 +2415,11 @@
       "paths": {
         "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/dashboard/": "infra/dashboard/"
+      }
     }
   ]
 }
