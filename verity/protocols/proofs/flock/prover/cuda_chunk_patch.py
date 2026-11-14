@@ -6,7 +6,8 @@ The NTT's shared-memory chunks (ntt_f128.cuh) run on ntt_tile.cuh's kernel, up t
 Run from the flock checkout after `git apply` of flock-link-b684b12.patch and flock-gpu-link-b684b12.patch and after
 copying verity/protocols/proofs/flock/prover/live to crates/flock-live. It applies the CUDA half of cuda_live_patch.py (the live hook in
 challenger.hpp, pow_grind.cuh and prove_ffi.cu; its gpu_roundtrip.rs half needs flock-128's harness and is skipped),
-copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, has the device arena take small blocks from its top,
+copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, names prove_ffi.cu's anonymous namespace, has the
+device arena take small blocks from its top,
 moves zerocheck round 1's GF(2^8) products from its shared-memory log tables onto clmad on sm_90
 (zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and CUDA (default /usr/local/cuda-13.3), without
 upstream's -lineinfo (`--lineinfo` keeps it).
@@ -34,6 +35,14 @@ s = pf.read_text()
 if '#include "prove_chunk.cuh"' not in s:
     s = s.rstrip("\n") + '\n\n#include "prove_chunk.cuh"\n'
     print("prove_ffi.cu includes prove_chunk.cuh")
+# cudafe++ names an anonymous namespace _GLOBAL__N__<hash>_..., the hash over nvcc's options and the source's absolute path,
+# which a module id file passed with -Xcudafe doesn't override, so the cubin's symbols would differ by where the tree sits.
+# A named namespace, with a using-directive standing in for the anonymous one's, leaves lookup unchanged.
+if "namespace {\n" in s:
+    assert s.count("\nnamespace {\n") == 1 and s.count("\n} // namespace\n") == 1, "prove_ffi.cu's anonymous namespace changed"
+    s = s.replace("\nnamespace {\n", "\nnamespace flock_ffi {\n")
+    s = s.replace("\n} // namespace\n", "\n} // namespace flock_ffi\nusing namespace flock_ffi;\n")
+    print("prove_ffi.cu: its anonymous namespace named flock_ffi")
 # the device arena takes blocks under 64 MiB from the top of the highest free block that holds them and larger ones first fit
 # from the bottom, so the small buffers one phase leaves live don't split the space the next phase's large ones need
 first_fit = """        for (auto block = free_.begin(); block != free_.end(); block++) {
