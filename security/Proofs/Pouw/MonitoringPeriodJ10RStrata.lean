@@ -1,6 +1,6 @@
 module
 
-public import Properties.Pouw.PeriodJ10RStrata
+public import Properties.Pouw.MonitoringPeriodJ10RStrata
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -33,12 +33,12 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Compose.ComposeMonitoringPeriod
-import Proofs.Pouw.PeriodJ10R
+import Proofs.Pouw.MonitoringPeriodJ10R
 
 /-!
-# Proof of `H1J10RCheckedCreditPeriodStrata`
+# Proof of `H1J10RCheckedCreditMonitoringPeriodStrata`
 
-At each stratum `s ∈ S`, what `Proofs.Pouw.PeriodJ10R` applies to its one stratum:
+At each stratum `s ∈ S`, what `Proofs.Pouw.MonitoringPeriodJ10R` applies to its one stratum:
 `Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
 (`pathsAt`). Its joint soundness comes from `StrataSampleIsCoin`'s half that puts stratum `s`'s sampled proof blocks among the
 proof blocks `Credit.window`'s sample demands, with its `TileServiceSound` (`jointSound_strata`); its pins from the period's
@@ -50,9 +50,9 @@ the summed credit has a stratum whose own fall short, so the union bound gives t
 
 @[expose] public section
 
-namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs
+namespace Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs
 
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.PeriodJ10RStrata
+open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs Properties.Pouw.MonitoringPeriodJ10RStrata
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## Stratum `s`'s view, window by window -/
@@ -85,8 +85,8 @@ theorem atStratum_perm {C : Type} {r m nB mB : ℕ} (h : r = m) (σ : Fin nB →
 /-- **The period's salt is its live coin on stratum `s`'s view.** -/
 theorem saltAt {C : Type} {r nB mB n : ℕ} (h : r = 1) (hr : 0 < r) (σ : Fin nB → Fin mB) (s : Fin mB)
     (ws : CreditExecutionPhases (StrataCoin C 1 σ) n) {enc : C → ByteArray}
-    (hs : Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc) :
-    Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf (creditAt h σ s ws)) enc := by
+    (hs : Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc) :
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin hr (saltOf (creditAt h σ s ws)) enc := by
   intro y w
   show saltOf ws ((pathsAt C h σ s n).symm y) w = _
   rw [hs, coinAt_view h σ s y w, coinAt_atStratum_fst h σ s _ hr Nat.one_pos]
@@ -131,7 +131,7 @@ theorem prefixLen_symm {C : Type} {r m nB mB n : ℕ} (h : r = m) (σ : Fin nB �
 /-! ## One stratum's bound, and the union -/
 
 /-- **Stratum `s`'s bound on the period's coins**: `CircuitCreditMonitoringPeriod` at stratum `s`'s run, as
-`Proofs.Pouw.PeriodJ10R` applies it, carried from the view to the period's coins. -/
+`Proofs.Pouw.MonitoringPeriodJ10R` applies it, carried from the view to the period's coins. -/
 theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ}
@@ -143,7 +143,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
     (Pl : Play (Coin C (Rest σ s) Cd.rounds σ s) n K T L U)
     (folded : Paths (Coin C (Rest σ s) Cd.rounds σ s) n → ℝ) (ρ δs δbind δks : ℝ)
     (hDraw : StrataSampleIsCoin σ k hk S unitOf ws)
-    (hSalt : Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc)
+    (hSalt : Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc)
     (hS : Scope Sc Cd δs) (hρ : 0 < ρ) (hρ1 : ρ ≤ 1)
     (hρN : ∀ t : Fin (tileCount σ s), ρ * (tileCount σ s) * shareCone Sc Cd (tileCount σ s) t ≤ 1)
     (hwmax : ∀ j, stageShare (tileStage Cd (tileCount σ s)) (shareCone Sc Cd (tileCount σ s)) j ≤ 1)
@@ -182,9 +182,9 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
       creditPrefix Sc Cd (tileCount σ s) ((creditAt hM σ s ws).prefixLen y) L 1 1 (j10rRate (k s) ρ) δs)
     (stratumLive_symm Sc Cd hM σ s Wp ws y)
 
-/-- **`H1J10RCheckedCreditPeriodStrata`**: each stratum's bound (`stratum_bound`), then the union bound over `S`: on an
+/-- **`H1J10RCheckedCreditMonitoringPeriodStrata`**: each stratum's bound (`stratum_bound`), then the union bound over `S`: on an
 accepted period whose summed fixed words fall short of the summed credit, some stratum's fall short of its own. -/
-theorem h1J10RCheckedCreditPeriodStrata : H1J10RCheckedCreditPeriodStrata := by
+theorem h1J10RCheckedCreditMonitoringPeriodStrata : H1J10RCheckedCreditMonitoringPeriodStrata := by
   intro ι K T L U C V _ _ _ _ _ _ nB mB σ k hk S unitOf Sc Cd n hn hN hr hM hKd ws opened enc place tile Wp Pl folded
     ρ δs δbind δks _hReg hDraw hSalt hS hρ hρN hwmax hlk hG hDD hPre hMoved hServ hLucks hUF
   calc _ ≤ prob (fun x : Paths (StrataCoin C 1 σ) n => ∃ s ∈ S, (Pl s).accepts (pathsAt C (hM s) σ s n x) ∧
@@ -209,4 +209,4 @@ theorem h1J10RCheckedCreditPeriodStrata : H1J10RCheckedCreditPeriodStrata := by
           (hρ s hs).2 (hρN s hs) (hwmax s hs) (hlk s hs) (hG s hs) (hDD s hs) (hPre s hs) (hMoved s hs)
           (hServ s hs) (hLucks s hs) (hUF s hs)
 
-end Properties.Pouw.PeriodJ10RStrata.SecurityProofs
+end Properties.Pouw.MonitoringPeriodJ10RStrata.SecurityProofs

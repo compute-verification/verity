@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pouw.Period.Honest
+public import Proofs.Pouw.MonitoringPeriod.Honest
 public import Proofs.Pouw.RelativeSecurity
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,13 +40,13 @@ import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# `H1CheckedCreditPeriod`'s witnesses
+# `H1CheckedCreditMonitoringPeriod`'s witnesses
 
-The honest and nontrivial witnesses of `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod`, both at one
-instance: H1's honest live-salt period (`Properties.Pouw.Period.Witnesses`, `Proofs.Pouw.Period.Honest`) of `n = 64`
+The honest and nontrivial witnesses of `Properties.Pouw.MonitoringPeriod.SecurityProofs.h1CheckedCreditMonitoringPeriod`, both at one
+instance: H1's honest live-salt period (`Properties.Pouw.MonitoringPeriod.Witnesses`, `Proofs.Pouw.MonitoringPeriod.Honest`) of `n = 64`
 windows at `δ_s = 1%`, `δ_bind = δ_ks = 0`.
 
-* `h1CheckedCreditPeriod_honest`: every premise of `H1CheckedCreditPeriod` holds there (`HonestH1.h1_meets`), with the
+* `h1CheckedCreditPeriod_honest`: every premise of `H1CheckedCreditMonitoringPeriod` holds there (`HonestH1.h1_meets`), with the
   period's play accepted exactly where the deployed check (`PouwCheck.protocol.check` at `Accept.h1Params`) accepts
   every window (`HonestH1.checkedPlay`), which it does on every path; the accepted prefix is the whole period and its
   live words are `128·64`.
@@ -58,9 +58,9 @@ windows at `δ_s = 1%`, `δ_bind = δ_ks = 0`.
 
 @[expose] public section
 
-namespace Properties.Pouw.Period.SecurityProofs.HonestH1
+namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
-open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs Properties.Pouw.Period.SecurityProofs.Accept
+open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
@@ -105,16 +105,16 @@ theorem prob_true {Ω : Type} [Fintype Ω] (a : Ω) : prob (fun _ : Ω => True) 
   rw [prob_eq_card, Finset.filter_true_of_mem fun _ _ => trivial, Finset.card_univ]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
-end Properties.Pouw.Period.SecurityProofs.HonestH1
+end Properties.Pouw.MonitoringPeriod.SecurityProofs.HonestH1
 
-namespace Properties.Pouw.Period.SecurityProofs
+namespace Properties.Pouw.MonitoringPeriod.SecurityProofs
 
-open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs.Accept HonestH1
+open Properties.Pouw.MonitoringPeriod Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept HonestH1
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
-/-- **The honest witness of `h1CheckedCreditPeriod`**: H1's honest live-salt period of `64` windows meets every premise
-of `H1CheckedCreditPeriod`, in its order, at its numbers (`N_p = 144`, `K_d = 24`, one round, `ρ = 8/9`, `w_max = 1`,
+/-- **The honest witness of `h1CheckedCreditMonitoringPeriod`**: H1's honest live-salt period of `64` windows meets every premise
+of `H1CheckedCreditMonitoringPeriod`, in its order, at its numbers (`N_p = 144`, `K_d = 24`, one round, `ρ = 8/9`, `w_max = 1`,
 lucks `7/8` and `½`), `δ_s = 1%` and `δ_bind = δ_ks = 0`, its play accepted where the deployed check accepts every
 window (`checkedPlay`). The check accepts every window on every path, so the play accepts on every path, the accepted
 prefix is the whole period and its live words are `128·64`. -/
@@ -149,7 +149,7 @@ theorem h1CheckedCreditPeriod_honest :
   exact ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
     fun hW x _ => hUF hW x trivial, hAcc, fun x => hAcc x, hPrefix, fun x => by rw [hLive x]; norm_num⟩
 
-/-- **The nontrivial witness of `h1CheckedCreditPeriod`**: its conclusion fails at the verifier that accepts everything.
+/-- **The nontrivial witness of `h1CheckedCreditMonitoringPeriod`**: its conclusion fails at the verifier that accepts everything.
 On H1's honest windows of `64` at the deployed check's verdict, at `δ_s = 1%` and `δ_bind = δ_ks = 0`, the play that
 accepts every path and fixes no word (`acceptAll`) has fewer fixed words than the credit on every path, since the
 check accepts all `64` windows, their live words are `128·64` and `ε(64) < 1` (`creditPrefix_pos`). So the event has
@@ -169,4 +169,4 @@ theorem h1CheckedCreditPeriod_nontrivial :
   rw [prob_true (Paths.const (Paths.const true _, (Equiv.refl _, ())) 64)] at hall
   norm_num at hall
 
-end Properties.Pouw.Period.SecurityProofs
+end Properties.Pouw.MonitoringPeriod.SecurityProofs

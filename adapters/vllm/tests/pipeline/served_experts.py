@@ -58,7 +58,7 @@ CAP = 48
 REPO, REV = "test/fp8-moe-served", "abc"
 KEY = bytes(range(32))
 REQUEST = "r0"
-LAW = "stratified:1"
+DESIGN = "stratified:1"
 LABEL = "fp8-moe-cpu"
 EPS = '{"f64":"0x1.0c6f7a0b5ed8dp-20"}'
 #: a registered tensor's dtype as the weights tree names it, and a committed plane's bytes, by element width
@@ -257,7 +257,7 @@ def partition() -> dict[str, Any]:
         if len(fused) != 1:
             raise ValueError(f"{spec}: {len(fused)} fused blocks of {BLOCKS[proj]} rows bind, not one")
         tmpls += [descriptor_id(read(E, 2 * K // G)), fused[0]]
-    return {"templates": tmpls, "law": LAW, "scope": {"op_path_prefix": OP}, "chunk_cap": dict.fromkeys(tmpls, CAP)}
+    return {"templates": tmpls, "law": DESIGN, "scope": {"op_path_prefix": OP}, "chunk_cap": dict.fromkeys(tmpls, CAP)}
 
 
 def commit(root: Path, *, seed: int = 23) -> dict[str, Any]:

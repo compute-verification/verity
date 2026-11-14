@@ -1,6 +1,6 @@
 module
 
-public import Properties.Pouw.PeriodJ10R
+public import Properties.Pouw.MonitoringPeriodJ10R
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # A period's credit over several tile strata of the sampling block, J10-R
 
-`Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` over a finite set `S` of the sampling block's tile strata in place
+`Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod` over a finite set `S` of the sampling block's tile strata in place
 of its one stratum `s_T`. Each stratum `s ∈ S` is one contraction `K` of the window's layout (H1's served layout has
 two, 16,384 and 65,536), with its own population `N_s = |stratum σ s|` (`tileCount σ s`), its own sample `k s`, registered circuit
 `Cd s`, live share `ρ s` and rate `Λ_s = j10rRate (k s) (ρ s)`, so its own `ε_s(j)`. The conclusion sums the strata:
@@ -56,13 +56,13 @@ window `Credit.window` refuses.
 * `StrataSampleIsCoin`: on every accepted window, the proof blocks `Credit.window`'s sample demands (`creditDrawn`) are the window
   proof blocks of the tile strata's coordinates of the block's sample, `k s` of stratum `s` for each `s ∈ S`.
 * `stratumLive`: stratum `s`'s live words in the windows before the first refusal.
-* `H1J10RCheckedCreditPeriodStrata`: the statement.
+* `H1J10RCheckedCreditMonitoringPeriodStrata`: the statement.
 
 *Period-wide and per stratum.* A window has one registration, one salt, one sample and one verdict, whatever its strata,
 so these are period-wide, stated once on the period's coins (`StrataCoin`):
 * `Credit.window`'s inputs (`ws`) and so the accepted prefix, which every stratum's credit reads;
 * `RegisteredBeforeDraw`, of `ws`;
-* `Properties.Pouw.Period.SaltIsLiveCoin`, of the window's one salt: every proof block's noise, in every stratum, reads it
+* `Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`, of the window's one salt: every proof block's noise, in every stratum, reads it
   through its call's `seed_c`;
 * `StrataSampleIsCoin`, in place of `TileSampleIsCoin` (below);
 * the service's openings `opened` (of window proof blocks, whatever their stratum), the salt's encoding `enc`, the scheme
@@ -93,16 +93,16 @@ J10-R's proof block on `PouwH1Tile_v5` whose proof blocks are at one or more `K`
 every stratum's game reads the window's one round coin and the prover adapts across strata, so the strata's failure
 events are not independent, and the union bound, `∑_{s ∈ S}` of the one-stratum bounds, is what holds.
 
-The proof is `Proofs.Pouw.PeriodJ10RStrata`'s: at each stratum, what `Proofs.Pouw.PeriodJ10R` applies
+The proof is `Proofs.Pouw.MonitoringPeriodJ10RStrata`'s: at each stratum, what `Proofs.Pouw.MonitoringPeriodJ10R` applies
 (`CircuitCreditMonitoringPeriod` at `tileRun`), with the stratum's joint soundness from `StrataSampleIsCoin` and its
 `TileServiceSound`, carried to the period's coins by `pathsAt`, then the union bound.
 -/
 
 @[expose] public section
 
-namespace Properties.Pouw.PeriodJ10RStrata
+namespace Properties.Pouw.MonitoringPeriodJ10RStrata
 
-open Properties.Pouw.PeriodJ10R
+open Properties.Pouw.MonitoringPeriodJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
 /-! ## The sampling block's sample and stratum `s`'s view of it -/
@@ -216,12 +216,12 @@ every scheme `Sc` and period of at most `n ≥ 1` windows, each window's `Credit
 period's coins (`ws`), over a finite set `S` of the sampling block's tile strata of `σ`, each `s ∈ S` with its own
 registered circuit `Cd s` (`(Cd s).units ≤ N_s = |stratum σ s|`, one round a window), sample `k s ≥ 1`, live share
 `0 < ρ s ≤ 1` and rate `Λ_s = j10rRate (k s) (ρ s)`: under the period-wide premises `RegisteredBeforeDraw`,
-`StrataSampleIsCoin` and `SaltIsLiveCoin`, and at each `s ∈ S` the premises `H1J10RCheckedCreditPeriod` takes at its one
+`StrataSampleIsCoin` and `SaltIsLiveCoin`, and at each `s ∈ S` the premises `H1J10RCheckedCreditMonitoringPeriod` takes at its one
 stratum, at stratum `s`'s view (`layerAt`, `runAt`, `relAt`), with `TileSampleIsCoin` replaced by `StrataSampleIsCoin`,
 except with probability `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s)))` an accepted period's fixed words summed over
 `S` are at least the sum over `S` of `(1 − ε_s(j))₊` of stratum `s`'s live words in the windows before the first
 refusal, `ε_s` at the stratum's `N_s`, `Cd s`, `Λ_s` and `δ_s(s)`. -/
-def H1J10RCheckedCreditPeriodStrata : Prop :=
+def H1J10RCheckedCreditMonitoringPeriodStrata : Prop :=
   ∀ {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Nonempty V]
     {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Finset (Fin mB)) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Fin mB → Declared ι) {n : ℕ} (_hn : 0 < n)
@@ -234,7 +234,7 @@ def H1J10RCheckedCreditPeriodStrata : Prop :=
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U)
     (folded : (s : Fin mB) → Paths (Coin C (Rest σ s) (Cd s).rounds σ s) n → ℝ) (ρ δs δbind δks : Fin mB → ℝ),
     RegisteredBeforeDraw ws → StrataSampleIsCoin σ k hk S unitOf ws →
-    Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc →
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc →
     (∀ s ∈ S, Scope Sc (Cd s) (δs s)) →
     (∀ s ∈ S, 0 < ρ s ∧ ρ s ≤ 1) →
     (∀ s ∈ S, ∀ t : Fin (tileCount σ s), ρ s * (tileCount σ s) * shareCone Sc (Cd s) (tileCount σ s) t ≤ 1) →
@@ -259,4 +259,4 @@ def H1J10RCheckedCreditPeriodStrata : Prop :=
           (stratumLive Sc (Cd s) (hM s) σ s (Wp s) ws x) 1 1 (j10rRate (k s) (ρ s)) (δs s)) ≤
       ∑ s ∈ S, (δs s + n * (δbind s + δks s))
 
-end Properties.Pouw.PeriodJ10RStrata
+end Properties.Pouw.MonitoringPeriodJ10RStrata

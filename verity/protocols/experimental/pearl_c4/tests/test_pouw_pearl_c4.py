@@ -1000,7 +1000,7 @@ def lifecycle(s: F.PearlC4, real=20, salt_key=None):
     return epoch, prover, prover.prove(epoch, {3: rows_a}), rows_a, rows_b
 
 
-def test_the_work_law_audits_pearl_c4():
+def test_the_work_sampling_design_audits_pearl_c4():
     s = V.scheme("nvfp4", True)
     epoch, prover, tr, rows_a, rows_b = lifecycle(s)
     splits = {9: W.Split(K)}
@@ -1080,7 +1080,7 @@ def test_h3_draws_each_rows_e_a_from_its_own_digest():
     assert s.encode(moved, s.noise(moved), a, b, tile).e_a == ops.e_a and s.noise(moved).seed_a != noise.seed_a
 
 
-def test_the_work_law_audits_pearl_c4_under_h3():
+def test_the_work_sampling_design_audits_pearl_c4_under_h3():
     """The work sampling design on `PearlC4(hashing="h3")`: R1's declaration forms each A row under its own seed, the audit accepts,
     and h0's verifier refuses the transcript's openings (another tree hash).  Each row's seed reads the hiding roots, so
     whether a row passes -h3's row cap changes with the salts: under this salt key none is over it, and the honest

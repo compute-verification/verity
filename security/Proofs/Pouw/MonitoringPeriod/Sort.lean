@@ -18,7 +18,7 @@ the proof of `Verity.QSort.ByKey.qsort_sorted` (a sort by a `Nat` key) at string
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 
-namespace Properties.Pouw.Period.SecurityProofs.Sort
+namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort
 
 theorem le_of_lt' {a b : String} (h : a < b) : a ≤ b := String.not_lt.1 (String.lt_asymm h)
 
@@ -259,4 +259,4 @@ theorem qsort_of_sorted {as : Array String} (h : as.toList.Pairwise (· < ·)) :
   List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => String.le_antisymm h1 h2) (qsort_sorted as)
     (h.imp le_of_lt') (Properties.Poub.qsort_toList_perm as _)
 
-end Properties.Pouw.Period.SecurityProofs.Sort
+end Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort

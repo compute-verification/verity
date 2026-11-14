@@ -1,6 +1,6 @@
 module
 
-public import Properties.Pouw.PeriodJ10R
+public import Properties.Pouw.MonitoringPeriodJ10R
 public import Definitions.Pouw.TS.Hashed
 public import Proofs.Compose.Compose.BindingOfECR
 public import Proofs.Compose.RemoteHeld.Binding
@@ -29,7 +29,7 @@ open terms are explicit.
   `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(finder) + κ)`, and under `ecr/sha-512` at the finder's `q` calls
   `SampledBindingOfFork` gives `Pr[MovedIn w] ≤ |L|·√(q/2^256 + κ)`.
 * **At J10-R** (`tile_binding`): `tileLayer`'s `BindingAt` at that bound, the binding premise of
-  `H1J10RCheckedCreditPeriod`, for any relation and rightness, since `MovedIn` reads neither.
+  `H1J10RCheckedCreditMonitoringPeriod`, for any relation and rightness, since `MovedIn` reads neither.
 * **At every period** (`Pouw.SecurityProofs.MonitoringPeriodBindingPerProver`, `Pouw.Guarantees.MonitoringPeriodBindingPerProver`): the
   same bound at `Declared.monitoringPeriodLayer` for any circuit and outcomes, at `L` the period's positions
   (`Declared.monitoringPeriodPositions`, which hold every slot: `monitoringPeriodPositions_mem`). Its honest witness is `oneMonitoringPeriod` under
@@ -42,7 +42,7 @@ position's leaf, and none fixes a position's verifier, root and rank by its cut.
 
 @[expose] public section
 
-namespace Properties.Pouw.PeriodJ10R.SecurityProofs.Binding
+namespace Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.Binding
 
 open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 
@@ -190,7 +190,7 @@ end Layer
 
 /-- **J10-R's binding premise from its hashed openings**: for any relation and rightness, the period's proofs under
 `Credit.window` (`tileLayer`) bind at `δ_bind = |L|·√(q/2^256 + κ)` (`BindingAt`, the binding premise of
-`H1J10RCheckedCreditPeriod`) when `L` holds every round's slots and the fork finder at `L` and `q` calls meets
+`H1J10RCheckedCreditMonitoringPeriod`) when `L` holds every round's slots and the fork finder at `L` and `q` calls meets
 `ecr/sha-512`, `κ` the unverified and split terms. -/
 theorem tile_binding {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] [Nonempty V] (Cd : Declared ι) {nB mB n : ℕ}
     (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
@@ -321,12 +321,12 @@ theorem honest_committed (x : OneCoins) (w : Fin 1) : honestLayer.committed x (w
 
 end OneMonitoringPeriod
 
-end Properties.Pouw.PeriodJ10R.SecurityProofs.Binding
+end Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.Binding
 
 namespace Pouw.SecurityProofs
 
 open Accounting.Compose Accounting.Compose.PeriodBinding Accounting.TS Pouw.RelativeSecurity
-  Properties.Pouw.PeriodJ10R.SecurityProofs.Binding
+  Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.Binding
 
 /-- **A period's binding per prover** (`movedIn_le_sqrt` at the period's positions). -/
 theorem MonitoringPeriodBindingPerProver : Pouw.Guarantees.MonitoringPeriodBindingPerProver := by

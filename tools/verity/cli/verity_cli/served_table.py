@@ -86,7 +86,7 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 
 # --- what each component and the workload declare -------------------------------------------------------------------
 
-def _law(law: str, params: Mapping[str, Any]) -> None:
+def _design(law: str, params: Mapping[str, Any]) -> None:
     """The served window's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
     by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
     strata = parse_strata_rate(law)
@@ -148,7 +148,7 @@ def _named(manifest: Manifest, names: Mapping[str, str]) -> tuple[tuple[Role, ..
 _P2_PARTIES, _P2_CHANNELS = _named(P2.MANIFEST, {P2.VERIFIER: BANDWIDTH_VERIFIER})
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), law=_law, default_law="rate:1/3481648"),
+              needs=frozenset({"windows"}), law=_design, default_sampling_design="rate:1/3481648"),
     Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),

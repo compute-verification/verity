@@ -1,10 +1,10 @@
 module
 
-public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.MonitoringPeriod.Sort
 public import Proofs.Properties.Pouw.Check
 public import Proofs.Properties.Pouw.Draw
 public import Properties.Pouw.Check
-public import Properties.Pouw.Period.Witnesses
+public import Properties.Pouw.MonitoringPeriod.Witnesses
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 import all Init.Data.Ord.String
@@ -24,17 +24,17 @@ pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1
 the profile the rule fixes (`h1Evidence`), and publishes level 39's work, `K′ = 24` and those units. `numbers_h1`: every
 window the check accepts at those parameters, registered at level 39, publishes `N = 144` and `K′ = 24`, the population
 and sample size `SampleIsCoin` reads at H1's instance. The numbers themselves (`h1Params`, `h1Reg`, `h1Evidence`) are
-`Properties.Pouw.Period.Witnesses`'.
+`Properties.Pouw.MonitoringPeriod.Witnesses`'.
 -/
 
 @[expose] public section
 
-namespace Properties.Pouw.Period.SecurityProofs.Accept
+namespace Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept
 
 open PouwCheck
 open Lean (Json)
 open PouwWindow (Work Sampling)
-open Properties.Pouw.Period.SecurityProofs.Sort
+open Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort
 
 /-! ## The registration's keys -/
 
@@ -158,4 +158,4 @@ theorem numbers_h1 (context : String) (c : ExecutionPhaseCommitmentRecord) (e : 
   have hs' : f.sampling = h1Fixed.sampling := Except.ok.inj (hs.symm.trans h2)
   exact ⟨by rw [hw']; rfl, by rw [hs']; rfl⟩
 
-end Properties.Pouw.Period.SecurityProofs.Accept
+end Properties.Pouw.MonitoringPeriod.SecurityProofs.Accept

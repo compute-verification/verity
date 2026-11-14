@@ -109,7 +109,7 @@ class Component:
     params: Callable[[Mapping[str, Any]], dict[str, Any]] = _no_params
     default_params: Mapping[str, Any] = field(default_factory=dict)
     law: Callable[[str, Mapping[str, Any]], None] | None = None
-    default_law: str | None = None
+    default_sampling_design: str | None = None
 
 
 @dataclass(frozen=True)
@@ -403,7 +403,7 @@ def new(workload: str, protocols: Sequence[str], components: Mapping[str, Compon
         parties, channels = declared(listed, w)
     except ValueError as e:
         raise Refused("declaration", str(e)) from None
-    law = next((d for d in (c.default_law for c in listed) if d and _runs_under(d, listed)), "")
+    law = next((d for d in (c.default_sampling_design for c in listed) if d and _runs_under(d, listed)), "")
     cfg = {"format": FORMAT, "protocols": list(protocols), "workload": {"name": workload},
            "service": {"law": law}, "program": {"commit": commit},
            "party": [{"name": p, "machine": machine, "principal": r.principal} for p, r in parties.items()],

@@ -3,7 +3,7 @@ module
 public import Proofs.Compose.ComposeMonitoringPeriod
 public import Proofs.Compose.Compose.SplitRateClosed
 public import Proofs.Accounting.Lemmas.Compose
-public import Properties.Pouw.Period.Witnesses
+public import Properties.Pouw.MonitoringPeriod.Witnesses
 
 /-!
 # An honest period meets `CircuitWorkMonitoringPeriod`'s premises
