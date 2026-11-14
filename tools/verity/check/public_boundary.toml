@@ -88,13 +88,14 @@ vllm = ["adapters/vllm", "verity/protocols/accounting/certifier/verifier/advice.
 shared = [
     "verity/commitments/{randomness,lms}",
     "tools/difftest", "verity/circuits/difftest",
-    # the reporting grid every monitoring-period report states: its periods and δs
-    "verity/protocols/reporting.py",
+    # the reporting grid every monitoring-period report states, its periods and δs, beside the manifests
+    "verity/protocol.py",
     "tools/config",
     # the hardware cards, the data sheets' numbers, which the integration's served device reads, and the node files, which
-    # say which cards a kind of node carries and what its host holds (the Lean tables' test reads Accounting's B200 sheet
-    # and the node files' test reads the Site, so each stays private)
-    "verity/hardware/{__init__.py,pyproject.toml,README.md,cards.py,nodes.py,tests/test_cards.py}",
+    # say which cards a kind of node carries and what its host holds; their readers are the Site's file's (the Lean
+    # tables' test reads Accounting's B200 sheet, so it stays private; the node files' test stays private until a
+    # boundary decision exports it)
+    "verity/hardware/{__init__.py,pyproject.toml,README.md,tests/test_cards.py}",
     "hardware/{cards,nodes}",
     # the vLLM endpoint's load generator, which the served run's requests come from
     "demos/vllm/serve_load.py",
@@ -127,12 +128,13 @@ benchmarks = [
     # the CPU reference of the int8 attention's gate, which vLLM's int8 attention tests hold the served kernels to
     "benchmarks/pouw/edited_gemm/{fattn_ref.py,pyproject.toml}",
     # Pearl-C's kernels, which the vLLM integration serves through: `verity_vllm.protocols.pouw.pearl_c.kernel` loads
-    # `run.py`, `fixture.py` and the cubin from the directory its `kernel` setting names (a path the run gives it, which no
-    # import shows: `tests/test_public_boundary.py` holds it), and `pearl_c.grouped` the `grouped.py` beside sm_90a's
-    # `run.py`. With them, what builds each cubin: `build.sh`, the sources it compiles and the gate it runs on the SASS
-    "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,sass_gate.py}",
+    # `run.py` and the cubin from the directory its `kernel` setting names (a path the run gives it, which no import
+    # shows: `tests/test_public_boundary.py` holds it), and `pearl_c.grouped` the `grouped.py` beside sm_90a's `run.py`.
+    # With them, what builds each cubin: `build.sh`, the sources it compiles and the gate it runs on the SASS, and
+    # `ship.sh` and `fixture.py`, the check the cubin is shipped with
+    "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,ship.sh,sass_gate.py}",
     "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
-    "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,sass_gate.py}",
+    "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,ship.sh,sass_gate.py}",
     "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h,debit_sm90.cu}",
     # the -h3 hashing both cubins include, and the wide rows' that sm_90a's does
     "benchmarks/pouw/pearl_c/{hash_h3.cuh,hash_wide.cuh,sha512.cuh}",
@@ -224,10 +226,9 @@ kernel_gates = ["adapters/vllm/tests/engine/{int8_attention_sass,test_int8_atten
 adapters = [
     "adapters/vllm/verity_vllm/protocols/{pous.py,remote_bandwidth}",
 ]
-# vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
+# vLLM's pins of the superseded Definition versions kept so old records replay
 checks = [
-    "adapters/vllm/tools/migrate/superseded_quarantine.py",
-    "adapters/vllm/tests/{migrate/test_superseded_quarantine,program/test_superseded_kept}.py",
+    "adapters/vllm/tests/program/test_superseded_kept.py",
 ]
 # vLLM's tests held to a private oracle: H1's GPU rigs and circuits (`benchmarks/pouw/{h1_prove,hidden_zk,served_h1}`, the
 # live challenger's models and auditor), the int8 step's perplexity bench (`benchmarks/ppl`), and the tests that import them
