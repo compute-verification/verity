@@ -1475,3 +1475,14 @@ def test_a_cancel_after_the_runner_closed_control_cancel_ends_the_run_itself(tmp
     assert sc["why"] == "the runner had recorded the workload's exit before the cancel" and sc["empty"] is True
     assert sc["status_json"] == "not written: its runner is live and writes status.json"
     assert "scope_end" not in json.loads((Path(rd) / "status.json").read_text())
+
+
+def test_a_cancel_request_that_does_not_parse_is_none_and_says_so_but_no_request_is_quiet(tmp_path, capsys):
+    from research.telemetry import scope
+
+    assert scope.cancel_request(tmp_path) is None
+    assert capsys.readouterr().err == ""
+    (tmp_path / scope.CONTROL_CANCEL).parent.mkdir()
+    (tmp_path / scope.CONTROL_CANCEL).write_text('{"grace_s": "soon"}')
+    assert scope.cancel_request(tmp_path) is None
+    assert "is no cancel request (ValueError" in capsys.readouterr().err
