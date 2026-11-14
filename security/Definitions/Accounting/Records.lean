@@ -18,7 +18,7 @@ namespace Accounting
 open Verity Finset
 
 /-- **Each device's record is within its limit `K`**: across the strategy `S`, what device `y` of `cert` places in its
-record cells (`record y`, `Actual.Run.record`) during `[a, b)`, as seen, takes at most `2 ^ K y` values. It is a cap on
+record cells (`record y`, `Actual.Run.record`) during `[a, b)`, as seen, takes at most `2 ^ K y` values. It is a limit on
 the record over every run of the strategy, whatever the developer's hardware sends; a record of a stated format has it
 at its size in bits. -/
 def RecordsWithin {Ω L : Type*} (S : Ω → Actual.Run L) (cert : Finset L) (record : L → Set ℕ) (a b : ℕ)
