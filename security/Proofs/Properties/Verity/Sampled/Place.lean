@@ -23,7 +23,7 @@ A base's `Vocab.place` read off the committed files alone, so a deployed base ca
 
 namespace Verity.Sampled
 
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 /-- **The place a commitment's layout registers for claims position `i`** (`Flock.Bridge.commitDepL`'s `C`, `rows`,
 `c`, `L` and `roots`): the registered port whose root is the position's row's root, as the deployed path check finds it

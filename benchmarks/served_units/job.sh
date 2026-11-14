@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # A served model's proof blocks under Flock --zk on CPUs, each proved by Rust `prove --zk` and verified by the Lean verifier
-# (`flock-verify`). Run from the source tree's root; results go to
+# (`verity-verify-proof`). Run from the source tree's root; results go to
 # $RESEARCH_RUN_DIR/out, scratch to a `mktemp -d` directory the job removes, builds and stagings to $SU_CACHE (kept, keyed by their
 # inputs) or the scratch directory. The builds, the run and the selftest controls are hidden_zk's (its job.sh, sourced):
 #   1. builds flock-circuit twice from Flock b684b12 and verity/protocols/proofs/flock/prover's patches (the proving build; the selftest build, with
-#      seed-injection), the Lean flock-verify from verity/protocols/proofs/flock/verifier, and a venv with numpy and blake3
+#      seed-injection), the Lean verity-verify-proof from verity/protocols/proofs/flock/verifier, and a venv with numpy and blake3
 #   2. per UNIT in SU_UNITS (stage.py's UNITS type, TYPE[:S=V,...]): stage N inputs of its proof block from synthetic values,
 #      bound to their Program and its partition (stage.py's default), one loopback --zk run sampling all N (subset:N) with the
 #      proving build, the selftest build's recorded controls sampled the same way, and the Lean verifier on all of them, each
 #      handed the statement's partition and Program:
 #        honest-own   the honest run                                                              ACCEPT
-#        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
+#        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection, a statement verity-verify-proof
 #                     refuses once every check has passed (`ProvedScope.servedForm`): honest REFUSED for that alone;
 #                     output_row_committed_false (a forged output word, committed and proved), output_claim_false and
 #                     unit_internal_bit_flipped REJECT
@@ -38,7 +38,8 @@ stage_one() {   # stage_one SPEC D O: D holds the proof block's staged files, fr
       echo '{"hit": true, "dir": "'"$S"'"}' > "$O/stage-cache.json"
     else
       rm -rf "$S" && mkdir -p "$S"
-      $TIME "$O/stage.time" bash -c "$(vlimit $STAGE_GB) exec $PY $SU/stage.py $spec $N $S" > "$O/stage.out" 2> "$O/stage.err" || exit 1
+      # quoted: a census name's statics are commas inside braces, which bash -c would brace-expand into one word a static
+      $TIME "$O/stage.time" bash -c "$(vlimit $STAGE_GB) exec $PY $SU/stage.py $(printf '%q ' "$spec" "$N" "$S")" > "$O/stage.out" 2> "$O/stage.err" || exit 1
       cp "$O/stage.time" "$S/stage.time" && touch "$S/.done"
       echo '{"hit": false, "dir": "'"$S"'"}' > "$O/stage-cache.json"
     fi

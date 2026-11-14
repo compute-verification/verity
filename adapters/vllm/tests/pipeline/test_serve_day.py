@@ -11,9 +11,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 from verity import device as ST
-from verity.hardware import registration as G
+from verity.protocols.accounting.registration.verifier import registration as G
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_day as SD
 from verity_vllm.pipeline import serve_h1 as SH
@@ -31,7 +30,7 @@ def _params(tmp: Path) -> Path:
     return p
 
 
-def _opts(tmp: Path, *day: str) -> object:
+def _opts(tmp: Path, *day: str) -> so.Options:
     return cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", str(tmp / "serve"), "--no-commit", *day],
                      environ={})
 
@@ -125,7 +124,12 @@ def test_a_second_declaration_of_the_day_is_refused_by_name_and_leaves_the_log_a
 def test_the_day_reaches_the_tie_through_serve_h1s_arm(tmp_path, monkeypatch):
     """`serve_h1.arm_of` hands the day to the tie it makes for ``--h1-window-commit``, and none without one."""
     made = []
-    monkeypatch.setattr(TIE, "WindowTie", lambda *a, **kw: made.append(kw.get("day")) or SimpleNamespace())
+
+    def tie(*a, **kw):
+        made.append(kw.get("day"))
+        return SimpleNamespace()
+
+    monkeypatch.setattr(TIE, "WindowTie", tie)
     monkeypatch.setattr(SH, "sessions_of", lambda opts: None)
     monkeypatch.setattr(SH, "H1Windows", lambda *a, **kw: SimpleNamespace(ready=lambda: None, tie=kw["tie"]))
     monkeypatch.setattr(SH, "worker", lambda name: None)

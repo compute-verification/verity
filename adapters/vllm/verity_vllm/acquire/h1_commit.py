@@ -16,18 +16,19 @@ from functools import partial
 from types import SimpleNamespace
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.acquire.sources.int8_source import Int8Source
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw.h1.commit import (
+from verity.protocols.accounting.pouw.prover.serving.h1.commit import (
     SCHEME,
     CommitTap,
     Sites,
     site,
 )
-from verity_vllm.protocols.pouw.h1.hooks import expert_names
-from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
+from verity_vllm.protocols.pouw.h1_hooks import expert_names
+from verity_vllm.protocols.pouw.h1_ranks import RankExtension, RankRun, RankTap
 
 
 class _EveryStep(dict):
@@ -97,8 +98,8 @@ def source(com: Any, model: Any, layers: Sequence[Any]) -> Any:
     return H1Source(com, model, modules, experts)
 
 
-def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: CommitTap | None = None) -> CommitTap:
-    """H1's tap (``tap``, else a new `CommitTap`) on the Commit already serving ``model`` (serve-openai's rows-sha512
+def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int]) -> CommitTap:
+    """H1's tap, a new `CommitTap`, on the Commit already serving ``model`` (serve-openai's rows-sha512
     collector, `pipeline.serve_seal.committer`), in place of a Commit of its own (`attach`): the step's input ids are its
     step-input port's (`served_record.StepInputPort`) and each of H1's ``layers``' x_q and s_a are its int8 source's
     (`Int8Source`, the bench row's manifest's sites, under their op paths), so H1's A tables are tied to the values the
@@ -118,7 +119,7 @@ def tap(com: Any, model: Any, layers: Sequence[Any], steps: Sequence[int], tap: 
     if missing := [(e, m) for e in steps for m in modules if (e, m) not in src.quant]:
         raise ValueError(f"the Commit's int8 source acquires {len(missing)} of H1's (engine step, linear) sites nowhere, "
                          f"{missing[:3]}: its manifest names no Int8RowQuant_v1 site there")
-    tap = tap if tap is not None else CommitTap()
+    tap = CommitTap()
     names = set(modules)
     tap.port = PORT_NAMES[0]
     tap.ops = {op: site(m) for (_e, m), op in src.quant.items() if m in names}
@@ -131,7 +132,6 @@ def committer(engine: Any, run_id: str) -> Any:
     as `pipeline.served_match` builds it), the windowed collector under rows-sha512 (`protocols.pouw.h1.commit.SCHEME`). It retains
     its values nowhere unless VERITY_RETAIN says otherwise: H1 reads them from its tap, and the windowed collector retains
     none on the device."""
-    from verity_vllm import settings
     from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
     settings.setdefault("VERITY_RETAIN", "none")

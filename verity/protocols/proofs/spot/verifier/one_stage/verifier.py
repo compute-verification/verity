@@ -238,7 +238,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
             day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None,
             seed_salt: str | None = None, pool: Mapping[str, Any] | None = None,
-            tied: Sequence[str] | None = None, history: Mapping[str, Any] | None = None) -> dict[str, Any]:
+            tied: Sequence[str] | None = None, history: Mapping[str, Any] | None = None,
+            compiler: Any = R.UNREAD) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), `pool` as the verifier holds it:
     the Lean adds its `pin` to the supplied or output values itself. The program function's parameters go with
     `registered` or `tied`, which name them."""
@@ -274,6 +275,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["pool"] = dict(pool)
     if history is not None:
         p["history"] = dict(history)
+    if compiler is not R.UNREAD:
+        p["compiler"] = None if compiler is None else dict(compiler)
     return p
 
 
@@ -287,9 +290,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
-          history: Mapping[str, Any] | None = None) -> Verdict:
+          history: Mapping[str, Any] | None = None, compiler: Any = R.UNREAD) -> Verdict:
     """`registration.check` (R1-R8) by the verifier, with R2's declared day when it passes `day` and `declarations`,
-    R6's seed salt when it passes `seed_salt`, R6's pool reset, week and spent mark, a reset at most once a week,
+    R6's seed salt when it passes `seed_salt`, R6's registered compiler when it passes `compiler`, R6's pool reset, week and spent mark, a reset at most once a week,
     and R7's pool chain when it passes `pool`, R8's tied values when it passes `tied`, and the roots of the history
     tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the
     supplied values' `history` sources. History tables both verifiers refuse fail it with `R.HISTORY` alone."""
@@ -298,14 +301,14 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         py: Verdict | None = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                      work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
                                      window_root=window_root, held=held, day=day, declarations=declarations,
-                                     seed_salt=seed_salt, pool=pool, tied=tied, history=history)
+                                     seed_salt=seed_salt, pool=pool, tied=tied, history=history, compiler=compiler)
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
                                                   window_root, held, outputs, day, declarations, seed_salt, pool, tied,
-                                                  history),
+                                                  history, compiler),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"],
@@ -406,7 +409,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         value_outputs: Mapping[str, Mapping[str, str]] | None = None,
         interior: Mapping[str, Any] | None = None, seed_salt: str | None = None,
         pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
-        history: Mapping[str, Any] | None = None, family: str | None = None) -> Verdict:
+        history: Mapping[str, Any] | None = None, family: str | None = None,
+        key: Mapping[str, Any] | None = None, main: Sequence[str] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
@@ -417,16 +421,19 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins of the challenger's
     family `family` (the one the stream read them from, never the evidence's) that the session the ledger
-    opens for `window_root` released after the registration's digest, and refuses the select step where they aren't or
-    `coins` or `family` is missing (code `coins`), and where the family's log shows a root other than the registration's
-    digest (code `family`); for one that read none, `coins` must be None. Where the two differ,
+    opens for `window_root` under the challenger key `key` (`ChallengerKey.to_json`'s form), from a commit on `main`,
+    the verifier's copy of main's first-parent history, released after the registration's digest; `key` and `main` are
+    the stream's own, and the evidence names neither. It refuses the select step where they aren't those coins or
+    `coins`, `family` or `key` is missing (code `coins`), and where the family's log shows a root other than the
+    registration's digest (code `family`); for one that read none, `coins` must be None. Where the two differ,
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
 
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
     `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, its window's `seed_salt`
     when it has one, and its `history` tables when it has any), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`), their evidence
-    (`coins`) and their family (`family`, the second stage's own: a family's coins follow one registration), its
+    (`coins`, held to the run's `key` and `main`: a run has one challenger) and their family (`family`, the second
+    stage's own: a family's coins follow one registration), its
     `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`,
     and `proofs`, the auditor's params naming each template's circuit file and reference header
     (`service.template_circuits`'s form, under the interior's params; None names none); the Lean derives the design's
@@ -445,7 +452,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
             "served": None if served is None else list(served),
             "session_roots": None if session_roots is None else dict(session_roots),
-            "coins": None if coins is None else dict(coins), "family": family}
+            "coins": None if coins is None else dict(coins), "family": family,
+            "key": None if key is None else dict(key), "main": None if main is None else list(main)}
     if interior is not None:
         it = interior
         i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held, i_outputs = \
@@ -541,18 +549,13 @@ def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  law: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
-                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
-                 own_reads: bool = False) -> dict[str, Any]:
+                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the registration's
-    values (`audit.session_registered(verdicts, registration)`), with `own_reads` (a two-stage run's, whose round 2
-    holds those reads' rows) less the reads of the registration's own ports at their own roots (`Record.lessOwnReads`):
-    the record of record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each side's acceptance and failed
-    checks)."""
+    values (`audit.session_registered(verdicts, registration)`) less the reads of its own ports at their own roots
+    (`audit.less_own_reads`): the record of record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each
+    side's acceptance and failed checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
-    opened = audit.session_registered(verdicts, registration)
-    if own_reads and opened is not None:
-        roots = {r["port"]: r["root"] for r in registration["roots"]}
-        opened = {v: r for v, r in opened.items() if not (v in roots and roots[v] == r)}
+    opened = audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
     py = audit.audit_record(registration, receipt, draw, law, list(proved_units), instances, statement, verdicts, delta,
                             sessions, served, session_roots, opened)
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
@@ -560,8 +563,7 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                           "law": dict(law), "proved_units": list(proved_units), "instances": instances,
                           "statement": dict(statement), "verdicts": verdicts, "delta": exact,
                           "sessions": list(sessions), "served": None if served is None else list(served),
-                          "session_roots": None if session_roots is None else dict(session_roots),
-                          **({"own_reads": True} if own_reads else {})})
+                          "session_roots": None if session_roots is None else dict(session_roots)})
     if isinstance(got, str):
         try:
             got = json.loads(got)

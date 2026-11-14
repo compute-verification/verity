@@ -95,7 +95,7 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
     {ct : CoinTree.Spec} (hct : spec.coinTree = some ct) {own : Json} (hown : Flock.JsonParse.parse spec.hello = .ok own)
     {hz : String} (hc : canon (helloJ own) = .ok hz) (tabs : Array Setup) (words : Array (List ℕ))
     (trs : Array Trace) (tape : TapeZk)
-    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.m = .ok v →
+    (hR : ∀ st ∈ tabs, ∀ v, Zk.schedule st.wideLeaf st.m = .ok v →
       ∀ rep dom tr tb cm₀ extras pads ic extra lanePad salt nonce prior ws,
       st.extra (ptsOf spec (coinOf (resp 0))) = .ok extras →
       Ret ((repPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) st v.1 v.2 rep dom tr tb cm₀ extras pads ic extra
@@ -103,7 +103,7 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
     (hst : ∀ a ∈ spec.repStreams, a.1 < tabs.size) {r : String × Array ByteArray} {bodies : Array Claims.Msg}
     (hrun : (sessionPZk (asksS resp) (Hashes.ofSha512 (Claims.hOf H)) spec tabs words trs tape).go #[] =
       (.ok r, bodies)) :
-    ∃ schs cms streams, (∀ i < tabs.size, Zk.schedule tabs[i]!.m = .ok schs[i]! ∧
+    ∃ schs cms streams, (∀ i < tabs.size, Zk.schedule tabs[i]!.wideLeaf tabs[i]!.m = .ok schs[i]! ∧
         commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) tabs[i]!.merkle (schs[i]!.1.levels.getD 0 default)
           schs[i]!.2 (packed trs[i]! tabs[i]!.m) (tape.extra i) (tape.lanePad i) (tape.salt i 0 0) = .ok cms[i]!) ∧
       cms.size = tabs.size ∧
@@ -117,11 +117,11 @@ theorem sessionPZk_filesJ (H : Claims.Msg → Claims.Msg) (resp : ℕ → Claims
           (1 + ((streams.toList.take j).flatMap Array.toList).length) (j / 2) (j % 2) streams[j]! r.2[j] := by
   unfold sessionPZk at hrun
   obtain ⟨schs, l1, hA, hrun⟩ := go_bind_ok hrun
-  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.m = .ok v) _ fun a _ =>
-    Ret.monadLift (Zk.schedule a.m)) hA
+  obtain ⟨hssz, hsf⟩ := Ret.go (Ret.mapM_array _ (fun st' v => Zk.schedule st'.wideLeaf st'.m = .ok v) _ fun a _ =>
+    Ret.monadLift (Zk.schedule a.wideLeaf a.m)) hA
   have hl1 := Still.go (Still.mapM_array (fun a l => by rw [monadLift_go]) _) hA
   subst hl1
-  have hv : ∀ i (hi : i < tabs.size), Zk.schedule tabs[i]!.m = .ok schs[i]! := fun i hi => by
+  have hv : ∀ i (hi : i < tabs.size), Zk.schedule tabs[i]!.wideLeaf tabs[i]!.m = .ok schs[i]! := fun i hi => by
     rw [getElem!_pos tabs i hi, getElem!_pos schs i (by omega)]
     exact hsf i hi (by omega)
   dsimp only at hrun
@@ -229,7 +229,7 @@ points and its pads' commitment `ic`, each masked proof a rep returns (`repRunJ`
 `Shaped` at the shape the masked verifier decodes it at. -/
 def RepShapedAt (c : Case H rel) : Prop :=
   ∀ i < c.sts.size, ∀ v cm e,
-    Zk.schedule (Setup.ofCircuit c.sts[i]!).m = .ok v →
+    Zk.schedule (Setup.ofCircuit c.sts[i]!).wideLeaf (Setup.ofCircuit c.sts[i]!).m = .ok v →
     commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit c.sts[i]!).merkle
       (v.1.levels.getD 0 default) v.2 (packed (traces c.sts c.w)[i]! (Setup.ofCircuit c.sts[i]!).m) (c.ω.extra i)
       (c.ω.lanePad i) (c.ω.salt i 0 0) = .ok cm →
@@ -281,7 +281,7 @@ theorem Run.repJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hR : Re
   dsimp only at hpsz hfiles
   rw [htsz] at hcsz
   obtain ⟨rbs, streams, -, -, -, -, -, hlink, -, -, hsess, -, -, -⟩ := Run.jsonJ h64 o hS
-  have hsc' : ∀ i (hi : i < o.sts.size), Zk.schedule (Setup.ofCircuit o.sts[i]!).m = .ok schs[i]! ∧
+  have hsc' : ∀ i (hi : i < o.sts.size), Zk.schedule (Setup.ofCircuit o.sts[i]!).wideLeaf (Setup.ofCircuit o.sts[i]!).m = .ok schs[i]! ∧
       commitPZk (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit o.sts[i]!).merkle
         (schs[i]!.1.levels.getD 0 default) schs[i]!.2 (packed (traces o.sts o.w)[i]! (Setup.ofCircuit o.sts[i]!).m)
         (o.ω.extra i) (o.ω.lanePad i) (o.ω.salt i 0 0) = .ok cms[i]! := fun i hi => by

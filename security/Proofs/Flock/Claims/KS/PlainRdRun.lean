@@ -47,7 +47,7 @@ theorem plainRawLevelCols_topK (keep : Bool → Bool) {Ω : Type} {P : Claims.Pr
   have hx := (Claims.Bridge.Custody.checks_ok hc).1
   rcases hro : runOf false (Claims.run sha512 P (VK keep) x ω c).seen 0 with _ | rr
   · simp only [plainRawLevelCols, hro]
-  · obtain ⟨f', s'', spec'', sts'', st', hf', hs', hst', hm⟩ := runOf_m hro
+  · obtain ⟨f', s'', spec'', sts'', st', hf', hs', hst', hm, -⟩ := runOf_m hro
     obtain rfl := Option.some.inj (hf.symm.trans hf')
     rw [hx, hs] at hs'
     obtain ⟨-, -, rfl⟩ : s = s'' ∧ spec = spec'' ∧ sts = sts'' := by simpa using hs'

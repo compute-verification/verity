@@ -307,7 +307,7 @@ theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
       · rename_i hc
         cases hd
         simp only [Bool.and_eq_true] at hc
-        exact ⟨l, ok_of_toOption hl, by simp, rfl, hc.1.1, hc.1.2⟩
+        exact ⟨l, ok_of_toOption hl, by simp, rfl, hc.1.1.1.1, hc.1.1.1.2⟩
       · cases hd
 
 /-- **Where the design evaluates, every template's reference statement reads as a member's** (`templateOk`). -/
@@ -324,8 +324,72 @@ theorem templateOk_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = 
       split at hd
       · rename_i hc
         simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hc
-        exact hc.2 t ht
+        exact hc.1.1.2 t ht
       · cases hd
+
+/-- **Where the design evaluates, every member's circuit is in the scope Flock's hidden-output proof covers**
+(`membersScoped`) **and the registered wiring is one the connected program reads as the second stage's check does**
+(`wiringOk`). -/
+theorem scoped_wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
+    membersScoped h = true ∧ wiringOk h = true := by
+  unfold two at hd
+  cases hl : (Spot.Slots.layout h.reg.first.program h.reg.first.query).toOption with
+  | none => simp [hl] at hd
+  | some l =>
+    cases hr : replayDesign h with
+    | none => simp [hl, hr] at hd
+    | some dr =>
+      simp only [hl, hr] at hd
+      split at hd
+      · rename_i hc
+        simp only [Bool.and_eq_true] at hc
+        exact ⟨hc.1.2, hc.2⟩
+      · cases hd
+
+/-- **Where the design evaluates, every member's circuit is in the scope Flock's hidden-output proof covers**, at
+the members as the partition lists them (`Held.ms`). -/
+theorem scoped_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
+    ∀ ci ∈ h.ms, _root_.Flock.ProvedScope.scopeOkH ci.1 = true := by
+  intro ci hci
+  have hsc := (scoped_wiring_of_two h hd).1
+  unfold membersScoped at hsc
+  rw [List.all_eq_true] at hsc
+  have hlen : h.ms.length = h.vus.length := by
+    unfold Held.ms
+    simp
+  unfold Held.ms at hci
+  obtain ⟨t, ht, hci'⟩ := List.mem_map.1 hci
+  have ht' : t ∈ List.range h.ms.length := by
+    rw [hlen]
+    exact ht
+  have h1 := hsc t ht'
+  rw [← hci']
+  exact h1
+
+/-- **What the registered wiring's check decides** (`wiringOk`), clause by clause. -/
+theorem wiringOk_iff : wiringOk h = true ↔
+    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMoveRows h = true ∧
+      wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
+      h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true := by
+  unfold wiringOk
+  simp only [Bool.and_eq_true, List.isEmpty_iff]
+  constructor
+  · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩
+    exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩
+  · rintro ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩
+    exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩
+
+/-- **Where the design evaluates, the registered wiring passes each clause of its check.** -/
+theorem wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
+    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMoveRows h = true ∧
+      wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
+      h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true :=
+  (wiringOk_iff h).1 (scoped_wiring_of_two h hd).2
+
+/-- **Where the design evaluates, the templates' names are distinct.** -/
+theorem names_nodup_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
+    ((List.range h.ms.length).map fun t => h.names.getD t "").Nodup :=
+  of_decide_eq_true (wiring_of_two h hd).1
 
 /-- **The statement round `stage + 1` checks is in scope**: it parses, its partition and design evaluate, and so the
 two-stage scope holds. -/

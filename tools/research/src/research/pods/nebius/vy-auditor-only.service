@@ -1,5 +1,5 @@
 [Unit]
-Description=stop any research run that is not one of this auditor host's commands (pods/nebius/slot_only.py --auditor, /etc/vy/auditor)
+Description=stop any research run that is not one of this auditor device's commands (pods/nebius/slot_only.py --auditor, /etc/vy/auditor)
 ConditionPathExists=/etc/vy/auditor
 
 [Service]

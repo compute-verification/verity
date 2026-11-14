@@ -236,7 +236,7 @@ theorem tiedColl_of_verifyInner {L : List (Claims.Msg × Claims.Msg)} {lay : Zk.
 `Zk.verifyInnerWith hs` at the pads layout `layZ`, from a transcript on the stream's rounds four rounds before their
 end. -/
 theorem zkVerifyRepWith_inner (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
-    {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :
     ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof) (finalC : F128)
       (cons : Array (String × Zk.Lin)) (t t' : Transcript),
@@ -244,7 +244,7 @@ theorem zkVerifyRepWith_inner (hs : Hashes Flock.V) {spec : SessionSpec} {st : S
       st.extra sess.points = .ok extras ∧ Zk.decode (shapeZK st sch extras) bytes = .ok zp ∧
       t.rounds = stream.rounds ∧ t.k + 4 = stream.rounds.size ∧
       Zk.verifyInnerWith hs (layZ st sch) zp.inner finalC cons t = .ok ((), t') := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, -, -⟩ := FlockSoundness.Discharge.ZkExec.zk_schedule_seams _ _ _ _ hsch
   obtain ⟨hn7, h2, -, -, -, -, -⟩ := hdim
   unfold Zk.verifyRepWith at h
   dsimp only at h

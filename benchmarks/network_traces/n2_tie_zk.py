@@ -7,7 +7,7 @@ and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
 
-    python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/n2_tie_zk.py prove --bin flock-circuit --lean verity-verify-proof --out DIR
       [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`PARAMS`, the pinned size class): a span, three id requests of 5, 40 and 5 prompt tokens

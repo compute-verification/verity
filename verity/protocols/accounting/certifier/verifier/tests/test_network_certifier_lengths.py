@@ -360,7 +360,8 @@ def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clie
     accepts every window. And it is no failure of the server's: the lengths and fails tables are those of the run
     without it, with no failed slot in them. Without lengths rows the same request is cut whole and released, the
     reference refuses its bucket, and the server's answer to it, which is no id response, fails as the server's
-    (format) and fails its window."""
+    (format) and fails its window; but for the one with bytes after its end, which is no one request to a server
+    (`release.one_request`) and is refused as its client's without lengths rows too."""
     bad, prefix = no_id_requests()[name]
     honest, out = id_req(1, 60), (7, 8, 9)
     assert len(cells(honest, B)) == 3 * B
@@ -390,6 +391,10 @@ def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clie
 
     plain, _, served = run(answers, arrivals, params=PLAIN, windows=3)
     log = {e["ordinal"]: e for e in plain.log}
+    if name == "bytes after its end":
+        assert (log[2]["release"], log[2]["failed"], served.conns[1].received) == (None, "malformed", b"")
+        assert END not in [k for _, k, _ in request_cells(plain, 2)] and plain.requests_released == 1
+        return
     assert (log[2]["release"], log[2]["failed"], log[2]["ended"]) == (0, "format", D)
     assert served.conns[1].received and END in [k for _, k, _ in request_cells(plain, 2)]
     assert read_as_requests(plain, 1) == (0, 60) and read_as_requests(plain, 2) is None

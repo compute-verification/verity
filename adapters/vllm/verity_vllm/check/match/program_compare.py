@@ -28,11 +28,13 @@ from __future__ import annotations
 
 import collections
 import difflib
+import hashlib
 import json
 import os
 import re
 import time
 from dataclasses import dataclass
+from typing import Any
 
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import split_selects
@@ -40,11 +42,13 @@ from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.check.match.program_loaders import load_derived, load_oracle
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import UsageError, option
-from verity_vllm.program.compact import expand_mixed as _expand_mixed, hash_operand as _hash_operand, n_crosses_step as _n_crosses_step  #
-# Imported from here by modules open PRs edit (tests/program/test_compact.py, tests/check/test_glm53_rank_rehearsal.py) and
-# by check/match/resolve_decomp.py, slated for deletion; they move to instance_sequence / program_loaders after those land.
-from verity_vllm.check.match.instance_sequence import const_value  # noqa: F401
-from verity_vllm.check.match.program_loaders import LOAD_NOTES  # noqa: F401
+from verity_vllm.program.compact import expand, first_runs
+from verity_vllm.program.compact import expand_mixed as _expand_mixed
+from verity_vllm.program.compact import hash_operand as _hash_operand
+from verity_vllm.program.compact import n_crosses_step as _n_crosses_step
+from verity_vllm.records.schema_ids import PROGRAM_COMPARE_SCHEMA
+
+__all__ = ["Options", "main"]
 
 _T_RE = re.compile(r"\{T=\d+,")
 
@@ -77,7 +81,7 @@ def _divergence_report(a: list, b: list) -> dict:
     truncated = len(ca) > W or len(cb) > W
     sm = difflib.SequenceMatcher(a=ca[:W], b=cb[:W], autojunk=False)
     ops = [(tag, i1 + p, i2 + p, j1 + p, j2 + p) for tag, i1, i2, j1, j2 in sm.get_opcodes() if tag != "equal"]
-    out = {"ops": ops}
+    out: dict[str, Any] = {"ops": ops}
     if truncated:
         out["window"] = {"common_prefix": p, "common_suffix": s, "core_a": len(ca), "core_b": len(cb), "window": W, "truncated": True}
     return out
@@ -105,8 +109,8 @@ def compare_steps(A: RootView, B: RootView, unfold_a: bool = False, *, canon_ste
         ib = sb[s] if s < len(sb) else []
         spa = [A.inst[i]["spec"] for i in ia]
         spb = [B.inst[i]["spec"] for i in ib]
-        st = {"step": s, "n_a": len(ia), "n_b": len(ib), "spec_seq_equal": spa == spb,
-              "spec_seq_equal_T_normalised": [_norm_T(x) for x in spa] == [_norm_T(x) for x in spb]}
+        st: dict[str, Any] = {"step": s, "n_a": len(ia), "n_b": len(ib), "spec_seq_equal": spa == spb,
+                              "spec_seq_equal_T_normalised": [_norm_T(x) for x in spa] == [_norm_T(x) for x in spb]}
         ca, cb = collections.Counter(spa), collections.Counter(spb)
         st["spec_multiset_equal"] = ca == cb
         if ca != cb:
@@ -124,7 +128,7 @@ def compare_steps(A: RootView, B: RootView, unfold_a: bool = False, *, canon_ste
         if st["spec_seq_equal_T_normalised"]:
             same = diff = 0
             by_spec_arg: collections.Counter = collections.Counter()
-            examples = []
+            examples: list[dict[str, Any]] = []
             kv_cross = 0
             for j, (i, k) in enumerate(zip(ia, ib)):
                 # remap producer indices through the (possibly filtered) sequences
@@ -161,7 +165,6 @@ def compare_steps(A: RootView, B: RootView, unfold_a: bool = False, *, canon_ste
 def _canonical_hash(P: RootView, seqs: list[list[int]], unfold: bool, canon_step_relative=None) -> str:
     """sha256 of the expanded instance sequence in canonical form: (spec, form, canonical operand sources, out type) per
     instance, producers as (step, index-within-step) — independent of input layout, node numbering and root naming."""
-    import hashlib
     canon_step_relative = canon_step_relative or _canon_step_relative
     h = hashlib.sha256()
     compact = getattr(P, "compact", False)
@@ -225,20 +228,19 @@ def audit_padding(P: RootView) -> dict:
     """The padded program's mux discipline: per decode step, one live bit keys 1 SelectI32 + 2*NL SelectBf16 batches,
     against one Const16 zero; guards = I32Eq + BitNot + BitAnd per event. Segments are TokenSelect-terminated, so segment
     s+1 holds event s's guard (it follows the sample) and decode step s's row muxes (the step-boundary cache clear)."""
-    per_step = []
+    per_step: list[dict[str, Any]] = []
     for s, idxs in enumerate(P.steps):
         muxes = [i for i in idxs if P.is_mux(i)]
         if not muxes:
             per_step.append({"step": s, "muxes": 0})
             continue
-        lives = collections.Counter()
-        zeros = collections.Counter()
-        kinds = collections.Counter()
+        lives: collections.Counter[str] = collections.Counter()
+        zeros: collections.Counter[str] = collections.Counter()
+        kinds: collections.Counter[str] = collections.Counter()
         for i in muxes:
             r = P.inst[i]
             kinds[r["spec"]] += 1
             if getattr(P, "compact", False):
-                from verity_vllm.program.compact import expand, first_runs
                 lives[str(expand(r["args"][0]))] += 1
                 if len(r["args"]) > 2 and "SelectBf16" in r["spec"]:
                     zeros[str(first_runs(r["args"][2], 1))] += 1
@@ -284,7 +286,7 @@ def main(a: Options) -> int:
         raise UsageError("--operands progressions compares without unfolding only: an unfolded side's operands are runs")
     A = load_derived(a.a, a.label_a, compact=cp)
     B = load_oracle(a.b, a.label_b, compact=cp) if os.path.exists(os.path.join(a.b, "program.json")) else load_derived(a.b, a.label_b, compact=cp)
-    res = {"schema": "cb-a/compare/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "a_dir": a.a, "b_dir": a.b, "unfold_a": a.unfold_a}
+    res: dict[str, Any] = {"schema": PROGRAM_COMPARE_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "a_dir": a.a, "b_dir": a.b, "unfold_a": a.unfold_a}
     if B.oracle_rows is not None:
         res["fold_form"] = CF.fold_in_form(B, [a.a])
     res["digests"] = {"a": A.digest, "b": B.digest, "equal": A.digest == B.digest}
@@ -303,12 +305,12 @@ def main(a: Options) -> int:
         res["oracle_segmentation_mismatches"] = mism
         res["oracle_weight_map"] = {"n_ranges": len(B.oracle_wmap), "first": B.oracle_wmap[:5], "overlaps": B.oracle_wmap_overlaps[:5],
                                     "n_overlaps": len(B.oracle_wmap_overlaps)}
-        B.weight_fields_ranges = B.oracle_wmap
     res["compare"] = compare_steps(A, B, unfold_a=a.unfold_a)
     if a.unfold_a:
         res["padding_audit_a"] = audit_padding(A)
     res["seconds"] = round(time.time() - t0, 1)
-    json.dump(res, open(a.out, "w"), indent=1, default=str)
+    with open(a.out, "w") as f:
+        json.dump(res, f, indent=1, default=str)
     t = res["compare"]["totals"]
     print(json.dumps({"digests_equal": res["digests"]["equal"], "canonical_equal": res["compare"]["canonical_sha256"]["equal"], "steps_a": res["compare"]["a"]["steps"], "steps_b": res["compare"]["b"]["steps"],
                       "instances": [res["compare"]["a"]["instances"], res["compare"]["b"]["instances"]], "totals": t,

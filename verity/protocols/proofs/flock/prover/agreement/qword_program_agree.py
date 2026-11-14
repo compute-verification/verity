@@ -1,4 +1,4 @@
-"""Conformance of the Lean verifier's `Q_word` v1 over programs (`flock-verify qword-program`: `Flock.Program` decodes
+"""Conformance of the Lean verifier's `Q_word` v1 over programs (`verity-verify-proof qword-program`: `Flock.Program` decodes
 the `verity-ir/descriptor/v1`, `Flock.Extract` builds each Call's graph, `Flock.Qword` cuts it) with core's
 (`verity.circuits.codec.decode_program`, `verity.circuits.cut`, `verity.circuits.partition_object`).
 

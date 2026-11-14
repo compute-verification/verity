@@ -398,7 +398,7 @@ theorem ligeritoWith_query (hs : Hashes V) (ms : MerkleScheme) (sch : Flock.Sche
 table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any oracle) has a stream with that round, and level 0's
 Merkle check passed against the committed `root_B` on the proof's opened rows at the positions of that round's coins. -/
 theorem zkQueryRound_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
-    (tPad : ℕ) (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.m = .ok (sch, tPad))
+    (tPad : ℕ) (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
@@ -411,7 +411,7 @@ theorem zkQueryRound_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Se
         zp.proof.ligerito.initialProof.rows zp.proof.ligerito.initialProof.siblings
         zp.proof.ligerito.initialProof.salts (2 ^ (sch.levels.getD 0 default).lanes + Zk.EXTRA_LANES) = .ok () ∧
       cap = zp.proof.cap.foldl (· ++ ·) ByteArray.empty ∧ cap = sess.rootB[i]! := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hL, -, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hL, -, -⟩ := zk_schedule_seams _ _ _ _ hsch
   have hq : (sch.levels.getD 0 default).q ≠ 0 := (hL 0 (by have := hdim.2.1; omega)).q_ne_zero
   have hn : sch.n ≠ 0 := by rw [hdim.1, hsm]; omega
   unfold Zk.verifyRepWith at h
@@ -457,8 +457,8 @@ theorem zkQueryRound_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Se
 
 /-- `zkProofShape` at a table's `--zk` schedule is the shape `Zk.verifyRep` decodes its proofs at. -/
 theorem zkProofShape_eq (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim)
-    (hsch : Flock.Zk.schedule st.m = .ok (sch, tPad)) :
-    Claims.Flock.zkProofShape st.m st.kLog (2 + extras.size) st.merkle.digestLen
+    (hsch : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) :
+    Claims.Flock.zkProofShape st.wideLeaf st.m st.kLog (2 + extras.size) st.merkle.digestLen
       (if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes) = shapeZK st sch extras := by
   simp only [Claims.Flock.zkProofShape, Claims.Flock.zkSched, hsch, shapeZK]
 
@@ -467,13 +467,13 @@ proof file is the witness lanes (the first `2^k0` symbols) of the proof's level-
 `zkQueryRound`'s coins, the positions and rows on which level 0's Merkle check passed against the committed `root_B`
 (`zkQueryRound_verifyRepWith`). -/
 theorem zkRepColsOf_verifyRepWith (hs : Hashes V) (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule)
-    (tPad : ℕ) (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.m = .ok (sch, tPad))
+    (tPad : ℕ) (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
       st.extra sess.points = .ok extras ∧ Flock.Zk.decode (shapeZK st sch extras) bytes = .ok zp ∧
       Claims.Flock.zkQueryRound st.m st.kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
-      Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape st.m st.kLog (2 + extras.size) st.merkle.digestLen
+      Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape st.wideLeaf st.m st.kLog (2 + extras.size) st.merkle.digestLen
           (if st.merkle.saltBytes = 0 then none else some st.merkle.saltBytes)) stream.rounds bytes =
         (Claims.Flock.zkRepCols (sch.levels.getD 0 default)
           (stream.rounds[Claims.Flock.zkQueryRound st.m st.kLog sch.k0 (2 + extras.size)]!).coins
@@ -499,7 +499,7 @@ theorem verifyWithM_reps (hs : Hashes V) (spec : SessionSpec) (tabs : Array Setu
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Flock.Schedule) (tPad : ℕ) (c : ByteArray),
-        Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
+        Flock.Zk.schedule tabs[i].wideLeaf tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
           Zk.verifyRepWith hs spec tabs[i] sch tPad sess i r proofs[2 * i + r]! = .ok c := by
   unfold Zk.verifyWithM at h
   dsimp only at h
@@ -559,13 +559,13 @@ theorem zkQueryRound_verifyWithM (hs : Hashes V) (spec : SessionSpec) (tabs : Ar
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
     ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Flock.Schedule) (tPad : ℕ),
-        Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
+        Flock.Zk.schedule tabs[i].wideLeaf tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
           tabs[i].extra sess.points = .ok extras ∧
           Flock.Zk.decode (shapeZK tabs[i] sch extras) proofs[2 * i + r]! = .ok zp ∧
           Claims.Flock.zkQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
-          Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
+          Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape tabs[i].wideLeaf tabs[i].m tabs[i].kLog (2 + extras.size)
               tabs[i].merkle.digestLen (if tabs[i].merkle.saltBytes = 0 then none else some tabs[i].merkle.saltBytes))
               stream.rounds proofs[2 * i + r]! =
             (Claims.Flock.zkRepCols (sch.levels.getD 0 default)
@@ -592,13 +592,13 @@ theorem zkQueryRound_verify (spec : SessionSpec) (tabs : Array Setup) (record : 
     ∃ sess : RunRecord, Record.decodeWith (Hashes.ofSha512 Sha512.hash : Hashes V) spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Flock.Schedule) (tPad : ℕ),
-        Flock.Zk.schedule tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
+        Flock.Zk.schedule tabs[i].wideLeaf tabs[i].m = .ok (sch, tPad) ∧ ∀ r < 2,
         ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
           tabs[i].extra sess.points = .ok extras ∧
           Flock.Zk.decode (shapeZK tabs[i] sch extras) proofs[2 * i + r]! = .ok zp ∧
           Claims.Flock.zkQueryRound tabs[i].m tabs[i].kLog sch.k0 (2 + extras.size) < stream.rounds.size ∧
-          Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape tabs[i].m tabs[i].kLog (2 + extras.size)
+          Claims.Flock.zkRepColsOf (Claims.Flock.zkProofShape tabs[i].wideLeaf tabs[i].m tabs[i].kLog (2 + extras.size)
               tabs[i].merkle.digestLen (if tabs[i].merkle.saltBytes = 0 then none else some tabs[i].merkle.saltBytes))
               stream.rounds proofs[2 * i + r]! =
             (Claims.Flock.zkRepCols (sch.levels.getD 0 default)

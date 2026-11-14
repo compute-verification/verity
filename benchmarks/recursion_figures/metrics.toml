@@ -1,0 +1,39 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# Each is modeled from the recursion bench's run of record, the run its command names, read from the evidence store
+# with this tree's reader, and written for each fleet's week,
+# month and year; the world's year, the one each id names, is written last. Recursion is parked (top/parked), so the
+# figures are redrawn monthly, from a newer run once one is recorded.
+[[metric]]
+id = "benchmarks/recursion-core-years-world-year"
+title = "Recursive audit cost, world year"
+owner = "benchmarks"
+unit = "CPU core-years"
+axis = "CPU core-years to audit every machine of the world for a year by recursive sessions, one a machine a window, at the run of record's session."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- env PYTHONPATH=benchmarks/recursion_e2e uv run python benchmarks/recursion_figures/figures.py --from r20261106-010929-a7ae"
+every = "30d"
+goal = "top/parked"
+
+[[metric]]
+id = "benchmarks/recursion-ks-error-log2-world-year"
+title = "Recursive audit soundness error"
+owner = "benchmarks"
+unit = "log₂ of error"
+axis = "Log₂ of the recursive sessions' knowledge-soundness error over the world's year, against the world's GPUs' SHA-512 calls, union-bounded over the year's sessions."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- env PYTHONPATH=benchmarks/recursion_e2e uv run python benchmarks/recursion_figures/figures.py --from r20261106-010929-a7ae"
+every = "30d"
+goal = "top/parked"
+
+[[metric]]
+id = "benchmarks/recursion-stop-leak-bits-world-year"
+title = "Recursive audit stop leakage"
+owner = "benchmarks"
+unit = "bits"
+axis = "Bits the ZK server's stops can leak over the world's year, a stream a machine and a session a window, at the run of record's parts."
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- env PYTHONPATH=benchmarks/recursion_e2e uv run python benchmarks/recursion_figures/figures.py --from r20261106-010929-a7ae"
+every = "30d"
+goal = "top/parked"

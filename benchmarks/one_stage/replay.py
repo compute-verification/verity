@@ -13,13 +13,14 @@ run recorded.
   names, at the population program's version the record holds, v1 or v0; the domains derived again), and how each was
   found (`provenance`). Floats in verdicts and statements, which neither side reads, are written as strings. The
   registered roots the record's `registered` check reads are the verdicts' own, for the registration's own values
-  (`audit.session_registered(verdicts, registration)`), on both sides.
+  (`audit.session_registered(verdicts, registration)`), less the reads of its own ports at their own roots
+  (`audit.less_own_reads`), on both sides.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
   the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
   recorded refusal, by the verifier's Lean (`one_stage.verifier.lean`) and the current Python.
 * **Negatives.** Each recorded refusal that is one of the protocol's checks (R1-R7, the sample's, the record's: proved,
   receipt, served, roots, registered; the verdicts'; the public file's) becomes the base case with the one change the
-  run made; a refusal by a check the protocol does not make (`flock-verify`'s U1-U3 and roots, M0's selftests and
+  run made; a refusal by a check the protocol does not make (`verity-verify-proof`'s U1-U3 and roots, M0's selftests and
   bindings, a tampered set before the verifier) is listed as outside, with the reason, and where the protocol
   has a check of the same kind its analog is replayed and counted apart.
 * **Verdicts.** Lean (`serve`), the current Python (`registration.check`, `draw.check_draw`, `audit.audit_record`, written
@@ -301,7 +302,7 @@ def live_line(path: Path) -> dict | None:
 
 
 def archive_keys(path: Path) -> dict[str, str]:
-    """`flock-verify archive-put`'s stdout: the SHA-512 content key of each file it put, by the path it was put from."""
+    """`verity-verify-proof archive-put`'s stdout: the SHA-512 content key of each file it put, by the path it was put from."""
     out: dict[str, str] = {}
     for line in path.read_text().splitlines():
         parts = line.split()
@@ -594,7 +595,7 @@ def python(c: Case) -> dict:
         return out("reject", f"draw: {', '.join(dv.codes)}")
     a = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                            e["verdicts"], delta, e["sessions"], e["served"], e["session_roots"],
-                           audit.session_registered(e["verdicts"], rec))
+                           audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec))
     failed = [k for k in CHECKS if k in a["checks"] and not a["checks"][k]["ok"]]
     if failed:
         return out("reject", f"the audit's checks failed: {', '.join(failed)}")
@@ -609,7 +610,7 @@ def python(c: Case) -> dict:
         return out("undecided", f"the verifier of record {next(k for k, v in of_record if v.get('accepted') is None)} has not run")
     profile = audit.profile(rec, e["draw"], delta).to_json()
     wrong = a["wrong_units"]
-    public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
+    public = {"bound": wrong["bound"], audit.COMPLETE: a["complete"], "drawn": list(e["draw"]["units"]),
               "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
     return out("accept", None, public, {**profile, "delta": str(profile["delta"])})
 
@@ -696,23 +697,23 @@ def compare(c: Case, lean: dict, py: dict) -> dict:
 
 #: Negatives a run recorded that are not the protocol's checks, with why.
 OUTSIDE = {
-    "public-body-altered-leaf-layer-updated (Lean roots)": "flock-verify recomputing the roots from the public file",
+    "public-body-altered-leaf-layer-updated (Lean roots)": "verity-verify-proof recomputing the roots from the public file",
     "statement-binds-another-partition": "M0's statement bindings (`a0.bindings`)",
     "m0-selftest-unit-draw-session": "M0's selftest",
     "prover-ignores-the-draw (M0 selftest)": "M0's selftest",
-    "wrong-output-word": "the verifier of record (flock-verify, M0) on a tampered copy of the set, whose record the run did not keep",
-    "lean-reads-another-root-of-W": "flock-verify's registered reads (`--registered`), opening each table row against the reads "
+    "wrong-output-word": "the verifier of record (verity-verify-proof, M0) on a tampered copy of the set, whose record the run did not keep",
+    "lean-reads-another-root-of-W": "verity-verify-proof's registered reads (`--registered`), opening each table row against the reads "
                                     "file's root; the protocol reads the roots the verdict opened against (replayed as "
                                     "registered-read-opened-against-another-root)",
-    "lean-reads-moved-position": "flock-verify's registered reads (`--registered`): each unit's position against the verifier's "
+    "lean-reads-moved-position": "verity-verify-proof's registered reads (`--registered`): each unit's position against the verifier's "
                                  "read map from its own program; the protocol reads the verdict",
-    "lean-weights-committed-afresh-read-as-registered": "flock-verify's registered reads (`--registered`) on a statement that "
+    "lean-weights-committed-afresh-read-as-registered": "verity-verify-proof's registered reads (`--registered`) on a statement that "
                                                         "commits W under fresh salts, with no paths; the protocol reads the verdict",
 }
-#: The flock-verify sample checks a run recorded, each with the protocol's check of the same kind (an analog).
+#: The verity-verify-proof sample checks a run recorded, each with the protocol's check of the same kind (an analog).
 ANALOG = {
-    "instances-not-the-draw (Lean U3)": "flock-verify U3; analog: the proved check on one instance more",
-    "draw-dropped-from-record (Lean U1)": "flock-verify U1; analog: the draw check on a null draw",
+    "instances-not-the-draw (Lean U3)": "verity-verify-proof U3; analog: the proved check on one instance more",
+    "draw-dropped-from-record (Lean U1)": "verity-verify-proof U1; analog: the draw check on a null draw",
 }
 
 
@@ -1018,8 +1019,8 @@ def option(argv: list[str], name: str, default: Any) -> Any:
 
 #: the tools `a0.audit_session` names in its verdicts (neither side reads them)
 A0_TOOLS = {"m0-verifier": "flock-circuit serve (M0, eb90718f)",
-            "lean-draw-u1-u3": "flock-verify draw-test (9d0d53df)",
-            "lean-verify": "flock-verify verify --archive"}
+            "lean-draw-u1-u3": "verity-verify-proof draw-test (9d0d53df)",
+            "lean-verify": "verity-verify-proof verify --archive"}
 
 
 def copies_against(p: dict, rec: dict, run: Run) -> dict[str, str]:
@@ -1036,7 +1037,7 @@ def a2_unaudited(run: Run) -> Iterator[Case]:
     the receipt's) under A2's copies, the sampling design and δ the `--k` and `--delta` `pod.sh` passed `a2.py` (its defaults 256 and
     2^-20 where it passed none), and the evidence `a0.audit_session` handed `audit_record`, rebuilt from the session's
     files: the sample the session recorded (`session.json`'s `unit_draw`), the statement from the LIVE line and the
-    session's coin seed, the verdicts (M0's from `session.json`, `flock-verify draw-test`'s DRAWCHECK lines, `flock-verify
+    session's coin seed, the verdicts (M0's from `session.json`, `verity-verify-proof draw-test`'s DRAWCHECK lines, `verity-verify-proof
     verify`'s VERDICT line as the verifier), the sessions' SHA-512, and the proved units through the public
     header's unit indices. The run recorded no verdict and no negatives."""
     base = "out/a2"
@@ -1612,7 +1613,7 @@ SERVED_OUTSIDE = (
                             "before the epoch's draw coin is released"),
     (r"(outcome|deliver)-again|retry-.*", "the service's stream: one delivery, a final outcome, the failure budget"),
     (r"open-.*", "served_zk's opening check (a proof's rows are the drawn unit's), a verdict beside the verifier of record's"),
-    (r"lean-.*", "the verifier of record (Lean `flock-verify verify --zk`) on one unit's session; the protocol reads its verdict"),
+    (r"lean-.*", "the verifier of record (Lean `verity-verify-proof verify --zk`) on one unit's session; the protocol reads its verdict"),
     (r"firewall-.*", "the firewall's checks on a delivered proof, before the outcome"),
 )
 
@@ -1893,7 +1894,7 @@ def sessions_evidence(run: Run, a: dict, sessions: list[tuple[str, str]]) -> tup
 A5_OUTSIDE = {"registration-of-another-rank (source)": "A5's check of the window's link (`source`: the stand-in's run, "
                                                        "`of` and `link` against the verifier's own), beside R1-R7"}
 A6_OUTSIDE = {"statement-binds-another-partition": "A6's statement checks (`statement_checks`: META's partition binding)",
-              "lean-verify-under-another-program": "flock-verify (`verify --zk --partition --program`) on a session under "
+              "lean-verify-under-another-program": "verity-verify-proof (`verify --zk --partition --program`) on a session under "
                                                    "another program's partition object; the protocol reads its verdict"}
 
 
@@ -2107,7 +2108,7 @@ A7_OUTSIDE = (
     (r"\(binding\)$", "A7's bindings of each unit's rows to the canonical commitments (`bindings`), beside R1-R7"),
     (r"\((v0 )?bridge[^)]*\)$", "v0's bridge between the remote session and the canonical rows (`v0_bridge`)"),
     (r"\(opening\)$", "A7's openings of each drawn unit's public and ok rows (`openings`)"),
-    (r"\(Lean roots\)$", "flock-verify recomputing the roots from the public file"),
+    (r"\(Lean roots\)$", "verity-verify-proof recomputing the roots from the public file"),
     (r"\((receipt|decode)[^)]*\)$|\((plan row|receipt path)\)$",
      "check 3's units and links, on cursor/zk-check3-unit-c7a9 (not on main)"),
 )

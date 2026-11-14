@@ -29,7 +29,7 @@ import Proofs.Flock.Soundness.Game
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
 
 The outer proof at a history `(R, ω, t)` (the registration, the sample of the hidden circuit's units, the rounds'
-commitments and coins) is `S` sessions in a row, session `j` one `flock-verify verify --zk --registered F` session of
+commitments and coins) is `S` sessions in a row, session `j` one `verity-verify-proof verify --zk --registered F` session of
 the public circuit `(Vs j).c` under its sampling design `(Vs j).law` (`VStmt`), with hidden outputs and `(Vs j).J` tables, and with
 inputs `zs R ω t j` (`ZkOuter`: public file, registered reads, the challenger's live-coin part's record). The audit accepts when every
 session accepts (`Accepts`), and the decoded witness is each session's value layer (`XplurZC`, `ZkOuter.layer`).
@@ -697,7 +697,7 @@ theorem outerV_le
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **What V*'s circuits compute** (`k, Rw` the count curve's): at every history `(R, ω, t)`, registration `R₂` of the
-outer proof and strategies `τ` of V*'s sessions there, when every session's outcome flock-verify `--zk --registered`
+outer proof and strategies `τ` of V*'s sessions there, when every session's outcome verity-verify-proof `--zk --registered`
 accepts and every session's value layer is `Good`, the messages `wmsg` reads from the layers hold an inner transcript
 the inner verifier accepts on the hidden circuit's statement `x R ω` at the rounds' coins. -/
 def VBridge (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')

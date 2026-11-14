@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = ["verity", "verity-vllm", "numpy", "blake3>=1.0"]
 
 [project.optional-dependencies]
-# the numerical bench (its contract, cell, generator suites and frozen instance sets), which Flock's bench drivers,
+# the numerical bench (its contract, cell, generator suites and frozen input sets), which Flock's bench drivers,
 # `instances` and their tests import where they run
 bench = ["verity-numerical"]
 
@@ -81,7 +81,7 @@ inputs = [
     "security/Proofs/Flock/Verifier.lean", "security/Proofs/Flock/Verifier",
     # what Lake reads to load security_proofs, and security and security_properties, which it requires by path
     "security/Proofs/lakefile.toml", "security/Proofs/lake-manifest.json", "security/Proofs/lean-toolchain",
-    "verity/hardware/record.py",
+    "verity/channel.py",
     "security/lakefile.toml", "security/lake-manifest.json", "security/lean-toolchain",
     "security/Properties/lakefile.toml", "security/Properties/lake-manifest.json", "security/Properties/lean-toolchain",
     # test_lean_verifier.py and test_audit_profile.py read the audit layer's files and its lifted statements
@@ -99,12 +99,12 @@ inputs = [
     # tree to RecVStar's
     "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
-    # the flock-verify artifact
+    # the verity-verify-proof artifact
     "verity/protocols/proofs/flock/verifier/Flock/Test/RecCap.lean",
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/proofs/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
-    # lock, the release side's (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
+    # lock, the release side's (its Flock.Firewall.Honest is Flock's, which the flock-firewall artifact keys)
     "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/proofs/recursion/verifier/firewall",
           "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py",
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
@@ -115,7 +115,7 @@ worker_gb = 16
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
-artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify",
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-frame-tape",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rec-sparse",
@@ -284,7 +284,7 @@ paths = [
 [[tool.verity.tests.reads]]
 tests = ["tests/test_sha512_leaves.py"]
 # nvcc's build of sha512_leaves.cu includes cuda/sha512.cuh, which includes the GPU's one SHA-512
-paths = ["verity/circuits/kernels/sha512.cuh"]
+paths = ["verity/commitments/cuda/sha512.cuh"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_security_inputs.py"]

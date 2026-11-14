@@ -4,7 +4,7 @@ protocols' path), served the bundle's own sample, and decided by Lean's `verify 
 the verifier; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
 tampered window's member, whose proof must not be accepted.
 
-    python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean flock-verify \\
+    python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
 
 * **The bundle** is what `replay_bundle.build` wrote of the window's sampled proof blocks. `prove_bundle.sh` proves the

@@ -2,8 +2,8 @@
 # tools/move/definitions_lake_map.toml` moves and rewrites.
 #
 # - The evaluator (`evaluate`, `verity_evaluate`) and a circuit's requirement (`requirement`, `core_requirement`) move
-#   whole and laid out as they were, each with its suite; `tests/test_boundaries.py` and `public_boundary.toml` list
-#   their new places beside the old ones.
+#   whole and laid out as they were, each with its suite; `tests/test_boundaries.py` lists their new places beside the
+#   old ones.
 # - A Lean module is named from its package's root, so no Lean module, declaration or lock record changes; what changes
 #   in a lakefile or a manifest is a path to these packages.
 # Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s. It needs none of the other

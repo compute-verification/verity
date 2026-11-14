@@ -1,7 +1,7 @@
-"""Execution profile (CONTRACT.md §2 / §2.1) shared by production and replay.
+"""Execution profile (CONTRACT.md §2 / §2.1) of the engines the adapter builds.
 
-Everything that decides *what vLLM runs* lives here so that production and replay
-construct the engine from one place.  The declared flags are ``engine.env.ENGINE``, each with
+Everything that decides *what vLLM runs* lives here so that every engine is
+constructed from one place.  The declared flags are ``engine.env.ENGINE``, each with
 its reason in ``engine.env.REASONS``; batch invariance is the row's execution label's
 (``engine.served``), and a served Commit reads every switch back (``engine.served.require``).
 
@@ -22,9 +22,12 @@ from verity_vllm import settings
 from verity_vllm.config import checkpoint_entries, checkpoints_hf_home
 from verity_vllm.engine import env, handle
 from verity_vllm.engine.profiles.cases import CASES
+from verity_vllm.log import init_logger
 from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
 
 __all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profile_id_of", "verify_local_weights"]
+
+logger = init_logger(__name__)
 
 DECLARED_ENV = env.ENGINE
 
@@ -57,12 +60,25 @@ def load_checkpoints(path: str | Path) -> dict[str, dict[str, Any]]:
 
 def checkpoint_for(case: str, checkpoints_path: str | Path) -> dict[str, Any]:
     if case in CASES:
-        cp = load_checkpoints(checkpoints_path)[CASES[case]["repo"]]
+        repo = CASES[case]["repo"]
+        cp = load_checkpoints(checkpoints_path)[repo]
+        # read by repo, the later of two pins wins: a second revision of the case's repo would be served without a word.
+        # Pins at one revision (a repo under two roles) are one checkpoint and pass.
+        revisions = [str(c.get("revision")) for c in checkpoint_entries(checkpoints_path) if c.get("repo") == repo]
+        if len(set(revisions)) > 1:
+            raise SystemExit(f"case {case!r}: {len(revisions)} pins of {repo} differ in revision "
+                             f"({', '.join(r[:12] for r in revisions)}); a fixed case reads its checkpoint by repo, "
+                             "so the manifest pins one revision of that repo")
     else:
-        # generalization sweep: roles registered by verity_vllm/input_provenance/add_checkpoint.py carry `role == case`
+        # a role of the manifest (an entry added to `manifests/checkpoints.json` by hand, or by `fp8-checkpoint pin` or
+        # `int8-checkpoint pin` for a recipe pin) carries `role == case`
         matches = [c for c in checkpoint_entries(checkpoints_path) if c.get("role") == case]
         if not matches:
             raise SystemExit(f"case {case!r}: not in CASES and no checkpoints.json entry with role {case!r}")
+        if len(matches) > 1:
+            raise SystemExit(f"case {case!r}: {len(matches)} pins carry role {case!r} "
+                             f"({', '.join(str(c.get('revision'))[:12] for c in matches)}); a role names one checkpoint, "
+                             "so another revision of a model is pinned under a role of its own")
         cp = matches[0]
     # a recipe pin (fp8_checkpoint, int8_checkpoint) is made on the pod, never downloaded: its snapshot is there or not
     if not (cp.get("downloaded") or cp.get("recipe")) or not cp.get("local_path"):
@@ -84,32 +100,27 @@ def verify_local_weights(cp: dict[str, Any]) -> None:
             raise SystemExit(f"{fname}: sha256 {h.hexdigest()} != frozen {sha}")
 
 
-REPLAY_EXECS = ("eager", "compiled-nograph")
-
-
-TP_WORKER_EXTENSION = "verity_vllm.tp.poc_tp_worker.VerityTPWorkerExtension"
-
 #: vLLM's engine seed (`LLM(seed=...)`) for every profile; the manifest records it in `engine_kwargs`.
 ENGINE_SEED = 0
 
 
 def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager: bool = False, custom_ops: str | None = None,
-                  replay_exec: str = "eager", max_num_batched_tokens: int | None = None,
+                  max_num_batched_tokens: int | None = None,
                   tensor_parallel_size: int | None = 1, quantization: str | None = None) -> dict[str, Any]:
-    """LLM(...) kwargs. Production: stock defaults (``enforce_eager`` is a declared flag for the
+    """LLM(...) kwargs: stock defaults (``enforce_eager`` is a declared flag for the
     eager-production profile row, §15.5; ``custom_ops`` = ``"all"`` keeps vLLM's CUDA custom ops
     inside the compiled forward instead of inductor-generated kernels, another declared flag / new
     profile row; ``max_num_batched_tokens`` is a declared scheduler flag, used by the varied-batch
-    cases (M2) to change batch composition; replay must use the production's value so the recorded
-    schedule is reproducible). Replay: + trace replay; ``replay_exec`` = ``eager`` (dispatch-mode
-    interception, ``enforce_eager=True``) or ``compiled-nograph`` (the production compilation
-    with CUDA graphs off in replay only, ``compilation_config.cudagraph_mode = NONE``).
+    cases (M2) to change batch composition).
     ``tensor_parallel_size`` > 1 (a profile port's
     ``parallelism.tensor_parallel_size``) is a declared production flag: the model is sharded over that
     many GPUs (vLLM's multiprocess executor; the engine core stays in-process). The key is absent at 1 so
-    earlier profile ids are unchanged. In replay with TP > 1 the model lives in worker processes, so the
-    capture is installed there through vLLM's ``worker_extension_cls`` seam (``tp_worker.py``);
-    production never loads the extension."""
+    earlier profile ids are unchanged.
+    ``replay`` is False at every call and True is refused: there is no replay engine, the replay
+    evaluates a Build (``check/replay``)."""
+    if replay:
+        raise ValueError("engine_kwargs(replay=True): there is no replay engine; the replay evaluates a Build (check/replay), "
+                         "so an engine is built with replay=False")
     kw: dict[str, Any] = {
         "model": cp["local_path"],
         "tokenizer": cp["local_path"],
@@ -121,38 +132,16 @@ def engine_kwargs(cp: dict[str, Any], *, replay: bool, seed: int, enforce_eager:
     }
     if tensor_parallel_size is not None and int(tensor_parallel_size) > 1:
         kw["tensor_parallel_size"] = int(tensor_parallel_size)
-        if replay:
-            kw["worker_extension_cls"] = TP_WORKER_EXTENSION
     if quantization:
         # `--quantization fp8` (the b1-fp8 port) is a declared
         # production flag (LLM(quantization=...)); the key is absent when unset so earlier profile ids are unchanged.
-        # Replay reads it from the manifest's `quantization` field (replay.py) so the same online-quantised weights
-        # and the same FP8 kernels run under the capture.
         kw["quantization"] = str(quantization)
     if max_num_batched_tokens is not None:
         kw["max_num_batched_tokens"] = int(max_num_batched_tokens)
     if enforce_eager:
         kw["enforce_eager"] = True
-    if custom_ops and not replay:
+    if custom_ops:
         kw["compilation_config"] = {"custom_ops": [custom_ops]}
-    if replay and replay_exec not in REPLAY_EXECS:
-        raise ValueError(f"replay_exec must be one of {REPLAY_EXECS}")
-    if replay and replay_exec == "compiled-nograph":
-        if enforce_eager:
-            raise ValueError("compiled-nograph replay of an eager production profile makes no sense (the production ran no compiled kernels)")
-        kw["enable_trace_replay"] = True
-        kw["compilation_config"] = {"cudagraph_mode": "NONE"}
-        kw["enable_prefix_caching"] = False  # same replay restriction as below
-        return kw
-    if replay:
-        kw["enable_trace_replay"] = True
-        kw["enforce_eager"] = True  # replay restriction: dispatch-mode interception is eager-only
-        # Replay restriction: with prefix caching a request whose first block(s) match another
-        # request's never computes those positions itself (its KV reads there are the other request's
-        # values, its boundary has no step for them). Stock production keeps caching; the B0/B1 rows
-        # bind every position of a request to that request's own steps. Cross-request KV identity
-        # is a prefix-cache workload's rule.
-        kw["enable_prefix_caching"] = False
     return kw
 
 
@@ -193,7 +182,8 @@ def _tuned_gemm_arch_family(major: int, minor: int):
         from vllm.platforms.interface import DeviceCapability
 
         return _get_tuned_matmul_arch_family(DeviceCapability(int(major), int(minor)))
-    except Exception:  # noqa: BLE001  (another vLLM layout: the field is absent, not guessed)
+    except Exception as e:  # noqa: BLE001  (another vLLM layout: the field is absent, not guessed)
+        logger.debug("vLLM gave no tuned-GEMM arch family for capability %r.%r: %r", major, minor, e)
         return "<unavailable>"
 
 

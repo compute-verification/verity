@@ -10,8 +10,8 @@ public import Proofs.Flock.Soundness.Audit.HarmBound
 * `Composed.execRefinesZK_on_drawn`: `execRefinesZK_on` with an event `E` of the sample on both sides, at one table, as
   `execRefinesZK_tables_drawn` is at `J` tables: both audits' outcomes carry the sample, and the refinement is one
   inequality at each of the sampling design's samples, where `E` is fixed.
-* `StratifiedBlock.accepted_drawnWrong_le`: flock-verify accepts the sampling block with a sampled proof block wrong with
-  probability at most `ε_ks + ε_bind`: `zk_flock_drawnC_reg` at `planAtZKH`, carried to flock-verify's acceptance.
+* `StratifiedBlock.accepted_drawnWrong_le`: verity-verify-proof accepts the sampling block with a sampled proof block wrong with
+  probability at most `ε_ks + ε_bind`: `zk_flock_drawnC_reg` at `planAtZKH`, carried to verity-verify-proof's acceptance.
 * `StratifiedBlock.drawMiss_le`: the live sample misses a set `B` with probability at most `Law.stratified`'s escape of
   `B`, under A3 (`Law.execOS_escape_le`).
 * `StratifiedBlock.within_of_le`: a set in the confidence set, `δ ≤` its escape, is within the one budget:
@@ -35,7 +35,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
 
-/-- **The refinement at `--zk` at one table, with an event of the sample**: flock-verify `--zk` accepts the live audit at
+/-- **The refinement at `--zk` at one table, with an event of the sample**: verity-verify-proof `--zk` accepts the live audit at
 a sample in `E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a sample in `E`. -/
 theorem execRefinesZK_on_drawn (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (E : Finset (Fin n) → Prop) :

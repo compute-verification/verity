@@ -30,7 +30,7 @@ import importlib
 import json
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -38,7 +38,7 @@ import numpy as np
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
-from verity_vllm.properties.record import seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 REQUIRED_EDGE_KINDS = ("zeros", "max", "subnormal", "alternating")
 DTYPE_BITS = {"bfloat16": 16, "float16": 16, "float32": 32, "int32": 32, "int64": 64, "uint8": 8, "int8": 8, "bool": 8}
@@ -157,7 +157,7 @@ def evaluate_spec(spec, operand_words: list[np.ndarray]) -> list[int]:
 def check(adapter: str, d: Path) -> dict[str, Any]:
     mod = importlib.import_module(adapter)
     man = json.loads((d / "manifest.json").read_text())
-    rep: dict[str, Any] = {"schema": "verity-gen/difftest/v1", "adapter": adapter, "semantic_id": getattr(mod, "SEMANTIC_ID", None),
+    rep: dict[str, Any] = {"schema": REGISTRY["difftest"].schema, "adapter": adapter, "semantic_id": getattr(mod, "SEMANTIC_ID", None),
                            "produce": {k: man.get(k) for k in ("seed", "n", "torch", "device")}, "cases": [], "status": "fail"}
     kinds_seen: set[str] = set()
     passed = 0
@@ -198,7 +198,6 @@ class ProduceOptions:
     seed: int = option("--seed", type=int, default=7)
     out: str = option("--out")
     device: str = option("--device", default="cuda")
-    cmd: str = field(default="produce", init=False)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -207,14 +206,13 @@ class CheckOptions:
     dir: str = option("--dir")
     out: str = option("--out")
     append: bool = option("--append", default=False, action="store_true", help="merge into an existing quarantine.json")
-    cmd: str = field(default="check", init=False)
 
 
 COMMANDS = {"produce": ProduceOptions, "check": CheckOptions}
 
 
 def main(a: ProduceOptions | CheckOptions) -> int:
-    if a.cmd == "produce":
+    if isinstance(a, ProduceOptions):
         m = produce(a.adapter, a.n, a.seed, Path(a.out), a.device)
         print(f"[difftest] produced {len(m['cases'])} cases for {m['semantic_id']} -> {a.out}", file=sys.stderr)
         return 0

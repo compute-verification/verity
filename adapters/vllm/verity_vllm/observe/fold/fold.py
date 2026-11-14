@@ -503,7 +503,7 @@ class _Fold:
             self.notes.append(f"unbound root: Root {r.name!r} ({r.role}, {r.view!r}) has no weights field in profile {self.profile.id}")
             return
         try:
-            coll = self.weights_coll
+            coll: Any = self.weights_coll if self.header is not None else None   # the run header makes the weights parameter
             for k in path:
                 coll = coll[k]
         except (KeyError, IndexError, TypeError, AttributeError) as e:

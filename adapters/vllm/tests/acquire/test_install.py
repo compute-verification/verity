@@ -17,13 +17,13 @@ from verity_vllm.acquire import plan as P
 from verity_vllm.acquire.install import (
     IncompletePlan,
     OccurrenceSink,
+    apply_plan_to_committer,
     install_from_plan,
+    plan_selection,
 )
-from verity_vllm.correspondence.reader_for_acquire import (
-    AnnotationCorrespondence,
-    runtime_tree_of,
-)
+from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records.runtime_tree import runtime_tree_of
 
 PD = "0" * 64
 TABLES: dict[str, set[str]] = {"HAZARD_LEAVES": set(), "GATHER_FLUSH_LEAVES": set(), "PRE_FLUSH_LEAVES": set()}
@@ -86,7 +86,7 @@ def row(family, op, member, step=0, **extra):
 def make(rows, model, runner):
     man = {"schema": RM.SCHEMA, "program_digest": PD, "identities": rows, "manifest_digest": RM.manifest_digest(rows), "wrapper_prefix": "", "op_path_aliases": {}}
     rt = runtime_tree_of(model, runner, source="tiny")
-    return P.acquisition_plan(man, AnnotationCorrespondence(rt), tables=TABLES), rt
+    return P.acquisition_plan(man, AcquireCorrespondence(rt), tables=TABLES), rt
 
 
 def base_rows():
@@ -119,6 +119,7 @@ def test_installs_exactly_the_sites_and_observes_them():
     assert sink.shapes[("blocks.0.norm", "producer_output", "1")] == [[1, 3, 4]] and sink.shapes[("embed", "consumer_input", "in[0]")] == [[1, 3]]
     assert sink.shapes[("runner.sampler", "runner_return", ".sampled_token_ids")] == [[1, 3]] and sink.dtypes[("embed", "consumer_input", "in[0]")] == {"int64"}
     doc = sink.to_json()
+    assert doc["schema"] == "verity-vllm/acquisition-observed/v1"
     assert [(s["module"], s["kind"], s["slot"]) for s in doc["sites"]] == expect and all(s["occurrences"] == 2 for s in doc["sites"])
     inst.remove()
     assert len(model.blocks[0].proj._forward_hooks) == 0 and len(model.embed._forward_pre_hooks) == 0
@@ -142,17 +143,6 @@ def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor()
     inst.remove()
 
 
-def test_install_from_the_serialised_document(tmp_path):
-    model, runner = Tiny(), Runner()
-    plan, _ = make(base_rows(), model, runner)
-    path = tmp_path / "plan.json"
-    plan.save(path)
-    doc = P.load_plan(path)
-    inst = install_from_plan(doc, model, runner)
-    assert inst.keys() == [h.key() for h in plan.hooks()]
-    inst.remove()
-
-
 def test_refuses_a_plan_for_another_runtime():
     model, runner = Tiny(), Runner()
     plan, _ = make(base_rows(), model, runner)
@@ -165,14 +155,51 @@ def test_refuses_a_plan_for_another_runtime():
         install_from_plan(plan, model, object())
 
 
-def test_refuses_incomplete_plan_unless_told():
+def test_refuses_incomplete_plan():
     model, runner = Tiny(), Runner()
     plan, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
     assert not plan.complete
     with pytest.raises(IncompletePlan, match="unsupported"):
         install_from_plan(plan, model, runner)
-    inst = install_from_plan(plan, model, runner, refuse_incomplete=False)
-    assert len(inst.installed) == 7
+
+
+def test_a_selection_refuses_what_an_install_refuses():
+    model, runner = Tiny(), Runner()
+    plan, _ = make(base_rows(), model, runner)
+    assert plan_selection(plan, model) == (["embed", "blocks.0.norm", "blocks.0.proj", "logits"], ["embed"])
+    with pytest.raises(IncompletePlan, match=r"^no model to install on$"):
+        plan_selection(plan, None)
+    with pytest.raises(IncompletePlan, match=r"^plan hook sites not in the built model: \['blocks.0.norm', 'blocks.0.proj', 'embed', 'logits', 'embed'\]$"):
+        plan_selection(plan, nn.Sequential(nn.Linear(4, 4)))
+    with pytest.raises(IncompletePlan, match=r"^the committer has no model to install on$"):
+        apply_plan_to_committer(types.SimpleNamespace(), plan)
+    gone, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
+    with pytest.raises(IncompletePlan, match=r"^1 unsupported Value\(s\): blocks.0.gone/out: no legal site: producer_output at blocks.0.gone/out: "):
+        plan_selection(gone, model)
+
+
+def test_an_occurrence_that_holds_no_tensor_is_counted_apart():
+    sink, key = OccurrenceSink(), ("blocks.0.proj", "producer_output", "out")
+    sink(key, None)
+    sink(key, (None, 3))
+    assert sink.counts == {key: 2} and sink.non_tensor == {key: 2} and sink.shapes == {} and sink.dtypes == {}
+    assert sink.to_json()["sites"] == [{"module": key[0], "kind": key[1], "slot": key[2], "occurrences": 2, "shapes": [], "dtypes": [], "non_tensor": 2}]
+
+
+def test_a_site_whose_slot_names_no_place_of_its_call_hands_the_sink_nothing():
+    """A hook reads its site's slot at each call: `out` or the k-th member of what its module returns, `in[k]` of its arguments.
+    A slot of another form, and one past what the call holds, is installed and hands the sink nothing."""
+    model = Tiny()
+    second = P.AcquisitionSite("producer_output", "blocks.0.norm", "1")
+    sites = [P.AcquisitionSite("producer_output", "blocks.0.proj", "hidden"), P.AcquisitionSite("producer_output", "blocks.0.norm", "2"),
+             P.AcquisitionSite("producer_output", "logits", "0"), P.AcquisitionSite("consumer_input", "embed", "out"),
+             P.AcquisitionSite("consumer_input", "logits", "in[1]"), second]
+    plan = P.AcquisitionPlan(PD, PD, "tiny", [P.ValuePlan(s.module, s.slot, "instance_outputs", 1, chosen=s, status="chosen") for s in sites])
+    sink = OccurrenceSink()
+    inst = install_from_plan(plan, model, sink=sink)
+    assert inst.keys() == sorted(s.key() for s in sites) and not inst.missing
+    model(torch.tensor([[1, 2, 3]]))
+    assert sink.counts == {second.key(): 1} and sink.shapes == {second.key(): [[1, 3, 4]]}
     inst.remove()
 
 

@@ -21,7 +21,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.program import quarantine as _quarantine
-from verity_vllm.properties.record import seal
+from verity_vllm.records.property_record import seal
 
 ROOT = Path(_quarantine.__file__).parent
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",
@@ -37,7 +37,6 @@ def lint_file(path: Path) -> dict[str, Any]:
     tree = ast.parse(src, str(path))
     problems: list[str] = []
     is_adapter = path.name.endswith("_difftest.py")
-    module_names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(getattr(n, "ctx", None), ast.Store)}
     semantic_id = None
     n_defs = 0
     for node in ast.walk(tree):
@@ -88,10 +87,7 @@ def _parents(tree: ast.AST, target: ast.AST) -> list[ast.AST]:
         if node is target:
             out.extend(chain)
             return True
-        for ch in ast.iter_child_nodes(node):
-            if walk(ch, chain + [node]):
-                return True
-        return False
+        return any(walk(ch, chain + [node]) for ch in ast.iter_child_nodes(node))
 
     walk(tree, [])
     return out
