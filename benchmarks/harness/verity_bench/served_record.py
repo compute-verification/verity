@@ -245,7 +245,7 @@ def shown(summary: Mapping, handoff: Mapping | None, check: Mapping | None, publ
 
     layout = (handoff or {}).get("commit") or (published if isinstance(published, Mapping) else None)
     interior = summary.get("interior") or {}
-    draw = (handoff or {}).get("draw") or {}
+    sample = (handoff or {}).get("draw") or {}
     server = audit.get("proof_server") or {}
     cards = {str(p["device"]): {"sessions": p.get("sessions"), "seconds": p.get("seconds")}
              for p in (server.get("busy") or {}).values() if isinstance(p, Mapping) and p.get("device") is not None}
@@ -262,7 +262,7 @@ def shown(summary: Mapping, handoff: Mapping | None, check: Mapping | None, publ
         "ties": ties(summary, handoff, check, published, first_class),
         "first_stage": None if handoff is None else {
             "registration": handoff.get("registration"), "rule": (handoff.get("rule") or {}).get("replay"),
-            "sampled": draw.get("units"), "of": draw.get("population"),
+            "sampled": sample.get("units"), "of": sample.get("population"),
             "check": None if check is None else {k: check.get(k) for k in ("error", "session_error", "coins_reason", "said")}},
         "layout": None if layout is None else {k: layout[k] for k in LAYOUT if k in layout}
         | {"values": sorted(layout.get("values") or {})},
