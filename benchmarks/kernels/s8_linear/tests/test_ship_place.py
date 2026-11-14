@@ -84,9 +84,9 @@ def copy(tmp: Path, where: tuple[str, str, str], source: str, text: str, header:
     """A copy of the tree under tmp placed as `where` says, holding the frame and one source with its header, the source's
     #include spelled for the header's place; the copy's root and the source's directory from it."""
     root, own, beside = tmp / where[0], where[1], where[2]
-    (root / "benchmarks/torch_gpu").mkdir(parents=True)
+    (root / "benchmarks/kernels").mkdir(parents=True)
     for f in FRAME_FILES:
-        shutil.copy(FRAME / f, root / "benchmarks/torch_gpu" / f)
+        shutil.copy(FRAME / f, root / "benchmarks/kernels" / f)
     (root / own / beside).mkdir(parents=True)
     assert text.count(f'#include "{header}"') == 1
     (root / own / source).write_text(text.replace(f'#include "{header}"', f'#include "{beside}{header}"'))
