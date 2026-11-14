@@ -2,7 +2,7 @@ module
 
 public import Mathlib
 public import Definitions.Accounting.Guarantees.RemoteSketch
-public import Proofs.Accounting.RateAudit.DeployedSketchSum
+public import Proofs.Poub.RateAudit.DeployedSketchSum
 import Proofs.Pous.Prob
 
 /-!

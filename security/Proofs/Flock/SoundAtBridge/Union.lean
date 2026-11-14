@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.TS.ProofLayer
+public import Definitions.Pouw.TS.ProofLayer
 public import Definitions.Flock.Game
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

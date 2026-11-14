@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Assumptions.Sheet
-public import Definitions.Accounting.Headline.Sm120Measured
+public import Definitions.Pouw.Headline.Sm120Measured
 public import Definitions.Pouw.FpG1
 public import Definitions.Pouw.FpG1.H1
 import Mathlib.Algebra.Order.Floor.Extended
@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120 (trusted)
 
-`Definitions.Accounting.Guarantees.Headline`'s `Sm120SheetHeadline` (H1 + fx1 on DS-120's sheet, `1 − 5.860%` outside
+`Definitions.Pouw.Guarantees.Headline`'s `Sm120SheetHeadline` (H1 + fx1 on DS-120's sheet, `1 − 5.860%` outside
 `2^-40`) at H1's windows whose committed leaves are FP8-g1's or W4A8-g1's: its conclusion and every premise as they
 are but binding's, over proof layers whose values carry the round's operand leaves (`Pouw.FpG1.Leaves`), the round's
 other values in a free `W` as the record's `V`, with at least one proof a round, and one premise more, that every leaf
@@ -48,7 +48,7 @@ the layer commits is g1's on H1's grids (`Leaves.Fp8 Grids.h1`, `Leaves.W4a8 Gri
 Binding is `ProofLayer.BindingAt` at `δ_bind`, the form (I8)'s pieces take (`ProofsSoundOfPinned`), where the
 record takes its fork form at `δ_fork` (`BindingForkAt`) and reads it at `√δ_fork` (`BindingOfFork`). So the budget
 reads `δ_bind` where the record's reads `√δ_fork`, a fork-form bound `δ_fork` meets the premise at `δ_bind = √δ_fork`
-(`Proofs.Accounting.Headline.Whole`'s `moved_le_sqrt`), and no number moves.
+(`Proofs.Pouw.Headline.Whole`'s `moved_le_sqrt`), and no number moves.
 
 The credit is the record's, `T_cred = B_♭/f_max` of H1's floor program: it counts the int8 GEMM's MACs, which on a
 g1 window carry the FP8 (or FP4) model's products as integers `R + b`. Whether those MACs are the model's useful work
@@ -57,12 +57,12 @@ is open and is not settled here.
 The g1 premise reads what the layer commits (`ProofLayer.committed`) at a value type the statements fix, so neither an
 empty reading nor an empty proof layer meets it: a layer that commits an H1 weight off E4M3's grid fails it
 (`Proofs.Pouw.FpG1.H1`'s `offGrid_not_fp8`), while it meets every other premise
-(`Proofs.Accounting.Headline.FpG1`'s `offGrid_premises`). It narrows the windows the statement covers, and no
+(`Proofs.Pouw.Headline.FpG1`'s `offGrid_premises`). It narrows the windows the statement covers, and no
 more: the g1 premise does no work in the bound. The conclusion reads no operand value, so the bound is the record's,
 and a layer may carry on-grid leaves that no relation reads, which is why this statement is the record's bound at
 g1's windows.
 
-What is g1's is that the premises hold at an honest g1 window: `Proofs.Accounting.Headline.FpG1`'s
+What is g1's is that the premises hold at an honest g1 window: `Proofs.Pouw.Headline.FpG1`'s
 `sm120FpG1_honest_applies` and `sm120W4a8G1_honest_applies` discharge every premise at an honest window whose layer
 checks H1's committed ranges, which g1's leaves meet (`Leaves.fp8_inH1`, `Leaves.w4a8_inH1`). The witness isn't a
 served window: its relation is H1's ranges, not a served Program's, its receipt game is the honest one, and its time
@@ -74,7 +74,7 @@ The measured twins are the same at `Sm120MeasuredHeadline` (H1 + fx1 on sm_120's
 proved, as it is for the record itself: at A6's proved `½` floor the same bound on the same vector is 7.791%
 (`Sm120MeasuredHeadline`'s docstring). Beside the g1 premise, which narrows the windows covered, they take
 no premise the measured record doesn't: binding at `δ_bind` is what the record's fork form gives at `√δ_fork`.
-`Proofs.Accounting.Headline.FpG1Measured` has their honest witnesses on the measured data and the off-grid twin.
+`Proofs.Pouw.Headline.FpG1Measured` has their honest witnesses on the measured data and the off-grid twin.
 
 The statements:
 
