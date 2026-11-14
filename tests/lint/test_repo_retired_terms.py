@@ -17,9 +17,11 @@ What a row retires:
   (``Flock.Firewall``, ``FC_FIREWALL*``, ``DrawIsCoin``: a dot, an underscore, a hyphen, an inner capital or a ``*``,
   which matches any identifier characters); a plain word there (``window``), a path, and a name that owns the next
   (``machine_model``'s ``cover``) are not.  A ``*`` name's site isn't one where the identifier around it already says
-  the row's term: its words before a parenthesis, ``;`` or ``,``, joined as ``MonitoringPeriod`` (as spelled) or
-  ``monitoring_period`` (in any case), so ``MonitoringPeriodChecked`` says ``monitoring period`` and isn't a
-  ``*Period*`` site.
+  the row's term: its words before a parenthesis, ``;`` or ``,``, joined as ``MonitoringPeriod`` or lowerCamel
+  ``monitoringPeriod`` (as spelled otherwise) or ``monitoring_period`` (in any case), so ``MonitoringPeriodChecked``
+  and ``liveAt_monitoringPeriod`` say ``monitoring period`` and aren't ``*Period*`` sites.  The identifier is taken
+  whole, so one holding an old name beside the term (``ledgerPeriod_le_monitoringPeriod``) passes the glob, and a name
+  that is itself a row's old name (``ComposePeriod``) still counts through its own term.
 
 The lint reads the whole text of what the lane-text lint reads (``test_repo_lane_text.py``: code, Lean, shell and
 config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP`` names, with each reason, and outside
@@ -192,12 +194,13 @@ class Term:
     @staticmethod
     def _says(new: str) -> re.Pattern | None:
         """An identifier that says the term ``new`` gives (its words before a parenthesis, ``;`` or ``,``): those words
-        in CamelCase as spelled, or in snake_case in any case; None when they aren't plain words."""
+        in CamelCase as spelled but for the first letter's case, or in snake_case in any case; None when they aren't
+        plain words."""
         words = re.split(r"[(;,]", new, maxsplit=1)[0].split()
         if not words or not all(re.fullmatch(r"[A-Za-z0-9]+", w) for w in words):
             return None
         camel = "".join(w[0].upper() + w[1:] for w in words)
-        return re.compile(f"{re.escape(camel)}|(?i:{re.escape('_'.join(words))})")
+        return re.compile(f"[{camel[0]}{camel[0].lower()}]{re.escape(camel[1:])}|(?i:{re.escape('_'.join(words))})")
 
     @staticmethod
     def _part(p: str) -> str:
@@ -760,16 +763,21 @@ def period_sites(text: str) -> list[str]:
 
 
 def test_a_name_that_already_says_the_row_s_term_is_not_a_site_of_its_glob() -> None:
-    """A ``*`` name's site in an identifier that says the row's term (its words before the parenthesis, in CamelCase or
-    snake_case) isn't one; the old names, a name in a dotted path beside one that says the term, another row's glob, and a
-    glob whose row gives no plain term still count."""
+    """A ``*`` name's site in an identifier that says the row's term (its words before the parenthesis, in CamelCase,
+    lowerCamel or snake_case) isn't one; the old names, a name in a dotted path beside one that says the term, another
+    row's glob, and a glob whose row gives no plain term still count.  The identifier is read whole, so one holding an old
+    name beside the term passes."""
     got = {t.old: t for t in terms_of(PERIOD_EXAMPLE)}
-    assert got["*Period*"].says.pattern == "MonitoringPeriod|(?i:monitoring_period)"
+    assert got["*Period*"].says.pattern == "[Mm]onitoringPeriod|(?i:monitoring_period)"
+    assert not got["*Period*"].says.search("MONITORINGPeriod monitoringperiod")
     assert got["*Epoch*"].says is None and got["ComposePeriod"].says is None and got["horizon"].says is None
     assert period_sites("MonitoringPeriodChecked, MonitoringPeriod, monitoring_period_checked, MONITORING_PERIOD") == []
+    assert period_sites("monitoringPeriodG, monitoringPeriod_every, liveAt_monitoringPeriod") == []
+    assert period_sites("ledgerPeriod_le_monitoringPeriod") == []
     assert period_sites("ComposePeriod, CircuitWorkPeriod, DampenerRemotePeriod, MONITORINGPeriod, "
-                        "Accounting.MonitoringPeriod.LedgerPeriod") == [
-        "ComposePeriod", "CircuitWorkPeriod", "DampenerRemotePeriod", "MONITORINGPeriod", "LedgerPeriod"]
+                        "Accounting.MonitoringPeriod.LedgerPeriod, composePeriod, ledgerPeriod") == [
+        "ComposePeriod", "CircuitWorkPeriod", "DampenerRemotePeriod", "MONITORINGPeriod", "LedgerPeriod",
+        "composePeriod", "ledgerPeriod"]
     assert period_sites("ComposeHorizon, PooledHorizonBound, the horizon") == [
         "ComposeHorizon", "PooledHorizonBound", "horizon"]
     assert period_sites("DampenerMonitoringPeriod, MonitoringPeriodRemotePeriod") == [
