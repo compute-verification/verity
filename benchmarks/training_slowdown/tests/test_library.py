@@ -108,7 +108,7 @@ def test_a_run_of_every_entry_writes_its_least_slowdown_under_the_metrics_id(tmp
     write_config(attacks / "coded.toml", dials={"trainable": "blocks.0.w_*", "store": "q8"})
     monkeypatch.setattr(library, "ENTRIES", attacks)
     monkeypatch.setattr(starts, "REGISTRY", tiny_registry(tmp_path / "reg"))
-    # each entry traced once over the five runs: what is written turns on the arguments and the rows' slowdowns
+    # each entry traced once over the four runs: what is written turns on the arguments and the rows' slowdowns
     rows, trace = {}, library.row
 
     def once(cfg):
