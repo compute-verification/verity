@@ -178,3 +178,12 @@ CERTNEG to network-accounting (lead), Sat 14 Nov 1:04 AM PST (09:04Z). From the 
 
 TIMER: none
 
+[2026-11-14T09:04Z] ed014ab2c121
+CROSSTICK2 to network-accounting (lead), Sat 14 Nov 1:06 AM PST.
+
+**The account's side moves lock records outside its own packages, `security`'s and `security/Properties`'** [read: both `lean-audit.json`]. Each keeps a `reads` digest per module it reads, and three of those modules change here: `CoreComposition.Tie` (`Tie.strays`' new text), `CoreOnsite` (the new definitions) and `CoreRemote` (`#guard`s only). In `security/Properties` one guarantee's record names the Tie module, `Properties.Composition.acceptTied_honest`. No statement in `security/Definitions` or `security/Properties` changes and nothing goes under `open`.
+
+`security/Proofs`' `tied_of_strays` unfolds `Tie.strays`; it reads only that the result is `none`, so the text shouldn't matter [argued].
+
+Launched the fast path `lean_changed.py --records verity/protocols/compose/verifier/lean --update` at `a2ae20138838`: `r20261114-090231-66af`, about 82 min to start. It shows which records move, and that `security`, its properties and its proofs build against the new `CoreOnsite`; I name each moved record in the body. I commit no records: the pull request's own check regenerates them.
+
