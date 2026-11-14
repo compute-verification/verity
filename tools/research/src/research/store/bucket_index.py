@@ -29,6 +29,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -88,7 +89,8 @@ def iso(text: Any) -> str | None:
         return None
     try:
         t = datetime.fromisoformat(text.replace("Z", "+00:00"))
-    except ValueError:
+    except ValueError as e:
+        print(f"research data: {text[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
     return (t if t.tzinfo else t.replace(tzinfo=timezone.utc)).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 

@@ -26,6 +26,7 @@ import re
 import shutil
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -82,7 +83,8 @@ def _run(cmd: list[str], *, cwd: Path | None = None, timeout: float = 10.0, bina
         return None
     try:
         r = subprocess.run(cmd, cwd=cwd, capture_output=True, timeout=timeout)
-    except (OSError, subprocess.TimeoutExpired, ValueError):
+    except (OSError, subprocess.TimeoutExpired, ValueError) as e:
+        print(f"env: {cmd[0]} did not run, so what it reports is not recorded ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
     if r.returncode != 0:
         return None
@@ -184,7 +186,8 @@ def _sha256_file(p: Path) -> str | None:
             for chunk in iter(lambda: f.read(1 << 20), b""):
                 h.update(chunk)
         return h.hexdigest()
-    except OSError:
+    except OSError as e:
+        print(f"env: {p} not hashed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -323,8 +326,8 @@ def conditions(*, run_dir: Path | str | None = None, project: str | None = None,
     out["hw.cpu"] = _cpu()
     try:
         out["hw.hostname"] = socket.gethostname()
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"env: no host name recorded ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     out["exec.exclusive"] = exclusive
     out["exec.load_start"] = load_now()
     out["exec.project"] = project

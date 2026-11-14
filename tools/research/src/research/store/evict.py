@@ -62,6 +62,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Any, Callable, Iterator
@@ -342,8 +343,9 @@ def _sources(rd: Path, outs: dict[str, Any]) -> list[tuple[str, str]]:
     output at its `tree` path, as the run's `outputs.json` declares them (`attempt.typed_outputs`)."""
     src = [(outs[k], "") for k in ("run_record", "run_files") if isinstance(outs.get(k), str)]
     try:
-        doc = json.loads((rd / "outputs.json").read_bytes())
-    except (OSError, ValueError):
+        doc = json.loads((rd / "outputs.json").read_bytes()) if (rd / "outputs.json").exists() else None
+    except (OSError, ValueError) as e:
+        print(f"research data: {rd / 'outputs.json'} unread, so no typed output is evicted ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         doc = None
     entries = doc.get("outputs") if isinstance(doc, dict) else None
     for ent in entries if isinstance(entries, list) else []:
@@ -415,9 +417,12 @@ def evict_custody(run_dir: Path, custody: dict[str, Any], *, min_bytes: int = MI
         if size < min_bytes:
             continue
         p = rd / rel
+        if not os.path.lexists(p):
+            continue
         try:
             st = p.lstat()
-        except OSError:
+        except OSError as e:
+            print(f"research data: {rel} not evicted, its lstat failed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if st.st_size != size or st.st_mtime >= t0 or not p.is_file():
             continue
@@ -434,9 +439,12 @@ def evict_custody(run_dir: Path, custody: dict[str, Any], *, min_bytes: int = MI
 
 
 def _read_evicted(rd: Path) -> dict[str, Any]:
+    if not (rd / EVICTED_FILE).exists():
+        return {}
     try:
         doc = json.loads((rd / EVICTED_FILE).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research data: {rd / EVICTED_FILE} unread, read as empty ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return doc if isinstance(doc, dict) else {}
 

@@ -987,3 +987,11 @@ def test_a_python_package_named_passes_or_anything_in_a_venv_is_no_retained_pass
     assert not R._holds_passes(tree / "vllm/compilation/passes", root)
     (tree / "out/passes/r0").mkdir(parents=True)
     assert R._holds_passes(tree, root) and R._holds_passes(tree / "out/passes/r0", root)
+
+
+def test_a_record_that_does_not_parse_reads_as_none_and_says_so_but_a_missing_one_is_quiet(tmp_path, capsys):
+    assert R._read_json(tmp_path / "status.json") is None
+    assert capsys.readouterr().err == ""
+    (tmp_path / "status.json").write_text("{torn")
+    assert R._read_json(tmp_path / "status.json") is None
+    assert f"retention: {tmp_path / 'status.json'} unread, read as none (JSONDecodeError" in capsys.readouterr().err

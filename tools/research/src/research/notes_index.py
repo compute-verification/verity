@@ -74,7 +74,8 @@ def _utc(m: re.Match | None) -> str | None:
         return None
     try:
         t = dt.datetime.fromisoformat(f"{m[2]}T{m[3][:5]}")
-    except ValueError:
+    except ValueError as e:
+        print(f"notes index: {m[0][:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
     tz = (m[4] or "Z").upper()
     if tz != "Z":

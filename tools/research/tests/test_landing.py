@@ -1288,3 +1288,11 @@ def test_every_temporary_directory_in_the_loops_code_ignores_cleanup_errors():
     bad = {m: lines for m in LOOP_MODULES if (lines := _unguarded(SRC / m))}
     assert not bad, (f"tempfile.TemporaryDirectory without ignore_cleanup_errors=True at {bad}: pass it, since the loop's TMPDIR "
                      "is NFS and a silly-renamed file fails the cleanup")
+
+
+def test_a_progress_line_that_does_not_parse_is_skipped_and_said_but_no_progress_is_quiet(tmp_path, capsys):
+    assert landing.failing(tmp_path) is None
+    assert capsys.readouterr().err == ""
+    (tmp_path / "steps.jsonl").write_text('{"step": "lint", "status": "failed"}\n{"step": "su')
+    assert landing.failing(tmp_path) == "step lint"
+    assert "landing: a line of steps.jsonl is not JSON, skipped" in capsys.readouterr().err

@@ -74,3 +74,12 @@ def test_the_cli_records_and_every_run_carries_run_binaries(tmp_path, monkeypatc
     assert main(["run", "--runs-dir", str(runs), "--project", "t", "--no-sampler", "--", "true"]) == 0
     assert all("binaries" not in json.loads(p.read_text())["run"] for p in runs.glob("*/job.json")
                if json.loads(p.read_text())["run"]["id"] != job["run"]["id"]), "no bin dir: nothing added"
+
+
+def test_a_git_that_times_out_names_no_commit_and_says_so(tmp_path, monkeypatch, capsys):
+    def slow(*a, **kw):
+        raise subprocess.TimeoutExpired("git", 30)
+
+    monkeypatch.setattr(BP.subprocess, "run", slow)
+    assert BP.source_identity(tmp_path)["commit"] is None
+    assert f"binprov: git rev-parse in {tmp_path.resolve()} did not run (TimeoutExpired)" in capsys.readouterr().err
