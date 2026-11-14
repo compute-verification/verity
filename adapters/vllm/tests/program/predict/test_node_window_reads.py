@@ -42,13 +42,13 @@ def _source(read: IF.Read, unit: int) -> int:
 
 def test_the_prompt_read(rank0):
     """One read: unit ``32 b + t`` of the prefill's embedding reads takes the prompt's id t, ``radix [32, 32]``, ``step [0, 2]``;
-    its units are the ones the window leaves free under the prompt, and the decode's reads take theirs by wire."""
+    its units are the ones the window declares the prompt's ingress, and the decode's reads take theirs by wire."""
     circuit, w = rank0
     (read,) = NR.prompt_reads(w)
     assert read.doc() == {"reader": READ, "port": "tok", "param": NR.PROMPT, "at": 0, "radix": [BLOCKS, LP], "base": 0,
                           "step": [0, 2]}
     assert all(_source(read, b * LP + t) == 2 * t for b in range(BLOCKS) for t in range(LP))
-    assert {(f.tid, f.port, f.at, f.count) for f in w.free if f.name == NW.PROMPT} == {(READ, "tok", 0, BLOCKS * LP)}
+    assert {(g.reader, g.port, g.at, g.units) for g in w.ingress} == {(READ, "tok", 0, BLOCKS * LP)}
     assert circuit.units[READ] == (LP + 1) * BLOCKS
 
 
@@ -78,13 +78,16 @@ def test_rank_0_alone_writes_the_served_ids(rank0, rank1):
 
 
 def test_the_window_declares_them(rank0):
-    """Rank 0's circuit with its boundary reads passes `interface.Circuit`'s checks (`check_inputs`: each on its template's
-    port and units, no row declared twice) and records them as its ``boundary_reads``; the served ids declared twice don't."""
+    """Rank 0's circuit with its boundary reads in place of its prompt's ingress (PRF-618: the read stays, the ingress on
+    those rows goes) passes `interface.Circuit`'s checks (`check_inputs`: each on its template's port and units, no row
+    declared twice) and records them as its ``boundary_reads``; beside the ingress, or with the served ids twice, it doesn't."""
     circuit, w = rank0
     reads = tuple(NR.boundary_reads(w, 0))
-    assert dataclasses.replace(circuit, boundary_reads=reads).description()["boundary_reads"] == [r.doc() for r in reads]
-    with pytest.raises(ValueError, match="both fill rows"):
-        dataclasses.replace(circuit, boundary_reads=(*reads, *NR.served_reads(w, 0)))
+    read = dataclasses.replace(circuit, ingress=(), boundary_reads=reads)
+    assert read.description()["boundary_reads"] == [r.doc() for r in reads]
+    for edit in ({"boundary_reads": reads}, {"ingress": (), "boundary_reads": (*reads, *NR.served_reads(w, 0))}):
+        with pytest.raises(ValueError, match="both fill rows"):
+            dataclasses.replace(circuit, **edit)
 
 
 def test_refused_by_name():
