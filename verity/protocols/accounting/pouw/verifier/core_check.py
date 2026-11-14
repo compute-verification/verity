@@ -101,6 +101,8 @@ from verity.commitments.crypto import lms
 from verity.commitments.randomness import derive, frame
 
 ID = domains.POUW_PROTOCOL
+#: the Lean core protocol whose `serve` gives an execution phase's verdict of record
+EXE = "pouw-check"
 ONE_STAGE = domains.ONE_STAGE_PROTOCOL
 SCHEME = "frame-v3-sha512/hm96-sha512"
 FORMATS = (domains.REGISTRATION_V1, domains.REGISTRATION)
@@ -637,8 +639,8 @@ def registered(p: dict, c: dict) -> str | None:
     return _registered(p, c)[0]
 
 
-def check(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
-    """(verdict, reason, (public, profile) on acceptance)."""
+def check_twin(p: dict, c: dict, e: dict) -> tuple[str, Any, Any]:
+    """The Python twin of `PouwCheck.check`, for the difftest: (verdict, reason, (public, profile) on acceptance)."""
     rec = c["record"]
     why, fixed = _registered(p, c)
     if why is not None:
@@ -1824,8 +1826,8 @@ def rounds(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: An
     return None
 
 
-def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
-    """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
+def answer_twin(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
+    """The Python twin of `Core.Protocol.answer`, for the difftest: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
         return {"protocol": ID, "verdict": verdict, "reason": reason, "commitment": None if d is None else d.hex(),
                 "public": pub, "profile": prof}
@@ -1842,12 +1844,12 @@ def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
         ev = evidence(evidence_b)
     except Refused as e:
         return out("reject", f"evidence: {e}", d)
-    verdict, reason, acc = check(p, c, ev)
+    verdict, reason, acc = check_twin(p, c, ev)
     return out(verdict, reason, d, *(acc or (None, None)))
 
 
-def case(j: Any) -> dict:
-    """`Core.Protocol.case` on one `serve` case, ``{"commitment": hex, "evidence": hex, "params": JSON}``: a malformed one
+def case_twin(j: Any) -> dict:
+    """The Python twin of `Core.Protocol.case`, for the difftest, on one `serve` case, ``{"commitment": hex, "evidence": hex, "params": JSON}``: a malformed one
     is rejected with no commitment."""
     try:
         params_j = _get(j, "params", "the case")
@@ -1857,7 +1859,30 @@ def case(j: Any) -> dict:
     except Refused as err:
         return {"protocol": ID, "verdict": "reject", "reason": f"case: {err}", "commitment": None, "public": None,
                 "profile": None}
-    return answer(params_b, bytes.fromhex(c), bytes.fromhex(e))
+    return answer_twin(params_b, bytes.fromhex(c), bytes.fromhex(e))
+
+
+def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
+    """`Core.Protocol.answer`, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`) on the case of these
+    bytes, with `answer_twin` its twin: a disagreement is a rejection."""
+    return V.serve_of_record(EXE, serve_case(params_b, commitment_b, evidence_b),
+                             answer_twin(params_b, commitment_b, evidence_b))
+
+
+def case(j: Any) -> dict:
+    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-check serve`, through `verifier.serve_of_record`),
+    with `case_twin` its twin: a disagreement is a rejection."""
+    return V.serve_of_record(EXE, j, case_twin(j))
+
+
+def serve_case(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
+    """The `serve` case of a case's three inputs: its parameters as JSON (as text where they aren't JSON, which the
+    Lean rejects), its commitment and evidence as hex."""
+    try:
+        params_j: Any = json.loads(params_b)
+    except ValueError as e:
+        params_j = f"{params_b.decode('utf-8', 'replace')} ({e})"
+    return {"commitment": commitment_b.hex(), "evidence": evidence_b.hex(), "params": params_j}
 
 
 def line(a: dict) -> str:
@@ -1865,8 +1890,8 @@ def line(a: dict) -> str:
     return _canon(a)
 
 
-__all__ = ["ANSWER_KEYS", "COIN_KEY", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
-           "VALUES_TAG", "WINDOW_VALUES", "answer", "answer_of", "canonical", "case", "check", "commitment", "digest",
+__all__ = ["ANSWER_KEYS", "COIN_KEY", "EXE", "FORMATS", "ID", "LEVEL", "LIVE", "ONE_STAGE", "Refused", "SCHEME", "SIGNED_LIVE",
+           "VALUES_TAG", "WINDOW_VALUES", "answer", "answer_of", "answer_twin", "canonical", "case", "case_twin", "check_twin", "commitment", "digest",
            "draw", "evidence", "integrity", "integrity_json", "law_name", "line", "live_epoch", "live_salt", "lms_verify",
-           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "salt", "salt_of_record", "unit_draw",
+           "opening", "params", "pass_epoch", "ratio", "recorded_reason", "registered", "rounds", "salt", "salt_of_record", "serve_case", "unit_draw",
            "values_root", "verify_path", "window_anchors", "window_domain", "window_salt", "work_k", "work_units"]

@@ -53,14 +53,14 @@ def statements(tmp_path, monkeypatch):
 @pytest.fixture
 def period_exe(tmp_path) -> Path:
     """A stand-in ``pouw-period``: ``check params.json commitment.bin evidence.json``, answered as the Lean answers it
-    (`period_check.case`, which ``pouw-period``'s difftest holds to it), its verdict its exit."""
+    (`period_check.case_twin`, which ``pouw-period``'s difftest holds to it), its verdict its exit."""
     exe = tmp_path / "pouw-period"
     exe.write_text(f"""#!{sys.executable}
 import json, sys
 from pathlib import Path
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 _, params, commitment, evidence = sys.argv[1:]
-a = PC.case({{"params": json.loads(Path(params).read_text()), "commitment": Path(commitment).read_bytes().hex(),
+a = PC.case_twin({{"params": json.loads(Path(params).read_text()), "commitment": Path(commitment).read_bytes().hex(),
              "evidence": Path(evidence).read_bytes().hex()}})
 print(json.dumps(a))
 sys.exit({{"accept": 0, "reject": 1, "undecided": 2}}[a["verdict"]])
@@ -125,7 +125,7 @@ def test_a_period_with_no_lean_executable_is_missing_not_the_python_references(t
     """No ``pouw-period`` (``--exe``; `served_pouw.sh` passes none where it doesn't build): the piece is MISSING, exit
     2, holding only ``missing.json``, even over a case the Python reference accepts, and a stale case is removed."""
     case, args = _honest_period_args(tmp_path)
-    assert PC.case({k: case[k] for k in ("params", "commitment", "evidence")})["verdict"] == "accept"
+    assert PC.case_twin({k: case[k] for k in ("params", "commitment", "evidence")})["verdict"] == "accept"
     out = tmp_path / "period"
     out.mkdir(mode=0o700)
     (out / "answer.json").write_text("{}\n")

@@ -24,8 +24,11 @@ from typing import Any
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import salt as PS
+from verity.protocols.accounting.pouw.verifier import verifier as V
 
 ID = "verity/pouw/period/v1"
+#: the Lean core protocol whose `serve` gives a credit period's verdict of record
+EXE = "pouw-period"
 COMMITMENT_TAG = "verity/pouw/period/ledger/v1"
 PARAMS_KEYS = ("key", "main", "name", "sessions")
 #: the keys of a period's parameters with no session list
@@ -176,8 +179,8 @@ def published(credit: dict, p: dict, ledger: list) -> dict:
             "length": c["seq"] + 1 - o["seq"]}
 
 
-def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] | None]:
-    """`PouwCheck.Period.check`: the first window in a form the period's guarantee doesn't cover (``form``), else the
+def check_twin(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] | None]:
+    """The Python twin of `PouwCheck.Period.check`, for the difftest: the first window in a form the period's guarantee doesn't cover (``form``), else the
     period's credit or the first refusal, then a session of its close the parameters don't list or that repeats; on
     acceptance what it publishes (`published`) and its profile."""
     if (why := form(p["name"], e["windows"])) is not None:
@@ -192,8 +195,8 @@ def check(p: dict, c: dict, e: dict) -> tuple[str, str | None, tuple[Any, Any] |
     return "accept", None, (published(got, p, c["ledger"]), {"period": p["name"], "windows": len(got["windows"])})
 
 
-def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
-    """`Core.Protocol.answer`: every input gets a verdict, a decoding failure being a rejection naming its input."""
+def answer_twin(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
+    """The Python twin of `Core.Protocol.answer`, for the difftest: every input gets a verdict, a decoding failure being a rejection naming its input."""
     def out(verdict: str, reason: str | None, d: bytes | None, pub: Any = None, prof: Any = None) -> dict:
         return {"protocol": ID, "verdict": verdict, "reason": reason, "commitment": None if d is None else d.hex(),
                 "public": pub, "profile": prof}
@@ -210,12 +213,12 @@ def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
         ev = evidence(evidence_b)
     except CC.Refused as e:
         return out("reject", f"evidence: {e}", d)
-    verdict, reason, acc = check(p, c, ev)
+    verdict, reason, acc = check_twin(p, c, ev)
     return out(verdict, reason, d, *(acc or (None, None)))
 
 
-def case(j: Any) -> dict:
-    """`Core.Protocol.case` on one `serve` case, ``{"commitment": hex, "evidence": hex, "params": JSON}``: a malformed one
+def case_twin(j: Any) -> dict:
+    """The Python twin of `Core.Protocol.case`, for the difftest, on one `serve` case, ``{"commitment": hex, "evidence": hex, "params": JSON}``: a malformed one
     is rejected with no commitment."""
     try:
         params_j = CC._get(j, "params", "the case")
@@ -225,10 +228,23 @@ def case(j: Any) -> dict:
     except CC.Refused as err:
         return {"protocol": ID, "verdict": "reject", "reason": f"case: {err}", "commitment": None, "public": None,
                 "profile": None}
-    return answer(params_b, bytes.fromhex(c), bytes.fromhex(e))
+    return answer_twin(params_b, bytes.fromhex(c), bytes.fromhex(e))
+
+
+def answer(params_b: bytes, commitment_b: bytes, evidence_b: bytes) -> dict:
+    """`Core.Protocol.answer`, the Lean's (`pouw-period serve`, through `verifier.serve_of_record`) on the case of these
+    bytes, with `answer_twin` its twin: a disagreement is a rejection."""
+    return V.serve_of_record(EXE, CC.serve_case(params_b, commitment_b, evidence_b),
+                             answer_twin(params_b, commitment_b, evidence_b))
+
+
+def case(j: Any) -> dict:
+    """`Core.Protocol.case` on one `serve` case, the Lean's (`pouw-period serve`, through `verifier.serve_of_record`),
+    with `case_twin` its twin: a disagreement is a rejection."""
+    return V.serve_of_record(EXE, j, case_twin(j))
 
 
 __all__ = ["ALONE_KEYS", "CHALLENGE_PHASES_FORM", "COMMITMENT_TAG", "COVERED_TILE", "EVIDENCE_KEYS", "GUARANTEE",
-           "ID", "KEYS_FORM", "PARAMS_KEYS", "answer", "case",
-           "challenge_phases_refusal", "check", "commitment", "digest", "evidence", "form", "ledger_challenge_phases",
+           "EXE", "ID", "KEYS_FORM", "PARAMS_KEYS", "answer", "answer_twin", "case", "case_twin",
+           "challenge_phases_refusal", "check_twin", "commitment", "digest", "evidence", "form", "ledger_challenge_phases",
            "params", "published"]

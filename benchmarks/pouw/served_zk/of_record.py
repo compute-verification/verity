@@ -12,7 +12,7 @@ challenger's path runs its Lean and its Python reference on one input:
   certified (`pouw-check-difftest draw`, `core_check.draw`);
 * ``opening``: a sampled proof block's opening (`pouw-check-difftest opening`, `core_check.opening`), with ``prelude``,
   `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
-* ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case`).
+* ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case_twin` its Python).
 
 Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
 two agree when their outputs are the same canonical JSON (an `answer`'s reason included), or when both refuse the input.
@@ -227,7 +227,7 @@ class Record:
 
     def answer(self, case: dict) -> dict:
         """PoUW's outcome (`Core.Answer`) of a `serve` case, the whole outcome compared, reason included."""
-        py = CC.case(copy.deepcopy(case))
+        py = CC.case_twin(copy.deepcopy(case))
         if not self.lean:
             self._note("answer", py, None, None)
             return py

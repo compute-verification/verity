@@ -25,8 +25,8 @@ The directory, private as `composite.py` reads it (0700, its files 0600: the evi
 blobs}``, the commitment and evidence hex, no blobs: neither protocol reads any) and ``answer.json``: the line ``EXE
 check params.json commitment.bin evidence.json`` prints, the Lean's (``--exe``, its package's ``pouw-check`` or
 ``pouw-period``). ``period`` is answered by the Lean alone: without ``--exe`` its piece is MISSING (below), never the
-Python reference's (`period_check.case`, which the difftests hold to the Lean); ``v1`` without ``--exe`` is
-`core_check.case`'s. Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when it is
+Python reference's (`period_check.case_twin`, which the difftests hold to the Lean); ``v1`` without ``--exe`` is
+`core_check.case`'s, which is the Lean's too (`pouw-check serve`, its Python `case_twin` beside it). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when it is
 undecided, as the check does.
 
 ``--serve-run SERVE_DIR --window K`` takes the inputs from a served run (`served_verdicts.sh`'s serve dir, or its
@@ -88,8 +88,8 @@ def challenger_key(doc: dict) -> dict:
 
 
 def answer(protocol: str, out: Path, exe: str | None) -> dict:
-    """The protocol's answer on the case in `out`: the Lean's when `exe` is given, else (`v1` only) the Python
-    reference's."""
+    """The protocol's answer on the case in `out`, the Lean's: `exe`'s when it is given, else (`v1` only)
+    `core_check.case`'s, `pouw-check serve` with its Python twin beside it."""
     if exe is None:
         if protocol != V1:
             raise RuntimeError(NO_EXE)
