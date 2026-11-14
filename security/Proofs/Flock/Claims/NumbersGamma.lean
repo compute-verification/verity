@@ -10,8 +10,8 @@ public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 `γ = 16·(√(2·k(x)·C) + k(x))²` (`Claims.Flock.γ`), with `k(x)` the verifier's rounds and `C` the weight. Here:
 
 * `N₀ = 2^{d₀}`, level 0's codeword length, has `10 ≤ d₀ ≤ 23` at every `fast100` schedule (`fast100_logLen₀`), and
-  `--zk` keeps it (`m1Schedule_logLen₀`), so `k = ⌈4N₀/e₋⌉` is `kVal d₀` (`kRep_eq`) and `Numbers`' bounds on `κ` apply;
-* the weight at a schedule and pads' domain `N` is `C = 2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2N² + 2 + 4N₀/e₋` (`weightOf`; `N = 0`
+  `--zk` keeps it (`m1Schedule_logLen₀`), so `k = ⌈4N₀/e⌉` is `kVal d₀` (`kRep_eq`) and `Numbers`' bounds on `κ` apply;
+* the weight at a schedule and pads' domain `N` is `C = 2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2N² + 2 + 4N₀/e` (`weightOf`; `N = 0`
   without `--zk`, `N = padDomain`, `2^12` or `2^13`, with it), at most `2^33` at every `fast100` schedule and every
   `--zk` schedule (`weightOf_le_fast100`, `weightOf_le_m1`);
 * so `γ ≤ 2^48` at up to `768` rounds (`γ_le_48`), and `γ ≤ 2^105` at up to `2^20` rounds and any weight up to `2^64`
@@ -52,13 +52,13 @@ theorem m1Schedule_logLen₀ {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) :
 def weightNat (sch : Schedule) (N : ℕ) : ℕ :=
   2 * (sch.levels.map fun l => 2 ^ l.logLen * l.queries).sum + 2 * N ^ 2 + 2
 
-/-- **The weight `C` of `γ`** at a schedule and pads' domain `N`: `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2N² + 2 + 4N₀/e₋`, the last
-term `k`'s share at `e₋ = 2.7182818283` (`eLo`). -/
+/-- **The weight `C` of `γ`** at a schedule and pads' domain `N`: `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2N² + 2 + 4N₀/e`. -/
 noncomputable def weightOf (sch : Schedule) (N : ℕ) : ℝ :=
-  weightNat sch N + 4 * 2 ^ (sch.levels.headD default).logLen / 2.7182818283
+  weightNat sch N + 4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1
 
 theorem weightOf_nonneg (sch : Schedule) (N : ℕ) : 0 ≤ weightOf sch N := by
   unfold weightOf
+  have := Real.exp_pos 1
   positivity
 
 theorem weightNat_mono (sch : Schedule) {N N' : ℕ} (h : N ≤ N') : weightNat sch N ≤ weightNat sch N' := by
@@ -66,10 +66,12 @@ theorem weightNat_mono (sch : Schedule) {N N' : ℕ} (h : N ≤ N') : weightNat 
   have := Nat.pow_le_pow_left h 2
   omega
 
-/-- `4N₀/e₋ ≤ 2^25` at `N₀ ≤ 2^23`. -/
-theorem kTerm_le {d : ℕ} (hd : d ≤ 23) : 4 * (2 : ℝ) ^ d / 2.7182818283 ≤ 2 ^ 25 := by
+/-- `4N₀/e ≤ 2^25` at `N₀ ≤ 2^23`. -/
+theorem kTerm_le {d : ℕ} (hd : d ≤ 23) : 4 * (2 : ℝ) ^ d / Real.exp 1 ≤ 2 ^ 25 := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
   have h2 : (2 : ℝ) ^ d ≤ 2 ^ 23 := pow_le_pow_right₀ (by norm_num) hd
-  rw [div_le_iff₀ (by norm_num)]
+  rw [div_le_iff₀ he0]
   nlinarith
 
 theorem weightOf_le_of {sch : Schedule} {N : ℕ} (hd : (sch.levels.headD default).logLen ≤ 23)

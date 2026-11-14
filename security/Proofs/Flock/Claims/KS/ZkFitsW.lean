@@ -13,8 +13,8 @@ The witness-lane bound (`FlockSoundness.Discharge.ZkLink.session_sound_of_table_
 most one event there, and every event but one weighs at least `2` (`cZW_add_two_le`, at least one `τ` and level 0's
 or both `τ`'s).
 
-Each table's weight is `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e₋`, which pays exactly for its fork events with level
-0's and its share of `k` (`cZW_sum_le_tableWeight`); `k < 4·N₀/e₋ + 1` leaves `FitsFork` short (it charges every event
+Each table's weight is `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e`, which pays exactly for its fork events with level
+0's and its share of `k` (`cZW_sum_le_tableWeight`); `k < 4·N₀/e + 1` leaves `FitsFork` short (it charges every event
 twice, and the tables' weights leave less than `1` for `k`'s ceiling). Counted per round (`Claims.Escapes.FitsForkR`)
 only round `0`'s events are charged twice, and those weigh at least `2` less than the whole per table, so the joined
 escapes fit the deployed weight with the fork event of weight `k` (`joinEscW_fitsForkR_zk`).
@@ -187,11 +187,11 @@ open Flock FlockSoundness
 
 /-- **A table's weight pays for its masked fork events with level 0's and its share of `k`**: the fork events'
 weights are `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, level 0's included, within the table's
-`2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e₋` when `N_p` is at most the deployed pads' domain. -/
+`2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2 + 4·2^{d₀}/e` when `N_p` is at most the deployed pads' domain. -/
 theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Schedule} (hsch : sch = Accounting.m1Schedule st.m)
     (Np : ℕ)
     (hNp : Np ≤ Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0)) :
-    4 * tableLen true st / 2.7182818283 + ∑ i, Claims.Flock.cZW sch Np i ≤ tableWeight true st := by
+    4 * tableLen true st / Real.exp 1 + ∑ i, Claims.Flock.cZW sch Np i ≤ tableWeight true st := by
   set f : Accounting.Level → ℝ := fun l => 2 ^ l.logLen * l.queries with hf
   have hd : (default : Accounting.Level).queries = 0 := rfl
   have hhead := Claims.Flock.head_add_sum_shift f (by simp [hf, hd]) sch.levels
@@ -214,15 +214,15 @@ theorem cZW_sum_le_tableWeight {st : Stmt} {sch : FlockSoundness.Accounting.Sche
   simp only [level0, wSched, ↓reduceIte, ← hsch] at hfits
   have hpow : (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d ≤ 2 ^ (sch.levels.headD default).logLen :=
     pow_le_pow_right₀ (by norm_num) hfits
-  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / 2.7182818283 ≤
-      4 * 2 ^ (sch.levels.headD default).logLen / 2.7182818283 := by
+  have hdiv : 4 * (2 : ℝ) ^ (Claims.Flock.zkLevel0 st.m).d / Real.exp 1 ≤
+      4 * 2 ^ (sch.levels.headD default).logLen / Real.exp 1 := by
     gcongr
   rw [hsum, hlen, htw, Claims.Flock.Numbers.weightOf, weightNat_cast, ← hhead]
   linarith
 
 /-- **The masked escapes with level 0's fit the deployed weight with the fork event of weight `k`, counted per
 round**, at a statement whose tables `st j` are Flock ZK's, when each table's pads' weight is at most its deployed
-pads' domain and each table puts at most one event at a round: `2·k < 8·N₀/e₋ + 2`, round `0`'s weights are at most
+pads' domain and each table puts at most one event at a round: `2·k < 8·N₀/e + 2`, round `0`'s weights are at most
 every table's but `2`, and every table's at most its weight but `4·len/e` (`cZW_sum_le_tableWeight`). -/
 theorem joinEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)
     (x : Claims.Msg) {spec : SessionSpec} (st : ℕ → Stmt)
@@ -254,21 +254,21 @@ theorem joinEscW_fitsForkR_zk (rel : Readable.Parsed → Readable.Relation) {Ω 
     sum_map_eq_range (tables true x) (fun j => (spec, st j)) hst _
   have hN : N₀ true x = ∑ j ∈ Finset.range n, tableLen true (st j) :=
     sum_map_eq_range (tables true x) (fun j => (spec, st j)) hst _
-  have hk : ((deployZk rel).k x : ℝ) = (Claims.Flock.kOfReal (N₀ true x) : ℝ) := rfl
+  have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
   show 2 * ((deployZk rel).k x : ℝ) + _ + _ ≤ 2 * weight true x
   rcases Nat.eq_zero_or_pos n with h0 | hpos
   · have := k_le_weight true x
     rw [h0, Finset.sum_range_zero, Finset.sum_range_zero, add_zero, add_zero, hk]
     linarith
-  have hper : ∀ j ∈ Finset.range n, 4 * tableLen true (st j) / 2.7182818283 +
+  have hper : ∀ j ∈ Finset.range n, 4 * tableLen true (st j) / Real.exp 1 +
       ∑ i, Claims.Flock.cZW (sch j) (Np j) i ≤ tableWeight true (st j) := fun j hj => by
     have hj := Finset.mem_range.1 hj
     exact cZW_sum_le_tableWeight (hsch j hj) (Np j) (hNp j hj)
   have hs := Finset.sum_le_sum hper
   rw [Finset.sum_add_distrib, ← Finset.sum_div, ← Finset.mul_sum, ← hN, ← hw] at hs
   rw [Finset.sum_sub_distrib, Finset.sum_const, Finset.card_range, nsmul_eq_mul]
-  have he : (0 : ℝ) < 2.7182818283 := by norm_num
-  have hceil := Claims.Flock.kOfReal_lt (N₀_nonneg true x)
+  have he := Real.exp_pos 1
+  have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg true x)) he.le)
   have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast hpos
   rw [hk]
   linarith

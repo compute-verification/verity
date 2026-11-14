@@ -15,7 +15,7 @@ at every set of the auditor's copies `h`:
   summed `2^10` to `n·2^23` (`zkOk_sound`, `FlockDeploy.N₀_le`); so the code's tables, the most any template's
   reference statement has, are at most `200` (`tables_le`);
 * `ref_one_table`: where the two-stage design evaluates, template `t`'s reference statement has one table
-  (`templateOk`), so its level-0 length is at most `2^23` and its sessions' `k′ = ⌈4N₀/e₋⌉` at most `12343986`;
+  (`templateOk`), so its level-0 length is at most `2^23` and its sessions' `k′ = ⌈4N₀/e⌉` at most `12343986`;
 * `κF_le`: so each template's sessions' knowledge error `κ_F = 4·ε_table + 2^{−m′} + 2k′/K′ + e^{−k′/8}`, at its
   `N₀` (`κFAt`), is at most `2^{−190}`;
 * `slack_le_one_add`, `slack_sq_le_one_add`: the waits' slack factor `c = 2^{2^{−j}}` at `j = slackExp` is at most
@@ -78,11 +78,11 @@ theorem tables_le (x : Msg) : (code h).tables x ≤ 200 := by
 
 /-- **Where the design evaluates, a template's session is one table**: `templateOk` holds each template's reference
 statement to one table (`templateOk_of_two`), so its masked level-0 length is at most `2^23` and its sessions'
-`k′ = ⌈4N₀/e₋⌉` at most `12343986`, the one table's at `m = 35`. `ref_numbers`'s `200` tables are Flock's masked
+`k′ = ⌈4N₀/e⌉` at most `12343986`, the one table's at `m = 35`. `ref_numbers`'s `200` tables are Flock's masked
 scope's (`zkOk`): the two-stage verifier refuses every run of a template with more than one. -/
 theorem ref_one_table {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) {t : ℕ}
     (ht : t < h.ms.length) :
-    (shapeOf (h.xS₀ t)).length = 1 ∧ n₀ h t ≤ 2 ^ 23 ∧ Claims.Flock.kOfReal (n₀ h t) ≤ 12343986 := by
+    (shapeOf (h.xS₀ t)).length = 1 ∧ n₀ h t ≤ 2 ^ 23 ∧ ⌈4 * n₀ h t / Real.exp 1⌉₊ ≤ 12343986 := by
   have h1 : (shapeOf (h.xS₀ t)).length = 1 := by
     have hok := templateOk_of_two h hd ht
     unfold templateOk at hok
@@ -96,7 +96,10 @@ theorem ref_one_table {s : AuditStatement} {d : Design.Two} (hd : two h s = some
     have hle := (ref_numbers h t).2.2.2
     rw [h1] at hle
     simpa using hle
-  refine ⟨h1, hN, Claims.Flock.kOfReal_le ?_⟩
+  refine ⟨h1, hN, ?_⟩
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  rw [Nat.ceil_le, div_le_iff₀ he0]
   push_cast
   linarith
 
@@ -108,16 +111,16 @@ section Numbers
 variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
 
 /-- **Each template's sessions' knowledge error is at most `2^{−190}`**: `κ_F` at template `t`'s `N₀` (`κFAt`), at the
-code's at most `200` tables (`tables_le`), `m′ = 210`, `K′ = 2^256` and `k′ = ⌈4N₀/e₋⌉` from `1507` to `200·2^24`
+code's at most `200` tables (`tables_le`), `m′ = 210`, `K′ = 2^256` and `k′ = ⌈4N₀/e⌉` from `1507` to `200·2^24`
 (`ref_numbers`), at every statement and every Flock record. -/
 theorem κF_le (x : Msg) (t : ℕ) :
     Claims.SamplingGeneric.κFAt (SamplingDeploy.deployOf F (code h)) x (n₀ h t) ≤ 2⁻¹ ^ 190 := by
   obtain ⟨hn1, hn200, hN, hN'⟩ := ref_numbers h t
   have hn : ((shapeOf (h.xS₀ t)).length : ℝ) ≤ 200 := by exact_mod_cast hn200
-  have hk1 : 1507 ≤ Claims.Flock.kOfReal (n₀ h t) := Claims.Flock.Numbers.k_ge hN
-  have hk2 : (Claims.Flock.kOfReal (n₀ h t) : ℝ) ≤ 200 * 2 ^ 24 :=
+  have hk1 : 1507 ≤ ⌈4 * n₀ h t / Real.exp 1⌉₊ := Claims.Flock.Numbers.k_ge hN
+  have hk2 : (⌈4 * n₀ h t / Real.exp 1⌉₊ : ℝ) ≤ 200 * 2 ^ 24 :=
     (Claims.Flock.Numbers.k_le_mul (by exact_mod_cast hn1) (le_trans (by positivity) hN) hN').trans (by nlinarith)
-  have he : Real.exp (-(Claims.Flock.kOfReal (n₀ h t) : ℝ) / 8) ≤ 2⁻¹ ^ 250 := by
+  have he : Real.exp (-(⌈4 * n₀ h t / Real.exp 1⌉₊ : ℝ) / 8) ≤ 2⁻¹ ^ 250 := by
     have := Claims.Flock.Numbers.exp_neg_k_le hk1
     rwa [show (-(250 : ℝ)) = -((250 : ℕ) : ℝ) by norm_num, inv_two_pow_eq] at this
   have e205 : (2 : ℝ) ^ (-(205 : ℝ)) = 2⁻¹ ^ 205 := by
@@ -131,7 +134,7 @@ theorem κF_le (x : Msg) (t : ℕ) :
   have h1 : 4 * (((code h).tables x : ℝ) * 2⁻¹ ^ 205) ≤ 4 * (200 * 2⁻¹ ^ 205) := by
     have : ((code h).tables x : ℝ) ≤ 200 := by exact_mod_cast tables_le h x
     gcongr
-  have h3 : 2 * (Claims.Flock.kOfReal (n₀ h t) : ℝ) / 2 ^ 256 ≤ 2 * (200 * 2 ^ 24) / 2 ^ 256 := by
+  have h3 : 2 * (⌈4 * n₀ h t / Real.exp 1⌉₊ : ℝ) / 2 ^ 256 ≤ 2 * (200 * 2 ^ 24) / 2 ^ 256 := by
     gcongr
   have hsum : 4 * (200 * (2 : ℝ)⁻¹ ^ 205) + 2⁻¹ ^ 210 + 2 * (200 * 2 ^ 24) / 2 ^ 256 + 2⁻¹ ^ 250 ≤ 2⁻¹ ^ 190 := by
     norm_num

@@ -354,8 +354,8 @@ theorem ofRec_EO_runs_exp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.
       hN x s (ms.take (IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x))
     show DO.k (((D.record IV).vstar x (ms.take (IV.k (Claims.Recursion.xI (D.record IV) x) +
       (D.record IV).kS x))).getD s []) = ((D.record IV).nums x s).k
-    unfold Claims.Flock.Deploy.k Nums.k
-    rw [hN₀, Claims.Flock.kOf_eq]
+    unfold Claims.Flock.Deploy.k
+    rw [hN₀, Claims.Recursion.Nums.k_eq]
 
 /-- **`CompiledEORunsExp` holds at every compiled record** (`ofRec_EO_runs_exp`). `SessionAccepts` is not read: each
 session's replay is counted whether or not it accepts. -/

@@ -49,7 +49,7 @@ At the deployed bound record (`RecDeploy.bdDeployed`) `γ`'s weight at `IVStar` 
 deployed plain verifier takes rounds at every statement (`RecDeploy.V_k_pos_flock`), so:
 
 * (P3) holds exactly where `w ≥ coverW wE` at every statement, `coverW wE = (√wE + (1 + 210·k)·√(k_I/32))²` at `DE`'s
-  weight `wE`, `k = ⌈4·N₀/e₋⌉` at the deployed plain record's `N₀` and `k_I` its verifier's rounds
+  weight `wE`, `k = ⌈4·N₀/e⌉` at the deployed plain record's `N₀` and `k_I` its verifier's rounds
   (`RecDeploy.weightCovers_deployed_iff`), at `w = coverW wE` in particular (`RecDeploy.weightCovers_coverW`);
 * it fails wherever `w ≤ wE` at some statement, at `w = wE` in particular (`RecDeploy.not_weightCovers_of_le`,
   `RecDeploy.not_weightCovers_self`): one weight for both records, the deployed plain record's, does not meet it;
@@ -176,10 +176,10 @@ namespace RecDeploy
 open Claims (Msg Out)
 open FlockDeploy (Coin)
 
-/-- **(P3)'s floor at the deployment**, at `DE`'s weight `wE`: `(√wE + (1 + 210·k)·√(k_I/32))²`, with `k = ⌈4·N₀/e₋⌉` at
+/-- **(P3)'s floor at the deployment**, at `DE`'s weight `wE`: `(√wE + (1 + 210·k)·√(k_I/32))²`, with `k = ⌈4·N₀/e⌉` at
 the deployed plain record's `N₀` and `k_I` the deployed plain verifier's rounds. -/
 noncomputable def coverW (wE : Msg → ℝ) (x : Msg) : ℝ :=
-  (Real.sqrt (wE x) + (1 + 210 * (Claims.Flock.kOfReal (FlockDeploy.N₀ false x) : ℝ)) *
+  (Real.sqrt (wE x) + (1 + 210 * (⌈4 * FlockDeploy.N₀ false x / Real.exp 1⌉₊ : ℝ)) *
     Real.sqrt ((FlockDeploy.V false).k x / 32)) ^ 2
 
 /-- **The deployed bound record's floor is `coverW`** at its `DE`'s weight, whatever else the code side picks. -/
@@ -190,7 +190,7 @@ theorem coverWeight_bdDeployed (rel : _root_.Flock.Readable.Parsed → _root_.Fl
     (bdDeployed rel nextE colsE wE join rowIn final w).coverWeight = coverW wE := by
   funext x
   show (Real.sqrt (wE x) + (1 + ((Claims.Flock.Numbers.waits : ℕ) : ℝ) *
-    (Claims.Flock.kOfReal (FlockDeploy.N₀ false x) : ℝ)) * Real.sqrt ((FlockDeploy.V false).k x / 32)) ^ 2 = _
+    (⌈4 * FlockDeploy.N₀ false x / Real.exp 1⌉₊ : ℝ)) * Real.sqrt ((FlockDeploy.V false).k x / 32)) ^ 2 = _
   rw [show ((Claims.Flock.Numbers.waits : ℕ) : ℝ) = 210 by norm_num [Claims.Flock.Numbers.waits]]
   rfl
 
@@ -245,10 +245,10 @@ theorem coverW_plain_le (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   obtain ⟨hN₀, hN₁⟩ := FlockDeploy.N₀_le h.setup h.size_pos fun st hst =>
     FlockDeploy.tableLen_plain_bounds st (h.tab st hst).1 (h.tab st hst).2.1
   have hk := Claims.Flock.Numbers.k_le_mul hn (le_trans (by norm_num) hN₀) hN₁
-  have hk0 : (0 : ℝ) ≤ (Claims.Flock.kOfReal (FlockDeploy.N₀ false x) : ℝ) := Nat.cast_nonneg _
-  show (Real.sqrt (FlockDeploy.weight false x) + (1 + 210 * (Claims.Flock.kOfReal (FlockDeploy.N₀ false x) : ℝ)) *
+  have hk0 : (0 : ℝ) ≤ (⌈4 * FlockDeploy.N₀ false x / Real.exp 1⌉₊ : ℝ) := Nat.cast_nonneg _
+  show (Real.sqrt (FlockDeploy.weight false x) + (1 + 210 * (⌈4 * FlockDeploy.N₀ false x / Real.exp 1⌉₊ : ℝ)) *
     Real.sqrt ((FlockDeploy.V false).k x / 32)) ^ 2 ≤ (sts.size : ℝ) ^ 3 * 2 ^ 72
-  generalize (Claims.Flock.kOfReal (FlockDeploy.N₀ false x) : ℝ) = kc at hk hk0 ⊢
+  generalize (⌈4 * FlockDeploy.N₀ false x / Real.exp 1⌉₊ : ℝ) = kc at hk hk0 ⊢
   generalize FlockDeploy.weight false x = C at hC hC0 ⊢
   generalize ((FlockDeploy.V false).k x : ℝ) = v at hV hv0 ⊢
   generalize (sts.size : ℝ) = n at hn hC hV hk ⊢

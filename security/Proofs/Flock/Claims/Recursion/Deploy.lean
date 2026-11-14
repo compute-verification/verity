@@ -467,8 +467,8 @@ noncomputable def numsOf (xO : Claims.Msg) : Claims.Recursion.Nums :=
 
 theorem numsOf_N₀ (xO : Claims.Msg) : ((numsOf xO).N₀ : ℝ) = N₀O xO := N₀Oq_cast xO
 
-theorem numsOf_k (xO : Claims.Msg) : (numsOf xO).k = Claims.Flock.kOfReal (N₀O xO) := by
-  rw [Claims.Recursion.Nums.k, Claims.Flock.kOf_eq, numsOf_N₀]
+theorem numsOf_k (xO : Claims.Msg) : (numsOf xO).k = ⌈4 * N₀O xO / Real.exp 1⌉₊ := by
+  rw [Claims.Recursion.Nums.k_eq, numsOf_N₀]
 
 open Classical in
 /-- Inner rounds at which part `s`'s staged statement sets up, when there are any. -/

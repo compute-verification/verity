@@ -337,7 +337,7 @@ when each table's pads' weight is at most its deployed pads' domain and only lev
 `0`, the fork of weight `k` and the joined escapes, round `0`'s charged twice, leave every table's level caps' and pads
 roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
 (`cZW_sum_le_tableWeight`), round `0` holds at most level 0's, the room and level 0's are every table's but `2`
-(`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e₋ + 2`. -/
+(`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
 theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)
@@ -358,7 +358,7 @@ theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
     sum_map_eq_range (tables true x) (fun j => (spec, st j)) hst _
   have hN : N₀ true x = ∑ j ∈ Finset.range n, tableLen true (st j) :=
     sum_map_eq_range (tables true x) (fun j => (spec, st j)) hst _
-  have hk : ((deployZk rel).k x : ℝ) = (Claims.Flock.kOfReal (N₀ true x) : ℝ) := rfl
+  have hk : ((deployZk rel).k x : ℝ) = (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ) := rfl
   show 2 * ((deployZk rel).k x : ℝ) + _ + _ + _ ≤ 2 * weight true x
   rcases Nat.eq_zero_or_pos n with h0 | hpos
   · have := k_le_weight true x
@@ -370,14 +370,14 @@ theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.M
       rw [h0, Finset.sum_range_zero]
     rw [hj0, hr0', h0, Finset.sum_range_zero, hk]
     linarith
-  have hper : ∀ j ∈ Finset.range n, 4 * tableLen true (st j) / 2.7182818283 +
+  have hper : ∀ j ∈ Finset.range n, 4 * tableLen true (st j) / Real.exp 1 +
       ∑ i, Claims.Flock.cZW (sch j) (Np j) i ≤ tableWeight true (st j) := fun j hj => by
     have hj := Finset.mem_range.1 hj
     exact cZW_sum_le_tableWeight (hsch j hj) (Np j) (hNp j hj)
   have hs := Finset.sum_le_sum hper
   rw [Finset.sum_add_distrib, ← Finset.sum_div, ← Finset.mul_sum, ← hN, ← hw] at hs
-  have he : (0 : ℝ) < 2.7182818283 := by norm_num
-  have hceil := Claims.Flock.kOfReal_lt (N₀_nonneg true x)
+  have he := Real.exp_pos 1
+  have hceil := Nat.ceil_lt_add_one (div_nonneg (mul_nonneg (by norm_num : (0 : ℝ) ≤ 4) (N₀_nonneg true x)) he.le)
   have hn1 : (1 : ℝ) ≤ n := by exact_mod_cast hpos
   rw [hk]
   linarith
@@ -389,7 +389,7 @@ when each table's pads' weight is at most its deployed pads' domain and only lev
 `0`, the fork of weight `k` and the joined escapes, round `0`'s charged twice, leave every table's level caps' and pads
 roots' weights (`Claims.Flock.roomW`) of twice the deployed weight: each table's weight pays for its events
 (`cZW_sum_le_tableWeight`), round `0` holds at most level 0's, the room and level 0's are every table's but `2`
-(`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e₋ + 2`. -/
+(`Claims.Flock.roomW_add`), and `2·k < 8·N₀/e + 2`. -/
 theorem zk_fork_room (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) {spec : SessionSpec}
     (st : ℕ → Stmt) (hst : ∀ j < (tables true x).length, (tables true x)[j]? = some (spec, st j))
     (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < (tables true x).length, sch j = Accounting.m1Schedule (st j).m)

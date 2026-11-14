@@ -396,8 +396,8 @@ theorem prefix_bad_le {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
   change DO.εtable (sessStmt H D I P x ω s r) = _ at hεt
   change DO.weight (sessStmt H D I P x ω s r) = _ at hwt
   have hkk : DO.k (sessStmt H D I P x ω s r) = (D.nums x s).k := by
-    unfold Flock.Deploy.k Nums.k
-    rw [hN₀, Flock.kOf_eq]
+    unfold Flock.Deploy.k
+    rw [hN₀, Nums.k_eq]
   have hle : offO H D I DO P x ω s r + DO.V.k (sessStmt H D I P x ω s r) ≤ D.V.k x := hRd x s _
   unfold sessPrB
   split_ifs with hA

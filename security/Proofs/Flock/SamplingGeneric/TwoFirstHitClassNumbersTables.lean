@@ -19,10 +19,10 @@ checks'), and each is the smallest power of two the sum is within (`hashBound_51
   `2^-92` and `2^-88`.
 
 **The sessions' expected reruns at `n` tables.** `Compiled.es` is the largest of `E^rep`'s `1 + m′·k` at the proof
-blocks' shapes, with `m′ = 210` (`waits`) and `k = ⌈4N₀/e₋⌉` at the level-0 symbols `N₀` of the block's session, summed
+blocks' shapes, with `m′ = 210` (`waits`) and `k = ⌈4N₀/e⌉` at the level-0 symbols `N₀` of the block's session, summed
 over the session's tables. A table has at most `2^23` of them, so a session of `n` tables has `N₀ ≤ n·2^23`
 (`SpotFlock.ref_numbers`, at each template's reference statement, which Flock's masked scope holds to `1` to `200`
-tables), and its `k` is at most `⌈4·n·2^23/e₋⌉`: `24687972`, `197503772` and `2468797139` at `2`, `16` and `200` tables
+tables), and its `k` is at most `⌈4·n·2^23/e⌉`: `24687972`, `197503772` and `2468797139` at `2`, `16` and `200` tables
 (`k_le_tables2`, `k_le_tables16`, `k_le_tables200`; each is that ceiling exactly, `k_tables_eq`). So `e_s` is at most
 `5184474121`, `41475792121` and `518447399191` there (`reruns_tables_eq`). At one table `k` is
 `SpotFlock.ref_one_table`'s `12343986`; `SpotFlock.κF_le` reads the same `k` at up to `200` tables through the coarser
@@ -41,23 +41,36 @@ namespace Claims.Flock.Numbers
 /-! ## A session's `k` at several tables -/
 
 /-- `k` at `N₀ ≤ 2·2^23`, a session of two tables, is at most `24687972`. -/
-theorem k_le_tables2 {N : ℝ} (hN : N ≤ 2 * 2 ^ 23) : kOfReal N ≤ 24687972 :=
-  kOfReal_le (by norm_num at hN ⊢; linarith)
+theorem k_le_tables2 {N : ℝ} (hN : N ≤ 2 * 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 24687972 := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  rw [Nat.ceil_le, div_le_iff₀ he0]
+  push_cast
+  linarith
 
 /-- `k` at `N₀ ≤ 16·2^23`, a session of `16` tables, is at most `197503772`. -/
-theorem k_le_tables16 {N : ℝ} (hN : N ≤ 16 * 2 ^ 23) : kOfReal N ≤ 197503772 :=
-  kOfReal_le (by norm_num at hN ⊢; linarith)
+theorem k_le_tables16 {N : ℝ} (hN : N ≤ 16 * 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 197503772 := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  rw [Nat.ceil_le, div_le_iff₀ he0]
+  push_cast
+  linarith
 
 /-- `k` at `N₀ ≤ 200·2^23`, a session of `200` tables, is at most `2468797139`. -/
-theorem k_le_tables200 {N : ℝ} (hN : N ≤ 200 * 2 ^ 23) : kOfReal N ≤ 2468797139 :=
-  kOfReal_le (by norm_num at hN ⊢; linarith)
+theorem k_le_tables200 {N : ℝ} (hN : N ≤ 200 * 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 2468797139 := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  rw [Nat.ceil_le, div_le_iff₀ he0]
+  push_cast
+  linarith
 
-/-- **Each is the ceiling exactly**: `⌈4·n·2^23/e₋⌉` at `n = 2`, `16` and `200`. -/
+/-- **Each is the ceiling exactly**: `⌈4·n·2^23/e⌉` at `n = 2`, `16` and `200`, from `e`'s nine-digit bounds. -/
 theorem k_tables_eq :
-    kOfReal (2 * 2 ^ 23) = 24687972 ∧ kOfReal (16 * 2 ^ 23) = 197503772 ∧ kOfReal (200 * 2 ^ 23) = 2468797139 :=
-  ⟨kOfReal_eq (n := 24687972) (by norm_num) (by norm_num) (by norm_num),
-    kOfReal_eq (n := 197503772) (by norm_num) (by norm_num) (by norm_num),
-    kOfReal_eq (n := 2468797139) (by norm_num) (by norm_num) (by norm_num)⟩
+    ⌈4 * (2 * 2 ^ 23 : ℝ) / Real.exp 1⌉₊ = 24687972 ∧ ⌈4 * (16 * 2 ^ 23 : ℝ) / Real.exp 1⌉₊ = 197503772 ∧
+      ⌈4 * (200 * 2 ^ 23 : ℝ) / Real.exp 1⌉₊ = 2468797139 :=
+  ⟨ceil_div_exp_one_eq (n := 24687972) (by norm_num) (by norm_num) (by norm_num),
+    ceil_div_exp_one_eq (n := 197503772) (by norm_num) (by norm_num) (by norm_num),
+    ceil_div_exp_one_eq (n := 2468797139) (by norm_num) (by norm_num) (by norm_num)⟩
 
 /-- **The sessions' expected reruns at those `k`**: `E^rep`'s `1 + m′·k` at `m′ = 210` (`waits`). -/
 theorem reruns_tables_eq :

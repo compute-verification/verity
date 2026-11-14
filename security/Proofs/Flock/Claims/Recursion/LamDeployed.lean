@@ -239,7 +239,7 @@ theorem numsκ_le_mul (m : Claims.Recursion.Nums) {n : ℝ} (hn : 1 ≤ n) (hε 
     (hw : 210 ≤ m.waits) (hK : m.cap = Claims.Flock.Numbers.cap) (hN : 2 ^ 10 ≤ (m.N₀ : ℝ))
     (hN' : (m.N₀ : ℝ) ≤ n * 2 ^ 23) : m.κ ≤ n * 2 ^ (-(202.98 : ℝ)) := by
   have hn0 : (0 : ℝ) ≤ n := by linarith
-  have hkm : m.k = Claims.Flock.kOfReal m.N₀ := Claims.Flock.kOf_eq _
+  have hkm : m.k = ⌈4 * (m.N₀ : ℝ) / Real.exp 1⌉₊ := Claims.Recursion.Nums.k_eq m
   have hk1 : 1507 ≤ m.k := by rw [hkm]; exact Claims.Flock.Numbers.k_ge hN
   have hk2 : (m.k : ℝ) ≤ n * 2 ^ 24 := by
     rw [hkm]; exact Claims.Flock.Numbers.k_le_mul hn (le_trans (by norm_num) hN) hN'

@@ -102,7 +102,7 @@ noncomputable def qDI : Flock.Deploy Bool ℕ Unit where
   dec := fun _ => ([], 0)
   read := fun _ => ⟨[]⟩
   εtable := fun _ => 0
-  N₀ := fun _ => 100 * (Flock.eLo : ℝ)
+  N₀ := fun _ => 100 * Real.exp 1
   weight := fun _ => 0
   waits := fun _ => 2
   cap := fun _ => 204800
@@ -164,9 +164,12 @@ theorem qAssemble_none (decode : List (ℕ × ℕ) → List Unit) (x : Msg) (vs 
   rfl
 
 theorem qDI_k (x : Msg) : qDI.k x = 400 := by
-  show Flock.kOfReal (100 * (Flock.eLo : ℝ)) = 400
-  rw [show (100 : ℝ) * Flock.eLo = ((400 : ℕ) : ℝ) * Flock.eLo / 4 by push_cast; ring]
-  exact Flock.kOfReal_mul_eLo 400
+  unfold Flock.Deploy.k
+  have : 4 * qDI.N₀ x / Real.exp 1 = ((400 : ℕ) : ℝ) := by
+    show 4 * (100 * Real.exp 1) / Real.exp 1 = _
+    field_simp
+    norm_num
+  rw [this, Nat.ceil_natCast]
 
 /-- `κ = 2^{−2} + 2^{−8} + e^{−50}`. -/
 theorem qκ (x : Msg) : Flock.κ qDI x = 1 / 4 + 1 / 256 + Real.exp (-50) := by

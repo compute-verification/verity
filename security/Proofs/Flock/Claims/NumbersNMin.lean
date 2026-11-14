@@ -54,7 +54,7 @@ Johnson count `johnsonCount k agree = ⌊(k+1)/agree²⌋ + 1` of the trace's co
 * that is `98.6%` to `98.8%` of the codeword: `nMin < N₀` (`nMin_lt_len`), so `nMin` distinct positions exist, but a
   run opens `218` level-0 columns (`277` at most under `--zk`), far fewer (`queries_lt_nMin`; `fast100_level₀_queries_lt`
   at any `agree ≤ 1`);
-* `E^rep` gathers its `k = ⌈4N₀/e₋⌉` accepted reruns' columns, `218·k > N₀` of them (`len_lt_k_mul_queries`), so they
+* `E^rep` gathers its `k = ⌈4N₀/e⌉` accepted reruns' columns, `218·k > N₀` of them (`len_lt_k_mul_queries`), so they
   never sit at distinct positions of the codeword, which `ListComplete` asks of its input;
 * a set of the `N₀ − nMin + 1` positions that `nMin` distinct positions must meet is missed by `q ≤ 277` uniform
   queries with probability `((nMin − 1)/N₀)^q ≥ 1/64` (`miss_ge`), against `κ ≤ 2^{−202.98}`;
@@ -163,7 +163,7 @@ theorem queries_lt_nMin {c q : ℕ} (hc : c ∈ [9, 10, 11, 12, 13, 14, 17, 18, 
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
   rcases hc with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;> simp [nMinVal] <;> omega
 
-/-- `E^rep`'s gathered level-0 columns outnumber the codeword's positions: `N₀ < 218·k`, with `k = ⌈4N₀/e₋⌉`. -/
+/-- `E^rep`'s gathered level-0 columns outnumber the codeword's positions: `N₀ < 218·k`, with `k = ⌈4N₀/e⌉`. -/
 theorem len_lt_k_mul_queries {d : ℕ} (hd : d ∈ [10, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23]) :
     2 ^ d < 218 * kRep d := by
   rw [kRep_eq hd]

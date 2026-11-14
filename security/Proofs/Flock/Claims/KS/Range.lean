@@ -47,7 +47,7 @@ At `H = SHA-512` the deployed verifier accepts only by a decision (`next_decide_
 `Zk.verify`) accepts the session's tables. Then there is a table, and every table's `m` is one the verifier serves:
 `fast100`'s `22 ≤ m ≤ 35`, or `Zk.schedule`'s `25 ≤ m ≤ 35` (`served_plain`, `served_zk`, from `verify_ok_tables` and
 `zk_verify_ok`). There table 0's level-0 codeword has `2^d ≥ 2^10` positions (`plainShape_table`, `zkShape_table`), so
-`N₀ ≥ 2^10` and `k = ⌈4N₀/e₋⌉ ≥ 1507` (`Numbers.k_ge`). So at every statement `k ≥ 8` or the verifier accepts no run
+`N₀ ≥ 2^10` and `k = ⌈4N₀/e⌉ ≥ 1507` (`Numbers.k_ge`). So at every statement `k ≥ 8` or the verifier accepts no run
 (`k_range_plain`, `k_range_zk`), and KS at the deployed instances asks only one wait's bound
 (`plain_of_oneWait_sha512`, `zk_of_oneWait_sha512`).
 -/

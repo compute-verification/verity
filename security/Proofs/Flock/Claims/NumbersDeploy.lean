@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.DeployCode
-public import Proofs.Flock.Claims.KOf
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.Nat.Power2.Basic
@@ -19,7 +18,7 @@ default); `PlainIn` and `ZkIn` collect these, with `n ≤ 200`:
 * each table's error is at most `2^{−205}` (`tableErr_plain_le`, `tableErr_zk_le`), and `ε_table`, their sum, at most
   `n·2^{−205}` (`εtable_le`);
 * `m′ = 210` and `K = 2^256` (`waits_deploy`, `cap_deploy`); `N₀`, the tables' level-0 lengths summed, each `2^d`
-  with `10 ≤ d ≤ 23`, is `2^10` to `n·2^23` (`N₀_le`), so `k = ⌈4N₀/e₋⌉ ≤ n·2^24` (`k_le_mul`); at one table
+  with `10 ≤ d ≤ 23`, is `2^10` to `n·2^23` (`N₀_le`), so `k = ⌈4N₀/e⌉ ≤ n·2^24` (`k_le_mul`); at one table
   `N₀ = 2^{d₀}` and `k = kVal d₀` exactly (`N₀_one`, `k_plain`, `k_zk`);
 * the verifier's rounds are at most `2 + 4400·n` (`Vk_le`: each rep at most `2200`, `repRounds_plain_le`,
   `repRounds_zk_le`) and the weight at most `n·2^33` (`weight_le`);
@@ -42,10 +41,14 @@ variable {Coin Col T : Type}
 
 /-- `k` at `0 ≤ N₀ ≤ n·2^23`, `n ≥ 1`, is at most `n·2^24`. -/
 theorem k_le_mul {N n : ℝ} (hn : 1 ≤ n) (h0 : 0 ≤ N) (hN : N ≤ n * 2 ^ 23) :
-    (kOfReal N : ℝ) ≤ n * 2 ^ 24 := by
-  refine (kOfReal_lt h0).le.trans ?_
-  have h1 : 4 * N / 2.7182818283 ≤ n * 2 ^ 24 - 1 := by
-    rw [div_le_iff₀ (by norm_num)]
+    (⌈4 * N / Real.exp 1⌉₊ : ℝ) ≤ n * 2 ^ 24 := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  refine (Nat.ceil_lt_add_one (by positivity)).le.trans ?_
+  have h1 : 4 * N / Real.exp 1 ≤ n * 2 ^ 24 - 1 := by
+    rw [div_le_iff₀ he0]
+    have hm : 0 ≤ n * 2 ^ 24 - 1 := by nlinarith
+    have := mul_le_mul_of_nonneg_left hlo.le hm
     nlinarith
   linarith
 
@@ -287,7 +290,7 @@ theorem N₀_one {zk : Bool} {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {st
   simp only [N₀, tables_eq hs, hl, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, tableLen]
 
 /-- **`N₀` and `k` without `--zk`, at one table**: `N₀ = 2^{d₀}`, the table's plain level-0 length,
-`2^10 ≤ N₀ ≤ 2^23`, and `k = ⌈4N₀/e₋⌉ = kVal d₀`. -/
+`2^10 ≤ N₀ ≤ 2^23`, and `k = ⌈4N₀/e⌉ = kVal d₀`. -/
 theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hs : setupOf false x = some (s, spec, sts)) (h0 : sts.size = 1)
     (h1 : 22 ≤ (sts[0]'(by omega)).m) (h2 : (sts[0]'(by omega)).m ≤ 35) :
@@ -307,7 +310,7 @@ theorem k_plain (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {
     exact Claims.Flock.Numbers.kRep_eq hd
 
 /-- **`N₀` and `k` with `--zk`, at one table**: `N₀ = 2^{d₀}`, the table's masked level-0 length,
-`2^10 ≤ N₀ ≤ 2^23`, and `k = ⌈4N₀/e₋⌉ = kVal d₀`. -/
+`2^10 ≤ N₀ ≤ 2^23`, and `k = ⌈4N₀/e⌉ = kVal d₀`. -/
 theorem k_zk (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (hs : setupOf true x = some (s, spec, sts)) (h0 : sts.size = 1)
     (h1 : 25 ≤ (sts[0]'(by omega)).m) (h2 : (sts[0]'(by omega)).m ≤ 35) :

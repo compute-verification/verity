@@ -317,7 +317,7 @@ theorem one_le_κ_nil (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
   have hk : (bdDeployed rel nextE colsE wE join rowIn final w).deploy.k [] = 0 := by
     unfold Claims.Flock.Deploy.k
     rw [hN]
-    simp [Claims.Flock.kOfReal]
+    simp
   unfold Claims.Flock.κ
   rw [hε, hk]
   have := Real.rpow_pos_of_pos (by norm_num : (0 : ℝ) < 2)

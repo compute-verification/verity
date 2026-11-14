@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.Bits
-public import Proofs.Flock.Claims.KOf
 public import Mathlib.Analysis.Complex.ExponentialBounds
 
 /-!
@@ -10,7 +9,7 @@ public import Mathlib.Analysis.Complex.ExponentialBounds
 The numbers Flock's claims read (`Claims.Flock.κ`, `γ`, `lamOf`) at the deployed parameters, each a theorem:
 
 * `E^rep`'s waits `m′ = 210` (`waits`) and its truncation `K = 2^256` (`cap`);
-* `k = ⌈4N₀/e₋⌉` (`kOfReal`) exactly, at every level-0 length `N₀ = 2^d` a `fast100` schedule has, `d ∈ {10, …, 15, 18, …, 23}`
+* `k = ⌈4N₀/e⌉` exactly, at every level-0 length `N₀ = 2^d` a `fast100` schedule has, `d ∈ {10, …, 15, 18, …, 23}`
   (`kRep_eq`): from `1507` at `d = 10` to `12343986` at `d = 23`;
 * `κ ≤ 2^{−203} + 2^{−210} + 2^{−231} + 2^{−250} ≤ 2^{−202.98}` once `ε_table ≤ 2^{−205}`, `m′ ≥ 210`, `K = 2^256` and
   `2^10 ≤ N₀ ≤ 2^23` (`κ_le_sum`, `κ_le`), and `κ ≤ 2^{−203} + 2^{−210} + 2k/K₀ + 2^{−250}` at a truncation `K = K₀`
@@ -32,10 +31,10 @@ def waits : ℕ := 210
 /-- `E^rep`'s truncation `K`: each wait gives up after `2^256` reruns. -/
 def cap : ℕ := 2 ^ 256
 
-/-! ## `k = ⌈4N₀/e₋⌉` -/
+/-! ## `k = ⌈4N₀/e⌉` -/
 
-/-- `E^rep`'s accepted reruns per wait at a level-0 codeword of `2^d` symbols: `⌈4·2^d/e₋⌉` (`kOfReal`). -/
-noncomputable def kRep (d : ℕ) : ℕ := kOfReal (2 ^ d)
+/-- `E^rep`'s accepted reruns per wait at a level-0 codeword of `2^d` symbols: `⌈4·2^d/e⌉`. -/
+noncomputable def kRep (d : ℕ) : ℕ := ⌈4 * (2 : ℝ) ^ d / Real.exp 1⌉₊
 
 /-- `⌈a/e⌉ = n` from `e`'s nine-digit bounds. -/
 theorem ceil_div_exp_one_eq {a : ℝ} {n : ℕ} (hn : n ≠ 0) (h1 : ((n : ℝ) - 1) * 2.7182818286 < a)
@@ -69,20 +68,30 @@ def kVal : ℕ → ℕ
   | 23 => 12343986
   | _ => 0
 
-/-- **`k = ⌈4N₀/e₋⌉`, exactly**, at every level-0 length of a `fast100` schedule. -/
+/-- **`k = ⌈4N₀/e⌉`, exactly**, at every level-0 length of a `fast100` schedule. -/
 theorem kRep_eq {d : ℕ} (hd : d ∈ [10, 11, 12, 13, 14, 15, 18, 19, 20, 21, 22, 23]) : kRep d = kVal d := by
   unfold kRep
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hd
   rcases hd with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-    exact kOfReal_eq (by simp [kVal]) (by norm_num [kVal]) (by norm_num [kVal])
+    exact ceil_div_exp_one_eq (by simp [kVal]) (by norm_num [kVal]) (by norm_num [kVal])
 
 /-- `k` at `N₀ ≥ 2^10` is at least `1507`. -/
-theorem k_ge {N : ℝ} (hN : 2 ^ 10 ≤ N) : 1507 ≤ kOfReal N :=
-  lt_kOfReal (n := 1506) (by norm_num at hN ⊢; linarith)
+theorem k_ge {N : ℝ} (hN : 2 ^ 10 ≤ N) : 1507 ≤ ⌈4 * N / Real.exp 1⌉₊ := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hhi := Real.exp_one_lt_d9
+  have h : ((1506 : ℕ) : ℝ) < 4 * N / Real.exp 1 := by
+    rw [lt_div_iff₀ he0]
+    push_cast
+    linarith
+  exact Nat.lt_ceil.2 h
 
 /-- `k` at `N₀ ≤ 2^23` is at most `2^24`. -/
-theorem k_le {N : ℝ} (hN : N ≤ 2 ^ 23) : kOfReal N ≤ 2 ^ 24 :=
-  kOfReal_le (by norm_num at hN ⊢; linarith)
+theorem k_le {N : ℝ} (hN : N ≤ 2 ^ 23) : ⌈4 * N / Real.exp 1⌉₊ ≤ 2 ^ 24 := by
+  have he0 : 0 < Real.exp 1 := Real.exp_pos 1
+  have hlo := Real.exp_one_gt_d9
+  rw [Nat.ceil_le, div_le_iff₀ he0]
+  push_cast
+  linarith
 
 /-! ## `κ` -/
 

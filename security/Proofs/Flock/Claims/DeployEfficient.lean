@@ -27,7 +27,7 @@ the decoder still fills its words, so no `p` with `p(0) = 0`, `0` and `X` among 
 
 At the deployed numbers (`erepRuns_plain`, `erepRuns_zk`), `E^rep` makes `Numbers.waits = 210` waits of at most
 `Numbers.cap = 2^256` samples, so it reruns the prover at most `1 + 210·2^256` times, and `1 + 210·k` times in
-expectation, `k = ⌈4·N₀/e₋⌉` with `N₀` the tables' level-0 codeword lengths summed (`2^d` at one table).
+expectation, `k = ⌈4·N₀/e⌉` with `N₀` the tables' level-0 codeword lengths summed (`2^d` at one table).
 -/
 
 @[expose] public section
@@ -152,21 +152,21 @@ theorem not_efficient_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed 
   Claims.Flock.not_efficient_of_nil H _ p (by rw [hp]; exact Claims.GS.zkCountedRD_nil_pos)
 
 /-- **`E^rep`'s reruns at the deployed plain verifier**, at every decoder: at most `1 + 210·2^256`, and
-`1 + 210·⌈4·N₀/e₋⌉` in expectation. -/
+`1 + 210·⌈4·N₀/e⌉` in expectation. -/
 theorem erepRuns_plain (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (decode : List (ℕ × List 𝔽) → List Claims.Flock.PlainTrace) :
     Claims.ExtractRunsLe H (Claims.Flock.E (deployPlainTrim rel) decode) (fun _ => 1 + 210 * 2 ^ 256) ∧
       Claims.ExtractRunsExpLe H (Claims.Flock.E (deployPlainTrim rel) decode)
-        (fun x => 1 + 210 * (Claims.Flock.kOfReal (N₀ false x) : ℝ)) :=
+        (fun x => 1 + 210 * (⌈4 * N₀ false x / Real.exp 1⌉₊ : ℝ)) :=
   Claims.ERep_cost H _ _ _ _ _ _ _
 
 /-- **`E^rep`'s reruns at the deployed masked verifier**, at every decoder: at most `1 + 210·2^256`, and
-`1 + 210·⌈4·N₀/e₋⌉` in expectation. -/
+`1 + 210·⌈4·N₀/e⌉` in expectation. -/
 theorem erepRuns_zk (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
     (decode : List (ℕ × List 𝔽) → List Claims.Flock.ZkTrace) :
     Claims.ExtractRunsLe H (Claims.Flock.E (deployZkTrim rel) decode) (fun _ => 1 + 210 * 2 ^ 256) ∧
       Claims.ExtractRunsExpLe H (Claims.Flock.E (deployZkTrim rel) decode)
-        (fun x => 1 + 210 * (Claims.Flock.kOfReal (N₀ true x) : ℝ)) :=
+        (fun x => 1 + 210 * (⌈4 * N₀ true x / Real.exp 1⌉₊ : ℝ)) :=
   Claims.ERep_cost H _ _ _ _ _ _ _
 
 end FlockDeploy

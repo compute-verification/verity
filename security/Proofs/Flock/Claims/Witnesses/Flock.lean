@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Flock.Claims.Witnesses.Shared
-public import Proofs.Flock.Claims.KOf
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -87,7 +86,7 @@ noncomputable def ksD (Coin : Type) : Claims.Flock.Deploy Coin Unit Unit where
   dec _ := ([()], 0)
   read _ := ⟨[]⟩
   εtable _ := 0
-  N₀ _ := 8 * (Claims.Flock.eLo : ℝ)
+  N₀ _ := 8 * Real.exp 1
   weight _ := 0
   waits _ := 4
   cap _ := 1024
@@ -171,9 +170,9 @@ section Numbers
 variable {Coin : Type}
 
 theorem ksD_k (x : Msg) : (ksD Coin).k x = 32 := by
-  have h : 8 * (Claims.Flock.eLo : ℝ) = ((32 : ℕ) : ℝ) * Claims.Flock.eLo / 4 := by push_cast; ring
-  show Claims.Flock.kOfReal (8 * (Claims.Flock.eLo : ℝ)) = 32
-  rw [h, Claims.Flock.kOfReal_mul_eLo]
+  have h : 4 * (8 * Real.exp 1) / Real.exp 1 = ((32 : ℕ) : ℝ) := by
+    rw [div_eq_iff (Real.exp_pos 1).ne']; push_cast; ring
+  simp only [Claims.Flock.Deploy.k, ksD, h, Nat.ceil_natCast]
 
 theorem exp_neg_four_le : Real.exp (-((32 : ℕ) : ℝ) / 8) ≤ 1 / 5 := by
   have h4 : (4 : ℝ) + 1 ≤ Real.exp 4 := Real.add_one_le_exp 4

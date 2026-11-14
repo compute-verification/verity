@@ -64,8 +64,9 @@ noncomputable def shape (D : Deploy Coin Col T) (n₀ : Msg → ℚ) (leaves coi
 /-- The shape's `k` is the record's where `n₀` is its `N₀`. -/
 theorem shape_k (D : Deploy Coin Col T) {n₀ : Msg → ℚ} (hn₀ : ∀ x, (n₀ x : ℝ) = D.N₀ x) (leaves coinLeaves : Msg → ℕ)
     (x : Msg) : (shape D n₀ leaves coinLeaves x).k = D.k x := by
-  show kOf (n₀ x) = kOfReal (D.N₀ x)
-  rw [kOf_eq, hn₀]
+  rw [Recursion.Nums.k_eq]
+  show ⌈4 * (n₀ x : ℝ) / Real.exp 1⌉₊ = ⌈4 * D.N₀ x / Real.exp 1⌉₊
+  rw [hn₀]
 
 /-- **Masked Flock as a zero-knowledge proof system**: `system` at the masked record, with its masked prover over the
 `Hello` round and `V`'s; simulators `Sim t` at each attempt budget wherever `Hides` holds, at the errors Flock's `--zk`

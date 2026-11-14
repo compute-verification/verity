@@ -89,7 +89,7 @@ def KSBoundCover (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
 /-- **`coverW` is monotone in `DE`'s weight.** -/
 theorem coverW_mono {wE wE' : Msg → ℝ} {x : Msg} (h : wE x ≤ wE' x) : coverW wE x ≤ coverW wE' x := by
   unfold coverW
-  have hc : 0 ≤ (1 + 210 * (Claims.Flock.kOfReal (FlockDeploy.N₀ false x) : ℝ)) *
+  have hc : 0 ≤ (1 + 210 * (⌈4 * FlockDeploy.N₀ false x / Real.exp 1⌉₊ : ℝ)) *
       Real.sqrt ((FlockDeploy.V false).k x / 32) := by positivity
   exact pow_le_pow_left₀ (add_nonneg (Real.sqrt_nonneg _) hc) (add_le_add (Real.sqrt_le_sqrt h) le_rfl) 2
 
