@@ -42,8 +42,8 @@ For `min_cut.bound`'s inputs it reads:
   word twice or the outputs of more than one node (calls a word, a batch a row). A carried word not shown distinct
   may repeat its rows: the smaller bound. A weight gradient and attention's products are both
   products of two activations, which a Program tells apart only by where their outputs go, which its author chooses.
-* Each operand's `β`, as `he_of_rows` derives it from the rate ρ at the operand's width w (its type's, at most the
-  source bits its values hold): w where ρ pays it, else w·ρ/(w + ρ). Where an adapter's rank shows (`Work.r_step`,
+* Each operand's `β`, as `he_of_rows` derives it from the rate ν at the operand's width w (its type's, at most the
+  source bits its values hold): w where ν pays it, else w·ν/(w + ν). Where an adapter's rank shows (`Work.r_step`,
   the least contraction of a product of two θ′ operands that widens it 4K-fold or more, one of them reading no input,
   on a Program where an operand no θ′ reaches and no input reaches multiplies one θ′ reaches; or of two weights both
   of whose sides are 4K or more), every activation is at most `beta_eff` at it. Every operand is at most
@@ -1303,7 +1303,7 @@ def least_sequence(sites) -> int | None:
 
 
 def operand_beta(rate: float, w: float, activation: bool, r_step: int | None, k: float, most: float) -> float:
-    """An operand's β (`he_of_rows`): its width where its rate pays it, else w·ρ/(w + ρ), an activation's at most
+    """An operand's β (`he_of_rows`): its width where its rate pays it, else w·ν/(w + ν), an activation's at most
     `beta_eff` at the adapter's rank, and every one at most ``most``."""
     b = w if paid(rate, w) else w * rate / (w + rate) if rate > 0 else 0.0
     if r_step is not None and activation:
