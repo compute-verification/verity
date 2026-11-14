@@ -1,0 +1,26 @@
+# The vLLM adapter's `properties/` dissolving: what `tools/move/layout.py --map tools/move/properties_map.toml` moves and
+# rewrites.
+#
+# `adapters/vllm/verity_vllm/properties/` holds two modules, each with readers in one place only:
+#
+# - `kernel_allowlist.py`, the device kernels a step's census accounts for, is read by the sm_89 eager profile alone
+#   (`observe/fold/profiles/vllm_d9105ea80_sm89_eager.py`), so it goes into that profile's directory.
+# - `quarantine_lint.py`, gate G4's purity and identity lint of `program/quarantine/`, is run by tests alone
+#   (`tests/properties/test_quarantine_lint.py`, `tests/properties/test_record.py`,
+#   `tests/engine/collectives/test_tp_collective.py`), so it goes beside them, as test code.
+#
+# The rest of the package, its `__init__.py` and README, is deleted by hand after the move, in a commit of its own. No
+# root moves ([roots] old == new); the root `tests` is the adapter's own test package, which its tests import as
+# `tests.properties`, so the lint is named `tests.properties.quarantine_lint`. No file is split, added or deleted. The
+# format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", tests = "adapters/vllm/tests" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter", tests = "adapters/vllm/tests" }
+
+[paths]
+"adapters/vllm/verity_vllm/properties/kernel_allowlist.py" = "adapters/vllm/verity_vllm/observe/fold/profiles/kernel_allowlist.py"
+"adapters/vllm/verity_vllm/properties/quarantine_lint.py" = "adapters/vllm/tests/properties/quarantine_lint.py"
+
+[retired]
+paths = ["adapters/vllm/verity_vllm/properties/kernel_allowlist.py", "adapters/vllm/verity_vllm/properties/quarantine_lint.py"]
