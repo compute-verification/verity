@@ -59,14 +59,14 @@ def _meta(name: str, t: torch.Tensor):
     return name, tps._bytes(t)
 
 
-def _oracle(cap: Path, rank: int, steps: dict[int, tuple[list[torch.Tensor], list[torch.Tensor]]]) -> None:
-    cap.mkdir(parents=True, exist_ok=True)
-    with (cap / f"coll.rank{rank}.jsonl").open("w") as f:
+def _oracle(capture_dir: Path, rank: int, steps: dict[int, tuple[list[torch.Tensor], list[torch.Tensor]]]) -> None:
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    with (capture_dir / f"coll.rank{rank}.jsonl").open("w") as f:
         for s, (parts, _outs) in steps.items():
             for k, mod in enumerate([OPROJ, MOE][: len(parts)]):
                 f.write(json.dumps({"rank": rank, "step": s, "k": k, "kind": "all_reduce", "module": mod, "shape": list(parts[k].shape)}) + "\n")
     for s, (parts, outs) in steps.items():
-        torch.save({"step": s, "part": parts, "out": outs}, cap / f"coll.rank{rank}.step{s}.pt")
+        torch.save({"step": s, "part": parts, "out": outs}, capture_dir / f"coll.rank{rank}.step{s}.pt")
 
 
 def _src(steps: dict, rank: int = 0, relabel: int | None = None):
@@ -186,12 +186,12 @@ LAYER = "model.layers.1"
 NORMS = [f"{LAYER}.input_layernorm", f"{LAYER}.post_attention_layernorm"]
 
 
-def _layer_oracle(cap: Path, parts: list[torch.Tensor], kind: str = "all_reduce") -> None:
-    cap.mkdir(parents=True, exist_ok=True)
-    with (cap / "coll.rank0.jsonl").open("w") as f:
+def _layer_oracle(capture_dir: Path, parts: list[torch.Tensor], kind: str = "all_reduce") -> None:
+    capture_dir.mkdir(parents=True, exist_ok=True)
+    with (capture_dir / "coll.rank0.jsonl").open("w") as f:
         for k, p in enumerate(parts):
             f.write(json.dumps({"rank": 0, "step": 0, "k": k, "kind": kind, "module": LAYER, "shape": list(p.shape)}) + "\n")
-    torch.save({"step": 0, "part": parts, "out": []}, cap / "coll.rank0.step0.pt")
+    torch.save({"step": 0, "part": parts, "out": []}, capture_dir / "coll.rank0.step0.pt")
 
 
 def test_a_fused_norm_record_compares_its_partial_not_the_stacked_residual(tmp_path):
@@ -266,9 +266,9 @@ def _schedule(seed: int) -> list[torch.Tensor]:
     return [torch.randint(0, 64, (6,), generator=g, dtype=torch.int32).view(torch.float32) for _ in OW.MEMBERS]
 
 
-def _record_schedule(cap: Path, rank: int, step: int, ws: list[torch.Tensor], k: int = 1) -> None:
+def _record_schedule(capture_dir: Path, rank: int, step: int, ws: list[torch.Tensor], k: int = 1) -> None:
     """The capture's witness row of the MoE's align call at (step, k): it runs after o_proj's all-reduce, before the MoE's."""
-    with (cap / OW.witness_file(rank)).open("a") as f:
+    with (capture_dir / OW.witness_file(rank)).open("a") as f:
         for m, t in zip(OW.MEMBERS, ws):
             f.write(json.dumps({"rank": rank, "step": step, "k": k, "module": MOE, "member": m, "sha256": OW.digest(tps._bytes(t))}) + "\n")
 
