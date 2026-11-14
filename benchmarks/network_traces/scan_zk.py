@@ -1255,7 +1255,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
          "salts": got["salts"], "ports": st.ports, "outputs": o0, "units": mr.units, "ins": sg.ins, "made": made,
          "partition_file": pg.partition_file, "program_file": pg.program_file,
-         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "warden": mr.warden,
+         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "network_certifier": mr.warden,
          "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     fv = m["header"]["frame_v3"]
@@ -1447,7 +1447,7 @@ def warden_roots(members) -> list[dict]:
     which this registration lists none of, and refuses the round."""
     out = {}
     for m in members:
-        for doc in m["warden"].values():
+        for doc in m["network_certifier"].values():
             p = f"rows/{doc['direction']}/{doc['window']}"
             out[p] = {"port": p, "root": doc["root"], "leaves": doc["rows"], "domain": doc["domain"]}
     return [out[p] for p in sorted(out)]
