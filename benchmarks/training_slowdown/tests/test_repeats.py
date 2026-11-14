@@ -245,8 +245,8 @@ def planting(monkeypatch) -> None:
     bytes."""
     parts = iter(range(len(synthetic.PARTS)))
 
-    def planted(rng: np.random.Generator, n: int) -> np.ndarray:
-        t = TOKENS(rng, n)
+    def planted(rng: np.random.Generator, n: int, alphabet: int | None = None) -> np.ndarray:
+        t = TOKENS(rng, n, alphabet)
         if next(parts, None) is not None:
             for i in range(0, n, synthetic.SHAPE["ctx"]):
                 t[i:i + len(PLANT)] = PLANT[: n - i]

@@ -13,6 +13,7 @@ from it.
 research pods registry [--json]             every machine `research run --on` accepts, and where its entry comes from
 research pods register NAME --host ADDR --project P    bind a name to an ssh machine; refused unless it answers over ssh
 research pods unregister NAME               drop the name
+research pods env NAME [NAME ...]           `export <NAME>_HOST=<host>` for each, for `eval` only: it prints addresses
 research pods ssh TARGET [-- CMD ...]       reach a machine by its name
 research pods sync TARGET [SRC]             put a worktree's files on it (what git would show, nothing ignored)
 research pods lease TARGET                  its lease line
@@ -84,6 +85,7 @@ added here reaches a node only through a line there.
 | `nebius/node_ops.py` | A shared node's OOM guard, status page and alerts. |
 | `nebius/oom_order.py` | Orders the kernel OOM killer's picks by each run's memory against its reservation. |
 | `nebius/sky/` | Node 1's Kueue queue: `nebius/sky/kueue.yaml` (the queues and their quotas, which `cluster_up.sh` applies), `nebius/sky/jobs/` (one template per kind of job, `nebius/sky/jobs/config-run.yaml` among them), `nebius/sky/job_tree.sh` (the tree a job runs from, one copy per content), `nebius/sky/vllm_bootstrap.sh` (a job's vLLM bootstrap, skipped once it has passed), and `nebius/sky/store_evict.sh` with `nebius/sky/store_evict_src.conf` (the timer that frees a node's disk of local copies the remote store holds). |
+| `nebius/image/` | The jobs' container images: `Dockerfile` (`verity-base`) and `sky-gpu.Dockerfile` (`verity-sky-gpu`, the tag `dispatch.py` and `n1_lease.py` default to, which a test holds to the file's hash). `build.sh` builds one with the node's docker and imports it into k3s as `NAME:<first 16 hex of the Dockerfile's sha256>`; nothing starts it. Run it by hand, as `research`, on the node that runs the jobs once a Dockerfile changes, from a checkout of `main` there: `bash tools/research/src/research/pods/nebius/image/build.sh --dry-run` prints the tag and refuses when / would keep under `MIN_FREE_GB`; without `--dry-run` it builds, and `IMAGE_NAME=verity-sky-gpu DOCKERFILE=sky-gpu.Dockerfile` before it builds the job image. |
 | `nebius/challenger/` | The auditor host's setup and units for the challenger and the network certifier's rehearsal, which `verity/protocols/compose/device/live_challenger` reads. `nebius/verifier/` is the same for the verifier's host. |
 | `nebius/lockout/` | Taking root away from the nodes' operator account; it has its own README. |
 

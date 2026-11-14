@@ -1,11 +1,11 @@
 """verity_vllm/check/gates.py — the frozen invariant set G1..G7 over the JSON artifacts of one run directory (torch-free).
 
-THE GATES AND THE CONSTANTS BELOW ARE FROZEN: they change only through an approved decision recorded in
-`out/capture/decisions.md`, never by editing this file alone.  Anything that is a heuristic (per-step histogram
+THE GATES AND THE CONSTANTS BELOW ARE FROZEN: they change only through an approved decision,
+never by editing this file alone.  Anything that is a heuristic (per-step histogram
 equality, linear instance growth, the family-reference match, the overhead ladder) is a DIAGNOSTIC reported in the
 card (`diagnostics()`), never a gate.
 
-A *run directory* is what `bench/run_config.py` produces for one configuration (model × engine arguments × κ):
+A *run directory* is what the Match driver (`verity_vllm.pipeline.match`) produces for one configuration (model × engine arguments × κ):
 
     RUN_DIR/run.json                 the driver's manifest (config_id, profile, case, workload, C, laptop, snapshot_steps,
                                      artifact path overrides)             — read by `RunArtifacts`
@@ -65,8 +65,8 @@ malformed one `error`; a gate never raises.  `evaluate_gates(run_dir)` runs the 
 them into ACCEPTED / REJECTED / INCOMPLETE (G1..G7 as before; G8 / R1 contribute only `fail` -> REJECTED, `error` /
 `unsupported` / `unverified` -> INCOMPLETE; a record that predates them keeps the verdict of G1..G7).
 
-The fold summary the driver writes (`run_config --worker fold`) is defined here: its fields are `FOLD_SUMMARY_FIELDS`, and
-its id is `FOLD_SUMMARY_SCHEMA`, which `records.schema_ids` states (also reproduced in `out/gen/cards/SCHEMA.md`).
+The fold summary the driver writes (`match --worker fold`) is defined here: its fields are `FOLD_SUMMARY_FIELDS`, and
+its id is `FOLD_SUMMARY_SCHEMA`, which `records.schema_ids` states.
 
 The code is in three modules.  `gate_base` holds the frozen constants, the artifacts and their reader, a gate's
 result and the registry; `gate_rules` the gates and R1; this one evaluates them, folds the verdict, writes the gates
@@ -317,7 +317,7 @@ def diagnostics(run: RunArtifacts | str | Path) -> dict:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the fold summary the driver writes (schema owned here, produced by `bench/run_config.py --worker fold`)
+# the fold summary the driver writes (schema owned here, produced by `match --worker fold`)
 # ---------------------------------------------------------------------------------------------------------
 
 FOLD_SUMMARY_FIELDS: dict[str, str] = {

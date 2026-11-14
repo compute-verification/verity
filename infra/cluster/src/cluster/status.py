@@ -2,8 +2,8 @@
 and node 1's unreplayed Commit bundles. Read-only: every command it sends a node (`COMMANDS`) only reads, through
 `kubectl get`, `df`, `find` and `du`, or `ls` and `cat`.
 
-`read` takes a node's snapshot over SSH (`HOSTS`, as `machines.d/<node>.toml` registers them); `node1` and `node2` are the
-pure half, snapshot and `now` in, report out, and `render` prints reports as text.
+`read` takes a node's snapshot over SSH (`reach`: the node's address is the environment's, no file's); `node1` and
+`node2` are the pure half, snapshot and `now` in, report out, and `render` prints reports as text.
 
 **Node 1** is Kueue's (`nebius1`'s mapping, from the same `kubectl get -o json`, plus the Jobs and queues). A Workload
 that isn't finished is one job: held when `spec.active` is false, running once Kueue reserved its quota (`admitted` until
@@ -38,10 +38,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from . import ledger, model, nebius1, nebius2
+from . import ledger, model, nebius1, nebius2, settings
 
 NODES = {"nebius-1": nebius1.NODE, "nebius-2": nebius2.NODE}
-HOSTS = {nebius1.NODE: "research@81.85.2.165", nebius2.NODE: "research@81.85.2.121"}
+#: a node's address is the environment's (`reach`): no file holds it
 SSH_KEY = Path.home() / ".ssh" / "research_key"
 LIVE = "/workspace/pouw/infra/cluster/live"
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
@@ -76,6 +76,18 @@ def ssh(dest: str, key: Path | None = SSH_KEY) -> Callable[[str], str]:
         if r.returncode:
             raise ReadError(f"{dest}: `{cmd[:60]}` exited {r.returncode}: {r.stderr.strip()[-300:]}")
         return r.stdout
+    return run
+
+
+def reach(node: str, key: Path | None = SSH_KEY) -> Callable[[str], str]:
+    """A runner of one shell command on `node`, as `ssh`'s. The node's address is the environment's, in the variable the
+    node's name gives (vy-nebius-1's is VY_NEBIUS_1_HOST), as `machines.d/<node>.toml` registers it (``host``): no file
+    here holds it, and with it unset each command fails as a read does (`ReadError`), naming the variable."""
+    def run(cmd: str) -> str:
+        if not (host := settings.host(node)):
+            raise ReadError(f"{settings.host_var(node)} is unset: {node}'s address, which machines.d/{node}.toml "
+                            "registers as host")
+        return ssh(f"research@{host}", key)(cmd)
     return run
 
 
@@ -314,7 +326,7 @@ def main(nodes: list[str], owner: str | None, as_json: bool, key: Path | None = 
          runner: Callable[[str], Callable[[str], str]] | None = None) -> int:
     """Read `nodes` at once, print their reports; 1 when a node couldn't be read."""
     now = int(clock())
-    runner = runner or (lambda node: ssh(HOSTS[node], key))
+    runner = runner or (lambda node: reach(node, key))
 
     def one(node: str) -> dict[str, Any]:
         try:
@@ -331,5 +343,5 @@ def main(nodes: list[str], owner: str | None, as_json: bool, key: Path | None = 
     return 1 if any("error" in r for r in reps) else 0
 
 
-__all__ = ["NODES", "HOSTS", "COMMANDS", "READS", "BUNDLE_ROOTS", "ReadError", "ssh", "read", "disk_pct", "bundles", "batch",
+__all__ = ["NODES", "COMMANDS", "READS", "BUNDLE_ROOTS", "ReadError", "ssh", "reach", "read", "disk_pct", "bundles", "batch",
            "node1", "node2", "report", "render", "span", "main"]

@@ -17,7 +17,7 @@ from the record -- the collector's own bytes never enter the expected side.
                          bytes                                                                    -> equal | MISMATCH (named; an opening
                          that does not verify is a mismatch)
     sampled_token_ids  : the committed id == the capture's SampleEnd id for that request at that step (every step, no snapshot needed)
-    not compared       : identities of a step the Match did not snapshot (row_pod MATCH_SNAP_STEPS, default 0,1), of a family the
+    not compared       : identities of a step the Match did not snapshot (the row's `--snapshot-steps`, MATCH_SNAP_STEPS: default 0,1), of a family the
                          Match has no value for (the FA2/FA3 M1 kernel-interior stream: its C2 is the tap's own bit-exact xcheck,
                          capacity FA2-01), registered inputs (weights: digest-pinned by the Build), or an op the fold did not instance
                          -> counted per reason, never silently dropped
@@ -35,8 +35,8 @@ from collections.abc import Callable
 from typing import Any
 
 # handed on: other modules and tests read the Match record's reader and the producers through this module
-from verity_vllm.check.match_oracle import _ITEMSIZE, MatchOracle
 from verity_vllm.check.match_oracle import _ROPE_MEMBER as _ROPE_MEMBER
+from verity_vllm.check.match_oracle import MatchOracle
 from verity_vllm.check.match_oracle import _contiguous as _contiguous
 from verity_vllm.check.match_oracle import _port_view as _port_view
 from verity_vllm.check.match_oracle import _prod as _prod
@@ -61,6 +61,7 @@ from verity_vllm.commit.opened import (  # noqa: F401  -- re-exported
     OpeningNotVerified,
     meta_by_name,
 )
+from verity_vllm.observe.events import DTYPE_BYTES
 from verity_vllm.records.schema_ids import ORACLE_COMPARE_SCHEMA
 
 __all__ = ["MatchOracle", "OpenedReader", "OpeningNotVerified", "SCHEMA", "entry_read_name", "merge_producers",
@@ -179,7 +180,7 @@ def _walk(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, s
             pairs_seen.add((step, rid))
         enc = e.get("encoding")   # the member's dtype and shape; an entry that states no dtype has no byte range to read
         dtype = str(enc.get("dtype") or "") if enc else ""
-        isz = _ITEMSIZE.get(dtype)
+        isz = DTYPE_BYTES.get(dtype)
         lo, hi = ident.get("element_range") or [0, None]
         if isz is None or hi is None or int(hi) <= int(lo):
             not_cmp["identity without a byte range (dtype/range)"] += 1
@@ -283,7 +284,7 @@ def _report(oracle: MatchOracle, wcheck: dict[str, Any], max_report: int, query_
         why = (f"C2 oracle mismatch: {len(mism)} identities differ from the Match oracle (first: step {i.get('step')} {i.get('op_path')}/{i.get('output_member')} "
                f"inv {i.get('invocation')} req {i.get('request_id')} range {i.get('element_range')} -- {m.get('why') or ('id ' + str(m.get('committed_id')) + ' vs ' + str(m.get('oracle_id')))})")
     elif result is None:
-        why = (f"{grade}: " + (f"steps {steps_not_snap[:8]}{'...' if len(steps_not_snap) > 8 else ''} not snapshotted by the Match (row_pod MATCH_SNAP_STEPS=all for a complete C2); " if steps_not_snap else "")
+        why = (f"{grade}: " + (f"steps {steps_not_snap[:8]}{'...' if len(steps_not_snap) > 8 else ''} not snapshotted by the Match (MATCH_SNAP_STEPS=all for a complete C2); " if steps_not_snap else "")
                + (f"request attribution unverified at {len(attrib_missing)} (step, request) pairs (first {attrib_missing[:4]}); " if attrib_missing else "")
                + (f"attribution ambiguous at steps {ambiguous[:8]} (equal ids + sampled id across requests, values not snapshotted); " if ambiguous else "")
                + "; ".join(f"{k} x{v}" for k, v in not_cmp.items() if not k.startswith("no oracle family")))

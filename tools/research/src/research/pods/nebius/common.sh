@@ -12,7 +12,9 @@
 # with `bash -x`.
 
 NEBIUS_REGION=${NEBIUS_REGION:-uk-south2}
-NEBIUS_PROJECT_ID=${NEBIUS_PROJECT_ID-project-e05mvq7kln00dvsa5xj2mg}   # default-project-uk-south2; the launcher is editor in uk-south2, us-central1, us-north1 and eu-north1 only
+# NEBIUS_PROJECT_ID is the environment's: the id of the project the VM is in (the region's default project; the launcher is
+# editor in uk-south2, us-central1, us-north1 and eu-north1 only), which no file holds. resolve_project refuses to go on
+# without it; set empty, it looks the project up by name
 NEBIUS_PROJECT_NAME=${NEBIUS_PROJECT_NAME:-vy-nebius}                    # only when NEBIUS_PROJECT_ID is set empty
 VM_NAME=${NEBIUS_VM_NAME:-vy-nebius-1}
 PRESET=${NEBIUS_PRESET:-8gpu-192vcpu-1744gb}
@@ -103,9 +105,11 @@ if len(hits) > 1:
 print(hits[0] if hits else "")' "$1"
 }
 
-# resolve_project: TENANT_ID and PROJECT_ID (NEBIUS_TENANT_ID / NEBIUS_PROJECT_ID, else looked up by name); CREATE=1 makes the
-# project when it is missing
+# resolve_project: TENANT_ID and PROJECT_ID (NEBIUS_TENANT_ID / NEBIUS_PROJECT_ID; with NEBIUS_PROJECT_ID set empty, looked up
+# by name); CREATE=1 makes the project when it is missing
 resolve_project() {
+  [ -n "${NEBIUS_PROJECT_ID+set}" ] || die "NEBIUS_PROJECT_ID is not set: the id of the project the VM is in (set it empty to \
+look the project up by name, NEBIUS_PROJECT_NAME, in the tenant)"
   TENANT_ID=${NEBIUS_TENANT_ID:-}
   PROJECT_ID=${NEBIUS_PROJECT_ID:-}
   if [ -n "$PROJECT_ID" ]; then

@@ -31,7 +31,11 @@ PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one ar
 
 from __future__ import annotations
 
+import json
+import sys
 import time
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from verity_vllm import settings
@@ -41,11 +45,6 @@ if TYPE_CHECKING:
     from verity_vllm.protocols import Composition
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports)
-
-import json
-import sys
-from dataclasses import dataclass
-from pathlib import Path
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.engine import engine_profile as prof  # apply_env before vllm import
@@ -181,6 +180,55 @@ def capture_protocols(wl: dict, args: Options, model: object) -> tuple[Compositi
     return protocols, list(protocols.entries) if protocols is not None else []
 
 
+def spec_tokens(wl: dict, eng: va.Engine) -> dict:
+    """[D88 artifact model] the specification's concrete workload as known BEFORE any engine step: the prompt token ids the workload
+    loader produced from the checkpoint's tokenizer, per-request output limits, arrival steps, sampling parameters, and the engine
+    kwargs the harness resolved.  Written before the warm-up; nothing observed from the run goes in here (tokens.json is the record)."""
+    return {
+        "schema": SPEC_TOKENS_SCHEMA, "known_before_execution": True,
+        "tokenizer": {"repo": eng.cp["repo"], "revision": eng.cp.get("revision")},
+        "requests": [{"request_id": r["request_id"], "prompt_token_ids": r["prompt_token_ids"], "prompt_len": len(r["prompt_token_ids"]),
+                      "max_tokens": r["max_tokens"], "arrive_step": int(r.get("arrive_step") or 0)} for r in wl["requests"]],
+        "sampling": wl["sampling"], "engine_kwargs": {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")},
+        # the execution the workload declares and the one the built engine realises (vllm_config read-back), beside the kwargs
+        "row_id": wl.get("row_id"), "declared_execution": eng.execution, "effective_execution": eng.effective}
+
+
+def lag_record(eng: va.Engine) -> dict:
+    """The record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
+    attests (profile.engine_kwargs.async_scheduling) and the Build's TargetProfile declares; True -> 1 post-EOS row, False -> 0, None ->
+    unattested (no default).  Per request the two lengths are kept distinct: served_output_len = the tokens served (generated_token_ids,
+    the answer up to and including the EOS or the cap); executed_prefix_len = served + LAG on an EOS stop before the cap (the post-EOS row
+    is active internal computation whose sampled token is NOT served).  Both are a function of the served tokens + the recorded fact,
+    never of the trace; GM-01 G6 verifies them against the rows the record actually holds."""
+    _asched = va.resolved_async_scheduling(eng.llm)
+    _lag = None if _asched is None else (1 if _asched else 0)
+    return {"value": _lag, "async_scheduling": _asched,
+            "source": "vllm_adapter.resolved_async_scheduling(engine) after the build (= RunHeader.profile.engine_kwargs.async_scheduling)",
+            "rule": "served_output_len = len(generated_token_ids); executed_prefix_len = served_output_len + LAG iff finish_reason == 'stop' and "
+                    "served_output_len < max_tokens, else served_output_len; cap_exhausted = served_output_len == max_tokens (R17-1)"}
+
+
+def request_row(r: dict, gen: list[int], acc: list[int] | None, eq: bool | None, steps_r: dict, _lag: int | None) -> dict:
+    """A request's row of tokens.json: what was served, beside the accepted record, and the run's steps for it (`steps_r`, empty
+    where the timing has no record of it)."""
+    rid = r["request_id"]
+    _served = len(gen)
+    _cap = int(r["max_tokens"])
+    _eos_stop = (str(steps_r.get("finish_reason")) == "stop") and _served < _cap
+    _executed = _served if not _eos_stop else (None if _lag is None else _served + _lag)
+    return {"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
+            "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq,
+            # realized lengths and schedule (D87): every run artifact records them
+            "prompt_len": len(r["prompt_token_ids"]), "n_generated": len(gen),
+            "arrive_step": int(r.get("arrive_step") or 0), "arrive_step_realized": steps_r.get("arrive_step_realized"),
+            "first_step": steps_r.get("first_step"), "finish_step": steps_r.get("finish_step"),
+            "finish_reason": steps_r.get("finish_reason"),
+            # the two lengths, distinct; cap exhaustion beside them; executed None = EOS stop under an unattested lag
+            "served_output_len": _served, "executed_prefix_len": _executed, "cap_exhausted": _served == _cap,
+            "eos_stop_before_cap": _eos_stop, "lag": _lag}
+
+
 def main(args: Options) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -200,18 +248,7 @@ def main(args: Options) -> None:
     print(f"[m1] engine built in {eng.build_s:.1f}s (case {case}, {eng.cp['repo']}); "
           f"kwargs={ {k: v for k, v in eng.kwargs.items() if k not in ('model', 'tokenizer')} }", flush=True)
     (out / "versions.json").write_text(json.dumps(va.versions_doc(eng), indent=1) + "\n")
-    # [D88 artifact model] the specification's concrete workload as known BEFORE any engine step: the prompt token ids the workload
-    # loader produced from the checkpoint's tokenizer, per-request output limits, arrival steps, sampling parameters, and the engine
-    # kwargs the harness resolved.  Written before the warm-up; nothing observed from the run goes in here (tokens.json is the record).
-    (out / "spec_tokens.json").write_text(json.dumps({
-        "schema": SPEC_TOKENS_SCHEMA, "known_before_execution": True,
-        "tokenizer": {"repo": eng.cp["repo"], "revision": eng.cp.get("revision")},
-        "requests": [{"request_id": r["request_id"], "prompt_token_ids": r["prompt_token_ids"], "prompt_len": len(r["prompt_token_ids"]),
-                      "max_tokens": r["max_tokens"], "arrive_step": int(r.get("arrive_step") or 0)} for r in wl["requests"]],
-        "sampling": wl["sampling"], "engine_kwargs": {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")},
-        # the execution the workload declares and the one the built engine realises (vllm_config read-back), beside the kwargs
-        "row_id": wl.get("row_id"), "declared_execution": eng.execution, "effective_execution": eng.effective},
-        indent=1, default=str) + "\n")
+    (out / "spec_tokens.json").write_text(json.dumps(spec_tokens(wl, eng), indent=1, default=str) + "\n")
     cs = dump_cos_sin(eng, out)
     print(f"[m1] cos_sin_cache -> {cs}", flush=True)
     nz = dump_normalizer(eng, out)
@@ -305,18 +342,8 @@ def main(args: Options) -> None:
            "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
     all_equal = True
     per_req = timing.get("requests")       # the run's timing by request, where the timing has any
-    # the record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
-    # attests (profile.engine_kwargs.async_scheduling) and the Build's TargetProfile declares; True -> 1 post-EOS row, False -> 0, None ->
-    # unattested (no default).  Per request the two lengths are kept distinct: served_output_len = the tokens served (generated_token_ids,
-    # the answer up to and including the EOS or the cap); executed_prefix_len = served + LAG on an EOS stop before the cap (the post-EOS row
-    # is active internal computation whose sampled token is NOT served).  Both are a function of the served tokens + the recorded fact,
-    # never of the trace; GM-01 G6 verifies them against the rows the record actually holds.
-    _asched = va.resolved_async_scheduling(eng.llm)
-    _lag = None if _asched is None else (1 if _asched else 0)
-    doc["lag"] = {"value": _lag, "async_scheduling": _asched,
-                  "source": "vllm_adapter.resolved_async_scheduling(engine) after the build (= RunHeader.profile.engine_kwargs.async_scheduling)",
-                  "rule": "served_output_len = len(generated_token_ids); executed_prefix_len = served_output_len + LAG iff finish_reason == 'stop' and "
-                          "served_output_len < max_tokens, else served_output_len; cap_exhausted = served_output_len == max_tokens (R17-1)"}
+    doc["lag"] = lag_record(eng)
+    _lag = doc["lag"]["value"]
     for r in wl["requests"]:
         rid = r["request_id"]
         acc = wl["accepted"].get(rid)
@@ -325,20 +352,7 @@ def main(args: Options) -> None:
         all_equal = all_equal and bool(eq)
         timed = per_req.get(rid) if per_req else None
         steps_r: dict = timed if timed else {}                # a request the timing has no record of has no realized step
-        _served = len(gen)
-        _cap = int(r["max_tokens"])
-        _eos_stop = (str(steps_r.get("finish_reason")) == "stop") and _served < _cap
-        _executed = _served if not _eos_stop else (None if _lag is None else _served + _lag)
-        doc["requests"].append({"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
-                                "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq,
-                                # realized lengths and schedule (D87): every run artifact records them
-                                "prompt_len": len(r["prompt_token_ids"]), "n_generated": len(gen),
-                                "arrive_step": int(r.get("arrive_step") or 0), "arrive_step_realized": steps_r.get("arrive_step_realized"),
-                                "first_step": steps_r.get("first_step"), "finish_step": steps_r.get("finish_step"),
-                                "finish_reason": steps_r.get("finish_reason"),
-                                # the two lengths, distinct; cap exhaustion beside them; executed None = EOS stop under an unattested lag
-                                "served_output_len": _served, "executed_prefix_len": _executed, "cap_exhausted": _served == _cap,
-                                "eos_stop_before_cap": _eos_stop, "lag": _lag})
+        doc["requests"].append(request_row(r, gen, acc, eq, steps_r, _lag))
         print(f"[m1] {rid}: prompt_len={len(r['prompt_token_ids'])} arrive={int(r.get('arrive_step') or 0)} "
               f"steps={steps_r.get('first_step')}..{steps_r.get('finish_step')} ({steps_r.get('finish_reason')}) generated {gen}\n"
               f"[m1]   accepted  {acc}  equal={eq}", flush=True)

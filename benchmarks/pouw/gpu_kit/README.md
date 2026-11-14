@@ -19,7 +19,7 @@ their readers are the kit's own files and its tests. `sass_gate.py` and `compare
 
 **What it never does.** It holds no kernel and no twin of one: the bench brings both. Its Python launches nothing on a
 GPU: the gate reads a built binary, and the other three read and write files where their caller says. It imports the
-standard library alone, but for the harness's gate, which `sass_gate.py` loads from its file.
+standard library alone, but for the SASS gate beside PoUW's prover, which `sass_gate.py` loads from its file.
 
 ## The gate
 

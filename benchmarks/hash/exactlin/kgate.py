@@ -29,13 +29,22 @@ plus the PTX of both kernels (`int8_fused.ptx_check`).  With `--zy` also
 `--shapes prefill` runs M across the prefill rows' edges (4,096 to 32,768; 4,097, 8,193 and 16,385 masked).  `gate()`
 returns the document; `ok` is the fused path's verdict (stock's differences are findings, not failures).
 
+Which kernel each call ran is observed, not derived: while a shape's checks run, `counting` wraps the bodies a check can
+launch (BODIES) on their modules, and each row's `kernels` holds, check by check, `through_dispatch` and the bodies it ran
+with the config each was handed.  Only `op_bodies` and `zy` go through the ops' dispatch (`int8_fused.product`,
+`product_zy`), which takes `int8_wgmma` where `pick_wgmma` has a row; every other check calls int8_fused's Triton bodies
+itself, so it checks Triton alone, and its `cfg` is the Triton config.  A check that ran no body, or not one GEMM, fails
+the row (`kernels_ok`): the count reads nothing if the dispatch stops looking its bodies up at each call.
+
     python kgate.py --out OUT [--shapes all|decode|prefill] [--models llama-3.1-8b,qwen3-8b] [--no-stock] [--dump] [--zy]
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -43,6 +52,7 @@ import torch
 from verity_vllm.engine import int8_fused as X
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
     from types import ModuleType
 
 MODELS = {
@@ -234,6 +244,65 @@ def work() -> X.Workspace:
     return _WORK[0]
 
 
+#: The bodies a check can launch, each looked up on its module at every call (`int8_fused.product`, `product_zy` and
+#: `row_quant` call them so): int8_fused's Triton kernels, and on sm_90 `int8_wgmma`'s.
+BODIES = (("int8_fused", "quant_rows"), ("int8_fused", "scaled_mm"), ("int8_fused", "scaled_mm_zy"),
+          ("int8_wgmma", "scaled_mm"), ("int8_wgmma", "scaled_mm_zy"))
+GEMMS = frozenset(f"{m}.{n}" for m, n in BODIES if n != "quant_rows")
+#: a GEMM body's config argument: its position and its keyword
+CFG_ARG = {"scaled_mm": 5, "scaled_mm_zy": 7}
+#: the checks that go through the ops' dispatch; every other one calls int8_fused's Triton bodies itself, or none
+DISPATCH = frozenset({"op_bodies", "zy"})
+#: the checks that launch none of BODIES
+NO_LAUNCH = frozenset({"control", "stock"})
+#: while `counting` lasts, each call of BODIES as "module.name" and, for a GEMM, the config it was handed
+RAN: list[str] | None = None
+
+
+def _counted(key: str, f: Callable[..., object], ran: list[str]) -> Callable[..., object]:
+    at = CFG_ARG.get(key.split(".")[1])
+
+    def body(*args: object, **kw: object) -> object:
+        cfg = kw.get("cfg", args[at] if at is not None and len(args) > at else None)
+        ran.append(key if cfg is None else f"{key} {cfg}")
+        return f(*args, **kw)
+    return body
+
+
+@contextlib.contextmanager
+def counting(modules: dict[str, ModuleType] | None = None) -> Iterator[list[str]]:
+    """BODIES wrapped on their modules so each call goes to RAN, and put back after: no timed call runs a wrapper."""
+    global RAN
+    mods = modules or {"int8_fused": X, "int8_wgmma": X.int8_wgmma}
+    saved = [(mods[m], n, getattr(mods[m], n)) for m, n in BODIES]
+    RAN = []
+    for (m, n), (mod, _, f) in zip(BODIES, saved):
+        setattr(mod, n, _counted(f"{m}.{n}", f, RAN))
+    try:
+        yield RAN
+    finally:
+        for mod, n, f in saved:
+            setattr(mod, n, f)
+        RAN = None
+
+
+def ran_since(i: int, check: str) -> dict:
+    """`check`'s record: whether it goes through the dispatch, and the bodies RAN holds from i on."""
+    return {"through_dispatch": check in DISPATCH, "ran": [] if RAN is None else RAN[i:]}
+
+
+def kernels_ok(kernels: dict) -> bool:
+    """Each check that launches ran one GEMM body (int8_fused's own where it calls them itself), and the others none."""
+    for check, rec in kernels.items():
+        gemms = [r.split()[0] for r in rec["ran"] if r.split()[0] in GEMMS]
+        if check in NO_LAUNCH:
+            if rec["ran"]:
+                return False
+        elif len(gemms) != 1 or not (rec["through_dispatch"] or gemms[0].startswith("int8_fused.")):
+            return False
+    return True
+
+
 DUMP_N = 128
 
 
@@ -255,13 +324,18 @@ def zy_doc(xq: torch.Tensor, s: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor
     e = E()
     m, n, k = xq.shape[0], w.shape[0], w.shape[1]
     rows = -(-m // e.UNIT[0]) * e.UNIT[0]
+    i = len(RAN or [])
     y, zy = F.product_zy(xq, s, w, s_w, rows)
     torch.cuda.synchronize()
+    kernels = {"zy": ran_since(i, "zy")}
     zy_ref = e.scaled_mm_zy(xq, s, w, s_w.reshape(-1), rows)[1]
     cfg = F.pick(m, n, k)
     doc = {"rows": rows, "cfg": str(cfg), "y_diff": diff(y, y_ref), "records_diff": diff(zy, zy_ref)}
     yy, zz = torch.empty_like(y), torch.empty_like(zy)
+    i = len(RAN or [])
     doc["ptx"] = F.ptx_check(F.scaled_mm_zy(xq, s, w, s_w.reshape(-1), yy, zz, rows, cfg, work()))
+    kernels["zy_ptx"] = ran_since(i, "zy_ptx")
+    doc["kernels"] = kernels
     doc["ok"] = doc["y_diff"] == 0 and doc["records_diff"] == 0 and doc["ptx"]["ok"]
     return doc
 
@@ -287,9 +361,12 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
     poison(y2)
     torch.cuda.synchronize()
     before = torch.cuda.memory_allocated()
+    kernels, i = {}, len(RAN or [])
     kq = X.quant_rows(x, xq, s)
     km = X.scaled_mm(xq, s, w, s_w, y, cfg, wk)
+    kernels["fused"], i = ran_since(i, "fused"), len(RAN or [])
     X.scaled_mm(xq_ref, s_ref, w, s_w, y2, cfg, wk)
+    kernels["fused_mm"], i = ran_since(i, "fused_mm"), len(RAN or [])
     torch.cuda.synchronize()
     doc["alloc_eager_bytes"] = torch.cuda.memory_allocated() - before
     doc["fused"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
@@ -297,11 +374,13 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
     xq_op, s_op = X.row_quant(x)
     y_op = X.product(xq_op, s_op, w, s_w)
     torch.cuda.synchronize()
+    kernels["op_bodies"], i = ran_since(i, "op_bodies"), len(RAN or [])
     doc["op_bodies"] = {"xq_diff": diff(xq_op, xq_ref), "s_diff": diff(s_op, s_ref), "y_diff": diff(y_op, y_ref)}
     del xq_op, s_op, y_op
     doc["workspace_zero_after"] = int((wk.ws != 0).sum()) + int((wk.cnt != 0).sum())
     poison(xq, s, y)
     torch.cuda.synchronize()
+    kernels["control"], i = ran_since(i, "control"), len(RAN or [])
     doc["control"] = {"xq_diff": diff(xq, xq_ref), "s_diff": diff(s, s_ref), "y_diff": diff(y, y_ref)}
     g = torch.cuda.CUDAGraph()
     torch.cuda.synchronize()
@@ -310,6 +389,7 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
         X.quant_rows(x, xq, s)
         X.scaled_mm(xq, s, w, s_w, y, cfg, wk)
         doc["alloc_capture_bytes"] = torch.cuda.memory_allocated() - before
+    kernels["graph"], i = ran_since(i, "graph"), len(RAN or [])
     poison(xq, s, y)
     for _ in range(3):
         g.replay()
@@ -333,9 +413,15 @@ def one(n: int, k: int, m: int, seed: int, with_stock: bool, names: list[str] | 
                  and doc["alloc_eager_bytes"] == 0 and doc["alloc_capture_bytes"] == 0 and all(p["ok"] for p in doc["ptx"]))
     if zy:
         doc["zy"] = zy_doc(xq_ref, s_ref, w, s_w, y_ref)
+        kernels.update(doc["zy"].pop("kernels"))
         doc["ok"] = doc["ok"] and doc["zy"]["ok"]
     if with_stock:
+        i = len(RAN or [])
         doc["stock"] = stock_doc(x, w, s_w, xq_ref, s_ref, y_ref)
+        kernels["stock"] = ran_since(i, "stock")
+    doc["kernels"] = kernels
+    doc["kernels_ok"] = kernels_ok(kernels)
+    doc["ok"] = doc["ok"] and doc["kernels_ok"]
     del x, w, s_w, xq_ref, s_ref, y_ref, xq, s, y, y2
     torch.cuda.empty_cache()
     return doc
@@ -347,11 +433,24 @@ def gate(shapes: str = "all", with_stock: bool = True, seed: int = 20261019,
     ms = GATE_MS[shapes]
     rows = []
     for n, k, m, names in shapes_of(models, ms):
-        d = one(n, k, m, seed + m, with_stock, names, dump=dump if m <= 32 else None, zy=zy)
+        with counting():
+            d = one(n, k, m, seed + m, with_stock, names, dump=dump if m <= 32 else None, zy=zy)
         rows.append(d)
         print(json.dumps({k: v for k, v in d.items() if k not in ("ptx", "special")}), flush=True)
+    kernels = kernels_summary(rows)
+    print(json.dumps({"kernels": kernels}), flush=True)
     return {"ok": all(r["ok"] for r in rows), "shapes": len(rows), "models": list(models), "poison": f"{POISON:#04x}",
-            "rows": rows, "device": torch.cuda.get_device_name(), "torch": torch.__version__}
+            "kernels": kernels, "rows": rows, "device": torch.cuda.get_device_name(), "torch": torch.__version__}
+
+
+def kernels_summary(rows: list[dict]) -> dict:
+    """Per check, whether it goes through the dispatch, and on how many shapes each GEMM body ran."""
+    out: dict = {}
+    for r in rows:
+        for check, rec in r["kernels"].items():
+            s = out.setdefault(check, {"through_dispatch": rec["through_dispatch"], "gemm": Counter()})
+            s["gemm"].update(b.split()[0] for b in rec["ran"] if b.split()[0] in GEMMS)
+    return {c: {**s, "gemm": dict(sorted(s["gemm"].items()))} for c, s in out.items()}
 
 
 def main() -> int:

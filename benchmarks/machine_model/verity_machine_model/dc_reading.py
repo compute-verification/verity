@@ -1,5 +1,5 @@
 """`dc_reading`: the H200's and B200's headline instances in `lean_headline`'s form, exact: each family's readings
-(`reading`), which `benchmarks/pouw/lean_headline_dc.py` writes as Lean.
+(`reading`), which `lean_headline_dc` writes as Lean.
 
 `lean_headline`'s bound (`Whole.headline_of_branches`) for the data-centre families, whose instances its
 `instance()` refuses. The bound is the larger of the folded branch, at w* and φ* on π* with p = 7/8, and the unfolded
@@ -71,7 +71,8 @@ from verity_machine_model.lean_headline import Q, exact
 from verity_machine_model.model import device
 
 #: What other files read of it: `verity_machine_model.lean_headline_dc`, which writes the readings as Lean and also
-#: takes the private `_Exact` and `_and`.
+#: takes the private `_Exact` and `_and`, and two tests in `benchmarks/pouw/tests/` (the data-centre exporter's and
+#: the census cover's).
 __all__ = ["CATCH_ALL", "CATCH_ALLS", "EPS_DEN", "FAMILIES", "JOINT_ISSUE", "SCALAR_REF", "SM90", "Family", "Reading",
            "reading"]
 

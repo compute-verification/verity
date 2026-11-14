@@ -10,6 +10,9 @@
 //!   flock-circuit selftest --instances INST --circuit FILE [--gpu] [--only CASE]
 //!   flock-circuit statement --instances PUB --circuit FILE    (the statement the verifier builds, its digest; nothing proved)
 //!   flock-circuit stacked  --table R.bin (--root-out ROOT.json | --points P.json --statement-digest HEX --verifier ADDR [--dump F])   (`stacked`)
+//!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
+//!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
+//!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
 //! `b || c`, the output rows' too; no row, no salt, no output word) and the pinned circuit, from which it derives Δ, the regions and their values; it checks the
@@ -3633,7 +3636,7 @@ fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circu
         WitData::Host((z, a, b, _)) => CircuitSrc::Host { z, a, b },
         WitData::Dev(r, h, i) => CircuitSrc::Device { rows: r, host: h, inputs: i },
         WitData::DevCut(r, h, i, ui) => {
-            let sched = flock_live::gpu_circuit::schedule(st.c.unit());
+            let sched = flock_live::ir_block::schedule(st.c.unit());
             let cut_rows: Vec<usize> = sched.cut_rows.iter().map(|&r| r as usize).collect();
             let late_rows: Vec<usize> = sched.late_rows.iter().map(|&r| r as usize).collect();
             mid_fn = move |cut: &[u32]| st.host_tail(&**ui, cut, &cut_rows, &late_rows);
@@ -3645,12 +3648,14 @@ fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circu
 
 #[cfg(feature = "gpu")]
 /// A rep's buckets: the device's phases (`t.`), and the host's around it (`h.`: setup, staging the device's inputs, decoding and
-/// serializing the proof), which with `t.total` make up the rep's wall time.
-fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused: bool, native_sha: bool) -> Value {
+/// serializing the proof), which with `t.total` make up the rep's wall time; and where the units came from: the host
+/// (`host_units`), or the device's level walk (`unit_walk`) or its unit kernel (neither).
+fn gpu_buckets(st: &Stmt, wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused: bool, native_sha: bool) -> Value {
     json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
            "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
            "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "h.setup": hph[0], "h.stage": hph[1], "h.decode": hph[2],
            "device_witness": !matches!(wt, WitData::Host(..)), "host_units": matches!(wt, WitData::Dev(_, _, i) if i.is_empty()),
+           "unit_walk": matches!(wt, WitData::Dev(_, _, i) if !i.is_empty()) && flock_live::gpu_circuit::unit_walk(st),
            "rep_reused": reused, "native_sha": native_sha,
            "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" },
            "hm96_native": matches!(wt, WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) if !h.hm96_rows.is_empty())})
@@ -3668,7 +3673,7 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
                                                  native_sha))?;
     let ts = Instant::now();
     let bytes = bincode::serialize(&(commitment, proof)).unwrap();
-    let mut bk = gpu_buckets(wt, ph, wph, hph, reused, native_sha);
+    let mut bk = gpu_buckets(st, wt, ph, wph, hph, reused, native_sha);
     bk["h.serialize"] = json!(ts.elapsed().as_secs_f64());
     eprintln!("GPUPHASE\t{bk}");
     Ok((bytes, bk))
@@ -3701,7 +3706,7 @@ fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook
     let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &pcs_of(st, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts),
                                                  reuse, native_sha))?;
-    let bk = gpu_buckets(wt, ph, wph, hph, reused, native_sha);
+    let bk = gpu_buckets(st, wt, ph, wph, hph, reused, native_sha);
     eprintln!("GPUPHASE\t{bk}");
     Ok((proof, commitment, bk))
 }
@@ -3917,6 +3922,9 @@ fn forged_stages(st: &Stmt) -> BTreeMap<usize, &'static flock_live::ir_block::Ir
     }).collect()
 }
 
+/// The ZK server's refusal of a session whose witness is not the host's: its recheck is of a host witness.
+const ZK_SERVER_HOST_WITNESS: &str = "FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)";
+
 /// How a session builds its witness: on the device (inputs and host slots) or on the host, with the units' slots on the host,
 /// the host slots in mapped memory, and the hm96 slots built on the device natively (beside the compressions' native witness).
 fn witness_mode(st: &Arc<Stmt>, plan: &Plan) -> (bool, bool, bool, bool) {
@@ -4111,6 +4119,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let tree = is_zk(st) || plain_tree(st);
     let mut commit: Vec<F128> = Vec::new();
     let (device, host_units, mapped, hm96) = witness_mode(st, plan);
+    // the ZK server rechecks a host witness: a session whose witness the device would build is refused by the recheck's own
+    // name, decided here from the session's witness mode before the session builds a witness; one the pipeline built ahead
+    // for it is waited for and dropped (below). A build without the device reaches the refusal too. It leaves where the
+    // recheck's own refusal does: after `Hello`, before anything of a table
+    let no_recheck = firewall_on(st) && device;
     // on the device, rep 1 proves from rep 0's level-0 commitment (the session's tag keys what rep 0 keeps) and builds its
     // witness again, under M1 too: both reps commit one level-0 codeword
     static SESSIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -4191,6 +4204,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut witness_prebuilt_s: Option<f64> = None;
     let mut wits = Vec::new();
     for (j, tb) in tabs.list.iter().enumerate() {
+        if no_recheck {
+            // a witness the pipeline built ahead of the session is waited for and dropped, never left building beside the refusal
+            if let Some(h) = plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()) {
+                let _ = h.join();
+            }
+            break;
+        }
         // a witness built beside the previous session: its wait counts as this session's witness time
         let tw = Instant::now();
         let pre = (tabs.list.len() == 1 && !plan.rep1_other_witness)
@@ -4279,6 +4299,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     else if tree { "the verifier's coin-tree root and session key" }
                                     else { "the verifier's seed commitment" })),
         }
+        if no_recheck {
+            return Err(ZK_SERVER_HOST_WITNESS.into());
+        }
         // under the ZK server every table's level 0 is the Lean session loop's, sampled once it has every table's witness, before
         // any rep's frame starts (its time counts in table 0's level 0)
         let tl = Instant::now();
@@ -4345,7 +4368,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                 false => None,
                 true => {
                     let Some(WitData::Host((z, ..))) = wt0.as_ref() else {
-                        return Err("FIREWALL-REFUSED: the firewall rechecks a host witness (FC_HOST_WITNESS=1)".into());
+                        return Err(ZK_SERVER_HOST_WITNESS.into());
                     };
                     let l0 = match zk_pre.as_ref() {
                         Some(z) => z[0].as_ref().expect("rep 0's pads").0.level0.clone(),
@@ -4762,6 +4785,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("host_units_match_witness", true, false),
     ("native_sha_matches_eval64", true, false),
     ("device_hm96_matches_host", true, false),
+    ("device_walk_matches_host", true, false),
     ("region_word_shared_refused", false, false),
     ("zk_pads_not_the_committed_ones", false, true),
     ("zk_final_c_solved_after_the_batching_coins", false, true),
@@ -4792,6 +4816,7 @@ const CASES: &[(&str, bool, bool)] = &[
     ("zk_worker_level0", false, false),
     ("zk_worker_pads", false, false),
     ("zk_value_salts", false, false),
+    ("zk_server_refuses_device_witness", false, false),
 ];
 
 /// Cases that exercise the statement's parse or the non-ZK proof format only (M1's `--zk` selftest skips them).
@@ -4916,6 +4941,132 @@ fn unit_walk(c: &Composite) {
                 }
             }
         }
+    }
+}
+
+/// `unit-levels`: circuit `--net`'s (default the statement's unit's) level schedule (`ir_block::schedule`, the walk
+/// `unit_ab_levels` and the device's unit kernel take), one `LEVELS` line: its rows and nonzeros, its levels, the rows a
+/// level (least, median, mean, most), how many of its widest levels hold half, 90% and 99% of the rows, and the levels and
+/// their rows by width (`by_width`: the levels of under 32 rows, of under 1,024, 32,768 and 1,048,576, and the rest). The
+/// schedule reads the rows by column, so it is a walk of the net only where `one_pass` is true. `--widths`: a `WIDTHS` line
+/// after it, every level's rows, in level order.
+fn unit_levels(c: &Composite) {
+    let ni: usize = arg("--net", &c.unit_net.to_string()).parse().expect("--net");
+    let net = &c.nets[ni].1;
+    let s = flock_live::ir_block::schedule(net);
+    let widths: Vec<usize> = (0..s.levels()).map(|l| s.level(l).len()).collect();
+    let rows: usize = widths.iter().sum();
+    let mut sorted = widths.clone();
+    sorted.sort_unstable_by(|a, b| b.cmp(a));
+    let holding = |share: f64| -> usize {
+        let mut held = 0;
+        sorted.iter().position(|&w| { held += w; held as f64 >= share * rows as f64 }).map_or(0, |i| i + 1)
+    };
+    let bounds = [32usize, 1 << 10, 1 << 15, 1 << 20, usize::MAX];
+    let by_width: Vec<Value> = bounds.iter().enumerate().map(|(k, &hi)| {
+        let lo = if k == 0 { 0 } else { bounds[k - 1] };
+        let of: Vec<usize> = widths.iter().copied().filter(|&w| lo <= w && w < hi).collect();
+        json!({"under": (hi != usize::MAX).then_some(hi), "levels": of.len(), "rows": of.iter().sum::<usize>()})
+    }).collect();
+    println!("LEVELS\t{}", json!({"net": ni, "name": c.nets[ni].0, "unit_log": net.unit_log, "rows": net.useful,
+        "inputs": net.in_words * 128, "nnz_a": net.a.nnz(), "nnz_b": net.b.nnz(), "one_pass": net.one_pass(),
+        "position_map": net.order.is_some(), "levels": s.levels(), "levels0": s.levels0, "late_rows": s.late_rows.len(),
+        "cut_rows": s.cut_rows.len(), "level_rows": rows,
+        "rows_a_level": {"min": sorted.last(), "median": sorted.get(sorted.len() / 2), "mean": rows as f64 / widths.len().max(1) as f64,
+                         "max": sorted.first()},
+        "widest_levels_holding": {"0.5": holding(0.5), "0.9": holding(0.9), "0.99": holding(0.99)}, "by_width": by_width}));
+    if flag("--widths") {
+        println!("WIDTHS\t{}", json!(widths));
+    }
+}
+
+/// `walk-twin`: the device's level walk on the host (`circuit::unit_walk_words`: the device's arrays, `ir_block::WalkRows`,
+/// by the device's steps, from arrays of 0xA5 bytes) against the host's builder (`unit_ab_into`) on the statement's own unit
+/// slots, from the prover's instance file (`--slots N`: the first N; default every one). One `TWIN` line: the `u32` words
+/// compared and how many of a, of b and of z (against a & b) differ, with the first differing word; `same` needs every
+/// assertion to hold, no word to differ and every slot's z to say something. `control_differs`: the same compare with one
+/// level's rows left out of the walk's arrays must find a difference, so the compare reads what the levels wrote. Exits 1 unless `same` holds and the control differs.
+fn walk_twin(st: &Arc<Stmt>, inst: &Arc<Instances>) {
+    use flock_live::circuit::{unit_ab_into, unit_walk_words};
+    use flock_live::ir_block::{WalkRows, schedule};
+    use rayon::prelude::*;
+    let c = &st.c;
+    let (ni, net) = (c.unit_net, c.unit());
+    let rows = inst.instance_rows(c).unwrap_or_else(|| refuse("walk-twin: the prover's instance file, with its rows".into()));
+    let per = c.unit_range().count;
+    let all = st.blocks() * per;
+    let slots = arg("--slots", &all.to_string()).parse::<usize>().expect("--slots").min(all);
+    let ins: Vec<Vec<F128>> = (0..slots).into_par_iter().map(|x| st.unit_inputs(Some(&rows), x / per, x % per)).collect();
+    let sched = schedule(net);
+    let t = Instant::now();
+    let Some(wr) = WalkRows::of(net, &sched) else {
+        refuse(format!("walk-twin: {} has no level walk (no one-pass form, or a cut unit's two phases)", c.nets[ni].0));
+    };
+    let rows_s = t.elapsed().as_secs_f64();
+    let uw = 1usize << (net.unit_log - 7);
+    let mut want = vec![0xa5a5_a5a5_a5a5_a5a5u64; 4 * uw * slots];
+    let t = Instant::now();
+    let host = unit_ab_into(net, ni, uw, &ins, &mut want);
+    let host_s = t.elapsed().as_secs_f64();
+    let half = |w: &[u64], j: usize| (w[j / 2] >> (32 * (j % 2))) as u32;
+    // per slot: the words of a, of b and of z (against a & b) that differ, the first of them, and whether z says anything
+    let compare = |z: &[u32], a: &[u32], b: &[u32], slots: usize| -> (Vec<[usize; 3]>, Option<(usize, &'static str, usize)>, usize) {
+        let per_slot: Vec<([usize; 3], Option<(&'static str, usize)>, bool)> = (0..slots).into_par_iter().map(|x| {
+            let (wa, wb) = (&want[4 * uw * x..4 * uw * x + 2 * uw], &want[4 * uw * x + 2 * uw..4 * uw * (x + 1)]);
+            let (mut n, mut first, mut says) = ([0usize; 3], None, false);
+            for j in 0..4 * uw {
+                let at = 4 * uw * x + j;
+                for (k, (differs, what)) in [(a[at] != half(wa, j), "a"), (b[at] != half(wb, j), "b"), (z[at] != a[at] & b[at], "z")].into_iter().enumerate() {
+                    if differs {
+                        n[k] += 1;
+                        first.get_or_insert((what, j));
+                    }
+                }
+                says |= z[at] != 0;
+            }
+            (n, first, says)
+        }).collect();
+        let first = per_slot.iter().enumerate().find_map(|(x, s)| s.1.map(|(what, j)| (x, what, j)));
+        (per_slot.iter().map(|s| s.0).collect(), first, per_slot.iter().filter(|s| !s.2).count())
+    };
+    let t = Instant::now();
+    let [z, a, b] = unit_walk_words(net, &sched, &wr, 4 * uw, &ins);
+    let walk_s = t.elapsed().as_secs_f64();
+    let (n, first, silent) = compare(&z, &a, &b, slots);
+    let sum = |k: usize| n.iter().map(|s| s[k]).sum::<usize>();
+    let differing = sum(0) + sum(1) + sum(2);
+    drop((z, a, b));
+    // the control: the walk with its middle level's rows never written (they leave the schedule and the rows' arrays, so
+    // they stay as the arrays started), on the first pass's slots
+    let control = (sched.levels() > 0).then(|| {
+        let l = sched.levels() / 2;
+        let (k0, k1) = (sched.level_off[l] as usize, sched.level_off[l + 1] as usize);
+        let gone = wr.st[k1] - wr.st[k0];
+        let less = flock_live::ir_block::UnitSched {
+            levels0: sched.levels0, late_rows: Vec::new(), cut_rows: Vec::new(),
+            level_off: sched.level_off.iter().enumerate().map(|(i, &o)| if i > l { o - (k1 - k0) as u32 } else { o }).collect(),
+            order: [&sched.order[..k0], &sched.order[k1..]].concat(),
+        };
+        let cut = WalkRows {
+            st: wr.st[..k0].iter().copied().chain(wr.st[k1..].iter().map(|&x| x - gone)).collect(),
+            mid: wr.mid[..k0].iter().copied().chain(wr.mid[k1..].iter().map(|&x| x - gone)).collect(),
+            cols: [&wr.cols[..wr.st[k0] as usize], &wr.cols[wr.st[k1] as usize..]].concat(),
+            own: wr.own.clone(),
+        };
+        let n0 = slots.min(256);
+        let [z, a, b] = unit_walk_words(net, &less, &cut, 4 * uw, &ins[..n0]);
+        let (n, _, _) = compare(&z, &a, &b, n0);
+        (l, k1 - k0, n.iter().map(|s| s[0] + s[1] + s[2]).sum::<usize>())
+    });
+    println!("TWIN\t{}", json!({"net": ni, "name": c.nets[ni].0, "rows": net.useful, "levels": sched.levels(), "columns": wr.cols.len(),
+        "slots": slots, "of": all, "slots_with_inputs": ins.iter().filter(|w| w.iter().any(|x| *x != F128::ZERO)).count(),
+        "words": 3 * 4 * uw * slots, "host_ok": host, "a_differing": sum(0), "b_differing": sum(1), "z_differing": sum(2),
+        "first_differing": first.map(|(x, what, j)| json!({"slot": x, "of": what, "word": j, "rows": [32 * j, 32 * j + 31]})),
+        "slots_with_no_z": silent, "same": host && differing == 0 && silent == 0,
+        "control": control.map(|(l, rows, n)| json!({"level_left_out": l, "its_rows": rows, "words_differing": n, "differs": n > 0})),
+        "rows_s": rows_s, "host_s": host_s, "walk_s": walk_s}));
+    if !(host && differing == 0 && silent == 0 && control.is_none_or(|x| x.2 > 0)) {
+        std::process::exit(1);
     }
 }
 
@@ -5079,6 +5230,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     }
     if name == "zk_value_salts" {
         return value_salts_case(st, inst, gpu);
+    }
+    if name == "zk_server_refuses_device_witness" {
+        return zk_server_device_witness_case(gpu);
     }
     if name == "lincheck_modes_agree" {
         return lincheck_modes_case(st, inst, gpu);
@@ -5479,6 +5633,43 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         return json!({"case": name, "pass": true, "skipped": "a check of the GPU build"});
     }
+    if name == "device_walk_matches_host" {
+        // the units as the device's level walk builds them (fc_walk_units from working arrays of 0xA5 bytes) are
+        // Stmt::slot_zab's word for word, on every unit of every block; the control, the same slots without the levels,
+        // must differ, so the compare reads what the levels wrote. Skipped, saying which: a build without the device, a
+        // device build not asked for it, no device present, or a statement whose unit no device walks; once a device is
+        // asked, a device error or a walk that differs, in any chunk, fails (`ir_block::walk_verdict`)
+        #[cfg(feature = "gpu")]
+        if gpu {
+            use rayon::prelude::*;
+            if flock_live::gpu::device_count() < 1 {
+                return json!({"case": name, "gpu": true, "pass": true, "skipped": "no device present: a device build, asked for the device, with no CUDA device"});
+            }
+            if let Some(why) = flock_live::gpu_circuit::unit_walk_off(st) {
+                return json!({"case": name, "gpu": true, "pass": true, "skipped": format!("no device walks this statement's unit: {why}")});
+            }
+            let w = wit(st, inst, &Plan::default(), false, ProverSeed::from_os(), 0);
+            let ins = st.converge(&*w.inputs, &*w.rowin, &w.nets);
+            let (ni, net) = (st.c.unit_net, st.c.unit());
+            let levels = flock_live::ir_block::schedule(net).levels();
+            let chunks: Vec<&[Vec<F128>]> = ins[ni].chunks(300).collect();
+            let sizes: Vec<usize> = chunks.iter().map(|c| c.len()).collect();
+            let same = |k: usize, dev: &Vec<(Vec<F128>, Vec<F128>, Vec<F128>)>| {
+                let host = st.slot_zab(ni, net, chunks[k]);
+                host.len() == chunks[k].len() && host.par_iter().all(|(x, z, a, b)| dev[*x].0 == *z && dev[*x].1 == *a && dev[*x].2 == *b)
+            };
+            let walk = |k: usize, walked: bool| flock_live::gpu_circuit::device_unit_walk(st, chunks[k], walked);
+            return match flock_live::ir_block::walk_verdict(&sizes, levels, walk, same) {
+                flock_live::ir_block::WalkVerdict::Equal { units } => json!({"case": name, "gpu": true,
+                    "expect": "the device's level walk's units equal the host's in every chunk, and not without the levels",
+                    "units": units, "chunks": sizes.len(), "levels": levels, "pass": units > 0 && units == ins[ni].len()}),
+                flock_live::ir_block::WalkVerdict::Fails { chunk, units_checked, why } => json!({"case": name, "gpu": true, "pass": false,
+                    "chunk": chunk, "chunks": sizes.len(), "units_checked": units_checked, "levels": levels, "why": why}),
+            };
+        }
+        let why = if cfg!(feature = "gpu") { "a device build not asked for the device (--gpu)" } else { "a build without the device" };
+        return json!({"case": name, "pass": true, "skipped": why});
+    }
     if name == "device_salts_match_host" {
         #[cfg(all(feature = "gpu", feature = "sha512"))]
         if gpu {
@@ -5837,8 +6028,9 @@ impl Transport for Wire {
     }
 }
 
-/// The selftest's own process for one ZK server session (`--only zk_worker_session`), its controls from this process's
-/// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`): the session goes through the
+/// The selftest's own process for one ZK server session (`--only zk_worker_session`; with `--gpu`, on the GPU device), its
+/// controls from this process's environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`):
+/// the session goes through the
 /// Lean session loop as `prove`'s does ([`session_addr`], with `--firewall-state` an outer session of the ZK server's
 /// release side, [`release_args`]), to a verifier of this process's on loopback, and the record is the
 /// session's outcome and every request that reached the verifier, behind the loop ([`seen`]; a frame that is not its
@@ -5846,7 +6038,7 @@ impl Transport for Wire {
 /// verifier's after its request as `["refused", WHY]`).
 const WORKER_SESSION: &str = "zk_worker_session";
 
-fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
+fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     use std::io::{BufReader, BufWriter};
     let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let verifier = l.local_addr().unwrap().to_string();
@@ -5884,7 +6076,7 @@ fn worker_session(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
             }
         }
     });
-    let plan = Plan::default();
+    let plan = Plan { gpu, ..Plan::default() };
     FINISH_REPS.store(2 * table_names(plan.tables).len(), std::sync::atomic::Ordering::SeqCst);
     let fw = release_args(st, 1);
     let (addr, frames) = session_addr(st, inst, table_names(plan.tables).len(), &verifier, fw.as_ref()).unwrap_or_else(|e| refuse(e));
@@ -5914,15 +6106,27 @@ fn worker_subsession(env: &[(&str, String)]) -> Value {
 /// [`worker_subsession`] on the instance file `instances`, with the flags `extra` beside the selftest's. Where the session
 /// never starts, the record is an `error`, with the refusal's reason as `refused` where the process refused.
 fn worker_subsession_on(instances: &str, extra: &[String], env: &[(&str, String)]) -> Value {
+    worker_subsession_with(instances, extra, env, true)
+}
+
+/// [`worker_subsession_on`] with the session's witness the host's (`host_witness`, `FC_HOST_WITNESS=1`), or left to the
+/// session's device: with `--gpu` among `extra` the device builds it, its units as the session's own switches say (none of
+/// `FC_HOST_WITNESS`, `FC_HOST_UNITS` and `FC_UNIT_WALK` reaches the session from this process's environment; `env` gives them).
+fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, String)], host_witness: bool) -> Value {
     let mut cmd = std::process::Command::new(std::env::current_exe().unwrap());
     cmd.arg("selftest").args(if zk_mode() { &["--zk"][..] } else { &[] })
         .args(["--instances", instances, "--circuit", &arg("--circuit", ""), "--tables", &arg("--tables", "tables"),
                "--only", WORKER_SESSION])
         .args(extra)
-        .env("FC_FIREWALL", "1").env("FC_HOST_WITNESS", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
+        .env("FC_FIREWALL", "1").env_remove("FC_FIREWALL_TAMPER").env_remove("FC_FIREWALL_CUT_AT")
         .env_remove("FC_FIREWALL_DEADLINE_S").env_remove("FC_WIRE_TAMPER").env_remove("FC_FINISH_TAMPER")
         .env_remove("FC_INNER_TAMPER").env_remove("FC_LEVEL0_TAMPER").env_remove("FC_FIREWALL_VALUES")
         .env_remove("FC_FIREWALL_SALT_KEY");
+    if host_witness {
+        cmd.env("FC_HOST_WITNESS", "1");
+    } else {
+        cmd.env_remove("FC_HOST_WITNESS").env_remove("FC_HOST_UNITS").env_remove("FC_UNIT_WALK");
+    }
     // the verifier's sample, as this process's server has it ([`serving`])
     for flag in ["--draw", "--draw-law", "--draw-file"] {
         let v = arg(flag, "");
@@ -5939,6 +6143,48 @@ fn worker_subsession_on(instances: &str, extra: &[String], env: &[(&str, String)
         json!({"error": format!("no session record (exit {:?}): {}", out.status.code(), err.lines().rev().take(5).collect::<Vec<_>>().join(" | ")),
                "refused": refused.map(|r| r["why"].clone())})
     })
+}
+
+/// `zk_server_refuses_device_witness` (live PROTOCOL.md §10.2, §10.4): the ZK server rechecks a host witness, so a
+/// session whose witness the device builds is refused by name before anything of its table leaves, with the device's level
+/// walk asked for (`FC_UNIT_WALK=1`, under which a deep unit's words are the device's and no host slots) as without it. Two
+/// ZK server sessions asked for the device (`--gpu`), each in a process of its own, with no `FC_HOST_WITNESS`, one with
+/// `FC_UNIT_WALK=1` (the record's own fields) and one with it unset (`without_walk`); in each the prover stops with
+/// the recheck's own refusal, the verifier gets no `Commit`, round or proof, and does not accept. The refusal is decided
+/// from the session's witness mode before the session builds a witness; one the pipeline built ahead for it is waited for
+/// and dropped. So a build without the device holds it too (`device_build` false:
+/// the session's `--gpu` reaches nothing of a device before it is refused); a device build runs the case on the device.
+fn zk_server_device_witness_case(gpu: bool) -> Value {
+    let name = "zk_server_refuses_device_witness";
+    if cfg!(feature = "gpu") && !gpu {
+        return json!({"case": name, "pass": true, "skipped": "a device build runs the case on the device (--gpu)"});
+    }
+    let lean = flock_live::firewall::lean_frame_exe();
+    if !lean.exists() {
+        return json!({"case": name, "pass": true, "skipped": format!("no Lean frame at {} (FC_FIREWALL_LEAN)", lean.display())});
+    }
+    let want = ZK_SERVER_HOST_WITNESS;
+    let kind = |x: &Value| x[0].as_str().unwrap_or("").to_string();
+    // one session with the walk asked for, one with FC_UNIT_WALK unset; the first's record is the case's own, the second's beside it
+    let one = |env: &[(&str, String)], asked: &str| {
+        let v = worker_subsession_with(&arg("--instances", ""), &["--gpu".to_string()], env, false);
+        let s = v["seen"].as_array().cloned().unwrap_or_default();
+        let left: Vec<String> = s.iter().map(kind).filter(|k| ["commit", "open", "round", "proof"].contains(&k.as_str())).collect();
+        let stopped = v["prover_stopped"].as_str().unwrap_or("").to_string();
+        let pass = v["accepted"] == false && stopped == want && left.is_empty();
+        json!({"unit_walk_asked": asked, "accepted": v["accepted"], "prover_stopped": stopped, "why": v["why"], "error": v["error"],
+               "requests": s.iter().map(kind).collect::<Vec<_>>(), "sent_of_the_table": left, "pass": pass})
+    };
+    let mut r = one(&[("FC_UNIT_WALK", "1".to_string())], "FC_UNIT_WALK=1");
+    let without = one(&[], "unset");
+    let pass = r["pass"] == true && without["pass"] == true;
+    r["case"] = json!(name);
+    r["expect"] = json!("each session, the walk asked for and not, refused by the recheck's own name, nothing of the table sent, not accepted");
+    r["gpu"] = json!(gpu);
+    r["device_build"] = json!(cfg!(feature = "gpu"));
+    r["without_walk"] = without;
+    r["pass"] = json!(pass);
+    r
 }
 
 /// `zk_worker_wire` (live PROTOCOL.md §10.4): every frame that reaches the verifier through the ZK server's session loop is
@@ -6536,7 +6782,8 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
     json!({"case": "gpu_proofs_match_cpu", "pass": true, "skipped": "built without the test harness's seed-injection feature"})
 }
 
-/// The device prover's paths against each other: the device's units, a rebuilt rep 1 and the compressions level by level, against
+/// The device prover's paths against each other: the device's units (by its level walk under `FC_UNIT_WALK`, else its unit
+/// kernel: `unit_walk` says which), a rebuilt rep 1 and the compressions level by level, against
 /// the host's units, rep 1 from rep 0's level-0 commitment, and the compressions natively (host units only where the
 /// device witness takes them, a statement whose units return its outputs), its witness built ahead of the
 /// session as the prove loop's next session's is. Equal seeds and verifier coins give byte-identical proofs and transcripts.
@@ -6559,7 +6806,7 @@ fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {
     let (pe, te) = (a.1 == b.1, a.2 == b.2);
     json!({"case": "gpu_paths_agree", "expect": "byte-identical proofs and transcripts", "gpu": true, "zk": is_zk(st), "accepted": accepted,
            "proofs_equal": pe, "transcripts_equal": te, "transcript_first_difference": first_diff(&a.2, &b.2, String::new()),
-           "host_units": used("host_units"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "hm96_native": [used_a("hm96_native"), used("hm96_native")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
+           "host_units": used("host_units"), "unit_walk": used_a("unit_walk"), "rep_reused": used("rep_reused"), "native_sha": used("native_sha"), "host_slots": [used_a("host_slots"), used("host_slots")], "hm96_native": [used_a("hm96_native"), used("hm96_native")], "prebuilt": b.0["witness_prebuilt_s"].is_number(), "prove_s": [a.0["prove_s"].clone(), b.0["prove_s"].clone()],
            "pass": accepted && pe && te})
 }
 
@@ -6746,7 +6993,7 @@ fn selftest(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) {
     let only = arg("--only", "");
     let missing = |name: &str| forged_missing(name).map(|why| json!({"case": name, "gpu": gpu, "accepted": false, "pass": false, "why": why}));
     if only == WORKER_SESSION {
-        println!("NEG\t{}", worker_session(st, inst));
+        println!("NEG\t{}", worker_session(st, inst, gpu));
         return;
     }
     if !only.is_empty() {
@@ -7594,6 +7841,9 @@ fn main() {
     if cmd == "unit-walk" {
         return unit_walk(&c);
     }
+    if cmd == "unit-levels" {
+        return unit_levels(&c);
+    }
     let pin = arg("--pin", "");
     if cmd == "serve" && pin.is_empty() {
         refuse("serve needs --pin (the pinned circuit's SHA-512)".into());
@@ -7647,6 +7897,7 @@ fn main() {
             "vus_per_block": st.c.g, "blocks": st.blocks_real, "k_log": st.c.k_log, "nbl": st.nbl, "dense_m": st.m,
             "regions": st.regions.len(), "circuit_sha512": hex(&st.c.sha512), "statement_digest": hex(&st.digest),
             "public_sha512": hex(&inst.public_sha512), "identity": st.identity})),
+        "walk-twin" => walk_twin(&st, &inst),
         "zkstat" => zkstat(&st, &inst),
         "zkaudit" => zkaudit(&st, &inst),
         "zkrewind" => zkrewind(&st, &inst),
@@ -7680,6 +7931,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1,2] [--huge-pages]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1,2] [--huge-pages] | unit-levels --circuit FILE [--net N] [--widths] | walk-twin --instances FILE --circuit FILE [--slots N]"),
     }
 }

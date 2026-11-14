@@ -24,6 +24,8 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import UsageError
 
+__all__ = ["main", "parse"]
+
 PROG = "verity-vllm"
 
 #: command -> (module, one-line help).  Modules are imported only when their command runs.
@@ -69,8 +71,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "serve-openai": ("verity_vllm.pipeline.serve_openai", "an OpenAI-compatible HTTP server on the in-process engine, every step committed"),
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
-    "records": ("verity_vllm.pipeline.circuit_db", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
-                            "switch), and a checkpoint's staging (staged)"),
+    "records": ("verity_vllm.pipeline.circuit_db",
+                ("the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
+                 "switch), and a checkpoint's staging (staged)")),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
     "router-tap-build": ("verity_vllm.acquire.router_tap_src.build_ext", "build or check the router-softmax tap's CUDA op"),
     "research-outputs": ("verity_vllm.pipeline.research_outputs", "typed outputs of a sweep stage"),
@@ -82,7 +85,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
-    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (mark, report, collect)"),
+    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (report)"),
     "topp-pin-check": ("verity_vllm.pipeline.topp_pin_check", "the top-p split pin on the GPU: the kernel pinned and not, requests together and alone"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
     "tp-capture": ("verity_vllm.pipeline.tp.capture", "tensor-parallel M1 capture"),
@@ -227,7 +230,7 @@ def process_settings(environ: MutableMapping[str, str]) -> None:
 
 def main(argv: list[str] | None = None) -> Any:
     process = argv is None
-    argv = sys.argv[1:] if process else list(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(usage(), file=sys.stdout if argv else sys.stderr)
         return 0 if argv else 2

@@ -108,9 +108,9 @@ def verdict(h: dict[str, Any], modes: Any) -> str:
         return (f"one whole run, its outer proofs accepted and its recursive statement {how}, so not an accepted recursive "
                 f"run (oprove modes {modes}" + (f": {why}" if why else "") + ")")
     if h.get("complete"):
-        why = h.get("refused")
+        refused = h.get("refused")
         return "one whole recursive run, **not accepted**" + (
-            f": Lean refused its recursive statement ({why})" if why else " (see ok and the steps' exits)")
+            f": Lean refused its recursive statement ({refused})" if refused else " (see ok and the steps' exits)")
     return "**not a whole recursive run**: some of " + ", ".join(RP.E2E_STEPS) + " did not run"
 
 

@@ -19,6 +19,7 @@ import signal
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import tomllib
 import types
 from pathlib import Path
@@ -960,6 +961,53 @@ def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_not
     assert not re.search(r"\bcat [^|'>]*(\.ssh/vy-cluster'|lean-cache\.env)", r.stdout)       # a key or env file is copied, never printed
     assert r.stdout.count("tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | ") == nodes and "sudo tar -C /etc/verity -cf - lean-cache.env' | " in r.stdout
     assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
+    # no file holds a project's id: each create reads it from the variable of its node's region
+    projects = re.findall(r"NEBIUS_REGION=(\S+) NEBIUS_PROJECT_ID=(\S+) ", r.stdout)
+    assert len(projects) == nodes and all(p == "$NEBIUS_PROJECT_ID_" + region.upper().replace("-", "_") for region, p in projects)
+
+
+@pytest.mark.parametrize("held, missing", [
+    ({}, "NEBIUS_PROJECT_ID_EU_WEST2 is unset: the id of the project"),
+    ({"NEBIUS_PROJECT_ID_EU_WEST2": "project-e00west", "NEBIUS_PROJECT_ID_UK_SOUTH1": "project-e00south"},
+     "NEBIUS_TENANT_ID is unset: the id of the tenant"),
+    ({"NEBIUS_PROJECT_ID_EU_WEST2": "project-e00west", "NEBIUS_PROJECT_ID_UK_SOUTH1": "project-e00south",
+      "N1R_TENANT": "tenant-e00example"}, "VY_NEBIUS_1_HOST is unset: vy-nebius-1's address"),
+])
+def test_n1s_replacement_preflight_ends_naming_the_first_id_or_address_the_environment_lacks(tmp_path, held, missing):
+    """The provider's ids and n1's address are the environment's: preflight ends naming the first one unset, before it
+    makes any Nebius call or opens any ssh."""
+    called = tmp_path / "called"
+    for name in ("nebius", "ssh"):
+        (tmp_path / name).write_text(f"#!/bin/bash\ntouch {called}\nexit 1\n")
+        (tmp_path / name).chmod(0o755)
+    base = {k: v for k, v in os.environ.items() if not k.startswith(("NEBIUS_", "N1R_", "VY_"))}
+    r = subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "preflight", "now"], capture_output=True, text=True,
+                       env={**base, "NEBIUS_BIN": str(tmp_path / "nebius"), "PATH": f"{tmp_path}:/usr/bin:/bin", **held})
+    assert r.returncode == 2 and r.stderr.startswith(f"n1_replacement: {missing}"), r.stderr
+    assert r.stdout == "" and not called.exists()
+
+
+def test_resolve_project_refuses_to_go_on_without_the_projects_id(tmp_path):
+    """No file holds a project's id: with NEBIUS_PROJECT_ID unset, launch.sh's and teardown.sh's resolve_project ends naming
+    it before any Nebius call; set, it is the project; set empty, the project is looked up by name, as before."""
+    script = (f". {NEBIUS / 'common.sh'}; nb() {{ echo \"$*\" >> \"$CALLS\"; echo '{{\"items\": []}}'; }}; "
+              "resolve_project && echo \"project $PROJECT_ID\"")
+    calls = tmp_path / "calls"
+    held = {k: v for k, v in os.environ.items() if not k.startswith("NEBIUS_")}
+
+    def resolve(**env: str) -> subprocess.CompletedProcess:
+        calls.unlink(missing_ok=True)
+        return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                              env={**held, "CALLS": str(calls), "XDG_RUNTIME_DIR": str(tmp_path), **env})
+
+    r = resolve()
+    assert r.returncode == 1 and r.stderr.startswith("nebius: NEBIUS_PROJECT_ID is not set: the id of the project") and not calls.exists()
+    r = resolve(NEBIUS_PROJECT_ID="project-e00example")
+    assert (r.returncode, r.stdout) == (0, "project project-e00example\n"), r.stderr
+    assert calls.read_text() == "compute instance list --parent-id project-e00example\n"
+    r = resolve(NEBIUS_PROJECT_ID="", NEBIUS_TENANT_ID="tenant-e00example")
+    assert r.returncode == 1 and "no project named vy-nebius in tenant tenant-e00example" in r.stderr
+    assert calls.read_text() == "iam v2 project list --parent-id tenant-e00example --all\n"
 
 
 def test_launch_refuses_to_spend_without_yes_and_a_lease():
@@ -2001,27 +2049,62 @@ elif a[0] == "logs":
 N1_OLD, N1_FUTURE = 1_000_000_000, 4_102_444_800     # a run's records last changed in 2001 (settled, and stale for a pod), or in 2100
 N1_CUSTODY = pytest.mark.skipif(shutil.which("bash") is None or shutil.which("flock") is None or not Path("/proc/self/stat").exists(),
                                 reason="n1_custody.sh is bash, and takes a flock")
+#: where _n1_custody's tree goes when a directory above tmp_path fails n1_custody.sh's rule; each is removed as its test ends
+CUSTODY_TMP, _CUSTODY_BASES = Path("/tmp"), []
+
+
+def _owned_up(d: Path) -> bool:
+    """Whether d and every directory above it, as written and resolved, passes n1_custody.sh's rule for a directory above the tree
+    it runs: root's or this uid's, and writable by its owner alone unless sticky."""
+    for p in {d, d.resolve()}:
+        for a in (p, *p.parents):
+            st = a.stat()
+            if st.st_uid not in (0, os.geteuid()) or (st.st_mode & 0o022 and not st.st_mode & 0o1000):
+                return False
+    return True
+
+
+def _custody_base(tmp_path: Path) -> Path:
+    """Where _n1_custody puts the tree and the Python the round runs, which it refuses under a directory another uid could change:
+    tmp_path, whose own mode the helper sets, unless a directory above it fails that rule (a `research run` job's scratch, its
+    TMPDIR, is group-writable), then a new directory of mode 700 under CUSTODY_TMP."""
+    if _owned_up(next(a for a in tmp_path.parents if a.exists())):
+        return tmp_path
+    assert _owned_up(CUSTODY_TMP), (f"a directory above {tmp_path} and above {CUSTODY_TMP} could be changed by another uid, so no "
+                                    "round would run a tree under either: give the tests a TMPDIR whose every directory up from / is "
+                                    "root's or yours and writable by its owner alone, or sticky")
+    _CUSTODY_BASES.append(Path(tempfile.mkdtemp(prefix="n1-custody-", dir=CUSTODY_TMP)))
+    return _CUSTODY_BASES[-1]
+
+
+@pytest.fixture(autouse=True)
+def _no_custody_base_left():
+    yield
+    while _CUSTODY_BASES:
+        shutil.rmtree(_CUSTODY_BASES.pop(), ignore_errors=True)
 
 
 def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
     """Node 1 for n1_custody.sh: its runs roots `jobs` (store uid 1000) and `research` (1001), node 2's relay copies under jobs/runs-n2,
     and the Secret's R2 as the fs vault `vault`. `run` makes a run dir from the run_v0.2 fixture (a pod's, pod-RUN, unless `host`),
     `round_` runs one round through FAKE_KUBECTL and a sudo that logs its argv (at `clock`, when given, as _n2_custody's), `created`
-    lists the Jobs created so far, `job` reads one back with its outcome, `command` its container's command, `held` the holds."""
+    lists the Jobs created so far, `job` reads one back with its outcome, `command` its container's command, `held` the holds.
+    `src`, `pyhome` and `py` are the tree and the Python the round runs, under `_custody_base`."""
     src_root = Path(registry.__file__).resolve().parents[2]
     n = types.SimpleNamespace(jobs=tmp_path / "jobs", research=tmp_path / "research", state=tmp_path / "state", vault=tmp_path / "vault",
                               log=tmp_path / "calls.log", absent=tmp_path / "absent.toml", remote=tmp_path / "vault.toml")
     bin_, kjobs, home = tmp_path / "bin", tmp_path / "k8s", tmp_path / "home"
-    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, tmp_path / "py" / "bin"):
+    base = _custody_base(tmp_path)
+    for d in (n.jobs / "runs", n.research / "runs", bin_, kjobs, n.vault, home, base / "py" / "bin"):
         d.mkdir(parents=True)
     # the round runs only a tree and a Python that no other uid can change: copies, not links into the checkout
-    shutil.copytree(src_root, tmp_path / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
-    shutil.copy(src_root.parent / "store.pod.toml", tmp_path / "src" / "tools" / "research" / "store.pod.toml")
-    (tmp_path / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
-    (tmp_path / "py" / "bin" / "python3").chmod(0o755)
-    for p in (tmp_path, tmp_path / "src", *(tmp_path / "src").rglob("*"), tmp_path / "py", *(tmp_path / "py").rglob("*")):
-        p.chmod(p.stat().st_mode & ~0o022)       # tmp_path too: a subdirectory a test makes takes the node's umask (002 on node 1)
-    n.src, n.py = tmp_path / "src", tmp_path / "py" / "bin" / "python3"
+    shutil.copytree(src_root, base / "src" / "tools" / "research" / "src", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(src_root.parent / "store.pod.toml", base / "src" / "tools" / "research" / "store.pod.toml")
+    (base / "py" / "bin" / "python3").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
+    (base / "py" / "bin" / "python3").chmod(0o755)
+    for p in (base, base / "src", *(base / "src").rglob("*"), base / "py", *(base / "py").rglob("*")):
+        p.chmod(p.stat().st_mode & ~0o022)       # base too: a subdirectory a test makes takes the node's umask (002 on node 1)
+    n.src, n.pyhome, n.py = base / "src", base / "py", base / "py" / "bin" / "python3"
     n.remote.write_text(f'[remote]\ntype = "fs"\npath = "{n.vault}"\n')
     (bin_ / "kubectl").write_text(f"#!{sys.executable}\n{FAKE_KUBECTL}")
     (bin_ / "sudo").write_text(f'#!/bin/sh\necho "sudo $*" >> {n.log}\n[ "$1 $2" = "-n -u" ] || exit 1\nshift 3\nexec "$@"\n')
@@ -2064,7 +2147,7 @@ def _n1_custody(tmp_path: Path) -> types.SimpleNamespace:
                               env={**os.environ, "PATH": f"{path}:{os.environ['PATH']}", "HOME": str(home), "KSTATE": str(kjobs),
                                    "KLOG": str(n.log), "KHOME": str(home), "KVAULT": str(n.remote), "RESEARCH_STORE_CONFIG": str(n.absent),
                                    "VY_CUSTODY_QUIET": "", "VY_CUSTODY_BOOT": "boot-n1", "VY_CUSTODY_PY": str(n.py),
-                                   "VY_CUSTODY_PYHOME": str(tmp_path / "py"), "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(n.src),
+                                   "VY_CUSTODY_PYHOME": str(n.pyhome), "VY_CUSTODY_STATE": str(n.state), "VY_CUSTODY_SRC": str(n.src),
                                    "VY_CUSTODY_ROOTS": f"{n.jobs}/runs={n.jobs}/store=1000,{n.research}/runs={n.research}/store=1001",
                                    "VY_CUSTODY_RELAY": f"{n.jobs}/runs-n2={n.jobs}/store=1000", "VY_CUSTODY_MAX_FILES": "10", **env})
 
@@ -2388,8 +2471,8 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
     rid = "r20261003-200000-0f01"
     node.run(node.jobs, rid, "done")
     tree, custody_py = node.src / "tools" / "research", node.src / "tools" / "research" / "src" / "research" / "store" / "custody.py"
-    (tmp_path / "py" / ".lock").write_text("")
-    (tmp_path / "py" / ".lock").chmod(0o666)
+    (node.pyhome / ".lock").write_text("")
+    (node.pyhome / ".lock").chmod(0o666)
     said = []
     for p, mode in ((tree, 0o777), (custody_py, 0o664), (node.src, 0o775), (node.py, 0o757)):
         was = p.stat().st_mode
@@ -2401,10 +2484,29 @@ def test_n1_custody_runs_only_a_tree_and_a_python_no_other_uid_can_change(tmp_pa
         said.append(out.stdout)
     assert "on this host and in Jobs with the Secret research-r2" in said[0]
     elsewhere = node.round_(VY_CUSTODY_PY=sys.executable)
-    assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {tmp_path / 'py'}" in elsewhere.stdout
+    assert elsewhere.returncode == 3 and f"refused: {sys.executable} is no interpreter under {node.pyhome}" in elsewhere.stdout
     assert node.created() == [] and "sudo" not in (node.log.read_text() if node.log.exists() else ""), "a refused round runs nothing"
     ok = node.round_()
     assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
+
+
+@N1_CUSTODY
+def test_n1_custody_tests_hold_whatever_the_mode_of_the_directory_their_tmp_path_sits_under(tmp_path):
+    """A `research run` job's scratch, the TMPDIR its tests' tmp_path sits under, is group-writable (775), and a round rightly
+    refuses a tree under a directory another uid could change: the custody tests build the tree and the Python the round runs
+    where every directory up from / passes, and a round there runs, while a tree under the 775 directory is still refused by name."""
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    scratch.chmod(0o775)
+    node = _n1_custody(scratch / "test")
+    rid = "r20261003-200000-0f02"
+    node.run(node.jobs, rid, "done")
+    ok = node.round_()
+    assert ok.returncode == 0 and node.created()[0] == f"n1-custody-{rid}", ok.stdout + ok.stderr
+    under = scratch / "custody"
+    shutil.copytree(node.src, under, symlinks=True)
+    out = node.round_(VY_CUSTODY_SRC=str(under))
+    assert out.returncode == 3 and f"refused: {scratch} could be changed by a uid other than root and " in out.stdout, out.stdout
 
 
 @N1_CUSTODY

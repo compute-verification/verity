@@ -1921,7 +1921,8 @@ def test_a_count_that_rises_past_its_bases_is_the_changes_whatever_its_list_allo
 
 
 #: docs/b.md renamed and edited, so no pure move: a line above its four uses, which move down a line
-B_MOVED = {"docs/b.md": None, "docs/c/b.md": "# B\n\nMoved.\n" + B_USES.removeprefix("# B\n"),
+B_MOVED_TEXT = "# B\n\nMoved.\n" + B_USES.removeprefix("# B\n")
+B_MOVED = {"docs/b.md": None, "docs/c/b.md": B_MOVED_TEXT,
            REPO_TERMS_JSON: _allowlist({**DOCS_A, "count": 2}, {"file": "docs/c/b.md", "count": 2})}
 
 
@@ -1942,7 +1943,7 @@ def test_one_more_site_in_a_renamed_file_is_the_changes(terms_behind):
     """The same rename with a fifth use of the term in the moved file: it holds one more site than its old path did, so
     the change fails, naming the new path's count and the one new site."""
     terms_behind.commit("b.md moves to c/ and uses the term a fifth time", {
-        **B_MOVED, "docs/c/b.md": B_MOVED["docs/c/b.md"] + "\nA teapot naps.\n"})
+        **B_MOVED, "docs/c/b.md": B_MOVED_TEXT + "\nA teapot naps.\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert c["verdict"] == "failed" and "finds 2 violation(s) on its tree" in c["why"], c["why"]
     moved = B_SITE.replace("docs/b.md", "docs/c/b.md")

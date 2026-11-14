@@ -20,5 +20,5 @@ def test_fold_wide3_at_32_bits(tmp_path):
     three = {"y": y, "z": z, "a": a}
     jobs = w32.controls({"y": y, "z": z, "w": y, "kx": z, "a": a, "m1": a})
     res = fx.width_wide3(exe, 32, three, jobs)
-    assert {r["firsts"] for r in res.values()} == {fx._new_word_sets(32, three)}
+    assert {r["firsts"] for r in res.values()} == {fx.new_word_sets(32, three)}
     assert not [lab for lab, r in res.items() if r[w32.kind(lab)] == 0], res

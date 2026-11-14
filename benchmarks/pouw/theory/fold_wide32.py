@@ -10,7 +10,7 @@ it at the two points, so none found means none in the modelled ISA at 32 bits; a
 
 Checks:
 1. Width 32 enumerates what `fold_opt_fx.py` does: `fold_wide3.c`'s distinct first instructions over three inputs are
-   `fold_opt_fx._new_word_sets`'s.
+   `fold_opt_fx.new_word_sets`'s.
 2. The search finds what it must at width 32, over six inputs (y, z, w, kx, a, m1): every control of
    `fold_opt_fx.wide3_controls` (each two-word form first and last, each way a last instruction is reached, a word of a
    second instruction), and a SEL.64 control built here, since `wide3_controls`' own needs a pattern no IMNMX.64 form
@@ -130,7 +130,7 @@ def main() -> int:
         ins, yp, zp, r = fx1_case()
         three = {k: ins[k] for k in ("y", "z", "a")}
         got = fx.width_wide3(exe, W, three, {"count": (ins["y"], ins["z"])})["count"]
-        want = fx._new_word_sets(W, three)
+        want = fx.new_word_sets(W, three)
         ck.check("width 32: fold_wide3.c's distinct first instructions over three inputs are fold_opt_fx.py's",
                  got["firsts"] == want, (got["firsts"], want))
 

@@ -16,13 +16,25 @@ def _file(tmp_path, doc):
     return str(p)
 
 
-@pytest.mark.parametrize("text", ["not json", "[" * 100_000, "{}", "[]", "null", "0"])
+@pytest.mark.parametrize("text", ["not json", "[" * 100_000, "{}", "[]", "null", "0", '""', "false"])
 def test_a_workload_that_cannot_be_read_or_states_nothing_gives_no_steps_and_each_default(tmp_path, text):
     for path in (None, "", str(tmp_path / "absent.json"), str(tmp_path), _file(tmp_path, text)):
         assert MW._workload_max_tokens(path) is None and MW._workload_expected_steps(path) is None, path
         assert MW._workload_engine_args(path) == {} and MW._workload_moe_construction(path) is None, path
         assert MW._workload_execution(path) is None and MW._workload_enforce_eager(path) is True, path
         assert MW.fold_construction_args(path, []) == [], path
+
+
+@pytest.mark.parametrize("text, kind", [("[1]", "list"), ('[{"max_tokens": 4}]', "list"), ('"x"', "str"), ("7", "int"), ("1.5", "float"),
+                                        ("true", "bool")])
+def test_a_workload_that_holds_something_other_than_an_object_is_refused_by_name(tmp_path, text, kind):
+    path = _file(tmp_path, text)
+    readers = (MW._workload_max_tokens, MW._workload_expected_steps, MW._workload_engine_args, MW._workload_moe_construction,
+               MW._workload_execution, MW._workload_enforce_eager, lambda p: MW.fold_construction_args(p, []))
+    for read in readers:
+        with pytest.raises(SystemExit) as e:
+            read(path)
+        assert str(e.value) == f"workload {path}: its JSON is a {kind}, not an object"
 
 
 @pytest.mark.parametrize("requests, longest", [
