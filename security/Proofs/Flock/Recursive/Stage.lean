@@ -29,17 +29,17 @@ binding's openings at each history are `obK` by definition (`ZkOuter.openingsOf_
 only the registered digests (`ValueBindingZ.cs`, from the public file). V*'s sessions together open `obS`: session
 `j`'s `obK`, tagged by `j` (`Openings.sigma`).
 
-* `candWeightK`: `candWeightZC` read off a session's law alone (`ZkOuter.candWeight_vb`);
+* `candWeightK`: `candWeightZC` read off a session's sampling design alone (`ZkOuter.candWeight_vb`);
 * `ZkOuter.candTransfer`: `zk_session_candValsR` with `candTermZC_le` at one session, the trial for each commit string a
   finder of `obK`'s openings (`ZkOuter.trial`), and the slack `ZkOuter.stageSlack` (`slackIf` where the session's
   knowledge finders satisfy `cr/sha-512`, else `1`);
-* `vCovers_full`: V*'s live law, the full sample, samples every unit (`execOS_subset_full_mem`), so every unit's wires are
+* `vCovers_full`: V*'s live sampling design, the full sample, samples every unit (`execOS_subset_full_mem`), so every unit's wires are
   covered;
 * `sessions_stage_le`: at V*'s sessions in a row, a layer that disagrees on a wire of a session's commit strings with
   the values `wv` is at most the sessions' expected slack plus each commit string's weight times its trial's chance of
   opening the session's registered digest there off `wv`; `outerV_stage_le` is the same at the registration `R₂` the
   prover sends (`outerV`), and `trialV` the trial there;
-* `VCommits`, `VDecodes`, `VFull`: what V*'s inputs, circuits and laws must do at each stage: session `j`'s public file
+* `VCommits`, `VDecodes`, `VFull`: what V*'s inputs, circuits and sampling designs must do at each stage: session `j`'s public file
   at history `t` registers `t`'s stage-`i` commitment at the stage's commit strings `Sk i j`, at every registration
   `R₂`, the layers' round-`i` message is read from the wires of those commit strings, and every such wire is a wire of
   some unit;
@@ -114,26 +114,26 @@ noncomputable def bitK (v : ValK c) (g : Fin ((keyProg c hU n).circuit (Layout.o
   v.2 (idxK c hU n g)
 
 /-- A sample of `Lv` reads commit string `pos`: a sampled proof block reads a wire it holds. -/
-def ReadsDrawK (Lv : Law n) (pos : PosK c hU n) (ω : Lv.Ω) : Prop :=
+def ReadsSampleK (Lv : SamplingDesign n) (pos : PosK c hU n) (ω : Lv.Ω) : Prop :=
   ∃ u ∈ Lv.draw ω, ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u, posK c hU n g = pos
 
 /-- **Every sample of `Lv` reads every wire of the commit strings `Sk`**: each is a wire of a sampled proof block. -/
-def VCovers (Lv : Law n) (Sk : Finset (PosK c hU n)) : Prop :=
+def VCovers (Lv : SamplingDesign n) (Sk : Finset (PosK c hU n)) : Prop :=
   ∀ (ω : Lv.Ω) g, posK c hU n g ∈ Sk → ∃ u ∈ Lv.draw ω, g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u
 
 open Classical in
 /-- **Commit string `pos`'s weight** at the stage's commit strings `Sk`: on `Sk`, the fraction of `Lv`'s samples reading
 it over `1 − ρ`. -/
-noncomputable def candWeightK (Lv : Law n) (Sk : Finset (PosK c hU n)) (ρ : ℝ) (pos : PosK c hU n) : ℝ≥0∞ :=
+noncomputable def candWeightK (Lv : SamplingDesign n) (Sk : Finset (PosK c hU n)) (ρ : ℝ) (pos : PosK c hU n) : ℝ≥0∞ :=
   if pos ∈ Sk then
-    ENNReal.ofReal ((Fintype.card {ω // ReadsDrawK c hU n Lv pos ω} : ℝ) / Fintype.card Lv.Ω / (1 - ρ))
+    ENNReal.ofReal ((Fintype.card {ω // ReadsSampleK c hU n Lv pos ω} : ℝ) / Fintype.card Lv.Ω / (1 - ρ))
   else 0
 
 end Fixed
 
 /-- **An event of the live audit's outcomes at the sampling design's samples**: implications that hold at every outcome
 `(R, L.draw ω, t)` bound probabilities. -/
-theorem prob_auditLive_mono {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (Fin n) → Reg → Game Exec.Transcript)
+theorem prob_auditLive_mono {n : ℕ} {L : SamplingDesign n} {Reg : Type} (live : Finset (Fin n) → Reg → Game Exec.Transcript)
     (τ : Strategy (auditLive L Reg live)) {p q : Reg × Finset (Fin n) × Exec.Transcript → Prop}
     (h : ∀ R ω t, p (R, L.draw ω, t) → q (R, L.draw ω, t)) :
     prob p (auditLive L Reg live) τ ≤ prob q (auditLive L Reg live) τ := by
@@ -146,7 +146,7 @@ theorem prob_auditLive_mono {n : ℕ} {L : Law n} {Reg : Type} (live : Finset (F
 namespace ZkOuter
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) (dg : ByteArray → ByteArray) (N : ℕ)
 
 /-- **The value binding's openings are `obK` at every history.** -/
 theorem openingsOf_vb :
@@ -223,7 +223,7 @@ theorem vb_bit (v : ValK c) (g : Fin ((keyProg c hU nv).circuit (Layout.outsOf c
   rcases HiddenExec.rowOfH c hU nv (Layout.outsOf c hU nv) g with _ | ⟨u, q, k⟩ <;> rfl
 
 open Classical in
-/-- **`candWeightZC` of V*'s session reads only V*'s law**: it is `candWeightK`. -/
+/-- **`candWeightZC` of V*'s session reads only V*'s sampling design**: it is `candWeightK`. -/
 theorem candWeight_vb (Sk : Finset (PosK c hU nv)) (ρ : ℝ) (pos : PosK c hU nv) :
     candWeightZC (L := Lv) execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀)
       (tabZHJ zo.dj zo.y₀) zo.vb Sk ρ pos = candWeightK c hU nv Lv Sk ρ pos := by
@@ -231,7 +231,7 @@ theorem candWeight_vb (Sk : Finset (PosK c hU nv)) (ρ : ℝ) (pos : PosK c hU n
   split_ifs with h1 h2 h2
   · exact congrArg (fun x : ℕ => ENNReal.ofReal ((x : ℝ) / Fintype.card Lv.Ω / (1 - ρ)))
       (Fintype.card_congr (Equiv.subtypeEquivRight fun ω => by
-        unfold ReadsDrawZ ReadsZ ReadsDrawK
+        unfold ReadsSampleZ ReadsZ ReadsSampleK
         simp only [vb_pos]
         exact Iff.rfl))
   · exact absurd h1 h2
@@ -273,7 +273,7 @@ every wire of `Sk` (`execOS_subset_full_mem`). -/
 theorem vCovers_full {Ω : Type} [Fintype Ω] [Nonempty Ω] {Lb : Fin 1 → ℕ}
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (Sk : Finset (PosK c hU nv))
     (hfull : ∀ g, posK c hU nv g ∈ Sk → ∃ u, g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u) :
-    VCovers c hU nv (Law.execOS (n := nv) src (.subset nv) nv) Sk := by
+    VCovers c hU nv (SamplingDesign.execOS (n := nv) src (.subset nv) nv) Sk := by
   intro ω g hg
   obtain ⟨u, hgu⟩ := hfull g hg
   exact ⟨u, execOS_subset_full_mem src ω u, hgu⟩
@@ -353,7 +353,7 @@ noncomputable def trialS (zs : (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArra
 noncomputable def weightS (Vs : Fin S → VStmt)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) (ρ : ℝ) (i : ℕ)
     (pos : Σ j, PosK (Vs j).c (Vs j).hU (Vs j).nv) : ℝ≥0∞ :=
-  candWeightK (Vs pos.1).c (Vs pos.1).hU (Vs pos.1).nv (Vs pos.1).law.live (Sk i pos.1) ρ pos.2
+  candWeightK (Vs pos.1).c (Vs pos.1).hU (Vs pos.1).nv (Vs pos.1).samplingDesign.live (Sk i pos.1) ρ pos.2
 
 /-- **A session's trial, played inside the sessions, is a tagged trial**: an opening of session `j`'s digest `d` off
 session `j`'s value of `v` is an opening of the tagged digest off `v`. -/
@@ -400,7 +400,7 @@ theorem sessions_stage_le
     (s : Strategy (sessions zs dg N)) :
     prob (fun b => Accepts zs b ∧ ¬ Q (layers zs dg N k Rw b)) (sessions zs dg N) s ≤
       sumS zs dg N (fun j τ => (zs j).slackIf dg N k Rw M ρ t' qF qS τ) s +
-        ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
+        ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).samplingDesign.live (Sk j) ρ pos *
           exG (fun rs : VRec Vs Reg' dg N =>
             prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N (rs j).1) pos).g
@@ -421,7 +421,7 @@ theorem sessions_stage_le
             bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g)
         ((zs j).game dg N) ((zs j).ofBase dg N τ₀) ≤
       (zs j).slackIf dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
-        ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
+        ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).samplingDesign.live (Sk j) ρ pos *
           prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
             ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).s := by
@@ -437,7 +437,7 @@ theorem sessions_stage_le
         (((zs j).candTransfer dg N hk hRw hM hρ (hr j) ht' _ hc (Sk j) (wv j)).trans
           (add_le_add le_rfl (Finset.sum_le_sum fun pos _ => ?_)))
       · rintro R' ω' tr ⟨hacc, g, hg, hne⟩
-        obtain ⟨u, hu, hgu⟩ := vCovers_full (Vs j).law.src (Sk j) (hfull j) ω' g hg
+        obtain ⟨u, hu, hgu⟩ := vCovers_full (Vs j).samplingDesign.src (Sk j) (hfull j) ω' g hg
         refine ⟨hacc, u, hu, g, hgu, ?_⟩
         unfold CandBadZ
         rw [ZkOuter.vb_pos, ZkOuter.vb_bit]
@@ -451,7 +451,7 @@ theorem sessions_stage_le
       (zs j).layer dg N k Rw ((zs j).ofBase dg N r.1) g ≠
         bitK (Vs j).c (Vs j).hU (Vs j).nv (wv j (posK (Vs j).c (Vs j).hU (Vs j).nv g)) g)
     (fun j τ₀ => (zs j).slackIf dg N k Rw M ρ t' qF qS ((zs j).ofBase dg N τ₀) +
-      ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
+      ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).samplingDesign.live (Sk j) ρ pos *
         prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
           ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).g
           ((zs j).trial dg N k Rw ((zs j).ofBase dg N τ₀) pos).s) hB s)).trans_eq ?_
@@ -489,7 +489,7 @@ theorem outerV_stage_le
     (s : Strategy (outerV zs dg N)) :
     prob (fun o => AcceptsV zs o ∧ ¬ Q (layers (zs o.1) dg N k Rw o.2)) (outerV zs dg N) s ≤
       sumV zs dg N (fun R₂ j τ => (zs R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s +
-        ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).law.live (Sk j) ρ pos *
+        ∑ j, ∑ pos, candWeightK (Vs j).c (Vs j).hU (Vs j).nv (Vs j).samplingDesign.live (Sk j) ρ pos *
           exG (fun rs : VRec Vs Reg' dg N =>
             prob (OffAt (obK (Vs j).c (Vs j).hU (Vs j).nv) (cs j pos) (wv j pos))
             ((zs s.1 j).trial dg N k Rw ((zs s.1 j).ofBase dg N (rs j).1) pos).g
@@ -499,7 +499,7 @@ theorem outerV_stage_le
   exact sessions_stage_le (zs s.1) dg N hk hRw hM hρ (hr s.1) ht' qF qS Sk hfull cs (hcs s.1) Q wv hQ
     (sessOf zs dg N s)
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **V*'s public files register the stages' commitments**: at every history `t` and registration `R₂`, where `t`'s
 stage-`i` commitment is `e.1` and session `j` accepts a transcript it writes at a registration `R'` (`ZkOuter.Writes`,
@@ -525,7 +525,7 @@ def VDecodes (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg) (same : ℕ �
     Option.Rel (same i ρs) (wmsg Xt)[i]? (some (msg i v))
 
 /-- **The stages are read from units' wires**: each wire of `Sk i j` (`i < r`) is a wire of some unit, so session `j`'s
-law, the full sample, samples it. -/
+sampling design, the full sample, samples it. -/
 def VFull (r : ℕ) (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv)) : Prop :=
   ∀ i < r, ∀ j g, posK (Vs j).c (Vs j).hU (Vs j).nv g ∈ Sk i j →
     ∃ u, g ∈ ((keyProg (Vs j).c (Vs j).hU (Vs j).nv).partition (Layout.outsOf (Vs j).c (Vs j).hU (Vs j).nv)).io u
@@ -593,7 +593,7 @@ theorem zk_sessions_recursive_full
     prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
         (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ t' qF qS qW qR τ) s) +
+          (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ t' qF qS qW qR τ) s) +
         ∑ i ∈ Finset.range I.r,
           (expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
               (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackIf dg N k Rw M ρ t' qF qS τ) s) +
@@ -655,7 +655,7 @@ theorem zk_sessions_recursive_fork
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin := by
   by_cases h1 : RoundFork zs dg N k Rw σ cmt
@@ -665,9 +665,9 @@ theorem zk_sessions_recursive_fork
   refine Or.inr (Or.inr ?_)
   have hno := allAt_of_not_exAt h2
   have hB : expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).law.model k Rw M ρ 0 0 0 0 0 τ) s) ≤
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundIf dg N (Vs j).samplingDesign.model k Rw M ρ 0 0 0 0 0 τ) s) ≤
       expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) := by
+        (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) := by
     refine expAt_mono_all (hno.mono fun ω t s hs => ?_)
     unfold sumV sumS
     exact exG_mono_outcome _ _ fun rs hrs => Finset.sum_le_sum fun j _ =>

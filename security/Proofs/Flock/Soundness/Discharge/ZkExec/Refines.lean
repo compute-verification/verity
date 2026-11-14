@@ -28,7 +28,7 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (opn : ∀ S R, Array ByteArray → Op S R) (dg : ByteArray → ByteArray)
   (dec : Finset (Fin n) → Reg → ℕ → ByteArray → List Msg) (one : Finset (Fin n) → Reg → ℕ → Bool)
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
-  (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : Law n)
+  (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : SamplingDesign n)
 
 theorem execRefinesZK_one : ExecRefinesZKOne G out acc I wr opn dg dec one fin capOf N L := by
   intro hinh hdec τ

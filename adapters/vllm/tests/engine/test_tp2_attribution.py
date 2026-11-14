@@ -1,5 +1,5 @@
 """Per-(request, engine step) attribution of a rank's committed sampled ids against the Match record
-(`tp2_worker._tp2_attribution`) -- CPU-only: the committer is the production per-tensor host committer (`tests.check.opened`) with
+(`tp2_worker._tp2_attribution`) -- CPU-only: the committer is the served per-tensor host committer (`tests.check.opened`) with
 `step_rows` (the rank's request->rows map) set; the sampled ids are read through `oracle_compare.OpenedReader` (opened, verified against
 the run root).
 
@@ -29,7 +29,7 @@ try:
 except ModuleNotFoundError as e:  # pragma: no cover -- only if tp2_worker grows a module-level torch import
     if e.name != "torch":
         raise
-    sys.modules["torch"] = types.SimpleNamespace()
+    sys.modules["torch"] = types.ModuleType("torch")
     try:
         w = importlib.import_module("verity_vllm.pipeline.tp.rank_worker")
     finally:

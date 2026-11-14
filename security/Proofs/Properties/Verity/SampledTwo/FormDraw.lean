@@ -10,25 +10,25 @@ public import Proofs.Flock.Claims.CanonWf
 /-!
 # The sample each record prints, from the stage coins
 
-`DrawAtFixed` (`FormStmts.lean`) says two accepted plays with one parameters and one log before the statements'
+`SampleAtFixed` (`FormStmts.lean`) says two accepted plays with one parameters and one log before the statements'
 round hold, template by template, session records that print one sample. The model's check of the statements' round
 holds each statement's sample to the verifier's own at the stage coins, by its canonical text
-(`SpotFlock.sample_canon_of_stmtOk`). Here `DrawAtFixed` is a theorem where the two plays' statements pass that
+(`SpotFlock.sample_canon_of_stmtOk`). Here `SampleAtFixed` is a theorem where the two plays' statements pass that
 check at one pair of stage coins (`StageCoinsOne`), which they do where one pair of stage coins carries the bytes
 both plays' samples read (`PlayCoinsOne`).
 
 * **The statement holds the record's printed sample** (`stmtAt_record`): on an accepted play, template `t`'s
   statement in the statements' message decodes to its member's statement at the files the check read
-  (`stmtAt_raw`), whose sample is the bytes its session's record's sample prints to (`SessionMsgs.drawBytes`), and
-  that sample is printable (`SessionCoins.draw_good`).
+  (`stmtAt_raw`), whose sample is the bytes its session's record's sample prints to (`SessionMsgs.sampleBytes`), and
+  that sample is printable (`SessionCoins.sample_good`).
 * **The printed sample reads back with the record's sample's canonical text** (`canon_of_printed`): the parser
   reads a printable value's text back alike it (`Flock.PartCong.printed_readsBack`), and alike values have one
   canonical text.
-* **A record's sample is fixed by its canonical text** (`recordDraw_of_canon`): it is `norm` of the record's
-  `unit_draw` (`Verity.Sampled.recordDraw_raw`), a well-formed value `norm` fixes, and two such values with one
+* **A record's sample is fixed by its canonical text** (`recordSample_of_canon`): it is `norm` of the record's
+  `unit_draw` (`Verity.Sampled.recordSample_raw`), a well-formed value `norm` fixes, and two such values with one
   canonical text are equivalent (`Properties.Challenger.CanonLine.canon_inj`), so equal
   (`FlockDeploy.eq_of_jsonEquiv_norm`).
-* **`DrawAtFixed`** (`drawAtFixed_of_coins`), from the three and `StageCoinsOne`.
+* **`SampleAtFixed`** (`sampleAtFixed_of_coins`), from the three and `StageCoinsOne`.
 * **An accepted play's statements pass the model's check** (`stmtOk_form`) at any round-0 coin and second stage's
   coins that carry the bytes its run's samples read (`SpotFlock.RunsAs.PlayCoins`): the run of record is an accepted
   two-stage run at the held copies, whose round 2 gives the model's statement check
@@ -50,11 +50,11 @@ open Lean (Json)
 
 /-- **A record's sample is fixed by its canonical text**: two records' samples with one canonical text are one
 value. -/
-theorem recordDraw_of_canon {record record' : String} {dj dj' : Json} {s : String}
+theorem recordSample_of_canon {record record' : String} {dj dj' : Json} {s : String}
     (h : Flock.Witness.recordDraw record = some dj) (h' : Flock.Witness.recordDraw record' = some dj')
     (hs : Flock.canon dj = .ok s) (hs' : Flock.canon dj' = .ok s) : dj = dj' := by
-  obtain ⟨_, d, -, -, -, rfl⟩ := Verity.Sampled.recordDraw_raw h
-  obtain ⟨_, d', -, -, -, rfl⟩ := Verity.Sampled.recordDraw_raw h'
+  obtain ⟨_, d, -, -, -, rfl⟩ := Verity.Sampled.recordSample_raw h
+  obtain ⟨_, d', -, -, -, rfl⟩ := Verity.Sampled.recordSample_raw h'
   exact FlockDeploy.eq_of_jsonEquiv_norm (FlockDeploy.norm_norm d) (FlockDeploy.norm_norm d')
     (Properties.Challenger.CanonLine.canon_inj
       (Properties.Challenger.CanonRead.sortedKeys_of_wf _ (FlockDeploy.wf_norm d))
@@ -65,9 +65,9 @@ printable and a statement's sample `b` is the bytes it prints to, the value Floc
 canonical text of the record's sample. -/
 theorem canon_of_printed {record : String}
     (hg : ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj) {b : ByteArray} {d : Json}
-    {s : String} (hb : SessionMsgs.drawBytes record = some b) (hj : FlockDeploy.jsonOf "draw" b = .ok d)
+    {s : String} (hb : SessionMsgs.sampleBytes record = some b) (hj : FlockDeploy.jsonOf "draw" b = .ok d)
     (hs : Flock.canon d = .ok s) : ∃ dj, Flock.Witness.recordDraw record = some dj ∧ Flock.canon dj = .ok s := by
-  unfold SessionMsgs.drawBytes at hb
+  unfold SessionMsgs.sampleBytes at hb
   cases hrd : Flock.Witness.recordDraw record with
   | none =>
     rw [hrd] at hb
@@ -88,10 +88,10 @@ theorem canon_of_printed {record : String}
 the check read is the device's, the reading has a statements' message whose `t`-th statement decodes to the statement
 (`SessionMsgs.stmtRaw`) of the member the `t`-th of the statements' sessions' statement names
 (`SessionMsgs.memberAt`), at the member's circuit and public files on the blobs, the blobs' lookup tables, the bytes
-the session's record prints its sample to (`SessionMsgs.drawBytes`) and the member's registered reads; and that
+the session's record prints its sample to (`SessionMsgs.sampleBytes`) and the member's registered reads; and that
 sample is printable. The statement is the member's at the record's sample (`SessionCoins.verified_at`,
 `SessionCoins.stmtAtCase_of_member`), which decodes from its bytes (`SessionCoins.stmtRaw_decode`), and the form set
-the session up at that sample (`SessionCoins.draw_good`). -/
+the session up at that sample (`SessionCoins.sample_good`). -/
 theorem stmtAt_raw {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hst : StmtsRead A C S)
     (hcount : StmtsCount A C Good) (hfit : SessionCoins.StmtsFit C Good) {o : Verity.Exchange} {k : Case}
@@ -102,7 +102,7 @@ theorem stmtAt_raw {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verit
     ∃ m₂ m circuitB pubB, S.stmts o = some m₂ ∧ SessionMsgs.memberAt p e t = some m ∧
       k.blobs.get m.own.pub "public file" = .ok pubB ∧
       FlockDeploy.decode (SpotFlock.stmtAt A.h m₂ t) =
-        some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
+        some (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)
           (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)) ∧
       ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj := by
   have hacc₀ := hacc
@@ -130,16 +130,16 @@ theorem stmtAt_raw {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verit
   have hrr : record' = record := Option.some.inj (hrec'.symm.trans hrec)
   rw [hrr] at hsetup hfd
   have hxe : SpotFlock.stmtAt A.h m₂ t =
-      (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.drawBytes record)
+      (SessionMsgs.stmtRaw m circuitB pubB (Spot.OneStageZk.tablesOf k.blobs) (SessionMsgs.sampleBytes record)
         (m.own.registered.map fun j => (Flock.RecordText.printT j).toUTF8)).encode :=
     Option.some.inj (hx.symm.trans (SessionCoins.stmtAtCase_of_member hf hm hfs hrec hc hp))
   have hdec := SessionCoins.stmtRaw_decode hfw hfd
   rw [← hxe] at hdec
-  exact ⟨m₂, m, circuitB, pubB, hm₂, hm, hp, hdec, fun dj hdj => SessionCoins.draw_good hdj hsetup⟩
+  exact ⟨m₂, m, circuitB, pubB, hm₂, hm, hp, hdec, fun dj hdj => SessionCoins.sample_good hdj hsetup⟩
 
 /-- **Template `t`'s statement holds its session's record's printed sample** (`stmtAt_raw`, its sample alone): the
 `t`-th statement of the statements' message decodes to a statement whose sample is the bytes the record of the
-`t`-th of the statements' sessions prints its sample to (`SessionMsgs.drawBytes`), and that sample is printable. -/
+`t`-th of the statements' sessions prints its sample to (`SessionMsgs.sampleBytes`), and that sample is printable. -/
 theorem stmtAt_record {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hst : StmtsRead A C S)
     (hcount : StmtsCount A C Good) (hfit : SessionCoins.StmtsFit C Good) {o : Verity.Exchange} {k : Case}
@@ -148,7 +148,7 @@ theorem stmtAt_record {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Ve
     (ht : t < A.h.ms.length) {fs : Spot.OneStageZk.RunFiles} {record : String}
     (hfs : SessionMsgs.filesAt e t = some fs) (hrec : SessionMsgs.recordAt k.blobs fs = some record) :
     ∃ m₂ w, S.stmts o = some m₂ ∧ FlockDeploy.decode (SpotFlock.stmtAt A.h m₂ t) = some w ∧
-      w.draw = SessionMsgs.drawBytes record ∧
+      w.draw = SessionMsgs.sampleBytes record ∧
       ∀ dj, Flock.Witness.recordDraw record = some dj → Claims.Json.Good dj := by
   obtain ⟨m₂, m, circuitB, pubB, hm₂, -, -, hdec, hg⟩ :=
     stmtAt_raw hS hst hcount hfit hacc hgood hk hf ht hfs hrec
@@ -167,14 +167,14 @@ def StageCoinsOne (A : Live₂) (C : CaseOf) (S : SessionReading) (Good : Verity
       ∃ (x x' m₁ m₁' : Msg) (c₀ : FlockDeploy.Coin) (c₁ : SpotFlock.Stage A.h),
         SpotFlock.stmtOk A.h x m₁ m₂ c₀ c₁ = true ∧ SpotFlock.stmtOk A.h x' m₁' m₂' c₀ c₁ = true
 
-/-- **`DrawAtFixed` from the stage coins** (`StageCoinsOne`), where the reading's statements are the case's: each
+/-- **`SampleAtFixed` from the stage coins** (`StageCoinsOne`), where the reading's statements are the case's: each
 play's `t`-th statement holds its record's printed sample (`stmtAt_record`), the model's check holds the two
 statements' samples to one canonical text (`SpotFlock.sample_canon_of_stmtOk`), which is each record's sample's
-(`canon_of_printed`), so the two records hold one sample (`recordDraw_of_canon`) and print the same bytes. -/
-theorem drawAtFixed_of_coins {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+(`canon_of_printed`), so the two records hold one sample (`recordSample_of_canon`) and print the same bytes. -/
+theorem sampleAtFixed_of_coins {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
     {L : CoinMap.Locate} (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg) (hst : StmtsRead A C S)
     (hcount : StmtsCount A C Good) (hfit : SessionCoins.StmtsFit C Good) (hone : StageCoinsOne A C S Good L) :
-    DrawAtFixed A C Good L := by
+    SampleAtFixed A C Good L := by
   intro o o' k k' p e e' hA hG hA' hG' hk hk' hlog hf hf' t ht fs fs' record record' hfs hfs' hrec hrec'
   obtain ⟨m₂, w₀, hm₂, hw₀, hd₀, hg⟩ := stmtAt_record hS hst hcount hfit hA hG hk hf ht hfs hrec
   obtain ⟨m₂', w₀', hm₂', hw₀', hd₀', hg'⟩ := stmtAt_record hS hst hcount hfit hA' hG' hk' hf' ht hfs' hrec'
@@ -182,16 +182,16 @@ theorem drawAtFixed_of_coins {A : Live₂} {C : CaseOf} {S : SessionReading} {Go
     hone o o' k k' p e e' m₂ m₂' hA hG hA' hG' hk hk' hlog hf hf' hm₂ hm₂'
   obtain ⟨w, w', b, b', d, d', s, hw, hw', -, hb, hb', hj, hj', hs, hs'⟩ :=
     SpotFlock.sample_canon_of_stmtOk hok hok' ht
-  have hbr : SessionMsgs.drawBytes record = some b := by
+  have hbr : SessionMsgs.sampleBytes record = some b := by
     rw [← hd₀, ← Option.some.inj (hw.symm.trans hw₀)]
     exact hb
-  have hbr' : SessionMsgs.drawBytes record' = some b' := by
+  have hbr' : SessionMsgs.sampleBytes record' = some b' := by
     rw [← hd₀', ← Option.some.inj (hw'.symm.trans hw₀')]
     exact hb'
   obtain ⟨dj, hdj, hc⟩ := canon_of_printed hg hbr hj hs
   obtain ⟨dj', hdj', hc'⟩ := canon_of_printed hg' hbr' hj' hs'
-  unfold SessionMsgs.drawBytes
-  rw [hdj, hdj', recordDraw_of_canon hdj hdj' hc hc']
+  unfold SessionMsgs.sampleBytes
+  rw [hdj, hdj', recordSample_of_canon hdj hdj' hc hc']
 
 /-! ## The statements' check at the play's coins -/
 
@@ -221,7 +221,8 @@ two-stage run (`acceptedTwo_of_formAccepts`) at the held copies (`heldAt_of_part
 (`recordsRead`) and name their registrations' names (`recordsAt_of_held`), and the reading's statements are the run's,
 each with its template's rounds, in scope and its reference statement but for the run's fields
 (`SpotFlock.RunsAs.stmtOk_of_accepted`). -/
-theorem stmtOk_form {A : Live₂} {C : CaseOf} {S : SessionReading} (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
+theorem stmtOk_form {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading} (hparts : PartsHeldAt A C)
+    (hof : HeldOfAt A C)
     (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
     {o : Verity.Exchange} {i : Spot.Run.Input} {it : Spot.Run.Interior} {x m₁ m₂ : Msg} (hA : FormAccepts C o)
     (hi : inputOn C o = some i) (hit : i.interior = some it) (hx : recordMsg i.record = some x)
@@ -251,7 +252,8 @@ def PlayCoinsOne (A : Live₂) (C : CaseOf) (Good : Verity.Exchange → Prop) (L
 
 /-- **`StageCoinsOne` from the plays' coins** (`PlayCoinsOne`): each play's statements pass the model's check at the
 coins that carry what its samples read (`stmtOk_form`), at its own records' messages (`records_of_accepts`). -/
-theorem stageCoinsOne_of_play {A : Live₂} {C : CaseOf} {S : SessionReading} {Good : Verity.Exchange → Prop}
+theorem stageCoinsOne_of_play {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
+    {Good : Verity.Exchange → Prop}
     {L : CoinMap.Locate} (hparts : PartsHeldAt A C) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
     (hcoins : PlayCoinsOne A C Good L) : StageCoinsOne A C S Good L := by

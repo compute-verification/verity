@@ -39,7 +39,8 @@ import hashlib
 import json
 import re
 import types
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import RunHeader
@@ -61,6 +62,9 @@ from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (FUSED_MOE_NUM
 from verity_vllm.observe.fold.profiles.gen_marlin_moe_patterns import MoEMarlinSharedExperts
 from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.program.frontend.target_profile import TargetProfile
+
+__all__ = ["derive_config", "effective_sliding_window", "module_name", "rank_hf_config", "router_vpt_bf16",
+           "structural_refusal"]
 
 MODULE_PREFIX = "derived_"
 OV_SAMPLING_SUFFIX = "_ovs"
@@ -340,7 +344,7 @@ def make_weight_field(cfg: dict[str, Any], C: dict[str, Any]) -> Callable[[str],
         layer_re = re.compile(_LAYER_RE_FMT.format(prefix=re.escape(prefix)))
         cos_sin = params["cos_sin"]
 
-        def weight_field(name: str) -> tuple[str | int, ...] | None:
+        def family_weight_field(name: str) -> tuple[str | int, ...] | None:
             if name in extra_top:
                 return extra_top[name] if extra_top[name][0] in top_fields else None
             m = layer_re.match(name)
@@ -353,7 +357,7 @@ def make_weight_field(cfg: dict[str, Any], C: dict[str, Any]) -> Callable[[str],
                     return ("layers", layer, f)
             return None
 
-        return weight_field
+        return family_weight_field
 
     base_wf = base.make_weight_field(C)
     layer_re = base._LAYER_RE
@@ -675,17 +679,17 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                             "quantization_config": C.get("quantization_config")}
     if arch in _MOE_ARCHES:
         moe = next(p for p in patterns if isinstance(p, (MoEFusedExperts, MoEFusedSharedExpertsFp8)))
-        E, T, I, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]
+        E, T, INTER, H = C["NUM_EXPERTS"], C["TOPK"], C["I"], C["H"]
         if isinstance(moe, MoEFusedExpertsFp8):
             fp8 = f"G={moe.group},KB={moe.fused_pins['BLOCK_SIZE_K']},SWAP=False,DOT=the record target's e4m3 step"
-            experts = [f"Fp8GroupQuant_v1{{K={H},G={moe.group}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},{fp8}}}", f"SiluMul_v2{{I={I}}}",
-                       f"Fp8GroupQuant_v1{{K={I},G={moe.group}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},{fp8}}}"]
+            experts = [f"Fp8GroupQuant_v1{{K={H},G={moe.group}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * INTER},{fp8}}}", f"SiluMul_v2{{I={INTER}}}",
+                       f"Fp8GroupQuant_v1{{K={INTER},G={moe.group}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={INTER},N={H},{fp8}}}"]
         else:
-            experts = [f"MoeExpertGemm_v1{{E={E},K={H},N={2 * I}}}", f"SiluMul_v2{{I={I}}}", f"MoeExpertGemmW_v1{{E={E},K={I},N={H}}}"]
+            experts = [f"MoeExpertGemm_v1{{E={E},K={H},N={2 * INTER}}}", f"SiluMul_v2{{I={INTER}}}", f"MoeExpertGemmW_v1{{E={E},K={INTER},N={H}}}"]
         notes["moe"] = {"status": "constructive: Computes over registry.moe definitions per step per rank",
                         "scope_pattern": f"gen_ov_moe_patterns.{type(moe).__name__} (vllm.moe_forward*), renormalize={bool(C.get('RENORMALIZE', False))}",
-                        "definitions": [f"MoeRouterTopK{'Ordered' if moe.router == 'ordered' else ''}{'Norm' if C.get('RENORMALIZE') else ''}_v1"
-                                        f"{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}", *experts,
+                        "definitions": [(f"MoeRouterTopK{'Ordered' if moe.router == 'ordered' else ''}{'Norm' if C.get('RENORMALIZE') else ''}_v1"
+                                         f"{{E={E},TOPK={T},VPT={C['ROUTER_VPT']}}}"), *experts,
                                         f"MoeSum_v1{{TOPK={T},H={H}}}"] + ([f"AllReduce2_v1{{N={H}}} (the block's TP all-reduce, in or after the scope)"] if world > 1 else []),
                         "pins": {"fused_moe_kernel": {**moe._numeric_pins(), **moe.fused_pins, "num_warps": moe.fused_num_warps, "num_stages": moe.fused_num_stages,
                                                       "source": "gen_ov_moe_patterns.FUSED_MOE_PINS (vLLM BI default, M-invariant)" if fused_moe_pins is None
@@ -694,7 +698,7 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                                  "alignment": "moe_align_block_size is Transparent(noop): a pair->expert-block schedule with no numerical effect"},
                         "construction": ("shared-experts-pairwise" if arch == "dsa-moe"
                                          else moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION),
-                        "sharding": {"router": "replicated (full E logits on every rank)", "experts": f"intermediate axis / {world}: w13 [E, 2*{I}, H], w2 [E, H, {I}]",
+                        "sharding": {"router": "replicated (full E logits on every rank)", "experts": f"intermediate axis / {world}: w13 [E, 2*{INTER}, H], w2 [E, H, {INTER}]",
                                      "reduce": "moe_sum rank-local, then AllReduce2_v1{N=H} of the routed sum"} if world > 1 else "none (TP1)",
                         "record_fields_present": sorted(f for f in ("q_norm", "k_norm", "gate_w", "w13", "w2")
                                                         if f in {n for n, _ in analytic.weights_type(C).fields[analytic.weights_type(C).index("layers")][1].elem.fields})}
@@ -706,7 +710,9 @@ def build_profile(role: str, world: int = 1, *, moe_construction: str | None = N
                                            "collective_received), linked to the other rank's committed partial by the cross-rank check (tp2_rank_match)"}
     pid = prof.id
     if ov_sampling:
-        from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import ov_sampling_patterns
+        from verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns import (
+            ov_sampling_patterns,
+        )
         patterns = ov_sampling_patterns(C) + patterns
         pid = prof.id + "+ov-sampling"
         notes["ov_sampling"] = {"pattern": "gen_ov_sampling_patterns.TokenSampleGumbel (_gumbel_sample_kernel; seeded rows at T=1 and T not in {0,1}, no top-k/top-p)",
@@ -741,6 +747,7 @@ def make_module(fullname: str) -> types.ModuleType:
         prof = build_profile(role, world, ov_sampling=ovs)
     except ValueError as e:
         raise ImportError(f"{fullname}: {e}") from e
+    mod: Any   # the module this function builds: its names are set below
     mod = types.ModuleType(fullname)
     mod.__doc__ = f"Configuration-derived κ profile for role {role}" + (f", one rank of TP{world}" if world > 1 else "") + f" ({src['source']}: {src['path']})"
     mod.CASE, mod.ROLE, mod.WORLD, mod.REPO_ID, mod.REVISION = role, role, world, src["repo"], src["revision"]
@@ -759,7 +766,9 @@ def make_module(fullname: str) -> types.ModuleType:
     mod.derive_config = lambda hf_config, world=1, **kw: derive_config(hf_config, repo=kw.get("repo"), revision=kw.get("revision"), world=world)
     mod.with_moe_construction = with_moe_construction if FF.facts_for(cfg)["arch"] == "moe" else None
     if FF.facts_for(cfg)["arch"] == "dense":
-        from verity_vllm.observe.fold.profiles.gen_ov_easy_family import serve_family                    # the untied / tied serving-family reference `compare` may consult
+        from verity_vllm.observe.fold.profiles.gen_ov_easy_family import (
+            serve_family,  # the untied / tied serving-family reference `compare` may consult
+        )
         mod.SERVE_FAMILY = serve_family
     mod.__file__ = __file__
     return mod

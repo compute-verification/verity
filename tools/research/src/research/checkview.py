@@ -1,4 +1,4 @@
-"""`research status RUN` on a check run (`tools/verity/check/check.py`): its live state from the run dir's own files, and an
+"""`research status RUN` on a check run (`tools/check/check.py`): its live state from the run dir's own files, and an
 ETA against a basis, a finished check whose files say how long each step and circuit-check target took.
 
 The files are the ones the check already writes, read and never written here (`CHECK_FILES`):

@@ -19,9 +19,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import interface as I
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as I
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")))
@@ -117,7 +117,7 @@ def test_a_held_wired_row_flipped_at_the_row_its_reference_names_is_refused():
     assert all(v["refused"] for v in neg.values())
 
 
-def test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own():
+def test_a_shared_row_readers_flipped_wired_row_is_its_sampled_units_own():
     """A shared-row reader (its body each port's table, then its units' refs) whose wired port is not its first, as the weights
     tie's stream rows (``data`` a registered read, ``cv`` wired): the flipped string is its unit 0's ``cv`` row, so the
     verifier's wiring check on that unit refuses it, and the honest wires hold."""
@@ -183,11 +183,11 @@ def test_a_wired_row_is_flipped_where_its_unit_reads_it_in_a_shared_row_member_w
 
 def test_a_wired_port_with_no_tree_of_its_own_is_a_read_of_its_writers_tree_and_never_bound():
     """A reader whose wired port has no tree of its own (`rows.Member.wired_trees`): the verifier's window names it under
-    its reader at its writer's tree (`rows.wired_ports`), and the registration holds its writer's root under that name.
+    its reader at its writer's tree (`rows.wired_ports`), and the docket holds its writer's root under that name.
     The verifier's file (`rows.own_reads`) names it a read of its writer's tree, each unit at its writer unit's leaf, and
     `a5.bound_reads` leaves that file as it is: the root under the reader's name is no tree of the port's own, and it
     binds the port to none. A file that leaves the wired port out is refused, and a port with a tree of its own that a
-    file leaves out is bound at the registration's root and the window's domain for it."""
+    file leaves out is bound at the docket's root and the window's domain for it."""
     circuit = I.Circuit("chain", ((GEMM, 2 * UNITS),), external=(f"{GID}/x",),
                         wires=(I.Wire(GID, "x", GID, "o0", at=UNITS, radix=(UNITS,), base=0, step=(1,)),),
                         order=((GID, 0, UNITS), (GID, UNITS, UNITS)))

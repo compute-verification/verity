@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 
 import pytest
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from tests.program.predict.test_node_window import LP, glm_request
 from verity_vllm.program.predict import node_window as NW

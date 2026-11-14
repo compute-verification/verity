@@ -7,6 +7,7 @@ dependencies = [
     "verity",
     "verity-config",
     "numpy>=1.26",
+    "verity-torch",
 ]
 
 [project.scripts]
@@ -49,7 +50,7 @@ markers = [
     "regression: the v1 reference regression checks (tests/regression); opt in with VERITY_REGRESSION=1",
     "pod: reads > 100 MB or rebuilds for minutes/hours -- run on a pod, never on the laptop",
     "weak: PASS-side only or a rule no reference row exercises (see the check module's docstring)",
-    "rebuild: recomputes from a row's Programs (a manifest rebuild, a component decode); skipped unless VERITY_REGRESSION_REBUILD=1, as after each train on main (tools/verity/check/post_train.py)",
+    "rebuild: recomputes from a row's Programs (a manifest rebuild, a component decode); skipped unless VERITY_REGRESSION_REBUILD=1, as after each train on main (tools/check/post_train.py)",
 ]
 
 # vLLM's mypy settings; tests/lint/test_mypy.py runs mypy under them and holds its errors to allowlists/mypy.json
@@ -63,6 +64,7 @@ follow_imports = "silent"
 # test files that start a program the read guard can't trace (git, lake, a shell): keyed on the suite's whole tree. A compiler
 # needs no entry: a file whose closure builds native code may start one (the test-file family's `compilers`)
 untraced = [
+    "tests/commit/test_census_and_memory_map.py",
     "tests/lint/test_merge_allowlist.py",
     "tests/lint/test_mypy.py",
     "tests/lint/test_ruff.py",
@@ -108,7 +110,7 @@ untraced = [
 # tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
 # (benchmarks/one_stage/glm53_*.json), and tests/tools/test_description_sizes.py holds the description of every template
 # they name to its size (each glm53_*_tp8_step*.json, so a partition file added there is listed here);
-# tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (benchmarks/pous/p2_v1/store.py and the
+# tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (verity/protocols/accounting/pous/prover/p2/p2_store/store.py and the
 # reference decode it imports) and imports the store's load (load.py, with the library's wrapper gpu.py); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py, test_repo_lane_text.py and test_repo_retired_terms.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
@@ -117,19 +119,24 @@ untraced = [
 # tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
 # compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
 # The root ruff.toml is what ruff.toml extends, and tests/lint/test_ruff_vllm.py reads its selection.
+# tests/commit/test_census_and_memory_map.py builds `core_requirement` (verity/circuits/requirement) against the
+# difftest harness's Lean (tools/difftest), and loads that package's test_requirement_difftest.py by its path.
 inputs_only = true
 inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_config", "artifacts.json",
           "demos/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "verity/protocols/accounting/pouw/verifier/lean/check/lakefile.toml",
           "verity/protocols/accounting/poub/verifier/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
-          "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py",
-          "benchmarks/remote_session/prover.py", "verity/protocols/accounting/poub/verifier/session/verifier.py", "verity/protocols/accounting/poub/verifier/session/wire.py",
+          "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json",
+          "verity/protocols/accounting/poub/prover/remote_session/prover.py",
+          "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py",
+          "verity/protocols/accounting/poub/verifier/session/verifier.py",
+          "verity/protocols/accounting/poub/verifier/session/wire.py",
           "verity/protocols/accounting/poub/verifier/session/checks.py", "verity/protocols/accounting/poub/verifier/session/lean_verifier.py", "verity/protocols/accounting/poub/verifier/session/challengers.py",
           "benchmarks/remote_session/store_layout.py", "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json",
           "verity/protocols/compose/device/live_challenger/models.py", "verity/protocols/accounting/pouw/prover/sass_gate.py",
-          "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
-          "benchmarks/pous/p2_v1/load.py", "benchmarks/pous/p2_v1/gpu.py",
+          "benchmarks/pous/p2_v1/__init__.py", "verity/protocols/accounting/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
+          "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
           "benchmarks/one_stage/glm53_prefill_tp8_step0.json", "benchmarks/one_stage/glm53_prefill_tp8_step0_core.json",
           "benchmarks/one_stage/glm53_moe_w13_tp8_step16.json", "benchmarks/one_stage/glm53_moe_w2_tp8_step16.json",
@@ -144,7 +151,7 @@ inputs = ["verity", "hardware/cards", "verity/README.md", "tools/config/verity_c
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py",
           "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
-          "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py"]
+          "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py", "tools/difftest"]
 parallel = true
 # verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
@@ -176,7 +183,7 @@ tests = [
     "tests/acquire/test_dsv4_route_source.py",
     "tests/acquire/test_route_source.py",
 ]
-paths = ["adapters/vllm/verity_vllm/check", "adapters/vllm/verity_vllm/properties"]
+paths = ["adapters/vllm/verity_vllm/check"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/acquire/test_norm_tap_src.py"]
@@ -277,7 +284,7 @@ paths = ["adapters/vllm/tests", "adapters/vllm/verity_vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_row.py"]
-paths = ["benchmarks/remote_session", "adapters/vllm", "verity"]
+paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "adapters/vllm", "verity"]
 
 [[tool.verity.tests.reads]]
 tests = [
@@ -294,7 +301,8 @@ tests = [
     "tests/pipeline/test_serve_remote.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
 ]
-paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/verifier"]
+paths = ["benchmarks/remote_session", "verity/protocols/accounting/poub/prover/remote_session/prover.py", "verity/protocols/accounting/poub/prover/remote_session/device.py",
+         "verity/protocols/accounting/poub/verifier"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/pipeline/test_serve_row.py"]
@@ -331,7 +339,8 @@ paths = ["verity/definitions"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/protocols/test_pous_option.py"]
-paths = ["benchmarks/pous/p2_v1"]
+paths = ["benchmarks/pous/p2_v1", "verity/protocols/accounting/pous/prover/p2/p2_store/store.py", "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
+         "verity/protocols/accounting/pous/prover/p2/p2_store/load.py", "verity/protocols/accounting/pous/verifier/p2_v1/reference.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/query/test_word.py"]
@@ -358,3 +367,7 @@ paths = [
     "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json",
     "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
 ]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/commit/test_census_and_memory_map.py"]
+paths = ["verity/circuits/requirement", "tools/difftest"]

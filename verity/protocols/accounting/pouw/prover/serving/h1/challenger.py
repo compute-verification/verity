@@ -53,7 +53,7 @@ verifier's check that a served window's coins are that challenger's.
   ``git rev-list --first-parent origin/main``, `remote.main_lines`; `Ledger.main`), not only in main's history. Its
   heads are read as core reads a ledger's (`pins_head`, `pins_of`: the longest, any two extending one another). No pins
   log, a cut one, a tree it doesn't record, no copy of main, or a pin off main's first-parent line, credits nothing.
-* **Periods**: a lane's period is its windows between its ``period-open`` and ``period-close`` entries (session null),
+* **Monitoring periods**: a lane's monitoring period is its windows between its ``period-open`` and ``period-close`` entries (session null),
   each window counted at its reserve (or a one-step v2 open) whose prover (``for``, else ``by``) is the lane, as core's
   check lists them (`Ledger.periods`). `period_reason`, a reading of that table, refuses a period the ledger doesn't
   close, one whose close isn't complete (an empty one, or a window never opened, never ended, unclosed or short of its

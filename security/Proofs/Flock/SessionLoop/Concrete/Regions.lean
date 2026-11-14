@@ -9,7 +9,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement

@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.Sampled.CoinMap
 /-!
 # The two-stage leg's coin map
 
-`CoinMapLaw` (`Proofs.Properties.Verity.SampledTwo.Projection`) reads a play of the period's game as a run of the two-stage
+`CoinMapDistribution` (`Proofs.Properties.Verity.SampledTwo.Projection`) reads a play of the period's game as a run of the two-stage
 verifier whose coins are written into the play's tape where the device releases them. This module builds that map and
 states its sampling design.
 
@@ -29,13 +29,13 @@ states its sampling design.
   shortfall below uniform (`Verity.Game.shortfall`, the one-stage leg's `openGap` at each node) plus the chance its class
   at the run's uniform elements is empty. A fresh coin's write costs nothing: its 512 bits are the coin's 4 elements one
   for one.
-* **The sampling design** (`LawAt`, `ElemAgrees`, `CoinMapHolds`): the period's play is at most as likely, at every
-  event, as the frame's play at a uniform tape and uniform run coins plus the hiding term (`LawAt`); and `CoinMapLaw`
+* **The sampling design** (`SamplingDesignAt`, `ElemAgrees`, `CoinMapHolds`): the period's play is at most as likely, at every
+  event, as the frame's play at a uniform tape and uniform run coins plus the hiding term (`SamplingDesignAt`); and `CoinMapDistribution`
   at the coin map's agreement (`ElemAgrees`): on the frame's plays counted, the coin `dev` reads for each read round has
   the run's coin's elements below what its releases that fit carry (`DevAgrees.lean`'s `ElemsBelow` at `fitOf`,
   stated by its body), which its `FirstElems` and `SecondElems` read. The agreement holds only in the event: at an opening whose
   class at the run's elements is empty the device releases the tree's own round, whose bits are not the run's.
-Statements and definitions; `LawAt` and `CoinMapHolds` are proved in `CoinMapLaw.lean` and `CoinMapAgree.lean`.
+Statements and definitions; `SamplingDesignAt` and `CoinMapHolds` are proved in `CoinMapDistribution.lean` and `CoinMapAgree.lean`.
 -/
 
 @[expose] public section
@@ -413,9 +413,9 @@ noncomputable def gapOf (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) 
 
 /-! ## The sampling design -/
 
-/-- **The sampling design at the locator `L`** (`CoinMapLaw`'s first clause): the period's play is at most as likely, at every event,
+/-- **The sampling design at the locator `L`** (`CoinMapDistribution`'s first clause): the period's play is at most as likely, at every event,
 as the frame's play at a uniform tape and uniform run coins, plus the hiding term. -/
-def LawAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+def SamplingDesignAt (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) : Prop :=
   ∀ E : Verity.Exchange → Prop, Verity.Game.prob E (V.game θ F c) σ ≤
     ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x => E ((frame V A x θ F c σ L P).out s.1 s.2)) +
@@ -428,13 +428,13 @@ def ElemAgrees (L : Locate) (A : Live₂) (x : Msg) (reads : ℕ → Prop) (o : 
   ∀ i : Fin (A.L.V.k x), reads i.val → ∀ c, dev L o.log i.val = some c →
     ∀ j : Fin 65536, j.val < fitOf L i.val [] o.log → c j = r i j
 
-/-- **The coin map's law holds** at every vocabulary, statement, strategy, locator, prover and set of read rounds:
-`CoinMapLaw` at the frame of `L` and the agreement `ElemAgrees`, with `hide` the hiding term (`gapOf`: the written
+/-- **The coin map's distribution holds** at every vocabulary, statement, strategy, locator, prover and set of read rounds:
+`CoinMapDistribution` at the frame of `L` and the agreement `ElemAgrees`, with `hide` the hiding term (`gapOf`: the written
 openings' shortfalls and empty classes along the frame's play). -/
 def CoinMapHolds : Prop :=
   ∀ (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Strategy (V.game θ F c)) (L : Locate) (P : Claims.Prover (TapeOf V θ F c σ)) (reads : ℕ → Prop),
-    CoinMapLaw V A x θ F c σ (frame V A x θ F c σ L P) (ElemAgrees L A x reads) (gapOf V θ F c σ L (A.L.V.k x))
+    CoinMapDistribution V A x θ F c σ (frame V A x θ F c σ L P) (ElemAgrees L A x reads) (gapOf V θ F c σ L (A.L.V.k x))
 
 /-! ## Probes -/
 

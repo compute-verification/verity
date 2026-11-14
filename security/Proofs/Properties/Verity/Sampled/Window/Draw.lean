@@ -19,7 +19,7 @@ the member's part of it (`Member.part`), and the window's projection hands each 
   (`JointAuditV5.Laid`), both fixed by the registration before the sample. A sampled proof block `u` is then the proof block
   of the one member with `base ≤ u < base + n` (`JointAuditV5.Laid.mem_iff`, `Laid.member_unique`), so the members'
   places partition the population.
-* **The marginals** (`Window.avg_design`, `Window.drawMiss_extend`, `Window.joint_extend`, `Window.eps_extend`,
+* **The marginals** (`Window.avg_design`, `Window.sampleMiss_extend`, `Window.joint_extend`, `Window.eps_extend`,
   `Window.sessionDelta_extend`): member `k`'s sampling design in Flock's window is its part of the window's one
   sample, a mean of a reading of the part over the sample's coins; the members' knowledge and binding terms read only
   that, so the window's error is the same at the window widened by the coins a projection reads.
@@ -27,7 +27,7 @@ the member's part of it (`Member.part`), and the window's projection hands each 
   `WindowStartWithin`, `WindowFirstStopFresh`, `WindowCouplesWithin`, `windowCouples_of_close`): `CoinMap`'s
   (`couples_of_close`), over the members' sessions in order. Wherever each member's coin map writes its link points
   in within `γL` of the tape's own and each round's coins within `γ`, the start leaves the tape from the first stop
-  fresh and is within `ε₀` of the uniform tape, the joint law's tape off the held-off events is within `ε₀` and the
+  fresh and is within `ε₀` of the uniform tape, the joint distribution's tape off the held-off events is within `ε₀` and the
   stops' term, every member's session's summed along the walk, of the uniform tape at every event; so the coin map's
   premise holds wherever that is at most the hiding term (`windowCouples_of_within`). The induction is one session's
   with what follows it (`avg_roundsOffK_le`, `avg_sessionOffK_le`), then over the members (`avg_seqOff_le`,
@@ -175,7 +175,7 @@ theorem Window.avg_design (W : Window) (t : ℕ) (k : Fin (W.joint t).ms.length)
   rfl
 
 /-- The sample's term doesn't read the widening. -/
-theorem Window.drawMiss_extend (W : Window) (S : Widening) : (W.extend S).drawMiss = W.drawMiss :=
+theorem Window.sampleMiss_extend (W : Window) (S : Widening) : (W.extend S).sampleMiss = W.sampleMiss :=
   rfl
 
 /-- **Flock's window at the widened window is Flock's window, widened** (`JointAuditV5.extend`). -/
@@ -183,7 +183,7 @@ theorem Window.joint_extend (W : Window) (S : Widening) (t : ℕ) : (W.extend S)
   rfl
 
 /-- The sample at widened coins is the sample at the device's coins. By `dsimp`, not `rfl`: elaborating the two
-samples as definitionally equal reduces their `match` and evaluates `drawUnits`. -/
+samples as definitionally equal reduces their `match` and evaluates `sampleUnits`. -/
 theorem Window.sample_extend (W : Window) (S : Widening) (ω : (W.extend S).L.Ω) :
     (W.extend S).L.draw ω = W.L.draw ω.1 := by
   dsimp only [Window.L, Flock.Bridge.execSel, Window.extend]
@@ -197,7 +197,7 @@ theorem Window.eps_extend (W : Window) (S : Widening) (t : ℕ) : ((W.extend S).
 theorem Window.sessionDelta_extend (W : Window) (S : Widening) (t : ℕ) :
     (W.extend S).sessionDelta t = W.sessionDelta t := by
   unfold Window.sessionDelta
-  rw [W.drawMiss_extend S, W.eps_extend S t, W.rootsErr_extend S]
+  rw [W.sampleMiss_extend S, W.eps_extend S t, W.rootsErr_extend S]
 
 /-! ## The coin map's premise within a term, over the members' sessions -/
 
@@ -496,7 +496,7 @@ noncomputable def seqErr : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Re
   | _, [], _ => 0
   | i, m :: l, p =>
     memberErrK (D i) (memberTabs S Rg m) (γ i) (γL i (memberPts m)) (fun q => seqErr (i + 1) l q) m.N p
-      (memberDrawn S m)
+      (memberSampled S m)
 
 /-- The sessions' error reads the position only at its next stop. -/
 theorem seqErr_toStop : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)),
@@ -504,7 +504,7 @@ theorem seqErr_toStop : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : �
   | [], _, _ => rfl
   | m :: l, i, p =>
     memberErrK_toStop (D i) (memberTabs S Rg m) (γ i) (γL i (memberPts m))
-      (fun q => seqErr D γ γL S Rg (i + 1) l q) (fun q => seqErr_toStop l (i + 1) q) m.N p (memberDrawn S m)
+      (fun q => seqErr D γ γL S Rg (i + 1) l q) (fun q => seqErr_toStop l (i + 1) q) m.N p (memberSampled S m)
 
 variable {Ω : Type} (M : WindowCoinMap g σ Ω R) (BL : WindowLinkHold) (B : WindowRoundHold)
 
@@ -514,7 +514,7 @@ theorem seqOff_le_one (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guaran
   | [], _, p => tapeInd_le_one Q p
   | m :: l, i, p =>
     memberOffK_le_one (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
-      (fun q => seqOff_le_one Q l (i + 1) q) m.N p (memberDrawn S m)
+      (fun q => seqOff_le_one Q l (i + 1) q) m.N p (memberSampled S m)
 
 /-- The sessions' share off the held-off events reads the position only at its next stop. -/
 theorem seqOff_toStop (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ)
@@ -522,7 +522,7 @@ theorem seqOff_toStop (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guaran
   | [], _, p => tapeInd_toStop Q p
   | m :: l, i, p =>
     memberOffK_toStop (D i) (memberTabs S Rg m) (M.member i (memberPts m)) (B i) (BL i (memberPts m))
-      (fun q => seqOff D M BL B S Rg Q (i + 1) l q) (fun q => seqOff_toStop Q l (i + 1) q) m.N p (memberDrawn S m)
+      (fun q => seqOff D M BL B S Rg Q (i + 1) l q) (fun q => seqOff_toStop Q l (i + 1) q) m.N p (memberSampled S m)
 
 open Classical in
 variable {D γ γL M} in
@@ -542,7 +542,7 @@ theorem avg_seqOff_le (hR : ∀ i mPts, (M.member i mPts).RoundClose (γ i))
   | m :: l, i, p =>
     avg_memberOffK_le (D := D i) (J := memberTabs S Rg m) (B := B i) (hL i (memberPts m)) (hR i (memberPts m))
       (BL i (memberPts m)) Q (fun q => seqOff_le_one D S Rg M BL B Q l (i + 1) q)
-      (fun q => avg_seqOff_le hR hL Q l (i + 1) q) m.N p (memberDrawn S m)
+      (fun q => avg_seqOff_le hR hL Q l (i + 1) q) m.N p (memberSampled S m)
 
 open Classical in
 variable {D γ γL M} in
@@ -648,7 +648,7 @@ noncomputable def windowErr (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ :
       ((W.extend M.widening).joint t).ms (Pos.root (roundCuts V θ F c rd) (M.start ω))
 
 open Classical in
-/-- **The window's coin map's premise within a term, off its local ones** (`couples_of_close`): the joint law's tape
+/-- **The window's coin map's premise within a term, off its local ones** (`couples_of_close`): the joint distribution's tape
 off the held-off events is within the start's term and the stops' of the uniform tape at every event, wherever each
 member's coin map writes its link points in within `γL` of the tape's own and each round's coins within `γ`, the start
 leaves the tape from the first stop fresh, and the start is within `ε₀` of the uniform tape. The stops' term carries,

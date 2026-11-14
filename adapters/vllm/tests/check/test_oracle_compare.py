@@ -644,7 +644,7 @@ def _shared_rotary_match(tmp: str, n_layers: int = 3):
 
 def _shared_rotary_bmap(vals: dict, *, tensor_bytes: dict | None = None):
     """The collector's shape: every invocation is a meta NAMED `<ROT>/query` (ordinal 10+k), bound under the canonical path at invocation k;
-    the reader is the PRODUCTION OpenedReader over those metas, committed on the per-tensor host path (ordinals 0-9: other tensors)."""
+    the reader is the library's OpenedReader over those metas, committed on the per-tensor host path (ordinals 0-9: other tensors)."""
     from tests.check.opened import commit_host_steps
     n = ROWS[U0]
     entries = []
@@ -753,7 +753,7 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
                               "pairs": 2, "steps": [1, 2], "pair_list": [[1, "r0"], [2, "r0"]], "rule": res["padding"]["rule"]}
     assert "bot_word" in res["padding"]["rule"]
     # with a manifest, a no-oracle family's `identities` is the FULL-cap count; on a padded record the live count is
-    # stated beside it (manifest minus the padding stated apart), labelled -- leg (b): moe_block_stream 6,144 manifest = 4,224 live + 1,920 inactive
+    # stated beside it (manifest minus the padding stated apart), labelled -- part (b): moe_block_stream 6,144 manifest = 4,224 live + 1,920 inactive
     manifest = {"identities": [{"family": "fa2_hidden_m1_stream"}] * 3 + [{"family": "instance_outputs"}] * 40}
     resq = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), query_families=OC.query_families_of(manifest))
     q = resq["not_compared_by_query_family"]["fa2_hidden_m1_stream"]

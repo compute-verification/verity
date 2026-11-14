@@ -1,0 +1,64 @@
+# The ZK server's names: what `tools/move/rename.py --map tools/move/zk_server_map.toml` renames, the retired word
+# "firewall" in the proof system's names, paths, binaries, flags, environment names and refusal words, in the spellings
+# agreed with lean: the Lean namespace `Flock.Firewall` is `Flock.ZkServer`, the executables `flock-firewall` and
+# `core-firewall` are `flock-zk-server` and `core-zk-server`, `FC_FIREWALL*` is `FC_ZK_SERVER*`, the flags `--firewall`
+# and `--firewall-state` are `--zk-server` and `--zk-server-state`. The phrases and the words `terms_map.toml` lists
+# (`Flock.Firewall`, `firewall`, `Firewall`, `FIREWALL`, `firewalled`, `unfirewalled` and their plurals) are its rows, not
+# this map's: each word has one map. A kebab-case name takes its own rows here, since `firewall`'s row would spell
+# `zk_server` inside it.
+#
+# What a served record, a verifier's input or another system already carries keeps its spelling until a format version
+# ([keep]): the domain tags and format ids (`verity/firewall-*/v0`, `firewall/v0/...`), the deployment's party and the
+# reports' key `"firewall"` as a quoted token, the parties' message type `"Firewall"` a deploy log records, the release's
+# reasons upstream's Rust records, a goal's id and the machines' systemd slice. `benchmarks/` follows in its own lane.
+# Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that
+# `tools/verity/lean/check.py --update --moved` takes.
+
+[words]
+# --- the executable's root takes `Main`, since the library `FlockZkServer` holds the name it would get
+"FlockFirewall" = "FlockZkServerMain"
+
+# --- kebab-case names: executables and Lake targets, the uv distribution, check steps, flags, run files
+"--firewall-state" = "--zk-server-state"
+"--firewall" = "--zk-server"
+"flock-firewall" = "flock-zk-server"
+"core-firewall" = "core-zk-server"
+"firewall-honest-difftest" = "zk-server-honest-difftest"
+"firewall-finish-agree" = "zk-server-finish-agree"
+"firewall-contract" = "zk-server-contract"
+"firewall-in" = "zk-server-in"
+"firewall-out" = "zk-server-out"
+"firewall-rss" = "zk-server-rss"
+"firewall-" = "zk-server-"
+"-firewall" = "-zk-server"
+
+# --- refusal and line words, then environment names and constants
+"FIREWALL-REFUSED" = "ZK-SERVER-REFUSED"
+"FIREWALL-TIMES" = "ZK-SERVER-TIMES"
+"UNFIREWALLED" = "UNSERVED"
+"FIREWALLED" = "ZK_SERVED"
+
+# --- identifiers that start in lower case and go on in camel case
+"firewallLeaf" = "zkServerLeaf"
+"firewallStrings" = "zkServerStrings"
+"firewallCommits" = "zkServerCommits"
+"firewallPairs" = "zkServerPairs"
+"firewallSends" = "zkServerSends"
+"firewallT" = "zkServerT"
+
+[rewrite]
+# Never rewritten: the term source and the lints and tables that spell the old word on purpose, the move tools and
+# their tests, changelogs, replicated fixtures and patches; `benchmarks/` renames what it spells in its own lane.
+exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
+           "tools/research/tests/test_slack.py", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
+           "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
+           "*.patch", "benchmarks/**"]
+
+[keep]
+patterns = ['(?<![\w-])verity/firewall-[\w-]*(?:/v\d+)?', '(?<![\w/.-])firewall/v\d+(?:/\w+)*',
+            '(?<=[\x22\x27])firewall-(?:salt|coins)(?=[\x22\x27])',
+            '(?<=[\x22\x27])firewall(?=[\x22\x27])', '(?<=\\[\x22\x27])firewall(?=\\[\x22\x27])',
+            '\x22Firewall\x22|\bFirewall(?= \{sha512)',
+            '\bthe firewall(?: serves nothing more of it|\x27s fault)',
+            '\b(?:goal:)?proofs/firewall-[\w-]+', '\bfirewall\.slice\b']
+strings = ["dials firewall, workers", "refused listen: firewall, workers", "outer prove (firewall) e2e_s"]

@@ -17,7 +17,7 @@
 # WARMUPS (2), REPS (3), MAX_MIN (the lease, 20), MEM_GB (the lease's host memory, 16);
 # GPU_LEASE_TIMED=1 for rows taken inside a booked clean window
 # (gpu-lease --timed). The node's pinned-vLLM Python is env.sh's VENV. numabind.py is
-# benchmarks/hash/dither/numabind.py; NUMABIND names another copy, and without one the arms run unbound. The node's load
+# benchmarks/kernels/numabind/numabind.py; NUMABIND names another copy, and without one the arms run unbound. The node's load
 # (loadavg and the leases) before and after each arm is OUT/load.txt. Scratch goes to one mktemp -d directory (TMPDIR),
 # removed at the end; everything kept is under OUT.
 # `served_step.sh post DIR` (no GPU) analyzes another run's OUT again with this tree's code, into this run's OUT; ANALYZE=0

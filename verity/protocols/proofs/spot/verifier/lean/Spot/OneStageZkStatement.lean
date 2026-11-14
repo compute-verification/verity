@@ -121,7 +121,7 @@ structure Evidence where
   sessions : Array RunFiles
   statements : Option (Array StatementFiles)
 
-private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
+def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
   else pure ()
 
@@ -189,12 +189,12 @@ def paramsParsed (j : Json) : V Params := do
 
 /-- **The one statement's parameters** (`paramsParsed`), with every sampling design that is no `subset` one refused by
 its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed sampling design's, the one the
-sample is sampled under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over
+sample is sampled under (`OneStage.sampledFrom`, `Draw.deriveSamplingDesign`): v1 has already resolved a rate stated as text over
 the population (`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` one here and passes, and `stratified-rate:` and
 `work-rate:` are refused as `stratified` and `work`. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
-  let kind := match getD p.base.verifier.law "law" with | .str s => s | _ => ""
+  let kind := match getD p.base.verifier.samplingDesign "law" with | .str s => s | _ => ""
   if kind != "subset" then throw (SUBSET_ONLY kind)
   pure p
 
@@ -280,14 +280,79 @@ def indicesHeld (rec h : Json) : Bool :=
   | some n, .arr is => is.size == n && (List.range n).all fun i => (is[i]? >>= nat?) == some i
   | _, _ => false
 
+/-- The port a registration names a window's row tables' root at (`verity.commitments.windows.rows.TABLE_PORT`). -/
+def TABLE_PORT : String := "row-table"
+
+/-- The refusal of a registration that names a row tables' root (`rootsOf`, `publicPorts`). -/
+def ROW_TABLES : String :=
+  "roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member " ++
+    "form is refused on a window with row tables until its guarantee covers a root every member reads"
+
+/-- Every way a root's port reads as `<name>/<port name>`: the name and the port name at each `/` of the characters
+given, the first `/` first, after the characters `pre` holds reversed. A member's name holds `/`s, so each `/` of a
+port is a place a name can end. -/
+def splitsFrom : List Char → List Char → List (String × String)
+  | _, [] => []
+  | pre, c :: cs =>
+    if c = '/' then (String.ofList pre.reverse, String.ofList cs) :: splitsFrom (c :: pre) cs
+    else splitsFrom (c :: pre) cs
+
+/-- Every way the port `port` reads as `<name>/<port name>` (`splitsFrom`). -/
+def splitsOf (port : String) : List (String × String) := splitsFrom [] port.toList
+
+/-- One root `r` of the registration given to its member, among the members `acc` holds a name of (`rootsOf`): the
+member whose name, then `/`, the root's port begins with, the root pushed on that member's with the name and the `/`
+taken off its port. A refusal where the root is a row tables' (`ROW_TABLES`), no member's, or two members'. -/
+def rootStep (acc : Std.HashMap String (Array Json)) (r : Json) : V (Std.HashMap String (Array Json)) := do
+  let .str port := getD r "port" | throw "roots: a root of the registration names no port"
+  if port == TABLE_PORT then throw ROW_TABLES
+  match (splitsOf port).filter fun x => acc.contains x.1 with
+  | [(name, bare)] =>
+    pure (acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
+      ("port", .str bare), ("root", getD r "root")])))
+  | [] => throw s!"roots: the registration's root {port} is no member's: a member's roots are named <member>/<port>"
+  | _ =>
+    throw (s!"roots: the registration's root {port} is two members': a member's roots are named " ++
+      "<member>/<port>, and a root is one member's")
+
+/-- The one name `n` every port of `ports` reads as `<n>/<port name>` with a port name that holds no `/` (the last of
+its `splitsOf`); none where a port reads as no name or two ports as two names. A member's own port names hold no `/`,
+so two members' roots, of one template or two, read as two names. -/
+def commonMember (ports : List String) : Option String :=
+  match ports.map fun p => (splitsOf p).getLast?.map (·.1) with
+  | some n :: ns => if ns.all (· == some n) then some n else none
+  | _ => none
+
+/-- The refusal of a registration whose roots are neither bare nor one member's (`publicPorts`). -/
+def NOT_ONE_MEMBER : String :=
+  "public file: the registration's roots are not one member's: the one statement's public file is held to a " ++
+    "registration whose ports are bare, or are all one window member's, <member>/<port>"
+
+/-- **The registration's roots by port, as the one statement's public file names them** (`publicHeld`): the record
+`rec`'s own (`Record.byPort`) where no root's port reads as `<name>/<port name>`; else, where every root's port is one
+member's (`commonMember`), that member's roots with its name and the `/` after it taken off
+(`rootStep`, which refuses a row tables' root and a root that is no member's), as the per-member form reads a
+member's (`Member.slice`). A registration of two members or more has no name every root's port reads as, and refuses
+(`NOT_ONE_MEMBER`). A function of the record alone, fixed before any coin. -/
+def publicPorts (rec : Json) : V (Array (String × Json)) := do
+  let rs := match getD rec "roots" with | .arr rs => rs | _ => #[]
+  let ports := rs.toList.filterMap fun r => match getD r "port" with | .str p => some p | _ => none
+  if ports.all fun p => (splitsOf p).isEmpty then return Record.byPort rec
+  let some n := commonMember ports | throw NOT_ONE_MEMBER
+  let acc ← rs.foldlM rootStep (({} : Std.HashMap String (Array Json)).insert n #[])
+  return Record.byPort (Json.mkObj [("roots", .arr (acc.getD n #[]))])
+
 /-- The public file held to the registration `rec` (module docstring, **public**; `registration.matches_public`, as the
 one-stage drivers hold theirs before the sample): its header's scheme, `frame_v3` roots and their `domain_ids`, and
-`instances` against the record's scheme, roots, domains and population, a refusal naming the codes that fail; then its
-`units.indices` the population's units in order (`indicesHeld`). -/
+`instances` against the record's scheme, roots by port as the public file names them (`publicPorts`), their domains
+and population, a refusal naming the codes that fail; then its `units.indices` the population's units in order
+(`indicesHeld`). -/
 def publicHeld (rec : Json) (pubB : ByteArray) : V Unit := do
   let h ← FilePart.header pubB
+  let reg ← publicPorts rec
   let fv := getD h "frame_v3"
-  let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
+  let c := Record.matchesPublicBy reg rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids")
+    (getD h "instances")
   if !c.codes.isEmpty then throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
   if !indicesHeld rec h then throw INDICES_WHY
 
@@ -300,10 +365,14 @@ theorem indicesHeld_of_publicHeld {rec : Json} {pubB : ByteArray} (h : publicHel
   | error e => simp [hh, bind, Except.bind] at h
   | ok hd =>
     refine ⟨hd, rfl, ?_⟩
-    cases hi : indicesHeld rec hd
-    · simp only [hh, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe, MonadExceptOf.throw] at h
-      split at h <;> simp_all
-    · rfl
+    cases hr : publicPorts rec with
+    | error e => simp [hh, hr, bind, Except.bind] at h
+    | ok reg =>
+      cases hi : indicesHeld rec hd
+      · simp only [hh, hr, hi, bind, Except.bind, Bool.not_false, ↓reduceIte, throw, throwThe,
+          MonadExceptOf.throw] at h
+        split at h <;> simp_all
+      · rfl
 
 /-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`, as the population check reads
 them: `FilePart.indicesOf` of `FilePart.header`) of the instances the session's record drew (`unit_draw.units`),
@@ -443,10 +512,10 @@ def fitsWhy (limit : Nat) (circuit pub : ByteArray) (tables : List (String × By
 
 /-- `some "the draw"` when a session's statement would hold its record's sample `draw` at `limit` bytes or more
 (`printedSize`). -/
-def drawFitsWhy (limit : Nat) (draw : Option Json) : Option String :=
+def sampleFitsWhy (limit : Nat) (draw : Option Json) : Option String :=
   if draw.any (limit ≤ printedSize ·) then some "the draw" else none
 
-/-- The refusal of a length `fitsWhy` or `drawFitsWhy` names at `WORD`. -/
+/-- The refusal of a length `fitsWhy` or `sampleFitsWhy` names at `WORD`. -/
 def FITS : String := "2^64 bytes or more, past the 8-byte word a session's statement holds each length in"
 
 /-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, the reads it
@@ -463,6 +532,17 @@ def readsOf : Option Json → V Reads
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
     pure ⟨some own, known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j), ← Flock.Registered.paramsOf j⟩
+
+/-- The refusal of registered reads at the sample's units alone: not written. -/
+def SAMPLED_READS : String :=
+  "registered reads: reads at the sample's units alone, with no walk over every instance, are not written " ++
+    "(proofs/zero-knowledge)"
+
+/-- **The verifier's registered reads at the sample's units alone**: `readsOf`, its ports' positions and the reads it
+knows given only for the proof blocks `units` the sample proves, each a position the verifier derives from the unit's
+index rather than a row of a table over every instance. Refused (`SAMPLED_READS`) until written. -/
+def sampledReadsOf (_j : Option Json) (_units : Array Nat) : V Reads :=
+  throw SAMPLED_READS
 
 /-- The checks `verifyCmd` makes on a session's tables once they are set up, before `Zk.shapeOk`. -/
 def setupChecks (I : Flock.Witness.Inputs) (rd : Reads) (sts : Array Flock.Stmt) : V Unit := do
@@ -497,7 +577,7 @@ registered openings, once the sampling design holds. -/
 def setupAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) :
     V (Flock.SessionSpec × Array Flock.Setup × Json × Json) := do
   let (spec, sts) ← (sessionAt I rd draw).mapError (s!"setup: {·}")
-  (if draw.isSome then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
+  (if draw.isSome then Flock.ProvedScope.sampleDesign true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
   pure (spec, sts.map Flock.Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Json.null,
     Flock.registeredOpenings sts rd.registered)
 
@@ -543,9 +623,9 @@ def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles population : V Unit) (co
   Flock.Zk.verify spec tabs record proofs
   scope
   Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-  (if draw.isNone then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
-  Flock.RecSetup.fullDraw none false draw record
-  Flock.RecSetup.innerDrawn none
+  (if draw.isNone then Flock.ProvedScope.sampleDesign true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
+  Flock.RecSetup.fullSample none false draw record
+  Flock.RecSetup.innerSampled none
   Flock.ProvedScope.programHeld I.program
   Flock.RecordText.check record
   ksFiles
@@ -573,7 +653,7 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
   | .error why =>
     pure { coinKeys, all := false, proved := r.proved, out := r.out.push (verdictJson rd programSha s st false why #[]) }
   | .ok () =>
-    if (programSha.map Json.str) != some want then
+    if !(match programSha with | some sha => jsonStrIs want sha | none => false) then
       throw s!"session {s.name}'s verdict names program {programSha.getD "none"}, not the partition object's {want.compress}"
     else do
       let units ← provedUnits I.publicFile record
@@ -583,14 +663,14 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
 /-- One session's `verity-verify-proof verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own sample
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
 makes after it, the population check last (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in
-no blob or not UTF-8, its sample doesn't fit the session's statement (`drawFitsWhy`), or it accepted naming another
+no blob or not UTF-8, its sample doesn't fit the session's statement (`sampleFitsWhy`), or it accepted naming another
 program than the partition object's. -/
 def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFiles population : V Unit)
     (programSha : Option String) (want : Json) (r : Run) (s : RunFiles) : V Run := do
   let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
     | throw s!"session {s.name}'s record is not UTF-8"
   let draw := Flock.Witness.recordDraw record
-  (match drawFitsWhy WORD draw with
+  (match sampleFitsWhy WORD draw with
     | some what => throw s!"session {s.name}: {what}: {FITS}"
     | none => pure () : V Unit)
   let st := setupAt I rd draw
@@ -599,7 +679,7 @@ def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFile
     (verdictOf I scope ksFiles population r.coinKeys record draw st (filesOf bs s st) coinKey)
 
 /-- The units the accepted sessions proved (`proved`, in session order) held to the evidence's `proved_units` (`want`):
-sorted, they must be it. `want` is strictly ascending (`Draw.checkDrawFull`), so a unit two sessions prove (or one
+sorted, they must be it. `want` is strictly ascending (`Draw.checkSampleFull`), so a unit two sessions prove (or one
 session twice) refuses, and so does a sampled proof block no session proves. -/
 def provedHeld (proved want : Array Nat) : V Unit :=
   if proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
@@ -611,7 +691,7 @@ accepted. A session accepts only where the registration's population is the publ
 (`FilePart.check`, last). A refusal, first, of blobs holding other lookup tables than the registered circuit's (`tablesHeld`),
 then for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
-the evidence's (`provedHeld`); and for a length a session's statement can't hold (`fitsWhy`, `drawFitsWhy`, at
+the evidence's (`provedHeld`); and for a length a session's statement can't hold (`fitsWhy`, `sampleFitsWhy`, at
 `WORD`). -/
 def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) : V Run := do
   tablesHeld p bs
@@ -666,6 +746,28 @@ def treesOf (p : OneStage.Params) (e : OneStage.Evidence) : V (Array Challenger.
 /-- The tables of the session `run` sets up: the statement's tags' at `inputsOf`'s count, one table. None when the
 statement is unknown, which `run` refuses. -/
 def sessionTables : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames 1)).getD #[]
+
+/-- The parameter naming how many tables one session sets up: the audit at `J` tables in one session, as
+`verity-verify-proof --session-tables J` and `SampledKSLiveV5` take them. Read nowhere yet: `inputsOf` and `inputsAt`
+set up one table (`count := 1`) and `sessionTables` names it. -/
+def TABLES_KEY : String := "session_tables"
+
+/-- The refusal of parameters naming `TABLES_KEY`: a session of more than one table is not written. -/
+def TABLES_REFUSED : String :=
+  "session_tables: one-stage v2 sets up one table a session; J tables in one session are not written (proofs/zero-knowledge)"
+
+/-- The tables one session sets up, from the parameters `j`: one where they name no `TABLES_KEY`, and `TABLES_REFUSED`
+where they name it, at any `J`. Where it would be read: `inputsOf`'s and `inputsAt`'s `count`, `sessionTablesAt` in
+place of `sessionTables`, and so `rootBTablesAt`'s link lengths; a sample split over `J` tables is held to
+`Draw.tablesWhy`. -/
+def tablesOfJson (j : Json) : V Nat :=
+  match field? j TABLES_KEY with
+  | none => pure 1
+  | some _ => throw TABLES_REFUSED
+
+/-- The tables a session of `J` tables sets up: the statement's tags' at `J` (`Flock.Tags.tableNames`), the names its
+link's `root_b` would hold. At `J = 1` it is `sessionTables`. -/
+def sessionTablesAt (J : Nat) : Array String := ((Flock.Tags.find? STATEMENT).map (·.tableNames J)).getD #[]
 
 /-- The byte length of table `st`'s `root_B`: the level-0 cap a `--zk` proof's reader reads (`Flock.ZkProof.reader`),
 `2^cap₀` digests of the table's Merkle scheme, `cap₀` the first stratum of `Flock.Zk.schedule` at the table's `m`.
@@ -797,6 +899,41 @@ def membersOf (shared : Own) (j : Json) : V (Array Member) := do
     if rs[i]!.1 < rs[i - 1]!.2 then
       throw s!"proofs: unit {rs[i]!.1} is in two members' units: a unit is one member's"
   pure ms
+
+/-- `membersOf`'s last check, alone: `a`, where no unit is in two of the ranges `rs`, sorted by their starts. A function
+of its own, never inlined, so that its loop is compiled over ranges it is handed. -/
+@[noinline] def unitsApart {α : Type} (rs : Array (Nat × Nat)) (a : α) : V α := do
+  for i in [1:rs.size] do
+    if rs[i]!.1 < rs[i - 1]!.2 then
+      throw s!"proofs: unit {rs[i]!.1} is in two members' units: a unit is one member's"
+  pure a
+
+/-- `membersOf` with its last check in a function of its own (`unitsApart`), and nothing else changed: what the compiler
+runs for `membersOf` (`membersOf_eq_membersOfApart`). Compiled as one function, `membersOf`'s last loop takes time
+quadratic in the members; with the loop apart, the parse takes time linear in them. -/
+def membersOfApart (shared : Own) (j : Json) : V (Array Member) := do
+  let .obj _ := j
+    | throw "proofs: members is not an object from a member's name to its files, its units and its vus_per_block"
+  let ms ← (entries j).mapM fun (name, m) => do
+    if name.isEmpty then throw "proofs: a member's name is empty"
+    exactly m #["circuit", "public", "registered", "units", "vus_per_block"] s!"member {name}"
+    let (circuit, pub, registered) ← committedOf m
+    let some units := (Draw.ranges? (getD m "units")).bind fun rs =>
+        rs.mapM fun (lo, hi) => if 0 ≤ lo then some (lo.toNat, hi.toNat) else none
+      | throw s!"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi"
+    if !ascending 0 units.toList then
+      throw s!"proofs: member {name}'s units are not ascending, each range after the one before"
+    let some g := (nat? (getD m "vus_per_block")).filter (0 < ·)
+      | throw s!"proofs: member {name}'s vus_per_block is not a positive natural number"
+    pure ({ name, units, g, own := { shared with circuit := circuit, pub := pub, registered := registered } } : Member)
+  if ms.isEmpty then throw "proofs: members names no member"
+  unitsApart ((ms.foldl (fun acc m => acc ++ m.units) #[]).qsort (·.1 < ·.1)) ms
+
+/-- **`membersOf` is `membersOfApart`**: the two differ only in where the last check's loop is written. Under it the
+compiler runs `membersOfApart` wherever `membersOf` is called from here on, `membersParamsOfJson` first. -/
+@[csimp] theorem membersOf_eq_membersOfApart : @membersOf = @membersOfApart := by
+  funext shared j
+  rfl
 
 /-- The per-member form's evidence `proofs`: exactly `{"statements"}`, a list of exactly `{"member", "sessions"}`, a
 member's nonempty name and its sessions (`sessionOf`). -/
@@ -963,41 +1100,6 @@ def Member.heldAt (m : Member) (strata : Array (String × Array (Nat × Nat))) (
   | none => throw MEMBER_STRATA
   | some _ => if unitsHeld m.indices h then pure () else throw MEMBER_UNITS
 
-/-- The port a registration names a window's row tables' root at (`verity.commitments.windows.rows.TABLE_PORT`). -/
-def TABLE_PORT : String := "row-table"
-
-/-- The refusal of a registration that names a row tables' root (`rootsOf`). -/
-def ROW_TABLES : String :=
-  "roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member " ++
-    "form is refused on a window with row tables until its guarantee covers a root every member reads"
-
-/-- Every way a root's port reads as `<name>/<port name>`: the name and the port name at each `/` of the characters
-given, the first `/` first, after the characters `pre` holds reversed. A member's name holds `/`s, so each `/` of a
-port is a place a name can end. -/
-def splitsFrom : List Char → List Char → List (String × String)
-  | _, [] => []
-  | pre, c :: cs =>
-    if c = '/' then (String.ofList pre.reverse, String.ofList cs) :: splitsFrom (c :: pre) cs
-    else splitsFrom (c :: pre) cs
-
-/-- Every way the port `port` reads as `<name>/<port name>` (`splitsFrom`). -/
-def splitsOf (port : String) : List (String × String) := splitsFrom [] port.toList
-
-/-- One root `r` of the registration given to its member, among the members `acc` holds a name of (`rootsOf`): the
-member whose name, then `/`, the root's port begins with, the root pushed on that member's with the name and the `/`
-taken off its port. A refusal where the root is a row tables' (`ROW_TABLES`), no member's, or two members'. -/
-def rootStep (acc : Std.HashMap String (Array Json)) (r : Json) : V (Std.HashMap String (Array Json)) := do
-  let .str port := getD r "port" | throw "roots: a root of the registration names no port"
-  if port == TABLE_PORT then throw ROW_TABLES
-  match (splitsOf port).filter fun x => acc.contains x.1 with
-  | [(name, bare)] =>
-    pure (acc.modify name (·.push (Json.mkObj [("domain", getD r "domain"), ("leaves", getD r "leaves"),
-      ("port", .str bare), ("root", getD r "root")])))
-  | [] => throw s!"roots: the registration's root {port} is no member's: a member's roots are named <member>/<port>"
-  | _ =>
-    throw (s!"roots: the registration's root {port} is two members': a member's roots are named " ++
-      "<member>/<port>, and a root is one member's")
-
 /-- **The registration's roots, each its member's**: the roots of the record `rec` by the name of the member each is
 of, in the record's order, each as the record holds it with the member's name and the `/` after it taken off its
 port (`rootStep`). A root is the member's whose name, then `/`, its port begins with, the whole name: the record's
@@ -1061,8 +1163,9 @@ def scopeAt (parsed : V Flock.Circuit) (I : Flock.Witness.Inputs) (rd : Reads) :
 
 /-- **What `step` reads of one statement**: its inputs, the verifier's registered reads, the scope, files and
 population checks its sessions' verdicts run, and its program's digest against the partition object's program; and,
-of its circuit file alone, the form the sampled audit's knowledge soundness covers without a session's sample
-(`ksForm`) and the units a proof block it parses with (`g`). Nothing of it reads a session's record, coins or sample,
+of its files alone, the form the sampled audit's knowledge soundness covers without a session's sample
+(`ksForm`), the public file's header and rows as a session's setup takes them (`header`) and the units a proof block
+the circuit parses with (`g`). Nothing of it reads a session's record, coins or sample,
 and it holds each check's result, never the parsed circuit. -/
 structure StepAt where
   I : Flock.Witness.Inputs
@@ -1070,6 +1173,7 @@ structure StepAt where
   scope : V Unit
   ksFiles : V Unit
   ksForm : V Unit
+  header : V Unit
   g : Option Nat
   population : V Unit
   programSha : Option String
@@ -1089,6 +1193,7 @@ def StepAt.ofOwn (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (tab
   { I, rd, scope := scopeAt parsed I rd
     ksFiles := Flock.PortRoots.checkOf parsed (Flock.Witness.zkTags I) pubB
     ksForm := Flock.KsScope.filesOf parsed (Flock.Witness.zkTags I) I.publicFile I.count
+    header := Flock.PortRoots.headerOf parsed (Flock.Witness.zkTags I) I.publicFile
     g := parsed.toOption.map (·.g)
     population
     programSha := programDigest p.program
@@ -1133,9 +1238,11 @@ def Member.statement (m : Member) (slice : Json) (bs : Core.Blobs) : V StepAt :=
 /-- **A statement's files held to what its sessions' verdicts check of the files alone**, with no session: the scope
 (`scope`), the files' ports and roots (`ksFiles`), the form the sampled audit's knowledge soundness covers, without a
 session's sample (`ksForm`, `Flock.KsScope.filesOf`), and the population check (`population`), in `verdictOf`'s
-order. It reads the statement's results and parses nothing. -/
+order; and, before the population check, the public file's header and rows as a session's setup takes them (`header`,
+`Flock.PortRoots.headerOf`), which a session's verdict holds at its sample and this at none. It reads the statement's
+results and parses nothing. -/
 def StepAt.filesHeld (a : StepAt) : V Unit :=
-  a.scope >>= fun _ => a.ksFiles >>= fun _ => a.ksForm >>= fun _ => a.population
+  a.scope >>= fun _ => a.ksFiles >>= fun _ => a.ksForm >>= fun _ => a.header >>= fun _ => a.population
 
 /-- **A member's statement with its files held** (`Member.statement`, then `StepAt.filesHeld`), a refusal naming the
 member. It reads the member's own files and no session, so it is the same for a member the sample holds and one it
@@ -1359,7 +1466,7 @@ theorem Member.population_on (m : Member) (slice : Json) :
 
 /-- `StepAt.ofOwn` on what is kept of the circuit file and the program: the lookup tables `tables` it is handed, the
 tags its sessions run under `tags`, what its checks read of the parse `k`, and the program's digest `sha`. Every
-check that read the parse reads `k`, and the three that load the public file read one load of it
+check that read the parse reads `k`, and the four that load the public file read one load of it
 (`Spot.CircuitKept.loadOf`). -/
 def StepAt.ofKept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (tables : List (String × ByteArray))
     (rd : Reads) (population : V Unit) (tags : Flock.Tags) (k : V CircuitKept.Kept) (sha : Option String) : StepAt :=
@@ -1368,6 +1475,7 @@ def StepAt.ofKept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteArray) (ta
     scope := CircuitKept.checkOf k pub tags true pubB 1 false rd.registered.isSome >>= fun _ => k >>= fun k => k.own
     ksFiles := CircuitKept.portsOf k pub
     ksForm := CircuitKept.filesOf k pub tags pubB
+    header := CircuitKept.headerOf k pub
     g := k.toOption.map (·.c.g)
     population
     programSha := sha
@@ -1394,11 +1502,12 @@ theorem StepAt.ofOwn_kept (p : Own) (tags0 : Flock.Tags) (circuitB pubB : ByteAr
       StepAt.ofKept p tags0 circuitB pubB tables rd population (tagsAt tags0 circuitB)
         ((Flock.ProvedScope.circuitOf (tagsAt tags0 circuitB) circuitB tables).map
           (CircuitKept.keptOf (tagsAt tags0 circuitB) true 1 templateOk)) (programDigest p.program) := by
-  show StepAt.mk _ _ _ _ _ _ _ _ _ = StepAt.mk _ _ _ _ _ _ _ _ _
+  show StepAt.mk _ _ _ _ _ _ _ _ _ _ = StepAt.mk _ _ _ _ _ _ _ _ _ _
   congr 1
   · exact scopeAt_kept _ _ _
   · exact CircuitKept.portsOf_kept _ _ _ true 1 templateOk
   · exact CircuitKept.filesOf_kept _ _ _ true 1 templateOk
+  · exact CircuitKept.headerOf_kept _ _ _ true 1 templateOk
   · exact CircuitKept.keptOf_g _ _ true 1 templateOk
 
 /-- `statementOf` at a member's own lookup tables, on what the files' pass keeps of its circuit file (`fk`) and its

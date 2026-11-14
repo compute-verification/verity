@@ -10,8 +10,10 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-import slots as S
-import slots_gpu as G
+from conftest import BUILD
+
+from verity.commitments.cuda.commit_slots import slots as S
+from verity.commitments.cuda.commit_slots import slots_gpu as G
 from verity.commitments.identity import identity_digest_sha512
 
 needs_cxx = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="needs a C++ compiler")
@@ -75,7 +77,7 @@ def _plan_counts(layout: S.CommitShape) -> dict[str, int]:
         m.setattr(S, "tagged_sha512", tagged)
         m.setattr(S.CommitShape, "manifest", manifest)
         m.setattr(G.Plan, "_shape", shape)
-        plan = G.Plan(CTX, layout, "host")
+        plan = G.Plan(CTX, layout, "host", build=BUILD)
         G.StepCommitter(plan, 0, 2, bytes(32))
         S.unit_domain(CTX, layout, layout.unit_count - 1)
     return n
@@ -99,7 +101,7 @@ def test_a_host_plan_of_over_six_million_units() -> None:
     layout digest was cached, planning was quadratic in the units and this never finished. What it catches that
     test_planning_is_linear_in_the_units can't: a linear but slow step a unit (a Python object or call a row) at full size."""
     layout = families_like(52, coords=117_000, chunks=400)
-    plan = G.Plan(CTX, layout, "host")
+    plan = G.Plan(CTX, layout, "host", build=BUILD)
     assert layout.unit_count == 6_104_800 and layout.row_count == 6_125_600
     assert plan.unit_dids.shape == (layout.unit_count, 8)
     for u in (0, 116_999, 117_000, 117_399, 3_000_000, layout.unit_count - 1):

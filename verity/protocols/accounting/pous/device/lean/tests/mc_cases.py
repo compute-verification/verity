@@ -437,9 +437,9 @@ def _at(path: tuple[str, ...], f):
 JSON_MUTATIONS = [
     _json_edit("commitment", lambda j, x: j | {"extra": x}),
     _json_edit("commitment", _drop),
-    _json_edit("commitment", lambda j, x: j | {"protocol": "verity-pous/memory-challenger/v0"}),
+    _json_edit("commitment", lambda j, x: j | {"protocol": "verity-pous/memory-challenger/v1"}),
     _json_edit("commitment", lambda j, x: j | {"clock": "CLOCK_REALTIME ns"}),
-    _json_edit("commitment", lambda j, x: j | {"coin_tree": mc.RECORDS_TREE}),
+    _json_edit("commitment", lambda j, x: j | {"coin_tree": mc.RECORDS}),
     _json_edit("commitment", lambda j, x: j | {"coin_key_sha512": "00" * 64}),
     _json_edit("commitment", lambda j, x: j | {"session": j["session"].upper()}),
     _json_edit("commitment", lambda j, x: j | {"binding": j["binding"] + "0"}),

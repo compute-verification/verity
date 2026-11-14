@@ -64,10 +64,8 @@ from typing import Any
 from verity.channel import Body, Int, Json, Message, Schema, Str
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.party import Finish, Identity, LogEntry, Received, Send
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.protocols.proofs.spot.verifier.parties import MAX_PROOF, MAX_REGISTRATION, MAX_SAMPLE, Unavailable
-from verity.runtime import sources
-from verity.runtime.runner import ProtocolDef
 
 from . import coins as Co
 from .protocol import DomainError
@@ -80,8 +78,6 @@ MAX_PHASES = 1 << 10
 PHASE_COINS = len(Co.LABELS) * (Co.COIN_BYTES + Co.HM96.salt_bytes)
 """The bytes of the `coins` need one phase's `coins.Challenger` reads."""
 ROOT = Body(size=DIGEST_BYTES["sha512"], max=DIGEST_BYTES["sha512"])
-(ASK,) = sources.ASKS["coins"].types
-"""The message that asks the `coins` need for bytes."""
 PHASE = Int(0, MAX_PHASES - 1)
 OPENING = Json(1 << 12)
 MANIFEST = Manifest(
@@ -142,7 +138,11 @@ class _Stream:
 
 class ChallengerParty:
     """The challenger: every phase's challenges committed before its phase is begun, each challenge opened once on the
-    verifier's `Open` (module docstring)."""
+    verifier's `Open` (module docstring). `ask` is the type of the message that asks its `coins` need for bytes, which
+    the program that starts the run hands in (`protocol`)."""
+
+    def __init__(self, ask: str) -> None:
+        self.ask = ask
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         try:
@@ -151,7 +151,7 @@ class ChallengerParty:
             return [Finish({"opened": []}, "schema")]
         self.c: list[Co.Challenger] = []
         self.opened: list[dict[str, Any]] = []
-        return [Send("coins", Message(ASK, {"n": PHASE_COINS}))]
+        return [Send("coins", Message(self.ask, {"n": PHASE_COINS}))]
 
     def on(self, r: Received) -> list[Any]:
         m = r.message
@@ -161,7 +161,7 @@ class ChallengerParty:
             c = Co.Challenger(len(self.c), _Stream(m.body))
             self.c.append(c)
             out = [Send(VERIFIER, Message("Commitment", {"phase": c.epoch}, c.commitment.root))]
-            more = [Send("coins", Message(ASK, {"n": PHASE_COINS}))] if len(self.c) < self.phases else []
+            more = [Send("coins", Message(self.ask, {"n": PHASE_COINS}))] if len(self.c) < self.phases else []
             return out + more
         if m.type == "Done":
             return [Finish({"opened": self.opened})]
@@ -334,9 +334,10 @@ class Prover:
         return [Send(VERIFIER, Message("Proof", {"phase": i}, proof))]
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: ChallengerParty, PROVER: Prover, VERIFIER: Verifier})
-PROTOCOLS = {ID: PROTOCOL}
+def protocol(ask: str) -> ProtocolDef:
+    """PoUW's three parties, the challenger handed `ask`, the type of the message that asks its `coins` need for bytes."""
+    return ProtocolDef(MANIFEST, {CHALLENGER: lambda: ChallengerParty(ask), PROVER: Prover, VERIFIER: Verifier})
 
 
-__all__ = ["CHALLENGER", "ID", "MANIFEST", "MAX_PHASES", "PHASE_COINS", "PROTOCOL", "PROTOCOLS", "PROVER", "SALT",
-           "SAMPLING", "VERIFIER", "VERSION", "ChallengerParty", "Prover", "Verifier", "params_of"]
+__all__ = ["CHALLENGER", "ID", "MANIFEST", "MAX_PHASES", "PHASE_COINS", "PROVER", "SALT", "SAMPLING", "VERIFIER", "VERSION",
+           "ChallengerParty", "Prover", "Verifier", "params_of", "protocol"]

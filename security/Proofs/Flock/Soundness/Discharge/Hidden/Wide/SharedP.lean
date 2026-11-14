@@ -31,8 +31,8 @@ import Proofs.Flock.Soundness.Refine.Walk
 
 `HmIn.loadPublic` and `HmIn.drawn` are `HmRow`'s on the circuit whose output ports are the public input words
 (`inRows`), so the `b ‖ c` a sampled statement's regions pin at a proved unit's `hm96` slot is the unit's in the
-population's public file (`bc_drawnWP`, `bc_drawnW` at `Hidden.SpecP`), and the public word the in regions hold at a
-proved slot's public leaf is the unit's public input word there (`inVal_drawnP`).
+population's public file (`bc_sampledWP`, `bc_sampledW` at `Hidden.SpecP`), and the public word the in regions hold at a
+proved slot's public leaf is the unit's public input word there (`inVal_sampledP`).
 -/
 
 @[expose] public section
@@ -61,13 +61,13 @@ theorem loadPublic_inRows {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {pf : By
     subst h
     assumption
 
-/-- **`bc_drawnW` at public inputs**: the `b ‖ c` the regions pin at a proved unit's `hm96` slot, in a satisfying
+/-- **`bc_sampledW` at public inputs**: the `b ‖ c` the regions pin at a proved unit's `hm96` slot, in a satisfying
 witness of a sampled hidden-output statement at public inputs, is the unit's `b ‖ c` in the population's public file, at
 every row. -/
-theorem bc_drawnWP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
+theorem bc_sampledWP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt} (s : SpecP tags cf pf coins tables (some d) own pi st)
-    {pop : Public} (hpop : HmIn.loadPublic tags st.c pi pf = .ok pop) {D : Draw.UnitDraw}
-    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
+    {pop : Public} (hpop : HmIn.loadPublic tags st.c pi pf = .ok pop) {D : Draw.UnitSample}
+    (hD : Draw.UnitSample.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
@@ -82,13 +82,13 @@ theorem bc_drawnWP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : L
   have hdrawn : HmRow.drawn (inRows st.c pi) pop d = .ok st.pub := hdr d rfl
   have hload := loadPublic_inRows hpop
   have hpopn : D.population = pop.n := by
-    obtain ⟨D', hD', hpn, -⟩ := Layout.drawn_spec hdrawn
+    obtain ⟨D', hD', hpn, -⟩ := Layout.sampled_spec hdrawn
     rw [hD] at hD'
     cases hD'
     exact hpn
   have hchunk : ∀ g' (hr' : o.val * st.c.g + g' < D.proved.size),
       Layout.bcChunk st.c st.pub o.val g' p = pop.digest D.proved[o.val * st.c.g + g'] p st.c.ports.size :=
-    fun g' hr' => bcChunk_drawnW hload hdrawn hD hlt hr' hp
+    fun g' hr' => bcChunk_sampledW hload hdrawn hD hlt hr' hp
   have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' p).size = 128 := fun g' hg' => by
     have hr' : o.val * st.c.g + g' < D.proved.size := by omega
     rw [hchunk g' hr']
@@ -111,10 +111,10 @@ theorem outWords_inRows {c : Circuit} {pi : HmIn.Ports} (hne : pi.ports.isEmpty 
 at block `b` and unit slot `k` whose instance `b · c.g + k / upv` is proved, public leaf `jj` of the slot's unit, public
 word `q`, holds word `q` of the proved unit `D.proved[b · c.g + k / upv]`'s public inputs in the population's public file
 (`HmRow.drawn` on `inRows`, `parse_leaf_lt`). -/
-theorem inVal_drawnP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+theorem inVal_sampledP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {d : Lean.Json} {own : Option ByteArray} {pi : HmIn.Ports} {st : Stmt}
     (s : SpecP tags cf pf coins tables (some d) own pi st) {pop : Public}
-    (hpop : HmIn.loadPublic tags st.c pi pf = .ok pop) {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D)
+    (hpop : HmIn.loadPublic tags st.c pi pf = .ok pop) {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson d = .ok D)
     (hlt : ∀ u ∈ D.proved, u < D.population) {b k jj i : ℕ} (hk : k < st.c.unitRange.count)
     (hi : b * st.c.g + k / st.c.upv = i) (hr : i < D.proved.size) {q : ℤ}
     (hq : (pi.leaves.getD (k % st.c.upv) #[]).getD jj (-1) = q) (hq0 : 0 ≤ q) :
@@ -132,8 +132,8 @@ theorem inVal_drawnP {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
       simp [Array.getD] at hq
       omega
   have hw := outWords_inRows (c := st.c) hne
-  obtain ⟨D', hD', hpopn, hn, -, -⟩ := drawn_spec hdrawn
-  obtain ⟨D'', hD'', hout⟩ := drawn_outputs hdrawn
+  obtain ⟨D', hD', hpopn, hn, -, -⟩ := sampled_spec hdrawn
+  obtain ⟨D'', hD'', hout⟩ := sampled_outputs hdrawn
   rw [hD] at hD' hD''
   cases hD'
   cases hD''

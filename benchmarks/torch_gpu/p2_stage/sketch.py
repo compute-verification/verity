@@ -46,14 +46,14 @@ import torch
 from verity_config.settings import of
 
 from verity.commitments.cuda import SHA512
+from verity.commitments.cuda.sha512_rows import engine as SE
 from verity.protocols.accounting.poub.verifier import p2
 from verity.protocols.accounting.poub.verifier import receipts as R
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
-ROWS_DIR = HERE.parents[2] / "verity" / "commitments" / "cuda" / "sha512_rows"
-sys.path.insert(0, str(ROWS_DIR))
-import engine as SE  # noqa: E402
+sys.path.insert(0, str(HERE.parent / "sha512_rows"))
+import torch_engine as TE  # noqa: E402
 
 BLOCK, UNIT, PER = p2.BLOCK_BYTES, p2.UNIT_BYTES, p2.UNIT_BLOCKS
 DEVICE_SOURCES = (SHA512, HERE / "receipts.cuh", HERE / "receipts.cu")
@@ -94,7 +94,7 @@ def receipts_lib(arch: str | None) -> ctypes.CDLL:
     nvcc = shutil.which("nvcc")
     if nvcc is None:
         raise RuntimeError("no nvcc on the path")
-    flags = (*SE.NVCC_FLAGS, *SE.variant_flags(SE.DEFAULT_VARIANT), f"-gencode=arch=compute_{arch},code=sm_{arch}")
+    flags = (*SE.NVCC_FLAGS, *SE.variant_flags(TE.VARIANT), f"-gencode=arch=compute_{arch},code=sm_{arch}")
     return _build(nvcc, DEVICE_SOURCES, flags, "libp2r_cuda.so")
 
 
@@ -175,7 +175,7 @@ class Tree:
     def __init__(self, units: int, device: Any) -> None:
         self.device = torch.device(device)
         self.host = self.device.type != "cuda"
-        self.E = SE.Engine("host" if self.host else self.device)
+        self.E = TE.Engine("host" if self.host else self.device)
         self.units, self.G = units, R.leaves(units)
         self.plan = R.Plan.whole(units)
         self.y = torch.zeros(units, R.DIGEST_BYTES, dtype=torch.uint8, device=self.device)

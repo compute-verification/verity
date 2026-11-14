@@ -70,6 +70,7 @@ import json
 import os
 from collections import Counter, deque
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
@@ -590,6 +591,16 @@ class H1Run:
         their served rows. A window with one credits nothing (`credit`)."""
         return [f"step {u['round']}: {u['rows']} row{'' if u['rows'] == 1 else 's'} of a request with no entry"
                 for u in self.unadmitted] + self.unbound
+
+    def observe(self, site: int, x: Any, weight: Any, y: Any, /, *, x_scale: Any = None, weight_scale: Any = None,
+                z: Any = None) -> None:
+        """`serving.observe_matmul`: linear ``site``'s call as its arm served it, recorded (`record`) unless the run commits
+        nothing. ``y`` is the arm's, which `judge` holds against the call's trace. A record given z writes neither y nor z
+        and runs no GEMM, so it runs `credit_gate.outside` the trace; one without z stays in it, where the GEMM a retaining
+        record runs is seen."""
+        if self.commit:
+            with CG.outside() if z is not None else nullcontext():
+                self.record(site, x, x_scale, weight, weight_scale, z)
 
     def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> Call | None:
         """Linear `w`'s served call: its s8 rows a [m, k], their f32 scales s_a [m], its int8 weight [n, k] and scales, and

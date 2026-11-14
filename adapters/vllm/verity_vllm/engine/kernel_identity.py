@@ -3,11 +3,11 @@
 Inductor writes every compiled graph piece as a Python *wrapper module* (``<cache>/<xx>/<hash>.py``)
 that embeds the Triton source of each kernel it launches (``async_compile.triton('<name>', '''...''')``)
 and a ``call()`` body that is the launch program of the fused region. The *cache key* of such a
-module depends on the whole Inductor config (so it differs between production and a replay whose
+module depends on the whole Inductor config (so it differs between serving and a replay whose
 ``CompilationConfig`` differs); the *sources* are what actually ran. This module collects, per
 process, the set of generated kernel sources and wrapper programs by content hash. Equality of two
 processes' kernel-source sets (``summary.kernel_set_sha256``, which a run's record pins) is the
-evidence that a replay executed production's generated kernels.
+evidence that a replay executed the served run's generated kernels.
 
 Also collected: Triton's compiled artifacts in ``TRITON_CACHE_DIR`` when it is set: per kernel the
 ``*.cubin`` hash and the hash of the *code* part of its PTX. Triton embeds the path of the Python
@@ -204,7 +204,7 @@ def autotune_configs(root: Path, unreadable: dict[str, str]) -> list[dict[str, A
     benchmarked more than one launch configuration (``autotune_pointwise``, pointwise kernels) — the chosen
     ``XBLOCK`` / ``num_warps`` / ``num_stages``. Those are *launch parameters* selected by timing in each
     process, not part of the generated source; a pointwise kernel's per-element arithmetic does not depend on
-    them, but they are the one thing production and replay may legitimately differ in, so they are recorded.
+    them, but they are the one thing serving and replay may legitimately differ in, so they are recorded.
     Each entry: kernel name (from the sibling ``.py``), the kernel module's sha256, the config.
     A file that can't be read or parsed is recorded in ``unreadable`` (path relative to ``root``)."""
     out: list[dict[str, Any]] = []

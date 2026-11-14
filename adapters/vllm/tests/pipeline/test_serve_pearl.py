@@ -1,5 +1,5 @@
 """serve-openai's Pearl+ arm (`serve_pearl`) on CPU, over test_serve_openai's stand-in engine and committer: one Pearl+
-epoch a Commit window, its composition Pearl-C beside sampled proofs cut at Pearl-C's sites, each engine step's forward
+epoch a Commit window, its composition Pearl-C beside SPOT cut at Pearl-C's sites, each engine step's forward
 one pass ended at the model runner the committer patched first (`pearl_c.passes.hook_steps`' ``runner``; the class's
 wrapper, under the committer's patch, never runs), and each window's ``pearl/w<k>/served.json`` and ``coins.json``, from
 which Pearl+'s window record W is written (`pearl_c.window.write`).
@@ -177,7 +177,9 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: {
         w: bytes([w + 1]) * 32 + salt_key for w in weights})
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPD.weight_roots)
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
     monkeypatch.setattr(verifier, "coins", random.Random(0).randbytes)
     monkeypatch.setattr(verifier, "executable", lambda: Path("lean"))

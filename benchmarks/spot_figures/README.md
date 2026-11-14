@@ -13,8 +13,8 @@ forms are the planner's.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
-                                                       # [--request workload] [--workers N] [--points N] [--no-lean]
-                                                       # [--serving measured]
+                                                       # [--request workload] [--served request] [--workers N]
+                                                       # [--points N] [--no-lean] [--serving measured]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/total_cost.py counts --line tokens_datacenter --beta 0.1 --out COUNTS.json
                                                        # a line's design as the counts the verifier's rule takes
@@ -29,7 +29,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`, `serving_rate`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`, `headline`, `serving_rate`, `certifier`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -165,6 +165,16 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     (A″) are plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its
     sessions and the shares of its proving in the phase's statements and on padding. No code builds a verification
     phase of a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
+  - A two-stage point's bound is for a deployment whose second stage has the coins its cells read first: on fewer it
+    refuses every honest run. Each two-stage exfiltration series carries them at every β that has a design
+    (`second_stage.at_design`): a sampled replay block's cells, the proof blocks sampled of them and the bytes they
+    read first; the rounds of 2^20 bytes and the challenger's 64-byte coins that hold the first reads of the K replay
+    blocks a verification phase samples, and the replay blocks whose first reads one commitment of the challenger's
+    holds (`challenger.MAX_COINS` coins); Lean's bound on the chance the second stage then refuses an honest run at a
+    first-stage coin the first stage accepts, K·Σ_t k_t·2^−64 (`SpotFlock.secondDraw_refused_le_first`); and that
+    bound added up over the replay blocks the scope samples. `total_cost.limits`' second draw is the same read with a
+    block type of under one proof block a replay block counted at the chance a replay block has it; `at_design`
+    counts every cell, the theorem's condition.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's verification phase beside each, thin and dashed;
@@ -216,8 +226,11 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
       size classes up to a threshold sampled together and each wider one apart), and request-level sampling. A
       two-stage bound is `CompiledTwo.Exfil`'s count (`optimize.two_stage_exfil`): every admissible set of incorrect
       proof blocks, each charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it
-      commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, every one
-      of its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`), in
+      commits. Beside it (dash-dot) is the same design with each request charged at most the bits it serves, each of
+      its tokens as the token select's 32-bit output word, the `design` card's `token_bytes` (`served_bits`): at most
+      the response cap of the model's `certifier` card, the network certifier's schedule (`WardenParams`), whose cap
+      ingress refuses a request past and `NetTiming.Guarantees.ResponseCapped` holds each response to, else every one
+      of its tokens (`--served request` takes every token under a cap too), in
       `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`), which still counts which of a request's proof
       blocks are incorrect, and never above the scope's served bits (`card_influenceTwo_le_min`). `--request
       workload` sizes a request as the `workload` card's instead of the census's mean. The appendix figure adds the
@@ -352,7 +365,9 @@ Limits of the model:
   that count for one design over the population (`TwoStageCheckPatternsSound`); no Lean statement carries it across
   the scope's verification phases.
 - The served bits count every token of a request as served, as the token select's output word alone: a circuit that
-  returns more (logits, state) serves more, and the cap is then too low.
+  returns more (logits, state) serves more, and the cap is then too low. Under the certifier's response cap a
+  request serves at most S, which the patterns' form reads as exactly S, and the tie of the statement's served outputs
+  to the tokens the certifier releases is pending, so the certifier card is provisional.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
   one token with its step's batch, the requests in flight a request's lifetime over the window (`LIVE`), from state it
   retains.
