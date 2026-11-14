@@ -3176,6 +3176,11 @@
         "adapters/vllm/verity_vllm/protocols/remote_bandwidth/registry.py": "verity/protocols/accounting/poub/prover/node_store/registry.py",
         "adapters/vllm/verity_vllm/protocols/remote_bandwidth/verify.py": "verity/protocols/accounting/poub/prover/node_store/verify.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/interface/CoreProtocol/SiteV2Guards.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteV2Guards.lean"
+      }
     }
   ]
 }
