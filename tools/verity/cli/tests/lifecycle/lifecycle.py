@@ -64,7 +64,7 @@ from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
 from verity.commitments import hm96
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[5]
 
 # --- the tiny model and its circuit ------------------------------------------------------------------------------------
 
