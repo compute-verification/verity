@@ -349,7 +349,8 @@ def across(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, An
     piece ``across``, on `link`'s read): ``logged``, ``order`` and ``audit``, each ``{"accepted", "why"}``, ``audit``
     with ``complete`` too (whether the boundary stream's audit record says every one of its entries ran), with
     ``case``, the boundary record's index in the log (``received``) and the two registrations' digests (``earlier``,
-    ``later``). ``{"refused": reason}`` where Lean refuses the input or can't run."""
+    ``later``). ``{"refused": reason}`` where Lean refuses the input, and that with ``"answered": False`` where it
+    can't run (`verifier.lean`)."""
     return V.lean("across", link(handoff, first, outcome))
 
 

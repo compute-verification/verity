@@ -970,7 +970,7 @@ def test_a_history_source_is_the_root_the_verifier_computes():
         assert "refused" in lean(**change), change
         got = V.check(rec, **args)
         assert not got.ok and got.codes == (R.HISTORY,), (change, got)
-        assert got.verifiers["lean"].keys() == {"refused"} and got.verifiers["python"].keys() == {"refused"}
+        assert got.verifiers["lean"] == got.verifiers["python"] == {"ok": False, "codes": [R.HISTORY]}, (change, got)
 
 
 def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
