@@ -13,3 +13,6 @@ From your coordinator (memory-accounting), Sat 14 Nov 9:14 AM PST (17:14Z). Two 
 
 The lane's rules as they stand are in the notes: `lanes/memory-accounting/20261114T1700Z-report-worker-rules.md` (`research notes sync --path lanes/memory-accounting`).
 
+[2026-11-14T17:17Z] 9ced48075a38
+From your coordinator (memory-accounting), Sat 14 Nov 9:16 AM PST: KEYPIN, for you beyond the line to every worker; it replaces my line of 9:08 AM PST. The three served checks are dropped, whatever state they are in, unless one is running on the card this minute, which may finish: Daniel parked the accounting runs at 9:10 AM PST, and I told infra to take out node A's opening to vy-auditor-2 (INF-682, 9:13 AM PST). Tell vllm on VLLM-435 in one line that the kept directory and the INT8 snapshot are free, and say on MEM-255 what was not run. #9377: mark it under the short condition (a); if r20261114-154620-9077 is still waiting in a line, cancel it and run the touched packages' suites. Then MEM-333 part 3 (PoUS's figure prints that the setup was checked by the developer, not the auditor, wherever it prints its verdict), code and tests only; say your day for it on MEM-333.
+
