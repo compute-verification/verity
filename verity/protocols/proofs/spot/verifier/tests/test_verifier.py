@@ -34,8 +34,7 @@ def _args(reg, draw, **change) -> dict:
 
 
 def _python_record(a: dict) -> dict:
-    opened = audit.less_own_reads(audit.session_registered(a["verdicts"], a["registration"]), a["registration"])
-    return audit.audit_record(*a.values(), session_registered=opened)
+    return audit.audit_record(*a.values(), session_registered=audit.held_reads(a["verdicts"], a["registration"]))
 
 
 def _public(rec: dict) -> tuple:
@@ -132,8 +131,7 @@ def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_
         a = {**_args(reg, draw, registration=registration, verdicts=verdicts), "session_roots": given}
         got = V.audit_record(**a)
         assert got["verifiers"]["agree"] and got["verifiers"]["lean"]["failed"] == failed, got["verifiers"]
-        opened = audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
-        py = audit.audit_record(**a, session_registered=opened)
+        py = audit.audit_record(**a, session_registered=audit.held_reads(verdicts, registration))
         assert canonical_json({k: v for k, v in got.items() if k != "verifiers"}) == canonical_json(py)
     assert got["checks"]["registered"]["detail"]["opened"] == [x]
 

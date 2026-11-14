@@ -170,8 +170,8 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
       simp only [hr, hj, ↓reduceIte]
   all_goals exact Iff.rfl
 
-theorem recordChecks_nil (c : Commitment) (e : Evidence) :
-    OneStage.recordChecks c.record (Flock.hexOf c.digest) e = #[] ↔ UnitsProved c e := by
+theorem recordChecks_nil (named : Array String) (c : Commitment) (e : Evidence) :
+    OneStage.recordChecks named c.record (Flock.hexOf c.digest) e = #[] ↔ UnitsProved named c e := by
   unfold OneStage.recordChecks
   simp only [Array.map_eq_empty_iff, Array.filter_eq_empty_iff]
   have hf : ∀ cs : Array (String × Check),
@@ -1263,7 +1263,7 @@ theorem registered_law {v : Registration.Verifier} {rec law : Json} (h : Registe
 theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :
     OneStage.check p c e = .accept pub prof ↔
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
-        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsProved p.windowValues c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
   unfold OneStage.check
@@ -1278,9 +1278,9 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     simp only [h1, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hd]
     by_cases h2 : Draw.checkDraw e.draw (getD c.record "population") law = #[]
     · simp only [h2, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-      by_cases h3 : OneStage.recordChecks c.record (Flock.hexOf c.digest) e = #[]
+      by_cases h3 : OneStage.recordChecks p.windowValues c.record (Flock.hexOf c.digest) e = #[]
       · simp only [h3, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-        have hu := (recordChecks_nil c e).1 h3
+        have hu := (recordChecks_nil p.windowValues c e).1 h3
         have hdr := (checkDraw_nil _ _ _).1 h2
         rcases hv : OneStage.verdictOf e.verdicts with ⟨⟨⟩, ⟨⟩⟩ | r | r
         · have hva := (verdictOf_accept _).1 hv
@@ -1313,11 +1313,11 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           rintro ⟨law', d', n', -, -, -, hva, -⟩
           have := (verdictOf_accept _).2 hva
           rw [hv] at this; cases this
-      · have : (OneStage.recordChecks c.record (Flock.hexOf c.digest) e).isEmpty = false := by
+      · have : (OneStage.recordChecks p.windowValues c.record (Flock.hexOf c.digest) e).isEmpty = false := by
           simpa [Array.isEmpty_iff] using h3
         simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
         rintro ⟨law', d', n', -, -, hu, -⟩
-        exact h3 ((recordChecks_nil c e).2 hu)
+        exact h3 ((recordChecks_nil p.windowValues c e).2 hu)
     · have : (Draw.checkDraw e.draw (getD c.record "population") law).isEmpty = false := by
         simpa [Array.isEmpty_iff] using h2
       simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
@@ -1337,7 +1337,7 @@ registered population, its units proved and served as sampled, and verdicts that
 `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat)
     (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)
-    (hu : UnitsProved c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
+    (hu : UnitsProved p.windowValues c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
     (hn : nat? (getD c.record "population") = some n) :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
   (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩

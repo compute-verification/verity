@@ -23,7 +23,9 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
   registered values' reads against the registered roots, a read named by one of the record's own ports taken only at
-  that port's root (`UnitsProved`), and the receipt names the commitment's digest (`Receipt`);
+  that port's root, and a read of a window value the verifier names (`Params.windowValues`), not one of the record's
+  own, taken only at the root of that value's entry in the record's `window.activations.values` (`UnitsProved`), and
+  the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
@@ -367,11 +369,12 @@ def Receipt (c : Commitment) (e : Evidence) : Prop :=
 
 /-- The roots the verifiers that accepted report opening the sessions' registered reads against, for the
 record's own values (its roots' ports and its registered values), less the reads of its own ports at their own roots
-(each port's last root, `Record.byPort`): `{value: root}`, a value reported under two roots mapped to null; none when no
-such verdict reports any (`audit.session_registered` and `audit.less_own_reads`, which `Record.sessionRegistered`,
-`Record.ownRegistered` and `Record.lessOwnReads` compute from the verdicts). -/
-def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
-  Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs))
+(each port's last root, `Record.byPort`), and for the window values `named` that are not its own, less the reads at the
+roots of their entries in its `window.activations.values`: `{value: root}`, a value reported under two roots mapped to
+null; none when no such verdict reports any (`audit.held_reads`, which `Record.sessionRegistered` and
+`Record.heldReads` compute from the verdicts). -/
+def openedRoots (named : Array String) (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
+  Record.heldReads named rec (Record.sessionRegistered vs)
 
 /-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
 the same key and root in the second. -/
@@ -382,18 +385,19 @@ def SameRoots (a b : Array (String × Json)) : Prop :=
 exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and, when the record registers values or the verifiers report reads of the record's own values,
-those reads, less those of its own ports at their own roots (`openedRoots`), were opened against exactly the record's
-`{value: root}` (`Record.registeredRoots`, each value's last entry). -/
-def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
+each port); and, when the record registers values or the verifiers report reads of the record's own values or of the
+window values `named`, those reads, less those of its own ports at their own roots and those of a window value at its
+window entry's root (`openedRoots`), were opened against exactly the record's `{value: root}`
+(`Record.registeredRoots`, each value's last entry). -/
+def UnitsProved (named : Array String) (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
     (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
-  ((field? c.record "registered").isSome ∨ (openedRoots c.record e.verdicts).isSome →
-    SameRoots ((openedRoots c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
+  ((field? c.record "registered").isSome ∨ (openedRoots named c.record e.verdicts).isSome →
+    SameRoots ((openedRoots named c.record e.verdicts).getD #[]) (Record.registeredRoots c.record))
 
 /-- The verdicts accept (`verdict` of `audit_record`): every verdict that ran (`accepted` not null) accepted; at least
 one is of record (`of_record` truthy); and every verdict of record ran. -/
@@ -437,7 +441,7 @@ def AcceptMeans : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
     OneStage.check p c e = .accept pub prof →
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
-        UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+        UnitsProved p.windowValues c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n
 

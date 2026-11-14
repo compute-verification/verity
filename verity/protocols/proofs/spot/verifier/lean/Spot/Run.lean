@@ -46,7 +46,8 @@ check the stream ran on it, in the stream's order.
   `SecondStage.replayReturns`), as its `statements` check
   (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
   record does. Each audit record takes the sessions' reads of its registration's own ports at their own roots
-  (`Record.lessOwnReads`); under a two-stage rule round 2 holds their rows.
+  (`Record.lessOwnReads`); under a two-stage rule round 2 holds their rows. Each holds the reads of the window values
+  its params name to their entries' roots (`Record.windowReads`).
 
 A step's refusal is `{"step", "codes"}`; a decided run is `{"receipt", "draw", "read", "symbol", "public", "audit"}`, the
 audit record as the text of Python's `canonical_json`, and under a two-stage rule `interior`, the interior registration's
@@ -187,13 +188,15 @@ def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json)
       if why == Challenger.FAMILY_ROOT then "family" else "coins"
   | _, _, _, _ => some "coins"
 
-/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions. -/
-private def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
-    (served sessionRoots : Json) : V Json :=
-  do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
+/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, holding the reads
+of the window values its params name (`OneStage.Params.windowValues`). -/
+private def audit (i : Input) (named : Array String) (record receipt draw law : Json) (proved : Array Int)
+    (instances : Int) (served sessionRoots : Json) : V Json :=
+  do Record.record (← Record.inputOf (Json.mkObj ([("registration", record), ("receipt", receipt),
     ("draw", draw), ("law", law), ("proved_units", Json.arr (proved.map Lean.toJson)),
     ("instances", Lean.toJson instances), ("statement", i.statement), ("verdicts", Json.mkObj i.verdicts.toList),
-    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots)]))
+    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots)] ++
+    if named.isEmpty then [] else [("window_values", Json.arr (named.map Json.str))])))
 
 /-- Under a two-stage rule, the check's query is the rule's `grain`. -/
 private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
@@ -252,7 +255,8 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
   | none => return (true, [])
   | some (it, receipt, draw, law, read) => do
     let proved := it.provedUnits.getD (Draw.proved draw)
-    let rec_ ← audit i it.record receipt draw law proved (it.instances.getD proved.size) it.served it.sessionRoots
+    let rec_ ← audit i it.params.windowValues it.record receipt draw law proved (it.instances.getD proved.size) it.served
+      it.sessionRoots
     let strata ← Partition.strata it.params.verifier.program it.params.verifier.query
     let own : SecondStage.Own :=
       { sample, parts := SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
@@ -305,7 +309,7 @@ def run (i : Input) : V Json := do
     let shown := if i.outputs.isEmpty then Json.mkObj [] else getD ((ofRecord[0]?.map (·.2)).getD Json.null) "public"
     let proved := i.provedUnits.getD drawn
     let instances := i.instances.getD proved.size
-    let rec_ ← audit i i.record receipt draw derived proved instances i.served i.sessionRoots
+    let rec_ ← audit i i.params.windowValues i.record receipt draw derived proved instances i.served i.sessionRoots
     let (accepted₂, staged) ← interiorAudit i (drawn.map Int.toNat) inner
     let accepted := jeq (getD rec_ "accepted") (.bool true) && accepted₂
     return Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),

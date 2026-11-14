@@ -523,7 +523,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "window_values")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -618,12 +618,23 @@ def decode_params(j) -> dict:
         raise D.Reject(str(e)) from None
     if "challenger" in j:
         _challenger(j["challenger"], window)
+    if "window_values" in j:
+        _window_values(j["window_values"], j["ports"], j["registered"] or {})
     delta = ratio(j["delta"])
     if not 0 < delta < 1:
         raise D.Reject("delta is not in (0, 1)")
     if R.unwindowed(PROGRAMS[sha], j["registered"] or {}, j.get("row_schemas"), window, fixed, j["log"]):
         raise D.Reject("a value it doesn't hold across windows that the log registered, and no window root")
     return {**raw, "program": PROGRAMS[sha], "delta": delta}
+
+
+def _window_values(named, ports: dict, registered: dict) -> None:
+    """`OneStage.paramsParsed`'s `window_values`: a list of strings, none a port or a value the verifier expects
+    registered."""
+    if not (isinstance(named, list) and all(isinstance(v, str) for v in named)):
+        raise D.Reject("window values are a list of strings")
+    if any(v in ports or v in registered for v in named):
+        raise D.Reject("a window value is a port or a registered value of the verifier's")
 
 
 def _challenger(ch, window) -> ChallengerKey:
@@ -736,7 +747,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return "reject", "coins"
     out = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                              e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"],
-                             audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec))
+                             audit.held_reads(e["verdicts"], rec, p.get("window_values") or ()))
     if not out["accepted"]:
         if not all(x["ok"] for x in out["checks"].values()):
             return "reject", "checks"
@@ -1418,7 +1429,11 @@ REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "pr
 def _record_input(j) -> Fraction:
     """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does; δ."""
     ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
-    _exactly(j, RECORD_INPUT_KEYS, "the record's input")
+    _exactly(j, RECORD_INPUT_KEYS | ({"window_values"} if isinstance(j, dict) and "window_values" in j else set()),
+             "the record's input")
+    named = j.get("window_values")
+    if not (named is None or isinstance(named, list) and all(isinstance(v, str) for v in named)):
+        raise D.Reject("window_values is not a list of strings")
     reg, draw_ = j["registration"], j["draw"]
     if not (isinstance(reg, dict) and all(k in reg for k in REGISTRATION_KEYS) and _int(reg["population"])
             and isinstance(reg["anchors"], list) and isinstance(reg["roots"], list)
@@ -1445,10 +1460,10 @@ def _record_input(j) -> Fraction:
 
 def audit_record_of(j) -> dict:
     """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), and the registered
-    roots the verdicts' own for the registration's values less those of its own ports at their own roots
-    (`Record.lessOwnReads`)."""
+    roots the verdicts' own for the registration's values less those of its own ports at their own roots, with those of
+    the window values it names less the reads at their window entries' roots (`Record.heldReads`)."""
     delta = _record_input(j)
-    opened = audit.less_own_reads(audit.session_registered(j["verdicts"], j["registration"]), j["registration"])
+    opened = audit.held_reads(j["verdicts"], j["registration"], j.get("window_values") or ())
     return audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
                               j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
                               opened)
@@ -1456,6 +1471,11 @@ def audit_record_of(j) -> dict:
 
 def record(j):
     return codec.canonical_json(audit_record_of(_json(j))).decode()
+
+
+def _named(params: dict) -> dict:
+    """`Run.audit`'s `window_values`: the params' window values, given only when there are some."""
+    return {"window_values": list(params["window_values"])} if params.get("window_values") else {}
 
 
 def _closure_map(closure):
@@ -1589,7 +1609,7 @@ def run(j):
     out = audit_record_of({"delta": j.get("delta"), "draw": drawn["draw"], "instances": instances, "law": derived,
                            "proved_units": proved, "receipt": receipt, "registration": rec, "served": j.get("served"),
                            "session_roots": j.get("session_roots"), "sessions": sessions, "statement": j.get("statement"),
-                           "verdicts": verdicts})
+                           "verdicts": verdicts, **_named(p)})
     accepted = out["accepted"] is True
     staged = {}
     if inner is not None:
@@ -1598,7 +1618,7 @@ def run(j):
             "delta": j.get("delta"), "draw": inner["draw"], "law": inner["law"], "proved_units": proved2,
             "instances": len(proved2) if it["instances"] is None else it["instances"], "receipt": inner["receipt"],
             "registration": it["record"], "served": it["served"], "session_roots": it["session_roots"],
-            "sessions": sessions, "statement": j.get("statement"), "verdicts": verdicts})
+            "sessions": sessions, "statement": j.get("statement"), "verdicts": verdicts, **_named(it["decoded"])})
         try:
             strata = P.strata(it["decoded"]["program"], it["decoded"]["query"])
         except (P.QueryRefused, ValueError) as e:

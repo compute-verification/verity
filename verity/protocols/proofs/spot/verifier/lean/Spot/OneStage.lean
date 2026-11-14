@@ -49,6 +49,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   the window registers for it (`HistoryTable.rootsOf`), and a supplied value's source `{"history": "H/root"}` or
   `{"history": "H/domain"}` then the bytes of the root or domain id it computed for table `H` (`HistoryTable.resolve`),
   refused in any other form;
+  and it may add `window_values`, a list of strings its caller names (one-stage names none): values the record commits in
+  its window's `activations.values`, whose reads a verifier of record reports the record's checks hold to that entry's
+  root (`Record.windowReads`), refused in any other form and where one is a port or a value it expects registered;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -65,7 +68,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R8 (`Registration.check`), then the
   record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
   roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
-  the registered one, and a read of the record's own port taken at that port's own root, `Record.lessOwnReads`). It rejects when one fails or
+  the registered one, a read of the record's own port taken at that port's own root, `Record.lessOwnReads`, and a read
+  of a value `window_values` names, not the record's own, taken only at the root of that value's entry in the record's
+  `window.activations.values`, `Record.windowReads`). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the sampled and proved units with the exact bounds on incorrect proof blocks at δ (`Bound.boundOf`,
@@ -97,6 +102,9 @@ structure Params where
   delta : Core.Ratio
   /-- the auditor's challenger the sample's coins come from, and their family; none when the verifier samples from its own -/
   challenger : Option (Challenger.ChallengerKey × String) := none
+  /-- the window values the record's checks hold the verifiers' reads of to their entries in the record's
+  `window.activations.values` (`Record.windowReads`), as the caller names them; none by default -/
+  windowValues : Array String := #[]
 
 structure Commitment where
   record : Json
@@ -245,6 +253,7 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   let keys := if (field? j "pool").isSome then keys.push "pool" else keys
   let keys := if (field? j "history").isSome then keys.push "history" else keys
+  let keys := if (field? j "window_values").isSome then keys.push "window_values" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -381,13 +390,20 @@ def paramsParsed (j : Json) : V Params := do
       | some n, .str p => pure (n, p)
       | _, _ => throw "a declaration's day is not a natural number or its program not a string"
     pure (some (day, ds))
+  let windowValues ← match field? j "window_values" with
+    | none => pure #[]
+    | some (.arr vs) => vs.mapM fun v => match v with
+      | .str v => if ports.any (·.1 == v) || registered.any (·.1 == v) then
+          throw s!"window value {v}: a port or a registered value of the verifier's, not a window's" else pure v
+      | _ => throw "window values are a list of strings"
+    | some _ => throw "window values are a list of strings"
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
                                     declared, seedSalt, pool, tied },
-                      delta, challenger }
+                      delta, challenger, windowValues }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
     throw (s!"registered values {again.toList} were registered by an earlier record of the log under the domains they " ++
@@ -446,13 +462,15 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-- `audit_record`'s checks after the sample's (`Record.checks`): the names of those that fail. The registered roots the
 sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
-values (`Record.ownRegistered`), less the reads of its own ports at their own roots (`Record.lessOwnReads`). -/
-def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
+values (`Record.ownRegistered`), less the reads of its own ports at their own roots (`Record.lessOwnReads`), with
+those of the window values `named` less the reads at their window entries' roots (`Record.windowReads`,
+`Record.heldReads`). -/
+def recordChecks (named : Array String) (rec : Json) (digest : String) (e : Evidence) : Array String :=
   let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
   let roots := e.sessionRoots.map entries
   let cs := Record.checks rec e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson) (Lean.toJson e.instances)
     digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots
-    (Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered e.verdicts)))
+    (Record.heldReads named rec (Record.sessionRegistered e.verdicts))
   (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
 
 
@@ -518,7 +536,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
   | .ok law =>
   let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") law
   if !drawCodes.isEmpty then .reject s!"draw: {", ".intercalate drawCodes.toList}" else
-  let failed := recordChecks rec_ (Flock.hexOf c.digest) e
+  let failed := recordChecks p.windowValues rec_ (Flock.hexOf c.digest) e
   if !failed.isEmpty then .reject s!"the audit's checks failed: {", ".intercalate failed.toList}" else
   match verdictOf e.verdicts with
   | .reject r => .reject r
