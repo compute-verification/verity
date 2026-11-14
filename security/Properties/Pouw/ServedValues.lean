@@ -8,13 +8,13 @@ public import Properties.Pouw.PeriodJ10R
 
 `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod` is stated in words: except with probability
 `δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the windows
-before the first refusal. `RightValues` states that bound in AND gates of the registered declared circuit under its
+before the first refusal. `RightValues` states that bound in AND gates of the registered circuit under its
 pinned lowering (`Verity.creditSize lower D`): except with probability δ_coin + δ_crypto,
 an accepted period's right values cover at least `(1 − ε_skip)₊·S` AND gates. It is the values guarantee, "declared
 size, values certified".
 
 *Not a compute claim.* Right values aren't work: one cheap faulty value upstream can make its
-whole cone right, and values that read no live coin can be replayed. So this says which of the declared circuit's
+whole cone right, and values that read no live coin can be replayed. So this says which of the registered circuit's
 values are certified, never what the prover spent. A compute guarantee for the served PoUW is a separate statement,
 which adds SAK to H1.
 
@@ -23,7 +23,7 @@ which adds SAK to H1.
   which are outputs of its block. Each unit is one instance of its `K`'s `PouwH1WindowTile_v1{UNIT=…,K=…}`
   (`Credit.layoutOf`), and its proof block is that instance's gates.
 * `BlockMap.size`: block `t`'s credit size, the AND count (`Verity.Circuit.andSize`) of its gates outside `ledger`,
-  the gates of `lower D` another protocol already credits (sampled proofs certify the served GEMMs too). One
+  the gates of `lower D` another protocol already credits (SPOT certifies the served GEMMs too). One
   ledger, so no gate is counted twice, and the blocks' sizes sum to at most the credit `Verity.creditSize lower D`
   (`Proofs.Pouw.ServedValues`' `sum_size_le_creditSize`).
 * `liveSize`, `creditedSize`: the credited size `S`, the size of each live block of credited words over the windows
@@ -57,7 +57,7 @@ namespace Properties.Pouw.ServedValues
 open Properties.Pouw.PeriodJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-- **The declared circuit's proof blocks and its words' bits**, the public map from words to gates. `gates t` is proof
+/-- **The registered circuit's proof blocks and its words' bits**, the public map from words to gates. `gates t` is proof
 block `t`'s gates in `lower D`, the registered declaration `D` under the lowering `lower` pinned at registration: the
 gates of the instance of its subcircuit template at its shape. `bits i` is word `i`'s bits, gate `i` of the word-level
 circuit `Cd` lowered to `lower D`'s one-bit gates. The blocks are disjoint and hold no input gate. Each word of block
@@ -88,9 +88,9 @@ def liveSize {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live :
 
 open Classical in
 /-- **The credited size `S`**: the live size of every block of the windows before the first refusal
-(`CreditWindows.AcceptedUpTo`), `creditLive` with each block's size in place of its words. -/
+(`CreditExecutionPhases.AcceptedUpTo`), `creditLive` with each block's size in place of its words. -/
 noncomputable def creditedSize {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : ExecutionPhasePlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditExecutionPhases (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then ∑ t : Fin Np, (liveSize Sc Cd Np (Wp.liveAt x w) sz t : ℝ) else 0
 
@@ -121,7 +121,7 @@ noncomputable def creditFloor {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (
   max (1 - epsSkip Sc Cd Np j Nlive S sz a b Λ δs) 0 * S
 
 /-- **The served PoUW's values in AND gates.** Take `H1J10RCheckedCreditPeriod`'s period and premises without
-`UnitFixed` (and without the play's `folded` words): a declared circuit `Cd` and a scheme `Sc` run as a period of at
+`UnitFixed` (and without the play's `folded` words): a registered circuit `Cd` and a scheme `Sc` run as a period of at
 most `n ≥ 1` windows over the sampling block's tile stratum `s_T` of `σ`, with `Credit.window`'s inputs (`ws`) any
 function of the period's coins. Add the registered declaration `D`, the lowering `lower` pinned at registration,
 `lower D`'s proof blocks and words' bits (`M : BlockMap`), and the gates other protocols credit (`ledger`). Then,
@@ -141,7 +141,7 @@ def RightValues : Prop :=
     (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n)
     (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (_hKd : 1 ≤ k sT)
     (D : Verity.RegisteredCircuit) (lower : Verity.RegisteredCircuit → Verity.Circuit) (M : BlockMap Cd (tileCount σ sT) lower D)
-    (ledger : Finset (Fin (lower D).N)) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
+    (ledger : Finset (Fin (lower D).N)) (ws : CreditExecutionPhases (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)

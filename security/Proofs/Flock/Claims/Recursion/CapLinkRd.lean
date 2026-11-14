@@ -52,7 +52,7 @@ values at the position (`rd`), and the link finder's two-reading term (`LinkFind
 
 * **The plurality single reading after the round** (`capPlurRd`): the value that runs forked at the round from `d₀`
   read alone most often. It reads only `d₀`'s coins before the round (`capPlurRd_prefix`).
-* **One base run's forks** (`offRd_le_succ`): `LinkFinder.succ_ge` at `drawGame`: forks that read anything but their
+* **One base run's forks** (`offRd_le_succ`): `LinkFinder.succ_ge` at `sampleGame`: forks that read anything but their
   plurality alone, at most as often as the link finder over them succeeds, plus `1/(eM)`.
 * **The link** (`Pr_rdOff_le_capHit`): where a run reads something exactly where it accepts and queries `q`, and any
   two different values that two runs sharing the coins before `q`'s round read (one run twice included) tie a
@@ -110,19 +110,19 @@ theorem offRd_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [
     (Pr fun e => (f e).Nonempty ∧ f e ≠ {plurRd f}) ≤
       (Ex fun e => Ex fun vs : Fin M → Dr => ind (LinkFinder.Succ f) (e, (List.finRange M).map vs)) +
         1 / (Real.exp 1 * M) := by
-  have hX : ∀ v, LinkFinder.pRd (drawGame Dr) (drawS Dr) f v ≤
-      LinkFinder.pRd (drawGame Dr) (drawS Dr) f (plurRd f) := fun v => by
-    simp only [LinkFinder.pRd, expect_drawGame]
+  have hX : ∀ v, LinkFinder.pRd (sampleGame Dr) (drawS Dr) f v ≤
+      LinkFinder.pRd (sampleGame Dr) (drawS Dr) f (plurRd f) := fun v => by
+    simp only [LinkFinder.pRd, expect_sampleGame]
     have := plurRd_max f v
     rwa [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Pr_eq_Ex] at this
-  have h := LinkFinder.succ_ge (drawGame Dr) (drawS Dr) f hX M hM
+  have h := LinkFinder.succ_ge (sampleGame Dr) (drawS Dr) f hX M hM
   rw [LinkFinder.expect_finderG] at h
-  simp only [expect_drawGame, expectN_drawGame] at h
-  have hr := LinkFinder.rRd_eq (drawGame Dr) (drawS Dr) f
+  simp only [expect_sampleGame, expectN_sampleGame] at h
+  have hr := LinkFinder.rRd_eq (sampleGame Dr) (drawS Dr) f
   have hoff : (Pr fun e => (f e).Nonempty ∧ f e ≠ {plurRd f}) =
-      LinkFinder.rRd (drawGame Dr) (drawS Dr) f - LinkFinder.pRd (drawGame Dr) (drawS Dr) f (plurRd f) := by
+      LinkFinder.rRd (sampleGame Dr) (drawS Dr) f - LinkFinder.pRd (sampleGame Dr) (drawS Dr) f (plurRd f) := by
     unfold LinkFinder.rRd LinkFinder.pRd
-    rw [← expect_sub, expect_drawGame, Claims.Bridge.Pr_eq_Ex]
+    rw [← expect_sub, expect_sampleGame, Claims.Bridge.Pr_eq_Ex]
     refine congrArg Ex (funext fun e => ?_)
     by_cases h2 : f e = {plurRd f}
     · simp [ind, h2]

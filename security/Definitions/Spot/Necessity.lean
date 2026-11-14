@@ -59,7 +59,7 @@ def Accepts (chk : U → T → Prop) (A : Finset U) {k : ℕ} (d : Fin k → U) 
   (∀ u ∈ A, chk u σ) ∧ ∀ i, chk (d i) σ
 
 /-- The probability of an event of the sample, over `k` independent samples from `π`: core's `Verity.Game.prPMFReal`
-under their law `iid π k`. -/
+under their distribution `iid π k`. -/
 noncomputable abbrev prob [Fintype U] (π : PMF U) (k : ℕ) (E : (Fin k → U) → Prop) : ℝ :=
   Verity.Game.prPMFReal (Verity.Game.iid π k) E
 

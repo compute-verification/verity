@@ -29,7 +29,7 @@ import re
 from collections.abc import Iterable
 
 from verity_vllm.program import compact as CP
-from verity_vllm.program import prune
+from verity_torch import prune
 from verity_vllm.program.sampling_event import is_sampling_event
 
 _INT = re.compile(r"\d+")

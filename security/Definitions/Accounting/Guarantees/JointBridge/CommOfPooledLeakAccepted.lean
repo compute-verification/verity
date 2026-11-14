@@ -57,7 +57,7 @@ set_option linter.unusedVariables false
 /-- **The network certifier's per-period guarantee, pooled** (conditional on its two inputs at each execution phase).
 On a run that realizes the network certifier's monitoring period of `m` sampled audits at the claim `c.K`
 (`RealizesCommOfPooledLeakAccepted`: the network audit's own coins are the `m` verification phases' coins, the deployed
-network certifier runs its code on its host, `trusted-host`, the realization's `trusted`, and the claim is the
+network certifier runs its code on its host, `trusted-device`, the realization's `trusted`, and the claim is the
 period's good event at the bound `Fmax` on its incorrect proof blocks), given
 
 * `hesc`, the miss probability given the earlier phases' coins, at the realization's `acc` and `W` and at every
@@ -83,7 +83,7 @@ def CommOfPooledLeakAccepted : Prop :=
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ}
     {Dj m Fmax : ℕ} (R : RealizesCommOfPooledLeakAccepted r c.K L Kₒ S lay k reg Dj m Fmax)
     (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
-    (hesc : MonitoringPeriodEscapes Set.univ R.acc R.W q e)
+    (hesc : MonitoringPeriodMissProb Set.univ R.acc R.W q e)
     (hleak : PhaseLeaks lay k reg Dj R.sw R.Pw R.ρ R.op Set.univ R.acc R.W R.record e'),
     r.Sound c p .network (Real.exp (-(q * Fmax)) + ∑ i, e i + ∑ i, e' i)
 

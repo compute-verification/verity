@@ -17,7 +17,7 @@ from starlette.concurrency import run_in_threadpool
 
 from . import crons, subscriber
 from .deps import (CANARY_DONE, CANARY_SENT, DEAD, DEAD_TOPIC, LAST_DONE, LAST_ENQUEUED, LAST_SUCCESS, OLDEST, TOPIC, Deps,
-                   error, production)
+                   error, deployed)
 
 MAX_SKEW_S = 300
 HEALTH_NOTE = ("from Vercel's Runtime Cache, best effort: null is unknown (a cold or evicted cache), not down; "
@@ -50,7 +50,7 @@ def bearer(request: Request, secret: str | None) -> bool:
     return bool(secret) and hmac.compare_digest(got.encode(), f"Bearer {secret}".encode())
 
 
-def create_app(deps: Callable[[], Deps] = production) -> FastAPI:
+def create_app(deps: Callable[[], Deps] = deployed) -> FastAPI:
     app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
     async def verified(request: Request) -> tuple[Deps, bytes, JSONResponse | None]:

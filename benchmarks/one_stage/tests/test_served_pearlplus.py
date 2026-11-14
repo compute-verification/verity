@@ -138,6 +138,7 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert (tmp_path / "tie.args").read_text().split() == [str(sd), "7", w, str(q / "passes")]
     verify = argv["served_passes.py verify"]
     assert verify[verify.index("--tie") + 1] == w and verify[verify.index("--passes") + 1] == str(q / "passes")
+    assert "--class" not in verify
     pearlplus = argv["served_verdicts.py pearlplus"]
     assert pearlplus[pearlplus.index("--served") + 1] == str(q / "passes" / "served.json")
     assert pearlplus[pearlplus.index("--tie") + 1] == w
@@ -150,8 +151,20 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert (sd / "pearl" / "w7" / "coin.json").exists()
 
 
+def test_under_pearlplus_tie_verify_holds_the_passes_to_the_windows_class(tmp_path):
+    """With PEARLPLUS_CLASS (served_verdicts.sh's, the class the window is committed at) `verify` gets ``--class`` beside
+    ``--tie W``, so it refuses passes that aren't the class's fixed load."""
+    run, sd, _tree = _piece(tmp_path, _epoch(), PEARLPLUS_CLASS="4,32,3")
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    verify = next(a for a in _steps(tmp_path) if Path(a[0]).name == "served_passes.py" and a[1] == "verify")
+    w = str(sd / "private" / "pearlplus" / "window-record.json")
+    assert verify[verify.index("--tie"):verify.index("--tie") + 4] == ["--tie", w, "--class", "4,32,3"]
+    script = (HERE.parent / "served_verdicts.sh").read_text()
+    assert "export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} " in script
+
+
 def test_under_pearlplus_tie_w_is_chained_after_the_serves_first_registration_record(tmp_path):
-    """Where the window serve wrote its first registration record (served_verdicts.sh's weights():
+    """Where the window serve wrote its first docket (served_verdicts.sh's weights():
     SERVE_DIR/deployment-registration.json, which registers the weights before the first request), `retain` gets it as
     ``--previous-record`` beside ``--window-record W``, so W is chained after it and the weights' record is the log's
     first; a serve dir with none leaves W chained after nothing (the test above)."""
@@ -221,7 +234,7 @@ def test_under_pearlplus_tie_a_window_whose_commit_tied_to_w_fails_gets_no_sampl
 
 
 @pytest.mark.parametrize("case", ["held", "unclosed", "refused", "unread"])
-def test_under_pearlplus_tie_and_the_gate_the_piece_draws_only_after_a_period_whose_reserves_held(tmp_path, case):
+def test_under_pearlplus_tie_and_the_gate_the_piece_samples_only_after_a_period_whose_reserves_held(tmp_path, case):
     """Under the gate the window serve closed its Pearl-C period (served_verdicts.sh's serve()), its period.json saying
     whether the lane's reserves since the open were the window's salt sessions alone (``reserves``) and holding the gate's
     close (``close``): the piece samples only after one that closed and held, and once the coin is flipped its RULE line reads
@@ -347,7 +360,7 @@ def test_the_give_up_runs_exactly_when_volunteer_needed_says_yes_and_cant_be_ski
         assert asked["verify"][asked["verify"].index("--over-cap") + 1] == "reject"
 
 
-def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_draw(tmp_path):
+def test_under_the_gate_the_untied_piece_holds_its_pearl_c_period_open_from_its_serve_to_right_before_its_sample(tmp_path):
     """Under the gate the untied piece opens the lane's Pearl-C period right before its retained serve and closes it only
     right before verify samples, after the give-up and retain: while it is open its cap of 1, which the serve's salt session
     fills, refuses every other reserve of the lane, so none comes between its close and the sample, which a compose takes

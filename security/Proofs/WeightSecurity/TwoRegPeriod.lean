@@ -40,7 +40,7 @@ open Classical in
 wrong at the committed boundary trace. -/
 theorem regCount_cases (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) (P : Prover Unit) :
     regCount H L x P = 0 ∨ ∃ s Pt d, L.parse x = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧
-      InScopeTwo Pt d s ∧ regCount H L x P = (wrongAtBoundaryAt s Pt d.part (L.regVal H P x ())).card := by
+      InScopeTwo Pt d s ∧ regCount H L x P = (incorrectAtBoundaryAt s Pt d.part (L.regVal H P x ())).card := by
   rcases hs : L.parse x with _ | s
   · exact Or.inl (by simp only [regCount, hs])
   rcases hPt : L.partition s with _ | Pt
@@ -113,7 +113,7 @@ theorem periodTwoReg_of (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) {r�
     (fun t τ hτ => (twoRegRec_accepted_le H (Lv t) (hks t) (href t) _ τ).trans (ENNReal.ofReal_le_ofReal hτ))
     (fun t τ _ => ⟨regCount H (Lv t) τ.2.1.1 τ.2.1.2, fun _ => rfl,
       twoRegRec_missed_le H (Lv t) hx0 (hmiss t) (hrate t) τ⟩)
-    T 0 s M (periodGood_of_plays _ _ T 0 s herr)
+    T 0 s M (monitoringPeriodGood_of_plays _ _ T 0 s herr)
   simp only [Nat.zero_add] at h
   rw [← ENNReal.ofReal_pow hx0] at h
   exact h

@@ -22,8 +22,8 @@ def _piece(name, *ops):
 
 
 def test_pieces_match_the_pipelines_operations():
-    from verity.definitions.registry import sampling as SM
-    from verity.definitions.registry import topp_split as TS
+    from verity_vllm.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import topp_split as TS
 
     rng = np.random.default_rng(7)
     n = 3000
@@ -83,7 +83,7 @@ def _rows(V, T, rng):
 
 def test_lowering_the_keep_word_names_the_word_gate_keep_word():
     """No one circuit holds the keep word, so Flock has no piece for it, and lowering it names what to bind instead."""
-    from verity.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling as SM
     from verity_flock import gf2
     from verity_flock import ir_lower as IL
 
@@ -99,7 +99,7 @@ def test_lowering_the_keep_word_names_the_word_gate_keep_word():
 def test_the_keep_word_counts_every_split_counts_pipeline():
     """The keep word counts its composition's ANDs (`topp_word.ands`), every split count's pipeline among them, so a unit
     holding it is sized before anything lowers it (`test_unit_range`)."""
-    from verity.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling as SM
     from verity_flock import ir_lower as IL
 
     assert {f"pipeline S = {S}" for S in TW.SPLIT_COUNTS} <= {k[0][0] for k in TW.count(16)}
@@ -131,7 +131,7 @@ def test_the_word_gate_keep_word_has_a_piece_for_every_gate(S):
     """What a served top-p select is proved through: at each split count the word-gate keep word (`TopPKeepWord_v2{V,S}`)
     holds only gates Flock has a piece for, so a partition cuts it into proof blocks of word gates."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import dead_free as DF
+    from verity_vllm.definitions.registry import dead_free as DF
     from verity_flock import ir_lower as IL
 
     gates = {i for i, p in _primitives(bind(DF.TopPKeepWordV2, V=16, S=S)).items()
@@ -145,7 +145,7 @@ def test_the_word_gate_keep_words_descriptor_grows_with_its_blocks_not_its_lanes
     128 times the lanes is under 1.5 times the nodes (a node a batch of one word gate over every lane it touches)."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import resolve
-    from verity.definitions.registry import dead_free as DF
+    from verity_vllm.definitions.registry import dead_free as DF
 
     nodes = {V: len(resolve(bind(DF.TopPKeepWordV2, V=V, S=32)).body.nodes) for V in (16, 2048)}
     assert nodes[2048] < 1.5 * nodes[16]
@@ -154,7 +154,7 @@ def test_the_word_gate_keep_words_descriptor_grows_with_its_blocks_not_its_lanes
 @pytest.mark.parametrize("V", [160, 200])
 @pytest.mark.slow
 def test_the_keep_word_is_topp_keep(V):
-    from verity.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import sampling as SM
 
     rng = np.random.default_rng(V)
     x, p, s = _rows(V, 33, rng)
@@ -179,8 +179,8 @@ def test_each_lane_follows_its_own_half_where_the_halves_disagree(monkeypatch):
     """``topp_split``'s own divergent rows (``test_topp_split_halves``): ordinary logits, the step kernels'
     partials constructed so that each half's own scalars decide ``nomask``, in both orders. The circuit, given the same partials
     for its step kernels, is ``sampling.topp_keep`` bit for bit."""
-    from verity.definitions.registry import sampling as SM
-    from verity.definitions.registry import topp_split as TS
+    from verity_vllm.definitions.registry import sampling as SM
+    from verity_vllm.definitions.registry import topp_split as TS
 
     V, S, P = 3000, 16, f32(0.5)
     rows = {35: [False, True], 50: [False, True], 17: [True, False], 47: [True, False]}

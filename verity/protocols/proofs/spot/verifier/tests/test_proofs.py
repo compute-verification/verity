@@ -13,12 +13,12 @@ is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
 names them or not. With it, a public file whose refs point one unit at another unit's rows is refused at its registered
-port. Under the registration's strata (`STRATA`) its public file's units are the population in order, and an
-accepted session under another population is rejected (`population_why`). A registration whose partition object queries
+port. Under the docket's strata (`STRATA`) its public file's units are the population in order, and an
+accepted session under another population is rejected (`population_why`). A docket whose partition object queries
 the program for another population is rejected at setup, by the v2 audit and by `verify` alike: the circuit file binds the
 digest of its own partition object.
 
-Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
+Without registered reads (``registered`` None), `verify` refuses a program with an input bound at docket (a
 `RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
 ``registered``, which the prover writes, names them. The fixture's program binds ``cs`` as a run input, so that refusal
 doesn't apply to it.
@@ -46,7 +46,7 @@ VERIFIER = Path(__file__).resolve().parents[3] / "flock" / "prover" / "agreement
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
-#: the registration's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
+#: the docket's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
 STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
 #: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
 REGISTERED_ROOTS = {
@@ -131,7 +131,7 @@ FORMS = {"unit form, own rows": ({}, None), "two input groups": ({"groups": 2}, 
 @pytest.mark.parametrize("form, want", FORMS.values(), ids=FORMS.keys())
 def test_the_mirror_of_the_ks_form_refuses_what_lean_refuses(tmp_path, form, want):
     """`ks_form_why` on files' heads: `KsScope.filesWhy`'s scope refusal with its reason, a shared-row file left to
-    Lean's `sharedWhy` (`verity/protocols/proofs/flock/prover/tests/test_lean_ks_form.py` holds it to `flock-verify ks-form` on the prover's
+    Lean's `sharedWhy` (`verity/protocols/proofs/flock/prover/tests/test_lean_ks_form.py` holds it to `verity-verify-proof ks-form` on the prover's
     files)."""
     assert PF.ks_form_why(*_files(tmp_path, **form)) == want
 
@@ -141,7 +141,7 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
-    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF, "executable", lambda: Path("verity-verify-proof"))
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
@@ -216,7 +216,7 @@ def test_fits_why_refuses_a_field_at_the_limit_and_not_below_it(field, value, si
     assert PF.fits_why(size + 1, **inputs) is None
 
 
-def test_fits_why_names_the_first_field_past_the_limit_and_the_draw_its_own():
+def test_fits_why_names_the_first_field_past_the_limit_and_the_sample_its_own():
     assert PF.fits_why(1, b"x", b"y", [("t", b"z")], b"p", {}, []) == "the circuit file"
     assert PF.fits_why(3, b"", b"", [], b"", {"a": 1}, ["é"]) == "the partition object"
     assert PF.fits_why(PF.WORD, b"x", b"y", [("t", b"z")], b"p", {}, []) is None
@@ -259,7 +259,7 @@ def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_wit
     (tmp_path / "s").mkdir()
     (tmp_path / "s" / "session.json").write_text("{}")
     verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
-    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF, "executable", lambda: Path("verity-verify-proof"))
     monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
         a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
     got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
@@ -438,7 +438,7 @@ def _same(v1, v2):
 @lean
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
-    """The v2 audit (`Spot.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
+    """The v2 audit (`Spot.OneStageZk`) runs `verity-verify-proof verify --zk`'s one-stage path inside its own Lean, on
     the files as blobs: on the honest session (accepted at its shared rows, proving its sampled proof blocks), a session
     whose proof bytes were tampered with (record kept or rehashed), and the honest session without the verifier's
     registered file, its finding is `verify`'s, reason and proof blocks included."""
@@ -457,8 +457,8 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
 @lean
 @pytest.mark.slow
 def test_an_accepted_session_of_another_population_is_rejected(fx):
-    """Under a registration of 31 units, the honest session that the verifier accepts on its public file of 32 is
-    rejected with `population_why`'s reason: its file's unit 31 is no slot of the registration's."""
+    """Under a docket of 31 units, the honest session that the verifier accepts on its public file of 32 is
+    rejected with `population_why`'s reason: its file's unit 31 is no slot of the docket's."""
     (f,), why = _verify(fx, fx / "session", strata=(("RoPEHead_v1{D=64}", ((0, 31),)),))
     assert why is None, why
     assert (f.accepted, f.units) == (False, ()) and f.why == PF.population_why(range(32), [("t", [[0, 31]])]), f
@@ -467,15 +467,15 @@ def test_an_accepted_session_of_another_population_is_rejected(fx):
 @lean
 @pytest.mark.slow
 def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refused_by_the_v2_audit(fx):
-    """A registration whose partition object asks the fixture's program for its `Q_call` units at X = 16, the RoPE
+    """A docket whose partition object asks the fixture's program for its `Q_call` units at X = 16, the RoPE
     heads' calls (2048 of them, `partition.strata`), rather than the 32 template instances the circuit file holds: the
     v2 audit's own run rejects the honest session at setup, since the circuit file binds another partition object's
     digest (`Flock.checkPartitionWith`), before any verdict reaches `FilePart.check`; `verify`, handed that
-    registration's strata, rejects it the same way. The other tests here run the v2 audit only on the circuit file's own
+    docket's strata, rejects it the same way. The other tests here run the v2 audit only on the circuit file's own
     partition object."""
     from verity.protocols.proofs.spot.verifier.one_stage import partition as PA
     from verity.circuits.codec import decode_program
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
 
     st = fx / "stage"
     part = {**json.loads((st / "partition.json").read_text()),

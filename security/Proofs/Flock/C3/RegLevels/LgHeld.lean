@@ -30,7 +30,7 @@ sparse phases', the list `stageStarts` sums.
 `stageHeld_stacked`: a stage whose coins are `stacked/rep0`'s recorded rounds from `k` on is `StageHeld` at the map's
 selector (`holoSelOne`) from `k` past the four streams' rounds. Its coins are the verifier's hold of `stacked/rep0`
 (`heldStage_of_lgCoins`); R's round `k` is history round `k` past the four streams' since every round of R's flips
-coins (`stackedRounds_coins`), so `drawn_stacked` samples them in order; and it ends by `r` (`hr`).
+coins (`stackedRounds_coins`), so `sampled_stacked` samples them in order; and it ends by `r` (`hr`).
 `lgCoins_of_weave`: a weave's coins are a prefix of the coins it is given (`weave_coins_prefix`), so at `MapsLeft`'s
 weave R's Ligerito's coins are `rep0`'s rounds from `k₂`, as many as it takes.
 `le_size_of_ringSwitch`: ring switching's `k₂` rounds are recorded rounds.
@@ -64,7 +64,7 @@ the map's selector `holoSelOne`): where the verifier holds `cs` (`hh`) and build
 shape has the reps' rounds `rep`, a sparse shape and R's, at R's two claims, with as many rounds of coins held of
 `stacked/rep0` as R's rounds (`hcsz`), a stage whose coin steps are `stacked/rep0`'s `n` rounds from `k` (`hts`), all
 recorded (`hn`), is `StageHeld` from `k` past the four streams' rounds (`J`, `stageStarts`' sum): R's round `k` is
-history round `J + k` since every round of R's flips coins (`stackedRounds_coins`), so `drawn_stacked` samples them in
+history round `J + k` since every round of R's flips coins (`stackedRounds_coins`), so `sampled_stacked` samples them in
 order, and they end by `r` (`hr`). -/
 theorem stageHeld_stacked {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))}
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
@@ -95,7 +95,7 @@ theorem stageHeld_stacked {r : ℕ} {CT : Fin r → Type} {Cm : Type} {t : List 
     rw [Nat.zero_add] at e
     rw [e]
     simp [heldBefore]
-  have hd := drawn_stacked (n := n) hS hL (hf tbl htbl) (fun p' hp' => hpos (k + p') (by omega)) p q hp
+  have hd := sampled_stacked (n := n) hS hL (hf tbl htbl) (fun p' hp' => hpos (k + p') (by omega)) p q hp
   rw [hk] at hd
   subst hJ
   exact hd

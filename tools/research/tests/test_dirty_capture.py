@@ -179,5 +179,5 @@ def test_custody_always_uploads_the_capture_whatever_the_undeclared_limit(tmp_pa
     (rd / "job.json").write_text(json.dumps({"run": {"id": "r1"}}))
     (rd / E.DIRTY_CAPTURE).write_bytes(b"t" * 4096)
     (rd / "scratch.bin").write_bytes(b"s" * 4096)
-    kept, trimmed = CU.select(rd, cap=0)
+    kept, trimmed = CU.select(rd, limit=0)
     assert E.DIRTY_CAPTURE in kept and [t["path"] for t in trimmed] == ["scratch.bin"]

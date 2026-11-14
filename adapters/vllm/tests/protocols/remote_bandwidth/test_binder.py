@@ -31,13 +31,13 @@ from verity_vllm.protocols.remote_bandwidth.binder import (
     page_layout,
     storage_bytes,
 )
-from verity_vllm.protocols.remote_bandwidth.interface import Append, WindowRecord
-from verity_vllm.protocols.remote_bandwidth.registry import (
+from verity.protocols.accounting.poub.prover.node_store.interface import Append, WindowRecord
+from verity.protocols.accounting.poub.prover.node_store.registry import (
     NodeMemory,
-    RemoteBandwidthReceipt,
+    PoubReceipt,
     chain,
 )
-from verity_vllm.protocols.remote_bandwidth.verify import verify_opening
+from verity.protocols.accounting.poub.prover.node_store.verify import verify_opening
 
 PAGES, SLOTS, HEADS, DIM = 6, 16, 2, 32          # a slot is 2 x 32 bf16 = 128 bytes; a plane-page 2 KiB
 
@@ -453,7 +453,7 @@ def test_with_the_drivers_tiles_a_steps_pass_is_the_drivers_and_opens_against_it
     s, tiles = NodeMemory(salt_key=bytes(32)), audit.NoiseTiles()
     recs: list[WindowRecord] = []
     b = Binder(s, messages=Every(2, lambda t: bytes([t]) * 32, windows=1), on_window=recs.append, tiles=tiles)
-    assert isinstance(b.receipt, RemoteBandwidthReceipt)
+    assert isinstance(b.receipt, PoubReceipt)
     r = runner()
     r.kv_caches = [torch.zeros(2, PAGES, SLOTS, HEADS, 2 * DIM, dtype=torch.bfloat16)]
     b.on_load(r)

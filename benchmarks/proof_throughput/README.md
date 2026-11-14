@@ -35,7 +35,7 @@ stratified sampling design the Lean verifier's soundness covers:
    the public file and every session in the evidence store as one bundle (`out/bundle.json`) and writes the contract
    result with the live verdicts only.
 2. **Verifier run** (`verify.sh`, a `research run --on vy-nebius-cpu-3` or `-cpu-2` job, tool `proof_throughput_verifier`):
-   builds the compiled Lean verifier (`flock-verify`, `verity/protocols/proofs/flock/verifier/`), runs `flock-verify verify --coins tree
+   builds the compiled Lean verifier (`verity-verify-proof`, `verity/protocols/proofs/flock/verifier/`), runs `verity-verify-proof verify --coins tree
    --program P --stratified B --partition F` on every session of the bundle one at a time under `/usr/bin/time`, with its
    own copies of the population's program and of the `verity/partition/v1` object the circuit binds (derived from the
    workload, checked against the circuit's META, not taken from the bundle). The verifier derives the stratified sampling design for B
@@ -103,7 +103,7 @@ busy.
 | `bf16-k6144` | `GemmCoordinate_v2{K=6144,DOT=HopperBF16WgmmaDot16_v1}` | lm_head, indexer `wk_weights_proj`, MoE router | 1024 |
 | `fp8-coord-k6144`, `-k2048`, `-k256` | `ScaledMmFp8BlockCoordinate_v2{K,G=128}` | the FP8 GEMMs with scale groups | declared |
 
-The bf16 sites are those of `verity/definitions/registry/bf16_gemm_check.py`. The cap is the largest
+The bf16 sites are those of `adapters/vllm/verity_vllm/definitions/registry/bf16_gemm_check.py`. The cap is the largest
 power of two of coordinates one statement holds at the hill-climb's 2^35 witness bits (each coordinate one 2^25-bit block
 at K = 6144). The FP8 coordinates are declared with their profile; the point job stages class-statement workloads only, and
 staging them through `benchmarks/served_units/stage.py` is the next workload's work.

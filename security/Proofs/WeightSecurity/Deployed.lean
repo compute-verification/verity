@@ -12,10 +12,16 @@ its timing bucket and on its advice, and then the window's audit runs (`JointAud
 session on one live sample). The probability that it leaves `M` incorrect proof blocks undetected is at most
 $$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
 by `period_undetected`. A window is accepted with a sampled incorrect proof block with probability at most its members'
-knowledge and binding terms (`JointAuditV5.accepted_drawnWrong_le`). Its sample misses its `w` incorrect proof blocks
-with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the sampling design's per-block miss: a
-premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata each have
-`(n − k)/n ≤ x`). The named assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
+knowledge and binding terms (`JointAuditV5.accepted_sampledIncorrect_le`). Its sample misses its `w` incorrect proof
+blocks with probability at most `P_a ≤ x^w` (`JointAuditV5.sampleMiss_le`, with `x` the sampling design's per-block
+miss: a premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata
+each have `(n − k)/n ≤ x`). The named assumptions are `JointPooledV5`'s, at every window, and weight security's own.
+
+The two SHA-512 premises are asked only of a window where some outcome of its stream ends its sample. Where none
+does, the window's audit rejects every run (`JointAuditV5.prob_accepts_of_not_ends`) and the window has no incorrect
+proof block on record (`JointAuditV5.incorrectSet` is empty there, so `servedRec`'s `incorrect` is `0`). `Served.Local`
+then allows that window's release no changed slot, so any change there is counted in the bound's last term, the
+probability that the releases are not local: at such a window the bound is weaker, never stronger.
 -/
 
 @[expose] public section
@@ -35,7 +41,7 @@ abbrev Release (O V Tick Adv : Type) := (O → V) × Tick × Adv
 /-- **A window served at the deployed audit**: the datacenter commits the window's release, then the window's audit
 runs. -/
 noncomputable def servedGame (w : JointAuditV5) (Rel : Type) :
-    Game (Rel × (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) :=
+    Game (Rel × ((w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) :=
   .send Rel fun m => w.game.map fun o => (m, o)
 
 /-- The audit's strategy that a served window's strategy plays. -/
@@ -45,8 +51,9 @@ noncomputable def servedAudit (w : JointAuditV5) {Rel : Type} (τ : Strategy (se
 /-- A served window's record: its verdict, whether its sample holds an incorrect proof block, how many it has, and its
 release. -/
 noncomputable def servedRec (w : JointAuditV5) (τ : Strategy (servedGame w (Release O V Tick Adv)))
-    (b : Release O V Tick Adv × (w.Reg × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) : Served O V Tick Adv :=
-  ⟨w.Accepts b.2, ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ), (w.wrongSet (servedAudit w τ)).card,
+    (b : Release O V Tick Adv × ((w.Reg × Bool) × Finset (Fin w.nJ) × List Discharge.Exec.Transcript)) :
+    Served O V Tick Adv :=
+  ⟨w.Accepts b.2, ∃ u ∈ b.2.2.1, u ∈ w.incorrectSet (servedAudit w τ), (w.incorrectSet (servedAudit w τ)).card,
     b.1.1, b.1.2.1, b.1.2.2⟩
 
 /-- The deployment's run over `T` windows at the datacenter's strategy `s`. -/
@@ -56,31 +63,33 @@ noncomputable def servedRun (W : ℕ → JointAuditV5) (T : ℕ)
   monitoringPeriodRun (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t => servedRec (W t)) 0 T s
 
 theorem servedRec_accepted_le (w : JointAuditV5) (τ : Strategy (servedGame w (Release O V Tick Adv)))
-    (hCR : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw (servedAudit w τ) k).draw ω)
+    (hCR : ∀ _ : Nonempty w.EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign (servedAudit w τ) k).draw ω)
         (reg (w.memberSim (servedAudit w τ) k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim (servedAudit w τ) k) ω))
       (w.ms.get k).qF (w.ms.get k).qS)
-    (hA2 : ∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
+    (hA2 : ∀ _ : Nonempty w.EndΩ, ∀ k, Assumptions.LinkCRZCAt execArith hs512 (w.ms.get k).P
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim (servedAudit w τ) k))
       (cont (w.memberSim (servedAudit w τ) k)) (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') :
     prob (fun b => (servedRec w τ b).accepted ∧ (servedRec w τ b).sampledIncorrect) (servedGame w _) τ ≤ w.eps := by
-  show prob (fun b => w.Accepts b.2 ∧ ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ))
+  show prob (fun b => w.Accepts b.2 ∧ ∃ u ∈ b.2.2.1, u ∈ w.incorrectSet (servedAudit w τ))
     (w.game.map fun o => (τ.1, o)) τ.2 ≤ _
   rw [prob_map]
-  exact w.accepted_drawnWrong_le (servedAudit w τ) hCR hA2
+  exact w.accepted_sampledIncorrect_le (servedAudit w τ) hCR hA2
 
-theorem servedRec_miss_le (w : JointAuditV5) (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (x : ℝ) (hx : 0 ≤ x)
+theorem servedRec_miss_le (w : JointAuditV5) (hA3 : Assumptions.UniformRandomBytes w.Lb w.src)
+    (x : ℝ) (hx : 0 ≤ x)
     (hpa : ∀ B, w.pa B ≤ x ^ B.card) (τ : Strategy (servedGame w (Release O V Tick Adv))) :
     prob (fun b => ¬ (servedRec w τ b).sampledIncorrect) (servedGame w _) τ ≤
-      ENNReal.ofReal x ^ (w.wrongSet (servedAudit w τ)).card := by
-  show prob (fun b => ¬ ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ)) (w.game.map fun o => (τ.1, o)) τ.2 ≤ _
+      ENNReal.ofReal x ^ (w.incorrectSet (servedAudit w τ)).card := by
+  show prob (fun b => ¬ ∃ u ∈ b.2.2.1, u ∈ w.incorrectSet (servedAudit w τ)) (w.game.map fun o => (τ.1, o)) τ.2 ≤ _
   rw [prob_map, ← ENNReal.ofReal_pow hx]
-  exact (w.drawMiss_le hA3 _ (servedAudit w τ)).trans (ENNReal.ofReal_le_ofReal (hpa _))
+  exact (w.sampleMiss_le hA3 _ (servedAudit w τ)).trans (ENNReal.ofReal_le_ofReal (hpa _))
 
 /-- **Model weight security at the deployed audit.** `TheftServed` with the probability of leaving `M` incorrect proof
 blocks undetected bounded by the windows' knowledge and binding terms plus `x^M`, at every datacenter strategy `s θ r`,
-under `JointHorizonV5`'s named assumptions at every window and weight security's `HonestUseHard` and `Simulable`. -/
+under `JointPooledV5`'s named assumptions at every window and weight security's `HonestUseHard` and `Simulable`. -/
 theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
     [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
     (W : ℕ → JointAuditV5) (T L E M : ℕ) (x : ℝ) (hx0 : 0 ≤ x) (hx1 : x ≤ 1)
@@ -92,15 +101,17 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
     (hA3 : ∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
     (hpa : ∀ t < T, ∀ B, (W t).pa B ≤ x ^ B.card)
     (hT : ∀ θ r t (τ : Strategy (servedGame (W t) (Release O V Tick Adv))),
-      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k ω j,
+      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → 
+      ∀ _ : Nonempty (W t).EndΩ, ∀ k ω j,
       Assumptions.TableCRZAt execArith hs512
-        (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw (servedAudit (W t) τ) k).draw ω)
+        (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberSamplingDesign (servedAudit (W t) τ) k).draw ω)
           (reg ((W t).memberSim (servedAudit (W t) τ) k))) j
         (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
           (cont ((W t).memberSim (servedAudit (W t) τ) k) ω))
         ((W t).ms.get k).qF ((W t).ms.get k).qS)
     (hL : ∀ θ r t (τ : Strategy (servedGame (W t) (Release O V Tick Adv))),
-      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → ∀ k,
+      MonitoringPeriodPlays (fun t => servedGame (W t) (Release O V Tick Adv)) 0 T (s θ r) t τ → 
+      ∀ _ : Nonempty (W t).EndΩ, ∀ k,
       Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P
         (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
         ((W t).ms.get k).vb (reg ((W t).memberSim (servedAudit (W t) τ) k))
@@ -115,25 +126,25 @@ theorem TheftServedDeployed {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fi
   classical
   refine TheftServed C gen Stolen A p Ou T L E M _ (fun θ r => servedRun W T (s θ r)) hhon hsim fun θ r => ?_
   let cr : (t : ℕ) → Strategy (servedGame (W t) (Release O V Tick Adv)) → Prop := fun t τ =>
-    (∀ k ω j, Assumptions.TableCRZAt execArith hs512
-      (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberLaw (servedAudit (W t) τ) k).draw ω)
+    (∀ _ : Nonempty (W t).EndΩ, ∀ k ω j, Assumptions.TableCRZAt execArith hs512
+      (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀ (((W t).memberSamplingDesign (servedAudit (W t) τ) k).draw ω)
         (reg ((W t).memberSim (servedAudit (W t) τ) k))) j
       (zcStrat execArith hs512 (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
         (cont ((W t).memberSim (servedAudit (W t) τ) k) ω))
       ((W t).ms.get k).qF ((W t).ms.get k).qS) ∧
-    ∀ k, Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P
+    ∀ _ : Nonempty (W t).EndΩ, ∀ k, Assumptions.LinkCRZCAt execArith hs512 ((W t).ms.get k).P
       (planZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀) (tabZHJP ((W t).ms.get k).dj ((W t).ms.get k).y₀)
       ((W t).ms.get k).vb (reg ((W t).memberSim (servedAudit (W t) τ) k))
       (cont ((W t).memberSim (servedAudit (W t) τ) k)) ((W t).ms.get k).k ((W t).ms.get k).Rw ((W t).ms.get k).M
       ((W t).ms.get k).t'
   have hs : MonitoringPeriodGood (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t τ => t < T ∧ cr t τ) 0 T (s θ r) :=
-    periodGood_mono _ T 0 (s θ r) (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
-      (periodGood_of_plays (fun t => servedGame (W t) (Release O V Tick Adv)) cr T 0 (s θ r)
+    monitoringPeriodGood_mono _ T 0 (s θ r) (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
+      (monitoringPeriodGood_of_plays (fun t => servedGame (W t) (Release O V Tick Adv)) cr T 0 (s θ r)
         fun t τ hp => ⟨hT θ r t τ hp, hL θ r t τ hp⟩)
   have h := period_undetected (fun t => servedGame (W t) (Release O V Tick Adv)) (fun t => servedRec (W t))
     (fun t τ => t < T ∧ cr t τ) (fun t => (W t).eps) (ENNReal.ofReal x) (ENNReal.ofReal_le_one.2 hx1)
     (fun t τ hτ => servedRec_accepted_le (W t) τ hτ.2.1 hτ.2.2)
-    (fun t τ hτ => ⟨((W t).wrongSet (servedAudit (W t) τ)).card, fun _ => rfl,
+    (fun t τ hτ => ⟨((W t).incorrectSet (servedAudit (W t) τ)).card, fun _ => rfl,
       servedRec_miss_le (W t) (hA3 t hτ.1) x hx0 (hpa t hτ.1) τ⟩)
     T 0 (s θ r) M hs
   rw [← ENNReal.ofReal_pow hx0] at h

@@ -1,5 +1,5 @@
 """Every coin source is named by a claim instance (`challenger.coin_claim`): its ``claim``, a ``uniform/<instance>``
-assumption of `verity.claims`.  The Lean verifier's `coins` is A3's ``uniform/io-getrandombytes``; a served
+claim id of `verity.commitments.claim_ids`.  The Lean verifier's `coins` is A3's ``uniform/io-getrandombytes``; a served
 challenger refuses a source no claim instance names (`served_claim`), `os.urandom` among them, and a misnamed one is
 refused wherever it is read; a test's seeded stream stays unnamed, and the challenger keeps the claim it sampled under."""
 
@@ -10,7 +10,7 @@ import random
 
 import pytest
 
-from verity import claims
+from verity.commitments import claim_ids
 from verity.protocols.proofs.spot.device import challenger as C
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
 
@@ -19,7 +19,7 @@ A3 = "uniform/io-getrandombytes"
 
 def test_the_lean_verifiers_coins_are_named_by_a3():
     assert C.served_claim(V.coins) == V.CLAIM == A3
-    assert claims.get(A3).name == "Independent uniform output of IO.getRandomBytes"
+    assert "FlockSoundness.Assumptions.UniformRandomBytes" in claim_ids.get(A3)["lean"]
 
 
 @pytest.mark.parametrize("source", [os.urandom, random.Random(0).randbytes, lambda n: bytes(n)])
@@ -44,7 +44,7 @@ def test_a_misnamed_source_is_refused(claim):
         C.LiveChallenger("verity/test/coins/v1", 0, [("x", 1)], source)
 
 
-def test_a_named_source_draws_its_own_bytes_and_the_challenger_keeps_its_claim():
+def test_a_named_source_samples_its_own_bytes_and_the_challenger_keeps_its_claim():
     source = C.named(A3, random.Random(1).randbytes)
     assert C.served_claim(source) == A3 and source(8) == random.Random(1).randbytes(8)
     ch = C.LiveChallenger("verity/test/coins/v1", 0, [("x", 2)], C.named(A3, random.Random(2).randbytes))

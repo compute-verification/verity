@@ -231,7 +231,7 @@ theorem ligerito_conss {tIn : Lin} {sws : Array Switched} {k k' : Nat} {src : Fl
   cases ha
   obtain ⟨b, k₃, hb, h⟩ := cm_bind h
   cases hb
-  by_cases cd : src.drawnAll k₁ = true
+  by_cases cd : src.sampledAll k₁ = true
   rotate_left
   · rw [ite_eq_left (by simpa using cd)] at h
     obtain ⟨_, _, h0, _⟩ := cm_bind h
@@ -530,7 +530,7 @@ section family
 
 variable {nT nR : ℕ} {T : Fin nT → Type} {CT : Fin nR → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 variable {cls : HClass} {regs : List (Region cls.kLog (cls.m - cls.kLog))} {sch : Flock.Schedule}
-variable {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => flockInnerCL T CT execArith H512 enc512 InnerAccepts.leafPlain cls regs (schedOf sch)
 

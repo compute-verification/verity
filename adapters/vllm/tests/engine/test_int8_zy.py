@@ -12,7 +12,8 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_ops as OPS
-from verity_vllm.protocols.pouw import credit_gate as CG
+from verity.protocols.accounting.pouw.prover.serving import credit_gate as CG
+from verity.protocols.accounting.pouw.prover.serving import credit_gate_device as CGD
 
 cuda = pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 UR, UC = E.UNIT
@@ -93,7 +94,7 @@ def test_each_records_z_is_the_compiled_units_z_in_its_cells_order():
     """Record u's z words are `pouw_h1.Call.z(Y, u)`: the compiled Program's unit u, its cells in its tile's pair order, so
     a leaf of the record is the unit's z as H1's statement reads it.  The only test that holds the layout to the compiled
     Program rather than to the module doc; about 30 s, compiling the smallest H1 call (K = 64, two by two units)."""
-    from verity_vllm.protocols.pouw import h1 as PH
+    from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     m, rows, n, k = 40, 64, 64, 64
     xq, sa, w, sw = _args(m, k, n, seed=11)
     zy = OPS.scaled_mm_zy(xq, sa, w, sw, rows)[1]
@@ -133,7 +134,7 @@ def test_a_tampered_unit_is_found_by_the_record_compare():
 
 def test_the_op_is_one_credited_gemm_that_wrote_y_and_the_records():
     xq, sa, w, sw = _args(3, 64, 32)
-    with CG.Trace("q") as trace:
+    with CGD.Trace("q") as trace:
         y, zy = OPS.scaled_mm_zy(xq, sa, w, sw, 32)
     v = CG.verdict(trace, y, zy)
     assert v["credit"] and v["kernel"] == "verity_int8::scaled_mm_zy" and v["gemms"] == ["verity_int8::scaled_mm_zy"], v
@@ -251,7 +252,7 @@ def test_cuda_op_is_one_credited_gemm_and_replays_in_a_graph():
     m, rows = 32, 64
     k, n = LLAMA["qkv"]
     xq, sa, w, sw = _cuda_call(m, k, n, seed=3)
-    with CG.Trace("qkv") as trace:
+    with CGD.Trace("qkv") as trace:
         y, zy = OPS.scaled_mm_zy(xq, sa, w, sw, rows)
     v = CG.verdict(trace, y, zy)
     assert v["credit"] and v["gemms"] == ["verity_int8::scaled_mm_zy"], v

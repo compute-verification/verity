@@ -18,7 +18,7 @@ against C's leaf).
   `--strict` refuses a `k` or limit no certificate covers (`covering_certificate`) before any round.  Every session's
   binding is `setup_root`, the root the setup publishes for the `C*` of these digests under READY's salt
   (`VerifierKey.from_row_digests`), recorded as `setup_root`.
-- **The coins.** A session's indices are a function of its coin source, its session id, the store's block count and `k`
+- **The coins.** A session's indices are a function of its live coins, its session id, the store's block count and `k`
   (`CoinTree.draw`), and both come from `os.urandom`.  `--seed HEX` derives them from the seed instead (`seeded_session`),
   so a CPU test's samples, and with them its controls' verdicts, are the same on every run: a control's gate is a
   statistical test that real samples fail now and then.  It is refused, before any session, key or connection, unless the
@@ -103,7 +103,7 @@ SEEDED_ONLY = ("a seeded session runs on the logical clock under the test signer
 
 
 def seeded_session(seed: bytes, j: int) -> tuple[bytes, bytes]:
-    """Session `j`'s coin source and session id under `--seed`: with the block count and `k`, all its indices rest on."""
+    """Session `j`'s live coins and session id under `--seed`: with the block count and `k`, all its indices rest on."""
     d = hashlib.sha512(b"verity-pous/bench/memory-challenger/seeded-session/v1\0" + seed + j.to_bytes(4, "big")).digest()
     return d[:32], d[32:]
 
@@ -307,7 +307,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     sessions are written to `sessions_out` (`write_sessions`) when the session loop ends, however it ends, before any
     verdict runs.  Every session's id is in `session_log_path` (`session_log`) before its first round; without one (the
     test signer), in a temporary directory with the test signer's leaf state, removed once the sessions are signed.  Each
-    session's coin source and session id are `os.urandom`'s, or `seeded_session(seed, j)` with `seed`, which only a
+    session's live coins and session id are `os.urandom`'s, or `seeded_session(seed, j)` with `seed`, which only a
     test-signed audit on the logical clock takes (`SEEDED_ONLY`)."""
     from verity.protocols.accounting.pous.verifier import audit as pous_audit
     from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -332,7 +332,7 @@ def audit(host: str, port: int, scheme: Any, salt: bytes, digests: bytes, *, aud
     cert = scheme.certificate
     k = k or (cert.k if cert is not None else pous_audit.CHALLENGES)
     binding = setup_root(params, salt, digests)
-    base = {"memory_challenger": "memory_challenger.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records_tree": mc.RECORDS_TREE,
+    base = {"memory_challenger": "memory_challenger.MemoryChallenger", "protocol": mc.PROTOCOL, "coin_tree": mc.COIN_TREE, "records": mc.RECORDS,
             "strict": strict, "warmup_pings": WARMUP_PINGS, "limit_ns": limit, "limit_fixed_before_load": fixed, "deadline_ns": deadline_ns,
             "allowance": "cap", "allowance_kind": ALLOWANCE_KIND, "rtt_allowance_ns": limit - deadline_ns, "rtt_cap_ns": cap,
             "k": k, "scheme": scheme.name, "setup_root": binding.hex(), **({} if seed is None else {"seed": seed.hex()})}

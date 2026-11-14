@@ -1,6 +1,6 @@
 """Every memory challenger in this suite runs on an injected clock (AGENTS.md "Tests"). `tests/test_no_wall_clock.py`
 scans for clock reads in test source, and cannot see an `audit.UnsignedRounds`, `ContinuousMemoryChallenger` or
-`memory_challenger.MemoryChallenger` left on its default `time.perf_counter_ns`, or a `streamed_wipe.WipeMemoryChallenger`
+`memory_challenger.MemoryChallenger` left on its default `time.perf_counter_ns`, or a `wipe_challenger.WipeMemoryChallenger`
 left on its default `streamed_wipe.raw_clock_ns`; such a test passes or fails with the load on `check`'s slot. Here each
 one's default clock, whichever it is, is replaced by one that fails the test that reads it, every time. The test signer's
 leaf states and session logs go under the suite's basetemp (`pous_test_signer.DIR`)."""
@@ -14,8 +14,10 @@ import pous_test_signer
 import pytest
 
 from verity.protocols.accounting.pous.device import memory_challenger
-from verity.protocols.accounting.pous.verifier import audit, streamed_wipe, wipe_stream
-from verity.protocols.accounting.pous.verifier.continuous import ContinuousMemoryChallenger
+from verity.protocols.accounting.pous.verifier import audit
+from verity.protocols.accounting.pous.device import wipe_challenger
+from verity.protocols.accounting.pous.device import wipe_stream
+from verity.protocols.accounting.pous.device.continuous import ContinuousMemoryChallenger
 
 
 def _wall_clock() -> int:
@@ -25,7 +27,7 @@ def _wall_clock() -> int:
 @pytest.fixture(autouse=True)
 def _no_default_clock(monkeypatch):
     for cls in (audit.UnsignedRounds, ContinuousMemoryChallenger, memory_challenger.MemoryChallenger,
-                streamed_wipe.WipeMemoryChallenger):
+                wipe_challenger.WipeMemoryChallenger):
         init = cls.__init__
         if inspect.signature(init).parameters["clock"].kind is inspect.Parameter.KEYWORD_ONLY:
             monkeypatch.setattr(init, "__kwdefaults__", {**init.__kwdefaults__, "clock": _wall_clock})

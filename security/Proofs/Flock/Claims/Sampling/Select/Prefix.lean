@@ -4,8 +4,8 @@ public import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-! # A sample from bytes samples the same from any extension of them
 
-`Draw.drawUnits` reads its source in order (`Draw.take`) and stops when its sampling design's sample ends, so a sample that ends on
-`ξ`'s bytes reads only `ξ` and ends the same on `ξ ++ t` (`drawUnits_append`). -/
+`Draw.sampleUnits` reads its source in order (`Draw.take`) and stops when its sampling design's sample ends, so a sample that ends on
+`ξ`'s bytes reads only `ξ` and ends the same on `ξ ++ t` (`sampleUnits_append`). -/
 
 @[expose] public section
 
@@ -123,10 +123,10 @@ theorem stratifiedWith_append {ξ t : ByteArray} {strata : Array Flock.Draw.Stra
   refine run_bind_of h (fun r hr => forIn_append _ _ (fun i b s z hz => ?_) _ _ _ _ hr) (fun _ _ hk => hk)
   exact run_bind_of hz (fun r hr => onWith_append (by unfold Flock.Draw.Stratum.need; omega) hr) (fun _ _ hk => hk)
 
-theorem drawWith_append {ξ t : ByteArray} (law : Flock.Draw.Law) (n : ℕ) {p : ℕ} {x : Option Flock.Draw.UnitDraw × ℕ}
-    (h : (Flock.Draw.drawWith (fun _ need => Draw.take ξ need) law n).run p = .ok x) :
-    (Flock.Draw.drawWith (fun _ need => Draw.take (ξ ++ t) need) law n).run p = .ok x := by
-  cases law with
+theorem sampleWith_append {ξ t : ByteArray} (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) {p : ℕ} {x : Option Flock.Draw.UnitSample × ℕ}
+    (h : (Flock.Draw.drawWith (fun _ need => Draw.take ξ need) samplingDesign n).run p = .ok x) :
+    (Flock.Draw.drawWith (fun _ need => Draw.take (ξ ++ t) need) samplingDesign n).run p = .ok x := by
+  cases samplingDesign with
   | subset k =>
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
@@ -146,14 +146,14 @@ theorem drawWith_append {ξ t : ByteArray} (law : Flock.Draw.Law) (n : ℕ) {p :
 
 /-- **A sample reads only what it needs.** The units a sampling design samples from `ξ`'s bytes, and the bytes it read, are the same
 from `ξ ++ t`. -/
-theorem drawUnits_append {ξ t : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r : Array ℕ × ℕ}
-    (h : Draw.drawUnits law n ξ = .ok r) : Draw.drawUnits law n (ξ ++ t) = .ok r := by
-  unfold Draw.drawUnits at h ⊢
-  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take ξ need) law n).run 0 with
+theorem sampleUnits_append {ξ t : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
+    (h : Draw.sampleUnits samplingDesign n ξ = .ok r) : Draw.sampleUnits samplingDesign n (ξ ++ t) = .ok r := by
+  unfold Draw.sampleUnits at h ⊢
+  cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take ξ need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok y =>
     rw [hw] at h
-    rw [drawWith_append (t := t) law n hw]
+    rw [sampleWith_append (t := t) samplingDesign n hw]
     exact h
 
 end Properties.Spot.SecurityProofs

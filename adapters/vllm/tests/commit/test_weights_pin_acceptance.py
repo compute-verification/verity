@@ -47,8 +47,6 @@ from verity_vllm.pipeline import row_records as R
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-
 # the three panel shapes of one model: B1 = the envelope, B2 / B8 mixed (no request has both maxima -> the default shape is NOT a component)
 B1_SHAPES = [(9, 2)]
 B2_SHAPES = [(4, 2), (9, 1)]

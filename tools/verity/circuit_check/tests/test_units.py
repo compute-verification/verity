@@ -77,10 +77,7 @@ def _fresh(root: Path, harness: str = HARNESS) -> dict:
 
 def _records(root: Path, units: tuple[str, ...] | None = None) -> list[Path]:
     def target(p: Path) -> list:
-        try:
-            return json.loads(p.read_text())["key"]["request"]["target"]
-        except ValueError:
-            return []
+        return json.loads(p.read_text())["key"]["request"]["target"]
     return [p for p in (root / "cache").glob("*/*/*.json")
             if (t := target(p))[:1] == ["catalog-unit"] and (units is None or tuple(t[1]) == units)]
 
@@ -926,7 +923,8 @@ def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_
 ON_DEMAND = """
 from circuit_check import targets as TG
 from verity.circuits.defs import REGISTRY
-import verity.definitions.boolean
+import verity.circuits.ops.boolean.versions
+import verity_vllm.definitions
 
 before = set(dict.keys(REGISTRY.defs))
 TG.on_demand_boolean_families({"Const8[0x0]_v1", "Const16[0x1]_v1", "Const32[0x2]_v1", "Const4[0x3]_v1", "GatherBf16x4_v1",

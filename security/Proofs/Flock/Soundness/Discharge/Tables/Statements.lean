@@ -18,11 +18,11 @@ here, and its theorem is below it.
 * `ExecRefinesTables`: the refinement for any plan,
   `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL … plan)) (simAuditJ …)` given `DecodesOnJ`.
 * `HeadlineTables`: `Prog.flock_headline_live_on` with `plan S R` of any length `J`, at the live stratified sample.
-* `HeadlineTablesSubset`: the same at the live subset sample, with count curve `C(n − K, kd) / C(n, kd)`; flock-verify
+* `HeadlineTablesSubset`: the same at the live subset sample, with count curve `C(n − K, kd) / C(n, kd)`; verity-verify-proof
   takes no other sample at `J > 1`.
-* `AcceptsTables`: flock-verify's acceptance at `count > 1`: the record's sample, when there is one, is a subset sample;
+* `AcceptsTables`: verity-verify-proof's acceptance at `count > 1`: the record's sample, when there is one, is a subset sample;
   the session's units (the sample's, without one the population's) split into `count` equal parts; and table `j` is
-  `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample `partDraw` of part `j`.
+  `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample `partSample` of part `j`.
 
 The decoder (`DecodesTable`, inside `DecodesOnJ`) is a named hypothesis per sample, registration and table: at one table
 it is `DecodesOn`'s, which `decodesOn_exec` (`Discharge/DecodeZL`) discharges for the plain headline's tables, and its
@@ -75,7 +75,7 @@ def ExecRefinesTables : Prop :=
     (one : (S : Finset (Fin n)) → (R : Reg) → Fin (plan S R).length → ℕ → Bool)
     (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (plan S R).length → Fin 2 → Array ByteArray → List Msg)
     (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (plan S R).length → Cap D) (N : ℕ)
-    {L : Law n} (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin capOf L)
+    {L : SamplingDesign n} (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfJ dg plan N wr))),
     ExecRefines (auditLive L Reg (liveOfJ dg plan N wr)) τ (LiveAccepts I) (fun _ => False)
       (audit L Reg (batchedSessionL H E Lf plan)) (simAuditJ H E Lf plan I wr opn dg dec one fin capOf N hdec τ)
@@ -87,8 +87,8 @@ theorem execRefines_tables_stmt : ExecRefinesTables :=
 /-- **The headline at the executable for sessions of `J` tables, at the live stratified sample.** -/
 def HeadlineTables : Prop :=
   ∀ {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (_hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (_hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
     (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
@@ -108,21 +108,21 @@ def HeadlineTables : Prop :=
     (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (plan S R).length → Fin 2 → Array ByteArray → List Msg)
     (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (plan S R).length → Cap Dig) (N : ℕ)
     (hdec : DecodesOnJ H512 enc512 leaf512 plan I wr opn dec one fin capOf
-      (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOfJ dg plan N wr))),
+      (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOfJ dg plan N wr))),
     let σ := simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ
     LinkCRL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t' →
     ∀ {qF qS : ℝ}, (∀ ω j, TableCRL execArith H512 enc512 leaf512
-      (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
+      (plan ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 leaf512 plan (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOfJ dg plan N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict plan (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOfJ dg plan N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
           plan tab (rs.binding hHm) k Rw M ρ t'
 
 theorem headline_tables : HeadlineTables := by
@@ -154,21 +154,21 @@ def HeadlineTablesSubset : Prop :=
     (one : (S : Finset (Fin n)) → (R : Reg) → Fin (plan S R).length → ℕ → Bool)
     (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (plan S R).length → Fin 2 → Array ByteArray → List Msg)
     (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (plan S R).length → Cap Dig) (N : ℕ)
-    (hdec : DecodesOnJ H512 enc512 leaf512 plan I wr opn dec one fin capOf (Law.execOS (n := n) src (.subset kd) n))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg plan N wr))),
+    (hdec : DecodesOnJ H512 enc512 leaf512 plan I wr opn dec one fin capOf (SamplingDesign.execOS (n := n) src (.subset kd) n))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg plan N wr))),
     let σ := simAuditJ H512 enc512 leaf512 plan I wr opn dg dec one fin capOf N hdec τ
     LinkCRL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw M t' →
     ∀ {qF qS : ℝ}, (∀ ω j, TableCRL execArith H512 enc512 leaf512
-      (plan ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+      (plan ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (batchStratL H512 enc512 leaf512 plan (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg plan N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg plan N wr)) τ ≤
       ((n - K).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
-        StrictCR.ksAvgStrict plan (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.subset kd) n)
+        StrictCR.ksAvgStrict plan (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.subset kd) n)
           plan tab (rs.binding hHm) k Rw M ρ t'
 
 theorem headline_tables_subset : HeadlineTablesSubset := by
@@ -180,13 +180,13 @@ theorem headline_tables_subset : HeadlineTablesSubset := by
 open Lean (Json) in
 /-- Part `j` of `count` equal consecutive parts of the session's units, as the subset sample of the population that
 `Stmt.setupTables` sets table `j` up at. -/
-def partDraw (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
+def partSample (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population),
     ("k", Lean.toJson (units.size / count)),
     ("units", Json.arr ((units.extract (j * (units.size / count)) (j * (units.size / count) + units.size / count)).map
       Lean.toJson))]
 
-/-- **flock-verify's acceptance at more than one table.** When `Accepts I t` at `count > 1` under a tag without hidden
+/-- **verity-verify-proof's acceptance at more than one table.** When `Accepts I t` at `count > 1` under a tag without hidden
 outputs: the tag allows several tables and `count ≤ 64`; the record's sample, when there is one, is a subset or stratified
 sample, whose
 population and units are the session's (without one, the population's every unit); the units split into `count`
@@ -198,14 +198,14 @@ def AcceptsTables : Prop :=
       Flock.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok () ∧
       I.tags.manyTables.isSome ∧ I.count ≤ Flock.Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
-        (∀ d, recordDraw t.record = some d → ∃ u, Flock.Draw.UnitDraw.ofJson d = .ok u ∧
-          ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
+        (∀ d, recordDraw t.record = some d → ∃ u, Flock.Draw.UnitSample.ofJson d = .ok u ∧
+          ((∃ k', u.samplingDesign = .subset k') ∨ ∃ K st, u.samplingDesign = .stratified K st) ∧
           u.population = population ∧ u.units = units) ∧
         (recordDraw t.record = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % I.count = 0 ∧ sts.size = I.count ∧
         ∀ (j : ℕ) (hj : j < sts.size),
           Flock.Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
-            (some (partDraw population units I.count j)) I.partition I.program = .ok sts[j]
+            (some (partSample population units I.count j)) I.partition I.program = .ok sts[j]
 
 theorem accepts_tables : AcceptsTables := by
   intro I t hh hc h

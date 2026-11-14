@@ -1,5 +1,5 @@
 """`HmRow.parse` calls `RecOpening.check`: a statement's unit named `rec-opening/m<m>-c<claims>-p<j>` must be the net the
-verifier builds for that part of the opening's algebra (`Flock.HmRow`). `flock-verify statement` accepts the files
+verifier builds for that part of the opening's algebra (`Flock.HmRow`). `verity-verify-proof statement` accepts the files
 `rec_residuals.stage_opening` writes, and refuses them with one row of the unit changed and with the unit renamed out of
 the name's form."""
 from __future__ import annotations
@@ -14,7 +14,7 @@ from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 from verity_flock.rec_outer import CLAIM_VALUE
 
-BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "verity-verify-proof"
 
 
 def _statement(d: Path, circuit: Path):
@@ -40,7 +40,7 @@ def test_a_rec_opening_unit_other_than_the_verifiers_is_refused(tmp_path):
     """The opening at m = 22 and 2 claims, one part, on random rows (`statement` binds the files and evaluates nothing).
     The staged files are accepted. With one AND row's two forms swapped, the unit is refused at that row; renamed
     `rec-opening/m22-c2`, it is refused for its name before any net is built. About 3 minutes: staging the unit (1,839,105
-    rows) and the verifier building its net twice. It is the only test that `flock-verify statement` refuses a rec-opening
+    rows) and the verifier building its net twice. It is the only test that `verity-verify-proof statement` refuses a rec-opening
     unit off the verifier's net, and m = 22 is the opening's smallest shape."""
     if not BIN.exists():
         pytest.skip("the Lean verifier is not built")

@@ -1,21 +1,21 @@
 module
 
-public import RemoteAudit
-public import RemoteAudit.Session
+public import Poub
+public import Poub.Session
 
 /-!
-# The remote bandwidth audit's verifier: what its Lean verdicts mean (`RemoteAudit`)
+# PoUB's verifier: what its Lean verdicts mean (`Poub`)
 
-The properties of `RemoteAudit` (`verity/core/protocols/remote_bandwidth/lean/`, the verifier's definition, which
-`audit.py` is held to by the difftest `remote-audit-difftest`), stated against its functions as they run, for every input of their types. They
-are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedSession`, and the
+The properties of `Poub` (`verity/protocols/accounting/poub/verifier/lean/`, the verifier's definition, which
+`audit.py` is held to by the difftest `poub-difftest`), stated against its functions as they run, for every input of their types. They
+are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedRun`, and the
 composed statement `Accounting.Guarantees.RegisteredCircuitRequirement` that reads it): each says what an acceptance
 establishes about the bytes the verifier holds. They take no premise. What the code cannot see (the coins' uniformity,
 the receipts' and the store's meaning as the game's oracle and words, the window's wall time) is not here: it is a
 premise or a proofs unit of the bridge, named in each docstring.
 
-The memory line of record (`RemoteAudit.Line.line`, its W from `RemoteAudit.Pooled`) is one statement over what this
-verifier accepts: `Properties.RemoteAudit.Line.LineHeld`, the bits its credited passes read
+The memory line of record (`Poub.Line.line`, its W from `Poub.Pooled`) is one statement over what this
+verifier accepts: `Properties.Poub.Line.LineHeld`, the bits its credited passes read
 (`Properties/Accounting/Remote/Line.lean`, proved in `Proofs/Accounting/RemoteHeld/Line.lean`, where `heldAt_of_read` derives
 memory held from it under the device model), with no code-to-model premise (the trace of record is over the
 registration's blocks by definition, `Properties/Accounting/Remote/Line/Premises.lean`, and the verifier refuses a record not
@@ -23,7 +23,7 @@ of the registration given, `LineRegistered`) and the W's cover of the session's 
 
 The window (`verifyWindow`):
 
-* `AcceptChecksOpenings`: an accepted window drew its receipts from its openings coin, has one opening a draw, and
+* `AcceptChecksOpenings`: an accepted window drew its receipts from its openings coin, has one opening a sample, and
   each sampled opening passes `checkOpening` under the receipter of its pass's seed;
 * `AcceptOpensSamples`: the same, with `checkOpening`'s five checks spelled out (`OpeningPasses`): the opening is the
   sampled receipt's, its leaf is under its pass's root in the domain of the pass's seed and plan, its block decodes to a
@@ -31,13 +31,13 @@ The window (`verifyWindow`):
 * `ChunkedIsWhole`: the verifier's process, which checks a window's openings in chunks on threads of their own
   (`checkWindowChunked`), gives `checkWindow`'s verdict on the whole window, the one `Session.run` sets.
 
-The draw (`draws`):
+The sample (`draws`):
 
-* `SampleIsSubset`: the window's draws are the sampler's `min(s, U)`-subset of `[0, U)` (`Randomness.subset` on the key
+* `SampleIsSubset`: the window's samples are the sampler's `min(s, U)`-subset of `[0, U)` (`Randomness.subset` on the key
   derived from the openings coin, the registration and the window), each value `u` mapped to the receipt `(i, p)` whose
-  index among the window's `U = Σ L_i` receipts in pass order is `u` (`receiptIndex`). So the draws are distinct
-  receipts of the window, as many as the sampler's values, and the map is a bijection: what `Key.subset`'s law gives
-  the values (a uniform `k`-subset over independent uniform streams: `KeyedDraw.subsetOn_escape_le`, a proofs unit,
+  index among the window's `U = Σ L_i` receipts in pass order is `u` (`receiptIndex`). So the samples are distinct
+  receipts of the window, as many as the sampler's values, and the map is a bijection: what `Key.subset`'s distribution gives
+  the values (a uniform `k`-subset over independent uniform streams: `KeyedSample.subsetOn_escape_le`, a proofs unit,
   under a uniform live coin, a premise) it gives the receipts.
 
 A pass's plan (`Plan.make?`, `Plan.changed`):
@@ -58,19 +58,19 @@ The session (`Session.run` from `State.init`, every event's result `.ok`; the re
 * `ReleasedStayOut`: a block released by an accepted release is read by no pass received after it;
 * `LifetimeCapped`: each append's blocks are read within `lifetime` consecutive windows.
 
-When the session reads a window's openings coin, and what its draw fixes (the code's half of the opening draw's
-`Refused` and `Live`), is `Properties.RemoteAudit.Coins`, and at one openings coin over `g` windows
-(`groups_per_coin`, `Shared.run g`) `Properties.RemoteAudit.Shared`. That the verifier's process, which takes the events
+When the session reads a window's openings coin, and what its sample fixes (the code's half of the opening sample's
+`Refused` and `Live`), is `Properties.Poub.Coins`, and at one openings coin over `g` windows
+(`groups_per_coin`, `Shared.run g`) `Properties.Poub.Shared`. That the verifier's process, which takes the events
 one request at a time on the coins the challenger sent and settles each window's check later, accepts what
 `Shared.run g` (`Session.run` at g = 1) accepts on the events its transcript records, at two windows in flight, is
-`Properties.RemoteAudit.Live` (`LiveIsRun`).
+`Properties.Poub.Live` (`LiveIsRun`).
 -/
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-! ## The window -/
 
@@ -79,7 +79,7 @@ seed. -/
 def receipterOf (reg : Registration) (w : WindowRecord) (i : Nat) : Receipter :=
   receipter reg.receipt (w.seedOf i) reg.rows
 
-/-- An accepted window drew `drawn` from its openings coin over its passes' plans, has exactly one opening a draw, and
+/-- An accepted window drew `drawn` from its openings coin over its passes' plans, has exactly one opening a sample, and
 each sampled receipt's opening passes `checkOpening` under the receipter of its pass's seed. -/
 def AcceptChecksOpenings : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
@@ -90,15 +90,15 @@ def AcceptChecksOpenings : Prop :=
         ∀ k (hk : k < drawn.size),
           checkOpening reg reg.digest appends w (receipterOf reg w drawn[k].1) drawn[k].1 drawn[k].2 openings[k]! = none
 
-/-- The verifier's process (`Verifier.spawnCheck`) checks a window's openings in chunks of `size` draws, each on a
+/-- The verifier's process (`Verifier.spawnCheck`) checks a window's openings in chunks of `size` samples, each on a
 thread of its own (`checkWindowChunked`): its verdict is `checkWindow`'s on the whole window, which `Session.verify`
-sets in `Session.run`, for every chunk size and every input, a rejection naming the same failure and draw. -/
+sets in `Session.run`, for every chunk size and every input, a rejection naming the same failure and sample. -/
 def ChunkedIsWhole : Prop :=
   ∀ (size : Nat) (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (drawn : Array (Nat × Nat)) (openings : Array Opening),
     checkWindowChunked size reg digest appends w drawn openings = checkWindow reg digest appends w drawn openings
 
-/-- Draw `(i, p)`'s opening `o` passes checks 1–5 (`checkOpening`), with `j` the block at position `p` of pass `i`'s
+/-- Sample `(i, p)`'s opening `o` passes checks 1–5 (`checkOpening`), with `j` the block at position `p` of pass `i`'s
 plan:
 
 1. it is the sampled receipt's (`o.pass = i`, `o.position = p`); its block is 4,096 bytes, it carries no tile, its salts
@@ -129,7 +129,7 @@ def OpeningPasses (reg : Registration) (appends : Array Append) (w : WindowRecor
             j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)) ∧
       (receipterOf reg w i).receipt j o.block = y
 
-/-- An accepted window drew `drawn` from its openings coin, has exactly one opening a draw, and each sampled receipt's
+/-- An accepted window drew `drawn` from its openings coin, has exactly one opening a sample, and each sampled receipt's
 opening passes checks 1–5 (`OpeningPasses`). -/
 def AcceptOpensSamples : Prop :=
   ∀ (reg : Registration) (appends : Array Append) (w : WindowRecord) (coin : ByteArray) (samples : Nat)
@@ -139,7 +139,7 @@ def AcceptOpensSamples : Prop :=
         openings.size = drawn.size ∧
         ∀ k (hk : k < drawn.size), OpeningPasses reg appends w drawn[k].1 drawn[k].2 openings[k]!
 
-/-! ## The draw -/
+/-! ## The sample -/
 
 /-- Receipt `(i, p)`'s index among a window's receipts in pass order: the positions of the passes before pass `i`,
 then `p`. -/
@@ -149,7 +149,7 @@ def receiptIndex (lengths : Array Nat) (i p : Nat) : Nat := (lengths.toList.take
 def openingsKey (registration : ByteArray) (t : Nat) (coin : ByteArray) : ByteArray :=
   FlockSoundness.Randomness.derive coin OPENINGS_DOMAIN [("registration", .bytes registration), ("window", .int t)]
 
-/-- The draws of window `t` (passes of `lengths` positions, `U` receipts in all) are `Key.subset`'s
+/-- The samples of window `t` (passes of `lengths` positions, `U` receipts in all) are `Key.subset`'s
 `min(s, U)`-subset of `[0, U)` on the openings key, its stream read to some length `L`, each value `u` mapped to the
 receipt `(i, p)` with `receiptIndex = u`: so they are `min(s, U)` distinct receipts of the window (`i` a pass,
 `p < L_i`), one for each of the sampler's values. -/
@@ -278,4 +278,4 @@ def LifetimeCapped : Prop :=
         s.windows[t].plans[i].block p < s.appends[k].first + s.appends[k].count →
           j ≤ t ∧ t < j + params.lifetime
 
-end Properties.RemoteAudit
+end Properties.Poub

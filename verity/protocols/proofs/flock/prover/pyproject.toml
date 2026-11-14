@@ -93,20 +93,20 @@ inputs = [
     # the Lean verifier's stratified sample against the one-stage protocol's, and the Lean spec of verity.commitments.randomness against
     # its pinned vectors
     "verity/protocols/proofs/spot", "verity/commitments/randomness", "verity/commitments/randomness/tests",
-    # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
-    "verity/protocols/policy/inference_only/verifier/nci/lean/scripts",
+    # the Lean decoder's width refusals against the codec, on the inference-only difftest's mistyped descriptors
+    "verity/protocols/policy/inference_only/verifier/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
     "verity/protocols/proofs/flock/verifier/Flock/Zk.lean", "verity/protocols/proofs/flock/verifier/Flock/RecVStar.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
-    # the flock-verify artifact
+    # the verity-verify-proof artifact
     "verity/protocols/proofs/flock/verifier/Flock/Test/RecCap.lean",
-    # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
+    # `flock-zk-server live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/proofs/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
-    # lock, the release side's (its Flock.Firewall.Honest is Flock's, which the flock-firewall artifact keys)
-    "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/proofs/recursion/verifier/firewall",
-          "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py",
+    # lock, the release side's (its Flock.ZkServer.Honest is Flock's, which the flock-zk-server artifact keys)
+    "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/proofs/recursion/verifier/zk_server",
+          "verity/__init__.py", "verity/commitments/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py",
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
           "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]
 parallel = true
@@ -115,8 +115,8 @@ worker_gb = 16
 # 9,765 s on one worker beside a loaded check, past suites.py's SUITE_TIMEOUT_S
 timeout_s = 14400
 # Build outputs the Lean tests run or skip on (`check` runs this suite after its Lean steps have built them).
-artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify",
-             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall",
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
+             "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-zk-server",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-frame-tape",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-rec-sparse",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-witness",
@@ -195,15 +195,15 @@ tests = [
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
-paths = ["verity/protocols/accounting/pouw/verifier/tests"]
+paths = ["verity/protocols/accounting/pouw/verifier/tests", "verity/protocols/experimental/pearl_c4/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]
-paths = ["verity/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_flock_rows.py"]
-paths = ["verity/circuits/ops", "verity/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_keyed.py"]
@@ -219,7 +219,7 @@ paths = [
 
 [[tool.verity.tests.reads]]
 tests = [
-    "tests/test_lean_draw_laws.py",
+    "tests/test_lean_sample_designs.py",
     "tests/test_lean_ks_form.py",
     "tests/test_lean_plain_hidden_tables.py",
     "tests/test_lean_record_checks.py",
@@ -262,7 +262,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]
@@ -278,13 +278,13 @@ tests = ["tests/test_rec_inner_stage.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/proofs/flock/prover/python/verity_flock/templates",
-    "verity/commitments/windows",
+    "verity/commitments/periods",
 ]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_sha512_leaves.py"]
 # nvcc's build of sha512_leaves.cu includes cuda/sha512.cuh, which includes the GPU's one SHA-512
-paths = ["verity/circuits/kernels/sha512.cuh"]
+paths = ["verity/commitments/cuda/sha512.cuh"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_security_inputs.py"]

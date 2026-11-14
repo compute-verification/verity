@@ -47,7 +47,7 @@ from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
 LEAN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier"
-BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
+BIN = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 UNIT = "rec-open/l16-h7"
@@ -78,7 +78,7 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 def built() -> None:
     assert (SET / "u" / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/protocols/proofs/flock/prover/tests/fixtures/rec-coins`")
-    subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    subprocess.run(["lake", "build", "verity-verify-proof"], cwd=LEAN, check=True, capture_output=True)
 
 
 @pytest.fixture(scope="module")
@@ -135,7 +135,7 @@ def shape(built, tmp_path_factory) -> Path:
 
 
 #: the sample of every one of the inner statement's 64 units, in order, as `--rec-inner-draw` takes it
-FULL_DRAW = {"law": "subset", "population": 64, "k": 64, "units": list(range(64))}
+FULL_SAMPLE = {"law": "subset", "population": 64, "k": 64, "units": list(range(64))}
 
 
 def _form(d: Path, draw: dict | None = None) -> list[str]:
@@ -144,7 +144,7 @@ def _form(d: Path, draw: dict | None = None) -> list[str]:
     unit unless given), written to `d`."""
     f = d / "draw.json"
     if draw is not None or not f.exists():
-        f.write_text(json.dumps(FULL_DRAW if draw is None else draw))
+        f.write_text(json.dumps(FULL_SAMPLE if draw is None else draw))
     return ["--rec-inner-statement", "verity/flock-circuit+plain-leaves", "--rec-inner-draw", str(f)]
 
 
@@ -282,7 +282,7 @@ def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forg
                         rf"{LEVEL} top, which the coin server committed", v["why"]), v["why"]
 
 
-def test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused(forged, shape, tmp_path, restaged):
+def test_a_level_at_link_points_the_coin_server_did_not_sample_is_refused(forged, shape, tmp_path, restaged):
     """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points, so the honest level
     against an inner transcript whose first link coin is one bit off from the record's is refused before setup."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
@@ -310,7 +310,7 @@ def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(for
                                                    "the link's roots and points, at json.dumps' indent=1)")
 
 
-def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
+def _inner_sampled(tmp_path: Path, draw: dict) -> Path:
     """The honest inner session, its record given `draw` as its `unit_draw`."""
     inner = shutil.copytree(SET / "inner-honest", tmp_path / "inner-drawn")
     s = json.loads((inner / "session" / "session.json").read_text())
@@ -319,20 +319,20 @@ def _inner_drawn(tmp_path: Path, draw: dict) -> Path:
     return inner
 
 
-def test_an_inner_record_whose_draw_leaves_a_unit_out_is_refused(forged, shape, tmp_path, restaged):
-    """`RecCoins.drawnSpec`: V* recurses on an inner session that proves every unit, so a record whose sample is a well
+def test_an_inner_record_whose_sample_leaves_a_unit_out_is_refused(forged, shape, tmp_path, restaged):
+    """`RecCoins.sampledSpec`: V* recurses on an inner session that proves every unit, so a record whose sample is a well
     formed sample of the 64 units is refused before its record is read."""
-    inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 1, "units": [0]})
+    inner = _inner_sampled(tmp_path, {"law": "subset", "population": 64, "k": 1, "units": [0]})
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, inner,
                 rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert v["why"] == (f"setup: rec-coins: {UNIT}: the inner session's draw: the session's draw proves 1 units, not "
                         "every one of the statement's 64 in order"), v["why"]
 
 
-def test_an_inner_record_given_the_full_draw_is_read_at_the_drawn_statement(forged, shape, tmp_path, restaged):
-    """`RecCoins.drawnSpec`: a record whose sample is every unit is decoded against the sampled statement's spec, whose
+def test_an_inner_record_given_the_full_sample_is_read_at_the_sampled_statement(forged, shape, tmp_path, restaged):
+    """`RecCoins.sampledSpec`: a record whose sample is every unit is decoded against the sampled statement's spec, whose
     header carries the sample. The honest session ran without one, so its record is refused there, at its parameters."""
-    inner = _inner_drawn(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
+    inner = _inner_sampled(tmp_path, {"law": "subset", "population": 64, "k": 64, "units": list(range(64))})
     v = _verify(forged, restaged / "pub.bin", restaged / "registered.json", shape, inner,
                 rows=_acc_rows(tmp_path / "rows.json", restaged))
     assert v["why"] == f"setup: rec-coins: {UNIT}: the inner session's record: {S2_R7}", v["why"]

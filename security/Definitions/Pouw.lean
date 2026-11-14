@@ -55,8 +55,6 @@ public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
 public import Definitions.Pouw.PearlC.DeviceFp4Hot
 public import Definitions.Pouw.PearlC.DeviceFp4Issue
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DevicePrices
-public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.PearlC.DeviceRev1
 public import Definitions.Pouw.PearlC.EncVectors
 public import Definitions.Pouw.PearlC.FormingPDefs
@@ -69,6 +67,7 @@ public import Definitions.Pouw.PearlC.Game
 public import Definitions.Pouw.PearlC.Hidden
 public import Definitions.Pouw.PearlC.HiddenTileGame
 public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.PearlC.Mend
 public import Definitions.Pouw.PearlC.NoiseSha512
 public import Definitions.Pouw.PearlC.PeelExact
 public import Definitions.Pouw.PearlC.PeelExactP
@@ -126,7 +125,7 @@ least the honest work of its correct units, over `1 + ε`.
 * `Properties.Pouw.Period.CheckedCreditPeriod` (the same module): the general form it instantiates, the credit in live
   words over the windows the deployed check accepts.
 * Resource accounting reads PoUW through two guarantees. `Accounting.Guarantees.ComputeOfPouw`
-  (`Definitions.Accounting.Guarantees.Pouw`) is PoUW's guarantee as the compute guarantee.
+  (`Definitions.Pouw.Guarantees.Pouw`) is PoUW's guarantee as the compute guarantee.
   `Accounting.Guarantees.Compose.CircuitCredit` (`Definitions.Accounting.Guarantees.Compose`) is PoUW's credit on a
   registered circuit it compiles.
 
@@ -161,10 +160,10 @@ modules keep their basenames in `Definitions.Pouw`, `Definitions.Pouw.Assumption
   `Definitions.Accounting.Guarantees.FpG1`'s headlines read H1's leaves.
 * `H1Zy`: H1's sampled-leaf statements on words, the bodies of the combine, lane and tile checks (`Combine`, `Lane`,
   `Tile`) on their primitives' word views.
-* `PearlC`: Pearl-C's Π (`Defs`), its game (`Game`) and its named protocol and error (`Instance`). The device records
-  and their prices are `Device` and `DevicePrices`, the hidden audit `Hidden` and `HiddenTileGame`, and the sampled
-  audit `Tile`, `TileDraw` and `Completeness`. The units as core circuits are `RowCircuit`, `TileCircuit` and
-  `WholeCircuit`, and Pearl-C4's FP4 step and chain `Fp4` and `Fp4Chain`.
+* `PearlC`: Pearl-C's Π (`Defs`), its game (`Game`) and its named protocol and error (`Instance`). The device record
+  is `Device` (the records at a card's numbers are `Proofs.Pouw.PearlC.Records`'), the hidden audit `Hidden` and
+  `HiddenTileGame`, and the sampled audit `Tile`, `TileDraw` and `Completeness`. The units as core circuits are
+  `RowCircuit`, `TileCircuit` and `WholeCircuit`, and Pearl-C4's FP4 step and chain `Fp4` and `Fp4Chain`.
 * `Receipt`: the receipt folds `Duo`, `Fx1` (sm_120's) and `Li`, after
   `verity/protocols/pouw/receipts/receipt_folds.py`. Their binding statements are `Definitions.Pouw.Guarantees.Receipt`.
 * `TileBound`: the FP4-tile model (`Defs`) and the FP8-tile model at sm_120's FP8 atom (`Fp8Defs`).

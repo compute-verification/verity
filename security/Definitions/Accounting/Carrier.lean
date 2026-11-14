@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.RateAuditSketchDeployed
-public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Poub.RateAuditSketchDeployed
+public import Definitions.Poub.RateAuditDeployed
 public import Definitions.Accounting.Gates.Codec
 public import Definitions.Accounting.Requirement
 import Mathlib.Basic.ENNReal.Real
@@ -37,13 +37,13 @@ a pass's certified stream and oracle, receipts it computed elsewhere among them:
 whose inputs are any function of the store, the stream and the oracle. A device reads such a carrier through its side
 sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts the side link without them.
 
-**A carrier of a declared circuit's.** A credited KV page's payload is a declared circuit `W`'s values. Its
+**A carrier of a registered circuit's.** A credited KV page's payload is a registered circuit `W`'s values. Its
 carrier's provenance is `W`'s computation from the chain's first write to the pass. So its inputs are `W`'s run inputs
 in those windows of the audit, and its encodes are `W`'s nonlinear units there, its budgeted units and its data
 products (`Provenance.OfCircuit`), which `W`'s census and `Gates.productsAt` count per window.
 
 **The tiles a pass read.** `readsIn` is `readsOn` restricted to the tiles `I j` of each pass `j`: the distinct
-device-memory sectors read from those tiles. With `I j` the tiles of a declared circuit's blocks, it is what a pass
+device-memory sectors read from those tiles. With `I j` the tiles of a registered circuit's blocks, it is what a pass
 read of that circuit's data.
 
 **A steered layout.** `steeredStore` is `coinStore` on a layout that reads the codec and the append coins as well as
@@ -55,8 +55,8 @@ own coin, and a re-key appends a block again under a fresh one. A pass's appende
 layout puts at positions of appends after the registration, and `Chip.rebuildsIn` counts a program's rebuilds of
 sectors in a set of tiles. The stacking premise charges carriers with the rebuilds of appended tiles only.
 
-**The lifetime cap.** The remote audit refuses a plan holding a block of an append that joined a window `L` or more
-before (its `lifetime`; `Properties.RemoteAudit.LifetimeCapped`). An append joins the window being filled at the first
+**The lifetime cap.** PoUB refuses a plan holding a block of an append that joined a window `L` or more
+before (its `lifetime`; `Properties.Poub.LifetimeCapped`). An append joins the window being filled at the first
 pass after it, so its coin was flipped after every pass of the windows before. `LifetimeCapped layout joined L` is the
 game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
 to `joined t + L − 1`. The game flips every append's coin with the codec, so `joined` is the game's only record of when.
@@ -72,7 +72,7 @@ device tick be in two windows or in two passes of one window.
 (`Definitions/Accounting/Gates`) of the codec words `x` bits fill, `⊤` when no circuit of the model's restricted class
 computes them, so that such a step exceeds every budget. The provenances' `gates` count them.
 
-**The append-coin rule.** The audit appends blocks during a session (a KV page), and remote_bandwidth's PROTOCOL.md
+**The append-coin rule.** The audit appends blocks during a session (a KV page), and poub's PROTOCOL.md
 (§3–§4) orders each append's choices before its encoding. The append's root commits its blocks' digests `d_j`, and only
 then does the verifier flip the append's coin `c_a`, once, which each block's key reads: `b_j(c_a) = H(seed ‖ j ‖ d_j ‖
 c_a)`. The registration is the first append, and its coin is the codec seed. So the writers' choices for an append
@@ -94,7 +94,7 @@ coins.
 
 namespace Accounting
 
-/-- **The blocks a pass reads under the append-coin rule** (remote_bandwidth's PROTOCOL.md §3–§4). The store is made by
+/-- **The blocks a pass reads under the append-coin rule** (poub's PROTOCOL.md §3–§4). The store is made by
 `T` appends in order, each of `M` block positions: the registration first, whose coin is the codec seed, then the
 appends of blocks written after it. Append `a`'s choices `choose ω a κ_<a` (its payloads, their padding, the run inputs
 behind them, how many blocks, the schedule up to it) read `ω` and the coins of the appends before it only, since its
@@ -212,7 +212,7 @@ def appendedTiles {Pfx Y : Type} {N T M : ℕ} (layout : Pfx → Y → Fin N ↪
     Finset (Fin N) :=
   Finset.univ.filter fun i => ((layout c y i).1 : ℕ) ≠ 0
 
-/-- **Each append's blocks are read within `L` windows of the one it joined**: the game's form of the remote audit's
+/-- **Each append's blocks are read within `L` windows of the one it joined**: the game's form of PoUB's
 `LifetimeCapped`. At the session's coins `x` (the codec and the append coins `x.1`, the windows' `x.2`), every pass
 whose layout puts a block of an append `t` after the registration in its store is in a window `w` with
 `joined x t ≤ w < joined x t + L`. `joined x t` is the window append `t` joined, the one being filled at the first pass

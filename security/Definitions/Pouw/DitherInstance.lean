@@ -2,8 +2,6 @@ module
 
 public import Definitions.Pouw.Dither
 public import Definitions.Core.Accel.Machine
-public import Definitions.Core.Accel.H200
-public import Definitions.Core.Accel.Sm120
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,8 +37,8 @@ import Mathlib.Topology.Sheaves.Init
 # The headline's model on the cards: the H200 and the RTX PRO 6000 (trusted)
 
 `Definitions.Pouw.Guarantees.Dither.WorkSound` is stated over an abstract accelerator `Accel`. This file ties that
-`Accel` to the machine 𝓜 (`Definitions.Core.Accel`) at a card's numbers, so the headline can be read on
-`Verity.Accel.H200.card` and `Verity.Accel.Sm120.card` (`Definitions.Pouw.Guarantees.DitherInstance`):
+`Accel` to the machine 𝓜 (`Definitions.Core.Accel`) at a card's numbers, so the headline can be read on every card
+table, the H200's and the RTX PRO 6000's among them (`Definitions.Pouw.Guarantees.DitherInstance`):
 
 * **the period's devices** (`Devices`): `n` cards of one table pooled into one machine (`poolCard`, a coarsening:
   the pooled cards share their stores and resources, so the links between them are free), and the period's other
@@ -101,7 +99,7 @@ crossing a network certifier other than the cards themselves (host CPUs over PCI
 resource with its θ rate in units a second (θ's per-node rows: SHA-512 and INT8 rates, DRAM, PCIe, C2C) and
 their memory in bits. Their programs are `Accel`'s like the cards', priced at the period's dual price, so the honest
 optimum may use them and the capacity `C` includes them. That the list is complete is the inventory premise
-(`Assumptions.PeriodInventory`). -/
+(`Assumptions.MonitoringPeriodInventory`). -/
 structure Others where
   Res : Type
   [instRes : Fintype Res]
@@ -251,11 +249,13 @@ and R-hi (the menu's `pub_sha.RTXPRO6000`; IMAD 487, IMAD.WIDE 487, IMAD.HI 487)
 def pubShaSm120 : List ResUnits :=
   [shaUnits 3415 0 (3415 / 32), shaUnits 2563 1704 (4267 / 32), shaUnits 2441 1461 (3902 / 32)]
 
-/-- The H200's public best methods: the public-best menu's named programs. -/
-def pubBestH200 : PubBest Verity.Accel.H200.card := ⟨pubMmH200, pubShaH200⟩
+/-- The H200's public best methods: the public-best menu's named programs, at the card table `c` that states the
+H200's card file (`hardware/cards/h200-sxm-141gb.toml`). -/
+def pubBestH200 (c : Verity.Accel.Card) : PubBest c := ⟨pubMmH200, pubShaH200⟩
 
-/-- The RTX PRO 6000's public best methods: the public-best menu's named programs. -/
-def pubBestSm120 : PubBest Verity.Accel.Sm120.card := ⟨pubMmSm120, pubShaSm120⟩
+/-- The RTX PRO 6000's public best methods: the public-best menu's named programs, at the card table `c` that states
+the RTX PRO 6000 Server Edition's card file (`hardware/cards/rtx-pro-6000-server.toml`). -/
+def pubBestSm120 (c : Verity.Accel.Card) : PubBest c := ⟨pubMmSm120, pubShaSm120⟩
 
 /-- **An oracle call costs a public SHA-512 compression on the card**: `G`'s oracle-call step (G3)
 uses, on the card's resources, the units of one compression of one of the public schedules

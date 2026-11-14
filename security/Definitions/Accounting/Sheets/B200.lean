@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.TS.Sheet
+public import Definitions.Pouw.TS.Sheet
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

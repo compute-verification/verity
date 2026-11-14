@@ -39,8 +39,8 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # The claims' incorrect set inside the game's wrong set
 
 `Claims.Sampling.faulty` counts the slots of the claims' partition whose proof block no interior makes correct on the
-witness's openings; `FlockSoundness.Discharge.ZkLink.wrongRegZ` counts the game's units not right on the registration at
-a transcript (`EndToEnd` reads it at `XplurZC`). `faulty_card_le_wrongRegZ`: when every slot is some game unit's
+witness's openings; `FlockSoundness.Discharge.ZkLink.incorrectRegZ` counts the game's units not right on the registration at
+a transcript (`EndToEnd` reads it at `XplurZC`). `faulty_card_le_incorrectRegZ`: when every slot is some game unit's
 (`slot`), at most as many slots are faulty as units are wrong, given two facts per game unit `u` at the slot's proof
 block `b u`, each a hypothesis here:
 
@@ -113,20 +113,20 @@ theorem not_faulty_of_rightRegZ {H : Claims.Msg → Claims.Msg} {Cm : Claims.Sam
 /-- **At most as many slots are faulty as game units are wrong on the registration**: every slot is some unit's
 (`slot`), and at each unit its slot's proof block lowers to it (`Lowers`) and the witness's openings agree with the
 registration's (`Binds`). -/
-theorem faulty_card_le_wrongRegZ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
+theorem faulty_card_le_incorrectRegZ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.CommitmentScheme Bool)
     (s : Claims.Sampling.AuditStatement)
     (Pc : Claims.Sampling.Partition) (w : Claims.Sampling.Wit) (R : Reg) (Xv : Fin C.N → Bool) (slot : Fin n → ℕ)
     (b : Fin n → List ℕ) (φ : ℕ → Fin C.N)
     (hcov : ∀ v < Pc.blocks.length, ∃ u, slot u = v) (hr : ∀ u, Pc.blocks[slot u]? = some (b u))
     (hlow : ∀ u, Lowers s.prog (b u) φ Xv) (hbind : ∀ u, Binds A P planZ tab vb H Cm s w (b u) φ R u) :
-    (Claims.Sampling.faulty H Cm s Pc w).card ≤ (wrongRegZ A P planZ tab vb R Xv).card := by
+    (Claims.Sampling.faulty H Cm s Pc w).card ≤ (incorrectRegZ A P planZ tab vb R Xv).card := by
   classical
-  calc (Claims.Sampling.faulty H Cm s Pc w).card ≤ ((wrongRegZ A P planZ tab vb R Xv).image slot).card := by
+  calc (Claims.Sampling.faulty H Cm s Pc w).card ≤ ((incorrectRegZ A P planZ tab vb R Xv).image slot).card := by
         apply Finset.card_le_card
         intro v hv
         simp only [Claims.Sampling.faulty, Finset.mem_filter, Finset.mem_range] at hv
         obtain ⟨u, rfl⟩ := hcov v hv.1
-        refine Finset.mem_image.2 ⟨u, (mem_wrongRegZ A P planZ tab vb).2 fun h => ?_, rfl⟩
+        refine Finset.mem_image.2 ⟨u, (mem_incorrectRegZ A P planZ tab vb).2 fun h => ?_, rfl⟩
         exact not_faulty_of_rightRegZ (hr u) (hlow u) (hbind u) h hv.2
     _ ≤ _ := Finset.card_image_le
 

@@ -12,6 +12,7 @@ from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import program_compare as PC
 from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.config import UsageError
+from verity_vllm.program.compact import from_runs
 from verity_vllm.records.schema_ids import PROGRAM_COMPARE_SCHEMA
 
 FOLD_KEYS = ["fold_form", "oracle_segmentation_mismatches", "oracle_weight_map"]   # what `main` adds when B is a fold's record
@@ -72,6 +73,24 @@ def test_main_reports_a_rank_program_that_reads_another_collectives_peer(tmp_pat
     assert brief["canonical_equal"] is False and brief["totals"] == cmp["totals"]
 
 
+@pytest.mark.parametrize("row", [1, 24], ids=["the first instance's", "the last instance's"])
+def test_main_counts_a_folds_row_that_states_another_step_than_its_sampling_events_cut(tmp_path, capsys, row):
+    """The fold's record states each instance's engine step; the view cuts its steps at the sampling events.  `main` counts the
+    instances whose row states another step than the cut, and compares as before: nothing else of the document moves."""
+    a, b = _dirs(tmp_path)
+    as_persisted, _brief, _ = _run(tmp_path, capsys, a=a, b=b)
+    assert as_persisted["oracle_segmentation_mismatches"] == 0
+    rows = tmp_path / "fold" / "instances.jsonl"
+    lines = rows.read_text().splitlines()               # the header, then a row an instance
+    stated = json.loads(lines[row])
+    stated["step"] = 1 - stated["step"]                 # the toy's fold has two steps
+    lines[row] = json.dumps(stated, separators=(",", ":"))
+    rows.write_text("\n".join(lines) + "\n")
+    doc, _brief, _ = _run(tmp_path, capsys, a=a, b=b)
+    assert len(lines) == 25 and doc["oracle_segmentation_mismatches"] == 1
+    assert {k for k in doc if doc[k] != as_persisted[k]} <= {"oracle_segmentation_mismatches", "utc", "seconds"}
+
+
 def test_two_rank_program_directories_are_compared_without_the_folds_keys(tmp_path, capsys):
     a, _b = _dirs(tmp_path)
     doc, _brief, _ = _run(tmp_path, capsys, a=a, b=a)
@@ -102,11 +121,13 @@ def test_progressions_refuse_an_unfolded_side_before_a_directory_is_read(tmp_pat
     assert not out.exists()
 
 
-def test_the_padding_audit_counts_a_steps_muxes_their_live_bit_and_zero_row_and_its_guards():
-    """A view of what `audit_padding` reads and nothing more: the second step holds one event's guard and its three muxes."""
+@pytest.mark.parametrize("compact", [False, True], ids=["record", "compact"])
+def test_the_padding_audit_counts_a_steps_muxes_their_live_bit_and_zero_row_and_its_guards(compact):
+    """A view of what `audit_padding` reads and nothing more: the second step holds one event's guard and its three muxes.  The
+    audit is the same of the record's runs and of the compact form's progressions (`compact.from_runs`)."""
     live, zero = [("n", 3, 0, 1)], ("n", 0, 0, 16)
     P = RootView.__new__(RootView)
-    P.compact = False
+    P.compact = compact
     P.inst = [{"spec": "TokenSelect_v1{V=8}", "args": [[("n", 1, 0, 8)]]},
               {"spec": "I32Eq_v1", "args": [[("n", 2, 0, 1)], [("n", 2, 1, 2)]]},
               {"spec": "BitNot_v1", "args": [[("n", 5, 0, 1)]]},
@@ -115,6 +136,8 @@ def test_the_padding_audit_counts_a_steps_muxes_their_live_bit_and_zero_row_and_
               {"spec": "SelectBf16_v1{N=16}", "args": [live, [("n", 8, 0, 16)], [zero, ("n", 9, 0, 16)]]},
               {"spec": "SelectBf16_v1{N=16}", "args": [live, [("n", 8, 16, 32)], [zero, ("n", 9, 16, 32)]]},
               {"spec": "TokenSelect_v1{V=8}", "args": [[("n", 10, 0, 8)]]}]
+    if compact:
+        P.inst = [dict(r, args=[from_runs(a) for a in r["args"]]) for r in P.inst]
     P.steps = [[0], [1, 2, 3, 4, 5, 6, 7]]
     assert PC.audit_padding(P) == {"per_step": [
         {"step": 0, "muxes": 0},

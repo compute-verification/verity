@@ -1,0 +1,15 @@
+{
+ "definitions": {
+  "PousP2SlotMatch_v1{P=6,N=15}": {
+   "and": 146,
+   "type": "fbc545ddac72afe899466413c29666a29063c9137eae1d71c6c41773ce1d30544ac77604aff089ad5a636ad774724afffc5a4b9e1910f0356726c4665ea2fbda"
+  },
+  "PousP2SlotMatch_v1{P=6,N=16}": {
+   "and": 160,
+   "type": "29f17ee6f25ed8c32f9f177351dd4179e445627fe6e08f3d5dbd12795352f124007ff5476a91a88ebfcaba53f5f0296a66e01e032f02b4815037379d13eeef45"
+  }
+ },
+ "struct_max_gates": {
+  "PousP2SetupCheck_v1": 1100000
+ }
+}

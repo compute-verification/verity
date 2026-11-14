@@ -4,6 +4,7 @@ public import Proofs.Pouw.PearlPlus.Assembly
 public import Proofs.Pouw.PearlPlus.Rules
 public import Proofs.Properties.Pouw.PearlPlus.Verdict
 public import Definitions.Pouw.PearlC.TileDraw
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl+'s bridge, the sample: the run's tickets and acceptance as the game's sample reads them
@@ -25,13 +26,13 @@ declaration is consistent with it (`goodDeclTiles`). This file reads the code's 
   tiles the verdict opened is in `goodDeclTiles ∪ blankTiles` or over the inert-work bound (`overCapTiles`), or SHA-512
   collides on an opened tile. A sampled tile's check gives its words (`TilePassGivesTheWords`) and its declaration
   (`TilePassGivesTheDecl`), so it is good within the game's inert-work bound (`capOK`) and over the bound otherwise.
-  The tile's weight rows passing the rules is a hypothesis (`DrawnOn.weights`), as in `TilePassGivesTheWords`: the
+  The tile's fixed-operand rows passing the rules is a hypothesis (`DrawnOn.weights`), as in `TilePassGivesTheWords`: the
   check holds only credited B rows to the rules (an excluded row must fail them and a voluntary one is unread), where
   `TileGood` reads every column.
 
 The run's layout (`RunLayout`) is what the game reads of the run: each pass tiles 64 × 64 (a manifest's `instance` may
 set another tile), each record is a unit of the workload that the transcript commits, with the record's shape and
-weight, and no two records share a call index. `passesDistinct` keys call indices per salt, so a run whose passes of
+fixed operand, and no two records share a call index. `passesDistinct` keys call indices per salt, so a run whose passes of
 different salts share an index is not one game's run.
 -/
 
@@ -848,12 +849,12 @@ theorem banded_row {r : UnitRecord} {i : ℕ}
 
 /-- **(c) A passed tile's declaration is consistent**: a tile of a pass `load` gives, which is audit tile `g` of `U`,
 whose unit `τ` commits as `c` and declares by its record (`declOf`), whose openings are `c`, and that `checkTile` passes
-on its weight's noise or finds only over its inert-work bound, has `declOK` at the deployed rules: its kept width is within `k`, and every credited row it
+on its fixed operand's noise or finds only over its inert-work bound, has `declOK` at the deployed rules: its kept width is within `k`, and every credited row it
 declares in the tile passes `RowOK` at `c`'s activations. -/
 def TilePassGivesTheDecl : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwCheck.PearlPlus.EpochCoins)
     (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Workload) (g : ℕ)
-    (τ : Pouw.PearlC.Transcript) (c : Pouw.PearlC.Commit) (dec : ℕ → Decl),
+    (τ : Pouw.PearlC.Trace) (c : Pouw.PearlC.Commit) (dec : ℕ → Decl),
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g →
     τ ((auditTiling 64 64 U.layout).unit g) = some c → (∀ r ∈ p.records, dec r.matmul.index = declOf r) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
@@ -925,8 +926,8 @@ def decOf (passes : List Pass) (u : ℕ) : Decl :=
   | none => ⟨0, ∅, ∅⟩
 
 /-- How the run's passes lie over the game's workload `U` and transcript `τ`: 64 × 64 tiles, each record's call a unit
-of `U` that `τ` commits, with the record's shape and weight, and no call in two records. -/
-structure RunLayout (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript) : Prop where
+of `U` that `τ` commits, with the record's shape and fixed operand, and no call in two records. -/
+structure RunLayout (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace) : Prop where
   tile64 : ∀ p ∈ passes, p.scheme.tileM = 64 ∧ p.scheme.tileN = 64
   unit : ∀ p ∈ passes, ∀ r ∈ p.records, r.matmul.index < U.layout.N ∧
     (U.layout.shape r.matmul.index).m = r.matmul.m ∧ (U.layout.shape r.matmul.index).k = r.matmul.k ∧
@@ -936,7 +937,7 @@ structure RunLayout (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.P
     p.records[pos]? = some r → passes[i']? = some p' → p'.records[pos']? = some r' →
     r.matmul.index = r'.matmul.index → i = i' ∧ pos = pos'
 
-variable {passes : List Pass} {U : Pouw.PearlC.Workload} {τ : Pouw.PearlC.Transcript}
+variable {passes : List Pass} {U : Pouw.PearlC.Workload} {τ : Pouw.PearlC.Trace}
 
 theorem decOf_cases (passes : List Pass) (u : ℕ) : decOf passes u = ⟨0, ∅, ∅⟩ ∨
     ∃ (i : ℕ) (p : Pass) (pos : ℕ) (r : UnitRecord), passes[i]? = some p ∧ p.records[pos]? = some r ∧
@@ -994,7 +995,7 @@ theorem cell_n_pos (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells pas
   rw [h] at hx
   simp [nblocks] at hx
 
-/-- A run's tile is its game tile's: the audit's tile `gOf` has the record's unit, shape, weight, rows and columns. -/
+/-- A run's tile is its game tile's: the audit's tile `gOf` has the record's unit, shape, fixed operand, rows and columns. -/
 theorem cell_audit (hL : RunLayout passes U τ) {c : Cell} (hc : c ∈ cells passes) :
     gOf U.layout c < (auditTiling 64 64 U.layout).NT ∧
       (auditTiling 64 64 U.layout).unit (gOf U.layout c) = c.r.matmul.index ∧
@@ -1120,7 +1121,7 @@ declaration read from its record (`decOf`), each of `Run.tickets`' entries is a 
 `drawTickets` under `pearlCDrawRev1 devH100` are the entry's tickets; distinct entries are on distinct game tiles, and
 every game tile with a ticket has an entry. -/
 def TicketsAreTheDraw : Prop :=
-  ∀ {Q R S : Type} (TR : TileRules Q R S) (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript),
+  ∀ {Q R S : Type} (TR : TileRules Q R S) (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace),
     (∀ L, TR.tiling L = auditTiling 64 64 L) → RunLayout passes U τ →
     ∃ φ : ℕ → ℕ,
       (∀ j id t, (tickets passes)[j]? = some (id, t) →
@@ -1179,10 +1180,10 @@ theorem ticketsAreTheDraw : TicketsAreTheDraw := by
 /-! ## Acceptance -/
 
 /-- What the game reads of the plan's tile `(pi, tid)` on audit tile `g`: the verdict opens it, it is `g` (`TileOf`),
-its pass's salt is the game's, its weight's root is the semantics', each weight row of its columns passes `P`'s rules,
+its pass's salt is the game's, its fixed operand's root is the semantics', each fixed-operand row of its columns passes `P`'s rules,
 and its openings are its unit's commitment. -/
 structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (P : Pouw.PearlC.Protocol Q R S) (s : S)
-    (pl : Plan) (opener : ℕ → ℕ → Except String TileOpening) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript)
+    (pl : Plan) (opener : ℕ → ℕ → Except String TileOpening) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace)
     (pi tid g : ℕ) : Prop where
   todo : (pi, tid) ∈ pl.todo
   tile : TileOf pl.passes[pi]! tid U g
@@ -1203,7 +1204,7 @@ tile, one hashed in digesting the words the check forms and one in digesting the
 def AcceptGivesTheAudit : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (P : Pouw.PearlC.Protocol Q R S)
     (TR : TileRules Q R S) (H : Q → R) (s : S) (i : Input) (opener : ℕ → ℕ → Except String TileOpening) (pl : Plan)
-    (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript) {w : ℕ → ℕ} {t : ℕ}
+    (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace) {w : ℕ → ℕ} {t : ℕ}
     (c : Fin t → Ticket w (TR.tiling U.layout).NT),
     TR.tiling = auditTiling 64 64 → TR.rowOK = (tilesH3 saltOf rootOf ρ : TileRules Q R S).rowOK →
     P.ticket = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).ticket →

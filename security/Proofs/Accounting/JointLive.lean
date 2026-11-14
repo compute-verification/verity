@@ -196,7 +196,7 @@ def Live.toyPeriod : PeriodLive Live.toyDevice Unit Live.toyCircuit (.ret ()) wh
 def Live.toyStrategy : Strategy (Game.ret () : Game Unit) := PUnit.unit
 
 /-- **The bound is not vacuous** (`Accounting.Guarantees.JointPeriodLive_nontrivial`): on the one-gate circuit, a
-period whose extractor reads `0` at the gate and whose sampled proofs accept is wrong at its one unit with
+period whose extractor reads `0` at the gate and whose SPOT accepts is wrong at its one unit with
 probability `1`, at integrity share `0`. -/
 theorem JointPeriodLive_nontrivial : Accounting.Guarantees.JointPeriodLive_nontrivial := by
   refine ⟨Empty, Unit, inferInstance, Live.toyDevice, Live.toyCircuit, Unit, .ret (), Live.toyPeriod,

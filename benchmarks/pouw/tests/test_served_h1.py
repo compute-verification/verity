@@ -9,7 +9,7 @@ junk row in a slot the queue leaves unassigned is refused and credits nothing, s
 the queue selects, and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against
 it and the step's A root, and A' = -b is refused.  A linear's B table is the same format over its weight rows, under the
 weights' root; the scheduler's record gives the request queue and its commitment.  A window's live coins
-(`served_h1/coins.py`) come from a challenger session off the node over its stream (a fake auditor host on loopback, its
+(`served_h1/coins.py`) come from a challenger session off the node over its stream (a fake auditor device on loopback, its
 ledger and the challenger's record and close signed with a test key), which refuses a session of another layout; the
 session is reserved at the gate for the window's layout and then opened on the root the caller gives (one quoted
 argument each), its secret kept from every output and carried in the hello, which the challenger refuses without it. The
@@ -42,7 +42,7 @@ import pytest
 import serve as SV
 import torch
 
-from verity_vllm.protocols.pouw.h1 import receipts as RC
+from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
 
 SALT, RA, RB = bytes(range(64)), bytes(range(64, 128)), bytes(range(128, 192))
 
@@ -400,13 +400,13 @@ MAIN = ["e1" * 20, PIN]
 
 @functools.cache
 def _host_key():
-    """The fake auditor host's LMS key: 16 leaves, a window's ledger entries, record and close at one each."""
+    """The fake auditor device's LMS key: 16 leaves, a window's ledger entries, record and close at one each."""
     from verity.commitments.crypto import lms
     return lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 
 
 class _Host:
-    """The challenger on its auditor host over loopback, as the gate runs a window's session (`auditor.py`): the
+    """The challenger on its auditor device over loopback, as the gate runs a window's session (`auditor.py`): the
     lane's period opened and the session reserved and opened on `root` in the auditor's signed ledger (`ledger`, v2), a
     live window's coins (`coins.layout`, or `rounds` rounds at `epoch`) with its record signed and written to
     `directory` (`remote.open_session`) beside an empty hellos.jsonl, serving one session (`remote.serve`, its hello
@@ -1024,7 +1024,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
     `$POUW_CHALLENGER_SECRET_FILE`) and no ``--coins``, it opens the challenger's session before anything else (this
     host's layout isn't the window's, so it stops there), and ``--coins seeded`` beside a session is refused.
     ``--gate`` is refused, with a session or without, and the refusal names the gated served window of record, vllm's H1
-    path (`adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py`)."""
+    path (`verity/protocols/accounting/pouw/prover/serving/h1/__init__.py`)."""
     host = _Host(tmp_path, EPOCH, ROUNDS + 1)
     CO.write_secret(tmp_path / "secret", host.secret)
     monkeypatch.delenv(CO.COMMITMENT_ENV, raising=False)
@@ -1042,7 +1042,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
             for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV):
                 monkeypatch.delenv(name)
         with pytest.raises(ValueError, match=r"--gate research@gate: served_h1's own gated window is superseded; .*"
-                                             r"adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py, which holds"):
+                                             r"verity/protocols/accounting/pouw/prover/serving/h1/__init__.py, which holds"):
             SV.main([*argv, "--gate", "research@gate"])
 
 

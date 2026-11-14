@@ -11,8 +11,8 @@ import math
 from fractions import Fraction
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import (  # noqa: F401
+from poub_fakes import Clock, Entropy
+from test_poub import (  # noqa: F401
     SCHEDULE,
     A,
     N,
@@ -24,20 +24,24 @@ from test_remote_bandwidth import (  # noqa: F401
     store,
 )
 
-from verity import claims
-from verity.protocols.accounting.poub.verifier import audit, codec, ledger, line, receipts, timing
+from verity.commitments import claim_ids
+from verity.protocols.accounting.poub.prover import audit_prover
+from verity.protocols.accounting.poub.verifier import audit, codec, ledger, line, monitoring, period, receipts, timing
 from verity.protocols.accounting.poub.verifier.audit import AuditRun, Pace
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
 B = codec.BLOCK_BYTES
+FIGURES = timing.RTX_PRO_6000_NODE
 
 
 def node(*, chip_blocks: int = 1, squarings: float = 0.0, disk: float = 0.0, link: float = 0.0,
          bursts: tuple[int, int, int] = (0, 0, 0)) -> ledger.Node:
     """A node sized to the small store: `timing`'s R, `chip_blocks` blocks on chip, the given ceilings, and bursts of
     the given blocks (rebuild, disk, link)."""
-    return ledger.Node(timing.SPEC_BYTES_PER_S, timing.READ_BYTES_PER_S, chip_blocks * B,
-                       {codec.FALLBACK.field.name: squarings}, disk_bytes_per_s=disk, link_bytes_per_s=link,
+    f = FIGURES
+    return ledger.Node(f.spec_bytes_per_s, f.read_bytes_per_s, chip_blocks * B, {codec.FALLBACK.field.name: squarings},
+                       f.gpu_write_bytes_per_s, f.host_write_bytes_per_s,
+                       disk_bytes_per_s=disk, link_bytes_per_s=link,
                        rebuild_burst_bytes=bursts[0] * B, disk_burst_bytes=bursts[1] * B,
                        link_burst_bytes=bursts[2] * B)
 
@@ -50,7 +54,7 @@ def paced(store, p: audit.Params, plan=None):
     root's arrival."""
     clock = Clock()
     s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenges, coin_at, closed_at = {0: s.start()}, {0: DOWN_NS}, None
     passes, arrivals, previous = {}, {}, store.registration.digest
     t = i = ready = step = 0
@@ -115,7 +119,7 @@ def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(stor
     s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
-    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
+    prover = audit_prover.Prover(store, None, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(coin, 0, store.registration.digest, None)
     assert s.receive(0, 0, ps.root, step=0) is None
@@ -167,8 +171,8 @@ def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
     out = ledger.declared(r, n)
-    sk, d = ledger.sketch(r, n), ledger.draw(r, n)
-    assert 0 <= sk < 2.0 ** -40
+    sk, d = ledger.sketch(r), ledger.draw(r)
+    assert 0 < sk < 2.0 ** -15, "16 rows at Q = 2^80"
     for g, cap in ((out.spec, n.spec_bytes_per_s), (out.measured, n.read_bytes_per_s)):
         want = audit.ledger(r, capacity_bytes_per_s=cap, chip_bytes=n.chip_bytes, rebuild=n.rebuild(r.codec))
         assert g.ledger == want and g.windows == want.windows and g.capacity_bytes_per_s == cap
@@ -176,6 +180,28 @@ def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
                                                               want.error_horizon + sk + d.total)
     assert out.to_json()["gamma"]["spec"]["gamma"] == out.spec.gamma
     assert out.to_json()["gamma"]["spec"]["error"]["draw"] == d.to_json()
+
+
+def test_a_periods_table_reads_the_sessions_error_from_its_declared_outputs(store) -> None:
+    """`monitoring.table` takes a session's whole error from the ledger's declared outputs, the horizon's: what the
+    answer's `eps` holds (the pooled bound's δ and the rejection) with the passes' slack, the receipts' binding term
+    and the sketch's term, which `eps` leaves out."""
+    s, prover, passes, clock = drive(store, params(delta=float(period.DELTA)), SCHEDULE)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r, n = s.record(), node(squarings=1e9)
+    public, profile = period.certified(r)
+    out = ledger.declared(r, n)
+    error = monitoring.ledger_error(out.to_json())
+    assert error == out.spec.to_json()["error"] == monitoring.ledger_error({"declared": out.to_json()})
+    table = monitoring.table({"verdict": "accept", "public": public, "profile": profile}, error, 1, 600)
+    eps, sk = Fraction(public["eps"]), ledger.sketch(r)
+    assert eps == period.DELTA + Fraction(len(r.windows) * r.samples, 2 ** 64) and sk > 0
+    assert table["observed"]["error"] == out.spec.error_horizon > float(eps)
+    assert out.spec.error_horizon == pytest.approx(
+        float(eps) + r.passes * 2.0 ** -audit.SLACK_LOG2 + ledger.binding(r) + sk, rel=1e-12)
+    assert table["observed"]["error_terms"]["sketch"] == float(sk)
+    week = table["periods"]["week"]
+    assert week["error"] == float(1008 * Fraction(out.spec.error_horizon)) and week["q_bytes"] == 1008 * public["q_bytes"]
 
 
 def test_a_paced_session_reads_gamma_per_fixed_window(k1) -> None:
@@ -213,12 +239,13 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
     sampled = len(r.windows) * r.samples
     assert sampled == sum(w.profile.drawn["receipt"] for w in r.windows) == 21, "each window holds more than 7 receipts"
-    assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.hiding(r)
-                          + ledger.binding(r, n) + ledger.sketch(r, n) + sampled * 2.0 ** -64)
-    d = ledger.delta_parts(r, n)
-    assert d == {"profile": r.windows[0].profile.delta, "slack": P * 2.0 ** -audit.SLACK_LOG2,
-                 "hiding": ledger.hiding(r), "binding": ledger.binding(r, n), "sketch": ledger.sketch(r, n),
-                 "rejection": sampled / 2 ** 64}
+    assert snap.delta == (Fraction(r.windows[0].profile.delta) + Fraction(P, 2 ** audit.SLACK_LOG2) + ledger.hiding(r)
+                          + ledger.binding(r) + ledger.sketch(r) + Fraction(sampled, 2 ** 64))
+    assert snap.to_json()["delta"] == str(snap.delta) and Fraction(snap.to_json()["delta"]) == snap.delta
+    d = ledger.delta_parts(r)
+    assert d == {"profile": Fraction(r.windows[0].profile.delta), "slack": Fraction(P, 2 ** audit.SLACK_LOG2),
+                 "hiding": ledger.hiding(r), "binding": ledger.binding(r), "sketch": ledger.sketch(r),
+                 "rejection": Fraction(sampled, 2 ** 64)}
     assert tuple(d) == ledger.DELTA_PARTS
     parts = d["profile"] + d["slack"] + d["hiding"] + d["binding"] + d["sketch"] + d["rejection"]
     assert snap.delta == parts and sampled > 0
@@ -228,19 +255,31 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
 
 def test_the_coin_commitments_hiding_is_charged(store) -> None:
     """`ledger.hiding` is `LineHeld`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
-    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries (`PooledSample` reads none)."""
+    within 2^-192, n·2^-191 over the record's n windows for all but a 2^-64 fraction of keys, which the line's δ
+    carries (`PooledSample` reads none)."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
-    assert len(r.windows) > 1 and ledger.hiding(r) == pytest.approx(len(r.windows) * 2.0 ** -191, rel=1e-12)
+    assert len(r.windows) > 1 and ledger.hiding(r) == Fraction(len(r.windows), 2 ** 191)
     assert ledger.hiding(r) == ledger.hiding_over(len(r.windows))
+
+
+def test_the_binding_term_is_exact_and_never_below_its_formula() -> None:
+    """`binding_over` is samples·√(receipts·s)·q/2^256.5 with √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`: the
+    root it takes is at least the true one and less than one step above it."""
+    step = Fraction(1, 2 ** ledger.BINDING_ROOT_BITS)
+    for draws, held, samples, queries in ((1, 1, 1, 0), (7, 10 ** 9, 33_273, 2 ** 80), (3, 2, 5, 12_345)):
+        s = min(samples, held)
+        q = 2 * queries + 2 * s * ledger.OPENING_HASHES
+        root = ledger.binding_over(draws, held, samples, queries) * 2 ** 256 / (draws * q)
+        assert root ** 2 >= Fraction(held * s, 2) > (root - step) ** 2
 
 
 def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part_of_delta() -> None:
     """`LineHeld`'s Σ_t adv_t has no numeric value: nothing prices it and the line doesn't assume it.  The ledger names
-    it by its claim (`PRF_CLAIM`, which the registry holds as an assumption of the protocols that do take it) and puts
-    it in no part of δ."""
-    assert claims.get(ledger.PRF_CLAIM).kind == "assumption" and ledger.PRF_CLAIM not in ledger.DELTA_PARTS
+    it by its claim (`PRF_CLAIM`, which the claim ids' table holds as an assumption of the protocols that do take it)
+    and puts it in no part of δ."""
+    assert claim_ids.get(ledger.PRF_CLAIM)["kind"] == "assumption" and ledger.PRF_CLAIM not in ledger.DELTA_PARTS
 
 
 def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1) -> None:
@@ -282,44 +321,45 @@ def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1
     assert bare(stripped) == ["declared.gamma.spec.error", f"declared.memory.{ledger.SNAPSHOT}"]
 
 
-def test_the_draws_terms_are_charged_by_name(store) -> None:
+def test_the_samples_terms_are_charged_by_name(store) -> None:
     """`ledger.draw` is `PooledSample`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
     record's `samples` and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
     than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the sample cap, and
-    q_t = 2·F·C + 2·s·69 for the fork finder that runs the prover twice; the PRF advantages are named with their claim
-    and in no total.  No hiding term: the prover gets the coin commitment only at the session's end.  γ's errors carry
+    q_t = 2·Q + 2·s·69 for the fork finder that runs the prover twice, Q = 2^80 the prover's budget; the PRF
+    advantages are named with their claim and in no total.  No hiding term: the prover gets the coin commitment only at the session's end.  γ's errors carry
     the two; the line's δ carries the binding term beside its own."""
     s, prover, passes, clock = drive(store, params(samples=7), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
     sampled = [w.profile.drawn["receipt"] for w in r.windows]
     assert len(sampled) > 1 and max(sampled) == 7 and r.samples == 7 and r.append_coins > 0 and r.pace is None
-    d = ledger.draw(r, n)
+    d = ledger.draw(r)
     assert d.rejection == len(r.windows) * r.samples / 2.0 ** 64 and not hasattr(d, "hiding")
-    fc = n.sketch_outside * ledger.compressions(r, n)
+    fc = 2 ** audit.QUERIES_LOG2
     L = (2 ** 64 - 1) * r.codec.max_blocks
     want = len(r.windows) * math.sqrt(L * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5
     realized = sum(math.sqrt(w.receipts * s) * (2 * fc + 2 * s * (64 + 5)) for w, s in zip(r.windows, sampled)) / 2 ** 256.5
-    assert d.binding == ledger.binding(r, n) == pytest.approx(want, rel=1e-12) and realized < d.binding < 2.0 ** -100
+    assert d.binding == float(ledger.binding(r)) == pytest.approx(want, rel=1e-12) and realized < d.binding < 2.0 ** -100
     paced = dataclasses.replace(r, pace=audit.Pace(1), append_coins=0)
-    assert ledger.binding(paced, n) == pytest.approx(
+    assert ledger.binding(paced) == pytest.approx(
         len(r.windows) * math.sqrt(r.blocks * 7) * (2 * fc + 2 * 7 * (64 + 5)) / 2 ** 256.5, rel=1e-12)
     with pytest.raises(ValueError, match="session's bounds"):
-        ledger.binding(dataclasses.replace(r, samples=None), n)
+        ledger.binding(dataclasses.replace(r, samples=None))
     assert d.total == d.rejection + d.binding
     assert d.to_json() == {"binding": d.binding, "rejection": d.rejection, "named": ledger.NAMED_TERMS}
     g = ledger.gamma(r, n, n.spec_bytes_per_s)
     assert g.draw == d and g.error == g.ledger.error + g.sketch + d.total
 
 
-def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
+def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
     """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window t
     requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
     record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
     more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts sample 70, 60 and 60: the ledger
     charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its five additions'
-    rounding.  A record whose samples aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
+    rounding, which the 16-row sketch's 2^-15 in D puts above the slack and far below the shortfall.  A record whose
+    samples aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
     s, prover, passes, clock = drive(store, params(samples=70), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
@@ -329,12 +369,12 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     deltas = {line.delta for line in ledger.memory(r, n)}
     assert len(deltas) == 1
     D = Fraction(deltas.pop())
-    delta_s, delta = Fraction(ledger.sketch(r, n)), Fraction(r.windows[0].profile.delta)
-    assert delta_s > 0 and Fraction(ledger.delta_parts(r, n)["rejection"]) == Fraction(sum(k), 2 ** 64)
+    delta_s, delta = Fraction(ledger.sketch(r)), Fraction(r.windows[0].profile.delta)
+    assert delta_s > 0 and Fraction(ledger.delta_parts(r)["rejection"]) == Fraction(sum(k), 2 ** 64)
     held = (delta_s + delta + Fraction(sum(k), 2 ** ledger.REJECTION_LOG2) + Fraction(ledger.hiding(r))
-            + Fraction(ledger.binding(r, n)))
-    slack, rounding = Fraction(r.passes, 2 ** audit.SLACK_LOG2), 5 * D / 2 ** 53
-    assert held <= D and abs(D - held - slack) <= rounding < slack
+            + Fraction(ledger.binding(r)))
+    slack = Fraction(r.passes, 2 ** audit.SLACK_LOG2)
+    assert ledger.delta_parts(r)["slack"] == slack and D == held + slack
     assert D - Fraction(sum(k) - sum(sampled), 2 ** ledger.REJECTION_LOG2) < held, "the draws made fall short of E"
     with pytest.raises(ValueError, match=r"window 0 drew 70 of its 80 receipts, not min\(60, 80\)"):
         dataclasses.replace(r, samples=60)
@@ -363,51 +403,50 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
     """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link burst
     `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
-    n = ledger.Node.stated(disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
+    n = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
         timing.CHIP_BYTES, 4.32e9, timing.LINK_WINDOW_BYTES)
-    assert (ledger.Node.stated().disk_burst_bytes, ledger.Node.stated().link_burst_bytes) == (0, 0)
-    m = ledger.Node.stated(disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
+    assert (ledger.Node.stated(FIGURES).disk_burst_bytes, ledger.Node.stated(FIGURES).link_burst_bytes) == (0, 0)
+    m = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
     assert (m.disk_burst_bytes, m.link_burst_bytes) == (4 << 20, 0) and m.to_json()["disk_burst_bytes"] == 4 << 20
     with pytest.raises(ValueError, match="link_burst_bytes"):
         dataclasses.replace(n, link_burst_bytes=-1.0)
 
 
-def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
-    """`ledger.sketch` charges Q = F·C, C the node's compressions over the span (`ledger.compressions`) and F its
-    `sketch_outside`, `timing.SKETCH_OUTSIDE` (2^20) unless stated, which `to_json` records; F is a positive
+def test_the_sketch_and_the_binding_charge_the_provers_budget(store) -> None:
+    """`ledger.sketch` and `ledger.binding` charge Q = 2^80 SHA-512 compressions, the prover's budget
+    (`audit.QUERIES_LOG2`), which AuditRO's count reads too: one constant, not the node's rate over the span, so the
+    node states no factor for it.  `timing.sketch_failure` charges it by default and refuses a Q that isn't a positive
     integer."""
     s, prover, passes, clock = drive(store, params(), SCHEDULE)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
-    assert n.sketch_outside == ledger.Node.stated().sketch_outside == timing.SKETCH_OUTSIDE == 2 ** 20
-    assert n.to_json()["sketch_outside"] == 2 ** 20
-    c = ledger.compressions(r, n)
-    assert c == math.ceil(n.sha512_per_s * r.span_ns / 1e9)
-    assert ledger.sketch(r, n) == float(timing.sketch_failure(2 ** 20 * c, r.passes, r.rows, blocks=r.blocks,
-                                                              outside=1))
-    assert ledger.Node.stated(sketch_outside=1).to_json()["sketch_outside"] == 1
-    near = dataclasses.replace(n, sketch_outside=1)
-    assert ledger.sketch(r, near) == float(timing.sketch_failure(c, r.passes, r.rows, blocks=r.blocks, outside=1))
-    assert ledger.memory(r, n)[0].delta - ledger.memory(r, near)[0].delta == pytest.approx(
-        ledger.sketch(r, n) - ledger.sketch(r, near))
+    assert audit.QUERIES_LOG2 == 80 and audit.named_bits(1) == 80
+    assert not {"sketch_outside", "sha512_per_s"} & set(n.to_json()) and not hasattr(ledger, "compressions")
+    q = 2 ** audit.QUERIES_LOG2
+    assert ledger.sketch(r) == timing.sketch_failure(r.passes, r.rows, blocks=r.blocks, queries=q)
+    assert timing.sketch_failure(r.passes, r.rows, blocks=r.blocks) == timing.sketch_failure(
+        r.passes, r.rows, blocks=r.blocks, queries=q)
+    assert ledger.sketch(r) > float(timing.sketch_failure(r.passes, r.rows, blocks=r.blocks, queries=q // 2))
+    L = ledger.window_receipts(r.pace, r.blocks, r.append_coins, r.codec.max_blocks)
+    assert ledger.binding(r) == ledger.binding_over(len(r.windows), L, r.samples, q)
     for bad in (0, -1, 2.0):
-        with pytest.raises(ValueError, match="sketch_outside"):
-            dataclasses.replace(n, sketch_outside=bad)
+        with pytest.raises(ValueError, match="budget Q"):
+            timing.sketch_failure(r.passes, queries=bad)
 
 
 def test_the_node_carries_a_write_ceiling_per_tier() -> None:
     """Beside its read ceilings a node has one GPU's and the host DRAM's write ceilings, `timing`'s in `Node.stated`
     and by default, each a positive finite rate, and no DPU's."""
-    for n in (ledger.Node.stated(), ledger.Node.stated(reported_read_bytes_per_s=2e13), node()):
+    for n in (ledger.Node.stated(FIGURES), ledger.Node.stated(FIGURES, reported_read_bytes_per_s=2e13), node()):
         assert (n.gpu_write_bytes_per_s, n.host_write_bytes_per_s) == (
-            timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597e12, 819.2e9)
-        assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597e12, 819.2e9)
+            timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597568e12, 819.2e9)
+        assert (n.to_json()["gpu_write_bytes_per_s"], n.to_json()["host_write_bytes_per_s"]) == (1.597568e12, 819.2e9)
     assert not [f.name for f in dataclasses.fields(ledger.Node) if "dpu" in f.name]
     for name in ("gpu_write_bytes_per_s", "host_write_bytes_per_s"):
         for bad in (0.0, -1.0, math.inf):
             with pytest.raises(ValueError, match=name):
-                dataclasses.replace(ledger.Node.stated(), **{name: bad})
+                dataclasses.replace(ledger.Node.stated(FIGURES), **{name: bad})
 
 
 def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> None:
@@ -415,26 +454,62 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
     read rate at spec and measured and its on-chip bytes, `timing`'s.  A reported read raises the node's R and no
     tier's; a node built by hand states none, and a tier is a `Tier` of whole devices, positive rates and whole
     bytes."""
-    n = ledger.Node.stated()
+    n = ledger.Node.stated(FIGURES)
     assert n.tiers == {
         "hbm": ledger.Tier(timing.GPUS, timing.GPU_SPEC_BYTES_PER_S, timing.GPU_READ_BYTES_PER_S,
                            timing.GPU_CHIP_BYTES),
         "dram": ledger.Tier(1, timing.HOST_SPEC_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S, timing.HOST_CHIP_BYTES)}
-    assert sum(t.devices * t.spec_bytes_per_s for t in n.tiers.values()) == n.spec_bytes_per_s == 13.5952e12
+    assert sum(t.devices * t.spec_bytes_per_s for t in n.tiers.values()) == n.spec_bytes_per_s == 13.599744e12
     assert sum(t.devices * t.read_bytes_per_s for t in n.tiers.values()) == n.read_bytes_per_s == 12.9188e12
     assert sum(t.devices * t.chip_bytes for t in n.tiers.values()) == n.chip_bytes == 3_105_652_736
-    fast = ledger.Node.stated(reported_read_bytes_per_s=2e13)
+    fast = ledger.Node.stated(FIGURES, reported_read_bytes_per_s=2e13)
     assert fast.tiers == n.tiers and fast.spec_bytes_per_s == fast.read_bytes_per_s == 2e13
-    assert node().tiers == {} and "tiers" not in n.to_json()
+    assert node().tiers == {} and node().to_json()["tiers"] == {}
     with pytest.raises(TypeError):
         n.tiers["disk"] = n.tiers["dram"]
     with pytest.raises(ValueError, match="tiers"):
-        dataclasses.replace(n, tiers={"hbm": (8, 1.597e12, 1.539e12, 263_163_904)})
+        dataclasses.replace(n, tiers={"hbm": (8, 1.597568e12, 1.539e12, 263_163_904)})
     for bad, what in (({"devices": 0}, "devices"), ({"devices": 1.0}, "devices"), ({"spec_bytes_per_s": 0.0}, "spec"),
                       ({"read_bytes_per_s": math.inf}, "read"), ({"chip_bytes": -1}, "chip_bytes"),
                       ({"chip_bytes": 1.0}, "chip_bytes")):
         with pytest.raises(ValueError, match=what):
             dataclasses.replace(n.tiers["hbm"], **bad)
+
+
+def test_a_nodes_capacities_are_handed_in_as_the_ledger_publishes_them() -> None:
+    """`Node.of_json` reads back what `to_json` publishes, through JSON, its tiers included; the stated node's is
+    `timing`'s.  Any other key set, of the node or of a tier, a squaring ceiling that isn't a map and a value `Node`
+    or `Tier` refuses are refused."""
+    for n in (ledger.Node.stated(FIGURES), ledger.Node.stated(FIGURES, disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10), node()):
+        assert ledger.Node.of_json(json.loads(json.dumps(n.to_json()))) == n
+    j = ledger.Node.stated(FIGURES).to_json()
+    assert (j["read_bytes_per_s"], j["chip_bytes"]) == (timing.READ_BYTES_PER_S, timing.CHIP_BYTES)
+    assert j["tiers"]["hbm"] == {"devices": timing.GPUS, "spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
+                                 "read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "chip_bytes": timing.GPU_CHIP_BYTES}
+    for bad in ({**j, "extra": {}}, {k: v for k, v in j.items() if k != "chip_bytes"}, [j]):
+        with pytest.raises(ValueError, match="exactly"):
+            ledger.Node.of_json(bad)
+    for tiers in ([], {"hbm": [8]}, {"hbm": {**j["tiers"]["hbm"], "bytes": 1}}):
+        with pytest.raises(ValueError, match="each memory tier"):
+            ledger.Node.of_json({**j, "tiers": tiers})
+    with pytest.raises(ValueError, match="squarings_per_s"):
+        ledger.Node.of_json({**j, "squarings_per_s": [1.0]})
+    with pytest.raises(ValueError, match="read_bytes_per_s"):
+        ledger.Node.of_json({**j, "read_bytes_per_s": -1.0})
+    with pytest.raises(ValueError, match="devices"):
+        ledger.Node.of_json({**j, "tiers": {"hbm": {**j["tiers"]["hbm"], "devices": 0}}})
+
+
+def test_a_reported_read_only_raises_a_nodes_rates() -> None:
+    """`Node.raised` lifts R measured to a faster reported read and R at spec with it, and leaves a slower report,
+    the tiers and every other capacity as they were; `Node.stated` is `timing`'s node raised."""
+    n = dataclasses.replace(ledger.Node.stated(FIGURES), spec_bytes_per_s=2e13, read_bytes_per_s=1e13)
+    assert n.raised(1.0) == n and n.raised(1e13) == n
+    assert n.raised(1.5e13) == dataclasses.replace(n, read_bytes_per_s=1.5e13)
+    assert n.raised(3e13) == dataclasses.replace(n, spec_bytes_per_s=3e13, read_bytes_per_s=3e13)
+    assert ledger.Node.stated(FIGURES, reported_read_bytes_per_s=2e13) == ledger.Node.stated(FIGURES).raised(2e13)
+    with pytest.raises(ValueError, match="a reported read"):
+        n.raised(-1.0)
 
 
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:

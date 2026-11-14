@@ -62,7 +62,7 @@ inputs = [
     "verity/protocols/proofs/spot/verifier/one_stage/produced.py",
     "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
     # `head_check` counts a Definition's ANDs with the census
-    "verity/definitions/__init__.py",
+    "adapters/vllm/verity_vllm/definitions/__init__.py",
     "verity/circuits/census.py",
     # the certifier's checks are circuits: what `verity.circuits` and its Boolean forms load to build and evaluate
     # them (the evaluator's directory is read whole), with the errors they raise
@@ -93,6 +93,8 @@ inputs = [
     "verity/circuits/evaluation",
     # and over committed rows: the hm96 row leaf, the frame, the LMS check and their SHA-512 gates
     "verity/commitments/__init__.py",
+    # the table of domain separators, where the certificate reads its mark's tag
+    "verity/commitments/domains.py",
     "verity/commitments/identity.py",
     "verity/commitments/indexed.py",
     "verity/commitments/limits.py",

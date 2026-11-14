@@ -1,6 +1,6 @@
 # Flock
 
-Flock's executable verifier, `flock-verify` (run as `verity verify proof`) and the other executables `lakefile.toml`
+Flock's executable verifier, `verity-verify-proof` (run as `verity verify proof`) and the other executables `lakefile.toml`
 builds, in Lean 4 at the toolchain `lean-toolchain` pins. What it checks, its commands
 and its agreement with upstream's Rust verifier are in `verity/protocols/proofs/flock/prover/agreement/README.md`; its guarantees are in
 `security/Definitions/Flock/Guarantees/` and `security/Proofs/Flock/`.
@@ -14,7 +14,7 @@ the base module. A job that builds this package outside the checkout copies it w
 (`verity/protocols/proofs/flock/prover/pod/lake_closure.py`).
 
 The libraries are layers, each loading only the ones before it: the verifier (`Flock`'s modules outside the next two),
-the ZK server (`FlockZkServer`, which imports `Flock.Firewall` and the modules under it) and the recursion (`FlockRec`,
+the ZK server (`FlockZkServer`, which imports `Flock.ZkServer` and the modules under it) and the recursion (`FlockRec`,
 which imports the `Flock.Rec*` modules, with `VStar`). `verity/protocols/proofs/flock/prover/tests/test_lean_layers.py` gives each module its layer and fails on an import
 of a layer above; the imports that still point up are its `UP`, each with what removes it.
 
