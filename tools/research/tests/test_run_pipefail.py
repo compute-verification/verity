@@ -62,6 +62,12 @@ def test_allow_pipe_launches_a_pipe_whose_own_exit_code_is_meant(tmp_path, launc
     assert run(tmp_path, "--allow-pipe", "--", *command) == 0 and launched == [command]
 
 
+def test_run_help_names_the_flag_without_a_command(capsys):
+    with pytest.raises(SystemExit) as e:
+        cli.main(["run", "--help"])
+    assert e.value.code == 0 and "--allow-pipe" in capsys.readouterr().out
+
+
 def test_the_machine_side_does_not_judge_again(tmp_path, launched):
     """The launcher judged the command; on the machine it may come wrapped (slot.py, gpu-lease) and is run as sent."""
     command = ["bash", "-lc", "a | tee f"]

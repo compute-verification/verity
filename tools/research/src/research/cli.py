@@ -215,12 +215,13 @@ def cmd_run(argv: list[str]) -> int:
 
 def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     started = time.monotonic()                   # --wait's cap counts the launch too: it bounds the whole tool call
-    if "--" not in argv:
+    asks_help = "--" not in argv and not {"-h", "--help"}.isdisjoint(argv)
+    if "--" not in argv and not asks_help:
         print("research run: the workload command goes after `--`", file=sys.stderr)
         return 2
-    i = argv.index("--")
+    i = argv.index("--") if "--" in argv else len(argv)
     opts, command = argv[:i], argv[i + 1 :]
-    if not command:
+    if not command and not asks_help:
         print("research run: empty command after `--`", file=sys.stderr)
         return 2
     ap = argparse.ArgumentParser(prog="research run", add_help=True, allow_abbrev=False, description=__doc__.split("\n\n")[1])
