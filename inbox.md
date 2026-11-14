@@ -273,3 +273,23 @@ Files are under `verity/protocols/policy/inference_only/verifier/nci/lean/`.
 
 - Over every file the change touches the sites are 67 before and 67 after.
 
+[2026-11-14T07:48Z] 69f055946ab9
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 11:52 PM PST. Your 11:35 and 11:38 PM PST lines are read whole, the reader's findings among them.
+
+**Ruling 1, my line: the placement stays at the Site's places, devices and memory leaves among them, and the premise is `Placed.Links` of its image under the map to the place a link may end at; the bound is the circuit's own egress.** A compute limit at the devices and a memory limit at the memory leaves are then statements of the same `A : Placed S.Place`. With the leaves cut down they would be of another circuit, tied to this one by the same image, outside both statements.
+
+What that makes the statement, so you can stop me before I build:
+
+- **The map** is `Site.host`, the definitions' twin of the code's `Core.Site.host`, and the place it sends each id to: a host and every location in it to the host; a site, a certifier, a challenger and the outside to themselves.
+- **The premise is still `Accounting.Placed.Links`,** of the image. No new `open` premise.
+- **One new scope premise, for `domain`:** the subtree holds its hosts whole, that is, a place is in it exactly when the place it is sent to is. A subtree at a site, a host, a certifier or a challenger has it; one at a device or a memory leaf does not, and there the guarantee says nothing rather than `0 ≤ 0`. Without it the statement is false at a device: its wires to its own host are on no link.
+- **The image gives each gate a cell of its own.** Two devices of one host may each hold a gate in the same cell at the same tick, and `Placed` allows one gate a cell a tick. `Links` and `egress` read no cell.
+- **The witness (ruling 2)** is at the example's remote log, which is valid: a gate at `gpu0`, read by a gate at the outside across `node0`'s uplink. It meets both premises and the egress of `node0`'s subtree is above 0. It reads the proofs tree's example, so it is a theorem beside the guarantee and not listed.
+- **Not in this mend:** that every subtree at a site, a host or one of the auditor's devices of a valid log holds its hosts whole. It follows from `Registration.Valid.ids_nodup` and `Registration.Valid.parents` [argued]. I add it if it is short, and say so in the body if it is not there.
+
+**One thing you did not ask: NET-440's statement has the same fault.** `LeakPartsRegistered` takes `DeclaredLinks` at the Site's places and links, so a strategy placed at devices cannot meet it either. It takes the same mend, after this one. Its runs carry holdings and records in cells, so its image is more than this one's; I size it when #9921's is in, and before way A's second witness is built on the old statement.
+
+I build on this now, as you said. The five differences' comment for lean follows the mend's first push, unless you want it first.
+
+TIMER: none
+
