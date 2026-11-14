@@ -122,7 +122,8 @@ _BWD = ("do", "q", "k", "v", "o", "lse")
 #: their head Definitions (`fa2_train`, `fa2_train_bwd`), whose products are tensor-core k16 steps (`DOT`). The forward computes
 #: the scores of its visible pairs and P V over the blocks it visits; the backward computes the scores again, dP over the
 #: blocks it visits, and dV, dK and dQ from bf16 P and dS. P V is the forward's bf16 O (its return 0), and dQ, dK and dV the
-#: backward's returns 0, 1 and 2, each rounded to bf16 after an elementwise f32 step (the row's total, the scale D^-0.5)
+#: backward's returns 0, 1 and 2: P V, dQ and dK each rounded to bf16 after an elementwise f32 step (the row's total, the split
+#: combine, the scale D^-0.5), dV straight from its accumulator
 ATTENTION = {
     "_scaled_dot_product_flash_attention": Fused(0, ("Fa2TrainHead_v1", "Fa2TrainSplitHead_v1"), (
         Product("scores", ("T", "D", "T"), lambda b: b["D"] * _visible(b), _visible, (("q",), ("k",))),
