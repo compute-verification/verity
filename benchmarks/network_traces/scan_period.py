@@ -45,8 +45,9 @@ and its Lean.
   an audit's state entry (`stateEntries`). A served window's registration, as ``prove_path.py window-commit`` writes
   it, holds that state in its window's ``activations.values`` alone, so a served period's case is refused at the state
   tie (`period_case.UNSTATED`), in Lean and in the mirror. No served run writes the entry in either of the two places
-  today, so with ``--v3c`` an honest round is expected refused there, by that refusal's name in both reasons, and an
-  accept is unexpected.
+  today. So with ``--v3c`` an honest round whose audit's registration has no state entry in either (the mirror's
+  `stateEntries`) is expected refused there, by that refusal's name in both reasons, and its accept is unexpected; one
+  whose registration has such an entry is expected accepted.
 """
 from __future__ import annotations
 
@@ -199,14 +200,21 @@ def main(argv=None) -> int:
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
-        why, where = (m.UNSTATED, " at the state tie") if a.v3c else (m.UNWIRED, " at the wiring")
-        if not honest:
-            why, where = None, ""
-        want = "reject" + where
-        good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
-                and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
+        commitment = json.loads(bytes.fromhex(case["commitment"]))
+        stated = all(m._states(r) for r in commitment["audits"])
+        if honest and a.v3c and stated:
+            want = "accept"
+            good = (py.get("verdict") == lean.get("verdict") == "accept"
+                    and py.get("public") == lean.get("public"))
+        else:
+            why, where = (m.UNSTATED, " at the state tie") if a.v3c else (m.UNWIRED, " at the wiring")
+            if not honest:
+                why, where = None, ""
+            want = "reject" + where
+            good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
+                    and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
         ok &= good
-        reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
+        reg = commitment["windows"][0]
         got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}
         print(f"SCPD {name}: want {want}; mirror {py.get('verdict')} {py.get('reason') or py.get('public')}; Lean "
               f"{lean.get('verdict')} {lean.get('reason') or lean.get('public')}; "

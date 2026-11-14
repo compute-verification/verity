@@ -648,9 +648,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     record whose state entry is among the audit's ``roots``, which the record check reads and which no served run
     writes today, refuses that audit at
     the state tie (`period_case.UNSTATED`) where its registration holds its `SCAN_STATE` as a served window's does, in
-    its window's ``activations.values`` alone and in no ``roots`` or ``registered`` entry, which is the refusal the
-    runner (`scan_period.main`) expects of an honest round under ``--v3c``, by its name, an accept unexpected, and
-    refuses the
+    its window's ``activations.values`` alone and in no ``roots`` or ``registered`` entry; the runner
+    (`scan_period.main`) under ``--v3c`` expects of an honest round that refusal, by its name, where the audit's
+    registration has no state entry among its ``roots`` and ``registered``, an accept there unexpected, and the accept
+    where it has one; and refuses the
     forged case (a certificate's signature changed) at the certificates, a registration whose egress member's o0
     root is of a row that is not the ok row, or that names no o0 for a member or for any, at the ok bits
     (`period_case.UNOK`), the tampered case (another Program's
@@ -784,14 +785,19 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         got = PC.reference(SP.rows_case(run, scan, v3c=served, circuit=SP.circuit_of_record(window_record)))
         assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNSTATED}"), got
     monkeypatch.setattr(SP, "mirror", lambda path: PC)
-    monkeypatch.setattr(SP, "lean_check", lambda exe, case, d: PC.reference(case))
-    for name, period, rc in (("served", served, 0), ("stated", v3c, 1)):
+    accepted = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
+    for name, period, lean, want, rc in (
+            ("served", served, PC.reference, "reject at the state tie", 0),
+            ("stated", v3c, PC.reference, "accept", 0),
+            ("served-accepted", served, lambda case: accepted, "reject at the state tie", 1),
+            ("stated-refused", v3c, lambda case: got, "accept", 1)):
+        monkeypatch.setattr(SP, "lean_check", lambda exe, case, d, lean=lean: lean(case))
         argv = ["--mirror", str(PERIOD_CASE), "--lean", "unused", "--out", str(tmp_path / name), "--v3c", str(period),
                 "--circuit", str(window_record), f"honest={run},{scan}"]
-        assert SP.main(argv) == rc
+        assert SP.main(argv) == rc, name
         ran = json.loads((tmp_path / name / "period.json").read_text())
-        assert (ran["ok"], ran["cases"]["honest"]["want"]) == (rc == 0, "reject at the state tie"), ran
-        assert (PC.UNSTATED in (ran["cases"]["honest"]["mirror"].get("reason") or "")) == (rc == 0), ran
+        assert (ran["ok"], ran["cases"]["honest"]["want"]) == (rc == 0, want), ran
+        assert (PC.UNSTATED in (ran["cases"]["honest"]["mirror"].get("reason") or "")) == (period == served), ran
     with pytest.raises(SystemExit, match="held to the verifier's own window-circuit record"):
         SP.rows_case(run, scan, v3c=v3c)
     (unnamed := tmp_path / "no-circuit.json").write_text(json.dumps({"format": SP.CIRCUIT}))
