@@ -77,7 +77,7 @@ from . import settings
 
 ROOT = Path(__file__).resolve().parents[4]
 #: the static table: the directory on its import path, and its module (module docstring)
-REGISTRY: tuple[Path, str] | None = (ROOT / "demos" / "onsite_served", "served_table")
+REGISTRY: tuple[Path, str] | None = (Path(__file__).resolve().parent, "served_table")
 #: the deploy bindings `begin` keeps beside the run (module docstring)
 BINDINGS = "bindings.json"
 #: what isn't an entry's message in the state: the build, the logs, the transcripts, the run, its bindings and the tools
@@ -434,6 +434,9 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
     try:
         reg = reg or registry()
         cfg = load(Path(a.config), reg)
+        if (cid := K.composite(cfg["protocols"], reg.components)) in K.UNACCEPTED:
+            raise NotImplementedError(f"verity run doesn't run {cid} ({', '.join(K.UNACCEPTED[cid])}) yet: "
+                                      "goal demos/onsite-demo")
         bound = bindings(Path(a.bindings) if a.bindings else None, cfg, reg)
         machine = a.machine or K.LOCAL
         if a.dry_run:

@@ -8,10 +8,9 @@ import struct
 
 import numpy as np
 import pytest
-import twin as W
-
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
+from verity.protocols.experimental.pearl_c4.prover.kernels import twin as W
 
 
 def grid() -> np.ndarray:

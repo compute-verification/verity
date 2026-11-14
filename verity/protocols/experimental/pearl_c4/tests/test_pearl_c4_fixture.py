@@ -1,4 +1,4 @@
-"""Pearl-C4's device-check fixture (`../../verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py`) by its command line, as `build.sh` runs it: a format's
+"""Pearl-C4's device-check fixture (`prover/kernels/fixture.py`) by its command line, as `build.sh` runs it: a format's
 directory holds the files its manifest names, at their sizes and digests, and each buffer but its three inputs (A's
 rows, B's rows and the salt) is held to what the verifier and the scalar reference
 (`verity.protocols.accounting.pouw.prover.schemes.pearl_c4`) make of those inputs.  The roots and domain ids are

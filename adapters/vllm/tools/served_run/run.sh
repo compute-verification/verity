@@ -50,7 +50,7 @@ for key, value in list(placed.items()):
                  f"or give --env {key}=VALUE")
     else:
         placed[key] = re.sub(r"\$\{(\w+)\}", lambda m: os.environ[m[1]], str(value))
-row, rows = placement["row"], here.parents[1] / "adapters" / "vllm" / "workloads"
+row, rows = placement["row"], here.parents[1] / "workloads"
 sums = {name.lstrip("*"): h for h, name in (line.split() for line in (rows / "SHA256SUMS").read_text().splitlines() if line.strip())}
 if (want := sums.get(f"{row}.json")) is None:
     sys.exit(f"run.sh: placement.toml's row {row} is not a workload adapters/vllm/workloads/SHA256SUMS lists")

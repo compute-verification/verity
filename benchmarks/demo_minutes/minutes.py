@@ -3,9 +3,11 @@
 ``vllm/remote-demo-minutes`` (`benchmarks/demo_minutes/metrics.toml`). Standard library only; the onsite demo's reader
 (`benchmarks/demo_minutes/onsite_minutes.py`) is this one with its own verdict.
 
-    research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN [--runs-dir DIR] [--main REF]
+    research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN [RUN ...] VERDICT_RUN
+        [--runs-dir DIR] [--main REF]
 
-The arguments are the demo's research runs in the order it ran them: the first is `verity demo vllm`'s, the last the one
+The arguments are the demo's research runs in the order it ran them: the first is the vLLM served run's
+(`adapters/vllm/tools/served_run/run.sh`), the last the one
 that composed remote's verdict on the auditor's machine (``served_verdicts.sh compose``). Each is a run id under
 ``--runs-dir`` (default ``$RESEARCH_RUNS``, else ``~/.research/runs``), where ``research fetch RUN --all`` copies a run's
 records and its ``out/``, or a run directory. The minutes run from the first run's ``started_utc`` to the last's

@@ -20,7 +20,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import twin as T
 
 from verity.commitments.crypto.turboshake import turboshake128
 from verity.circuits.kernels.tc import group_sum_total_batch
@@ -30,6 +29,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.accounting.pouw.verifier import audit as AU
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.experimental.pearl_c4.prover.kernels import twin as T
 
 SHAPE = (128, 128, 1024)
 WEIGHT = 1

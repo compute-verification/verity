@@ -1,6 +1,6 @@
 """PoUS's messages between the workload and the prover: its Setup, which asks the workload to store the weights, and the
 store the workload hands back, which PoUB's bandwidth check reads too. The one list of every protocol's messages is
-`tests/test_workload_messages.py`'s. The parties are SPOT's (`spot.verifier.workload`), declared again here because
+`tests/test_workload_messages.py`'s. The parties are SPOT's (`spot.prover.workload`), declared again here because
 this place does not load SPOT's.
 
 ~~~text

@@ -1,4 +1,4 @@
-"""Pearl-C4's offline gate (`../../verity/protocols/experimental/pearl_c4/prover/kernels/sass.py`) by its command line, on a ptxas log and a SASS listing written here: the
+"""Pearl-C4's offline gate (`prover/kernels/sass.py`) by its command line, on a ptxas log and a SASS listing written here: the
 kernels the cubin must hold pass with the tensor-core and cast instructions each is meant to issue, and each defect the
 gate names (a warning, a spill, a stack frame, local memory, an FP32 instruction with .FTZ, the other format's OMMA, a
 count that is no whole number of copies, a missing kernel) is refused with its reason, exit 1 and the same JSON."""

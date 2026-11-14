@@ -1,4 +1,4 @@
-"""`minutes.py`: the onsite demo's minutes from the prover node's run's start to the auditor device's run's end, written
+"""`onsite_minutes.py`: the onsite demo's minutes from the prover node's run's start to the auditor device's run's end, written
 only for an accepting ``VERDICT`` line of the goal's seven checks, from a research run, on a commit of main."""
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import os
 import subprocess
 from pathlib import Path
 
-import minutes as M
+import onsite_minutes as M
 import pytest
 
 
@@ -55,7 +55,8 @@ def demo(root: Path, sha: str, *log: str) -> list[str]:
 
 def test_the_checks_are_the_served_tables_seven():
     """`CHECKS` repeats `served_table.ONSITE_COMPONENTS`, which this reader can't import (it is stdlib only)."""
-    tree = ast.parse((Path(M.__file__).parent / "served_table.py").read_text())
+    table = Path(M.__file__).resolve().parents[2] / "tools" / "verity" / "cli" / "verity_cli" / "served_table.py"
+    tree = ast.parse(table.read_text())
     (seven,) = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
                 and any(getattr(t, "id", None) == "ONSITE_COMPONENTS" for t in n.targets)]
     assert M.CHECKS == seven
