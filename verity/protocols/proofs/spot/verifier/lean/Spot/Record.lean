@@ -301,7 +301,7 @@ instances, verdicts objects (the verifier that accepted reporting its registered
 optionally `window_values`, a list of strings (`record`). -/
 def inputOf (j : Json) : V Input := do
   need (keys? j == some INPUT_KEYS || keys? j == some (sortStrings (INPUT_KEYS.push "window_values")))
-    s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}, and optionally window_values"
+    s!"the record's input is exactly {", ".intercalate INPUT_KEYS.toList}"
   let windowValues ← match getD j "window_values" with
     | .null => pure #[]
     | .arr vs => vs.mapM fun v => match v with
@@ -404,6 +404,13 @@ roots (`windowReads`). -/
 def heldReads (named : Array String) (reg : Json) (opened : Option (Array (String × Json))) :
     Option (Array (String × Json)) :=
   (lessOwnReads reg (ownRegistered reg opened)).map (· ++ (windowReads named reg opened).getD #[])
+
+/-- Naming no window value, `heldReads` holds exactly the record's own reads less its ports' at their own roots. -/
+theorem heldReads_nil (reg : Json) (opened : Option (Array (String × Json))) :
+    heldReads #[] reg opened = lessOwnReads reg (ownRegistered reg opened) := by
+  have h : ∀ a : Array (String × Json), a.filter (fun _ => false) = #[] := fun a => by
+    rcases a with ⟨l⟩; simp
+  cases opened <;> simp [heldReads, windowReads, h]
 
 def record (i : Input) : V Json := do
   let reg := i.registration

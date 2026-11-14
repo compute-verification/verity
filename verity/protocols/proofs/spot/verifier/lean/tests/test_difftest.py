@@ -631,10 +631,13 @@ def decode_params(j) -> dict:
 def _window_values(named, ports: dict, registered: dict) -> None:
     """`OneStage.paramsParsed`'s `window_values`: a list of strings, none a port or a value the verifier expects
     registered."""
-    if not (isinstance(named, list) and all(isinstance(v, str) for v in named)):
+    if not isinstance(named, list):
         raise D.Reject("window values are a list of strings")
-    if any(v in ports or v in registered for v in named):
-        raise D.Reject("a window value is a port or a registered value of the verifier's")
+    for v in named:
+        if not isinstance(v, str):
+            raise D.Reject("window values are a list of strings")
+        if v in ports or v in registered:
+            raise D.Reject(f"window value {v}: a port or a registered value of the verifier's, not a window's")
 
 
 def _challenger(ch, window) -> ChallengerKey:
@@ -6609,6 +6612,126 @@ def test_a_v2_audit_reads_the_sessions_registered_roots(server):
             lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}
             case = _json(_case({**a, "evidence": {**a["evidence"], "verdicts": {"lean": lean}}}))
             assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, got)
+
+
+#: A window value's root, committed in the record's window and in no root or registered entry of it.
+WINDOW_VALUE_ROOT = "5d" * 64
+#: The setups whose values read nothing of the record's window, so a window that also commits a window value's entry
+#: registers them as it did.
+WINDOW_FREE_SETUPS = [s for s in REGISTERED_SETUPS if '"window"' not in json.dumps(getattr(s, "sup", {}))]
+
+
+def _window_value_audit(s: RegisteredSetup, named: list, entry: dict | None, reads: dict) -> dict:
+    """`_v2_audit` of `s` whose verifier names `named` window values (none: no `window_values`), whose record's window
+    holds `entry` in its `activations.values` under `st` (none: no `activations`), and whose verdict also reports
+    `reads`."""
+    a = _v2_audit(s, s.values[0])
+    rec = a["record"]
+    if entry is not None:
+        rec["window"] = {**rec["window"], "activations": {"values": {"st": entry}}}
+    if named is not None:
+        a["params"]["window_values"] = named
+    lean = a["evidence"]["verdicts"]["lean"]
+    a["evidence"] = {**a["evidence"], "receipt": R.receipt(rec, "v", received=RECEIVED),
+                     "verdicts": {"lean": {**lean, "registered": {**lean["registered"], **reads}}}}
+    return _json(a)
+
+
+def test_a_named_window_value_is_read_at_its_entrys_root(server):
+    """A window value the verifier names is held to the root of its entry in the record's `window.activations.values`:
+    a read at that root accepts, as does no read of it; a read at another root, under two roots, or of a named value
+    with no entry, or one whose entry names another value, rejects. Named nowhere, the same reads accept as on the
+    base, which reads none of a value the registration doesn't name. A name that is a port or a value the verifier
+    expects registered is refused with the parameters."""
+    at = lambda root: {"st.0": {"root": root, "value": "st"}}  # noqa: E731
+    entry = {"root": WINDOW_VALUE_ROOT, "value": "st"}
+    for s in WINDOW_FREE_SETUPS:
+        for named, ent, reads, want in (
+                (["st"], entry, at(WINDOW_VALUE_ROOT), "accept"),
+                (["st"], entry, {}, "accept"),
+                (["st"], entry, at("12" * 64), "reject"),
+                (["st"], entry, {**at(WINDOW_VALUE_ROOT), "st.1": {"root": "12" * 64, "value": "st"}}, "reject"),
+                (["st"], None, at(WINDOW_VALUE_ROOT), "reject"),
+                (["st"], {**entry, "value": "other"}, at(WINDOW_VALUE_ROOT), "reject"),
+                (["st"], {"value": "st"}, at(WINDOW_VALUE_ROOT), "reject"),
+                ([], entry, at("12" * 64), "accept"),
+                (None, entry, at("12" * 64), "accept"),
+                (None, None, at("12" * 64), "accept")):
+            kind, line = D.replay(ONE_STAGE, _json(_case(_window_value_audit(s, named, ent, reads))), server)
+            assert kind == want, (s.program.fn.id, named, ent, reads, line)
+        port, value = sorted(s.ports)[0], sorted(s.values[0])[0]
+        for named in ([port], [value], ["st", port], "st", [5]):
+            kind, line = D.replay(ONE_STAGE, _json(_case(_window_value_audit(s, named, entry, at(WINDOW_VALUE_ROOT)))),
+                                  server)
+            assert kind != "accept" and "window value" in line, (s.program.fn.id, named, line)
+
+
+def test_a_named_window_value_at_another_named_values_root_is_refused(server):
+    """With two window values named, each with its own entry, a read of one at the other's entry's root rejects: each
+    named value is held to its own entry, never to any named entry's root."""
+    a_root, b_root = WINDOW_VALUE_ROOT, "6e" * 64
+    entries = {"st": {"root": a_root, "value": "st"}, "su": {"root": b_root, "value": "su"}}
+    for s in WINDOW_FREE_SETUPS:
+        for reads, want in (({"st.0": {"root": a_root, "value": "st"}, "su.0": {"root": b_root, "value": "su"}}, "accept"),
+                            ({"st.0": {"root": b_root, "value": "st"}}, "reject"),
+                            ({"su.0": {"root": a_root, "value": "su"}}, "reject")):
+            a = _window_value_audit(s, ["st", "su"], None, reads)
+            a["record"]["window"] = {**a["record"]["window"], "activations": {"values": entries}}
+            a["evidence"]["receipt"] = R.receipt(a["record"], "v", received=RECEIVED)
+            kind, line = D.replay(ONE_STAGE, _json(_case(a)), server)
+            assert kind == want, (s.program.fn.id, reads, line)
+
+
+def _unnamed(j):
+    """`j` naming no window value (`window_values` empty), where it is an object."""
+    return {**j, "window_values": []} if isinstance(j, dict) else j
+
+
+def _base_held(verdicts, registration, window_values=()):
+    """The registered reads `audit_record` held before window values: the registration's own, less its ports' at their
+    own roots."""
+    return audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
+
+
+#: The one refusal whose text names the keys it was given, which a `window_values` added to keys already wrong joins.
+KEYS_REFUSED = ("params: the keys of the parameters are not", "the keys of the record's input are not")
+
+
+def _same(port, got, unnamed, ok) -> None:
+    """`unnamed`'s outcome is `got`'s, byte for byte, but where `got` refused the keys it was given: then it refuses."""
+    reason = json.loads(got[1]).get("reason") if port is ONE_STAGE and got[0] != "error" else got[1]
+    if got[0] in ("reject", "error") and isinstance(reason, str) and reason.startswith(KEYS_REFUSED):
+        assert unnamed[0] == got[0], (ok, got, unnamed)
+    else:
+        assert unnamed == got, (ok, got, unnamed)
+
+
+def test_naming_no_window_value_changes_no_outcome(server, pieces):
+    """Naming no window value changes nothing, reason included: on each sampled one-stage case and record-piece input of
+    the agreement tests, the mirror with the key absent gives the line it gives holding the reads as before window
+    values (`_base_held`), and Lean and the mirror with `window_values` empty give the lines they give with it absent,
+    but where the input's keys were already refused, a refusal that names them and refuses again."""
+    import hypothesis
+    seen: set[str] = set()
+
+    @hypothesis.settings(derandomize=True, database=None, deadline=None, max_examples=300,
+                         suppress_health_check=[hypothesis.HealthCheck.too_slow])
+    @hypothesis.given(CASES, RECORD_PORT.inputs)
+    def same(case, j):
+        named = {**case, "params": _unnamed(case["params"])} if isinstance(case, dict) and "params" in case else case
+        with mock.patch.object(audit, "held_reads", _base_held):
+            base, base_j = ONE_STAGE.python(case), RECORD_PORT.python(j)
+        assert ONE_STAGE.python(case) == base and RECORD_PORT.python(j) == base_j
+        lean = ONE_STAGE.lean(server, case)
+        seen.add(lean[0])
+        _same(ONE_STAGE, lean, ONE_STAGE.lean(server, named), case)
+        _same(ONE_STAGE, base, ONE_STAGE.python(named), case)
+        _same(RECORD_PORT, RECORD_PORT.lean(pieces, j), RECORD_PORT.lean(pieces, _unnamed(j)), j)
+        _same(RECORD_PORT, base_j, RECORD_PORT.python(_unnamed(j)), j)
+        seen.add(f"record {base_j[0]}")
+
+    same()
+    assert {"accept", "reject", "record output", "record reject"} <= seen, seen
 
 
 def _accepted_record_case(kind: str, delta: float) -> dict:

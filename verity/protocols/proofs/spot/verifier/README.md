@@ -362,7 +362,10 @@ A program's weights, constants and tables are values: committed once, under hidi
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
 - **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
   `Record.sessionRegistered`) to the registration's own (`Record.ownRegistered`), taking a read named by one of its
-  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other.
+  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other. It holds
+  a read of a window value its caller names (the parameters' `window_values`, none by default; never a port or a
+  registered value of the verifier's) to the root of that value's entry in the record's `window.activations.values`,
+  refusing it at any other root, under two roots, or with no such entry (`audit.window_reads`, `Record.windowReads`).
 
 Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`.
 

@@ -136,6 +136,37 @@ def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_
     assert got["checks"]["registered"]["detail"]["opened"] == [x]
 
 
+def test_a_named_window_values_reads_are_held_to_its_window_entrys_root():
+    """`audit_record`'s window values (`Record.windowReads`), the Lean against the Python: with `st` named and its entry
+    in the registration's `window.activations.values`, a read of it at that entry's root is taken and one at another root
+    refused; named nowhere, neither read is the registration's to hold."""
+    _, reg, draw = _drawn()
+    root = "5d" * 64
+    rec = {**reg.record, "window": {**reg.record["window"], "activations": {"values": {"st": {"root": root, "value": "st"}}}}}
+    for named, read, failed in ((["st"], root, False), (["st"], "77" * 64, True), ((), "77" * 64, False)):
+        verdicts = _lean(registered={"0": {"value": "st", "root": read}})
+        a = {**_args(reg, draw, registration=rec, verdicts=verdicts),
+             "session_roots": {r["port"]: r["root"] for r in rec["roots"]}}
+        got = V.audit_record(**a, window_values=named)
+        assert got["verifiers"]["agree"] and ("registered" in got["verifiers"]["lean"]["failed"]) == failed, got["verifiers"]
+        py = audit.audit_record(**a, session_registered=audit.held_reads(verdicts, rec, named))
+        assert canonical_json({k: v for k, v in got.items() if k != "verifiers"}) == canonical_json(py)
+
+
+def test_held_reads_names_no_window_value_by_default():
+    """`held_reads` naming no window value is the registration's own reads less its ports' at their own roots, whatever
+    the registration's window holds; a named value that is a port of its roots is the port's, never the window's."""
+    _, reg, _ = _drawn()
+    x = reg.record["roots"][0]["port"]
+    rec = {**reg.record, "window": {**reg.record["window"], "activations": {"values": {
+        "st": {"root": "5d" * 64, "value": "st"}, x: {"root": "5d" * 64, "value": x}}}}}
+    verdicts = _lean(registered={"0": {"value": "st", "root": "77" * 64}, "1": {"value": x, "root": "5d" * 64}})
+    base = audit.less_own_reads(audit.session_registered(verdicts, rec), rec)
+    assert audit.held_reads(verdicts, rec) == base == {x: "5d" * 64}
+    assert audit.held_reads(verdicts, rec, ["st"]) == {**base, "st": "77" * 64}
+    assert audit.held_reads(verdicts, rec, [x]) == base
+
+
 def _lean_answering(monkeypatch, fn: str, answer):
     """The Lean, answering `fn` with `answer(its own answer)`."""
     real = V.lean
