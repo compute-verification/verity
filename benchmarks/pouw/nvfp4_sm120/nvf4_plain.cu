@@ -132,7 +132,7 @@ const phc_entry TABLE[] = {
     {"verity_nvf4_256x128_ew", 5, 0, query, prepare<0, 1, 1, 0>},
     {"verity_nvf4_256x128_o_ew", 5, 0, query, prepare<1, 1, 1, 0>},
 };
-// the FP8 entries, named as nvf4_bench.cu's kernels
+// the FP8 entries
 const phc_entry TABLE_FP8[] = {
     {"verity_fp8_256x128", 1, 0, query_fp8, prepare<0, 0, 0, 1>},
     {"verity_fp8_256x128_o_e", 1, 0, query_fp8, prepare<1, 1, 0, 1>},
@@ -151,45 +151,3 @@ const phc_entry* phc_table_fp8(int* count) {
   *count = N_FP8;
   return TABLE_FP8;
 }
-
-#ifdef NVF4_PLAIN_ABI
-// Standalone, cutlass_registry.cu's C ABI over these tables alone (NVFP4's entries, then FP8's), so nvf4_bench.py and
-// fp8_bench.py can gate and time the entries as the harness calls them (PLAIN_LIB):
-//   nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xcompiler -fPIC -shared -DNVF4_PLAIN_ABI \
-//        -I<cutlass_api.h's directory> nvf4_plain.cu -o libnvf4_plain.so
-extern "C" {
-static const phc_entry& entry(int i) { return i < N_NVF4 ? TABLE[i] : TABLE_FP8[i - N_NVF4]; }
-const char* ph_last_error() { return ""; }
-int ph_cutlass_count() { return N_NVF4 + N_FP8; }
-int ph_cutlass_describe(int i, const char** name, int* kind, int* swap) {
-  if (i < 0 || i >= ph_cutlass_count()) return -1;
-  *name = entry(i).name;
-  *kind = entry(i).kind;
-  *swap = entry(i).swap;
-  return 0;
-}
-int ph_cutlass_query(int i, int m, int n, int k, size_t* ws, size_t* sfa_bytes, size_t* sfb_bytes) {
-  if (i < 0 || i >= ph_cutlass_count()) return -1;
-  return entry(i).query(m, n, k, ws, sfa_bytes, sfb_bytes);
-}
-int ph_cutlass_prepare(int i, int m, int n, int k, const void* A, const void* B, const void* sfa, const void* sfb, void* D,
-                       void* ws, size_t ws_bytes, void* stream, void** out) {
-  if (i < 0 || i >= ph_cutlass_count()) return -1;
-  phc_args a{m, n, k, A, B, sfa, sfb, D};
-  phc_prepared* p = nullptr;
-  const int r = entry(i).prepare(&a, ws, ws_bytes, stream, &p);
-  *out = p;
-  return r;
-}
-int ph_cutlass_launch(void* h, void* stream) {
-  const int r = static_cast<phc_prepared*>(h)->launch(stream);
-  if (r) return r;
-  const cudaError_t e = cudaGetLastError();
-  return e == cudaSuccess ? 0 : 1000 + int(e);
-}
-int ph_cutlass_release(void* h) {
-  delete static_cast<phc_prepared*>(h);
-  return 0;
-}
-}
-#endif

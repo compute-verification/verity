@@ -750,9 +750,9 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     the unit's range and ``unit_log`` are that net's slot. A size class's ``definition`` has no templated form.
 
     ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
-    (the format line and META) are returned. The unit's netlist goes from `ir_lower.netlist_pieces` into the file and into
-    ``unit_sha256`` a piece at a time; a flat statement's META, which ``unit_sha256`` precedes, is written with stand-ins of
-    its digests' lengths and rewritten in place once the netlist is."""
+    (the format line and META) are returned. The unit's circuit description goes from `ir_lower.netlist_pieces` into the file and
+    into ``unit_sha256`` a piece at a time; a flat statement's META, which ``unit_sha256`` precedes, is written with stand-ins of
+    its digests' lengths and rewritten in place once the circuit description is."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -959,9 +959,9 @@ def _put(out: BinaryIO | None, s: str, h=None) -> None:
 
 
 def _write_netlist(low: IL.Lowering, out: BinaryIO | None = None) -> tuple[str, int]:
-    """The unit's netlist (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.netlist_pieces`), each piece hashed and
-    written to ``out`` where given, and dropped before the next is rendered: its ``unit_sha256`` (`Lowering.sha256_after`) and
-    its lines."""
+    """The unit's circuit description (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.netlist_pieces`), each
+    piece hashed and written to ``out`` where given, and dropped before the next is rendered: its ``unit_sha256``
+    (`Lowering.sha256_after`) and its lines."""
     h, lines = hashlib.sha256(), 0
     for piece in IL.netlist_pieces(low.layout, low.name):
         _put(out, piece, h)

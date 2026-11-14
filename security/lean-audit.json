@@ -375,10 +375,25 @@
    "digest": "cac063df365f7c845e896f15d04ac61e77ab0c59876e7f1a913d3fd4f2841858",
    "why": "The domain on which every unit has `W_ref(u) ≤ Ω_max·W_mm(u)`, the bound `EndToEnd` takes inline."
   },
+  "SamplingDeploy.Code.ReplayCap": {
+   "owner": "@proofs",
+   "digest": "35191193418830bf3e43b2588c54da4b4ed1cd313c6688a7e6ff3f991b93eec6",
+   "why": "`SampledKSTwo` is stated over a code, its design and its replay sample of record: `ReplayCap` says the sample of record is within the replay cap the bound counts, a fact of the code. SPOT[Flock]'s code has it (`replayCap_wired`). (met by `SampledKSTwo_honest`)"
+  },
+  "SamplingDeploy.RegMatchesTwo": {
+   "owner": "@proofs",
+   "digest": "09284aa232f552a0416a8d518fa2518c1c997eb3a933eb8dbdca298eda283ea1",
+   "why": "`SampledKSTwo` is stated over a code, its registration and its design: `RegMatchesTwo` says the registration's samples are the design's, a fact of the code. SPOT[Flock]'s code has it (`regMatchesTwo_wired`). (met by `SampledKSTwo_honest`)"
+  },
   "SpotFlock.Built": {
    "owner": "@proofs",
    "digest": "b127ee90592d546378395533b5ffa6452b8b69a90df932b25cdb015cbd28dd9b",
    "why": "The two-stage guarantees are stated at SPOT[Flock]'s own frame: `Built` says the held code's frame is the one `frameAt` builds from its slots and its reveal code, as the verifier's run sets it. (met by `built_spot`)"
+  },
+  "SpotFlock.BuiltWired": {
+   "owner": "@proofs",
+   "digest": "efe3282e5ca8a279d33994de93b05a28cab7f72104bc6fe55f31190b9494e21d",
+   "why": "The two-stage guarantees are stated at SPOT[Flock]'s own frame at the connected program: `BuiltWired` says the held code's frame is the one `frameAt` builds from the addresses' slots and the reveal code at the wired program (`revealCodeWired`). (met by `builtWired_spot`)"
   },
   "Verity.Accel.Card.Exact": {
    "owner": "@compute-research",
@@ -3132,18 +3147,6 @@
    "issue": "PRF-460",
    "due": "2026-11-30"
   },
-  "SamplingDeploy.Code.ReplayCap": {
-   "owner": "@proofs",
-   "digest": "35191193418830bf3e43b2588c54da4b4ed1cd313c6688a7e6ff3f991b93eec6",
-   "issue": "PRF-466",
-   "due": "2026-11-12"
-  },
-  "SamplingDeploy.RegMatchesTwo": {
-   "owner": "@proofs",
-   "digest": "09284aa232f552a0416a8d518fa2518c1c997eb3a933eb8dbdca298eda283ea1",
-   "issue": "LEAN-186",
-   "due": "2026-11-12"
-  },
   "SamplingDeploy.SessionsIn": {
    "owner": "@proofs",
    "digest": "99857991deb3c674327c159100265d18964d94aaa1e2e9fb073990566e81bcc0",
@@ -3153,6 +3156,12 @@
   "SpotFlock.Addresses": {
    "owner": "@proofs",
    "digest": "5a41733162d8750a1f6962991c0d2ef715cd3c4d19fd288b14ea68a2b48accd9",
+   "issue": "PRF-460",
+   "due": "2026-11-30"
+  },
+  "SpotFlock.AddressesConnected": {
+   "owner": "@proofs",
+   "digest": "938986b5fbb10ed3bca096bd4f957e4039c2de248e253e7fedf1770a7c48f2d9",
    "issue": "PRF-460",
    "due": "2026-11-30"
   },
@@ -3960,6 +3969,14 @@
    "Claims.Flock.KSTable": {
     "fails": "Claims.Flock.KSTable_fails",
     "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
    }
   },
   "not": {
@@ -6087,7 +6104,7 @@
    "Proofs.Flock.RecGeneric": "the generic recursion's proofs and its instance at Flock, on the recursive audit's model and C-Flock's; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Bytes": "the byte conversion `bs`, which the deployed sampling commitment's SHA-512 (`Claims.Sampling.Path.sha512Msg`) and registration roots read in SampledKSLive; C-Flock is excepted until proofs extracts its spec",
    "Proofs.Flock.SamplingGeneric": "the deployed two-stage guarantee (`Flock.Guarantees.SampledKSTwo`) states KS at the sampled verifier's code record at its stage order (`SamplingDeploy.codeTwoStage`, `compiledTwo`) and that code's facts (`RegMatchesTwo`, `Code.RefusesTwo`, `SessionOpensTwo`), still in Proofs; C-Flock is excepted until its spec is extracted",
-   "Proofs.Flock.SpotFlock": "SPOT[Flock]'s two-stage guarantees (`Flock.Guarantees.SpotKSTwo`, `SpotExfilTwo`) state KS and its exfiltration bound at SPOT[Flock]'s code record (`SpotFlock.code`, `Held`, `two`, `rs`, `iroots`) and at a built session frame and its addresses (`Built`, `Addresses`), still in Proofs; C-Flock is excepted until its spec is extracted into Definitions/, which removes this entry",
+   "Proofs.Flock.SpotFlock": "SPOT[Flock]'s two-stage guarantees (`Flock.Guarantees.SpotKSTwo`, `SpotExfilTwo`) state KS and its exfiltration bound at SPOT[Flock]'s code record at the connected program (`SpotFlock.codeConnected`, `Held`, `twoConnected`, `rsConnected`, `iroots`, `wireMap`, `returned`), at a built session frame and its addresses there (`BuiltWired`, `AddressesConnected`), still in Proofs; C-Flock is excepted until its spec is extracted into Definitions/, which removes this entry",
    "Proofs.Flock.ZkAny": "the session loop's any-values guarantee states its release at the unswitched prover, the deferred release and the held relay (`RefSession.unP`, `RefSession.UnCausal`, the rounds of `LeanRelease.TrustsStop`), still in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Accounting.ReadUnit.Guarantees": "the expert-row read's binding states its ports at C-Flock's unit (`Flock.Bridge.circuitOf`, `copyGate`), still in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Properties.Verity.Sampled": "the deployed remote theorem (Verity.Sampled.remote_soundness_deployedReady) states remote soundness at the deployed vocabulary (`Instance`, `Live`, `constructionsAt`), which C-Flock's V5 bridge, decoders and Discharge type and which is still in Proofs; excepted until that vocabulary is extracted into Definitions/ (PRF-557), which removes this entry"
@@ -12245,6 +12262,22 @@
    },
    "type_hash": "196e6f2701cbab3465fe7f07ad01cc4bb6f385d3d01b8dfa60ab2a8d643eeef0"
   },
+  "Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Sampling.InScopeTwo", "Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "c4063ff68a156feff3bcf14c3b894b45c701dc0ab0853fcef0d8ebf0086d9c4a"
+  },
   "Claims.SamplingGeneric.CompiledTwo.Exfil_fails": {
    "owner": "@proofs",
    "signature": [
@@ -16329,15 +16362,13 @@
    "assumptions": [],
    "premises": {
     "assumptions": ["FlockSoundness.Assumptions.UniformRandomBytes"],
-    "domain": [],
+    "domain": ["SamplingDeploy.Code.ReplayCap", "SamplingDeploy.RegMatchesTwo"],
     "open": [
      "Claims.Sampling.SessionRuns",
      "Claims.SamplingGeneric.CompiledTwo.Scope",
      "Claims.SamplingGeneric.SessionOpensTwo",
      "SamplingDeploy.Code.InteriorFixed",
      "SamplingDeploy.Code.RefusesTwo",
-     "SamplingDeploy.Code.ReplayCap",
-     "SamplingDeploy.RegMatchesTwo",
      "SamplingDeploy.SessionsIn"
     ],
     "reads": []
@@ -16538,8 +16569,12 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["SpotFlock.Built"],
-    "open": ["Claims.Sampling.InScopeTwo", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.Addresses"],
+    "domain": ["SpotFlock.BuiltWired"],
+    "open": [
+     "Claims.Sampling.InScopeTwo",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "SpotFlock.AddressesConnected"
+    ],
     "reads": []
    },
    "type_hash": "ac7eedcb10306cfde243f580a97a016d9c3e11b405fd8b68666bbbdf3b51cdf6"
@@ -16562,8 +16597,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["SpotFlock.Built"],
-    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.Addresses"],
+    "domain": ["SpotFlock.BuiltWired"],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.AddressesConnected"],
     "reads": []
    },
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d"
@@ -28175,7 +28210,7 @@
    "Pouw.SecurityProofs.NCP.GapFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod": "frozen (no-function,world-unlisted): CircuitWorkMonitoringPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkMonitoringPeriod's claims off the premises list. Proved from CircuitWorkMonitoringPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated.",
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.ExecutionPhasePlay, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, MonitoringPeriodBudget, MonitoringPeriodTailMax once at the accepted prefix, SampledRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposeMonitoringPeriod.monitoringPeriodCovers: Declared.monitoringPeriodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under the PouwH1Tile_v2 tile the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
-   "Flock.SecurityProofs.SpotKSTwo": "frozen (obligation,no-function): ksTwo_spot at SPOT[Flock]'s two-stage code (SpotFlock.code), knowledge sound at SHA-512 with that code's facts, its coins' bytes and its sessions' runs proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotKSTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SpotKSTwo": "frozen (obligation,no-function): ksTwo_connected at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs with every read sent through the code's own wiring map, SpotFlock.wireMap, returning the written bits at an output port a link names, SpotFlock.returned), knowledge sound at SHA-512 with that code's facts, its coins' bytes and its sessions' runs proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says), and from one fact nothing proves. What the proof reads of the held wiring is decided where the design evaluates (SpotFlock.two, by SpotFlock.wiringOk), so V h refuses every run of a held code that fails it and the statement takes no premise for it: each wire's writer's part before its reader's (SpotFlock.WiresFirst), every wired source bit with a gate to go to (SpotFlock.WiresMove) and every source bit at a port a link or a wire names (SpotFlock.SourcesNamed) are among its clauses. The fact: each gate's value has one address at the connected program, fixed before the run, which holds at every accepted run's checked unit whose proof block needs the gate (SpotFlock.AddressesConnected). Nothing proves it at a registration: not that the checked unit's instance is one of its session's (SpotFlock.CheckedRun.Counted), not that the address's place reads the row its session holds the gate in (SpotFlock.CheckedRun.RowAt), and not that V h holds each needed gate's read to one entry, a linked gate's to the boundary record. What the statement covers rests on the links the held code holds: an output that leaves and that no held link names is outside it. The held links are the auditor's copy, which nothing in the statement holds to the replay block program's own links (SecondStage.replayLinks), though V h runs the design's check of them (SecondStage.linksOk). That check asks that each link is for a template one of the parts is of, whose units its rows place, and not that an output that leaves has a link. Over the members' programs side by side (SpotFlock.ksTwo_spot) every written bit is returned, whatever the links; the connected program of a design with no wire still returns only the linked bits, so at every design, with a wire or without, this statement speaks only of the linked outputs. It reads SpotKSTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SessionLoopZKAnyDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound per outcome at the session loop's release at the deployed tables (Masked.dataE, at the loop's own link and Finish: ofLoopLink, LeanRelease.withFiles, Loop.realOf): as a simulation statement against every malicious verifier it has no acceptance of a function to take; it is at any values whose unswitched round encoding is causal (RefSession.UnCausal), at a relation whose statements' table witnesses are valid (RefSession.Complete), where the transport's trusts at the unswitched prover hold at the relation's statements (LeanRelease.TrustsStop), premises that aren't on the list.",
    "Pouw.SecurityProofs.EndToEndEps": "frozen (conjecture,no-function,hash): EndToEnd in ε form. It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is sampled uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1": "frozen (conjecture,no-function,hash): GapFromTTNCP_U_v1 in ε form. It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is sampled uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
@@ -28200,7 +28235,7 @@
    "Verity.SecurityProofs.PrintCollision": "frozen (no-function): the collision bound behind a memory check's key prints (Verity.MemCheck.element, security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and set of packed keys, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
    "Verity.SecurityProofs.MemoryChecked": "frozen (no-function): offline memory checking over an abstract access log (Verity.MemCheck.Checked, security/Definitions/Core/MemCheck.lean), the reference semantics a memory-checked circuit's log is held to, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
    "Accounting.SecurityProofs.RegisteredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedRunConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummaryRun), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, SquaringFloor and ChainSum (at their floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
-   "Flock.SecurityProofs.SpotExfilTwo": "frozen (obligation,no-function): exfil_of_ks on SpotKSTwo at SPOT[Flock]'s two-stage code (SpotFlock.code): what an accepted run serves is in the influence set at δ at SpotKSTwo's errors, and that set has at most Σ_{T admissible} 2^{b(T)} members, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotExfilTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SpotExfilTwo": "frozen (obligation,no-function): exfil_of_ks on SpotKSTwo at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected): the served outputs, which are the extractor's witness's openings, under the statement's roots, at the connected program's returned gates, the written bits at an output port a link names (SpotFlock.returned), are in the influence set at δ at SpotKSTwo's errors, and that set has at most Σ_{T admissible} 2^{b(T)} members. What the bound counts rests on the links the held code holds: an output that leaves and that no held link names is outside it, and at a held code with no link nothing is returned and the bound is on nothing. The held links are the auditor's copy, which nothing in the statement holds to the replay block program's own links (SecondStage.replayLinks), though V h runs the design's check of them (SecondStage.linksOk). That check asks that each link is for a template one of the parts is of, whose units its rows place, and not that an output that leaves has a link. Over the members' programs side by side (SpotFlock.code, by exfil_of_ks on SpotFlock.ksTwo_spot) every written bit is counted, whatever the links; the connected program of a design with no wire still returns only the linked bits, so at every design, with a wire or without, this bound is on the linked outputs alone. At SpotKSTwo's premises: SpotFlock.BuiltWired, part of what it says, and SpotFlock.AddressesConnected, a fact nothing proves, open, as SpotKSTwo's reason says; what the proof reads of the held wiring the design's evaluation decides (SpotFlock.wiringOk). It reads SpotExfilTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "NetTiming.SecurityProofs.SampledLeakChecked": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS at each deployment), on the statements whose check misses with probability at most εchk (CheckedWitness), and bounds AccSeqsChecked, the observation sequences the circuit's Program (circuitProgram) accepts with a valid run, where the check pins its checked inputs (CheckedUnique), not runs of the network check's code; it charges the free inputs outside each statement's registered and checked inputs (freeInputs \\ (reg ∪ chk)).",
    "WeightSecurity.SecurityProofs.TheftServedReq": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Served.lean), per charge unit and with the served channel's covert capacity in bits (WeightSecurity.servedBits), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
    "WeightSecurity.SecurityProofs.TheftServedMinEntropy": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (security/Definitions/WeightSecurity/Served.lean) by two to the served channel's covert capacity in bits less the weights' min-entropy under honest use, stated as honest-use hardness against every party (WeightSecurity.Assumptions.HonestUseHard at Set.univ), and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' isolation (WeightSecurity.Served.Isolated) as a probability term; it reads no function's acceptance.",
@@ -34389,11 +34424,13 @@
    }
   },
   "Definitions.Claims.Sampling": {
-   "digest": "df08048cb4d66db6a551485244f6a793fdc80e9fc1e9a341bce71ae2ad7d423c",
+   "digest": "7f6cbc6cc7344e8914bd53438aed98e39d401f2e4069ccd00c0c9b1e6dcc94d2",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
+    "Claims.Sampling.AuditStatement.desc": "9aba517d0fa98c7dc8fccb8df71878f443a969a34b856cd0ea175f9a594e0496",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
     "Claims.Sampling.AuditStatement.prog": "87b63818a7d980ed2906214d1894f239d7c1f55cf1806d17b654b4b81fcc5108",
+    "Claims.Sampling.AuditStatement.query": "b73404e3ead38c0a0760e477adeb9d1706a9cd5184f58a11ab4fd49c9abd6d10",
     "Claims.Sampling.AuditStatement.roots": "181df3c2630f46600044d273ba021e70dc33a8ec789d3aec36d0fe6f0b234871",
     "Claims.Sampling.BGate": "63a981e57403ae475c097446b58799e6bbc6ebb87e4a1ff8911d63f602542833",
     "Claims.Sampling.BGate.and": "5e97bb022ac07b984f8303744fbc545e8aa6f37c7e6ec025083230906f800909",
@@ -34834,6 +34871,15 @@
     "Claims.SamplingGeneric.CompilerHeadlineTwoX": "7144d29b119cabe26ab9d7c7a87f675c3d5f95b28b75c5318b1518ea7abeb08b",
     "Claims.SamplingGeneric.CompilerKSRegTwoX": "7f106b3d736ef8553e9f9f05b2f69d71c306f748057421a9a371012c149393ae",
     "Claims.SamplingGeneric.CompilerMissTwoX": "20f8a807c5efa511f50d2e157a569c28ebef322459a165793d8aa168bc574c93"
+   }
+  },
+  "Definitions.Claims.SamplingTwoServedX": {
+   "digest": "73d0bd66602324f4a8db624ac16745091bb314bfd92aefc825c8c1ca36fc66a0",
+   "definitions": {
+    "Claims.Sampling.influenceTwoAt": "10d26107d7484453ac0c44bdb01ce0859a1a71006b534f451a2a9a04ed802248",
+    "Claims.Sampling.traceInputs": "cd53a90b6710cd2fde593e9ea5e369cb4180759befabf9e432f70e1eb2fc871a",
+    "Claims.Sampling.traceServed": "f6b3089a9af9d86dcd5efdb43e88250b2eba82628032f1c93fa3c91c6104d7e4",
+    "Claims.SamplingGeneric.CompiledTwo.ExfilRegTwoX": "518c955576f6ffc02d2c8bd86403da629b9debee0cc09e69691c8f185d4d267a"
    }
   },
   "Definitions.Claims.ZKOut": {
@@ -50616,6 +50662,16 @@
     "SamplingDeploy.replayTwo": "e97056cbf61eca5b206aa8415c4c8fccef2a4b49c3d99c9cef58028feedf4750"
    }
   },
+  "Proofs.Flock.Claims.Sampling.Rewire": {
+   "digest": "7cec139f57e7d1dcaf10a8492c6ae348f9279866bc2cf7c233daa0157f4cdd02",
+   "definitions": {
+    "Claims.Sampling.BGate.rewire": "0d8e76b33b9bf03ed02ea09679d17fb95cba1c34da97e2aa746e685e0a62d29f",
+    "Claims.Sampling.Partition.cut": "bd861e98c7a0e39613374ae16f64a1aa9dee010a420e19b3d408b33b7be11ff0",
+    "Claims.Sampling.Prog.rewire": "c8bb4c8e72f354c3348f66f6857c13a94d439352d07bd52abe75a4a47f2e0134",
+    "Claims.Sampling.Prog.wired": "d0e7bbdcb24fcad9a10848b19df61d031e67137f71bcc0cd9d70ac43df72f19a",
+    "Claims.Sampling.cutBlock": "67b679cc62df274afb745160631637b74f861bf59711880a9ed4f601d2781a03"
+   }
+  },
   "Proofs.Flock.Claims.Sampling.Select.DrawLaw": {
    "digest": "4572a19478a69aef2821bcb754447c9560ee513acde935b1761f562564535a41",
    "definitions": {
@@ -53053,11 +53109,11 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.Guarantees": {
-   "digest": "bc57fee09ca3e8a7fe0c95ad0a344e19f87054c8599d3b5b5e936698e0d47986",
+   "digest": "be361e82afff4b530e199b1b0ff515453c780900e26f5c46eac7146935d529e3",
    "definitions": {
     "Flock.Guarantees.SampledKSTwo": "30ffe2b28d47195d8240120c7674301bc14a571edbdd70c910b32bf3c9faa884",
-    "Flock.Guarantees.SpotExfilTwo": "097271a4310d5e7764bb4753dab66ef363db9d20a19b0e44e6f3edb2edd916d8",
-    "Flock.Guarantees.SpotKSTwo": "dad9e5b89978f6e5ccad6a2ef9ceed7e4885f11196f4a068960fac5e693b6955"
+    "Flock.Guarantees.SpotExfilTwo": "08de0b7993c2ff3d4eb9ca95b743b436bb560e22af1e32504005bc08ba31c82c",
+    "Flock.Guarantees.SpotKSTwo": "920013bcf254c576602bfeb1df3942c6b725046ba3f6891145ef4975ec111656"
    }
   },
   "Proofs.Flock.SamplingGeneric.OpensTwo": {
@@ -56593,6 +56649,17 @@
     "FlockSoundness.foldLo": "8a30f04523f730fa470c3bd23ca1e9dd61de0515521a8e0e0da4e8638db9efa1"
    }
   },
+  "Proofs.Flock.SpotFlock.AddressesWired": {
+   "digest": "f0dd9d8eff05022a361de4232447f70dc5a07cbf6a99da849ad9748b35b08300",
+   "definitions": {
+    "SpotFlock.AddressesConnected": "938986b5fbb10ed3bca096bd4f957e4039c2de248e253e7fedf1770a7c48f2d9",
+    "SpotFlock.AddressesWired": "401a6d468beb03732370677d38e0e3a7750cfda951f3008d1b659d1f46e8ab98",
+    "SpotFlock.CheckedRun.AddressHoldsWired": "d624856552c4747788608f5219fa60c18bfccff43bb0dcd0f20bed68b1ecba03",
+    "SpotFlock.CheckedRun.ReadsInteriorWired": "9326d5305ffc97fa7b585bcfa635ee6c7a79c736b724ca299b8ae0f767c6c015",
+    "SpotFlock.CheckedRun.ReadsRegisteredWired": "a230482657dfcd30782484f92238f423148ae103a439d3c697669fa35be608c7",
+    "SpotFlock.CheckedRun.rootsWired": "b69aa92fea79226106302ed264e2d14c0c3c013403c8ab133f8b9e5776505043"
+   }
+  },
   "Proofs.Flock.SpotFlock.Cap": {
    "digest": "9a7de9503993c0d986dbe66ceaf52bae601787ba7c7da4fb00996ecef4f8fc89",
    "definitions": {
@@ -56604,19 +56671,20 @@
    }
   },
   "Proofs.Flock.SpotFlock.Code": {
-   "digest": "bc14c592145efe4034a6a8f2413533c8b77966daaa4dfe6068555dd296d72d10",
+   "digest": "6f7a39ccf4bfe2b109aca8954b49225340fc6fe6bfd1d2b88a50447365822e3a",
    "definitions": {
-    "SpotFlock.Held": "696fc670c2679e17d018ff56f9aec6ef5323e9cea3f10b409e2a1701ae803aed",
+    "SpotFlock.Held": "d8bf02cc78697e9b0bafb7166fc4f554d7d44e5196379a868867da619089e125",
     "SpotFlock.Held.boundaryNames": "33f16aae45218ba384824fa13e5ffa780b3f9bf825f3edbbec11c60e4dcea7f6",
     "SpotFlock.Held.desc": "179ec1b9ad7cfb7bfd8265185f8315714cfe6b49683a24609ffc144bb14a3721",
-    "SpotFlock.Held.frame": "b1b6dc4fa671ca40acfd3bb2ecf37c8344b9c041bf7a713950dff66b9a3e3083",
+    "SpotFlock.Held.frame": "10fab963d8cf904c580831739874a95514a03239a27d96b6d3f771cd389ee270",
     "SpotFlock.Held.interiorNames": "d2c8c4a90a5c00e0a948c1c5f597c617cd06bfe851a8c71c0f2bdda413065612",
     "SpotFlock.Held.k": "3fa28a557de0fec2570ae423fd6b53f18dede78db786a6fbcf756d9311dea60f",
     "SpotFlock.Held.links": "f0bbfbd4cdfe616e70827af3baad4797acfd67594b472a905f7e99923b457278",
-    "SpotFlock.Held.more": "3d4f16179841a6c4fa78dd4b015a68ffb941335a2eccd3b74a30bb0f2ec77a34",
+    "SpotFlock.Held.more": "501180a9e35bdab2abc41f4dfa414baab02e3ae0438f52ea7a691d68b888ac72",
     "SpotFlock.Held.ms": "89ff9aa12e29ae8cd828ef08f5619cd809e72016c90627c6ab57c8abef0cbbb6",
     "SpotFlock.Held.names": "06536136104f010703bfced9310a7a6ca8688d9bed8c756633790e785c51339d",
     "SpotFlock.Held.query": "a5f51cfa7803849a7c805ca672318ae4aff6166701d38f293d7c8922e71cbb0d",
+    "SpotFlock.Held.refHeaders": "8c5c75fa5940145675c8d943a3d09ffe77c85e9a6a2fa14cda00acdfbc4dd68e",
     "SpotFlock.Held.refReads": "09e56d411dc9d4813e60ca3a8178b4062551774990cda9f003740b01f09abfa3",
     "SpotFlock.Held.reg": "7c467ed615a390d6e47527545d7428cc0fa8de3c9dca1a9470d617ab0af0b354",
     "SpotFlock.Held.rows": "ce1a79de1fa5da61be6f571c3052797c0d9be16d9b743e459e31135c85b549cb",
@@ -56636,14 +56704,20 @@
     "SpotFlock.answered": "fc7458d5796a66660e016a4cf116e479ac88d29d772b873ac0c84b2848c51b45",
     "SpotFlock.base": "0876f427eeaf122a2d57caf9348699c37ea3d4e367bf6d3a844a337d5421aa64",
     "SpotFlock.blocksOf": "1e08e138e19d4a1f2095452b4786c1ceaa5f66ab94794dc46376c48d00567d3a",
+    "SpotFlock.cellRow": "a90749c700525c67303c32471dbf8ea1cb5b2b93426e7fa2d60273f3923ee251",
     "SpotFlock.code": "898d1a6ba4389c8b296baef3f41b5b77f63a93f2f566ac68b7975a4e7e7ec52f",
-    "SpotFlock.codesOk": "19d0e2016ca5ea4f2490fc744cc972fe83387b1736b322991e4532c3c8f6db23",
+    "SpotFlock.codesOk": "d9ae987441691fd73fe381a2d25304bccbc824d299e60f52de8e4ee04dc9f759",
     "SpotFlock.coinByte": "43927e511fb1a08e5466102b42a5299ff18dfcce23d44a15b9f4f051c0dfa44c",
     "SpotFlock.constAt": "750c06f31897d99e7a2754f10a89663282019f01e71579e19f2c4ebd1c67de7e",
     "SpotFlock.decidedAt": "ecb1d9dd2d62f026623cb791aa7399eeacf8c17eedd441a4460ebf770d82aa52",
     "SpotFlock.decode": "ebba0538b2199bbacfd637e32b05a8625787b31fcffdc19bf30169d0c4d417bf",
     "SpotFlock.filesOk": "4c00e72b8e0d1618f17f83a65baa44445cdbdbc13e4cd63ec57260fcbd5184a9",
     "SpotFlock.headerOf": "178444d4c7ed5324c6c7face303703f05d74d5f2cc5c368bb44c32759db55485",
+    "SpotFlock.heldLink": "9e3dc2eb389aa3ca20e9e521c607e496e3e675248c04cbc716c95a6b7f23c011",
+    "SpotFlock.heldPos": "34b6298d03f9ebd8f5db3e0c0654e77a1860f005fe8b3072b794e46efc4f9623",
+    "SpotFlock.heldRows": "52c625608128236b579d5fc643585eac05d2e1678b0898a173a9502e827088ba",
+    "SpotFlock.heldWire": "8955f16f0e72becd0be6c3bba4edcab763852600ccd2347fcae83ceea253cdc8",
+    "SpotFlock.heldWriter": "3e9e0759c9574b0df60929c4cc0f0f607e201c946058f40be632a0db083c09df",
     "SpotFlock.hexMsg": "3738fd873fe7c8267e09f8c4c35c76d2d4bc89b675ee6122a76508df75b99cb0",
     "SpotFlock.hiddenOf": "2f795695a547bf8dba5671142c32ae460ad0bdbb4474b6a0642a87118a9a57c7",
     "SpotFlock.instDecidableEqRaw": "a6bde40d901c6bf8da9a723c5ae02979ce5d4aa1bdf47619e7f2255fe97079ba",
@@ -56652,15 +56726,18 @@
     "SpotFlock.irootsOf": "255156327007b3a9ae5bb030b58823bbc3930f417d41797daf4669b90d3952b4",
     "SpotFlock.jsonMsg": "f0f274b8bb42c49c51a24c3b69a8598bc065d540f5985c4d44dd5b720f34ac0d",
     "SpotFlock.k₀": "da87a53c87758b9529e0e0959ad9e33b030aff5100885168b330054cfe637b64",
+    "SpotFlock.memberCircuit": "c963bc2f92716782e65cc30f3042b4181d1663028c1ad380692ca10d51eced1a",
+    "SpotFlock.membersScoped": "e1450026b39805c9e0d7dc2ec80cfbdd2a6db73564503b0809fc53285eae68f4",
     "SpotFlock.namesAt": "6adc7c4f0ee5c53ae29bc22d4931cfa827b0d43dd7c4a4c674a34755a7049c9f",
     "SpotFlock.namesEq": "59d6468c5d489e2c93215c2c9ccbd5276ae92c55bf4d68c408dca96a5a60e6af",
+    "SpotFlock.namesOnce": "b9e9a44d1abe4a924ad1f83f9a448d306559cec4d8f6d73028d5b274981745f0",
     "SpotFlock.natMsg": "608e1e0a2c3b83959f512de3b1b5ecb2c79cf5fb195371771ea3455f3b161088",
     "SpotFlock.next": "49f8fc6b8c78addfec7189193936c64d86bad1821462ddc0c56267800b357ca3",
     "SpotFlock.n₀": "2dfa032ea72a80b4635e08cf4f98e5d3d47b5bfef651ec577fbcbd058e3c4de8",
     "SpotFlock.off": "1526e8cb50cb38e6874eca0d706289d904d4fe856d85ea75aaff82588a7f439a",
     "SpotFlock.oneStageOk": "c885be823a770f382b021003c5bdd1ccbd10bfe55acf3e37b1b820fb90943af8",
     "SpotFlock.order": "22c018485385764aaae73948db6efed98360e4bf39e6314bbb439dbae477d481",
-    "SpotFlock.ownOf": "72f4043abb90712f49e32a583566c4ebcaf625b99828d6bda8bef1cd03a95bc6",
+    "SpotFlock.ownOf": "d810492ac87d26120390e5e87e1d51e87be541eb95b5fc3b14d2259a9274cd96",
     "SpotFlock.parse": "3ecaf35fb08d8804163c7c0ae6ac0050a073c4f2fd4d80b30e3fd4f0f6752b0f",
     "SpotFlock.partAt": "6e2cd00cd81b01d76247fe1f89bcc0927bbdaa089d61d11a699405154a20672e",
     "SpotFlock.partition": "796d42dda4df8f8b4db2064063cda8ccde6d5e0ccc2cb0ee447a5789576f5ee6",
@@ -56668,16 +56745,20 @@
     "SpotFlock.partsAt": "38df960e61fc29451c48b275dc33604ce7c31c4442f93d891efbe4cb48250b76",
     "SpotFlock.pinOk": "311809c0c1000e96088c5a5b0f982d80cf6b44f336144e6560e5d197f51e23dc",
     "SpotFlock.portEntry": "8e70e04aca151905ef7296a9552235cfde54ce861361ad568b61f53daaf71605",
+    "SpotFlock.portNamed": "e8a98e14b72ca86a4bdcfb46461d55fe3bf7349a8f86bf17ecc645266e8950a2",
     "SpotFlock.portRoots": "682f6a6839c7f88c9456dd086611a01f679a49eabab61336f8b58ec8d63b77bb",
-    "SpotFlock.readsOk": "bb1a0907bce78426e600bf0549e1014cd8cbd7618bbf457b29660a19d34b8be1",
+    "SpotFlock.readsOk": "5682a238bd7bd40fbaebd0b5401e010c4b508214e59e1d03af325497a0046a15",
     "SpotFlock.recordOk": "e790ebcfdc103885e89e3639eddfa3af64b6e177f63d5fff4d23fcedd808ae3c",
     "SpotFlock.recordsOk": "e3168565eeb6c0a20b31b88acb02ea9ef9bf4551b153406c6bfe97e4b8507734",
+    "SpotFlock.refReadsOwn": "665d6961a05d8314d465fbc7e945c336c3b2f0748c99a62a54496c06a4e82b57",
     "SpotFlock.refRegisteredOf": "dd1111313e33df4818c34abc9684d7e88ce33ce5e0f7e7f6465d61c0d1c5526e",
-    "SpotFlock.refsOf": "4e604e14eaac42ce51ad16a692e54ee9ab172e577a5731bd8616733feab79b41",
+    "SpotFlock.refsOf": "9cf6eae381962a4852df856876dca938961d085048de6a652cea12514ddffb14",
     "SpotFlock.refusedSeen": "024f7609fe61f1400dd1372c8df182cfc088b47ae58be4dc5c2cd1a63cc8cb28",
     "SpotFlock.reg": "72e9ebd65137f6a6a39f05a9d74ce43c1dd73f8280fe9a31e2950ab30ee64aa7",
     "SpotFlock.regList": "705b3c9ff22a292b1a3465307618048e5857b43d56739a8a60f3f633610f8157",
     "SpotFlock.replayDesign": "485c3e90580781e7ae0392a00b9968e4a00775dd3821f20961342e1f30170a4d",
+    "SpotFlock.returned": "7074a4e9da40d414f89ec0d0002fde6972c721309cf9ace05914d545bee55c7a",
+    "SpotFlock.returnedWhole": "8710ef01d626d34c5569d6eb0cdec1627914024bef01558ca47e968f55495315",
     "SpotFlock.rs": "10d87b9e650669b7f50fffa6667865dadc175edfd1ed4d57bf65ff7a8f2c2bc2",
     "SpotFlock.scopeOk": "f77fc0a54d5080bcc76510fde22b6da68f6309bbeddfa21600dadc125cc6f6e9",
     "SpotFlock.secondDraw": "d814e5ff64df5bc3afb14396ccdf0ab8d31ccb653890d327de10829c423f3b44",
@@ -56686,6 +56767,8 @@
     "SpotFlock.sessionOk": "9ebd5c97b9fb8696ab2f98660a9907f56440c12b6b89f79b8461f1b1d7c95319",
     "SpotFlock.shapeOf": "9efe3c6fc8b6011f794ecdb6319e4863d51fc85b61ae2252384817f99946f801",
     "SpotFlock.slotOf": "65feecb9135f04144d5fd94c532f9dda6eb03c4bca543d49bc807f3bd1e51818",
+    "SpotFlock.sourceBits": "be9f42eb5026ddcf52c9ab947cec3481896d0b4862ddc1473063671eef75bfae",
+    "SpotFlock.sourcesNamed": "91de5384db1c9d64a504aad4ff10d37d5fc0faaa7265bf57cbdf87fa171bdea9",
     "SpotFlock.src": "99b3cf8f8e850361e01c861c6a956e800916d99fb88f019743d37c580ee4deaa",
     "SpotFlock.stageByte": "b711fc4130e5a27c70911a2e49dbeb51b30d6847d1e61f941b726b886daa744e",
     "SpotFlock.stageOf": "5e551af1eb2b7196a31aa1498ef1b6292b713845c37d23d8d9e3be5a7272cb9a",
@@ -56700,8 +56783,20 @@
     "SpotFlock.templateOf": "47ea706c76067812593b21253bb3661e1dc1dd6fd55bde113a2d1a0974c81e15",
     "SpotFlock.templateOk": "396ace325465197288008ad48dee10df2f06aa3486afa683e0f35e26e3f07bf3",
     "SpotFlock.topoOk": "6e1a7f383fbb5772eb4320c24876b0d1b256fd8c9c2a8691c7230d4b27959bb9",
-    "SpotFlock.two": "f7195100c6392abda2459cf8adec83703c7c5d08a6cb1ee504a5ae1936d7d05a",
+    "SpotFlock.two": "0f1f0bce3e5e7cd3a19d9097ee0b58fd10357d3f6e7e25d8c4f9ce436323b89d",
     "SpotFlock.verdict": "54a60c971b3b220ea22f24328ed35ec3b68ea42737cfe25b93125e2e88d02907",
+    "SpotFlock.wireAlike": "34617aab7ab005f6ab49ffa5eab7ad1507c5cb5cb039654b83a12de9a8e7bbde",
+    "SpotFlock.wireCell": "8e8b174128b3c6e26c387ebc21599738381f1e0b1fee46c2de82a18b43aec08e",
+    "SpotFlock.wireMap": "f7872b246edb0cdb23e9f7e51d651546e1429b95f3115ec823c66cf9f6632c26",
+    "SpotFlock.wireTarget": "72b974f8e49b6bcda5ad286ce5b22c391d2959e8a85478a33bfa122962607c84",
+    "SpotFlock.wireUnit": "91249331f09600a705f437a3bd4cbc1c84fd2a222bb16ea6116508c2a8dbea91",
+    "SpotFlock.wiresAlike": "99944606edc7c22cb73dccf07583781fe0b7e0591a83c549cff047de76064a3e",
+    "SpotFlock.wiresMove": "c2b48f356d3f728ed230be1ba19f313e5e414a63eb8cd1ef937e93a5166bbdec",
+    "SpotFlock.wiringOk": "ee4845325b747ebcb37a5b5e3d0f8b20b98def270349b56ae5d1a78e6a949f75",
+    "SpotFlock.writersFirst": "436fcbebad7b3afe706ba5e7ad9da98406627a48ca913bcfacbc8f07bacc17bb",
+    "SpotFlock.writtenBits": "11e9d26511bfebc5bedc084281487cdb856f5c40c18f591e79243184296268ec",
+    "SpotFlock.writtenRead": "30244ceae0beb890757163ffb00fc2bae435987c8705e034ec736b2fd563e95d",
+    "SpotFlock.writtenUnwired": "f94f31bc4545176136183e00d23f94d073b5087b893d55c1510a6636938e1f3d",
     "SpotFlock.zkOk": "2693efaed2bfc2b4d301af0a0624291a6b2da6b6dfb09394c2445a27ff753365"
    }
   },
@@ -56860,6 +56955,19 @@
     "SpotFlock.Reveal.rootsAt": "9c42b7ff2e2579d3034d4480434a4e94fd3316aff220dcdf66ed80256ed70fc0"
    }
   },
+  "Proofs.Flock.SpotFlock.RevealsWired": {
+   "digest": "13d8d1f1b8f822fc3897f5c00fb191c2b6997470a7cd1efe05541dad151779c2",
+   "definitions": {
+    "SpotFlock.BuiltWired": "efe3282e5ca8a279d33994de93b05a28cab7f72104bc6fe55f31190b9494e21d",
+    "SpotFlock.addressMapWired": "9a419fd298baa4a742798ae70b308c358b6b047b6fbeae1b18362e9a8472a13f",
+    "SpotFlock.needsSide": "b6ec4ee81f72534106a3f7d0ac4645dfbf92cbd936be14cef4476bd2248ecaf3",
+    "SpotFlock.partitionWired": "eea7fbeacb4e9d9ade76a70bef71633a5a2c73f2788548e5be408ee09e1e3762",
+    "SpotFlock.revealCodeWired": "f08f16f1be857b892b808c6a8f19542c3a96d4567ae8a517f3c73343f7a94a1a",
+    "SpotFlock.revealWired": "216e0ab57acfcb3c6f0926f9bbe15b9892b16a496bff63c4ceb0136d70b2b164",
+    "SpotFlock.rootsAtWired": "3b0a1b4e675dfc5778502ea6a63123dfcdff4bb2bd0621c18f0396a2bbb925e0",
+    "SpotFlock.twoWired": "55cc87de532a594906a1e63937277926b34f3efb4a3a456eef69f6d829d23a58"
+   }
+  },
   "Proofs.Flock.SpotFlock.Rooted": {
    "digest": "e760a2cf908d8870343c69e779a57f4db44034b687212991d653dd3e0f793225",
    "definitions": {
@@ -56881,6 +56989,20 @@
     "SpotFlock.addressMap": "51f9b9b60a64f2b901eaee6af75fdc3e94c9bfb924e4c46702f3b22f3ff5f247",
     "SpotFlock.slotMap": "9b94ed5a76675960e80cdfaecba63eb9eb642bb5d9420173cdb63743e666694b",
     "SpotFlock.slotsOf": "c35a8e1acac89d66d137661d6ec6e4e5481431c364caae23fd12cd051a20beb8"
+   }
+  },
+  "Proofs.Flock.SpotFlock.WiredCode": {
+   "digest": "702993f05c5435e0685365377173381301a1a7b078c96cde9ed163be8df6fef2",
+   "definitions": {
+    "SpotFlock.baseWired": "3975d2b0e513626451ad8efa07d0b2efd093a15ed871797a6bbfa4af6b4a0141",
+    "SpotFlock.codeConnected": "6812d9c13d090f3a9132ffefd527e77c7fa4a86a4ab41b85c1be56eeb34452e5",
+    "SpotFlock.codeWired": "95bc3b42a36ad3e64feef7c788ac33dfc191e3567eabe674f7db1dbf8c91ff7b",
+    "SpotFlock.orderWired": "2eeb702df01f03d69dcd590364234931161a364d5b1f01885e713eff798700fb",
+    "SpotFlock.parseWired": "41b31c6d5a0b0d810ed011590cc235f1bb2c01df0675b0b11968e1f378a2d46d",
+    "SpotFlock.rsConnected": "07f6642ecd5f4102fec5b26d6e760f1df182ed7b2259a0458b8700f20116f0b4",
+    "SpotFlock.rsWired": "f5fb615bc31b98d5331cf6818bc18b633dc49674b28e9daf46664869c50e70e8",
+    "SpotFlock.stageOrderWired": "1ba5ec9f56db2c9abc4ed4418143eea2627bbdbb6af0537bec51519470f4b636",
+    "SpotFlock.twoConnected": "ef1d7287dcb7cf211217389bda316ada57b6fe33153267f6c81e6522aa6f17b0"
    }
   },
   "Proofs.Flock.VBridge.Family.Encode": {
@@ -58569,7 +58691,7 @@
    }
   },
   "Spot.Bits": {
-   "digest": "0341d0f6cdca61727bd38b795c39eb5929c8634318818450e70737df3504b32e",
+   "digest": "a5ac4063a6eefded8fd3774de5d7b6b3135c8d6bf7460c486c13d78105caf1e7",
    "definitions": {
     "Spot.Bits.Index": "da9a9294bea1589b1f65fd9c806d626bbe74cfb8453b8104d6442a3a520255cd",
     "Spot.Bits.Index.cuts": "c4c11717ca1946e0f38b5d5e4c90e3715138be199aa1c0e06975b86b173e2431",
@@ -58593,6 +58715,12 @@
     "Spot.Bits.LGate.rec": "f9059766e7a5bfd35e377ba0b68d14fa12e40b6b6fffe2f3f770d812f3a5da96",
     "Spot.Bits.LGate.xor": "40d40107ca86f930b8a059e4195b709e39e5ed8dd51164c291949e5253e6e360",
     "Spot.Bits.Members": "b94fb81ed5129370bc8ffd12b3b709dd85f6e541132b2ad8f6a7f130e2a2601a",
+    "Spot.Bits.RowPos": "34f7fc8a63236f4deaf07474060a377e289e75cab5b7ba60a9f501408b2911a8",
+    "Spot.Bits.RowPos.bit": "545932b305e6d4aad6240710d907942482f98e7fa2eb32cb2a13c409df77631c",
+    "Spot.Bits.RowPos.casesOn": "c18d1ab33d2baf8c4d41e56a4a646ed12b7d5ef00c0a5674bac19839a3c1129c",
+    "Spot.Bits.RowPos.leaf": "10dea783ccd0bb111db55d488c435d04c113c3822cd439407e78656847ab0460",
+    "Spot.Bits.RowPos.rec": "294da432d3f05b1f28b83406cfb710d0c03997d6287d683d9034fc208b52f115",
+    "Spot.Bits.RowPos.row": "e6a53b12be1590d58e0975d3da31daa869bf33b8fa403ea0a3b7bde07f2f370e",
     "Spot.Bits.Rows": "beb380552f97399d1e1c53438d32074c755e2b7a61a0dd9ae052102ce5a0dfbb",
     "Spot.Bits.Rows.a": "a19fd54997737df1fc924c23ff5f0f1e06d3dbdc796cc27114dd67064e3012ec",
     "Spot.Bits.Rows.b": "1242a10a357be07657b74a6f58621813c424d3da1614d4dfb3a59fc33ab76335",
@@ -58604,6 +58732,7 @@
     "Spot.Bits.Rows.stackRow": "c2e528ac0f6b9cefc0260a30df7c1d0e95c6592d02002a1f5faf248daa335599",
     "Spot.Bits.Src": "cce84b213fe299d7d086a5cb70a3aa0951ebbda44ad961919b890fb8dabda5ea",
     "Spot.Bits.Src.casesOn": "a6ae52a09002e0dd5b5a541a97cdd49b4e63857d218d754cfbe31cd71863df02",
+    "Spot.Bits.Src.ctorIdx": "7de82f36839f271c474c682869f904cfec1e624ce38bfbc2f029cafe7a428cac",
     "Spot.Bits.Src.lit": "254cb706a4318ff1cbf97bcc63444fca24e4fe228093f41f14e97b37b8e2e749",
     "Spot.Bits.Src.msg": "4c901a3c6616b475dcd7834e8693227e1a938c33bf671a1c9a0371ca7a05d734",
     "Spot.Bits.Src.pad": "28acb525d756ccab3815c890ebaed4f49c9e94e29c1d4888123f064bb7586dbd",
@@ -58616,6 +58745,8 @@
     "Spot.Bits.consts": "3cd7750504b1e3168ef17df31aaa489ef2aa5e3f11c5e8af5ac185cd430717cc",
     "Spot.Bits.gateSize": "51d36a424af2648fa077ac296e004ccb695d0c8f38a2229b9dc5e4a815df943b",
     "Spot.Bits.insOf": "72cb4f190b010bb55f811760b25a26f0cbb69bc3e29b76115d50c91d589c2b4e",
+    "Spot.Bits.instDecidableEqRowPos": "d637cbe327b8075a77e396deb6c7b594ab2e09aa659bfeced33aa0df52c0b6a9",
+    "Spot.Bits.instDecidableEqRowPos.decEq": "2c5d15adf19f418d98f17095579237b217a58336bddbfdd7d55650d9a38fa5fa",
     "Spot.Bits.instDecidableEqSrc": "cab04635b9d524ba46608bc2014159653d3e1fe7f5ee787dee57a525a55068bc",
     "Spot.Bits.instDecidableEqSrc.decEq": "5e89b4138532e28599d0c4ec42296e540bf7f6bddeff1345eaa7fcfa731b7560",
     "Spot.Bits.keyIdx": "b64320955b92d268d5dd0a78b5da0410ae31c32cfae5854141d3f27a16326997",
@@ -58626,12 +58757,16 @@
     "Spot.Bits.off": "779ef056c58aea3b5af9d35e62c225ba839138744bbc9efdcc43d1972f9fdbfc",
     "Spot.Bits.outCol": "b9a271d612c976342a25b54f5b69ad5850ef695231439fdea48c04724eb82297",
     "Spot.Bits.outGate": "a1aba0a6641e373465b8ff69c2fdc3a34dcd5e42297e473f167e0f61d8010c2e",
+    "Spot.Bits.outPos": "cd730c5359fa2e7d9f5de940473ffe9ee1bced4a2f8ac0d1f34d3538e9b54897",
+    "Spot.Bits.outRowBit": "a01fe57d7a5b640dfb13804b7150382cfe8fa9a2a20b55c9da835a7e9e299def",
     "Spot.Bits.owner": "c6de340101413f185f6885a23198fcd405f205608036a2d5c6a96377e5419dc0",
     "Spot.Bits.posOf": "c20267a9a05d82bcb1b63d5ab7705204ca129155504bea6cf7d1a39c6e4884fe",
     "Spot.Bits.prog": "7c72d59b92ad5eae5331d4e3c5691ac90def5e7b494f6688b02571996bfbed01",
+    "Spot.Bits.rowBit": "db68dfb34cb2f859aea5eb3d70465e0a97234efc4cc0213e37715769bddc620e",
     "Spot.Bits.rowGate": "7fb7a1c5a0ac75561b935e331a10704d1f0ecdc6e79bf8588bd4b9f19b6a1ce1",
     "Spot.Bits.srcAt": "913d66e4f97e93be125b42a899e3ddaf30dd5d5029bd4b63047c9a9680fe5e40",
     "Spot.Bits.srcKey": "8f27ccd88551cced164d93fbe5f29d294ca16b473805dda7928cfd27a0cbe138",
+    "Spot.Bits.srcPos": "a8d7a8a7ffc1cc564d48a22b8f5d974c9b5650022895c970a8f7fa757eb46af9",
     "Spot.Bits.unitGates": "f6c3e9495a93555102db78e7c1d4b255f4f2c0333d493c301cc4be90b48ee006",
     "Spot.Bits.unitOf": "0282127cb889bc2a33e089e33f075336da641e979743f678bb525a2b5a8597b1"
    }
@@ -58696,7 +58831,7 @@
    }
   },
   "Spot.ChallengerCoins": {
-   "digest": "56fae9925796ca2bd372abbe8c79f7c10fd89dc6d45c156c88e032f8db35a0fb",
+   "digest": "0e322b9b7c5b799cd81c5b58adc652ffa71bfe9413429c42ba4c366668842a68",
    "definitions": {
     "Spot.Challenger.FAMILY_ROOT": "73d04951cb6d6dd23f80140003c5dd9cd93bd72079ccbe9ccadaa50bfcf55d71",
     "Spot.Challenger.LIMITS": "e7bfb471561d80fdee056273c9f5c772f1d8042bb580ecf0c98661c934fb8008",
@@ -58715,7 +58850,7 @@
     "Spot.Challenger.SEGMENT_FORM": "c52e73ce8c32b42739c3ed9507c9c2b8652602c5fcc9c9d9691216556e79324f",
     "Spot.Challenger.WITHHELD": "218d71c722297a393b300c9c0d32291a596d31ea111ff6e032acf001e1db8718",
     "Spot.Challenger.arrSize": "1ba24d09e64bb2ca0b304ea389f91ab093599edac9fdd8d71eb7e16507962c55",
-    "Spot.Challenger.challengerStream": "bf344249321fd12224dcbbf9a0a95a43b345e05bea215fb3cd20c8c720b7cedf",
+    "Spot.Challenger.challengerStream": "f233f44a6e4dafa1bcb451af24510fc1e4973bb8e6b47c54f45e55e9ce02abe3",
     "Spot.Challenger.withheldOn": "0b901e9670b0baeb11447d1b44a31ef6052853b2d04bd530284525d1d902ecf4",
     "Spot.Challenger.withinAt": "f6f5b3c70fda31eee55c13ee910e2ef8c8c3f61205d67d9361ca2859f535e35d"
    }
@@ -58748,7 +58883,7 @@
    }
   },
   "Spot.ChallengerRecord": {
-   "digest": "71f3992b42f34afb894b8bf000675545bf986babe34ed9e04c4d54928c64b462",
+   "digest": "ae9e8cd7e9852345ec3a820a32cb07fa1268cb1e8af9952a4cfa1ee08ea32300",
    "definitions": {
     "Spot.Challenger.COMMITMENT_TAG": "533b9e8aa59874facc70d607333a408dd5b2d893dbbbbbd3ff44360e1bca81d5",
     "Spot.Challenger.ChallengerKey": "28b8d7cf3733aafd4ec5fe39df55a719cc4712c962b00c6b39c49be8ab4f9804",
@@ -58768,12 +58903,12 @@
     "Spot.Challenger.field": "9699d70853b8497b176743bee5a63f2b5c8b62725b44f06e3ead4118b9f9b2e1",
     "Spot.Challenger.isHost": "dd9e52b5fc201441a1a230f2958756134719c5fedab0405363e76b6b5fc2f07e",
     "Spot.Challenger.recordMessage": "e6a79450a78cbd267e033e6c09f2e83f83ac0d69279ff2b69dabf9377afdac33",
-    "Spot.Challenger.recordReason": "529cd20715177e1287f66cd402a53f325fa0e3b85932e185a1e308e9bd8d9ed8",
+    "Spot.Challenger.recordReason": "3037e772f3afc9c26b3ee765f5fe0057bf641c0cae3db75f92be7762c5134eb2",
     "_private.Spot.ChallengerRecord.0.Spot.Challenger.hexOf?": "d7faeecdcfbc0613ef2452951b0dcd044a6ce82e31ca6185f3cc1c04be52c994"
    }
   },
   "Spot.ChallengerSession": {
-   "digest": "0e571b0f8fa59f9997bae8011949307a0fb526463316b6e3d544d20c509f1b50",
+   "digest": "7975b3d99311c6a4a7c58e1b5ae6ab6c6aefc9a07ae163dbb33b360e42d0cd99",
    "definitions": {
     "Spot.Challenger.Audited": "67907e70e13df8e0a71d4816b64126a9e02156a2a7f4c1774e923ffbcb2780de",
     "Spot.Challenger.Audited.circuit": "a73b3aad92abf4ba22c25228c2c6b5e86d2861b68fec367d0b459573c172b2c4",
@@ -58856,16 +58991,16 @@
     "Spot.Challenger.Win.root": "addbbb4bfd24443201b29060198f2e1765a9ec47a710d514f14fd173b0f2da28",
     "Spot.Challenger.ZERO": "485851f6467b12f818f58c0905c5c43e6d826f93a1de28d925a827df6b163520",
     "Spot.Challenger.auditedChallengePhase": "ac4fe8585ce40943430f47a9a6c860db8b225eede392293563276a8dc8b6f6f5",
-    "Spot.Challenger.auditedOpen": "6fe3726e737afb00e4102b7c7aa8e6121472707aaa1acc270546ffe56825b332",
-    "Spot.Challenger.challengePhaseNamed": "033e2c9d49f3e87802e6d8db858506eaa4ce61aa458e4cb52c01a420ed2141bc",
-    "Spot.Challenger.challengePhaseOf": "d91ebdb6dd18f93bfd25db34d47de20eeed8ba2b2ffad3308bba9aa01d249492",
-    "Spot.Challenger.checked": "f274ccd2dd3283a1d4e68a0d4d9d64c8e622ab49bd8c074ec067c8901c7666d0",
+    "Spot.Challenger.auditedOpen": "bd50bb1cceeee11640f9da3fa14e2fcc04c97307389954a8c2abf26f5b84f666",
+    "Spot.Challenger.challengePhaseNamed": "e336391255434cf900f1d9836d4e01d1f14776b15008df55e86c788a20756a63",
+    "Spot.Challenger.challengePhaseOf": "fd02b4cf7c63a9889d826ec7227e2741c40f29448137bb604e659f9af76963e5",
+    "Spot.Challenger.checked": "76dffab1db23eba9017d9d0727f22dc10991eb813d292c4b19331db47cacbda5",
     "Spot.Challenger.circuitReason": "4f82835da0c27d15b5754ed206ab67f2969cce5f3dd45efa4df2a3f06f39b73e",
     "Spot.Challenger.closeMessage": "8b2d69d7407f1b1f800e33fdea7306b96858c2cb9ce15250e4046f5ed463a84c",
     "Spot.Challenger.creditedChallengePhase": "ef7c78b7790f1f000cdc9947783f36831ccf6bdd2e88d14e7f0fed924efd47e4",
     "Spot.Challenger.dayOf": "3cd54f113dcece28dc86f26db9e76dda45c107f6ed88bb9e049adf488b97a1ae",
     "Spot.Challenger.event": "12b45ad3827f3bc8cc24825d88a96eadd45d82ce2e9f991c2cb5ea4add296dac",
-    "Spot.Challenger.firstParentReason": "f271874dd695861bf5af03cf5fd9629cbee6b33be5b55c134adfbd00daa5fa3d",
+    "Spot.Challenger.firstParentReason": "d9a7e64d5c22cb10852804be993b3d1681b2d95263a69d637c4f26d893eb2f73",
     "Spot.Challenger.instInhabitedLedgerEntry": "0f9b3d221a718a6872f03c6e47bd7b1102e9614d093f414c4a1339a8e1730a82",
     "Spot.Challenger.instInhabitedLedgerEntry.default": "74fbc4956f7092ee3d54ddd1c51e77745629a1a055ef56718c2c0ceb131e9562",
     "Spot.Challenger.instInhabitedMonitoringPeriod": "acc1302ffbfb2001c7e79e093685700f0fafbcef601ea5d7850f67158bc9e1f0",
@@ -58887,23 +59022,23 @@
     "Spot.Challenger.logDigest": "0b7cbc63f865c71786c13f2f15a17390c871c989e7cba191514f21c45cd46bca",
     "Spot.Challenger.pinOf?": "a2862c599daec4573da6b503f2ed846e1ea83d497bc32bc38d60d4f100f27880",
     "Spot.Challenger.pinnedChallengePhase": "d5eacf67b6e814ef6970fa90af4a2b34d0938d1d14c861606dc18cc7bbcea45d",
-    "Spot.Challenger.pinsReason": "b54bdd00c4d273bd5eed6c05b88929d12e34785fbb058ba17a033be25abbaa9d",
-    "Spot.Challenger.releasedRootsOf": "f6efdc7f4e3583700eee2975e7e7cd56b784443111f8e935ed685ceca06f130f",
+    "Spot.Challenger.pinsReason": "07ab80a979d68863b01cfb3f8d94870bc4d361239a1570bd023c70012294235a",
+    "Spot.Challenger.releasedRootsOf": "672f930c0d1974bbb6b57d832f667e3c151231f778487816bb5ecb53324d8356",
     "Spot.Challenger.treeLine": "d151b9c394dd0f77207eff5243c79a148ac33ccc204a06b9922aa71da348a358",
     "Spot.Challenger.trustedChallengePhaseOf": "de0fffc703dafaacfe584fced6a9cf49a2c5253d26e8bfbd10207ce6395edb39",
     "Spot.Challenger.verifyDays": "a426d9799f0d8bb794c117c77e8a7acd574a3cd796a8300851bec73c08ec47c9",
-    "Spot.Challenger.verifyLedger": "51e446b211e42c99d5d5bbe0eb44d259515528ea5d3086f79fcbb44105b66c5b",
+    "Spot.Challenger.verifyLedger": "58beeaab78478fe0b6363ea8294e89da4943312fae7add14330791f898cc383a",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.daysIn": "9c90608c5c0a8079b5429f656960a26f5888424dc8c73c55513374a87edb911d",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.digitsAt": "e377ed709709703303085d0f77be19e522e79a7be53736e97795bf5a68ffa67b",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.escapesSurrogate": "f84d9ba64a44ae5e3509323c9e7091f8d47df61f8e84c3b5a065ec3147252d11",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.hexAt?": "1f1f4249327f3e2098c03f64820f7231b571d3f8ce9ef4d40bf8f76100ff9ed0",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.inReserve": "67215c4728472eb4b7edd4155a7fd3beb210ff0b2cfec68e3973359ba53dac71",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isBodyOf": "dd116acfb9ac7332a63737e23f2fe560320f194f0eb9d29d563bf4a34efa5235",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isBodyOf": "90f08155bad61d8058c3ea7dccb18ce4859ca5fce55a49e43830b3341535e0bc",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isDeclaration": "f01983a9f33d3489d3749dae93f488e24858ef11f624a2cf892eb4daa77d0fc3",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isDigest": "149e7c28c97ccdb66a1550f063944007150f6f827d26b6ffe0c96471b9002f06",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isLedgerName": "70c59c791631dbd8e9e99952ee222e27b9e54349b1ee9f6abfaae8f53168ee90",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isOutcome": "5927b4a83fb28d31844409744eab166c2ed695add546e7721dc32bd5ec7d84fc",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isReserve": "ce47fe07f1f0212ba936d6225cfa4773917ac649746b06a1304c247d7e50f272",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isOutcome": "597a16f4ee419cf8064402671354e62281b83ee58733cc17447e6177d48f4d0f",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isReserve": "a8d528161a724e5426011310129c6cd45e6b8017a566e01710efdd1ca8459bcc",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isStr": "6cbe72c67080dcc9e217ff8bd4aec9d3c0995e54fb786645c0cfb5fc6efe35f2",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isTime": "fd317615edc610bc0062308f8245bb0e34c73ee1b55a817a4f0ba4bc874b0efd",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isV1Run": "caae722904a84cb2b6760c665b87430c7e5c81821cc795b1574c42bee19c3838",
@@ -59085,7 +59220,7 @@
    }
   },
   "Spot.Json": {
-   "digest": "61a1c4e7f9f80c8ce822366259cc058fabae80a37006109414c57a926b1104c8",
+   "digest": "50cd8453e0d39173371ed779315f4f419623f7425590ff9dd31591fc33bf7d3b",
    "definitions": {
     "Spot.Check": "7dfc036c0ba1e812942dcd7f6defc02cfba46485806ba0ffebbabd4c7c9260c1",
     "Spot.Check.codes": "2023c19204f36cb7b59a06c9f2226c76b613dcf8638fe1e5bacd4aad0829fc9e",
@@ -59101,6 +59236,7 @@
     "Spot.intsJson": "7c4db10607d2f0b45df2e6b5fe3af57d349ae4e507a9153fbdef4fe1464ddba7",
     "Spot.isHex": "d29ab48eb63f20868e0bdff2ab56ecd9c01f2eddcde41740cc7008dcf9055dce",
     "Spot.jeq": "fc16a705d80a01371429e1089648d1b33f9d090c9c6433c5c40bb8cef4e7440a",
+    "Spot.jsonBoolIs": "1e55a3a231e4513e24510c497d79424dca919a21b8cfb83583b73480c34925ce",
     "Spot.jsonStrIs": "a1e112d3c8033a562585752322bb461764454516cd47ff8ba2591ddb6c9f50ed",
     "Spot.keys?": "8b08331aacfaf869e4500a3cc8db0c87d45c0517274302d355ebd6804a712164",
     "Spot.nat?": "9a20b6b82e106116f06bb5c10731579b488794f6adcb2de42016e5f5ce2e7aa8",
@@ -59559,7 +59695,7 @@
    }
   },
   "Spot.SecondStage": {
-   "digest": "438e8ba06e04c0acaeb6840673b750cdb4d690f03b4b16d02ead97f9fb65f552",
+   "digest": "9303473a28400eaad25361ac5d33c499b1db47160b86ef015c56627ab9106a41",
    "definitions": {
     "Spot.SecondStage.Checked": "52526db3f80591213b39931dabf9b672031fd8cc237edb85b12d063b24b0b158",
     "Spot.SecondStage.Checked.draw": "b3d2c49ff050a3b47ddab2d926e49b54f309985a6de1dff50317aa835fe9e9a0",
@@ -59572,18 +59708,28 @@
     "Spot.SecondStage.Link.value": "05b49e9b82be48ac872dec9ca7a938847733bc31c915264f79698966c7160188",
     "Spot.SecondStage.MAX_LEAVES": "9c2dead127137f4fd0e1bf06cf8b63d54d275bfb0d53877f441552c7d844e962",
     "Spot.SecondStage.ONE_TABLE": "2bd5a5b24e1b6c25a374182809a79cb7c7d9a180764476309262e1763ee9afea",
-    "Spot.SecondStage.Own": "11af98b54fb17760f6a3f41b47f926bd8fb77c42e1d6b9e963b9300e75daec5a",
+    "Spot.SecondStage.OPENING_DOMAIN": "008f58732b68442c8d6cda970ffff4433c978cfa7957aa0f71519744cfe1d196",
+    "Spot.SecondStage.OPENING_KEY": "4336c5e4a778fcd8749e5d94217fb4d40df3de443afc6636dba047970ec9b122",
+    "Spot.SecondStage.OPENING_ROOT": "b9f450e7b6304e948fd42ba2df9248707afd6264fce778bcc42d5537a552f703",
+    "Spot.SecondStage.OPENING_ROW": "ee9042b6889861a114c640e0182917f8f67bdd73fac32ca9174691d9e7631719",
+    "Spot.SecondStage.OPENING_TABLE": "ddf79750153018410b64d0d63794e204e6333a58b964c6d933092977bd451ab1",
+    "Spot.SecondStage.OPENING_VERDICT": "011f2610402e34ea32cafd7122a2c408dfc12677a0568583754861465b862a30",
+    "Spot.SecondStage.OWN_SOURCES": "b22adc121936a5889f239594473bdf8b8b24b9796f4d49151db8f876c2441ffe",
+    "Spot.SecondStage.Own": "54a5e878740fcf71b4ff5a3bedea4dcbf0bb06d4d4e82acf30edffc216cf0f24",
     "Spot.SecondStage.Own.boundary": "004425714613337e574fcb96b7e1fa11fae6e42714be5f040131beb822927f5c",
     "Spot.SecondStage.Own.drawn": "9745db868d64b4f26be685822ecab776f95553a1a81c4ad2f71b94128a88c966",
+    "Spot.SecondStage.Own.fixed": "482b4b46e119f55e58ce090141c704d2fba71a9a224c2b94a2e24dda3b1a7a66",
     "Spot.SecondStage.Own.interior": "07fbec86d902048fbeaaf358be62b9cc1e2ee3acef523dc97c867f6a2ae96566",
     "Spot.SecondStage.Own.links": "4d4fb412b93e500db2ce552a5e6aad032a6c8089e907bc13552893a8765d3107",
     "Spot.SecondStage.Own.parts": "a82f415ae734b592d406078a532c201e007e3160990527c0ea666198515959c4",
+    "Spot.SecondStage.Own.reads": "2d3ecf5baa92b4f8c498d6f8e887142d09ca15ace27b06dd2fde4fe552220edf",
     "Spot.SecondStage.Own.refReads": "809a571ba6a6f949ae4e7f5b355a511e25079c29386a11cd6de1c2886283221b",
     "Spot.SecondStage.Own.refs": "2d72fcbaeb3cb114991627b603959b80cd2f1ce3bec6fc63586442dd23a951ed",
     "Spot.SecondStage.Own.reported": "e159cc840872b87e45dd853cadac4cf91b15cc63b300e5155bea24b3e44f4c87",
     "Spot.SecondStage.Own.returns": "92076ffb60c2738b8098571ef778794fcf41788313c8fd0df19cdb3b64ccdb8e",
     "Spot.SecondStage.Own.rows": "aa014bd92b339b7b50eff2bb4c91ebb8ea4944cf7a68ab2becd8190a7d3fbc63",
     "Spot.SecondStage.Own.sample": "184a466d49a07d782ac263e62c6535330f0ec38766d87b85642d579cc1a9c4d3",
+    "Spot.SecondStage.Own.supplied": "ec63164fb8bd50b0cc22dcf41ee1ab1c0c324786122e369947d727b14c5dadcf",
     "Spot.SecondStage.Own.verified": "c98a7781d0e3d33a06fb3196267674f1ab3df10edd2a45d32addfebe6d286d45",
     "Spot.SecondStage.Own.wires": "7a4da42581c633996a60db09f62dcc6afdb57ce015116976f86725937dc5dea4",
     "Spot.SecondStage.Part": "e2884ca123be41628e982fec6862d0d6d71fe6edc917949c5b83231cf23fd6bf",
@@ -59602,7 +59748,9 @@
     "Spot.SecondStage.Rows.runs": "9d2181764fb84959f0d7624a8c18359eb0ca097587138936d856f232bd2c73b8",
     "Spot.SecondStage.Rows.template": "cd4f11c390a0338cf1e1a519868c966973cb5d1801461b89dc63c6d67fd9a7b4",
     "Spot.SecondStage.Run": "2caf5ae2774f96cf520a87e6c143e643b51c8d22fac68ac93739165305aba025",
+    "Spot.SecondStage.Run.casesOn": "0945ca3e32c8547ac953df815ef3964456f44e2da34a59ad8546ee9f54b8f1ff",
     "Spot.SecondStage.Run.count": "0db2542b287dc7e9591163497a4d7ac9bd0cbde955e2bdb48d1d0edb16d192ec",
+    "Spot.SecondStage.Run.rec": "a3ecc7978c2fd3fdab29d2406c8943d743de1807ae5dbca8a4d0eeb922014801",
     "Spot.SecondStage.Run.row": "75beb95cf4da60cd23ef2f87f852dc613623857fa36c4fea36c0273e3920f48b",
     "Spot.SecondStage.Run.step": "770e7d8370ca651c7159c4989d027a67d3c334c8e742444095f8d250ff64b373",
     "Spot.SecondStage.Run.unit": "1c01ce768fc6939c953e4ad15d3ae89ae1e0b6dae7260b2e988532be8059f96a",
@@ -59614,6 +59762,7 @@
     "Spot.SecondStage.Stmt.ofJson?": "e3298c5c953c8d12190a614ef8196eb7594e684011c7175b5949ea4f910f1ec6",
     "Spot.SecondStage.Stmt.registered": "bb9f6cfd6b07613bf9a21bf09456b8a535117dd2c085fa1228e3c866c94782d7",
     "Spot.SecondStage.Stmt.template": "efd6eb2936371b58a11c1f6490a221962aa6708a6a98b0ab91317069afda197c",
+    "Spot.SecondStage.VERDICT_ONE": "00dac84167497d7ac0874cc64a0d2c21a011a95fab1d3050e59b2ff933d467eb",
     "Spot.SecondStage.WINDOW_DOMAIN": "0ff0c67d8b15094f2c83ae016064f6373b57b229c9d5f15d1323949ffddc4098",
     "Spot.SecondStage.Wire": "0a40a24f351260d7b0752e4134d97cd768b83946970fcaaba46b76bc09e2df05",
     "Spot.SecondStage.Wire.port": "22b3b05f4787c5a9a28a43ea3909f38408462af824b522073d621ed0eee72c52",
@@ -59625,8 +59774,14 @@
     "Spot.SecondStage.blankReads": "dedafa7763daa673c99de1d265c75d585bc5b0d6d1ea24bfe7a0b490badf2906",
     "Spot.SecondStage.blankRun": "e62c8216b1abb9110345010dd8a3ee142c408f49eefc632b6ae35ed5b2ea2a07",
     "Spot.SecondStage.byTemplate": "5295d41f7a8a2271cb87d3840072d7853dd3e2b0dad7792e922d9061540ec7ea",
+    "Spot.SecondStage.bytesOf": "9ef3da7f3faa759cfd2c1de48102be502caca3ffce5878fe04a78f2aa28ca581",
+    "Spot.SecondStage.designOk": "27ff86f875a272c42afa3ebfc0fc4475f0ecf64a13e77e89c041428371a0222c",
+    "Spot.SecondStage.fits": "c2c455bda07806ad9a0af1a09ba6a1c21cf78fb421f564f48fa06c2c112aacc2",
     "Spot.SecondStage.headerOk": "9fb3d5c76fce9a0a11ec8985755464efcd8f0d0c908920e45dbb1a5ea7446123",
     "Spot.SecondStage.heldPort": "f5edb533e3194481d3a3a56b28e365b556a001d45bf5c54c859300007adb6d84",
+    "Spot.SecondStage.inputsFailure": "7eb1c113c6cdf9386c8bd25f69dd7a57d0ad25c34b2a4e2818763d14b80df370",
+    "Spot.SecondStage.instDecidableEqRun": "fc2184fb1aa4e661a47dde676c336fea379ca56b7c02dca35c54dacc4d0d65c4",
+    "Spot.SecondStage.instDecidableEqRun.decEq": "43b54defcbdb73625df3d1debcfbe5364a3ddfedcde61f59f5047c80b2691a36",
     "Spot.SecondStage.instInhabitedRun": "b8916262cb5545ed953dc003bd43e9b75a4921af3855e5eec19cfac0d3906d70",
     "Spot.SecondStage.instInhabitedRun.default": "20c918f6e27230dc76667eabc4dbde35dbf6c7c4c30c3f4a56b9f14ac2e15ce1",
     "Spot.SecondStage.interiorOrderOk": "48a11a759389ca763092fdd77644626800769e3d8aadeff0d292a8bb88832d9b",
@@ -59634,7 +59789,14 @@
     "Spot.SecondStage.linkOf": "cf4e927a484861a5af19485d51622fc8eb79ae84677cdd17c848d7b426b36421",
     "Spot.SecondStage.linkedRead": "dd53173112066294bd5c5c0dde2e8e002fef76d2ec4851106617ca709a803a8c",
     "Spot.SecondStage.linkedRow": "48c7152e99abc0afdb304742aa484b114ae7190608cf6569cd617b4674791627",
+    "Spot.SecondStage.linksOk": "96c7ff2fd57b749902b6683f45999ba335318998fb4cc9521eb508a861ed9173",
+    "Spot.SecondStage.namesOk": "bb9abddcc549344e5233e2e2ce22e716f1b4fa7cb3a55621d60cfcd76d8024cf",
+    "Spot.SecondStage.oneTable": "312d1c43e9089eccc21dcfcd153589dd86a05edbd69ad49f6d7c4ae581870616",
+    "Spot.SecondStage.openedRow": "b829401124d8119d226c2b776929e80515b157ec980374498a2bf0001c109cd9",
     "Spot.SecondStage.ownDraw": "984a1fc095e7d9a818cbad2928a5b49962bcd52f5467f70a4b2a8279c1c7c983",
+    "Spot.SecondStage.ownRows": "efa230b319a6341c964fb57241e494fff03b7528537e236662c802741bce6f55",
+    "Spot.SecondStage.ownValues": "177e69b784371d2a913d85b42eb81712658f5a053c94a1f9d9ed2de2ade7b156",
+    "Spot.SecondStage.placed": "e652c2c30a84e9336e26a0f6c30a81ab61c0029c24c5d42caa08156ad9a2e3e4",
     "Spot.SecondStage.placedOk": "a80967e6b78d683089d476363e894e8f4d84606d6e6a2ec2b6d72d81fe6c2a78",
     "Spot.SecondStage.populationOk": "b1156e615d46a066ddbd7823eafc0f7888835a3d9b54df0fbb4516b9e44f252f",
     "Spot.SecondStage.portBinding": "c32ae535800449b68c1bf9c613e04aa1c71c1f2c2f7d5a245c0a71adf77980a7",
@@ -59642,6 +59804,8 @@
     "Spot.SecondStage.posOf": "02385fb4fb2e0b22c1ed739e61259071d1b49d727dae0a74bfd4e916a152b907",
     "Spot.SecondStage.putAt": "323fb65624aa3d6eb14c574e83795fbb65c99eb62e128ffa94630b66c5a1761b",
     "Spot.SecondStage.readOk": "edc579139345ea815cb35618b10916bef22e5576defa22c1b1758b5da4b69a53",
+    "Spot.SecondStage.readSize": "102b09141d351fbac2cf39c75002faadff70433f4a3945940bed397998e5164d",
+    "Spot.SecondStage.readUnlinked": "86c18539a233b4d3d6d31fa8deabebcd2c2d2e85fc665f3ae078b10ebeaaa493",
     "Spot.SecondStage.refOf": "cd9a86dfcc668788774ec382d31696c4fe04f91aa0e8c22057e01ccab0bb9825",
     "Spot.SecondStage.refReadsOf": "184901e7d161373ea20732b6d2a62adfbe37ba3b0de114d7690306315106b81f",
     "Spot.SecondStage.refsOk": "b5433edee01d43b2ffad82171bdb9780c8682b7fb64b08e12ded8e43b295bc73",
@@ -59663,6 +59827,7 @@
     "Spot.SecondStage.wireOf": "2d602594a2796bc10ace23c500db17039ea639fe23fa7723dc515b25729402be",
     "Spot.SecondStage.wiredRead": "2b840d0e2ad6bbb1d31c91bee439fcae47a1723ec768874918cc23bc4b0751eb",
     "Spot.SecondStage.wiredRow": "38c0af8ab11aed382e6052b73c2b54b4fa1e09ed014731f845b40997c3c3687a",
+    "Spot.SecondStage.wiresOk": "952868fd599318d96685258c73e1b36a9ab3b4b718c3ab5840a5deb53fc4a5ba",
     "Spot.SecondStage.writerOf": "837083fb53c08ad61a6e4297a7bbd6b76916b394791faf7482cf0ca44a5eeb3e"
    }
   },
