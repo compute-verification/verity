@@ -310,6 +310,7 @@ theorem Member.files_header {m : Member} {slice : Json} {bs : Core.Blobs} {a : S
   obtain ⟨⟨⟩, -, hb⟩ := Flock.HmNets.bind_ok hb
   have ha : a'' = a' := Except.ok.inj hb
   subst ha
+  obtain ⟨tables, -, hst⟩ := Flock.HmNets.bind_ok hst
   obtain ⟨tags0, circuitB, pubB, rd, rfl⟩ := statementOf_ofOwn hst
   exact hh
 
@@ -687,7 +688,8 @@ theorem membersRun_sampled {p : Params} {ms : Array Member} {c : OneStage.Commit
   unfold membersRun at h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
-  exact runMembers_sampled h
+  obtain ⟨_, hrun, _⟩ := Flock.HmNets.bind_ok h
+  exact runMembers_sampled hrun
 
 /-- **Where the per-member form's run returns, its order refusal and its population refusal passed** (`orderHeld`,
 `popHeld`): the two the one statement's check makes too, with the same arguments. -/

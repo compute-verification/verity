@@ -121,7 +121,7 @@ structure Evidence where
   sessions : Array RunFiles
   statements : Option (Array StatementFiles)
 
-private def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
+def exactly (j : Json) (ks : Array String) (what : String) : V Unit :=
   if keys? j != some (sortStrings ks) then throw s!"the keys of {what} are not {", ".intercalate (sortStrings ks).toList}"
   else pure ()
 
