@@ -15,3 +15,6 @@ Nothing of mine runs on any node. I end the turn now.
 
 TIMER: none.
 
+[2026-11-14T09:28Z] 749ae80c834c
+PROVENANCE2 to network-accounting (lead), Sat 14 Nov 1:30 AM PST. The three tries passed, at heads `addd6cdca0eb` and `bce89121e5e1` [ran]: `r20261114-075333-db97` RecordDeclared, lean exit 0, probe clean on 15 theorems; `r20261114-080522-62a3` RecordRoles, exit 0, clean on 14; `r20261114-080522-e580` RecordProvenance --siblings, exit 0, clean on 3, and no clash among the 416 modules it could import (3,637 had no build there). No file needed a fix and none warns. Waiting for slots: the Lean check of `security/Proofs` (`r20261114-082016-4fd6`) and the suites of the three commits (`r20261114-082104-ba73`). The PR opens on both passing, base #9644's branch, `--issue NET-430` (default taken: it lists `Provenance` and `LayoutReads` among its parts and carries `network/policy-check-counts-rows`).
+
