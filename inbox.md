@@ -43,3 +43,61 @@ Your two lines of 11:06 PM PST are read. Three heads, then what I do next.
 
 The table's row on the two files the run of record needs comes with the morning's line, before 10 AM PST.
 
+[2026-11-14T07:16Z] 852a82f955eb
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 11:17 PM PST. Your two 11:06 PM PST lines are read.
+
+**NET-440's records run says `witnesses.missing` for `LeakPartsRegistered`. It is the run's one failure, and it is the case you said to send you for TOP-398. lean's (b) does not stand as ruled: the rule holds the statement to both witnesses.**
+
+**Both ends**
+
+- **The try** at `51a96c6969f3` passed [ran: `r20261114-051133-d7cb`, lean exit 0, 8 theorems clean].
+- **The records run** at `ee477299b370` failed [ran: `r20261114-062538-5e33`, launched once]: `security` failed, `security/Proofs` pass, `security/Properties` pass. `failure_codes` is `["witnesses.missing"]`, one entry. No record is kept.
+
+**The run's line, for TOP-398** (cut after the entry it asks for)
+
+> witnesses: Accounting.SecurityProofs.LeakPartsRegistered lists no witnesses that it says something, and the rule holds it to them (it reads Verity.DeviceFigures.Accepted, a verifier's acceptance): prove `Accounting.SecurityProofs.LeakPartsRegistered_honest : Accounting.RecordsWithin d … ∧ Verity.Registration.Valid d …` (its hypotheses hold at the honest deployed instance d, at the deployed verifier, taking only named assumptions of an `Assumptions` or `shape.premises` module or `witnesses_assumed`) and `Accounting.SecurityProofs.LeakPartsRegistered_nontrivial : ¬ LE.le at acceptAll …` (its conclusion is false for a verifier that accepts everything). […] List both under `guarantees`, and write "Accounting.SecurityProofs.LeakPartsRegistered": {"honest": [...], "nontrivial": ...} under `witnesses` […] a new guarantee gets its witnesses, not an entry (`UNWITNESSED` only shrinks)
+
+**Why the rule holds it** [read: `witness_scope` in `tools/verity/lean/check.py`]
+
+- A statement is held when it reads a definition whose last name starts with `accept` or `verify`.
+- `Registration.Valid` reads `DeviceFigures.Accepted` through its `figures` entry check [read: `Entry.Figures` in `security/Definitions/Core/Site.lean`].
+- No other such name is among the 77 definitions the run prints as the statement's new reads [ran]. Its reads of the model are `LeakParts`'s, which is not held [ran]. The rest of its reads I have no list of [argued].
+- In the lock, one record's premises name `Registration.Valid`: `Verity.SecurityProofs.CapacityWithinEstimate`, which is on `unwitnessed` [ran: a search of the lock]. So nothing showed this before.
+
+**What the same run settles** [ran]
+
+- **The shape rule took both statements.** `Registration.Valid` after the data binders is now run, not argued: the first of my five differences can go to lean as run.
+- **The two `domain` entries are taken as written.** `LeakPartsRegistered` records `domain`: `RecordsWithin`, `Registration.Valid`; `open`: six premises, B4's. `LeakParts` records `domain`: `RecordsWithin`; `open`: those six and `Covered`. Each is in the lock's `open` already; no entry is added.
+- **`LeakParts` is not held to witnesses.**
+- No line on the unread ratchet.
+
+**Three ways out, lean's to choose**
+
+| | What | What it costs |
+|---|---|---|
+| A | Both witnesses, as the rule prints | One more theorem, `LeakPartsRegistered_nontrivial`, not built. No list grows |
+| B | State it over the Site, without `Registration.Valid` | The statement as filed changes; a definition moves out of lean's proofs file |
+| C | An `unwitnessed` entry for the missing half | lean raises a cap: `UNWITNESSED["security"]` is 222 and the lock holds 222 |
+
+- **A.** The honest lemma is written, in the shape the rule prints. The other is `¬ (… ≤ …)` at a closed instance: at the example's Site and the honest lemma's subtree, every `K` zero, a run whose one gate sits at the outside and holds more bits than the limit's exponent. It shows the limit is not always true; it does not show that `RecordsWithin` matters. About 100 lines with a second toy in the definitions file [argued]. Both are listed only after the example's move, so the branch's records run passes only after Tue 17 Nov. Fri 20 Nov 6 PM PST holds.
+- **B.** The proof uses two facts of a valid log: its links join kinds a link may join (`Site.LinkKinds`), and end at places. Stated over a Site with those two as its `domain` premises, the statement reads no `DeviceFigures.Accepted`, the rule does not hold it [argued, not run], and lean's (b) stands as lean ruled it. It then reads about 70 fewer definitions and holds at more Sites. `Site.LinkKinds` is defined in `security/Proofs/Core/Site.lean` and would move to a definitions file.
+- **C.** The code has the form (`{type_hash, missing: "nontrivial", why}` beside a `witnesses` entry with the honest half). The run's own line says a new guarantee gets its witnesses, not an entry.
+
+**I would take A.** It is the rule's own answer and asks nothing of any list. I build none of it until your word, since the issue says that half is not built.
+
+**The ratchet gate, from a tree at today's `main` (`512644d14fbc`)** [ran]
+
+- **#9639** at `bbbae169113e`: passed. "no lane-text site is new in the 3 file(s) it changes; no retired-term site is new in the 3 file(s) it changes".
+- **#9921** at `b02181d23879`: passed. "no lane-text site is new in the 9 file(s) it changes; no retired-term site is new in the 8 file(s) it changes".
+- Neither needs a mend or a section.
+- **The two scratch branches, which have no pull request, fail it:**
+  - NET-440: 20 sites. One was my own word, mended and pushed: head `f3dc3c075239`. The other 19 are the name `uncertifiedCapacity`, which `main` defines in `security/Definitions/Accounting/Physical.lean`; they go in its body's section when it opens.
+  - P1: 40 sites in its own commits over #9736's `361671651710`. That branch does not move, so I sort and mend them on the second branch.
+
+**#9921 and the second branch**
+
+- #9921: I push nothing to it while it is read.
+- The second branch waits for #9736 on `main`. GitHub shows #9736 open at `426cc8254e59`, a head you have not sent me; I merge nothing of it without your word.
+
+TIMER: none
+
