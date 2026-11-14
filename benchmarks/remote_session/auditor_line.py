@@ -44,8 +44,8 @@ for a host run. `--peer` overrides it, and a gate run whose record names none is
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
 the auditor's.
 
-**Credit.** The line of record (`line`) counts a session only when all five hold, each reported per session
-(`credit`), and gives any other session zero credit with the reasons:
+**Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
+(`credit`), and its store's binding isn't refused, and gives any other session zero credit with the reasons:
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
@@ -62,21 +62,25 @@ the auditor's.
   lines as the gate served them) and the auditor's own first-parent list of main (`--main FILE`, `git rev-list
   --first-parent origin/main`): its open sealed the log as it stood, one of the sealed lines records the open's
   `pinned`, and that commit is on main's first-parent line, a tree main's check ran on. With no
-  log or no copy of main, no session is pinned or credited;
-- *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
-  (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
-  pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited* names, so the period's circuit commits to
-  the code that decided it), the Lean verifier deciding it (`hold`, the binding's `lean`), the binding's root is the
-  registration's, and its model, name and
-  checkpoint_sha512, is the one the audit's period signs (its open's `model`), or with no period's, `--model-pin`'s.
-  With neither, no session is bound.
+  log or no copy of main, no session is pinned or credited.
+
+**The store** (`bound_check`, the run's, so every session's, reported as `bound`). The registered store is bound to
+the model when the verifier bound it (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose
+payload root isn't that of the store the pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited*
+names, so the period's circuit commits to the code that decided it), the Lean verifier deciding it (`hold`, the
+binding's `lean`), the binding's root is the registration's, and its model, name and checkpoint_sha512, is the one the
+audit's period signs (its open's `model`), or with no period's, `--model-pin`'s. A run whose verifier bound the store to
+no model, or with no model to bind it to, is unbound: its sessions are credited on the four checks, and the line is
+conditional on `DeveloperStore` (`PREMISES`: the verifier held no checkpoint, so the store's bytes are the developer's
+choice). A binding the record carries is checked even with no model: one that doesn't hold, or holds the store to
+another model, is refused, and every session's credit is zero.
 
 At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
 reasons; beside each share of weights held is the same session's share of filler held (the rest of HBM and the host
 tier, `line`'s `filler`), which the line doesn't count as weights. Each form charges the node's rates (`RATES`) and
 their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7), and deducts the chips' S_chip at no
 less than the auditor's (`verifier.recorded_chip_bytes`). What every accepted paced session
-measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
+measured, credited or not, is `measured`. `--table` writes each session's four checks and the line as Markdown.
 Each session's `sketch` is its δs at the outside-compute factor F its verifier charged, Q = F·C (`verifier.sketch_at`),
 and `sketch_outside` every F the run's sessions were charged at.
 
@@ -98,8 +102,9 @@ check, so a line says it is conditional on C (`NoOutsideCompute`, the label's na
 the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
-grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
-NoOutsideCompute, binding-split`), and the evidence store's labeller refuses one that doesn't.
+grounded or not. An unbound store's line is conditional on `DeveloperStore` after them (**The store**). The
+`memory-line-of-record` label names what the file names (`line_label`: `lean conditional on NoOutsideCompute,
+binding-split`, then `, DeveloperStore` when unbound), and the evidence store's labeller refuses one that doesn't.
 
 **The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
@@ -157,8 +162,17 @@ they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate do
 LANE = "memory-accounting"
 VERIFIER_TREE = "verity/protocols/accounting/poub/verifier"
 LEAN_VERDICTS = ("lean", "both")
-CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
+CHECKS = ("credited", "complete", "accepted", "pinned")
 """What a session's credit needs, each reported per session in this order."""
+UNBOUND = "the verifier held no checkpoint: the store's bytes are the developer's choice"
+"""What an unbound store's line rests on (`bound_check`), in benchmarks/memory's words (`run.UNBOUND`)."""
+DEVELOPERS, MODELS = "the developer's choice", "the model's"
+"""Whose the store is (`bound_check`'s `store`): unbound, or bound to the model."""
+STORE_PREMISE = "DeveloperStore"
+PREMISES = {STORE_PREMISE: (
+    f"{UNBOUND}: no auditor's machine reads a checkpoint, so the blocks the line credits as weights are the "
+    "registered model's weights only on the developer's word that the store holds them")}
+"""What the line rests on when nothing held the store to the model (`bound_check`'s `premise`)."""
 SHARES = ("time", "snapshot", "filler_time", "filler_snapshot")
 """A session's shares of the node in a form (`shares`): weights held, over time and at the passes, and filler held in
 the same two readings."""
@@ -529,15 +543,30 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
     binding (verifier.json's `binding`, `remote_bandwidth.store.Binding.record`) held the hello's payload root to the root of the
     store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
-    `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`."""
+    `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`.
+    `bound` says whether it is. A run with no binding, or with no model to hold one to, is unbound: its store is the
+    developer's choice (`store`), which the line is then conditional on (`premise`, `STORE_PREMISE`), and `ok`.
+    A binding that doesn't hold, or holds the store to another model, is refused (`refused`, not `ok`): its credit
+    is zero."""
     b, root = v.get("binding"), (v.get("registration") or {}).get("payload_root")
     out = {"model": model, "source": source, "binding": None if b is None else {
         k: b.get(k) for k in ("name", "checkpoint_sha512", "payload_root", "expected_root", "bound", "lean")}}
-    if model is None:
-        why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
-    elif b is None:
-        why = ("the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin FILE), so its "
-               "payload root is the prover's choice")
+    why = refused(b, root, model)
+    if why is None and (b is None or model is None):
+        why = ("no model to bind the store to: the audit's period signs none and no --model-pin names one"
+               if model is None else "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint "
+               "DIR --pin FILE), so its payload root is the prover's choice")
+        return {**out, "bound": False, "store": DEVELOPERS, "premise": STORE_PREMISE, "refused": None, "ok": True,
+                "reason": why}
+    return {**out, "bound": why is None, "store": MODELS if why is None else DEVELOPERS, "premise": None,
+            "refused": why, "ok": why is None, "reason": why}
+
+
+def refused(b: dict | None, root: str | None, model: dict | None) -> str | None:
+    """Why the binding `b` (verifier.json's, None: none) doesn't hold the store whose payload root is `root` to
+    `model` (None: no model to hold it to, so only the binding itself is checked), or None."""
+    if b is None:
+        why = None
     elif b.get("bound") is not True:
         why = f"the verifier didn't hold the hello's payload root to {b.get('name')}'s store"
     elif b.get("expected_root") != root or b.get("payload_root") != root:
@@ -545,12 +574,22 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     elif not isinstance(lean := b.get("lean"), dict) or "regions" not in lean or lean.get("expected_root") != root:
         why = ("the Lean verifier didn't hold the hello's payload root to the store (`hold`): the binding is "
                "store.py's alone")
-    elif (b.get("name"), b.get("checkpoint_sha512")) != (model["name"], model["checkpoint_sha512"]):
+    elif model is not None and (b.get("name"), b.get("checkpoint_sha512")) != (model["name"], model["checkpoint_sha512"]):
         why = (f"the verifier bound the store to {b.get('name')} ({str(b.get('checkpoint_sha512'))[:16]}...), not "
                f"{model['name']} ({model['checkpoint_sha512'][:16]}...)")
     else:
         why = None
-    return {**out, "ok": why is None, "reason": why}
+    return why
+
+
+def store_text(bound: dict) -> str:
+    """`bound_check`'s outcome in a line: the model the store is bound to, the premise an unbound store's line rests
+    on, or why the binding is refused."""
+    if bound["bound"]:
+        return f"yes, to {bound['model']['name']}"
+    if bound["premise"] is not None:
+        return f"no, {UNBOUND} ({bound['reason']}); credited on the other checks, conditional on {bound['premise']}"
+    return f"refused, every session's credit zero: {bound['refused']}"
 
 
 def _utc(x: object) -> bool:
@@ -611,19 +650,27 @@ def lockdown_check(lockdown: dict | None, span: list[str] | None) -> dict:
             "shared_filesystem": "pending (infra)" if lockdown["shared_filesystem"] is None else "none mounted"}
 
 
-def conditional_on(rows: list[dict]) -> dict:
-    """What the line is conditional on (`CONDITIONAL_ON`, `GROUNDED`): the assumption each credited session's
-    `NoOutsideCompute` rests on (`no_relay`), or each gate session's when none is credited, `NoOutsideCompute` with
-    none; then the gaps in its charge (`GAPS`)."""
+def conditional_on(rows: list[dict], bound: dict | None = None) -> dict:
+    """What the line is conditional on (`CONDITIONAL_ON`, `GROUNDED`, `PREMISES`): the assumption each credited
+    session's `NoOutsideCompute` rests on (`no_relay`), or each gate session's when none is credited,
+    `NoOutsideCompute` with none; then the gaps in its charge (`GAPS`); then the store's premise when `bound`
+    (`bound_check`'s) names one."""
     xs = [r for r in rows if r["credit"]["ok"]] or rows
     names = sorted({r["no_relay"]["conditional_on"] for r in xs if "no_relay" in r}) or ["NoOutsideCompute"]
-    return {n: {**CONDITIONAL_ON, **GROUNDED}[n] for n in [*names, *GAPS]}
+    premise = [] if bound is None or bound.get("premise") is None else [bound["premise"]]
+    return {n: {**CONDITIONAL_ON, **GROUNDED, **PREMISES}[n] for n in [*names, *GAPS, *premise]}
 
 
 def line_label(doc: dict) -> str:
     """The `memory-line-of-record` value naming the doc's line: who computed it and what it is conditional on, as
     the evidence store's labeller holds it to this file (`vocab.check_line_of_record`)."""
     return f"{doc['line_by']} conditional on {', '.join(doc['conditional_on'])}"
+
+
+def with_check(credit: dict, name: str, check: dict) -> dict:
+    """`credit` (`credit_check`'s) with one more check, which its credit then needs too."""
+    zero = [*credit["zero"], *([] if check["ok"] else [f"not {name}: {check['reason']}"])]
+    return {**credit, name: check, "ok": credit["ok"] and check["ok"], "zero": zero}
 
 
 def clock_rate_ppm(Rv: list[int], Ra: list[int]) -> float | None:
@@ -693,9 +740,9 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     the verifier `desc` describes (`credited_session`), that verifier's `commit` on `main`, its window and its period
     closed complete, its verdict the
     Lean's acceptance, its open's pin one the host's pins log `pins` records on the auditor's first-parent list of
-    main `main` (`pinned_session`; None: no log, or no copy of main), and the run's store bound to the model (`bound`,
-    `bound_check`'s); each check with its reason, and `zero` the
-    reasons it earns none."""
+    main `main` (`pinned_session`; None: no log, or no copy of main); each check with its reason, and `zero` the
+    reasons it earns none. The run's store (`bound`, `bound_check`'s) is reported beside them and zeroes the credit
+    only when its binding is refused: an unbound store is a premise of the line (`conditional_on`), not a check."""
     sid = (s.get("challenger") or {}).get("session")
     credited: dict = {"descriptor_sha512": hashlib.sha512(desc).hexdigest()}
     try:
@@ -748,9 +795,9 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
         pinned.update(ok=True, reason=None)
     except Ch.CoinError as e:
         pinned.update(ok=False, reason=str(e))
-    checks = {"credited": credited, "complete": complete, "accepted": accepted, "pinned": pinned, "bound": bound}
+    checks = {"credited": credited, "complete": complete, "accepted": accepted, "pinned": pinned}
     zero = [f"not {name}: {c['reason']}" for name, c in checks.items() if not c["ok"]]
-    return {**checks, "ok": not zero, "zero": zero}
+    return with_check({**checks, "ok": not zero, "zero": zero}, "bound", bound)
 
 
 def session_check(s: dict, k: int, R: str, windows: dict, periods: dict, *, period: str, lane: str, peer: str,
@@ -814,8 +861,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     `peer_of`), `rates` the node's (`rates_at`; None: its defaults), `lean` the Lean verifier that computes every
     session's line (`line_of_record`; None: `line.py` alone, `line_by` python), and `lockdown` the provider's lockdown
     of the gate node, which grounds a gate session's `NoOutsideCompute` where its signed span lies inside an applied
-    interval (`read_lockdown`, `lockdown_check`; None: none does). Each session's line is the Lean's off the record `Session.run` makes of its transcript where
-    out/ keeps it (`transcript_of`, `line_of`), else off its kept record."""
+    interval (`read_lockdown`, `lockdown_check`; None: none does). Each session's line is the Lean's off the record
+    `Session.run` makes of its transcript where out/ keeps it (`transcript_of`, `line_of`), else off its kept record."""
     rates = rates_at() if rates is None else rates
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
@@ -916,7 +963,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                                              "of_record": row["of_record"], "credited": row["credit"]["ok"]}
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows)
-    doc["conditional_on"] = conditional_on(rows)
+    doc["conditional_on"] = conditional_on(rows, bound)
     doc["sketch_outside"] = sorted({r["sketch"]["outside"] for r in rows if r["sketch"]})
     return doc
 
@@ -950,7 +997,7 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
     credited = [r["k"] for r in rows if r["credit"]["ok"]]
     zero = {r["k"]: r["credit"]["zero"] for r in rows if not r["credit"]["ok"]}
     if not credited:
-        said = "the line credits zero: no session is credited, complete, accepted, pinned and bound"
+        said = "the line credits zero: no session is credited, complete, accepted and pinned under a binding not refused"
     else:
         said = (f"the line credits session(s) {', '.join(map(str, credited))}"
                 + (f"; session(s) {', '.join(map(str, zero))} earn none" if zero else ""))
@@ -959,8 +1006,8 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
 
 
 def table(doc: dict) -> str:
-    """`analyse`'s doc as Markdown: each session's five checks (`CHECKS`), with the reason of each that failed, and
-    its credit, weights held then filler held; then the line at each T, time-held (labelled as under Identity, which
+    """`analyse`'s doc as Markdown: each session's four checks (`CHECKS`), with the reason of each that failed, and
+    its credit, weights held then filler held; then the store (`store_text`), the line at each T, time-held (labelled as under Identity, which
     nothing the verifier checks establishes) / link-charged with the snapshot forms, weights and filler apart, and its
     error when it credits a session."""
     b = line.FORMS
@@ -973,7 +1020,7 @@ def table(doc: dict) -> str:
                   + " / ".join(f"{mine[x]['filler_time']:.4%}" for x in b) if c["ok"] and all(mine.values())
                   else "zero")
         out.append(f"| {s['k']} | {s.get('T') or '-'} | " + " | ".join(cells) + f" | {credit} |")
-    out.append("")
+    out += ["", *([f"store bound: {store_text(doc['bound'])}"] if "premise" in (doc.get("bound") or {}) else [])]
     for t, row in doc["line"].items():
         out.append(f"line {t}: credited {row['credited_sessions']}, time-held (under Identity: no block over the "
                    "boundary links) / link-charged weights "
@@ -1014,8 +1061,8 @@ def main(argv: list[str] | None = None) -> int:
                     "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
-                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either no session is "
-                         "bound")
+                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either the store is "
+                         "unbound and the line conditional on DeveloperStore")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
     ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
@@ -1073,9 +1120,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"auditor_line: line by {doc['line_by']}; {doc['credit']['summary']}", file=sys.stderr)
     print(f"auditor_line: conditional on {', '.join(doc['conditional_on'])} (its memory-line-of-record label: "
           f"`{line_label(doc)}`)", file=sys.stderr)
-    bound = doc["bound"]
-    print(f"auditor_line: bound: {'yes, to ' + bound['model']['name'] if bound['ok'] else 'no: ' + bound['reason']}",
-          file=sys.stderr)
+    print(f"auditor_line: bound: {store_text(doc['bound'])}", file=sys.stderr)
     return 0
 
 

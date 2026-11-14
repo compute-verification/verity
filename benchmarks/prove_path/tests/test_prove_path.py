@@ -1225,6 +1225,57 @@ def test_a_served_runs_weights_registration_is_the_committers_under_its_own_key(
     assert "the checkpoint is not of record" in capsys.readouterr().err and not out.exists()
 
 
+def test_the_weights_registration_is_also_the_first_record_of_the_serves_registration_log(tmp_path, capsys, monkeypatch):
+    """``weights-registration --deployment-record FILE`` writes the committer's registration also as the first record of the
+    serve's registration log (`window_weights.deployment_record`): a `verity/registration/v2` record chained after nothing
+    that registers each rooted weight parameter's entry as the registration states it, by name, and names the unrooted
+    ones in its header, with nothing of the key; the command says its digest (`registration.digest`), which Pearl+'s W
+    names as its ``previous`` on a serve tied to it. So each weight's root is in the log's first record under its value's
+    name, where the inference-only policy's check looks a registered parameter up, by name and root, in the log it is
+    given (its Lean's `isTheta`). Without the flag no such record is
+    written; a registration with a value that is no weight parameter gives none, and a name under a weight's with a
+    suffix `_param` takes no form of (``/bnk``, ``/b<b>/table``, ``/b<b>/vocab``) is such a value: the record is refused
+    whole, never written without the name."""
+    import functools
+
+    from verity_vllm.program.predict import window_weights as WW
+    from verity_vllm.program.predict.window_weights import Grain
+
+    grain = Grain(gemm_words=512, rows=9, select=64)
+    monkeypatch.setattr(WW, "weights_registration", functools.partial(WW.weights_registration, grain=grain))
+    run, hf, ck = tmp_path / "serve", tmp_path / "tiny.json", tmp_path / "ck" / "snap"
+    run.mkdir()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
+             "execution": "bi-eager", "target": {"compute_capability": [12, 0], "num_sms": 188}}
+    (run / "serve.json").write_text(json.dumps(serve))
+    hf.write_text(json.dumps(TINY))
+    man = _tiny_checkpoint(ck, serve["model"], serve["revision"])
+    out, key, first = tmp_path / "weights_registration.json", tmp_path / "private" / "weights.key", tmp_path / "first.json"
+    argv = ["weights-registration", "--serve-run", str(run), "--checkpoint-dir", str(ck), "--checkpoints", str(man),
+            "--hf-config", str(hf), "--key", str(key), "--out", str(out)]
+    capsys.readouterr()
+    assert PP.main(argv) == 0 and "deployment" not in json.loads(capsys.readouterr().out) and not first.exists()
+    assert PP.main([*argv, "--deployment-record", str(first)]) == 0
+    reg, rec, said = json.loads(out.read_text()), json.loads(first.read_text()), json.loads(capsys.readouterr().out)
+    assert rec == WW.deployment_record(reg) and said["deployment"] == R.digest(rec) and said["roots"] == 16
+    assert (rec["format"], rec["protocol"], rec["previous"]) == (R.FORMAT_V2, R.PROTOCOL, None)
+    assert [e["value"] for e in rec["registered"]] == sorted(reg["values"])
+    assert {e["value"]: e for e in rec["registered"]} == reg["values"]
+    assert all(set(e) == {"value", "root", "leaves", "words", "domain"} for e in rec["registered"])
+    assert rec["deployment"] == {"kind": WW.DEPLOYMENT, "program": reg["program"], "grain": reg["grain"],
+                                 "model": {"repo": serve["model"], "revision": serve["revision"]},
+                                 "unrooted": sorted(reg["unrooted"])}
+    assert rec["deployment"]["unrooted"] and not {e["value"] for e in rec["registered"]} & set(reg["unrooted"])
+    assert key.read_bytes().hex() not in first.read_text()
+    stem = next(iter(reg["values"])).rpartition("@")[0]
+    for name in ("x", f"{stem}@192/bnk", f"{stem}@3072/b0/table", f"{stem}@192/b0/vocab"):
+        odd = {**reg, "values": {**reg["values"], name: {**next(iter(reg["values"].values())), "value": name}}}
+        with pytest.raises(ValueError, match=re.escape(f"{name!r} is no weight parameter")):
+            WW.deployment_record(odd)
+    with pytest.raises(ValueError, match="never a weights record"):
+        WW.deployment_record({"schema": "other"})
+
+
 def test_an_int8_served_runs_weights_registration_roots_its_scales_fused_linears_and_tied_embedding(tmp_path, capsys, monkeypatch):
     """The int8 Llama-3.2-1B is an exact-int8 checkpoint (`engine.int8_checkpoint`'s v1: each decoder linear an s8 weight and an f32
     row scale, the embedding bf16 and tied to the LM head), served under a target whose ``int8_exact`` is ``linears``, and
@@ -1571,7 +1622,7 @@ def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_hol
     with pytest.raises(Loaded):
         PP.main(["window-commit", "--serve-run", s.a.serve_run, "--window", "0", "--row-dir", s.a.row_dir, "--advice",
                  str(tmp_path / "advice.bin"), "--key", str(tmp_path / "private" / "key"), "--registration", "unread",
-                 "--checkpoint-dir", "unread", "--out", str(out)])
+                 "--checkpoint-dir", "unread", "--law", "rate:1/4", "--out", str(out)])
     assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
     assert seen["digs"] == {u.id: u.digest for u in s.units} and s.compiles == [True, False]
     assert not list(Path(s.a.row_dir).glob("build_request*"))
@@ -1658,6 +1709,30 @@ def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
         tie(window_registration=str(tmp_path / "other.json"))
     with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
         tie(SimpleNamespace(outputs=4))
+
+
+def test_window_commits_design_is_the_one_its_rate_names_over_the_circuit_and_a_fixed_count_is_refused():
+    """`window_design`: window-commit's ``--law`` is the rate the window's audit states to its stream, and the window is
+    committed under the sampling design that rate names over the circuit's own proof blocks, so its registration is under
+    the design the stream holds it to: a subset design under a rate, one K for every stratum under a stratified rate, at
+    1 where the rate's denominator is no smaller than the largest stratum. A fixed count, which no stream takes, is
+    refused by name."""
+    from verity.circuits.defs import bind
+    from verity.circuits.ops import gemm as G
+    from verity.protocols.proofs.spot.verifier import service as S
+
+    small, large = (bind(G.ScaledMmS8Coordinate, K=k, **G.GEMM_SM120_S8) for k in (64, 128))
+    circuit = IF.Circuit("test", ((small, 3), (large, 37)))
+    program, query = circuit.program()
+    assert PP.window_design("rate:1/40", circuit) == {"law": "subset", "k": 1}
+    assert PP.window_design("rate:1/8", circuit) == {"law": "subset", "k": 5}
+    assert PP.window_design("stratified-rate:1/40", circuit) == {"law": "stratified", "k": 1}
+    dense = PP.window_design("stratified-rate:1/8", circuit)
+    assert dense["law"] == "stratified" and dense["k"] > 1 and dense == S.params_law("stratified-rate:1/8", program, query, None)[0]
+    for fixed in ("subset:1", "stratified:1", "work:1"):
+        with pytest.raises(ValueError, match="a fixed count") as e:
+            PP.window_design(fixed, circuit)
+        assert repr(fixed) in str(e.value)
 
 
 def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows_retained_steps(tmp_path):

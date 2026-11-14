@@ -168,7 +168,7 @@ def test_call_keys_are_the_fixtures_keys_of(scheme):
     for index, w, m16 in ((0, 0, 32), (5, 1, 8192), (127, 0, 16)):
         mm = Matmul(index, Shape(m16, 1024, 256 if w == 0 else 128), w)
         kk = F.keys_of(s, epoch, mm, C._labelled(epoch.salt + roots[w], "seed-B"))
-        assert PPD.call_keys(F, epoch.salt, roots[w], index, m16, s.commitment_hash) == kk["dom_a"] + kk["unit"]
+        assert PPD.call_keys(epoch.salt, roots[w], index, m16, s.commitment_hash) == kk["dom_a"] + kk["unit"]
 
 
 # ---- the run on a recording stand-in for the device ---------------------------------------------------------------
@@ -223,7 +223,7 @@ def device_run():
     rng = np.random.default_rng(3)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
-    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     coins = salt_coin(roots)
@@ -258,7 +258,7 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
         sh = run.shapes[(32, weights[w].shape[0], 1024)]
         assert by["pd_commit_851"][0][9] == sh.count.data_ptr() and by["pd_commit_851"][1] == (32, 1024, 0, sh.mp)
         index = len(run.cur.matmuls) - 1
-        assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], index, 32, run.tree_hash)
+        assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(salt, roots[w], index, 32, run.tree_hash)
         assert bool((sh.xa[m:] == 0).all()) and torch.equal(sh.xa[:m], x.float())
     assert [u.index for u in run.cur.matmuls] == [0, 1, 2] and run.cur.tiles == 4 + 2 + 4
     dev.log.clear()
@@ -369,6 +369,30 @@ def test_a_retained_pass_writes_what_the_verifier_opens(device_run, tmp_path):
         y, tree = (tmp_path / u["y"]["rows"]["path"]).read_bytes(), (tmp_path / u["y"]["tree"]["path"]).read_bytes()
         root, want = SY.commit_y(y, u["n"], salt, u["index"], SALT_KEY)
         assert len(y) == 2 * u["real_rows"] * u["n"] and tree == want and u["y"]["root"] == root.hex() == tree[-64:].hex()
+
+
+def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(device_run, tmp_path, monkeypatch):
+    """A caller that commits y with its own launches (the overhead arm) hands `_retained` its tree (``y_tree``): the pass
+    retains those bytes, its y root their last node, and makes no tree of its own; so a tree its launches wrote nothing
+    into is retained as the poison it held, and the verifier sees what the launches left."""
+    make, _, weights, _, salt = device_run
+    run = make()
+    run.begin(retain=str(tmp_path))
+    retained, given = run._retained, {}
+
+    def with_tree(cur, mm, m, flags, xa, tree, y=None, y_tree=None):
+        honest = SY.commit_y(PPD._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, SALT_KEY)[1]
+        given[mm.index] = bytes([0xA5]) * len(honest) if given else honest
+        return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8))
+    monkeypatch.setattr(run, "_retained", with_tree)
+    monkeypatch.setattr(SY, "y_tree", lambda *_: pytest.fail("a given y tree is never made again"))
+    run.gemm(0, torch.randn(20, 1024).to(torch.bfloat16), weights[0], None)
+    run.gemm(1, torch.randn(32, 1024).to(torch.bfloat16), weights[1], None)
+    man = json.loads(Path(run.end()["manifest"]).read_text())
+    for u in man["matmuls"]:
+        tree = (tmp_path / u["y"]["tree"]["path"]).read_bytes()
+        assert tree == given[u["index"]] and u["y"]["root"] == tree[-64:].hex()
+    assert man["matmuls"][1]["y"]["root"] == "a5" * 64
 
 
 def test_a_retained_calls_files_are_written_behind_it_and_the_passs_end_joins_them(device_run, tmp_path, monkeypatch,
@@ -561,7 +585,7 @@ def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypa
                for w, n in ((0, 256), (1, 128))}
     got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
     for name, end in (("reach-in", _reach_in), ("end_pass", _end_pass)):
-        kernel = PPD.Kernel(R, F, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
+        kernel = PPD.Kernel(R, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
         model, comp, option = _served(monkeypatch, kernel, weights)
         engine = _Engine(model, SERVED_STEPS)
         hooks, out = _per_step(engine, end(option))
@@ -590,7 +614,7 @@ def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkey
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)]] * 256
-    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
     model, comp, option = _served(monkeypatch, kernel, weights, capacity=32, flag_rows=512)
     engine = _Engine(model, steps)
     hooks, out = _per_step(engine, _end_pass(option))
@@ -663,7 +687,7 @@ def test_the_model_runner_hook_commits_each_engine_step_as_end_pass_did(monkeypa
     got, pd = {}, HD.build(tmp_path) if dev == "twin" else None
     for name in ("end_pass", "hook", "hook and end_pass"):
         with monkeypatch.context() as mp:
-            kernel = PPD.Kernel(R, F, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
+            kernel = PPD.Kernel(R, TwinDev(pd) if dev == "twin" else RecordingDev(), "0" * 64)
             runners = _runners(mp) if name != "end_pass" else []
             model, comp, option = _served(mp, kernel, weights)
             engine = _Engine(model, SERVED_STEPS)
@@ -692,7 +716,7 @@ def test_plain_serving_with_a_model_runner_never_overflows(monkeypatch):
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)]] * 256
     (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
     core = _Core(runner(), _Engine(model, steps))
     for _ in steps:
         core.step()
@@ -709,7 +733,7 @@ def test_a_manual_end_pass_ends_only_what_no_engine_step_ended(monkeypatch):
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     v1, v2 = _runners(monkeypatch, "vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights)
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights)
     run, passes = option.end_pass.__self__, option.details["passes"]
     engine = _Engine(model, [[(0, 40)], [(1, 3)], [(0, 5), (1, 5)], [(0, 7)]])
     core = _Core(v2(), engine)
@@ -745,7 +769,7 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)], [(0, 120), (1, 120)], [(0, 3), (1, 3)]]
-    kernel = PPD.Kernel(R, F, TwinDev(HD.build(tmp_path)) if dev == "twin" else RecordingDev(), "0" * 64)
+    kernel = PPD.Kernel(R, TwinDev(HD.build(tmp_path)) if dev == "twin" else RecordingDev(), "0" * 64)
     (runner,) = _runners(monkeypatch)
     root = tmp_path / "passes"
     model, comp, option = _served(monkeypatch, kernel, weights, {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
@@ -774,7 +798,7 @@ def test_each_served_step_is_a_pass_retained_on_its_own(monkeypatch, tmp_path, d
 
 #: `_retained_files`' digest of the three steps below as the retention path wrote them when each call's copies, its record,
 #: y's root and the pass's files and manifest were all waited for in its step
-RETAINED_DIGEST = "6ea82b92968e7213c16a075e8c0d7910dcbe5ea32f8892f937b85165e3a8722d"
+RETAINED_DIGEST = "87ec23c3532ef5596a14787aaf69d3983a4565cbe3ce55c95b24a6e0cde11485"
 
 
 def _retained_files(root: Path) -> dict[str, str]:
@@ -797,7 +821,7 @@ def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monk
         monkeypatch.setattr(cls, "retain_behind", behind)
         (runner,) = _runners(monkeypatch)
         root = tmp_path / f"behind-{behind}"
-        model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights,
+        model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights,
                                       {"transcript_dir": str(root)}, capacity=32, flag_rows=512)
         core = _Core(runner(), _Engine(model, steps))
         for _ in steps:
@@ -819,7 +843,7 @@ def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)], [(0, 3), (1, 3)], [(0, 3), (1, 3)]]
     (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights,
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights,
                                   {"transcript_dir": str(tmp_path)}, capacity=32, flag_rows=512)
     run, core, fills, fill = option.end_pass.__self__, _Core(runner(), _Engine(model, steps)), [], torch.Tensor.fill_
     monkeypatch.setattr(torch.Tensor, "fill_", lambda t, v: (fills.append(t.data_ptr()), fill(t, v))[1])
@@ -881,7 +905,7 @@ def test_a_step_over_one_pass_is_refused_before_its_forward(monkeypatch):
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     (runner,) = _runners(monkeypatch)
-    model, comp, option = _served(monkeypatch, PPD.Kernel(R, F, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
+    model, comp, option = _served(monkeypatch, PPD.Kernel(R, RecordingDev(), "0" * 64), weights, capacity=32, flag_rows=512)
     assert option.details["max_step_tokens"] == 256
     r = runner()
     type(r).engine = _Engine(model, [[(0, 257), (1, 257)], [(0, 256), (1, 256)]])
@@ -933,7 +957,7 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
     """The constants the pipeline reads (the prover's salt key, then `audit.hm96_kernel_constants`) and a run's tree hash are
     the scheme's: hm96-sha512's.  Without the prover's 32-byte key the constants are refused."""
     s = PPD.scheme_of(scheme)
-    kernel = PPD.Kernel(R, F, RecordingDev(), "0" * 64)
+    kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
     for bad in (None, bytes(31)):
         with pytest.raises(ValueError, match="salt key"):
             PPD._constants(s, torch.device("cpu"), bad)
@@ -962,7 +986,7 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
     rows = lambda x: [r.tobytes() for r in x.float().numpy()]  # noqa: E731
-    kernel = PPD.Kernel(R, F, TwinDev(HD.build(tmp_path)), "0" * 64)
+    kernel = PPD.Kernel(R, TwinDev(HD.build(tmp_path)), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=key)
     assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
                      for w, t in weights.items()}
@@ -1251,6 +1275,26 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
     path.write_text(json.dumps(man))
     moved = VR.verify_passes([path], 3, 1, "test", published(path), b"verifier" * 4, test_instance=True)
     assert moved["answer"]["verdict"] == "reject" and "y opening" in moved["answer"]["reason"], moved["line"]
+
+
+@pytest.mark.slow
+def test_a_pass_whose_y_trees_hold_the_poison_is_rejected(tmp_path):
+    """The no-write control on y: a pass whose y trees are what launches that wrote nothing into them leave, the 0xA5
+    poison, each root its last node (as `_retained` retains a given ``y_tree``), its y rows and everything else honest, is
+    rejected at its sampled tiles' y openings, by the one-pass verifier the harness runs and by the passes' verifier."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    source = b"verifier" * 4
+    assert VR.verify(path, 3, 1, "test", source, coins=published(path))["accepted"]
+    man = json.loads(path.read_text())
+    for u in man["matmuls"]:
+        file = path.parent / u["y"]["tree"]["path"]
+        poison = bytes([0xA5]) * file.stat().st_size
+        u["y"] = {**u["y"], "root": poison[-64:].hex(), "tree": PPD._write(file, poison)}
+    path.write_text(json.dumps(man))
+    one = VR.verify(path, 3, 1, "test", source, coins=published(path))
+    assert not one["accepted"] and "y opening" in one["line"], one["line"]
+    passes = VR.verify_passes([path], 3, 1, "test", published(path), source, test_instance=True)
+    assert passes["answer"]["verdict"] == "reject" and "y opening" in passes["answer"]["reason"], passes["line"]
 
 
 def short_y(path: Path, pos: int, drop: int) -> None:
@@ -1950,7 +1994,10 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     warm-up's round 0, retains rounds 1 and 2 (places among served.json's passes with calls), and writes W over those two
     under their numbers, so ``verify --tie W`` accepts the run tied to W's digest on its 8 tables and credits the timed
     passes alone.  The warm-up retained, W can't tie it (W registers none of round 0, and `pearl_c.window.write` refuses
-    to); once the coin is flipped ``retain`` refuses to write W again."""
+    to); once the coin is flipped ``retain`` refuses to write W again.  With ``--previous-record FILE`` the W it writes is
+    the same record chained after that one (its ``previous`` the record's digest, as a serve chains W after its first
+    registration record, the weights'), which the tie holds to the same passes under W's own digest; the flag without
+    ``--window-record`` is a usage error, and a record that can't be read leaves no W."""
     SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
     warm, a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     d = _serve_dir(tmp_path, [warm, a, b])
@@ -1970,6 +2017,17 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     assert [e["value"] for e in w["registered"]][8:] == ["pearl-b/0", "pearl-b/1"]
     r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
+    first, chained = tmp_path / "first.json", tmp_path / "w-chained.json"
+    first.write_text(json.dumps({"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "registered": [], "previous": None}))
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(chained), "--previous-record", str(first)]) == 0
+    wc = json.loads(chained.read_text())
+    assert w["previous"] is None and wc == {**w, "previous": REG.digest(json.loads(first.read_text()))}
+    assert VR.tie(wc, [VR.load(x, published(x)) for x in (a, b)], [1, 2], (0,)) == {"record": REG.digest(wc), "tables": 10}
+    assert REG.digest(wc) != REG.digest(w)
+    with pytest.raises(SystemExit):
+        SP.main(["retain", "--passes", str(d), "--previous-record", str(first)])
+    assert SP.main(["retain", "--passes", str(d), "--window-record", str(tmp_path / "none.json"),
+                    "--previous-record", str(tmp_path / "absent.json")]) == 1 and not (tmp_path / "none.json").exists()
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
     assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 10}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
@@ -3680,14 +3738,14 @@ def test_native_keys_are_call_keys_byte_for_byte():
     rng = random.Random(5)
     for _ in range(40):
         salt, root = rng.randbytes(32), rng.randbytes(32)
-        keys = PPD._Keys(F, salt, tree_hash)
+        keys = PPD._Keys(salt, tree_hash)
         assert keys.native is not None
         for index, m16 in ((0, 16), (1, 32), (127, 8192), (rng.randrange(1 << 20), 16 * rng.randrange(1, 600)), ((1 << 40) + 3, 48)):
-            assert keys(root, index, m16) == PPD.call_keys(F, salt, root, index, m16, tree_hash)
+            assert keys(root, index, m16) == PPD.call_keys(salt, root, index, m16, tree_hash)
     keys.native = None
-    assert keys(root, 9, 64) == PPD.call_keys(F, salt, root, 9, 64, tree_hash)
+    assert keys(root, 9, 64) == PPD.call_keys(salt, root, 9, 64, tree_hash)
     with pytest.raises(ValueError, match="don't frame tree hash 'sha256'"):
-        PPD._Keys(F, salt, "sha256")
+        PPD._Keys(salt, "sha256")
 
 
 def test_the_upload_ring_writes_each_slot_as_given_through_its_wraparound():
@@ -3729,7 +3787,7 @@ def test_each_calls_a_root_lands_at_its_position_and_its_keys_take_the_epochs_in
             run.gemm(w, torch.randn(8, 1024).to(torch.bfloat16), weights[w], None)
             size = run._pipe(w, sh)[0].size["tree_a"]
             assert PPD._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPD._bytes(tree[size - 64:size])
-            assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(F, salt, roots[w], 3 * step + i, 16, run.tree_hash)
+            assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(salt, roots[w], 3 * step + i, 16, run.tree_hash)
         assert [u.index for u in run.cur.matmuls] == [3 * step, 3 * step + 1, 3 * step + 2]
         run.end_pass()
     assert run.cur.base == run.epoch_calls() == 6
@@ -3759,7 +3817,7 @@ def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_p
         got[name] = (keys, launches, {k: man[k] for k in ("records_root", "commitment", "salt")},
                      [{k: u[k] for k in ("root_a", "excluded_a", "real_rows")} for u in man["matmuls"]])
     assert got["native"] == got["reference"]
-    assert got["native"][0][0] == PPD.call_keys(F, make().salt, make().roots[0], 0, 32, HM96)
+    assert got["native"][0][0] == PPD.call_keys(make().salt, make().roots[0], 0, 32, HM96)
 
 
 def interpreted_triton(monkeypatch) -> None:
@@ -3992,7 +4050,7 @@ def sm90_run():
     rng = np.random.default_rng(3)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
-    kernel = PPD.Kernel(R90, F90, H100Dev(), "0" * 64)
+    kernel = PPD.Kernel(R90, H100Dev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, H100_SCHEME, salt_key=SALT_KEY)
     coins = salt_coin(roots)
 
@@ -4069,7 +4127,7 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 16
     for j, index in ((0, 2), (1, 1)):
         keys = sh.keys if j == 0 else sh.sets[j]["keys"]
-        assert PPD._bytes(keys[:168]) == PPD.call_keys(F90, run.salt, roots[0], index, 32, run.tree_hash)
+        assert PPD._bytes(keys[:168]) == PPD.call_keys(run.salt, roots[0], index, 32, run.tree_hash)
     assert [set(PPD._bytes(run.roots_buf[nb * c:nb * (c + 1)])) for c in range(3)] == [{0x11}, {0x22}, {0x11}]
     assert run.end()["schedule"] == "deferred-a"
 
@@ -4391,8 +4449,8 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
     xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
           for w, m in ((0, 20), (1, 32), (0, 64), (1, 20), (0, 32))]
     scheme = H100_SCHEME if arch == "sm90" else SCHEME
-    kernel = (PPD.Kernel(R90, F90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
-              PPD.Kernel(R, F, TwinDev(pd), "0" * 64))
+    kernel = (PPD.Kernel(R90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
+              PPD.Kernel(R, TwinDev(pd), "0" * 64))
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
@@ -4432,8 +4490,8 @@ def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_p
     xs = [(w, torch.from_numpy(bf16_words(rng, m, 1024).view(np.float32).copy()).to(torch.bfloat16))
           for w, m in ((0, 300), (1, 290), (0, 300), (1, 20), (1, 290))]
     scheme = H100_SCHEME if arch == "sm90" else SCHEME
-    kernel = (PPD.Kernel(R90, F90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
-              PPD.Kernel(R, F, TwinDev(pd), "0" * 64))
+    kernel = (PPD.Kernel(R90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
+              PPD.Kernel(R, TwinDev(pd), "0" * 64))
     roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
