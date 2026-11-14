@@ -560,7 +560,7 @@ def stop_order(key: Ch.ChallengerKey | None, main: Sequence[str], evidence: Mapp
     in the order released, the root the challenger had received when it released it. It holds:
 
     * every coin of the stop sample's family ``family`` (the stop stream's own, `stop_first`'s hand-off's) is one the
-      log shows released after the stop docket ``registration`` (its digest, hex), and the sample read all of
+      log shows released after the stop docket ``docket`` (its digest, hex), and the sample read all of
       those and no other (`coins.coins_reason` on the bytes ``read``): no coin that sampled a stop block was released
       before the challenger received what fixes `b.stop` and the rows the blocks read;
     * the log shows a coin released after the class's boundary docket ``boundary``, and the last of those comes
