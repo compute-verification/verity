@@ -1220,6 +1220,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     and the order is read under them; a ``local`` challenger is kept where the second stage reopens it
     (`challenger_host`)."""
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     root = pubs[0]["run"]
     caught = (S.Refused, ValueError, KeyError, TypeError, OSError)
@@ -1241,7 +1242,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     manager, turns, finisher = AC.start(a.challenger, root, sorted([*ranks.values(), *stops.values()]),
                                         Path(a.out) / "challenger", a.main, ssh_key=a.ssh_key, peer=a.peer,
                                         key_record=a.challenger_key, host=challenger_host(a, Path(a.out) / HOST_DIR),
-                                        deployed=getattr(a, "deployed_key", False))
+                                        deployed=getattr(a, "deployed_key", False), local=LC.Local)
     ours = AC.held(turns)
     out: list[dict] = [{} for _ in pubs]
     stop_design = a.stop_design or a.replay
@@ -1398,6 +1399,7 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     interior's commitment by ``clock``, the replay's own record's seconds); exit 0 when the second stage held
     (`held`)."""
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1438,7 +1440,8 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     trees = bool(getattr(a, "interior_trees", False))
     manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
                                         peer=a.peer, key_record=a.challenger_key, host=host,
-                                        stage=AC.SECOND if trees else "", deployed=getattr(a, "deployed_key", False))
+                                        stage=AC.SECOND if trees else "", deployed=getattr(a, "deployed_key", False),
+                                        local=LC.Local)
     ours = AC.held(turns)
     again.stream.key, again.stream.main = ours["key"], tuple(ours["main"])
     coins = AC.RankCoins(turns, 0)

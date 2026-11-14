@@ -936,8 +936,8 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 
 def _auditor():
-    from verity.protocols.proofs.spot.device import challenger_session as AC
-    return AC._module("a5_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    return LC._module("a5_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
@@ -1368,6 +1368,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--port", "10000",
@@ -1393,6 +1394,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     gate = ["--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json", "--gate-key", "gate.key"]
     with pytest.raises(Opened):
         RA.main([*args, *gate])
+    assert seen.pop("local") is LC.Local
     assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
                     "peer": "vy-nebius-1", "key_record": "key.json", "deployed": False}
     seen.clear()
@@ -1401,6 +1403,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     assert seen == {}
     with pytest.raises(Opened):
         RA.main([*args, "--challenger", "local", "--deployed-key"])
+    assert seen.pop("local") is LC.Local
     assert seen == {"challenger": "local", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": None, "peer": None,
                     "key_record": None, "deployed": True}
 

@@ -3,7 +3,8 @@ of record, from whose coins each rank's docket samples once (`spot.coins.Challen
 `remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
 * **The session.** ``local``: a development session on this machine, run by the auditor device's own service
-  (`verity/protocols/compose/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
+  (`verity/protocols/compose/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel:
+  `local_challenger.Local`, which `start`'s caller passes as ``local``, since this file loads none of it) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone (or, where its caller keeps the host's root, `start`'s ``host``, that of every
   run that reopens it: a later stage's session is then the same challenger's), so its samples show the path, not an
@@ -34,7 +35,7 @@ of record, from whose coins each rank's docket samples once (`spot.coins.Challen
   on the one client until `drawn` returns its segment, which is settled once the session has closed (`Draws.released`).
   Once every rank has sampled or won't (`skip`), the client closes the
   session. `Replay` reads an honest sample's bytes again, for the negatives' streams.
-* **The evidence** (`Local.finish` or `GateClient.finish`, on a thread of the run's process once the session closed): the session's out/,
+* **The evidence** (`local_challenger.Local.finish` or `GateClient.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
   ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one sample's `{ledger, main,
@@ -52,22 +53,17 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import importlib.util
 import io
 import json
 import os
 import re
-import secrets
-import shutil
 import socket
 import subprocess
-import sys
 import tarfile
 import tempfile
 import threading
 import time
 from collections.abc import Callable, Mapping
-from datetime import datetime, UTC
 from multiprocessing import get_context
 from multiprocessing.managers import BaseManager
 from pathlib import Path
@@ -90,15 +86,6 @@ SECOND = "second"
 LOCAL_PARAMS = (4, 5)
 LOCAL_HOST, LOCAL_PEER = "local-challenger", "local"
 MINUTES = 240
-
-
-def _module(name: str, path: Path):
-    if name in sys.modules:
-        return sys.modules[name]
-    spec = importlib.util.spec_from_file_location(name, path)
-    module = sys.modules[name] = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
@@ -422,7 +409,7 @@ NO_HOST = ("holds no development challenger: --challenger-host is the directory 
 
 
 def local_key(host: str | Path, params: tuple[int, int] = LOCAL_PARAMS) -> Ch.ChallengerKey:
-    """The key of the development challenger kept at `host` (`Local`'s root), `Ch.CoinError` where the directory holds
+    """The key of the development challenger kept at `host` (`local_challenger.Local`'s root), `Ch.CoinError` where the directory holds
     none. A later command of one audit reads it from the host its first command made, never from a sample's evidence
     or a hand-off, and makes no host of its own: a second host would sign under a second key."""
     public = Path(host) / "var" / "key" / "public"
@@ -615,84 +602,6 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
     return None if got.get("signed") is True else "its challenger signed no record"
 
 
-class Local:
-    """A development session on this machine (module docstring), its auditor device's root in scratch `root`, pinned on the
-    verifier's copy of main's first-parent line `main`, its key at `params` (W, H), made in `workers` processes. A
-    `root` that holds a host already is reopened: its key, with the leaves it has signed at, its ledger and its pins
-    log are kept, so a session opened on it is the same challenger's as the ones before it, under the same key (`key`)."""
-
-    def __init__(self, root: Path, main: list[str], by: str = "circuits", params: tuple[int, int] = LOCAL_PARAMS,
-                 workers: int = 1) -> None:
-        A = _module("a5_auditor", TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
-        self.A, self.by = A, by
-        self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
-        (root / "var" / "sessions").mkdir(parents=True, exist_ok=True)
-        (root / "peers").write_text(f"{LOCAL_HOST} research@127.0.0.1\n{LOCAL_PEER} research@127.0.0.1\n")
-        (root / "coin-ports").write_text(f"{LOCAL_PEER} {A.PORTS.start}-{A.PORTS.stop - 1}\n")
-        self.pin = on_main(main)
-        pins = lines(self.host.pins) if self.host.pins.exists() else []
-        if not pins or json.loads(pins[-1]).get("commit") != self.pin:  # the pins log only grows, as the host's does
-            with open(self.host.pins, "a", encoding="utf-8") as log:
-                log.write(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(UTC))) + "\n")
-        self.params = lms.Params(64, *params)
-        self.signer = A.key_signer(self.host, self.params, workers=workers)
-        self.key = Ch.ChallengerKey(self.params.W, self.params.H, (self.host.key / "public").read_bytes())
-        self.thread: threading.Thread | None = None
-        self.session: str | None = None
-
-    def _serve(self, session: str) -> None:
-        A, host = self.A, self.host
-        body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
-        argv = A.serve_argv(host, session, body)
-        argv[argv.index("--port") + 1] = "0"
-        argv += ["--params", f"{self.params.W},{self.params.H}", "--keygen-workers", "1"]
-        A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(UTC), argv=argv)
-
-    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
-             withhold: bool = False) -> tuple[str, str, str | None]:
-        """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does, a withheld one
-        when `withhold`: (address, secret, commitment), the commitment None on a withheld session (the gate holds its
-        root until the session's end)."""
-        A, host, now = self.A, self.host, datetime.now(UTC)
-        hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
-                     reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
-        rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", scheme, "--families", json.dumps(layout),
-                          "--minutes", str(minutes), *(["--withhold"] if withhold else [])], host, **hooks)
-        if rc:
-            raise Ch.CoinError(f"the local gate refused the reserve: {out.decode().strip()}")
-        self.session = json.loads(out)["session"]
-
-        def start(s: str) -> None:
-            self.thread = threading.Thread(target=self._serve, args=(s,), daemon=True)
-            self.thread.start()
-
-        def alive(_: str) -> bool:
-            return self.thread is not None and self.thread.is_alive()
-        rc, out = A.gate(["open", "--session", self.session, "--root", root], host, **hooks, secret=secrets.token_bytes(32),
-                         admit=lambda s: A.admit(host, s, signer=self.signer, pinned=self.pin, now=now, active=alive),
-                         start=start, active=alive, ready=lambda s: A.await_commitment(host, s, alive))
-        got = json.loads(out)
-        secret = got.pop("secret", None)  # an open the gate answered holds the hello's secret: no error quotes it
-        if rc or opened_reason(got, withhold) is not None:
-            raise Ch.CoinError(f"the local gate refused the open, or {opened_reason(got, withhold)}: {json.dumps(got)}")
-        address = host.sessions / self.session / "out" / "address.json"
-        # serve.py writes the file in place, its newline last: read it only once it is whole
-        while not (address.exists() and address.read_text().endswith("\n")) and alive(self.session):
-            time.sleep(0.1)
-        return json.loads(address.read_text())["address"], secret, got["commitment"]
-
-    def finish(self, dest: Path) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
-        """Once the session has ended (its end entry in the ledger): its out/, the ledger and the pins log copied to `dest`, and
-        its key."""
-        assert self.thread is not None and self.session is not None
-        self.thread.join()
-        dest.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(self.host.sessions / self.session / "out", dest / "session", dirs_exist_ok=True)
-        shutil.copyfile(self.host.ledger, dest / "windows.jsonl")
-        shutil.copyfile(self.host.pins, dest / "pins.jsonl")
-        return dest / "session", dest / "windows.jsonl", dest / "pins.jsonl", self.key
-
-
 class GateClient:
     """The challenger host's session through infra's gate `gate` (USER@HOST) with the lane's gate key `ssh_key`, its challenger
     listening on `peer`'s 127.0.0.1 (this machine's name in the host's /etc/vy/peers), and the challenger key the deployment
@@ -713,7 +622,7 @@ class GateClient:
     def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
              withhold: bool = False) -> tuple[str, str, str | None]:
         """Reserve and open the root's one session, of `scheme`, a withheld one when `withhold` (its commitment None, as
-        `Local.open`'s), once the host's pins log pins, in its last line, a commit on `main`: a session from any other tree
+        `local_challenger.Local.open`'s), once the host's pins log pins, in its last line, a commit on `main`: a session from any other tree
         gives coins `pinned_session` refuses, and the gate opens a root once, ever."""
         pins = [x for x in self._raw("pins").decode().split("\n") if x]
         pin = json.loads(pins[-1]).get("commit") if pins else None
@@ -755,7 +664,7 @@ class GateClient:
 
 class Loopback:
     """The challenger party's host on this machine (`challenger_party.Host`, the ``host`` of SPOT's challenger)
-    at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
+    at `address` (HOST:PORT): `local_challenger.Local`'s session, asked for over one JSON line each way. Its key comes
     from the party itself, asked for before any session (`key`), so its coins are a development session's, not an
     auditor's (`simulated`)."""
 
@@ -806,7 +715,7 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
           reserve: Callable[[Mapping[int, int]], list] | None = None, deployed: bool = False, host: Path | None = None,
-          stage: str = ""):
+          stage: str = "", local: Callable[..., Any] | None = None):
     """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its samples' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
     `ranks` has planned its sample (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
@@ -815,13 +724,16 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
     origin/main``). With `deployed`, a ``local`` session's key is made at `lms.DEPLOYED` (module docstring). A ``local``
-    session's host is made under `host` when given, or reopened there when it holds one (`Local`), and else in a
+    session is the caller's `local` (`local_challenger.Local`), its host made under `host` when given, or reopened there when it holds one, and else in a
     scratch directory of this run's alone. `stage` tags every family of the session (`family`). The challenger's key is known here, before the session opens (the local
     host's, the loopback party's, or the gate's key record), and the manager holds it with `main`'s lines (`held`)."""
     first_parent = R.main_lines(main)
     if challenger == "local":
         at = dict(params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0))) if deployed else {}
-        session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")) if host is None else Path(host), first_parent, **at)
+        if local is None:
+            raise SystemExit("--challenger local is a development session its caller makes and passes as `local` "
+                             "(`local_challenger.Local`), and none was passed")
+        session = local(Path(tempfile.mkdtemp(prefix="a5-challenger-")) if host is None else Path(host), first_parent, **at)
     elif challenger.startswith("loopback:"):
         session = Loopback(challenger.removeprefix("loopback:"))
     elif challenger.startswith("gate:") and peer and key_record:

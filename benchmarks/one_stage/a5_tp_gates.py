@@ -447,6 +447,7 @@ def main(argv=None) -> int:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
     from verity.protocols.proofs.spot.prover.audit import window_audit as a5
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = a.out
     parts = partials(a.hidden, a.tokens, a.requests, a.seed)
@@ -459,7 +460,7 @@ def main(argv=None) -> int:
     sets = {tg: (composer(defs[tg], a.hidden, a.compose_cache), defs[tg]), rid: (row_composer(defs[rid], 8 * REST_BYTES), defs[rid])}
     a.rule, a.window_root, a.compose_cache, a.transfer_gate = RULE, ROOT, None, [tg]
     port = a.port or free_ports(a5.RANK_PORTS * len(RANKS))
-    manager, a.coins, finisher = AC.start("local", ROOT, list(RANKS), out / "challenger", a.main)
+    manager, a.coins, finisher = AC.start("local", ROOT, list(RANKS), out / "challenger", a.main, local=LC.Local)
 
     def rank(r: int) -> dict:
         try:
