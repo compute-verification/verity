@@ -84,6 +84,9 @@ class StepNeeds:
             DECODE_THRESHOLD_DEFAULT,
         )
         self.phi, self.net = phi, dsa.Net(phi, 1, 8)
+        if self.net.kv_layout is not None:
+            raise Unexpressible(f"vocabulary cannot express: the needs of a step over an {self.net.kv_layout} cache (counted from "
+                                f"`dsa`'s Program, which this mirror does not write)")
         self.C, self.tp, self.W = self.net.C, self.net.tp, self.net.world
         self._shape = {key: _arr_shape(t) for _, t, key in self.net._leaves if key is not None}
         self._routes = _routes_of_definitions()

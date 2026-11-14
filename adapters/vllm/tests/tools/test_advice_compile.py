@@ -233,14 +233,12 @@ def _glm53_launch(target: dict | None = None, **engine_kwargs: Any) -> dict:
             "engine_record": {"engine_kwargs": {"tensor_parallel_size": 8, "max_model_len": 2048, **engine_kwargs}}}
 
 
-def test_an_fp8_launch_of_glm53_on_cc_9_0_states_the_fp8_ds_mla_layout_and_no_decoder_models_it_yet():
+def test_an_fp8_launch_of_glm53_on_cc_9_0_states_the_fp8_ds_mla_layout_which_its_decoder_models():
     """GLM-5.3 at ``--kv-cache-dtype fp8`` on cc 9.0, the cache vLLM's FlashMLA sparse backend stores as ``fp8_ds_mla``: φ's
     engine states that layout, so its digest is not the default launch's, which is as before. Every other format, model or
     capability is refused by the setting, and so is the fp8 launch beside another attention backend or with layers skipped.
-    No decoder models the layout yet: `build.decoder` refuses that φ by the engine arg, so no Program of a launch at the
-    default stands in for it."""
-    from verity_vllm.program.predict import build, dsa
-    from verity_vllm.program.predict.build import Unexpressible
+    GLM-5.3's decoder models the layout (`dsa.Net.kv_layout`), and the default launch's decoder has none."""
+    from verity_vllm.program.predict import build
 
     hf = json.loads(pinned_hf_config(*GLM53).read_text())
     fp8, bf16 = AC.phi_of(_glm53_launch(kv_cache_dtype="fp8"), hf, 3), AC.phi_of(_glm53_launch(), hf, 3)
@@ -269,9 +267,7 @@ def test_an_fp8_launch_of_glm53_on_cc_9_0_states_the_fp8_ds_mla_layout_and_no_de
             "engine kv_cache_dtype_skip_layers=['0'] at kv_cache_dtype='fp8': a request Program models every layer's cache in the "
             "layout fp8_ds_mla, and those layers keep the default's. Serve with no layer skipped to compile it")):
         AC.phi_of(_glm53_launch(kv_cache_dtype="fp8", kv_cache_dtype_skip_layers=["0"]), hf, 3)
-    assert isinstance(build.decoder(bf16), dsa.Net)
-    with pytest.raises(Unexpressible, match=re.escape("vocabulary cannot express: engine arg kv_cache_dtype='fp8_ds_mla' (not modelled)")):
-        build.decoder(fp8)
+    assert (build.decoder(bf16).kv_layout, build.decoder(fp8).kv_layout) == (None, "fp8_ds_mla")
 
 
 def test_a_user_with_two_requests_in_one_window_is_refused(tmp_path):
