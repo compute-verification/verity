@@ -194,7 +194,7 @@ def _headroom() -> int | None:
                 lim, cur = a.read().strip(), int(b.read().strip())
         except (OSError, ValueError):
             continue
-        if lim.isdigit() and int(lim) < (1 << 60):
+        if lim.isdecimal() and int(lim) < (1 << 60):
             return max(0, int(lim) - cur)
     try:
         with open("/proc/meminfo") as f:
@@ -305,7 +305,7 @@ def _own_budget(budget_gb: float | None = None) -> int | None:
             total = next(int(ln.split()[1]) * 1024 for ln in f if ln.split(":")[0] == "MemTotal")
     except (OSError, StopIteration, ValueError, IndexError):
         return None
-    return head if lim.isdigit() and int(lim) < total else None
+    return head if lim.isdecimal() and int(lim) < total else None
 
 
 def _build_in_turn(tasks: list[tuple[str, dict[str, Any]]], after: Callable[[int, dict[str, Any]], None], log=None) -> list[dict[str, Any]]:
