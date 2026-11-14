@@ -58,9 +58,7 @@ when:
   below's wherever in its file it stands: it is compared by its file and what it is, with a count, never by its line, so
   an edit above a site moves it and adds none, a second site of the same kind in its file is the change's, and a file's
   count that a mended site lowers is no new violation, whether its entry falls with it or stays (`beyond`); a list
-  lowered under a tree that its base's list covered is one.  What a repository list's lint finds past its list in a file
-  the change renames is compared at the file's new path (`placed_at`), so a move carries the sites its base holds
-  uncovered and one more in the moved file is the change's.  In a temporary worktree of the change's top, each
+  lowered under a tree that its base's list covered is one.  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
@@ -726,11 +724,6 @@ def changed_sources(lo: str, hi: str, left: tuple[str, ...], holds: Callable[[st
     return out
 
 
-def renamed(lo: str, hi: str) -> dict[str, str]:
-    """Each file ``lo..hi`` renames (``git diff -M``), its new path to its old one."""
-    return {f: o for f, o, *_ in changed_sources(lo, hi, (), lambda _: True) if o is not None and o != f}
-
-
 def carried(before: dict[str, list], moved: dict[str, str]) -> dict[str, list]:
     """``before`` with each repository list's (``CATCH_UP``) entry for a file the change renames (``moved``: its new path to
     its old) at the file's new path: what the base's list allows the file, where the change puts it."""
@@ -1361,18 +1354,6 @@ def beyond(found: list[str], had: list[str]) -> tuple[list[str], list[str]]:
     return [old[i] for i in sorted(old)], [v for i, v in enumerate(found) if i not in old]
 
 
-def placed_at(found: list[str], moved: dict[str, str]) -> list[str]:
-    """``found``, the base's violations, each as it reads where the change puts its file: one of a repository list's lint
-    (``CATCH_UP``) that names a file the change renames (``moved``: its new path to its old) names the file's new path, so
-    `beyond` compares a moved file's violations with the ones its base holds."""
-    to = {o: f for f, o in moved.items()}
-    out = []
-    for v in found:
-        m = SITE.match(v) or RUFF_PAIR.match(v)
-        out.append(v[:m.start(1)] + to[m[1]] + v[m.end(1):] if m and m[1] in to and v.split(":", 1)[0] in CATCH_UP else v)
-    return out
-
-
 def added_by(rev: str, items: list[str]) -> str:
     """Each violation in ``items`` with the change on ``rev``'s first-parent chain that added the line it names
     (``lint: file:line ...``), by `git blame --first-parent`: ``#N`` for a queue merge, else the commit.  One that names only
@@ -1421,7 +1402,7 @@ def judge(c: Change, base: str, every: bool = False) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        moved = renamed(c.lo, c.hi)
+        moved = {f: o for f, o, *_ in changed_sources(c.lo, c.hi, (), lambda _: True) if o is not None and o != f}
         placed_before = carried(before, moved)
         grown, added, c.pooled = growth(placed_before, after, {**was_at, **now_at}, *held(c, placed_before, after, moved))
         uncalled, public = public_callers(c)
@@ -1444,12 +1425,9 @@ def judge(c: Change, base: str, every: bool = False) -> None:
                 failures, unrun = [], f"; the base's lints didn't run on it ({e})"
             found = violations(failures)
             if found:
-                as_named = violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1])
-                at_base = placed_at(as_named, moved)
-                names = dict(zip(at_base, as_named))
+                at_base = violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1])
                 inherited, new = beyond(found, at_base)
                 had, found = set(at_base) | (set(found) - set(new)), new
-                inherited = [names.get(v, v) for v in inherited]
                 like, rekeyed, rekey = base_form(before, after, {**was_at, **now_at})
                 if found and rekeyed:
                     again = beyond(violations(base_lints(c, selection, like)[1]), at_base)[1]

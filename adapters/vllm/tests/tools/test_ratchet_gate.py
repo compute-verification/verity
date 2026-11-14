@@ -2099,29 +2099,6 @@ def test_a_renamed_file_s_entry_is_compared_at_its_new_path_so_a_move_buys_no_ro
     assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(b)} 0 -> 2"]
 
 
-def test_a_moved_file_s_uncovered_sites_are_the_bases_still_where_the_change_puts_it_and_one_more_is_the_changes(terms_behind):
-    """The base's violations are read where the change puts their files too: docs/b.md holds four uses against a list that
-    allows two, and a mover takes the file and its entry to notes/b.md as they are, so what the base's lint finds there
-    past the list is the base's, each named as the base holds it, with the change that wrote it; the same mover with a
-    fifth use fails, naming the file's count and the one new site."""
-    wrote = terms_behind.git("rev-parse", "main").strip()[:12]
-    listed = _allowlist({**DOCS_A, "count": 2}, {"file": "notes/b.md", "count": 2})
-    as_it_is = terms_behind.commit("the mover, the file and its entry as they are", {
-        "docs/b.md": None, "notes/b.md": B_USES, REPO_TERMS_JSON: listed})
-    c = _queued(terms_behind, 7, as_it_is)
-    assert (c["verdict"], c["lints"], c["pooled"]) == ("passed", ["repo_retired_terms"], []), c["why"]
-    assert ("finds 5 violation(s) its own tree already holds, which aren't this change's: "
-            f"added by {wrote}: {', '.join(B_SITE.format(n) for n in (3, 5, 7, 9))}, "
-            "repo_retired_terms: docs/b.md: 4 found, 2 allowed") in c["why"], c["why"]
-    terms_behind.git("checkout", "-q", "-B", "pr", "main")
-    more = terms_behind.commit("the mover, and a fifth use in the moved file", {
-        "docs/b.md": None, "notes/b.md": B_USES + "\nA teapot naps.\n", REPO_TERMS_JSON: listed})
-    c = _queued(terms_behind, 8, more)
-    assert c["verdict"] == "failed" and "finds 2 violation(s) on its tree" in c["why"], c["why"]
-    assert c["fix"] == ["repo_retired_terms: notes/b.md: 5 found, 2 allowed",
-                        B_SITE.format(11).replace("docs/b.md", "notes/b.md")], c["why"]
-
-
 C_SITE = "docs/c.md:{} 'teapot' is retired; say kettle (GLOSSARY.md)"
 
 
@@ -2136,7 +2113,6 @@ def test_a_file_moved_to_where_its_lint_counts_it_is_growth_named_at_the_file_s_
     terms_linted.git("checkout", "-q", "-B", "pr")
     terms_linted.git("mv", "fixtures/c.md", "docs/c.md")
     terms_linted.commit("fixtures/c.md goes to docs/ as it is, with its entry", {REPO_TERMS_JSON: _allowlist(DOCS_A, c_md)})
-    assert G.renamed("main", "pr") == {"docs/c.md": "fixtures/c.md"}
     [c] = G.gate("main", "pr")["changes"]
     assert c["verdict"] == "failed" and c["why"].startswith(f"grows {REPO_TERMS_JSON} 1 -> 2 in total"), c["why"]
     assert c["fix"] == [f"{REPO_TERMS_JSON}: {G.key(c_md)} 0 -> 1"]
