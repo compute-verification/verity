@@ -49650,8 +49650,9 @@
    }
   },
   "Proofs.Flock.Claims.DecodeFlock": {
-   "digest": "6240f1b1e1038037d5f17e711ba2697c4d50d24ff6022ec235be02dbf163d724",
+   "digest": "dc47f6bd7d5f1780ec98bcdc327e4ffae584fc76a160338e10154d874dc03994",
    "definitions": {
+    "Claims.Flock.flockLevelZero": "bf5e8accd125bba1c0b7a732e19a8b602003d3e35c50e62d0973c0093d5de71f",
     "Claims.Flock.levelZero": "49e82419bc7f3ad7d3c0dc9a5dad02c9b1ce55db656dd1b66ff5282cbdbde27c"
    }
   },
@@ -49857,8 +49858,10 @@
    }
   },
   "Proofs.Flock.Claims.GS.Flock": {
-   "digest": "1963b851d900e59446f1f07f8f7fc5e703ba46a931940d8187bb30b335e7e08a",
+   "digest": "4c7333f6ebf5207826a5614f551a6d4f7d17344c150bec07d2c85e3800ae73e8",
    "definitions": {
+    "Claims.GS.flockDecode": "03613c6d5016e9632d938a3d50d5574924dcc1754f97ae57adb44aba9dfa86f6",
+    "Claims.GS.flockReader": "da81583644097665797395535c6f0b49c065b64e778c73e0455be90ce1265e4a",
     "Claims.GS.levelZeroReader": "2db8d9c1e097e856f525fde2d5ecc71b0d6226350eddc8b0851401d34cfeff64",
     "Claims.GS.novelCoeffs": "0a07c1d8b4aa574b6001b9a2262e4b475cae7df06b7ebaf1446116c394b02b22",
     "Claims.GS.novelInv": "e60ff2db70ca9f0f86dbd5f56f81fc61fcbe6616c64556f6b6a474f23f0f02c2",
@@ -49912,10 +49915,12 @@
    }
   },
   "Proofs.Flock.Claims.GS.Radius": {
-   "digest": "dffe8681f96a4bda791d3779e13e5bfdd23ecaa2789ea2299ce3fbeea83f0783",
+   "digest": "2adcf172c35cb01606f9d6edf28bb616091ed5260a22b5dfb5be7d368fdbdc9f",
    "definitions": {
+    "Claims.GS.agreeR": "dbca32d0d028afbec2a5bc00422eb1f2cea3e169e58e89ee8347705118283932",
     "Claims.GS.fillPts": "5c173dbfd887450e414f3c1623b1b571750e7c8e25d126eeb6c079fdb661cdb0",
     "Claims.GS.fillPtsC": "386b5cdc704e3220706c5f262e3eada5d5d9785b2f8ad596c5b1ba42f818469f",
+    "Claims.GS.flockDecodeR": "715dc1aa0935e4e73883d92f60b65779aed9e77c05eeac307bdf5c04d2a95c58",
     "Claims.GS.lookupC": "9bd1fbe18f60a96a3c046405dcd3f0bd24845c20f265c1bab1a0007d584ddde5"
    }
   },
@@ -54812,6 +54817,14 @@
     "FlockSoundness.Discharge.Exec.capOfRoot": "be537f3d1534d509593f3fd32844ff197345589a9d7e25dc018516187ac3f491"
    }
   },
+  "Proofs.Flock.Soundness.Discharge.Exec.DecodeL": {
+   "digest": "4c03855792dada99c8bb5eedebf321e372db466979cecaff50d21478ba50814e",
+   "definitions": {
+    "FlockSoundness.Discharge.Exec.colsL": "a74e4572bca95570b55da63e32c5537cefd41afb95ac78165d9cd1ace419af96",
+    "FlockSoundness.Discharge.Exec.colsOf": "b6740e76e9162b52534d1da95f662447ac124b80b4f00123c59a406858d6cc5c",
+    "FlockSoundness.Discharge.Exec.decodeL": "70138c11cbfd0c0f4a1f51f36820720f8f3611d6148a3794ef99521316a08d98"
+   }
+  },
   "Proofs.Flock.Soundness.Discharge.Exec.Emit": {
    "digest": "796cc71647898cebe3c7ce3505832bbc72511a5e89eef4e46e8e4b7b23527fef",
    "definitions": {
@@ -54850,7 +54863,7 @@
    }
   },
   "Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL": {
-   "digest": "d31b410b23fab721456a0447329aed0eb4874387d8601b191c5c8463086f365a",
+   "digest": "5a84328fa857ca01ef21bccaf8f3308bc0538a527cce7faae35455ace0055c40",
    "definitions": {
     "FlockSoundness.Discharge.Exec.LinkCRL": "ace01b040e11356bd19328ff59800a004e5e8001da7636681d0471135794ffa8",
     "FlockSoundness.Discharge.Exec.OpensAtL": "5fe0b661d35cac7aa3b69cd6dda8b0bb877824b5acf267e6d448944aed0f7cf8",
@@ -54859,7 +54872,7 @@
     "FlockSoundness.Discharge.Exec.XvalL": "0a84776de376f62d8aecd4242fdfa8f70f7f87e4e0e38c6b97bf2dd08b0ae5dc",
     "FlockSoundness.Discharge.Exec.accωL": "e9ac4573ac9b8c8a824936a5e329a241e029bfe28151f4d2e3705d550d8d6ed4",
     "FlockSoundness.Discharge.Exec.cTL": "dfe3c631a4ec092f00b7931a8d5696a0d3893adb243598895902747ff8d777d4",
-    "FlockSoundness.Discharge.Exec.candL": "1d3c8c896437470df4640a2b542596b2f58cebc70c9e98ff2d1f98fe709b39be",
+    "FlockSoundness.Discharge.Exec.candL": "d210c79ae1a800179bb0ba1886b62225be991c3e9ccfaf5e6966d3249cbe23fe",
     "FlockSoundness.Discharge.Exec.gameωL": "dd379009bcbe7e7c189607689bbaa32584f4e0b027d4072aa0933c3b97b3ec56",
     "FlockSoundness.Discharge.Exec.opensL": "500e94329f9cbcc49b4b9f5dfe4bb9de52a70d300f7066e9cdd47ccf4695a144",
     "FlockSoundness.Discharge.Exec.opsTL": "6fab74ee298b2cbd2b72ced577c458129a56b87d11d6db376a11a268c8b00781",
