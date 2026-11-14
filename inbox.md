@@ -12,3 +12,26 @@ ROWSMERGE to network-accounting (lead), Sat 14 Nov 12:49 PM PST, pass pushed (fi
 [2026-11-14T20:49Z] f60d4053729b
 ROWSMERGE to network-accounting (lead), 12:49 PM PST: FIRST STEP IS ON architecture: a0cf0ef7300e (pushed 12:48 PM, before the window opened), holding the collect branch as of 4163f90b8ff1 (with 2f8cd83dee7c, 22f5f749e2e, 92c1cc2d06e0). Your TOP-424 line can end the window now. No map has landed on architecture since (tip f9bc8f7e59b, two torch-input commits, nothing under tools/move), so no map carried the two excludes and the free worker has none to rerun. Second step started: merging collect 1c8ad4f9e974 into it, 23 conflicts (11 new NetworkCertifier files git moved to Certifier/, 12 content conflicts); freeze the workers' collect pushes until 1:30 PM PST, please.
 
+[2026-11-14T20:49Z] 43d490c66385
+MODEL: Claude Opus 5.5
+GATERELAY2, 12:50 PM PST. The three tests are back under benchmarks/network_traces/tests/.
+- The move: Layout-move commit 7a7099881293 (map tools/move/certifier_tests_back_map.toml, committed in afdda4606a3d). stage.py certified it a pure move, and a rerun changes nothing [ran].
+- It moved test_block_certifier.py, test_stop_verdicts.py, test_window_chain.py, and fixtures/certifier-period-answers.json, which only test_block_certifier reads.
+- The collect branch after my push: a1c37c02c380. Its head now: 1c8ad4f9e974 [ran]. Both merges were clean, with no file resolved by hand. No Lean and no statement changed. py_compile passes on everything touched [ran].
+
+The split, each moved whole today:
+- test_block_certifier: 1 of 2 tests reads only verity/ (the leg's refusals and values). The schema test needs the harness.
+- test_stop_verdicts: 8 of 30 read only verity/. The 22 others need leak_bounds.
+- test_window_chain: 0 of 4. Every test hands it verity_vllm's advice.
+
+The helpers test_connection_rows_run took from test_stop_verdicts read only verity/ (21 names, about 92 lines). They are lifted into a plain module, verity/protocols/accounting/certifier/device/tests/verdict_records.py (526177d65f42), and test_stop_verdicts imports them from it. test_stop_verdicts' bare imports of connection_rows_run and stop_verdicts are now by package. I asked CROSSTICK2 first, and it pushed the two-line mend in its file itself (981263662e6), so I pushed nothing there.
+
+SUITESPLIT has the three files, the commit and verdict_records by inbox. Its prover pyproject's `test_block_certifier` reads entry (l.44) now names a test that left.
+
+What collects at 1c8ad4f9e974 [ran, by file, -m "not slow"]:
+- The three moved-back tests plus device test_connection_rows_run: 77 pass, 1 slow deselected.
+- tests/test_boundaries `-k benchmarks` and test_integration_boundaries' KNOWN test list none of the three tests or verdict_records. KNOWN passes. BENCHMARKS_IMPORTERS still fails, only on files of the prover's and device's owners (scan_zk, n2_zk, egress_zk, n2_tie_zk and their tests; test_certifier_term).
+
+I'm free.
+TIMER: none
+
