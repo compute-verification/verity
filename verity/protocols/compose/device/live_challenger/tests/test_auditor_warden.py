@@ -15,7 +15,7 @@ import signal
 import socket
 import sys
 import tarfile
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -24,8 +24,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
-T0 = datetime(2026, 10, 24, 11, 0, 0, tzinfo=timezone.utc)
-T1 = datetime(2026, 10, 24, 11, 20, 0, tzinfo=timezone.utc)
+T0 = datetime(2026, 10, 24, 11, 0, 0, tzinfo=UTC)
+T1 = datetime(2026, 10, 24, 11, 20, 0, tzinfo=UTC)
 PIN = "c" * 40
 REQUEST = ["warden-rehearse", "--peer", "vy-nebius-1", "--port", "8011", "--minutes", "20"]
 TUNNEL = [sys.executable, "-c", "import signal; signal.pause()"]

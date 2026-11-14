@@ -68,3 +68,42 @@ def test_lazy_filler_warps_are_part_of_the_config():
     k, fused, _, _ = S.fstep_pick([eager, lazy], split=True)[(132, 5120)]
     assert k[12] == 2 and fused == pytest.approx(0.43)
     assert S.afw_name(8, 2, 1, 2) == "8 NC 2 persistent lazy 2"
+
+
+def test_a_large_batchs_non_gemm_time_is_its_tokens():
+    f = S.StepFiller({(512, 2048): (0.5, 0.0, 0.9)})
+    other = 38.37 / 16  # 4.684 µs a token over 512 tokens, which is past the 1.09 ms a step
+    assert other > S.DEC_OTHER_MS
+    t, macs = f.apply(_M, 512, 2048, 10.0)
+    assert t == pytest.approx((10.0 - other) * 0.9 + other)
+    assert macs == pytest.approx(0.5 * (10.0 - other) * 0.9 * 1e-3 * _M.capacity)
+
+
+def test_the_pick_keeps_a_config_at_the_limit_and_the_larger_total_whichever_comes_first():
+    at_limit = S.fstep_pick([_row(64, 2048, 8, 4, 0, 0.30, 0.0, S.LIMIT)], split=False)
+    assert at_limit[(64, 2048)][1:] == (0.30, 0.0, S.LIMIT)
+    # the larger total comes first at both points: at one by its fused share, at the other by its pump's
+    rows = [_row(32, 2048, 8, 4, 108, 0.60, 0.10, 1.0), _row(32, 2048, 8, 4, 0, 0.50, 0.0, 1.0),
+            _row(64, 2048, 8, 4, 108, 0.10, 0.60, 1.0), _row(64, 2048, 8, 4, 0, 0.50, 0.0, 1.0)]
+    split = S.fstep_pick(rows, split=True)
+    assert split[(32, 2048)][1:] == (0.60, 0.10, 1.0) and split[(64, 2048)][1:] == (0.10, 0.60, 1.0)
+    rows = [_row(32, 2048, 8, 4, 0, 0.55, 0.0, 1.0), _row(32, 2048, 4, 4, 0, 0.40, 0.0, 1.0)]
+    whole = S.fstep_pick(rows, split=False)
+    assert whole[(32, 2048)][0][2] == 8 and whole[(32, 2048)][1] == 0.55
+
+
+def test_a_line_without_the_later_keys_is_the_whole_gpu_with_four_chains_and_no_attention_filler():
+    old = {"B": 32, "L": 2048, "FW": 8, "NC": 2, "pdl": 1, "thr": 3, "fill_share": 0.4, "slowdown": 1.01}
+    assert S.fstep_points([old]) == {(32, 2048, 8, 2, 0, 0, 0, 1, 0, 3, 4, 0, 0): (0.4, 0.0, 1.01)}
+    assert S.afw_name(6, 4) == "6" and S.afw_name(6, 5) == "6 NC 5"
+
+
+def test_the_fstep_fillers_are_the_pick_on_the_whole_gpu_and_the_pick_with_the_pump():
+    rows = [_row(32, 2048, 8, 4, 0, 0.55, 0.0, 0.91), _row(32, 2048, 8, 4, 108, 0.22, 0.52, 1.0)]
+    f = S.fstep_fillers(rows)
+    assert list(f) == ["fused ≤ 5%", "fused + pump ≤ 5%"]
+    assert all(isinstance(x, S.StepFiller) for x in f.values())
+    assert f["fused ≤ 5%"].at(32, 2048) == (0.55, 0.0, 0.91)
+    assert f["fused + pump ≤ 5%"].at(32, 2048) == (0.22, 0.52, 1.0)
+    assert list(S.fstep_fillers(rows[1:])) == ["fused + pump ≤ 5%"]  # none on the whole GPU: no such filler
+    assert S.fstep_fillers([]) == {}
