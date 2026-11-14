@@ -3,6 +3,7 @@ module
 public import Definitions.Slowdown.Guarantees.Threads
 public import Proofs.Core.Circuit
 public import Proofs.InferenceOnly.Pull
+public import Proofs.Slowdown.Piece
 public import Proofs.Slowdown.Fit
 
 /-!

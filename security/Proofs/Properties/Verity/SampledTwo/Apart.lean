@@ -61,8 +61,8 @@ theorem apart_of_own {S₁ S₂ : RunSetup} {w₁ w₂ : String} (h₁ : OpensOw
 after `θ`, the first session's setup opens only its own run on the parameters' first window, the second's only its
 own on the second, and the two runs' ids differ. -/
 theorem binds_of_own (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (θ : ByteArray)
-    (h₁ : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → OpensOwn (S₁ o) w₁)
-    (h₂ : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → OpensOwn (S₂ o) w₂)
+    (h₁ : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → OpensOwn (S₁ o) w₁)
+    (h₂ : ∀ o : Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → OpensOwn (S₂ o) w₂)
     (hid : ∀ o : Exchange, o.params = θ → (S₁ o).id ≠ (S₂ o).id) :
     Binds (dev₂ S₁ S₂ cut) θ :=
   binds_dev₂ S₁ S₂ cut θ fun o hθ w₁ w₂ hw hne =>

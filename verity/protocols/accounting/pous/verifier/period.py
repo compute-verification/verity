@@ -1,6 +1,6 @@
 """The verifier's side of one PoUS period on one node: the run's check, with the answer of PoUS's component of onsite
 Verity (`verity/pous/p2/v4/run`, `PousCheck.RunProtocol` in `check/`). The prover's side, the setup, the session and the
-period's leg, is `verity/protocols/accounting/pous/prover/period_prover.py`, which ends each period here.
+period's subprotocol, is `verity/protocols/accounting/pous/prover/period_prover.py`, which ends each period here.
 
 The verifier judges the run, setup's acceptance of `C*` publishing exactly the run's commitment (`tie`) and then
 `run.check_at`, and answers in the core interface's canonical form (`answer`); the case (`case`) carries setup's own
@@ -26,9 +26,9 @@ setup's acceptance is the open premise `SETUP_ACCEPTED`, among its certificate's
 
 `trusted-device`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 under a committed configuration, for a session signed under a key its `[[pin]]` entries give the memory challenger
-(`period.json`'s `deployment`), whatever the host names say; the leg says which (`challenger_session.placement`).
+(`period.json`'s `deployment`), whatever the host names say; the subprotocol says which (`challenger_session.placement`).
 The setup's salt is still sampled on the node, and its check runs there too: every verdict rests on setup checked by
-the developer, not the auditor, which the leg says beside the premise.
+the developer, not the auditor, which the subprotocol says beside the premise.
 """
 
 from __future__ import annotations
@@ -65,7 +65,6 @@ SETUP_ACCEPTED = ("the store at the published root is the encoding of the regist
                   "commitment and salt (SetupAccepted)")
 """`PousCheck.SignedRun.SETUP_ACCEPTED`: setup's acceptance, an open premise of the signed run, among its certificate's
 hypotheses."""
-SETUP_PROTOCOL = "verity/pous/p2/v4/setup"
 SESSION_DOMAIN = "verity/pous-period/session/v1"
 W, C0 = 1024, 105
 """The small point's width: a 1,024-bit prime `2^w − c0` of P2's ladder, 126 payload bytes a 128-byte block."""
@@ -282,10 +281,6 @@ class Run:
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
 
 
-Period = Run
-"""`Run`, under the name some of its readers still use; it goes when none does."""
-
-
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
     """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI). The lines go
     as bytes, so a served case (gigabytes) is held once beside its own JSON, not again as text."""
@@ -334,11 +329,11 @@ def deployment(doc: Mapping[str, Any]) -> dict[str, Any]:
 
 
 SETUP_WORKERS = 32
-"""The processes the leg encodes a node's `C*` in, and the memory challenger's side makes its key in, at most, within the
+"""The processes the subprotocol encodes a node's `C*` in, and the memory challenger's side makes its key in, at most, within the
 CPUs each may run on (`period_prover.setup_store`; `onsite.device_key`, from `challenger_party.main`)."""
 
 
-__all__ = ["DEPLOYMENT", "NO_JUDGE", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL",
-           "Period", "Run", "SetupInputs", "answer", "answer_signed", "case", "case_signed", "certificate", "certify",
-           "deployment", "gaps", "openings_of", "point_for", "point_of", "profile", "profile_signed",
+__all__ = ["DEPLOYMENT", "NO_JUDGE", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS",
+           "SIGNED_PROTOCOL", "Run", "SetupInputs", "answer", "answer_signed", "case", "case_signed", "certificate",
+           "certify", "deployment", "gaps", "openings_of", "point_for", "point_of", "profile", "profile_signed",
            "serve", "setup_case", "setup_inputs", "tie", "unjudged"]

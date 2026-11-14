@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CoinMapDistribution
 
 /-!
-# The two-stage leg's coin map: its distribution with the agreement in the event (`coinMapHolds`)
+# The two-stage subprotocol's coin map: its distribution with the agreement in the event (`coinMapHolds`)
 
 `CoinMapHolds` (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is `CoinMapDistribution` at the coin map's frame, with the
 agreement `ElemAgrees` inside the event and `hide = gapOf`. It is proved as `distributionAt` is, along `relK` one coin node at a

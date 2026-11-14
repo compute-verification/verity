@@ -1,15 +1,15 @@
 """`wipe_store`, the streamed wipe's prover keeping the fill in device memory, here on its host-memory stand-in: it keeps
 each frame where its labels go and answers each read from there, its gate writes both sides of every power-of-two byte
 boundary and refuses a store whose addresses wrap, its cheat keeps prior content in the first labels' places and is
-rejected one label past the published threshold, a host without the CUDA driver is refused by name, and the leg runs
+rejected one label past the published threshold, a host without the CUDA driver is refused by name, and the subprotocol runs
 whole on it against a challenger side of its own host that streams natively, recording the prover's, the session's and
 the streamer's figures and the store in the placement, and against a simulated placement's side on the cheat,
 rejecting. On a stand-in CUDA driver and NVML (`wipe_store.load`), a device is the larger of the two totals, NVML's
-read at the PCI bus id CUDA reports, so the leg's `R` counts the driver's reserve, and without NVML the record names
+read at the PCI bus id CUDA reports, so the subprotocol's `R` counts the driver's reserve, and without NVML the record names
 the reserve uncertified. On a disk (`Disk`, a small fill file in the test's directory) it keeps the fill in a file of
 its own, written in whole blocks and patched where a frame isn't, on the file once synced, and removed at close,
 refuses a fill it can't keep and never takes an existing file; one session over a disk and host memory (`Joint`)
-accepts the honest server and rejects the one keeping its own content on the disk, and the leg runs it whole, the disk
+accepts the honest server and rejects the one keeping its own content on the disk, and the subprotocol runs it whole, the disk
 declared."""
 
 from __future__ import annotations
@@ -233,8 +233,8 @@ def test_without_nvmls_total_the_device_is_cudas_and_says_why(monkeypatch) -> No
 
 
 @pytest.mark.parametrize("nvml", [True, False], ids=["nvml", "no-nvml"])
-def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
-    """The leg on a GPU (`wipe.store` `cuda`, on `cuda_on_host`) of 64 MiB by CUDA's count and an H200's driver reserve
+def test_the_subprotocol_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
+    """The subprotocol on a GPU (`wipe.store` `cuda`, on `cuda_on_host`) of 64 MiB by CUDA's count and an H200's driver reserve
     more by NVML's: the tier declared is NVML's total, so `R`, and `M` with it, counts the reserve (on Demo B's H200,
     the 5,159,518,208 bits CUDA's count leaves out), and none of the device is undeclared. Without NVML the tier is
     CUDA's, and the placement names the reserve uncertified by its tier; the prover's own record keeps the device's
@@ -251,7 +251,7 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = wipe_run.leg(period, "n0", out, side_of=_handed(side))
+    answer = wipe_run.subprotocol(period, "n0", out, side_of=_handed(side))
     record = json.loads((out / "wipe.json").read_text())
     assert answer["verdict"] == "accept" and record["prover"]["gate"]["passed"], answer
     assert answer["profile"]["tiers"] == [["gpu-hbm", tier]] and answer["public"]["memory_bits"] == 8 * tier
@@ -269,7 +269,7 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
 
 
 @pytest.mark.parametrize("nvml", [True, False], ids=["nvml", "no-nvml"])
-def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
+def test_the_subprotocol_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
     """The disks ahead of a GPU in one joint store, the whole-node session's shape: the GPU part is declared at NVML's
     total, and without NVML the record names that part's reserve uncertified."""
     cuda = 64 << 20
@@ -287,7 +287,7 @@ def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, 
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = wipe_run.leg(period, "n0", out, side_of=_handed(side))
+    answer = wipe_run.subprotocol(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
     assert record["wipe"]["tier"] == "disk+gpu-hbm" and answer["profile"]["tiers"][1] == ["gpu-hbm", tier]
@@ -302,8 +302,8 @@ def test_percentiles() -> None:
     assert WS.percentiles([]) == {"n": 0} and WS.gbps(10, 0) is None and WS.gbps(3_000, 1_000) == 3.0
 
 
-def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_streamer) -> None:
-    """The leg whole as the H200's will run: period.json's wipe on a `wipe_store` prover (host memory standing in for
+def test_the_subprotocol_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_streamer) -> None:
+    """The subprotocol whole as the H200's will run: period.json's wipe on a `wipe_store` prover (host memory standing in for
     the device) gated first, against a challenger side of its own host (`wipe_side.py`) streaming natively. The record
     holds the prover's fill and device reads, the signed session's fill and round trips, and the streamer's gate and
     figures; the prover's record names its store, and the placement doesn't."""
@@ -317,7 +317,7 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
                             str(wipe_streamer.path)))
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = wipe_run.leg(period, "n0", out, side_of=_handed(side))
+    answer = wipe_run.subprotocol(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
     assert answer["profile"]["tiers"] == [["host-dram", 1 << 25]]
     assert answer["profile"]["placement"]["store_gaps"] == [] and "prover_store" not in answer["profile"]["placement"]
@@ -333,7 +333,7 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     assert s["tier"] == "host-dram"
 
 
-def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatch) -> None:
+def test_the_cheats_subprotocol_rejects_under_a_simulated_placement(tmp_path, monkeypatch) -> None:
     """`main` on period.json's cheat (`foreign_bytes` `fM`) with the challenger a process of its own on the developer's
     node named `simulated`: the wipe rejects, `--expect reject` exits 0, and the record names the placement and what
     the prover kept."""
@@ -451,7 +451,7 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
         assert w.answer["profile"]["tiers"] == [list(t) for t in joint.declared()]
 
 
-def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
+def test_the_subprotocol_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     """period.json's wipe on host memory and a disk directory in one session against a challenger side of its own
     host: it accepts, both tiers declared, the disk's filesystems no longer undeclared, and the fill file removed."""
     period = tmp_path / "periods" / "p0"
@@ -466,7 +466,7 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = wipe_run.leg(period, "n0", out, side_of=_handed(side))
+    answer = wipe_run.subprotocol(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
     disk_total = record["prover"]["store"]["parts"][0]["total_bytes"]
@@ -480,7 +480,7 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     assert _fills(target) == []
 
 
-def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
+def test_the_subprotocol_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
     """wipe.dram after a disk store: the DRAM is a tier declared at all the host's physical memory, so none of it is
     undeclared, and the fill's last segment is in it."""
     period = tmp_path / "periods" / "p0"
@@ -495,7 +495,7 @@ def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
     side = Side("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
-    answer = wipe_run.leg(period, "n0", out, side_of=_handed(side))
+    answer = wipe_run.subprotocol(period, "n0", out, side_of=_handed(side))
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
     whole = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")

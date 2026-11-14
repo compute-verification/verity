@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CoinMapAgree
 
 /-!
-# The two-stage leg's coin map: the play before a release reads only the coins written before it
+# The two-stage subprotocol's coin map: the play before a release reads only the coins written before it
 
 The coin map (`place`, `Proofs.Properties.Verity.SampledTwo.CoinMap`) writes a run's coins into a tape one release at a
 time: a release the locator puts on round `j` is written from the next elements of `r j` (`slot`), and nothing else of

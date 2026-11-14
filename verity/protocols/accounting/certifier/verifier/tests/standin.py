@@ -2,7 +2,7 @@
 (`prove_tie`), for tests: what Flock's prover behind the ZK server would deliver, and a stand-in for the verifier's own
 run of Flock's Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in
 prover writes. The proof's output word is the proof block's on the prover's opening by each gate's reference
-(`LinkWindows.outputs`, `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim
+(`TransferBlocks.outputs`, `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim
 another. So the tests check everything the verifier does around the proof: its run's findings, the public row
 opened to the verifier's own copy, the output row, the certificates and the sync."""
 
@@ -28,7 +28,7 @@ def _bc(data: bytes, bits: int, salt: bytes) -> bytes:
     return _INST.commit_string(_INST.default_key, sha512_row_v2_digest(data, bits), salt)
 
 
-def prove(lw: SVC.LinkWindows, opening: SVC.Hidden, draw: S.Draw, syncs: Sequence[Any], out: Path, *,
+def prove(lw: SVC.TransferBlocks, opening: SVC.Hidden, draw: S.Draw, syncs: Sequence[Any], out: Path, *,
           program: str | None = None, accepted: bool = True, word: int | None = None, root: bytes | None = None,
           salts: dict[str, bytes] | None = None, units: Sequence[int] | None = None) -> SVC.Delivered:
     """The delivered proof of the sampled proof block on `opening` under the registered root (or `root`): the
@@ -45,7 +45,7 @@ def prove(lw: SVC.LinkWindows, opening: SVC.Hidden, draw: S.Draw, syncs: Sequenc
 
 def _deliver(unit: Any, rows: dict[str, bytes], draw: S.Draw, out: Path, *, program: str | None, accepted: bool,
              word: int | None, salts: dict[str, bytes] | None, units: Sequence[int] | None) -> SVC.Delivered:
-    """The statement's files for `rows` on `unit` (a `LinkWindows` or an `IngressTie`) and what the prover delivers."""
+    """The statement's files for `rows` on `unit` (a `TransferBlocks` or an `IngressTie`) and what the prover delivers."""
     out.mkdir(parents=True, exist_ok=True)
     public = out / "public.bin"
     header = {"units": {"indices": list(draw.units if units is None else units)}, "instances": 1}
@@ -185,9 +185,9 @@ def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dic
     return out, None
 
 
-def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Hidden, syncs: Sequence[Any], out: Path,
+def decide(lw: SVC.TransferBlocks, stream: S.Stream, draw: S.Draw, opening: SVC.Hidden, syncs: Sequence[Any], out: Path,
            *, certificates: Sequence[Any] | None = None, **kw: Any) -> S.Outcome:
-    """The sampled link-window proved on `opening` (`prove`, with `kw`), delivered and decided by the verifier
+    """The sampled execution phase proved on `opening` (`prove`, with `kw`), delivered and decided by the verifier
     on the proof and the certificates (by default the opening's), with the opening's in-the-clear check beside it as the
     debug comparison, which must agree with the proof's verdict when nothing is forged."""
     delivered = prove(lw, opening, draw, syncs, out, **kw)

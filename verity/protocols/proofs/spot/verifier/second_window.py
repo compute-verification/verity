@@ -36,7 +36,8 @@ UNITS_WHY = "a template's units over the ranks are not the joined record's count
 SHAPE_WHY = ("the ranks are not {of, prefix}, the prefix r<rank>/, at least one rank, each {window, units, wires}: 128 "
              "lowercase hex digits, naturals by template, a natural")
 WIRES_WHY = ("the joined record's first wires are not each rank's own wires moved to its units, a rank's count of them, in "
-             "rank order, or a wire after them has its reader units in no one rank or all its writers in its reader's rank")
+             "rank order, or a wire after them reads no reader unit, or one in no rank, or in some rank whose units it reads "
+             "has all its writers of them in that rank")
 READS_WHY = ("the joined record's registered declarations are not its ranks', each named r<r>/... and at its rank's units, "
              "in rank order, or a rank's record declares what the join names no rule for (values, histories, supplied "
              "parameters)")
@@ -134,16 +135,21 @@ def shifted_wires(ranks: Sequence[tuple[str, Mapping[str, int], int]], r: int, d
                    segment(ranks, w.get("writer", ""), r)[0]) for w in doc.get("wires", [])]
 
 
-def _join_wire_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], w: Mapping[str, Any]) -> bool:
-    try:
-        radix, step, (_c0, cuts) = list(w["radix"]), list(w["step"]), w.get("cut", (0, 1))
-        units = math.prod(radix) // cuts
-        lo = w["base"] + sum(min(0, (k - 1) * d) for k, d in zip(radix, step, strict=True))
-        hi = w["base"] + sum(max(0, (k - 1) * d) for k, d in zip(radix, step, strict=True))
-        r = _rank_of(ranks, w["reader"], w["at"], w["at"] + units - 1)
-    except (KeyError, TypeError, ValueError):
+def _join_wire_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], w: Any) -> bool:
+    """`Spot.Ranks.joinWireOk`: one box per wire and reader rank it reads."""
+    p = _pattern(w)
+    if p is None:
         return False
-    return r is not None and units >= 1 and not (lo >= 0 and _rank_of(ranks, w["writer"], lo, hi) == r)
+    units, c = _reader_units(p), p["cut"][1]
+    if units < 1 or p["at"] + units > segment(ranks, p["reader"], len(ranks) - 1)[1]:
+        return False
+    for r in range(len(ranks)):
+        lo, hi = segment(ranks, p["reader"], r)
+        if max(lo, p["at"]) < min(hi, p["at"] + units):
+            x, y = _box(p, (max(lo, p["at"]) - p["at"]) * c, (min(hi, p["at"] + units) - p["at"]) * c - 1)
+            if x >= 0 and _rank_of(ranks, p["writer"], x, y) == r:
+                return False
+    return True
 
 
 def wires_ok(ranks: Sequence[tuple[str, Mapping[str, int], int]], record: Mapping[str, Any],

@@ -39,7 +39,7 @@ appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publ
 is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
-docket (`public_docket`: the advice's length padded to its compiler's cap), ``sampled-line`` the
+docket (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
 (`sampled_line`: the partition the sample was over, the members it drew, and no length of the advice or count of the
 scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
@@ -149,8 +149,8 @@ sampled against), read as `served_integrity.answer` reads it (Pearl+'s window ti
 on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,
 with each one's server) and from it the block record (``block-record.json``, `block_record.from_period`, held by
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
-an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
-(`block_record.leg`) is its subprotocol's error, and so is a bandwidth answer whose profile names no term its error leaves
+an answer that names no server isn't carried. An accepted answer whose outputs are not its subprotocol's certificate
+(`block_record.subprotocol`) is its subprotocol's error, and so is a bandwidth answer whose profile names no term its error leaves
 out (``named_terms``). `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written. Otherwise
 the verdict is the block record's, which is the Lean ``onsite check`` or ``remote check``'s answer; no Lean check runs
@@ -670,12 +670,12 @@ def publish(out: Path, private: Path) -> list[str]:
     return held
 
 
-#: The advice docket's fields that state the advice's own length, which `public_docket` pads to the cap.
+#: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
 PADDED = ("binding.advice.bits", "rows")
 
 
-def public_docket(reg: Mapping[str, Any]) -> dict[str, Any]:
-    """What the run publishes of a window's advice docket: the advice's length (`PADDED`) at its compiler's
+def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
+    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
     ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each), no count or refusal of its requests,
     no window's number (`public_json`), and the rest as registered. ``padded`` names the fields padded."""
     cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
@@ -718,12 +718,12 @@ def _unset(comp: str, what: str) -> str:
 
 
 def dropped_row(key: str, product: str) -> dict[str, Any]:
-    """The row of a subprotocol ``product`` drops (`block_record.PRODUCTS`, its legs being the components): not run."""
+    """The row of a subprotocol ``product`` drops (`block_record.PRODUCTS`, its subprotocols being the components): not run."""
     from verity_e2e_demo import block_record as BR
 
-    by_leg = {"integrity": NAMES["integrity"], **{v[1]: v[0] for v in PIECES.values()}, "wipe": WIPE[0]}
+    by_subprotocol = {"integrity": NAMES["integrity"], **{v[1]: v[0] for v in PIECES.values()}, "wipe": WIPE[0]}
     return {"verdict": "dropped", "owner": PIECES.get(key, WIPE)[2],
-            "why": f"not run: the {product} product composes {' and '.join(by_leg[x] for x in BR.PRODUCTS[product])} alone"}
+            "why": f"not run: the {product} product composes {' and '.join(by_subprotocol[x] for x in BR.PRODUCTS[product])} alone"}
 
 
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None,
@@ -1944,12 +1944,12 @@ def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
     return str(e)
 
 
-def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
+def terms(r: Mapping[str, Any], subprotocol: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party (the network certifier's ``placement``),
     the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-device`
     premise rests on (the wipe's holds only under the key its challenger's host is pinned to, and reads a rehearsal's
-    otherwise); and each δ of the block record's at which its leg's quantity is not established. A placement
+    otherwise); and each δ of the block record's at which its subprotocol's quantity is not established. A placement
     with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
@@ -1966,7 +1966,7 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
         outside = (profile.get("outside") or {}).get("bytes") or {}
         out.append(f"they are {float(Fraction(w['share'])):.1%} of the checkpoint ({w.get('covers', 'its weights')})"
                    + (f"; {', '.join(sorted(outside))} are outside its claim" if outside else ""))
-    return out + (error_said(leg) if leg else [])
+    return out + (error_said(subprotocol) if subprotocol else [])
 
 
 def error_said(entry: Mapping[str, Any]) -> list[str]:
@@ -1986,9 +1986,9 @@ def error_said(entry: Mapping[str, Any]) -> list[str]:
 
 
 def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | None, str]], node: str,
-         legs: Mapping[str, Mapping[str, Any]] | None = None) -> str:
+         subprotocols: Mapping[str, Mapping[str, Any]] | None = None) -> str:
     """The composed verdict's reason: one clause a subprotocol, its verdict and, unless it accepted about ``node``, why; an
-    accept about ``node`` with its `terms` (``legs``: each accepted one's block record leg, by runner name)."""
+    accept about ``node`` with its `terms` (``legs``: each accepted one's block record subprotocol, by runner name)."""
     out = []
     for k, r in rows.items():
         v, server = r.get("verdict"), at[k][0]
@@ -1999,7 +1999,7 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         elif server not in (None, node):
             s = f"{v} about {server}, another server: carried, not composed"
         elif v == "accept":
-            t = terms(r, (legs or {}).get(k))
+            t = terms(r, (subprotocols or {}).get(k))
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
             if r.get("answer_from") == PEARLPLUS_FROM:
                 s += f", {PEARLPLUS_SAID}"
@@ -2113,8 +2113,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     if off_node and host == node:
         raise ValueError(f"a record composed off the served node is not composed on it: this host is {node}")
 
-    legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
-    drops = [k for k in rows if legs[k] not in BR.PRODUCTS[product]]
+    subprotocols = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
+    drops = [k for k in rows if subprotocols[k] not in BR.PRODUCTS[product]]
     at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
           | {k: (None, "real") for k in drops})
     rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
@@ -2125,10 +2125,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
             try:
-                built[k] = BR.leg(legs[k], r, server=at[k][0], runs=[], source=at[k][1])
+                built[k] = BR.subprotocol(subprotocols[k], r, server=at[k][0], runs=[], source=at[k][1])
             except (KeyError, IndexError, TypeError, ValueError, ZeroDivisionError) as e:
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
-                           "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
+                           "reason": f"its answer is not the block record's {subprotocols[k]} subprotocol: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
              "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
     left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
@@ -2155,7 +2155,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
         line = {"composed": composed, "by": bad, **named, "block_record": None, "reason": report["composed"]["reason"],
                 "why": "block_record carries an accepted subprotocol's certificate only"}
         return report, None, line
-    extra = {legs[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
+    extra = {subprotocols[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra, product=product)
@@ -2322,7 +2322,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(line, flush=True)
         return rc
     if a.cmd == "public-registration":
-        print(json.dumps(public_docket(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
+        print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
         return 0
     if a.cmd == "sampled-line":
         rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]

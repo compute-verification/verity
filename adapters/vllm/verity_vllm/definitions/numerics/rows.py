@@ -64,7 +64,7 @@ EVALUATORS = {
                     "-- HopperBF16WgmmaDot16_v1 + Fa3InvSum_v1 = FA3 on sm_90 (== verity_vllm.definitions.numerics.fa3_model.fa3_rows); "
                     "AmpereBF16TcDot16_v2 + Fa2InvSum_v1 = FA2 under the lifted name); "
                     # the silicon envelope of the FA3 relation, stated with the evaluator
-                    "FA3 envelope MEASURED exact on the H100 production capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves); "
+                    "FA3 envelope MEASURED exact on the H100 serving capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves); "
                     "rows beyond it (1024/128, hdim 64 / kBlockN 192) are measured BY THE COMMIT -- a chain "
                     "mismatch FAILs by name, never a silent word; "
                     "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",

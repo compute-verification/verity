@@ -1,5 +1,5 @@
 """The prover's side of one PoUS period on one node: the setup, the session with the memory challenger and the period's
-leg, each ending in the verifier's check (`verity.protocols.accounting.pous.verifier.period`).
+subprotocol, each ending in the verifier's check (`verity.protocols.accounting.pous.verifier.period`).
 
 `run(node, store, coins, signer=..., log=...)` plays every party in one process, in the protocol's order (`setup_store`
 is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and audited every period):
@@ -20,7 +20,7 @@ so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `enc
 over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
 a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
-`leg(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's
+`subprotocol(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' subprotocol for space: by default it sets the node's
 store up once at `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory
 challenger is a party of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key
 at S1's deployed parameters (`memory_challenger.LMS`) that `onsite.device_key` makes once on that host; the
@@ -51,7 +51,6 @@ from verity.protocols.accounting.pous.verifier.period import (
     SESSION_DOMAIN,
     SETUP_WORKERS,
     W,
-    Period,
     Run,
     answer,
     case,
@@ -152,7 +151,7 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: challenger_session.Side | None = None, session: Session | None = None) -> Period:
+          party: challenger_session.Side | None = None, session: Session | None = None) -> Run:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's
     session under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the
     tie on the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of
@@ -185,7 +184,7 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: challenger_session.Side | None = None, session: Session | None = None) -> Period:
+        party: challenger_session.Side | None = None, session: Session | None = None) -> Run:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
@@ -325,9 +324,9 @@ def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",))
     return bytes(out)
 
 
-def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side],
+def subprotocol(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side],
         session: Session) -> dict[str, Any]:
-    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`). By default the
+    """Space's subprotocol of `benchmarks/all_protocols` (`subprotocol(period_dir, node, out, side_of=...) -> answer`). By default the
     node's store is set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records
     at its first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up
     to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period audits it with fresh
@@ -390,5 +389,5 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "EncodedStore", "Prover", "Session", "audit", "cite", "cited", "encode", "honest", "leg",
+__all__ = ["LEDGER_SCHEMAS", "EncodedStore", "Prover", "Session", "audit", "cite", "cited", "encode", "honest", "subprotocol",
            "records", "run", "setup_store"]

@@ -3,7 +3,7 @@ its executed prefix accepted on the tokens the driver served, each opened from t
 id it was served from.
 
 The world: two requests arrive at engine step 0 under LAG 1.  r0 serves [11, 12, EOS] and stops (its fourth step is the LAG row, whose
-sampled id 99 is committed and never served); r1 runs its cap of 5.  Every tensor is committed by the production host committer and read
+sampled id 99 is committed and never served); r1 runs its cap of 5.  Every tensor is committed by the serving host committer and read
 back through `OpenedReader`, so each refusal here is the one a tampered or inconsistent record meets on a pod."""
 from __future__ import annotations
 

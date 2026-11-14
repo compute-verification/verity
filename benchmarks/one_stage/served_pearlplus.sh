@@ -84,7 +84,7 @@
 # symlink to SERVE_DIR/pearl/wWINDOW (its served.json, coins.json and owner-only pass-NNNNN/, round s the window's step
 # s), and goes no further unless that served.json says ok; steps 3 and 4 read and write there, `retain` writing Pearl+'s
 # window record W (`--window-record`, private/pearlplus/window-record.json, rounds dropped as above), chained after the
-# serve's first docket where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
+# serve's first registration record where the serve wrote one (`--previous-record`: SERVE_DIR/deployment-registration.json,
 # served_verdicts.sh's weights(), which registers the weights before the first request), and then, before the coin,
 # PEARLPLUS_TIE_CMD (`served_verdicts.sh pearl-tie SERVE_DIR WINDOW W PASSES`) committing the window tied to W, its
 # docket R chained right after W; step 4 is `verify --tie W`, which holds the passes to W, with PEARLPLUS_CLASS

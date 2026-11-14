@@ -131,8 +131,8 @@ def CertifiedRead (certified : Array String) (opened : Array (String × Json)) :
 /-- What the record's checks hold of an accept: `UnitsProved`, and a reported read of each value the verifier holds a
 certified entry for (the check `certified`), which `AcceptMeans` does not state. -/
 def UnitsRead (p : Params) (c : Commitment) (e : Evidence) : Prop :=
-  UnitsProved c e ∧
-    CertifiedRead (p.verifier.certified.map (·.1.value)) ((openedRoots c.record e.verdicts).getD #[])
+  UnitsProved p.windowValues c e ∧
+    CertifiedRead (p.verifier.certified.map (·.1.value)) ((openedRoots p.windowValues c.record e.verdicts).getD #[])
 
 /-- The check `certified` holds exactly when each certified value has a reported read. -/
 theorem certifiedCheck_ok (certified : Array String) (opened : Option (Array (String × Json))) :
@@ -200,7 +200,8 @@ theorem checks_ok (reg receipt draw samplingDesign : Json) (units : Array Int) (
   all_goals exact Iff.rfl
 
 theorem recordChecks_nil (p : Params) (c : Commitment) (e : Evidence) :
-    OneStage.recordChecks c.record (Flock.hexOf c.digest) e (p.verifier.certified.map (·.1.value)) = #[] ↔
+    OneStage.recordChecks p.windowValues c.record (Flock.hexOf c.digest) e (p.verifier.certified.map (·.1.value)) =
+      #[] ↔
       UnitsRead p c e := by
   unfold OneStage.recordChecks
   simp only [Array.map_eq_empty_iff, Array.filter_eq_empty_iff]
@@ -1302,7 +1303,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
     simp only [h1, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hd]
     by_cases h2 : Draw.checkDraw e.draw (getD c.record "population") samplingDesign = #[]
     · simp only [h2, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-      by_cases h3 : OneStage.recordChecks c.record (Flock.hexOf c.digest) e
+      by_cases h3 : OneStage.recordChecks p.windowValues c.record (Flock.hexOf c.digest) e
           (p.verifier.certified.map (·.1.value)) = #[]
       · simp only [h3, Array.isEmpty_empty, Bool.not_true, Bool.false_eq_true, ↓reduceIte]
         have hu := (recordChecks_nil p c e).1 h3
@@ -1338,7 +1339,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           rintro ⟨samplingDesign', d', n', -, -, -, hva, -⟩
           have := (verdictOf_accept _).2 hva
           rw [hv] at this; cases this
-      · have : (OneStage.recordChecks c.record (Flock.hexOf c.digest) e
+      · have : (OneStage.recordChecks p.windowValues c.record (Flock.hexOf c.digest) e
             (p.verifier.certified.map (·.1.value))).isEmpty = false := by
           simpa [Array.isEmpty_iff] using h3
         simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
@@ -1370,6 +1371,68 @@ theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (sampl
     (hn : nat? (getD c.record "population") = some n) :
     OneStage.check p c e = .accept (publicOf p e samplingDesign d n) (profileOf p c e d n) :=
   (acceptMeans_iff p c e _ _).2 ⟨samplingDesign, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
+
+/-- Naming no window value, the opened roots are the record's own reads less its ports' at their own roots. -/
+theorem openedRoots_nil (rec : Json) (vs : Array (String × Json)) :
+    openedRoots #[] rec vs = Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs)) := by
+  unfold openedRoots
+  exact Record.heldReads_nil rec _
+
+/-- Naming no window value, `UnitsProved` is the units' statement before window values: its last conjunct reads the
+record's own reads less its ports' at their own roots. -/
+theorem unitsProved_nil (c : Commitment) (e : Evidence) :
+    UnitsProved #[] c e ↔
+      (e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
+        Receipt c e ∧
+        (∀ served, e.served = some served →
+          (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
+        (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+          ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧
+            jeq (getD reg.2 "root") pr.2) ∧
+        OpenedRegistered ((Record.lessOwnReads c.record
+            (Record.ownRegistered c.record (Record.sessionRegistered e.verdicts))).getD #[])
+          (Record.registeredRoots c.record)) := by
+  rw [UnitsProved, openedRoots_nil]
+
+/-- `acceptMeans` for a verifier that names no window value, its units' statement the one before window values
+(`unitsProved_nil`). -/
+theorem acceptMeans_unnamed (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity)
+    (hw : p.windowValues = #[]) (h : OneStage.check p c e = .accept pub prof) :
+    ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧
+      Drawn e.draw (getD c.record "population") samplingDesign ∧
+      (e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
+        Receipt c e ∧
+        (∀ served, e.served = some served →
+          (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
+        (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
+          ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧
+            jeq (getD reg.2 "root") pr.2) ∧
+        OpenedRegistered ((Record.lessOwnReads c.record
+            (Record.ownRegistered c.record (Record.sessionRegistered e.verdicts))).getD #[])
+          (Record.registeredRoots c.record)) ∧
+      VerdictsAccept e.verdicts ∧
+      Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
+      pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n := by
+  obtain ⟨samplingDesign, d, n, hr, hd, hu, rest⟩ := acceptMeans p c e pub prof h
+  rw [hw] at hu
+  exact ⟨samplingDesign, d, n, hr, hd, (unitsProved_nil c e).1 hu, rest⟩
+
+/-- `acceptMeans`'s honest witness, not yet proved: a one-stage run naming no window value that the check accepts. Its
+theorem names the run: a registration that keeps R1–R8, an honest sample of its sampling design, the record and the
+verdicts. -/
+def acceptMeans_honest : Prop :=
+  ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+    p.windowValues = #[] ∧ OneStage.check p c e = .accept pub prof
+
+/-- `acceptMeans`'s nontrivial witness, not yet proved: what `AcceptMeans` concludes fails at some inputs, so a check
+that accepted every input would break it. -/
+def acceptMeans_nontrivial : Prop :=
+  ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+    ¬ ∃ samplingDesign d n, Registered p.verifier c.record samplingDesign ∧
+        Drawn e.draw (getD c.record "population") samplingDesign ∧
+        UnitsProved p.windowValues c e ∧ VerdictsAccept e.verdicts ∧
+        Record.profileSample samplingDesign = some d ∧ nat? (getD c.record "population") = some n ∧
+        pub = publicOf p e samplingDesign d n ∧ prof = profileOf p c e d n
 
 theorem digestIsRecord's : DigestIsRecord's := by
   intro b c h
