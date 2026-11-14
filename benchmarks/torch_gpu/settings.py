@@ -1,7 +1,10 @@
-"""sha512_rows' settings: the variables engine.py reads, declared once (`verity_config.settings`).
+"""The torch_gpu benchmarks' settings: the variables they pass to the SHA-512 rows engine
+(`verity/commitments/cuda/sha512_rows/engine.py`, which reads none), declared once (`verity_config.settings`) and read
+by `sha512_rows/torch_engine.py`.
 
-It owns ``SHA512_ROWS_``: a variable with it that nothing here declares is refused when the registry loads.  gpu.sh's
-own variables (LEASE_MIN, PY, BENCH_ARGS) are the shell's.
+It owns ``SHA512_ROWS_``: a variable with it that nothing here declares is refused when the registry loads.  The GPU
+scripts' own variables (LEASE_MIN, PY, BENCH_ARGS) are the shell's.  p2_stage has its own registry beside its own
+``pyproject.toml``.
 """
 from __future__ import annotations
 

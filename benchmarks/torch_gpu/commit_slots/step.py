@@ -44,8 +44,10 @@ import numpy as np
 from verity_config.settings import SHARED
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "commit_slots"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sha512_rows"))
 
 import slots as S  # noqa: E402
+import torch_engine as T  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 
 CTX = identity_digest_sha512("verity/commit-slots/step/context/v1", {"step": 1})
@@ -119,7 +121,7 @@ def count(a: argparse.Namespace) -> int:
 
     t = time.perf_counter()
     layout = S.load(a.layout) if a.layout else uniform(a.uniform, a.units)
-    plan = G.Plan(CTX, layout, "host")
+    plan = G.Plan(CTX, layout, "host", build=T.BUILD, default=T.VARIANT)
     got = {}
     for slots in (1, 2):
         outputs = S.random_outputs(layout, slots, np.random.default_rng(slots))
@@ -240,7 +242,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
 
     m0 = torch.cuda.memory_allocated()
     t = time.perf_counter()
-    plan = G.Plan(CTX, layout, temp_bytes=a.temps[0], leaf_minb=a.leaf_minb[0])
+    plan = G.Plan(CTX, layout, "cuda", temp_bytes=a.temps[0], leaf_minb=a.leaf_minb[0], build=T.BUILD, default=T.VARIANT)
     torch.cuda.synchronize()
     distinct = {id(g): g for g in layout.groups}
     gen = torch.Generator(device="cuda")

@@ -10,6 +10,7 @@ import pytest
 
 import slots as S
 import slots_gpu as G
+from conftest import BUILD
 
 torch = pytest.importorskip("torch")
 pytestmark = pytest.mark.skipif(not torch.cuda.is_available() or shutil.which("nvcc") is None,
@@ -27,20 +28,20 @@ def _cuda(out: list[list[np.ndarray]]) -> list[list[object]]:
 def test_the_edge_layout(slots: int) -> None:
     layout = S.edge_layout()
     out = S.random_outputs(layout, slots, np.random.default_rng(slots))
-    assert G.commit(G.Plan(CTX, layout), 1, KEY, _cuda(out), slots) == G.commit(G.Plan(CTX, layout, "host"), 1, KEY, out, slots)
+    assert G.commit(G.Plan(CTX, layout, "cuda", build=BUILD), 1, KEY, _cuda(out), slots) == G.commit(G.Plan(CTX, layout, "host", build=BUILD), 1, KEY, out, slots)
 
 
 def test_two_h200_layers() -> None:
     layout = S.h200_layout(layers=2)
     out = S.random_outputs(layout, 3, np.random.default_rng(3))
-    assert G.commit(G.Plan(CTX, layout), 2, KEY, _cuda(out), 3) == S.commit(CTX, layout, 2, KEY, out, 3)
+    assert G.commit(G.Plan(CTX, layout, "cuda", build=BUILD), 2, KEY, _cuda(out), 3) == S.commit(CTX, layout, 2, KEY, out, 3)
 
 
 @pytest.mark.parametrize("leaf_minb", [1, 2])
 def test_either_leaf_kernel_gives_the_reference_s_roots(leaf_minb: int) -> None:
     layout = S.h200_layout(layers=2)
     out = S.random_outputs(layout, 3, np.random.default_rng(5))
-    plan = G.Plan(CTX, layout, leaf_minb=leaf_minb)
+    plan = G.Plan(CTX, layout, "cuda", leaf_minb=leaf_minb, build=BUILD)
     assert G.commit(plan, 3, KEY, _cuda(out), 3) == S.commit(CTX, layout, 3, KEY, out, 3)
 
 
@@ -50,7 +51,7 @@ def test_passes_on_the_device_give_the_reference_s_roots(temp_bytes: int) -> Non
     frontier folded and closed on the device: three H200 layers (75 units in groups of 25 rows) at 5 slots."""
     layout = S.h200_layout(layers=3)
     out = S.random_outputs(layout, 5, np.random.default_rng(4))
-    plan = G.Plan(CTX, layout, temp_bytes=temp_bytes)
+    plan = G.Plan(CTX, layout, "cuda", temp_bytes=temp_bytes, build=BUILD)
     assert plan.per_pass(plan.groups[0].shape, 5) == (1 if temp_bytes == 1 else 2)
     assert G.commit(plan, 6, KEY, _cuda(out), 5) == S.commit(CTX, layout, 6, KEY, out, 5)
 
@@ -60,7 +61,7 @@ def test_steps_on_graphs_give_the_reference_s_roots(temp_bytes: int) -> None:
     """Each add one CUDA graph launch, captured on the first step and replayed on the next over other tensors (other
     addresses) under another salt key: three H200 layers at 5 slots, in one pass or in passes of 2 slots."""
     layout = S.h200_layout(layers=3)
-    plan = G.Plan(CTX, layout, temp_bytes=temp_bytes)
+    plan = G.Plan(CTX, layout, "cuda", temp_bytes=temp_bytes, build=BUILD)
     for step, key in ((6, KEY), (7, bytes(range(32))), (8, KEY)):
         out = S.random_outputs(layout, 5, np.random.default_rng(step))
         assert G.commit(plan, step, key, _cuda(out), 5, graphs=True) == S.commit(CTX, layout, step, key, out, 5)
@@ -70,7 +71,7 @@ def test_steps_on_graphs_give_the_reference_s_roots(temp_bytes: int) -> None:
 def test_the_edge_layout_on_graphs() -> None:
     """Units of several rows (one padded) and a two-part row, replayed under a second key."""
     layout = S.edge_layout()
-    plan, host = G.Plan(CTX, layout), G.Plan(CTX, layout, "host")
+    plan, host = G.Plan(CTX, layout, "cuda", build=BUILD), G.Plan(CTX, layout, "host", build=BUILD)
     for step, key in ((1, KEY), (2, bytes(32))):
         out = S.random_outputs(layout, 300, np.random.default_rng(step))
         assert G.commit(plan, step, key, _cuda(out), 300, graphs=True) == G.commit(host, step, key, out, 300)
@@ -79,7 +80,7 @@ def test_the_edge_layout_on_graphs() -> None:
 def test_a_marked_step_on_graphs_marks_each_add() -> None:
     """Marks (a caller times its commit by the last) are one an add on graphs, none captured, and finish's as ever."""
     layout = S.h200_layout(layers=2)
-    plan = G.Plan(CTX, layout)
+    plan = G.Plan(CTX, layout, "cuda", build=BUILD)
     for step in (1, 2):
         out = S.random_outputs(layout, 3, np.random.default_rng(step))
         marks: list = []
@@ -99,7 +100,7 @@ def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
     except RuntimeError as e:
         pytest.skip(str(e))
     layout = S.h200_layout(layers=3)
-    plan = G.Plan(CTX, layout, sms=16)
+    plan = G.Plan(CTX, layout, "cuda", sms=16, build=BUILD)
     for step, key in ((6, KEY), (7, bytes(range(32)))):
         out = S.random_outputs(layout, 5, np.random.default_rng(step))
         assert G.commit(plan, step, key, _cuda(out), 5, graphs=True) == S.commit(CTX, layout, step, key, out, 5)
@@ -118,7 +119,7 @@ def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_limit(graphs
     retried), or as holding tables two adds did (the third group's ran out)."""
     dev, width, slots, lag = torch.device("cuda"), 4 << 20, 64, 2
     group = S.Group((width,), tuple((S.Row((S.Part(0, a, 32 << 10),)),) for a in range(0, width, 32 << 10)))
-    plan = G.Plan(CTX, S.CommitShape("commit-slots/test-hbm-cap/v1", (group,) * 6))
+    plan = G.Plan(CTX, S.CommitShape("commit-slots/test-hbm-cap/v1", (group,) * 6), "cuda", build=BUILD)
     gen = torch.Generator(device=dev)
 
     def table(step: int, g: int) -> object:
@@ -171,7 +172,7 @@ def test_a_table_freed_once_added_goes_at_its_read_with_no_later_add(graphs: boo
     GB more on the device at the frozen shape's 1 KiB rows); the roots are the reference's."""
     layout = S.h200_layout(layers=2)
     out = S.random_outputs(layout, 3, np.random.default_rng(9))
-    plan = G.Plan(CTX, layout)
+    plan = G.Plan(CTX, layout, "cuda", build=BUILD)
     sc = G.StepCommitter(plan, 4, 3, KEY, graphs=graphs)
     first, rest = _cuda(out[:1])[0], _cuda(out[1:])
     alive = [weakref.ref(t) for t in first]
@@ -192,7 +193,7 @@ def test_a_table_freed_once_added_goes_at_its_read_with_no_later_add(graphs: boo
 
 def test_a_plan_has_one_step_on_graphs_open() -> None:
     layout = S.edge_layout()
-    plan = G.Plan(CTX, layout)
+    plan = G.Plan(CTX, layout, "cuda", build=BUILD)
     out = _cuda(S.random_outputs(layout, 2, np.random.default_rng(1)))
     sc = G.StepCommitter(plan, 1, 2, KEY, graphs=True)
     sc.add(out[0])

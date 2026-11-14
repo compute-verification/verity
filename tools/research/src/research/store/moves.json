@@ -2954,6 +2954,11 @@
     },
     {
       "paths": {
+        "verity/commitments/cuda/sha512_rows/settings.py": "benchmarks/torch_gpu/settings.py"
+      }
+    },
+    {
+      "paths": {
         "adapters/vllm/tests/program/test_broadcast_bias_add.py": "adapters/torch/tests/frontend/test_broadcast_bias_add.py",
         "adapters/vllm/tests/program/test_composition.py": "adapters/torch/tests/frontend/test_composition.py",
         "adapters/vllm/tests/program/test_derive_gate_path.py": "adapters/torch/tests/frontend/test_derive_gate_path.py",
