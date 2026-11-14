@@ -6,7 +6,7 @@ number is at least `2 ^ (8 (j + 1))`).
 -/
 module
 
-public import Proofs.Poub.ReadUnit.Frame.Bytes
+public import Proofs.Accounting.ReadUnit.Frame.Bytes
 
 @[expose] public section
 

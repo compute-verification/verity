@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Poub.ReadUnit.Check.Parts
+public import Proofs.Accounting.ReadUnit.Check.Parts
 
 /-!
 # A template the read's check accepts computes the read

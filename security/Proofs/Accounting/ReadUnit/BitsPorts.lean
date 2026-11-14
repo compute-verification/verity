@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Poub.ReadUnit.Binding
+public import Proofs.Accounting.ReadUnit.Binding
 public import Proofs.Flock.Bridge.BitsCopyGate
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 
