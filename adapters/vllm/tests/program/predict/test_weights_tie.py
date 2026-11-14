@@ -27,10 +27,10 @@ from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 
-from verity.protocols.spot.verifier import service as SV
-from verity.protocols.spot.verifier.one_stage import draw as D
-from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier import service as SV
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.circuits.codec import descriptor_id
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.gates.sha512 import IV
