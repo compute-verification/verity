@@ -232,7 +232,8 @@ def filesOf (bs : Core.Blobs) : Std.HashMap String ByteArray :=
 
 /-- **The rows table**: per template of `circuits`, by its id, the rows of one unit of the file its digest names
 among the blobs (`rowsOf`); or the reject for the first template whose file is no blob or is not counted. One lookup
-and one file a template, the blobs indexed once. -/
+and one file a template, the blobs indexed once. The cost is one parse for each template that names a file, so a file
+two templates name is parsed twice; a memo by digest is the mend if a record ever shares a file between templates. -/
 def tableOf (circuits : Array (String × String)) (bs : Core.Blobs) : Except String (Std.HashMap String Nat) :=
   let files := filesOf bs
   let tables := Spot.OneStageZk.tablesOf bs

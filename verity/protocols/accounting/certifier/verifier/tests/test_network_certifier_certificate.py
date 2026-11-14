@@ -522,10 +522,9 @@ def test_the_issuer_signs_no_second_mark_of_a_message(tmp_path):
 
 
 def test_a_mark_that_is_not_bytes_is_signed_nowhere(tmp_path):
-    """A mark of 64 bytes that are not `bytes` (a `bytearray`, a `memoryview`) is no mark `marked` can hold, so it passes
-    by the once-only refusal; it takes a salt and is refused by `mark_digest` with `ValueError` before the signer is
-    asked anything, before and after the same bytes are certified: no leaf is used, nothing is listed in `refused`,
-    and neither the salt nor the mark is kept."""
+    """A mark of 64 bytes that are not `bytes` (a `bytearray`, a `memoryview`) is refused with `ValueError` before the
+    issuer takes a coin or asks its signer anything, before and after the same bytes are certified: no coin is taken,
+    no leaf is used, nothing is listed in `refused`, and neither a salt nor the mark is kept."""
     signer = signers.signer(tmp_path)
     taken = []
 
@@ -537,12 +536,12 @@ def test_a_mark_that_is_not_bytes_is_signed_nowhere(tmp_path):
     for mark in (bytearray(MARK), memoryview(MARK)):
         with pytest.raises(ValueError, match="a mark is 64 bytes"):
             issuer.mark("responses", 5, mark)
-    assert (len(taken), signers.used(signer), issuer.refused, issuer.marked, issuer.mark_salts) == (2, [], [], set(), set())
+    assert (len(taken), signers.used(signer), issuer.refused, issuer.marked, issuer.mark_salts) == (0, [], [], set(), set())
     m = issuer.mark("responses", 5, MARK)
-    assert (m.salt, signers.used(signer), issuer.marked) == (b"\x03" * 64, [0], {MARK})
+    assert (m.salt, signers.used(signer), issuer.marked) == (b"\x01" * 64, [0], {MARK})
     with pytest.raises(ValueError, match="a mark is 64 bytes"):
         issuer.mark("responses", 9, bytearray(MARK))
-    assert (len(taken), signers.used(signer), issuer.refused, issuer.mark_salts) == (4, [0], [], {m.salt})
+    assert (len(taken), signers.used(signer), issuer.refused, issuer.mark_salts) == (1, [0], [], {m.salt})
 
 
 def test_a_mark_certificate_is_refused_by_name(tmp_path):
