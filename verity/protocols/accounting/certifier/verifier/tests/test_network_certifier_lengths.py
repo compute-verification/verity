@@ -32,8 +32,9 @@ PLAIN_DIGEST = ("b064f2c3e90f5059b7393bcbca02b7b94d514041946423a253fa1cca6de11ee
                 "1898e2e0368e1a03d9e5f8a910fc91ac2f8154924ccd7f669f8b0f4d99964808")
 CAPPED_DIGEST = ("6dc8692fb13c37e45ce4d4229a8377931b434ff5c72fd243aeb2d0596dc0226e"
                  "b987b7a37d81a0baeed20ac5eb52ee614b991797a45e85c3fba8916f34361c22")
-#: PLAIN's digest with lengths rows and with content rows, each the one the period check's Lean computes for the same
-#: schedule (`NetworkCheck.Period`'s guards on `plainSchedule`): the changes to PLAIN, then the digest
+#: PLAIN's digest with lengths rows, with content rows and with request words, each the one the period check's Lean
+#: computes for the same schedule (`NetworkCheck.Period`'s guards on `plainSchedule`): the changes to PLAIN, then the
+#: digest
 ROWS_DIGESTS = (
     ({"lengths": 1}, "98280d93904a794e8b443e0c2bb917e0ce0fbb20462a8e99f42fdbe06b0b8510"
                      "bc65791cc41703428a43976695a2fb75330780df7434190990751efd1202bd13"),
@@ -47,7 +48,10 @@ ROWS_DIGESTS = (
      "dee255fe7b76238dc4b4147b60191d30179391ecca9e29aed228723e822f9811"),
     ({"lengths": 2, "content": ((2, 2), (4, 8)), "max_tokens_cap": 4},
      "5c079664862cfe253a9794957b6af18c8d0cd41adf1e2608e624663cde1038f8"
-     "3f792222b44885914fde2364290676e742cf28c1f93c55f093953fc7f1be6d3e"))
+     "3f792222b44885914fde2364290676e742cf28c1f93c55f093953fc7f1be6d3e"),
+    ({"lengths": 2, "content": ((2, 2), (4, 8)), "max_tokens_cap": 4, "request_words": True},
+     "213b8b63d87459e4b76591beab56ea7b2ac6b9c888566ca4cd43b0d511584459"
+     "b84624493f8e18377327c4402ab301982b8fda184864fb9f2879502707781b47"))
 
 
 # --- the mode ----------------------------------------------------------------------------------------------------
@@ -70,8 +74,9 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
 
 
 def test_a_schedule_with_rows_hashes_as_the_period_check_reads_it():
-    """The digest of a schedule with lengths rows, with content rows and with `max_tokens_cap` beside them is the one
-    the period check's Lean computes for the schedule it parses (`Schedule.digest`), pinned on both sides; so are a
+    """The digest of a schedule with lengths rows, with content rows, with `max_tokens_cap` beside them and with
+    request words is the one the period check's Lean computes for the schedule it parses (`Schedule.digest`), pinned
+    on both sides; so are a
     slot stride's releases, an execution phase's and a connection's span (`Schedule.strideReleases`,
     `executionPhaseReleases` and `span`), and the least cell of a schedule with lengths rows (`firstPromptEnd`)."""
     for change, digest in ROWS_DIGESTS:
