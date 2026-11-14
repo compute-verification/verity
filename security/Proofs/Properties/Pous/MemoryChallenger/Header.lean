@@ -56,7 +56,7 @@ theorem pyJsonStr_toList (s : String) (h : ∀ c ∈ s.toList, plain c = true) :
 /-- The header's keys, each with its place in `vals`. -/
 def keys : List (String × Nat) :=
   [("binding", 0), ("block_bytes", 1), ("blocks", 2), ("clock", 3), ("coin_key_sha512", 4), ("coin_root", 5),
-   ("coin_tree", 6), ("k", 7), ("limit_ns", 8), ("protocol", 9), ("records_tree", 10), ("session", 11), ("ended", 12),
+   ("coin_tree", 6), ("k", 7), ("limit_ns", 8), ("protocol", 9), ("records", 10), ("session", 11), ("ended", 12),
    ("rounds", 13)]
 
 /-- The header's values, in `keys`'s places. -/
@@ -119,7 +119,7 @@ theorem comma_pyJsonStr {s : String} (hs : Plain s) : ',' ∉ (pyJsonStr s).toLi
   rw [pyJsonStr_toList s hs]
   simpa using comma_plain hs
 
-theorem plain_const : Plain CLOCK ∧ Plain COIN_TREE ∧ Plain PROTOCOL ∧ Plain RECORDS_TREE := by
+theorem plain_const : Plain CLOCK ∧ Plain COIN_TREE ∧ Plain PROTOCOL ∧ Plain RECORDS := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;> intro c hc <;> revert c <;> decide
 
 theorem plain_keys : ∀ x ∈ keys, Plain x.1 := by

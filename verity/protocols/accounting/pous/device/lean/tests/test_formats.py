@@ -1,5 +1,5 @@
 """The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
-`streamed_wipe.py` and `verity.commitments.crypto.lms`: the coins and their tree, the round records' root, the header and the
+`streamed_wipe.py` and `verity.commitments.crypto.lms`: the coins and their tree, the round records' digest, the header and the
 signed message, the label digest, LMS signing at a leaf and verification, the setup record's bytes, message and check,
 and the streamed wipe's signed message, start and end messages and an egress count's unit, each on sampled inputs that
 include what both sides must refuse (`test_verdict.py` and `test_wipe_verdict.py` hold the verdicts)."""
@@ -132,20 +132,20 @@ def test_verify_coin(server):
 
 ROUND = st.fixed_dictionaries({"j": WIDE(32), "index": WIDE(64), "send_ns": WIDE(64), "receipt_ns": WIDE(64),
                                "digest": hexed(st.binary(max_size=70))})
-#: Mostly in range: `WIDE` overflows half the time, which would leave few records whose root both sides compute.
+#: Mostly in range: `WIDE` overflows half the time, which would leave few records whose digest both sides compute.
 NARROW_ROUND = st.fixed_dictionaries({"j": st.integers(0, 2 ** 32 - 1), "index": st.integers(0, 2 ** 64 - 1),
                                       "send_ns": st.integers(0, 2 ** 64 - 1), "receipt_ns": st.integers(0, 2 ** 64 - 1),
                                       "digest": hexed(st.binary(min_size=64, max_size=64))})
 ROUNDS = st.lists(mostly(NARROW_ROUND, st.one_of(ROUND, malformed(NARROW_ROUND)), 15), max_size=6)
 
 
-def records_root(v) -> str:
-    return mc.records_root(M.hex_(v, "session"), [M.round_of(r) for r in M.list_(v, "rounds")]).hex()
+def records_digest(v) -> str:
+    return mc.records_digest([M.round_of(r) for r in M.list_(v, "rounds")]).hex()
 
 
-def test_records_root(server):
-    inputs = with_malformed(st.fixed_dictionaries({"session": hexed(st.binary(max_size=40)), "rounds": ROUNDS}))
-    stats = D.run(port("records_root", records_root, inputs), examples=300, server=server)
+def test_records_digest(server):
+    inputs = with_malformed(st.fixed_dictionaries({"rounds": ROUNDS}))
+    stats = D.run(port("records_digest", records_digest, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats
 
 

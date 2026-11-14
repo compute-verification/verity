@@ -179,8 +179,11 @@ def test_a_rounds_digest_is_the_blocks_sha512_row_v2_digest_in_a_92_byte_record(
     assert mc.block_digest(b) != hashlib.sha512(b).digest()
     assert mc.block_digest(bytes(2056)) == hashlib.sha512(rowleaf.sha512_row_v2_prefix(16448) + bytes(2056)).digest()
     _, signed, signer = session()
-    assert mc.RECORD_SCHEMA == "pous/round-record/v2"
-    assert all(len(r.value()) == 92 and r.value()[-64:] == expected(r.index) for r in signed.rounds)
+    assert all(len(r.value()) == mc.RECORD_BYTES == 92 and r.value()[-64:] == expected(r.index) for r in signed.rounds)
+    stream = b"".join(r.value() for r in signed.rounds)
+    assert mc.records_digest(signed.rounds) == rowleaf.sha512_row_v2_digest(stream, 8 * len(stream))
+    with pytest.raises(ValueError, match="digest is 64 bytes"):
+        dataclasses.replace(signed.rounds[0], digest=signed.rounds[0].digest + b"\0").value()
     plain = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
                                 binding=ROOT, clock=Clock(1_000_000))
     while not plain.done:

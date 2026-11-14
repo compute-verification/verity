@@ -14,9 +14,9 @@ A session has four steps:
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
    retried, and no index is resampled.
-3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records root)`: the header is
-   the commitment's fields and how the session ended, and the records root is the frame-v3-sha512 root of the round
-   records.  The records are witness: the prover proves things about them, and they never reach the auditor in the
+3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records digest)`: the header is
+   the commitment's fields and how the session ended, and the records digest is the `sha512/row/v2` digest of the round
+   records as one stream.  The records are witness: the prover proves things about them, and they never reach the auditor in the
    clear.
 4. **Release.** Once the session is signed the memory challenger releases its commitment (`commitment`: the coin
    tree's root and hm96 key, the session's id and parameters, and the root the setup published for the `C*` it audits,
@@ -45,9 +45,10 @@ bound, `k · 2^-256` under the fresh key, and no guarantee reads it: the root le
 last answer.  The domain's 32-byte binding is the first 32 bytes of
 `SHA-512(tag ‖ session)`, since a frame-v3 binding is 32 bytes until the identity re-baseline.
 
-**Round records** (`RECORDS_TREE`): record `j` is `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)` (92
-bytes), the value of frame leaf `(rank j, position j, RECORD_SCHEMA)`, in a frame-v3-sha512 tree over the session's
-rounds (binding(RECORD_BINDING, session), owner -1).  `H(block)` is the block's `sha512/row/v2` digest
+**Round records** (`RECORDS`): record `j` is `u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)`
+(`RECORD_BYTES`, 92 bytes).  The session's `k` records, in round order, are one stream, and its digest is the stream's
+`sha512/row/v2` digest, `SHA-512(P(8 · 92k) ‖ record_0 ‖ … ‖ record_{k-1})` (`records_digest`): the header binds the
+session and the number of rounds, so the stream needs no binding of its own.  `H(block)` is the block's `sha512/row/v2` digest
 `SHA-512(P(8N) ‖ block)` for an N-byte block (`verity.commitments.rowleaf.sha512_row_v2_digest`), the inner
 digest of C's `hm96-sha512/row/v2` leaf: `answer_circuit.PousAnswerOpens_v1` proves it equal to `h` and opens it against
 C's leaf with no second hash of the block.  The digest costs the same 17 compressions as a plain SHA-512 of the block,
@@ -107,19 +108,18 @@ from verity.protocols.accounting.pous.verifier.verifier import DIGEST_BYTES
 
 log = logging.getLogger(__name__)
 
-PROTOCOL = "verity-pous/memory-challenger/v1"
+PROTOCOL = "verity-pous/memory-challenger/v2"
 COIN_DOMAIN = "verity/pous/memory-challenger-coins/v1"
 COIN_TREE = "verity-pous/coin-tree/hm96-sha512/v1"
-RECORDS_TREE = "verity-pous/round-records/frame-v3-sha512/v1"
+RECORDS = "sha512/row/v2"
 COIN_TAG = b"verity-pous/memory-challenger/coin/v1\0"
 COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
-RECORD_BINDING = b"verity-pous/memory-challenger/round-records/v1\0"
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
 SETUP_RECORD_TAG = b"verity-pous/memory-challenger/setup-record/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
 SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
 COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
-RECORD_SCHEMA = "pous/round-record/v2"
+RECORD_BYTES = 92
 TEST_PREFIX = "test/"
 CLOCK_RESOLUTION_NS = 1_000
 """The coarsest clock the memory challenger runs on: a microsecond (the certifier's 100 ms buckets are far too coarse)."""
@@ -142,11 +142,6 @@ def block_digest(block: bytes) -> bytes:
 
 def _domain(tag: bytes, session: bytes, count: int) -> CommitmentDomain:
     return CommitmentDomain(_sha512(tag, session)[:32], -1, RangeIndexedDomain(0, count), hash="sha512")
-
-
-def _root(domain: CommitmentDomain, leaves: Sequence[bytes]) -> bytes:
-    levels = tree_levels(domain, leaves)
-    return levels[-1][0] if levels else domain.empty_root()
 
 
 def _path(levels: tuple[tuple[bytes, ...], ...], rank: int) -> tuple[bytes, ...]:
@@ -246,7 +241,7 @@ class SessionCommitment:
     binding: bytes
 
     def header(self) -> dict[str, Any]:
-        return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records_tree": RECORDS_TREE, "session": self.session.hex(),
+        return {"protocol": PROTOCOL, "coin_tree": COIN_TREE, "records": RECORDS, "session": self.session.hex(),
                 "coin_root": self.coin_root.hex(), "coin_key_sha512": _sha512(self.coin_key).hex(), "blocks": self.blocks,
                 "k": self.k, "limit_ns": self.limit_ns, "block_bytes": self.block_bytes, "binding": self.binding.hex(),
                 "clock": "CLOCK_MONOTONIC ns"}
@@ -277,6 +272,9 @@ class Round:
         return self.receipt_ns - self.send_ns
 
     def value(self) -> bytes:
+        """The record's `RECORD_BYTES` bytes; a digest of another length is refused, so the stream splits one way."""
+        if len(self.digest) != DIGEST_BYTES:
+            raise ValueError(f"a round's digest is {DIGEST_BYTES} bytes")
         return (self.j.to_bytes(4, "big") + self.index.to_bytes(8, "big") + self.send_ns.to_bytes(8, "big")
                 + self.receipt_ns.to_bytes(8, "big") + self.digest)
 
@@ -289,17 +287,16 @@ class Round:
         return cls(int(doc["j"]), int(doc["index"]), int(doc["send_ns"]), int(doc["receipt_ns"]), bytes.fromhex(doc["digest"]))
 
 
-def records_root(session: bytes, rounds: Sequence[Round]) -> bytes:
-    """The frame-v3-sha512 root over the round records (module docstring)."""
-    domain = _domain(RECORD_BINDING, session, len(rounds))
-    return _root(domain, [domain.leaf(r, r, RECORD_SCHEMA, x.value()) for r, x in enumerate(rounds)])
+def records_digest(rounds: Sequence[Round]) -> bytes:
+    """The round records' stream digest, `block_digest` of their values in round order (module docstring)."""
+    return block_digest(b"".join(r.value() for r in rounds))
 
 
 def message(commitment: SessionCommitment, ended: str, rounds: Sequence[Round]) -> bytes:
-    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`."""
+    """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records digest)`."""
     head = json.dumps({**commitment.header(), "ended": ended, "rounds": len(rounds)}, sort_keys=True,
                       separators=(",", ":")).encode()
-    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_root(commitment.session, rounds))
+    return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_digest(rounds))
 
 
 class Signer(Protocol):
@@ -807,9 +804,9 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 
 
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMPLETE", "HM96", "LATE", "LMS", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
+           "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
            "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog",
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",
            "Signer", "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "collector_paused",
-           "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of",
+           "covering_certificate", "lms_verify", "message", "records_digest", "register", "resolution_of",
            "setup_record_message", "setup_record_ok", "sign_setup_record", "verdict", "verify_coin"]

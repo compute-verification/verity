@@ -56,7 +56,7 @@ def verifyCoinFn (j : Json) : V Json := do
   pure (.bool (verifyCoin (← SessionCommitment.ofJson (← J.get j "commitment" "input"))
     (← CoinOpening.ofJson (← J.get j "opening" "input"))))
 
-def recordsRootFn (j : Json) : V Json := do pure (hexJ (← recordsRoot (← hex j "session") (← rounds j)))
+def recordsDigestFn (j : Json) : V Json := do pure (hexJ (← recordsDigest (← rounds j)))
 
 def headerFn (j : Json) : V Json := do
   pure (.str (header (← SessionCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input")
@@ -188,7 +188,7 @@ def attestLivenessFn (j : Json) : V Json := do
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("coin_digest", coinDigestFn), ("coin_tree", coinTreeFn), ("verify_coin", verifyCoinFn),
-  ("records_root", recordsRootFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
+  ("records_digest", recordsDigestFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
   ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("wipe_message", wipeMessageFn),
   ("setup_record", setupRecordFn), ("setup_record_message", setupRecordMessageFn), ("setup_record_ok", setupRecordOkFn),
   ("wipe_start_message", wipeStartMessageFn), ("wipe_end_message", wipeEndMessageFn),

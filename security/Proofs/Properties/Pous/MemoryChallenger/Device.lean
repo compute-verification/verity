@@ -15,8 +15,8 @@ import Mathlib.Tactic.SetLike
 The device ends a session `complete` or `late` (`ended_of_recorded`), both plain, so the header it signs is read back
 (`Header.header_inj`). If the session's signature verifies over its message and the device signed that message for one
 of its sessions, then under no SHA-512 collision among the run's strings the two signed inputs are one, so the two
-records, so the two headers and records roots, so the commitments, the ends and (through `Tree.tree_bind`) the rounds
-(`signedByDevice_of`). Otherwise the device never signed it: a forgery.
+records, so the two headers and records digests, so the commitments, the ends and the records' streams, which under one
+round count split into the rounds (`Inputs.stream_inj`, `signedByDevice_of`). Otherwise the device never signed it: a forgery.
 -/
 
 @[expose] public section
@@ -63,15 +63,13 @@ theorem coinKey_mem (pk : ByteArray) (c : SessionCommitment) (e : String) (round
     c.coinKey ∈ sessionStrings pk c e rounds := by
   simp [sessionStrings]
 
-theorem tree_mem {pk : ByteArray} {c : SessionCommitment} {e : String} {rounds : Array Round} {vs : Array ByteArray}
-    (hv : rounds.mapM Round.value = .ok vs) {x : ByteArray}
-    (hx : x ∈ treeStrings (domain RECORD_BINDING c.session rounds.size) vs) : x ∈ sessionStrings pk c e rounds := by
-  simp only [sessionStrings, hv, List.mem_append]
-  exact Or.inl (Or.inl (Or.inr hx))
+theorem stream_mem {pk : ByteArray} {c : SessionCommitment} {e : String} {rounds : Array Round} {st : ByteArray}
+    (hs : recordsStream rounds = .ok st) : HmRow.rowPrefixV2 (8 * st.size) ++ st ∈ sessionStrings pk c e rounds := by
+  simp [sessionStrings, hs]
 
-theorem session_mem {pk : ByteArray} {c : SessionCommitment} {e : String} {rounds : Array Round} {root : ByteArray}
-    (hr : recordsRoot c.session rounds = .ok root) :
-    SESSION_TAG ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++ (header c e rounds.size).toUTF8 ++ root ∈
+theorem session_mem {pk : ByteArray} {c : SessionCommitment} {e : String} {rounds : Array Round} {d : ByteArray}
+    (hr : recordsDigest rounds = .ok d) :
+    SESSION_TAG ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++ (header c e rounds.size).toUTF8 ++ d ∈
       sessionStrings pk c e rounds := by
   simp [sessionStrings, hr]
 
@@ -110,27 +108,23 @@ theorem same_session {s : SignedSession} {dev : Challengers} (cf : CF (runString
       r.recorded.rounds = s.rounds := by
   obtain ⟨r, hr, ended, rec, hend, hmsg, hmcm⟩ := hsig
   have hm : message s.commitment s.ended s.rounds = .ok m := hm
-  obtain ⟨root, hroot, rfl⟩ := Inputs.message_ok hm
-  obtain ⟨vs, hvs, rfl⟩ := Inputs.recordsRoot_ok hroot
-  obtain ⟨root', hroot', rfl⟩ := Inputs.message_ok hmsg
-  obtain ⟨vs', hvs', rfl⟩ := Inputs.recordsRoot_ok hroot'
+  obtain ⟨d, hd, rfl⟩ := Inputs.message_ok hm
+  obtain ⟨st, hst, rfl⟩ := Inputs.recordsDigest_ok hd
+  obtain ⟨d', hd', rfl⟩ := Inputs.message_ok hmsg
+  obtain ⟨st', hst', rfl⟩ := Inputs.recordsDigest_ok hd'
   obtain ⟨hI, rfl⟩ := Inputs.signedMessage_ok hM
   obtain ⟨-, hMM⟩ := Inputs.signedMessage_ok hmcm
   have e1 := cf _ (own_mem (signed_mem hm hI)) _ (device_mem hr hend (signed_mem hmsg hI)) hMM
   have e2 := Inputs.signed_split (by rw [Tree.hash_size, Tree.hash_size]) e1
-  have e3 := cf _ (own_mem (session_mem hroot)) _ (device_mem hr hend (session_mem hroot')) e2
-  obtain ⟨e4, e5⟩ := Inputs.session_split (by rw [Tree.root_width, Tree.root_width]) e3
+  have e3 := cf _ (own_mem (session_mem hd)) _ (device_mem hr hend (session_mem hd')) e2
+  obtain ⟨e4, e5⟩ := Inputs.session_split (by rw [Tree.hash_size, Tree.hash_size]) e3
   have hp : Header.Plain s.ended := he ▸ Header.plain_complete
   obtain ⟨hb, hbb, hbl, hck, hcr, hk, hl, hs, hen, hn⟩ :=
     Header.header_inj hp (plain_of_recorded r hend) (String.toByteArray_inj.mp e4)
   have hkey := cf _ (own_mem (coinKey_mem _ _ _ _)) _ (device_mem hr hend (coinKey_mem _ _ _ _)) hck
-  rw [hs, hn] at e5
-  have hsz : vs.size = vs'.size := by rw [Inputs.mapM_size hvs, Inputs.mapM_size hvs', hn]
-  have hvv := Tree.tree_bind hsz (fun x hx => own_mem (tree_mem hvs (by rwa [hs, hn])))
-    (fun x hx => device_mem hr hend (tree_mem hvs' hx)) cf e5
-  subst hvv
+  have e6 := cf _ (own_mem (stream_mem hst)) _ (device_mem hr hend (stream_mem hst')) e5
   refine ⟨r, hr, (commitment_ext hs hcr hkey hbl hk hl hbb hb).symm, by rw [hend, hen], ?_⟩
-  exact (Inputs.rounds_inj hvs hvs').symm
+  exact (Inputs.stream_inj hst hst' hn e6).symm
 
 /-- **A verifying signature is the device's, or the run carries a break.** -/
 theorem signedByDevice_of {schemes : Schemes} {trusted : List ByteArray} {s : SignedSession} (dev : Challengers)

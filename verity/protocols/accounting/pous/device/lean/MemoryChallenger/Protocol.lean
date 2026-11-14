@@ -34,7 +34,7 @@ private def hexJ (b : ByteArray) : Json := .str (hexOf b)
 private def natJ (n : Nat) : Json := Lean.toJson n
 
 def SessionCommitment.toJson (c : SessionCommitment) : Json :=
-  Json.mkObj [("protocol", .str PROTOCOL), ("coin_tree", .str COIN_TREE), ("records_tree", .str RECORDS_TREE),
+  Json.mkObj [("protocol", .str PROTOCOL), ("coin_tree", .str COIN_TREE), ("records", .str RECORDS),
     ("session", hexJ c.session), ("coin_root", hexJ c.coinRoot), ("coin_key_sha512", hexJ (Sha512.hash c.coinKey)),
     ("blocks", natJ c.blocks), ("k", natJ c.k), ("limit_ns", natJ c.limitNs), ("block_bytes", natJ c.blockBytes),
     ("binding", hexJ c.binding), ("clock", .str CLOCK), ("coin_key", hexJ c.coinKey)]
