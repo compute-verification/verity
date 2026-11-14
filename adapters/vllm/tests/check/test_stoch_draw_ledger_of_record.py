@@ -44,7 +44,7 @@ def test_the_two_b8_stoch_records_of_record_carry_a_clean_ledger_every_request_t
     wlj = json.loads(wl.read_text())
     for q in wlj["requests"]:
         e = out["requests"][q["request_id"]]
-        assert e["samples"] == q["max_tokens"] and e["first_pos"] == q["prompt_len"] - 1 and e["last_pos"] == q["prompt_len"] - 2 + q["max_tokens"]
-        assert e["one_sample_per_step"] and e["ordered_set_equal"] and e["finish"] == "length" and e["sampled_not_expected"] == [] == e["expected_not_sampled"]
-    assert sum(e["samples"] for e in out["requests"].values()) == n_rows
+        assert e["draws"] == q["max_tokens"] and e["first_pos"] == q["prompt_len"] - 1 and e["last_pos"] == q["prompt_len"] - 2 + q["max_tokens"]
+        assert e["one_draw_per_step"] and e["ordered_set_equal"] and e["finish"] == "length" and e["drawn_not_expected"] == [] == e["expected_not_drawn"]
+    assert sum(e["draws"] for e in out["requests"].values()) == n_rows
     assert out["measured"].startswith("R5 NOT MEASURED")

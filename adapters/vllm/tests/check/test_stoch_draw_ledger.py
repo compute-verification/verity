@@ -42,7 +42,7 @@ def test_every_request_to_its_max_tokens_is_a_clean_ledger_and_r5_is_named_not_m
     out = sample_accounting(d, wl, _build(tmp_path, [99]), lag_attested=(1, "test"))
     assert out["problems"] == [] and out["lag_slot_exercised"] is False and out["requests_at_cap"] == 2
     a = out["requests"]["a"]
-    assert a["finish"] == "length" and a["ordered_set_equal"] is True and a["sampled_not_expected"] == [] and a["expected_not_sampled"] == []
+    assert a["finish"] == "length" and a["ordered_set_equal"] is True and a["drawn_not_expected"] == [] and a["expected_not_drawn"] == []
     assert a["expected_executed_slots"] == {"n": 4, "first": 1, "last": 4} and a["expected_positions"] == {"n": 4, "first": 9, "last": 12}
     assert a["first_pos"] == 9 and a["last_pos"] == 12
     assert "NOT MEASURED" in out["measured"] and "not scheduled" in out["requests"]["b"]["lag_slot"]
@@ -57,10 +57,10 @@ def test_eos_before_max_tokens_with_exactly_one_lag_sample_at_prompt_len_plus_k_
     out = sample_accounting(d, wl, _build(tmp_path, [99]), lag_attested=(1, "RunHeader.profile.engine_kwargs.async_scheduling=True"))
     assert out["problems"] == [] and out["lag_slot_exercised"] is True and out["requests_with_eos_before_cap"] == 1
     a = out["requests"]["a"]
-    assert a["finish"] == "eos" and a["served_eos"] == {"sample_k": 2, "slot": 3, "step": 2, "pos": 11, "token": 99} and a["samples_after_served_eos"] == 1
+    assert a["finish"] == "eos" and a["served_eos"] == {"draw_k": 2, "slot": 3, "step": 2, "pos": 11, "token": 99} and a["draws_after_served_eos"] == 1
     assert a["expected_executed_slots"] == {"n": 4, "first": 1, "last": 4} and a["rule"]["t_eos"] == 3
-    assert a["lag_slot"]["measured"] is True and a["lag_slot"]["lag_slots_expected"] == 1 and a["lag_slot"]["bounded_by_max_tokens"] is False
-    assert a["lag_slot"]["samples"] == [{"slot": 4, "pos_expected": 12, "pos": 12, "step": 3, "pos_ok": True}]
+    assert a["lag_slot"]["measured"] is True and a["lag_slot"]["lag_slots_expected"] == 1 and a["lag_slot"]["bounded_by_cap"] is False
+    assert a["lag_slot"]["draws"] == [{"slot": 4, "pos_expected": 12, "pos": 12, "step": 3, "pos_ok": True}]
     assert a["lag_slot"]["profile_A"] == 1
     assert out["measured"].startswith("R5 MEASURED")
 
@@ -72,16 +72,16 @@ def test_a_sample_past_the_lag_slot_a_missing_lag_sample_and_a_lag_pos_off_by_on
     (past,) = two_after["problems"]
     assert "[13] outside the executed set (slots 1..4 of " in past and " 8, EOS at slot 3, 1 lag slot(s)): " in past
     assert past.endswith(" past the EOS's lag slot -- the RNG advanced without r_t")
-    assert two_after["requests"]["a"]["sampled_not_expected"] == [13]
+    assert two_after["requests"]["a"]["drawn_not_expected"] == [13]
     none_after = sample_accounting(_samples("a", 10, 3, 0, served=[7, 7, 99]), wl, b, lag_attested=(1, "t"))
-    assert len(none_after["problems"]) == 1 and "the lag slot did not sample" in none_after["problems"][0] and none_after["requests"]["a"]["expected_not_sampled"] == [12]
+    assert len(none_after["problems"]) == 1 and "the lag slot did not sample" in none_after["problems"][0] and none_after["requests"]["a"]["expected_not_drawn"] == [12]
     # lag 0 (async_scheduling False): the same 3-sample record is clean; the 4-sample one has a sample past the slot
     assert sample_accounting(_samples("a", 10, 3, 0, served=[7, 7, 99]), wl, b, lag_attested=(0, "t"))["problems"] == []
     assert "RNG advanced" in sample_accounting(_samples("a", 10, 4, 0, served=[7, 7, 99, 5]), wl, b, lag_attested=(0, "t"))["problems"][0]
     # the lag sample at the wrong pos: an extra position AND a missing one, both named
     off = sample_accounting(_samples("a", 10, 4, 0, served=[7, 7, 99, 5], pos_of=lambda k: 9 + k if k < 3 else 13), wl, b, lag_attested=(1, "t"))
     assert any("outside the executed set" in p for p in off["problems"]) and any("did not sample" in p for p in off["problems"])
-    assert off["requests"]["a"]["sampled_not_expected"] == [13] and off["requests"]["a"]["expected_not_sampled"] == [12]
+    assert off["requests"]["a"]["drawn_not_expected"] == [13] and off["requests"]["a"]["expected_not_drawn"] == [12]
     assert off["measured"].startswith("R5 FAILS")
 
 
@@ -95,17 +95,17 @@ def test_f_r17b_35_past_max_tokens_without_eos_fails_and_the_lag_slot_is_bounded
     # (a) no EOS, max_tokens 8, 9 samples
     over = sample_accounting(_samples("a", 10, 9, 0), wl, b, lag_attested=(1, "t"))
     assert len(over["problems"]) == 1 and "past the length bound without an EOS" in over["problems"][0] and "RNG advanced without r_t" in over["problems"][0]
-    assert over["requests"]["a"]["sampled_not_expected"] == [17] and over["requests"]["a"]["finish"] == "length"
+    assert over["requests"]["a"]["drawn_not_expected"] == [17] and over["requests"]["a"]["finish"] == "length"
     # (a') EOS at the last sample (slot 8) plus one more sample: max_tokens has no slot after it
     over_eos = sample_accounting(_samples("a", 10, 9, 0, served=[7] * 7 + [99, 5]), wl, b, lag_attested=(1, "t"))
-    assert len(over_eos["problems"]) == 1 and over_eos["requests"]["a"]["finish"] == "eos-at-max-tokens" and over_eos["requests"]["a"]["sampled_not_expected"] == [17]
+    assert len(over_eos["problems"]) == 1 and over_eos["requests"]["a"]["finish"] == "eos-at-cap" and over_eos["requests"]["a"]["drawn_not_expected"] == [17]
     (past,) = over_eos["problems"]                                                # an EOS at the last slot has no lag slot to name
     assert "[17] outside the executed set (slots 1..8 of " in past and " 8): " in past and "EOS at slot" not in past
     assert past.endswith(" past the EOS's lag slot -- the RNG advanced without r_t")
     # (b) EOS at slot 7 of max_tokens 8 under A = 1: one lag sample (slot 8) and the record is MEASURED, clean
     near = sample_accounting(_samples("a", 10, 8, 0, served=[7] * 6 + [99, 5]), wl, b, lag_attested=(1, "t"))
     assert near["problems"] == [] and near["lag_slot_exercised"] is True and near["requests"]["a"]["lag_slot"]["lag_slots_expected"] == 1
-    assert near["requests"]["a"]["lag_slot"]["bounded_by_max_tokens"] is False and near["measured"].startswith("R5 MEASURED")
+    assert near["requests"]["a"]["lag_slot"]["bounded_by_cap"] is False and near["measured"].startswith("R5 MEASURED")
     # (b') a 9th sample after that bounded slot fails
     near_over = sample_accounting(_samples("a", 10, 9, 0, served=[7] * 6 + [99, 5, 5]), wl, b, lag_attested=(1, "t"))
     assert len(near_over["problems"]) == 1 and "past the EOS's lag slot" in near_over["problems"][0]
@@ -121,19 +121,19 @@ def test_wrong_positions_two_samples_in_a_step_past_max_tokens_and_a_short_stop_
     b = _build(tmp_path, [99])
     shifted = sample_accounting(_samples("a", 10, 4, 0, pos_of=lambda k: 10 + k), wl, b, lag_attested=(1, "t"))   # pos = L + k: another row's counter
     assert any("outside the executed set" in p for p in shifted["problems"]) and any("did not sample" in p for p in shifted["problems"])
-    assert shifted["requests"]["a"]["sampled_not_expected"] == [13] and shifted["requests"]["a"]["expected_not_sampled"] == [9]
+    assert shifted["requests"]["a"]["drawn_not_expected"] == [13] and shifted["requests"]["a"]["expected_not_drawn"] == [9]
     d = _samples("b", 3, 3, 0)
     d["b"].append({"step": 2, "row": 1, "pos": 5, "served": 7})                                                  # two rows at step 2
     dup = sample_accounting(d, wl, b, lag_attested=(1, "t"))
-    assert any("two sampled rows in one engine step" in p for p in dup["problems"]) and dup["requests"]["b"]["expected_not_sampled"] == [6]
+    assert any("two sampled rows in one engine step" in p for p in dup["problems"]) and dup["requests"]["b"]["expected_not_drawn"] == [6]
     d2 = _samples("b", 3, 3, 0)
     d2["b"].append({"step": 2, "row": 1, "pos": 3, "served": 7})                                                 # the same pos sampled twice
     assert any("repeated or out of order" in p for p in sample_accounting(d2, wl, b, lag_attested=(1, "t"))["problems"])
     over = sample_accounting(_samples("c", 3, 4, 0), wl, b, lag_attested=(1, "t"))                                    # 4 samples, max_tokens 2, no EOS
-    assert any("past the length bound without an EOS" in p for p in over["problems"]) and over["requests"]["c"]["sampled_not_expected"] == [4, 5]
+    assert any("past the length bound without an EOS" in p for p in over["problems"]) and over["requests"]["c"]["drawn_not_expected"] == [4, 5]
     short = sample_accounting(_samples("b", 3, 3, 0), wl, b, lag_attested=(1, "t"))                                   # 3 of 5, no EOS served
     assert len(short["problems"]) == 1 and "did not sample" in short["problems"][0] and "deleted step" in short["problems"][0]
-    assert short["requests"]["b"]["finish"] == "length" and short["requests"]["b"]["expected_not_sampled"] == [5, 6]
+    assert short["requests"]["b"]["finish"] == "length" and short["requests"]["b"]["expected_not_drawn"] == [5, 6]
     # an undeclared stop rule: a short stop is UNJUDGED (not attested), a full run is still judged on positions / max_tokens
     unk = sample_accounting(_samples("b", 3, 3, 0), wl, _build(tmp_path / "u", None), lag_attested=(None, "not attested"))
     assert "cannot be read as an EOS stop" in unk["problems"][0] and unk["stop_rule"]["attested"] is False
@@ -147,7 +147,7 @@ def test_wrong_positions_two_samples_in_a_step_past_max_tokens_and_a_short_stop_
 def test_eos_at_the_last_sample_schedules_no_lag_slot_and_a_declared_lag_disagreeing_with_the_record_is_named(tmp_path):
     wl = _wl(tmp_path, [("a", 10, 3)])
     at_last = sample_accounting(_samples("a", 10, 3, 0, served=[7, 7, 99]), wl, _build(tmp_path, [99]), lag_attested=(1, "t"))
-    assert at_last["problems"] == [] and at_last["requests"]["a"]["finish"] == "eos-at-max-tokens" and "no slot after it" in at_last["requests"]["a"]["lag_slot"]
+    assert at_last["problems"] == [] and at_last["requests"]["a"]["finish"] == "eos-at-cap" and "no slot after it" in at_last["requests"]["a"]["lag_slot"]
     assert at_last["lag_slot_exercised"] is False and at_last["requests_at_cap"] == 1
     dis = sample_accounting(_samples("a", 10, 3, 0), wl, _build(tmp_path / "d", [99], lag_decl=0), lag_attested=(1, "hdr=True"))
     assert any("declares stop_rule.eos_lag_rows 0 but the record attests hdr=True -> 1" in p for p in dis["problems"])

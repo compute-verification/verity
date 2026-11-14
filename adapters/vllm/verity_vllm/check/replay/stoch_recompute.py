@@ -344,11 +344,11 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
     for rid, dr in sorted(samples_seen.items()):
         dr = sorted(dr, key=lambda x: (x["step"], x["row"]))
         w = wl_req.get(rid)
-        ent: dict = {"samples": len(dr), "first_step": dr[0]["step"], "last_step": dr[-1]["step"], "first_pos": dr[0]["pos"], "last_pos": dr[-1]["pos"],
-                     "prompt_len": w["prompt_len"] if w else None, "max_tokens": w["max_tokens"] if w else None}
+        ent: dict = {"draws": len(dr), "first_step": dr[0]["step"], "last_step": dr[-1]["step"], "first_pos": dr[0]["pos"], "last_pos": dr[-1]["pos"],
+                     "prompt_len": w["prompt_len"] if w else None, "cap": w["max_tokens"] if w else None}
         steps = [x["step"] for x in dr]
-        ent["one_sample_per_step"] = len(set(steps)) == len(steps)
-        if not ent["one_sample_per_step"]:
+        ent["one_draw_per_step"] = len(set(steps)) == len(steps)
+        if not ent["one_draw_per_step"]:
             probs.append(f"sample ledger {rid}: two sampled rows in one engine step ({[s for s in steps if steps.count(s) > 1][:3]}): a request samples once per step")
         if not w:
             out["requests"][rid] = ent
@@ -390,8 +390,8 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
         extra, missing = cmp["extra"], cmp["missing"]
         ent["expected_executed_slots"] = {"n": len(exp_slots), "first": exp_slots[0], "last": exp_slots[-1]}
         ent["expected_positions"] = {"n": len(expected), "first": expected[0], "last": expected[-1]}
-        ent["sampled_not_expected"] = extra
-        ent["expected_not_sampled"] = missing
+        ent["drawn_not_expected"] = extra
+        ent["expected_not_drawn"] = missing
         ent["repeated"] = cmp["repeated"]
         ent["ordered_set_equal"] = cmp["ok"]
         ent["compare"] = "verity_vllm.program.lifting.continuation.compare_draw_positions"
@@ -399,7 +399,7 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
             probs.extend(f"sample ledger {rid}: {p}" for p in cmp["problems"])
         n_lag = 0                                                 # the lag slots the rule expects: none unless an EOS is served early
         if t_eos is None or t_eos >= T:
-            ent["finish"] = "length" if t_eos is None else "eos-at-max-tokens"
+            ent["finish"] = "length" if t_eos is None else "eos-at-cap"
             ent["lag_slot"] = ("not scheduled: the request ran to its max_tokens (nothing is scheduled past the length bound)" if t_eos is None else
                                f"not scheduled: the EOS is served at the last slot {t_eos} (no slot after it)")
             out["requests_at_cap"] += 1
@@ -410,12 +410,12 @@ def sample_accounting(samples_seen: dict[str, list[dict]], workload: str | Path 
             out["lag_slot_exercised"] = True
             n_lag = min(int(profile), T - t_eos)
             k_eos = t_eos - 1
-            ent["served_eos"] = {"sample_k": k_eos, "slot": t_eos, "step": dr[k_eos]["step"], "pos": dr[k_eos]["pos"], "token": dr[k_eos]["served"]}
+            ent["served_eos"] = {"draw_k": k_eos, "slot": t_eos, "step": dr[k_eos]["step"], "pos": dr[k_eos]["pos"], "token": dr[k_eos]["served"]}
             after = dr[k_eos + 1:]
-            ent["samples_after_served_eos"] = len(after)
+            ent["draws_after_served_eos"] = len(after)
             ent["lag_slot"] = {"profile_A": int(profile), "lag_slots_expected": n_lag,
-                               "bounded_by_max_tokens": n_lag < int(profile),
-                               "samples": [{"slot": t_eos + 1 + j, "pos_expected": L + k_eos + j, "pos": x["pos"], "step": x["step"],
+                               "bounded_by_cap": n_lag < int(profile),
+                               "draws": [{"slot": t_eos + 1 + j, "pos_expected": L + k_eos + j, "pos": x["pos"], "step": x["step"],
                                           "pos_ok": x["pos"] == L + k_eos + j} for j, x in enumerate(after)],
                                "measured": sampled == expected}
         if extra:
