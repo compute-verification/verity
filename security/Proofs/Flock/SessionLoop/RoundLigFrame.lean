@@ -228,7 +228,7 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hmkt : tph.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by rw [hts']; exact hmk
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hAA : alg.size = A := by
     rw [(alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
   have hXSP : xs.size = spec.points * (Masked.stAt x j).regions.size := by rw [hxs]; exact hXS

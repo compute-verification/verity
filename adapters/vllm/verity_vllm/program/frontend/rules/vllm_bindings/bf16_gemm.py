@@ -15,8 +15,8 @@ from verity.circuits.refs import Coll
 from verity.definitions.registry import bf16_gemm_check
 
 from verity_vllm.program.frontend import targets
-from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import (
+from verity_torch.frontend.rules.base import OpRule, RuleInfo
+from verity_torch.frontend.rules.common import (
     from_rows,
     known,
     rows_of,
@@ -26,7 +26,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
     launch_tokens_of,
 )
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+from verity_torch.frontend.rules.bindings.operands import (
     _strides,
     _untransposed,
 )

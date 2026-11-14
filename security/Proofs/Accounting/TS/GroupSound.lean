@@ -122,7 +122,7 @@ theorem full_of_check {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Wr
   have e := s.hCust.2 S D hD
   subst e
   have hkd : s.kd = k := by
-    have h : Flock.Draw.Law.subset s.kd = .subset k := hl
+    have h : Flock.Draw.SamplingDesign.subset s.kd = .subset k := hl
     injection h
   have hn : k = s.n := hp
   refine ⟨?_, hkd.trans hn, by rw [← hn]; exact hk⟩
@@ -131,11 +131,11 @@ theorem full_of_check {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Wr
   have hm : u.val ∈ (FlockSoundness.Discharge.ZkLink.drawOf (.subset s.kd) s.n S).units := by
     rw [hu, hn]
     exact Array.mem_range.2 u.isLt
-  obtain ⟨u', hu', he⟩ := (FlockSoundness.Discharge.ZkLink.drawOf_mem _ _ S u.val).1 hm
+  obtain ⟨u', hu', he⟩ := (FlockSoundness.Discharge.ZkLink.sampleOf_mem _ _ S u.val).1 hm
   exact (Fin.ext he) ▸ hu'
 
 /-- **At a written accepted outcome that samples every unit, every unit reads a one-row port at its row**
-(`Accounting.TS.Lanes.ReadsOwnRow`): the unit is sampled and proved (`drawn_of_acceptsZKR`, `drawOkZKHJ_of_file`), so
+(`Accounting.TS.Lanes.ReadsOwnRow`): the unit is sampled and proved (`sampled_of_acceptsZKR`, `sampleOkZKHJ_of_file`), so
 acceptance gives `own`'s port a position at the unit's index (`reads_of_acceptsZKR`), which is the unit's read
 (`ServedRegistered`); a port of one read has it at index 0. -/
 theorem readsOwnRow_of {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Written o)
@@ -150,9 +150,9 @@ theorem readsOwnRow_of {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.W
   have hd : recordDraw (s.wr S R o').record = some (s.dj S) :=
     (s.hCust.1 S R o' (acceptsZK_of_R (t := s.wr S R o') hacc)).1
   obtain ⟨D, dp, idx, hD, hdp, hidx⟩ :=
-    drawn_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o') hacc hd u.val
+    sampled_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o') hacc hd u.val
   have hmD : u.val ∈ D.proved :=
-    ((FlockSoundness.Discharge.ZkReg.drawOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 S)
+    ((FlockSoundness.Discharge.ZkReg.sampleOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 S)
       (partOf s.I (s.dj S) u.val)).1 D hD u (mem_partS hu)
   obtain ⟨pos, hpos⟩ :=
     reads_of_acceptsZKR s.I s.ht s.hc s.hpub s.hTags (tr := s.wr S R o') hacc hmem hd hD hdp hidx hmD

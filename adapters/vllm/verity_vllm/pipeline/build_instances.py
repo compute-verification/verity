@@ -12,6 +12,7 @@ Program's units, boundaries and committed values, whichever IR the Program is in
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from verity_vllm.program.instances_file import (
     INSTANCES_GZ_LEVEL,  # noqa: F401 (read through here)
@@ -23,6 +24,9 @@ from verity_vllm.program.instances_file import (
     write_instances_file as _write_instances_file,
 )
 from verity_vllm.records.schema_ids import INSTANCE_SEQUENCE_SCHEMA
+
+if TYPE_CHECKING:
+    from verity.circuits import Program
 
 __all__ = ["write_instances"]
 
@@ -78,7 +82,7 @@ def check_rows(body, n: int) -> list[list[int]]:
     return [[i, k, k + 1] for _s, i, k in reversed(leaves)]
 
 
-def write_instances(out: str, program, digest: str, corr_digest: str | None, supplied: dict, *, names: dict[int, str | None] | None = None,
+def write_instances(out: str, program: Program, digest: str, corr_digest: str | None, supplied: dict, *, names: dict[int, str | None] | None = None,
                     params: list[list[str]] | None = None, checks: dict | None = None) -> None:
     """A derive dir's `instances.json.gz`: the Program's instance sequence (`_instance_rows`) under its digests.  `names` (by Call)
     and `params` stand in for the Program's own Call names and parameters, which no digest covers (`predict.aot.emit`: as its

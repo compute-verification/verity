@@ -26,7 +26,7 @@ from verity.definitions.registry import sparse_mla_split as W
 
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
-from verity_vllm.program import mla_capture as MC
+from tests.program import mla_inputs as MC
 
 GLM = M.SPARSE_MLA_GLM53
 U32 = np.uint32

@@ -95,7 +95,7 @@ the ledger replays into exactly the simulator's allocations and queue.
 ## Commands
 
 ~~~text
-uv run tools/verity/check/suites.py cluster
+uv run tools/check/suites.py cluster
 uv run cluster validate infra/cluster/descriptions/nebius.toml
 uv run cluster plan infra/cluster/descriptions/nebius.toml SNAPSHOT.json    # snapshot shape: cli.py's docstring
 uv run cluster submit infra/cluster/descriptions/nebius.toml --run-id R --now T --project P --submitter W --max-s S [--gpus N ...]

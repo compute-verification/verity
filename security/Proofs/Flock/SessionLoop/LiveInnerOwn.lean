@@ -163,7 +163,7 @@ theorem finOf_finalC_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVa
       _root_.Flock.Zk.PadLayout.zp, _root_.Flock.Zk.PadLayout.lc]
     omega
   have hfc := Loop.finInner_fc hfi
-  rw [hlayT, Loop.askOf_draws, Loop.askOf_vals_fc _ _ hfv] at hfc
+  rw [hlayT, Loop.askOf_samples, Loop.askOf_vals_fc _ _ hfv] at hfc
   have hph : (_root_.Flock.ZkServer.Finish.padsOf q₀.draws).h =
       (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h :=
     congrArg (fun p => p.h) hpads

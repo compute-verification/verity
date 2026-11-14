@@ -314,7 +314,7 @@ theorem roundSizes_eq {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sched
   rw [hlc] at hk2 elc er
   rw [hcs] at eg hk3
   have h3' := Flock.RecAlgebra.ligerito_sim (Flock.RecAlgebra.Lin.eval_hom fun _ => 0) _ _ _ _ _ _ _ _ h3
-  obtain ⟨st₀, out, stV, k₄, hrun, hdr⟩ := ligerito_drawn h3'
+  obtain ⟨st₀, out, stV, k₄, hrun, hdr⟩ := ligerito_sampled h3'
   rw [hsch] at hrun
   have : Fact (Flock.RecAlgebra.NoEmpty (Flock.RecAlgebra.zeroRounds (roundSizes sh))) := ⟨hneZ⟩
   obtain ⟨hk, pL⟩ := ligeritoRun_sz hdim hlv hrun

@@ -16,13 +16,13 @@ import all Init.Data.Repr
   `0 < NUM ≤ DEN` and `1 ≤ T`, and a stratified or work rate design's `(NUM, DEN)` has `0 < NUM ≤ DEN`, read off their
   guards: no text is evaluated.
 * **`Rule.ofJson` by cases** (`ofJson_cases`): a rule it parses is `all`, a design whose text is a rate (`rate?`), or a
-  two-stage rule whose replay design is a rate design (`replayLaw?`).
+  two-stage rule whose replay design is a rate design (`replaySamplingDesign?`).
 * **`textOver` by cases** (`subset_of_textOver`, `textOver_cases`): over `n` units, a rate text's count is
   `Rate.count`, `Rate.stratK` or `Rate.count` at one table, between 1 and `n`, and at least the rate by
   `Rate.count_ge` and `Rate.stratK_ge`; any other text `rate?` admits is a Bernoulli design.
 * **The work table** (`tableOver_cases`): each entry is its stratum's, at `Rate.floor`, at least the rate by
   `Rate.workK_ge`.
-* **A rule object at a design text** (`ofJson_ruleOfText`): `{rule: law, law: t}` parses as the design `t` where `t` is
+* **A rule object at a design text** (`ofJson_ruleOfText`): `{rule: samplingDesign, samplingDesign: t}` parses as the design `t` where `t` is
   a rate, and is refused with `FIXED t` where it is not; a fixed count is no rate (`parseRate_fixed`,
   `parseStrataRate_fixed`, `rate?_fixed`), and `rate:NUM/DEN` is read back (`parseRate_repr`).
 * `ruleAtRate`, with its witnesses: `ruleAtRate_honest`, the rule object at `rate:1/2` parses and is `subset:2` over
@@ -68,8 +68,8 @@ theorem parseStrataRate_bounds {t : String} {work : Bool} {num den : Nat}
 /-- **The rules `Rule.ofJson` parses**: `all`, a design whose text is a rate, or a two-stage rule whose replay design is
 a rate design. -/
 theorem ofJson_cases {j : Json} {rule : Select.Rule} (h : Select.Rule.ofJson j = .ok rule) :
-    rule = .all ∨ (∃ t, rule = .law t ∧ Select.rate? t = true) ∨
-      ∃ g t k, rule = .twoStage g t k ∧ Select.replayLaw? t = true := by
+    rule = .all ∨ (∃ t, rule = .samplingDesign t ∧ Select.rate? t = true) ∨
+      ∃ g t k, rule = .twoStage g t k ∧ Select.replaySamplingDesign? t = true := by
   unfold Select.Rule.ofJson at h
   dsimp only at h
   repeat' split at h
@@ -175,7 +175,7 @@ def tableFloor (given : Array (String × Nat × Nat)) (tmpl : String) : Nat :=
 
 /-- **A work rate design's table** is `TableAtRate`'s. -/
 theorem tableOver_cases {t : String} {p : Program} {query : Json} {table out : Option Json}
-    (h : (Select.Rule.law t).tableOver p query table = .ok out) : TableAtRate t p query out := by
+    (h : (Select.Rule.samplingDesign t).tableOver p query table = .ok out) : TableAtRate t p query out := by
   intro num den hs
   obtain ⟨hn, hd⟩ := parseStrataRate_bounds hs
   unfold Select.Rule.tableOver at h
@@ -214,10 +214,10 @@ theorem keys_ruleOfText (t : String) : keys? (ruleOfText t) = some #["law", "rul
   unfold keys? ruleOfText
   with_unfolding_all rfl
 
-/-- **A rule object at a design text**: `{rule: law, law: t}` parses as the design `t` where `t` is a rate, and is
+/-- **A rule object at a design text**: `{rule: samplingDesign, samplingDesign: t}` parses as the design `t` where `t` is a rate, and is
 refused with `FIXED t` where it is not. -/
 theorem ofJson_ruleOfText (t : String) :
-    Select.Rule.ofJson (ruleOfText t) = if Select.rate? t then .ok (.law t) else .error (Select.FIXED t) := by
+    Select.Rule.ofJson (ruleOfText t) = if Select.rate? t then .ok (.samplingDesign t) else .error (Select.FIXED t) := by
   unfold Select.Rule.ofJson
   rw [show getD (ruleOfText t) "rule" = .str "law" from rfl, keys_ruleOfText,
     show getD (ruleOfText t) "law" = .str t from rfl]
@@ -319,7 +319,7 @@ theorem ruleAtRate : RuleAtRate := by
     ofJson_fixed "work" (Or.inr (Or.inr rfl))⟩
   · rcases ofJson_cases hj with rfl | ⟨t, rfl, hr⟩ | ⟨g, t, k, rfl, hr⟩
     · exact (Option.some.inj ho).symm
-    · have ho' : (Select.textOver t n sizes).map Select.Rule.law = some r := ho
+    · have ho' : (Select.textOver t n sizes).map Select.Rule.samplingDesign = some r := ho
       cases hx : Select.textOver t n sizes with
       | none => rw [hx] at ho'; exact absurd ho' (by simp)
       | some t' =>
@@ -339,8 +339,8 @@ theorem ruleAtRate : RuleAtRate := by
 /-- **`RuleAtRate`'s honest lemma**: the rule object at the rate design `rate:1/2` parses, and over four units it is
 `subset:2`. -/
 theorem ruleAtRate_honest :
-    Select.Rule.ofJson (ruleOfText "rate:1/2") = .ok (.law "rate:1/2") ∧
-      (Select.Rule.law "rate:1/2").over 4 [] = some (.law "subset:2") := by
+    Select.Rule.ofJson (ruleOfText "rate:1/2") = .ok (.samplingDesign "rate:1/2") ∧
+      (Select.Rule.samplingDesign "rate:1/2").over 4 [] = some (.samplingDesign "subset:2") := by
   have hp : Select.parseRate "rate:1/2" = some (1, 2, 1) := parseRate_repr 1 2 (by decide) (by decide)
   have hr : Select.rate? "rate:1/2" = true := by
     unfold Select.rate?
@@ -351,7 +351,7 @@ theorem ruleAtRate_honest :
     unfold Select.textOver
     rw [hp]
     rfl
-  show (Select.textOver "rate:1/2" 4 []).map Select.Rule.law = _
+  show (Select.textOver "rate:1/2" 4 []).map Select.Rule.samplingDesign = _
   rw [ht]
   rfl
 
@@ -359,7 +359,7 @@ theorem ruleAtRate_honest :
 forms: it is no rate design, no stratified or work rate design and no Bernoulli design. A parser that takes every rule
 object as it is written, as one that accepts every input does, gives it, so it does not have `RuleAtRate`'s conclusion.
 -/
-theorem ruleAtRate_nontrivial : ¬ AtRate (.law "subset:1") (.law "subset:1") 3 [] := by
+theorem ruleAtRate_nontrivial : ¬ AtRate (.samplingDesign "subset:1") (.samplingDesign "subset:1") 3 [] := by
   have h1 : Select.parseRate "subset:1" = none := parseRate_fixed "subset" (Or.inl rfl) 1
   have h2 : Select.parseStrataRate "subset:1" = none := parseStrataRate_fixed "subset" (Or.inl rfl) 1
   have h3 : Select.parseDesign "subset:1" = .ok (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson 1)]) :=

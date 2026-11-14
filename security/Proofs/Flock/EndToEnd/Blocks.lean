@@ -63,7 +63,7 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
   have hx : x ≤ 1 := ENNReal.ofReal_le_one.2 (by linarith)
   -- some sampling block of `I` accepted with a sampled proof block wrong
   have hA := monitoringPeriod_union (fun t => (W t).game) (fun t => (W t).record t)
-    (fun r => r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (fun t τ => (W t).CR τ)
+    (fun r => r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (fun t τ => (W t).CR τ)
     (fun t => if t ∈ I then (W t).ks + (W t).link else 0)
     (fun t τ hτ => by
       by_cases ht : t ∈ I
@@ -73,28 +73,28 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) T 0 s hs
   -- every sample of `I` misses, with at least `M` incorrect proof blocks in `I`
   have hB := monitoringPeriod_horizon (fun t => (W t).game) (fun t => (W t).record t)
-    (fun r => r.idx ∈ I → ¬ r.drawnWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
+    (fun r => r.idx ∈ I → ¬ r.sampledWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
     (fun t τ => (W t).CR τ) x hx
     (fun t τ _ => by
       by_cases ht : t ∈ I
       · refine ⟨((W t).wrongSet τ).card, fun _ => ite_eq_left_of_eq_true _ _ (eq_true ht), ?_⟩
         refine (prob_mono (q := fun o => ¬ ∃ u ∈ o.2.1, u ∈ (W t).wrongSet τ) (fun o ho => ho ht) _ _).trans ?_
-        exact ((W t).drawMiss_le (hA3 t ht) _ τ).trans
+        exact ((W t).sampleMiss_le (hA3 t ht) _ τ).trans
           (pow_le_pow_left₀ zero_le ((W t).one_sub_le hq (hqt t ht)) _)
       · exact ⟨0, fun _ => ite_eq_right_of_eq_false _ _ (eq_false ht), (prob_le_one _ _ _).trans_eq (pow_zero x).symm⟩) T 0 s M hs
   calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
         M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum) (Period.run W T s)
-      ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) ∨
-          ((∀ r ∈ l, r.idx ∈ I → ¬ r.drawnWrong) ∧
+      ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) ∨
+          ((∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum)) (Period.run W T s) := by
         refine value_mono (fun l hl => ?_) _
-        by_cases hd : ∃ r ∈ l, r.idx ∈ I ∧ r.drawnWrong
+        by_cases hd : ∃ r ∈ l, r.idx ∈ I ∧ r.sampledWrong
         · obtain ⟨r, hr, hrI, hdr⟩ := hd
           exact Or.inl ⟨r, hr, hrI, hl.1 r hr hrI, hdr⟩
         · push Not at hd
           exact Or.inr ⟨hd, (sum_filter_wrong I l) ▸ hl.2⟩
-    _ ≤ value (fun l => ∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) (Period.run W T s) +
-          value (fun l => (∀ r ∈ l, r.idx ∈ I → ¬ r.drawnWrong) ∧
+    _ ≤ value (fun l => ∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.sampledWrong) (Period.run W T s) +
+          value (fun l => (∀ r ∈ l, r.idx ∈ I → ¬ r.sampledWrong) ∧
             M ≤ (l.map fun r => if r.idx ∈ I then r.wrong else 0).sum) (Period.run W T s) :=
         value_or_le _ _ _
     _ ≤ (∑ t ∈ Finset.range T, if t ∈ I then (W t).ks + (W t).link else 0) + x ^ M := by

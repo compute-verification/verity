@@ -63,8 +63,8 @@ def instanceTs? (reg : Json) (drawn : List Json) (sigma : Json) (cap : Int) : Ex
   let some n := pop.bind strictInt?
     | throw s!"the registration's population {(pop.map pyRepr).getD "None"} is not a tile count of at most 2^{tBits}"
   if !(1 ≤ n && n ≤ 2 ^ tBits) then throw s!"the registration's population {n} is not a tile count of at most 2^{tBits}"
-  let law := pyGet? reg "law"
-  let k := match law with
+  let samplingDesign := pyGet? reg "law"
+  let k := match samplingDesign with
     | some l@(.obj _) => if pyGet? l "law" == some (Json.str "subset") then (pyGet? l "k").bind strictInt? else none
     | _ => none
   let some k := k.filter (1 ≤ ·) | throw "the registration's law is not subset:K′"

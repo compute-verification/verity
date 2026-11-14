@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-import slots_gpu as G
+from verity.commitments.cuda.commit_slots import slots_gpu as G
 
 torch = pytest.importorskip("torch")
 from torch.cuda import _utils  # noqa: E402
@@ -14,7 +14,7 @@ def test_the_bindings_are_torch_s(monkeypatch: pytest.MonkeyPatch) -> None:
     drv, ok = object(), object()
     monkeypatch.setattr(_utils, "_cuda_bindings_driver", drv, raising=False)
     monkeypatch.setattr(_utils, "_check_cuda_bindings", ok, raising=False)
-    assert G.driver_bindings() == (drv, ok)
+    assert G.driver_bindings(torch) == (drv, ok)
 
 
 @pytest.mark.parametrize("state", ["missing", "None"])
@@ -25,4 +25,4 @@ def test_a_python_without_them_is_refused_by_name(monkeypatch: pytest.MonkeyPatc
     else:
         monkeypatch.setattr(_utils, "_cuda_bindings_driver", None, raising=False)
     with pytest.raises(RuntimeError, match=rf"no CUDA driver bindings .*_cuda_bindings_driver is {state}\), so no green context"):
-        G.driver_bindings()
+        G.driver_bindings(torch)

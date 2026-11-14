@@ -58,12 +58,12 @@ set_option Elab.async false
 checks (`RecIns.setup`), with no premise:
 
 * A V\* session is one table (`RecSetup.oneFull`, `oneFull_staged`), so `setupTables` sets table 0 up at the session's
-  sample (`setupTables_okAny`), and the label check reads that sample (`RecVStar.tableDraw` at one table).
+  sample (`setupTables_okAny`), and the label check reads that sample (`RecVStar.tableSample` at one table).
 * Without a sample the table's public file is the registered population's (`setupOne_pub`), whose labels `loadPublic`
   refuses unless they ascend, one per instance (`loadPublic_asc`).
-* With a sample the table is the sampled proof blocks' (`HmRow.drawn`, `Layout.drawn_spec`: `n` is the proved units' count), and
+* With a sample the table is the sampled proof blocks' (`HmRow.drawn`, `Layout.sampled_spec`: `n` is the proved units' count), and
   the setup's label check (`RecVStar.checkLabels`, which runs under the verifier's inner shape, `insO_staged`) makes its
-  labels the proved units (`checkLabel_idx`). These ascend (`proved_asc`): `UnitDraw.ofJson` refuses sampled proof blocks, or a
+  labels the proved units (`checkLabel_idx`). These ascend (`proved_asc`): `UnitSample.ofJson` refuses sampled proof blocks, or a
   closure, that are not ascending and distinct, or a closure holding a sampled proof block (`ofJson_asc`), and with a closure
   `proved` is their `qsort`, which sorts (`Verity.QSort.ByKey.qsort_sorted`) and permutes (`CoinPos.qsort_perm`) them.
 -/
@@ -91,11 +91,11 @@ theorem not_mem_of_any {cs us : Array ℕ} (h : ¬ (cs.any us.contains) = true) 
 
 -- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
-/-- **A sample's units ascend, and so does its closure, which holds no sampled proof block**: `UnitDraw.ofJson` refuses any other. -/
-theorem ofJson_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
+/-- **A sample's units ascend, and so does its closure, which holds no sampled proof block**: `UnitSample.ofJson` refuses any other. -/
+theorem ofJson_asc {d : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson d = .ok D) :
     (∀ j, 0 < j → j < D.units.size → D.units[j - 1]! < D.units[j]!) ∧
       (∀ j, 0 < j → j < D.closure.size → D.closure[j - 1]! < D.closure[j]!) ∧ ∀ u ∈ D.closure, u ∉ D.units := by
-  unfold Draw.UnitDraw.ofJson at h
+  unfold Draw.UnitSample.ofJson at h
   dsimp only at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -145,10 +145,10 @@ theorem asc_of_pairwise {a : Array ℕ} (h : a.toList.Pairwise (· < ·)) :
 
 /-- **A sample's proved units ascend**: its sampled proof blocks without a closure (`ofJson_asc`), else their `qsort` with the
 closure, sorted (`qsort_sorted`) and distinct, since it permutes distinct units (`qsort_perm`). -/
-theorem proved_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :
+theorem proved_asc {d : Lean.Json} {D : Draw.UnitSample} (h : Draw.UnitSample.ofJson d = .ok D) :
     ∀ j, 0 < j → j < D.proved.size → D.proved[j - 1]! < D.proved[j]! := by
   obtain ⟨hu, hc, hdis⟩ := ofJson_asc h
-  unfold Draw.UnitDraw.proved
+  unfold Draw.UnitSample.proved
   split
   · exact hu
   · refine asc_of_pairwise ?_
@@ -227,7 +227,7 @@ theorem setupOne_pub {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables :
     cases draw with
     | none => exact ⟨st.c, st.pub, setupH_none h, fun _ => rfl, fun d (e : (none : Option Lean.Json) = some d) => nomatch e⟩
     | some d =>
-      obtain ⟨pop, hl, hd⟩ := FlockSoundness.Discharge.Layout.setupH_drawn h
+      obtain ⟨pop, hl, hd⟩ := FlockSoundness.Discharge.Layout.setupH_sampled h
       exact ⟨st.c, pop, hl, (fun (e : some d = none) => nomatch e), fun d' (e : some d = some d') => by cases e; exact hd⟩
 
 /-! ## The setup's label check -/
@@ -243,7 +243,7 @@ theorem recSetup_labels {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h 
     | (cases h; assumption)
 
 theorem checkLabel_idx {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.checkLabel dj pub j = .ok ())
-    {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson dj = .ok D) :
+    {D : Draw.UnitSample} (hD : Draw.UnitSample.ofJson dj = .ok D) :
     ∃ idx, Registered.unitIndices pub = .ok idx ∧ idx = D.proved := by
   cases hidx : Registered.unitIndices pub with
   | error e =>
@@ -254,7 +254,7 @@ theorem checkLabel_idx {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.c
 
 /-- **A staged table's labels ascend, one per instance**: its one table is set up at the session's sample; without one
 its labels are the registered population's (`loadPublic_asc`), with one the proved units (`checkLabel_idx`), which
-ascend (`proved_asc`) and are its instances (`drawn_spec`). -/
+ascend (`proved_asc`) and are its instances (`sampled_spec`). -/
 theorem labels_staged {st : RecDeploy.Stage} {s : ℕ} {x xO : Msg} (hS : RecDeploy.StagedPart st s x xO) {i : RecIns}
     {spec : SessionSpec} {sts : Array Stmt} (hsu : RecDeploy.setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size) :
     LabelsAscend sts[0].pub := by
@@ -279,9 +279,9 @@ theorem labels_staged {st : RecDeploy.Stage} {s : ℕ} {x xO : Msg} (hS : RecDep
   | some d =>
     rw [hd] at hl
     have hl0 := FlockC3.PubRows.checkLabels_at hl 0 (by simp)
-    rw [show RecVStar.tableDraw d i.base.read.I.count 0 = d by unfold RecVStar.tableDraw; exact ite_eq_left hc] at hl0
+    rw [show RecVStar.tableSample d i.base.read.I.count 0 = d by unfold RecVStar.tableSample; exact ite_eq_left hc] at hl0
     change RecVStar.checkLabel d st0.pub 0 = .ok () at hl0
-    obtain ⟨D, hD, -, hn, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec (hdr d hd)
+    obtain ⟨D, hD, -, hn, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec (hdr d hd)
     obtain ⟨idx, hidx, rfl⟩ := checkLabel_idx hl0 hD
     exact ⟨_, hidx, hn.symm, fun j hj0 hj => proved_asc hD j hj0 (by omega)⟩
 

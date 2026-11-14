@@ -829,7 +829,7 @@ def test_the_batch_built_beside_the_lean_batch_its_tick_stages_takes_no_pr_set_a
     aside = Outcome((5,), heads(5), INFRA, (5,), MAIN)
     s = snap(ready=[lean(1), pr(5)], history=[aside], records=True)
     assert decide(s) == [Build((1,), MAIN, 2, records=True)]
-    touching = pr(5, None, "tools/verity/check/check.py", lean_input=True)
+    touching = pr(5, None, "tools/check/check.py", lean_input=True)
     assert decide(replace(s, ready=(lean(1), touching))) == [Build((1,), MAIN, 2, records=True)]
     assert decide(replace(s, ready=(lean(1), touching, pr(6)))) == [Build((1,), MAIN, 2, records=True), Build((6,), MAIN, 2)]
 
@@ -843,7 +843,7 @@ def test_no_lean_batch_is_staged_pinned_or_not_while_a_pr_changing_a_lean_input_
     and the Lean batch is staged once it is in a candidate, on it; with the chain full, both wait, and one the tick's batch
     has no place for keeps the Lean batch waiting as well.  One set aside goes behind the PRs waiting, the Lean batch's
     among them, and keeps none waiting; nor does any with no records run, where no batch keeps it out."""
-    touching = pr(1, None, "tools/verity/check/check.py", lean_input=True)
+    touching = pr(1, None, "tools/check/check.py", lean_input=True)
     s = snap(ready=[touching, lean(2), pr(3)], records=True, **pins)
     assert decide(s) == [Build((1, 3), MAIN, 2)]
     assert decide(replace(s, ready=(replace(touching, rank=9), lean(2), pr(3)))) == [Build((3, 1), MAIN, 2)]
@@ -868,7 +868,7 @@ def test_with_a_records_run_no_lean_batch_is_staged_on_a_chain_holding_a_pr_set_
            "input, and no PR with no Lean change is ready to take")
     assert decide(s) == [Wait(why)]
     assert decide(replace(s, ready=(*s.ready, pr(3)))) == [Build((3,), "c1", 2)]
-    assert decide(replace(s, ready=(pr(1, None, "tools/verity/check/check.py", lean_input=True), lean(2)))) == [Wait(why)]
+    assert decide(replace(s, ready=(pr(1, None, "tools/check/check.py", lean_input=True), lean(2)))) == [Wait(why)]
     err = (Failed("node", "key:node", frozenset({"tools/runner.py"})),)
     acts = decide(replace(s, candidates=(cand("c1", MAIN, 1, state=INFRA, infra=err, tries=2),)))
     assert kinds(acts) == [Drop, Build] and acts[0].outcome.state == INFRA and acts[1] == Build((2,), MAIN, 3, records=True)
@@ -905,7 +905,7 @@ def test_left_out_names_the_lean_prs_and_the_lean_inputs_a_staged_batch_keeps_ou
     """Beside a staged Lean batch a Lean PR waits for its turn, one at a time, and a PR changing a Lean input for that batch to
     go on the chain; with none staged, a Lean PR past `lean` waits behind those ranked before it, and while a PR changing a
     Lean input that a batch may take waits, no Lean batch opens; with no batch to build, `Wait`'s reason is the Lean PR's."""
-    touching = pr(3, None, "tools/verity/check/check.py", lean_input=True)
+    touching = pr(3, None, "tools/check/check.py", lean_input=True)
     staged = replace(cand("s1", MAIN, 1), waits=True, records=RUNNING)
     s = snap(staged, ready=[lean(1), lean(2), touching, pr(4)], records=True, depth=2)
     assert decide(s) == [Build((4,), MAIN, 2)]
@@ -966,7 +966,7 @@ def test_a_staged_batch_reads_no_verdict_and_the_chain_fills_beside_it_with_no_s
     assert decide(s) == decide(replace(s, depth=2)) == []
 
 
-@pytest.mark.parametrize("files", [("tools/verity/check/check.py",), ("tools/pous_grader/scripts/gen.py",)],
+@pytest.mark.parametrize("files", [("tools/check/check.py",), ("tools/pous_grader/scripts/gen.py",)],
                          ids=["check's code", "a Python file of a Lake package"])
 def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_once_that_batch_is_on_the_chain(files):
     """A PR with no Lean change whose files are Lean inputs (`Ready.lean_input`), built beside a staged batch, would change the

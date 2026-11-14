@@ -336,7 +336,7 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hmkt : tb.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by rw [hts']; exact hmk
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hAA : alg.size = A := by
     rw [(alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
   have hm14t : 14 ≤ tb.st.m := by rw [htm]; omega
@@ -352,7 +352,7 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hbA : (piopV tb.st.m tb.st.fold.kLog tb.st.digest (_root_.Flock.ZkServer.Finish.flat tb.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0) (fun _ => 0) alg.size).length ≤
       c'.order.size := by
-    rw [hc', Loop.ofDraws_order, absorbed_size]
+    rw [hc', Loop.ofSamples_order, absorbed_size]
     exact le_trans (piopV_length_le lay hm14t hk6t hnM hnL hsz.le) (by omega)
   -- past the ring switch's first round the frame is outside every masked phase
   have hsw : k ≠ 0 → m.on = false ∧ m.inner = none := by
@@ -386,7 +386,7 @@ theorem schedTaken_switch (L₁ : LeanRelease Flock.Wit Loop.Tp)
     have hpN : m.pos = c'.nPiop := by
       rw [hpos', hsz, piopV_length_congr tb.st.m tb.st.fold.kLog (digest' := tb.st.digest)
           (cap' := _root_.Flock.ZkServer.Finish.flat tb.cm0.cap) (root' := Sched.root0) (lay' := lay) (fun _ => 0)
-          (fun _ => 0), piopV_length _ _ _ _ _ _ _ hm14t hk6t hnM hnL, hc', Loop.ofDraws_nPiop, absorbed_size]
+          (fun _ => 0), piopV_length _ _ _ _ _ _ _ hm14t hk6t hnM hnL, hc', Loop.ofSamples_nPiop, absorbed_size]
       omega
     have hlayC : ((ofLoop Masked.dataE L₁ (Loop.realOf src)).cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay =
         _root_.Flock.Zk.PadLayout.new tb.st.m tb.st.fold.kLog sch'.k0 := by

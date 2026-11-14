@@ -555,22 +555,22 @@ and, without it, exactly where a plain claim samples by it: at hidden outputs, a
 (`SoundExecH` at its subset sample design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset sampling design alone. So a
 bernoulli sample, a work sample (with or without a closure), a subset sample without `--zk` or `--plain-tables` at public outputs,
 and a stratified sample under `--plain-tables` are outside them. -/
-def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : Option String :=
-  match d.law with
+def samplingDesignWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitSample) : Option String :=
+  match d.samplingDesign with
   | .stratified .. => if plainTables then some "a stratified draw under --plain-tables" else none
   | .subset _ => if zk || tags.hiddenOutputs || plainTables then none else some "a subset draw without --zk"
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`lawWhy`): `draw` is
+/-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`samplingDesignWhy`): `draw` is
 the record's (`recordDraw`), none for a session without one. Every claim is about a sampled session, so a session without
 a sample is refused (D12); so is a sample that does not parse. -/
-def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
+def sampleDesign (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
   | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
-  | some j => match Draw.UnitDraw.ofJson j with
+  | some j => match Draw.UnitSample.ofJson j with
     | .error e => .error s!"refused: a draw that does not parse ({e})"
-    | .ok d => match lawWhy zk tags plainTables d with
-      | some why => .error s!"refused: {why}: no soundness claim draws by this law"
+    | .ok d => match samplingDesignWhy zk tags plainTables d with
+      | some why => .error s!"refused: {why}: no soundness claim draws by this samplingDesign"
       | none => .ok ()
 
 /-- **The verifier was handed a program**: a session verified without one (`--program`) is refused (`NO_PROGRAM`),
