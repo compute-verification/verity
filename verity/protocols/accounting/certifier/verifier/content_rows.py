@@ -110,6 +110,14 @@ schedule's largest class holds (the schedule's `request_bound`: ingress refuses 
 for its request's length; and a class of the largest P holds the most ids a response releases ("The classes"), so
 none is unfiled for its ids. Every release of a schedule's own network certifier fits a class.
 
+Under form 2 the rule files in no class a release that ended in a `FAIL` before any `DATA` cell, whatever class
+holds it. The network certifier released no id of it, so its response row would hold none, and its slots of the
+lengths and fails tables say how it ended. So no table of form 2 has an end row (1, 0), a class's count is of its
+releases that ended in their `END` or released an id, and such a `FAIL` is the one release of a schedule's own
+network certifier that has no content row. The rule reads the release's end as the network certifier cut it, which
+no server can compute: which releases a class holds is the network certifier's to say. Under form 1 the rule reads
+no end, and such a release has its rows.
+
 **A row of zero bytes** is what every table of form 1 holds where no release is filed (`empty_rows`, the one
 statement of it), and each table's decoder reads it its own way. `request_of` refuses it: its count is 0, and a
 released request has a byte. `response_of` reads a response of no id, and `end_of` an `END` after no `DATA` cell. So
@@ -441,7 +449,10 @@ def ids_of(packed: bytes) -> tuple[int, ...]:
 
 def file(params: WardenParams, release: Released) -> int | None:
     """The class the network certifier files a release in (the module docstring's "The filing"): the first of the
-    schedule's that holds its request's bytes and its ids, or None where none does."""
+    schedule's that holds its request's bytes and its ids, or None where none does, and, where a class's tables
+    hold its held rows and no other (`counted`), for a release that ended in a `FAIL` before any `DATA` cell."""
+    if counted(params) and release.failed and not release.outputs:
+        return None
     B = params.cell_bytes
     for i, (P, O, _) in enumerate(sized(params)):
         if len(release.request) <= request_room(B, P) and len(release.ids) <= U32_BYTES * O:

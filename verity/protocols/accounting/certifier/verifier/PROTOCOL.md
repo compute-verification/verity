@@ -2176,8 +2176,11 @@ prompt ids and a size of ids released, each a power of two.
   length: the network certifier admits a request of at most the bytes the schedule's largest class holds (the
   schedule's `request_bound`), and a longer one is ingress past its bounds, whose connection fails closed
   (`ingress`) with nothing released. None is unfiled for its ids, which a class of the largest P holds ("The
-  classes"). So every release of a schedule's own network certifier fits a class, and one has no content row only
-  under form 1, where its class's rows are all held. Under form 2 a class's rows are all held at R of them ("The
+  classes"). So every release of a schedule's own network certifier fits a class. Under form 1 one has no content
+  row only where its class's rows are all held. Under form 2 one has no content row only where it ended in a `FAIL`
+  before any `DATA` cell: the rule files such a release in no class, since the network certifier released no id of
+  it, and its lengths and fails slots say how it ended. It reads the end as the network certifier cut it, which no
+  server can compute. Under form 2 a class's rows are all held at R of them ("The
   bound", below), and a release filed in it past them is refused, naming the release, the class and R
   (`content_rows.tables`): releases with one past R are no execution phase's of the schedule, so none of their
   tables is laid and no head is signed over them.

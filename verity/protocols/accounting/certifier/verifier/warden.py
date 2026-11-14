@@ -131,7 +131,8 @@ more of the device or of a server.
 It releases no request that no class holds: a request longer than the schedule's largest class holds (the
 schedule's `request_bound`) is ingress past its bounds, so its connection fails closed (ingress) and none of it is
 released. A released request that no class held would be filed in none (`content_rows.file`), with no content row
-for any verdict on a class to be of.
+for any verdict on a class to be of. Under form 2 one release is filed in none by the rule itself: one that ended
+in a `FAIL` before any `DATA` cell, of which it released no id.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
 and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a

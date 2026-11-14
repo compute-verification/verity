@@ -195,6 +195,8 @@ SENT = ((11, 22, 33), tuple(range(8)), (), (7, 8, 9, 10), (), (1, 2), (99,))
 FAILED = (False, False, False, False, True, True, True)
 #: the class the network certifier's rule files each in, and its row there
 FILED = ((0, 0), (2, 0), (2, 1), (0, 1), (1, 0), (1, 1), (1, 2))
+#: the same under the lengths rows' form 2, where the rule files a `FAIL` before any `DATA` cell in no class
+HELD_FILED = (*FILED[:4], None, (1, 0), (1, 1))
 #: the clients that go away after their release, by connect order from 1, and the bucket each is gone from: one whose
 #: server ends the response, and one whose server stops answering
 GONE = {4: 16, 8: 27}
@@ -262,8 +264,10 @@ def read(issuer: Issuer, phase: int, strides, params: WardenParams) -> tuple:
     return opened, doc, head, domains
 
 
-#: the releases three loads file in each class: the traffic's first execution phase, its second, and one of none
-COUNTS = {"first": (2, 0, 2, 0), "second": (0, 3, 0, 0), "none": (0, 0, 0, 0)}
+#: the releases three loads file in each class under form 1: the traffic's first execution phase, its second, and
+#: one of none; and under form 2, which files the second's `FAIL` before any `DATA` cell in no class
+LAID = {"first": (2, 0, 2, 0), "second": (0, 3, 0, 0), "none": (0, 0, 0, 0)}
+COUNTS = LAID | {"second": (0, 2, 0, 0)}
 
 
 @pytest.fixture(scope="module")
@@ -631,9 +635,10 @@ def test_the_registration_of_a_schedule_with_content_rows_refuses_anything_but_i
 
 
 def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads):
-    """Under form 2 the same hand lays, for each class, the rows form 1 lays first and nothing after them: a row a
-    release filed in the class, in release order, and three tables of no row where none is filed. The lengths and
-    fails tables are form 1's. A class's rows are all held at R: R releases filed in it are laid, and with one more
+    """Under form 2 the same hand lays, for each class, the rows form 1 lays first, less the row of a `FAIL` before
+    any `DATA` cell, and nothing after them: a row a release filed in the class, in release order, and three tables
+    of no row where none is filed. The lengths and fails tables are form 1's. A class's rows are all held at R: R
+    releases filed in it are laid, and with one more
     the hand is refused, naming the release, the class and R, where form 1 leaves a release past a class's rows
     unfiled. The commitment takes a class's three tables only at one count of at most R. The device hands under
     form 2 what it hands under form 1, and its last execution phase, of no release, too; the records' reading
@@ -641,10 +646,12 @@ def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads
     for load, strides in loads.items():
         one, two = CR.tables(CON, strides), CR.tables(HELD, strides)
         assert list(two) == list(one) and all(two[name] == one[name] for name in ("lengths", "fails"))
-        for i, count in enumerate(COUNTS[load]):
-            assert [two[name] for name in CT.names(i)] == [one[name][:count] for name in CT.names(i)]
+        for i, (count, laid) in enumerate(zip(COUNTS[load], LAID[load])):
+            kept = [r for r, end in enumerate(one[f"end.{i}"][:laid]) if CT.end_of(end) != (True, 0)]
+            assert len(kept) == count
+            assert [two[name] for name in CT.names(i)] == [[one[name][r] for r in kept] for name in CT.names(i)]
             assert all(CT.held(row) for row in two[f"request.{i}"])
-            assert [CT.held(row) for row in one[f"request.{i}"]] == [True] * count + [False] * (CLASSES[i][2] - count)
+            assert [CT.held(row) for row in one[f"request.{i}"]] == [True] * laid + [False] * (CLASSES[i][2] - laid)
     R = HELD.phase_releases
     a = loads["first"][0][0]
     assert CT.file(HELD, a) == CT.file(CON, a) == 0
@@ -680,6 +687,36 @@ def test_under_form_2_a_classes_tables_are_its_held_rows_and_no_other(ran, loads
     device, _, _ = run(answers, arrivals, params=HELD, windows=3, client=leaving(GONE))
     assert device.lengths == [(0, loads["first"]), (1, loads["second"]), (2, loads["none"])]
     assert CR.of_records(HELD, *records(device)[:2]) == dict(device.lengths)
+
+
+def test_under_form_2_a_fail_before_any_data_cell_is_filed_in_no_class(ran, loads):
+    """Where a class's tables hold its held rows and no other, the rule files in no class a release that ended in a
+    `FAIL` before any `DATA` cell. It reads the release's end as the network certifier cut it: the same release
+    ended in its `END`, or failed after an id, is filed in the class that holds it. So no table of the execution
+    phase has an end row (1, 0), a class's count is of its releases that ended in their `END` or released an id,
+    and the release's lengths and fails slots are the ones it had. Under form 1 the rule reads no end, and the
+    same release has its row."""
+    _, _, _, handed = ran
+    got = released(handed)
+    assert [(r.failed, r.outputs) for r in got] == [(failed, len(sent)) for failed, sent in zip(FAILED, SENT)]
+    assert [CT.file(HELD, r) for r in got] == [at and at[0] for at in HELD_FILED]
+    assert [CT.file(CON, r) for r in got] == [i for i, _ in FILED]
+    none = got[4]
+    assert (none.failed, none.outputs, HELD_FILED[4], FILED[4]) == (True, 0, None, (1, 0))
+    assert CT.file(HELD, none._replace(failed=False)) == 1
+    assert CT.file(HELD, none._replace(outputs=1, ids=bytes(4))) == 1
+    one, two = CR.tables(CON, loads["second"]), CR.tables(HELD, loads["second"])
+    assert [CT.end_of(row) for row in one["end.1"]] == [(True, 0), (True, 2), (True, 1)]
+    assert [CT.end_of(row) for row in two["end.1"]] == [(True, 2), (True, 1)]
+    assert [len(two[name]) for name in CT.names(1)] == [2, 2, 2]
+    assert not any(CT.end_of(row) == (True, 0) for load in loads.values()
+                   for name, rows in CR.tables(HELD, load).items() if name.startswith("end.") for row in rows)
+    for name in ("lengths", "fails"):
+        assert two[name] == one[name]
+    assert [r.order for stride in CR.releases(HELD, two["lengths"], two["fails"]) for r in stride] == [4, 5, 6]
+    # `content_rows.tables` lays the class it is given: told a class for the release, it lays its row
+    told = CT.tables(HELD, [r for stride in loads["second"] for r in stride], [1, 1, 1])
+    assert [CT.end_of(row) for row in told["end.1"]] == [(True, 0), (True, 2), (True, 1)]
 
 
 def test_under_form_2_one_head_counts_each_classes_held_rows_and_its_other_fields_are_the_schedules(loads, counted):
@@ -773,7 +810,7 @@ def test_a_form_2_registration_whose_classes_three_tables_differ_in_rows_is_refu
     for load, name, rows, like in (
             ("first", "response.0", 1, "request.0 table 2"), ("first", "end.0", 3, "response.0 table 2"),
             ("first", "response.1", 1, "request.1 table 0"), ("first", "end.2", 0, "response.2 table 2"),
-            ("second", "end.1", 2, "response.1 table 3"), ("none", "response.3", 6, "request.3 table 0")):
+            ("second", "end.1", 3, "response.1 table 2"), ("none", "response.3", 6, "request.3 table 0")):
         _, doc, _, _ = by_load[load]
         with pytest.raises(ValueError, match=f"{name} table has rows {rows}, and its class's {like}: a class's tables"):
             CR.check_registration(recounted(doc, {name: rows}), key, signers.SESSION, HELD, LINK, 0)
@@ -960,12 +997,17 @@ def test_the_response_tie_on_the_certifiers_end_row_returns_the_response_row_it_
     the blocks' rows. That holds for a connection that ended, one that failed after two ids and before any, and the
     two the client aborted. With an id the server never sent below the count the block's row is another, and the
     read refuses it. The same blocks read the tables of either of the lengths rows' forms: under form 2 a class's
-    table is the releases' rows alone, a block each, and a class without one has no row to read."""
+    table is the releases' rows alone, a block each, and a class without one has no row to read; the connection
+    that failed before any id is filed in no class there, so no block is of it."""
     handed, by_phase = tied
     for phase, (opened, _, head, domains) in by_phase.items():
         cases: dict[int, list] = {i: [] for i in range(len(CLASSES))}
+        filed = HELD_FILED if CT.counted(opened.params) else FILED
         for release in (r for stride in handed[phase] for r in stride):
-            i, r = FILED[release.order]
+            if filed[release.order] is None:
+                assert (release.failed, release.outputs) == (True, 0)
+                continue
+            i, r = filed[release.order]
             o = CLASSES[i][1]
             end = opened.table(f"end.{i}").rows[r]
             assert CT.end_of(end) == (FAILED[release.order], len(SENT[release.order]))

@@ -34,12 +34,13 @@ WORDED = dataclasses.replace(BOUNDED, request_words=True)
 R = WORDED.phase_releases
 #: each class's four tables, in the head's order
 NAMES = tuple(CT.names_of(WORDED, i) for i in range(len(WORDED.content)))
-#: the form-2 schedule's digest, and `registrations` of the content tables tests' traffic under it, as each was
-#: before the request words were a parameter
+#: the form-2 schedule's digest, as it was before the request words were a parameter, and `registrations` of the
+#: content tables tests' traffic under it, whose `FAIL` before any `DATA` cell is filed in no class: the filing
+#: rule is in no digest, so the schedule's digest is one whichever rule filed a run
 HELD_DIGEST = ("fe09d8179188559f4744e18efbcc9371ecdf7bbaae4e2cc1fbe26e4df92299a4"
                "a378a5a47d2b1de609f79f8c81b54362d5dbb2e19b488c143839714b5f972069")
-HELD_REGISTERED = ("57251fa45c593f1c7bfdd05bee62a08a9caef4d78dc969c29609baf7e7ae7549"
-                   "c09710f4ccfc6b5ba00bfd0caef9f801ffb6f4208058e31ed472ae945ca50b10")
+HELD_REGISTERED = ("65bbc0b02c29f9d80d3761afcd4dc19299d6bd356b75eaa5166ac8d2eb819a06"
+                   "3755382f840ebac9ad2140bb4033a9760b2d664df08f5da3f7fb6ab7dd6b6142")
 
 #: each released request's `max_tokens` and its prompt's count of ids, by its place in the release order: a prompt
 #: of one cell, of two and of three, a `max_tokens` of 0 and one at the schedule's most
@@ -140,8 +141,9 @@ def test_request_words_are_a_parameter_of_a_form_2_schedule_with_content_rows_an
 
 def test_a_schedule_without_request_words_has_the_digest_the_tables_and_the_heads_it_had(tmp_path):
     """The request words are hashed only by a schedule that has them, so a form-2 schedule without them has the
-    parameters digest it had, lists three tables a class, and its run's registrations are the ones it left, byte
-    for byte. Its tables take any released request, as they did: nothing reads its words."""
+    parameters digest it had, lists three tables a class, and its run's registrations are the pinned ones, byte
+    for byte: three tables a class, each of the releases the rule files in it. Its tables take any released
+    request, as they did: nothing reads its words."""
     assert HELD.digest.hex() == HELD_DIGEST and all(len(CT.names_of(p, 0)) == 3 for p in (HELD, BOUNDED, CON))
     _, arrivals, answers = mixed()
     device, _, _ = run(answers, arrivals, params=HELD, windows=3, client=leaving(GONE))
