@@ -103,7 +103,8 @@ theorem SketchBoundDeployed_honest :
   · rw [Subsingleton.elim j 0]
     exact hω
   · exact (Nat.lt_one_iff.1 b.isLt).symm
-  · simp [Trace.present, honestTrace]
+  · unfold Trace.present
+    exact mem_union_left _ (mem_univ _)
 
 /-- **`SketchBoundDeployed`'s conclusion bites**: on an audit that accepts everything, a pass's correct receipt of a
 block never present breaks the sketch bound at the deployed δs (`Q = 0`, `P = 1`, `ε = 0`, `N = 1`). -/
@@ -111,10 +112,16 @@ theorem SketchBoundDeployed_nontrivial :
     ¬ SketchBound acceptAll (((0 : ℕ) : ℝ) / 2 ^ 216 + (((0 : ℕ) : ℝ) + ((1 : ℕ) : ℝ)) * (0 + ((1 : ℕ) : ℝ) / 2 ^ 512) +
       (((0 : ℕ) : ℝ) + ((1 : ℕ) : ℝ)) ^ 2 / 2 ^ 513) := by
   intro h
-  unfold SketchBound Trace.Holds at h
-  rw [Pouw.pr_eq_one fun _ => ⟨trivial, fun hp => ?_⟩] at h
-  · norm_num at h
-  · have := hp 0 (by simp [acceptAll]) ⟨0, by simp [acceptAll]⟩ (by simp [acceptAll])
-    simp [acceptAll] at this
+  have hev : ∀ ω : Unit, acceptAll.accepts ω ∧ ¬ (∀ p < acceptAll.passes, ∀ j ∈ acceptAll.correct ω p,
+      ∃ t, acceptAll.tick ω p ≤ t ∧ t < acceptAll.tick ω (p + 1) ∧ j ∈ acceptAll.present ω t) := by
+    intro ω
+    refine ⟨trivial, fun hp => ?_⟩
+    obtain ⟨t, -, -, ht⟩ := hp 0 (by simp [acceptAll]) ⟨0, by simp [acceptAll]⟩ (by simp [acceptAll])
+    simp [Trace.present, acceptAll] at ht
+  have h1 : (1 : ℝ) ≤ _ := le_trans (Pouw.pr_eq_one hev).symm.le h
+  have a : ((2 : ℝ) ^ 512)⁻¹ ≤ 4⁻¹ := inv_anti₀ (by norm_num) (by norm_num)
+  have b : ((2 : ℝ) ^ 513)⁻¹ ≤ 4⁻¹ := inv_anti₀ (by norm_num) (by norm_num)
+  norm_num at h1
+  linarith
 
 end Accounting.SecurityProofs.Remote
