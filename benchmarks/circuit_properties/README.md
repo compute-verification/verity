@@ -93,7 +93,7 @@ m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 `references.layer(C, T)` is one b1 layer (σ(`LayerPre_v1`), the Boolean `Attention_v3`, σ(`LayerPost_v1`)) at T
 positions; `references.configs()` lists the served configurations and two shapes with no served workload (Qwen2.5-7B,
 Llama-3.1-405B), labeled as constructed, whose shapes are benchmarks/slowdown's (its `models.toml`, read through
-`rho.instances.models`). The circuits are forward layers: the Programs declare no training (backward, optimizer)
+`slowdown.instances.models`). The circuits are forward layers: the Programs declare no training (backward, optimizer)
 circuit.
 
     uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
@@ -106,7 +106,7 @@ measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/slo
 
 The package reads `verity.circuits` (Programs, the canonical layout) and `verity.definitions` (the Boolean GEMM and
 the served b1 Definitions on bits). For a model's shapes it loads the slowdown calculator where it sits, with
-`benchmarks/slowdown` put on `sys.path`: `rho.instances`, and `rho.params` for the registry, which
+`benchmarks/slowdown` put on `sys.path`: `slowdown.instances`, and `slowdown.params` for the registry, which
 loads the inference-only policy's calibrations (`benchmarks/nci/calibrations.json`). The suite
 names what it reads of both among its `inputs`.
 

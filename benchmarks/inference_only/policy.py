@@ -24,7 +24,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RHO = ROOT / "benchmarks" / "slowdown"
-# first on the path: rho's `periods` imports rho's own `run`, not this benchmark's
+# first on the path: the slowdown calculator's `periods` imports the slowdown calculator's own `run`, not this benchmark's
 sys.path.insert(0, str(RHO))
 
 from slowdown import hardware, min_cut  # noqa: E402
@@ -220,7 +220,7 @@ def bound(p: Policy, sh: Shape, blocks: float = 1.0) -> min_cut.Bound:
 
 
 def fleet_periods(work: float) -> list[dict[str, Any]]:
-    """For each of the slowdown calculator's fleets and monitoring periods (rho's `periods.FLEETS` and `PERIODS`): the
+    """For each of the slowdown calculator's fleets and monitoring periods (the slowdown calculator's `periods.FLEETS` and `PERIODS`): the
     period's seconds and the policy's blocks the fleet holds at capacity, each of ``work`` MACs. A fleet's rate is its
     locations' data-sheet dense rate (`location.<name>.flops`, two FLOPs a MAC)."""
     import periods as rho_periods
