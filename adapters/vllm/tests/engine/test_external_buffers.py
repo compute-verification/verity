@@ -20,12 +20,12 @@ class _Writer:
 
 
 def _note(runner) -> dict:
-    cap = C.Capture.__new__(C.Capture)
-    cap.runner, cap.model = runner, SimpleNamespace(named_modules=lambda: [])
-    cap.storage = SimpleNamespace(events_pending=lambda: [], use_weakrefs=False)
-    cap.writer, cap.events_written = _Writer(), 0
-    cap._install_external_buffers()
-    (note,) = cap.writer.events
+    capture = C.Capture.__new__(C.Capture)
+    capture.runner, capture.model = runner, SimpleNamespace(named_modules=lambda: [])
+    capture.storage = SimpleNamespace(events_pending=lambda: [], use_weakrefs=False)
+    capture.writer, capture.events_written = _Writer(), 0
+    capture._install_external_buffers()
+    (note,) = capture.writer.events
     return note.data
 
 

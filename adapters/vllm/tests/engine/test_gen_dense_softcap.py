@@ -114,13 +114,13 @@ def test_softcap_without_dense2_patterns_still_resolves_the_windowless_launch():
     assert "AttentionSoftcap_v1{T=33,NH=9,KVH=3,D=64,BN=128,CAP=30.0}" in by_spec(res)
 
 
-@pytest.mark.parametrize("cap", [-50.0, float("nan"), float("inf")])
-def test_bad_softcaps_are_unsupported_with_the_value_recorded(cap):
-    se, res = _resolve(softcap=cap)
+@pytest.mark.parametrize("softcap_value", [-50.0, float("nan"), float("inf")])
+def test_bad_softcaps_are_unsupported_with_the_value_recorded(softcap_value):
+    se, res = _resolve(softcap=softcap_value)
     uns = [r for r in res if isinstance(r, Unsupported)]
     assert len(uns) == 1 and uns[0].op == SCOPE and "softcap" in uns[0].reason
     got = uns[0].detail["softcap"]
-    assert got == cap or (math.isnan(cap) and math.isnan(got))
+    assert got == softcap_value or (math.isnan(softcap_value) and math.isnan(got))
 
 
 def test_base_facts_are_still_checked_under_a_softcap():
