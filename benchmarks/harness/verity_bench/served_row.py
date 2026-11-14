@@ -6,7 +6,7 @@ outcome and its codes, the layout the serve committed. The audit's verdict is th
 top-level ``accepted``, which is the one-stage record of the sessions alone. This module decides nothing about the
 run; it reads from the tree who decided each of those and what proves it, and prints (`account`, `render`):
 
-* **The verdict line**, in the verifier's own words (`verdict_line`): how many of the sampled proofs the Lean
+* **The verdict line**, in the verifier's own words (`verdict_line`): how many of the sampled proof blocks' proofs the Lean
   verifier accepted, then the final accept as the stream's outcome gave it: given, refused with its codes, or
   withheld, where every check of the second stage held and the outcome is refused by one code the table names a
   reason for (`TABLE`'s ``withheld``). An accept the verifier withheld or refused is never printed as given, and
@@ -183,16 +183,16 @@ def outcome(shown: Mapping, kinds: Mapping, theorem: Mapping) -> dict:
 
 
 def verdict_line(kinds: Sequence[Mapping], final: Mapping) -> str:
-    """The verdict in the verifier's own words: the sampled proofs the Lean verifier accepted, then the final accept
+    """The verdict in the verifier's own words: the sampled proof blocks' proofs the Lean verifier accepted, then the final accept
     as the outcome gave it. No accept the verifier withheld or refused is said to be given."""
 
     proofs = next((k for k in kinds if k["kind"] == PROOFS), None)
     if proofs is None or not proofs["of"]:
-        said = "no sampled proof was put to the Lean verifier"
+        said = "no sampled proof block's proof was put to the Lean verifier"
     elif proofs["accepted"] == proofs["of"]:
-        said = f"every sampled proof accepted by the Lean verifier ({proofs['of']} of {proofs['of']} sessions)"
+        said = f"every sampled proof block's proof accepted by the Lean verifier ({proofs['of']} of {proofs['of']} sessions)"
     else:
-        said = f"{proofs['accepted']} of {proofs['of']} sampled proofs accepted by the Lean verifier"
+        said = f"{proofs['accepted']} of {proofs['of']} sampled proof blocks' proofs accepted by the Lean verifier"
     if final["final"] == "given":
         return (f"{said}; the final accept given by `{final['verifier']}`"
                 + ("" if final["complete"] else f", and {GIVEN_NOT_COMPLETE}"))

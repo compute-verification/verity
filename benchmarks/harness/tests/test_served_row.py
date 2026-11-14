@@ -72,7 +72,7 @@ def test_proved_is_printed_only_where_every_lock_entry_has_no_open_premise(tmp_p
     doc = W.account(record, tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)
     out = W.render(doc)
     assert doc["verdict"]["mark"] == W.PROVED and doc["to_fully_proved"] == []
-    assert "- **verdict: proved.** Every sampled proof accepted by the Lean verifier (2 of 2 sessions); the final accept " \
+    assert "- **verdict: proved.** Every sampled proof block's proof accepted by the Lean verifier (2 of 2 sessions); the final accept " \
            "given by `lean-outcome`." in out
     assert "- **to fully proved**: nothing in the run's own files or in its verdicts' lock entries." in out
     assert out.count("proved by `Made.up`, which takes no open premise") == 3 and all(k[W.PROVED] for k in doc["verdicts"])
@@ -155,7 +155,7 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     assert doc["outcome"]["final"] == "withheld" and doc["verdict"]["mark"] == E.RUN_NOT_PROVED
     assert doc == W.account(record_of(tmp_path / "other", sessions_record=False), tree(tmp_path), holes=CLOSED) | {
         "one_stage_record": doc["one_stage_record"]}
-    assert doc["verdict"]["line"] == ("every sampled proof accepted by the Lean verifier (2 of 2 sessions); the final accept "
+    assert doc["verdict"]["line"] == ("every sampled proof block's proof accepted by the Lean verifier (2 of 2 sessions); the final accept "
                                       "withheld, reason `two-stage-form` (the two-round form's soundness is not proved)")
     assert "final accept given" not in out and "| withheld (`two-stage-form`) |" in out
     assert "  - the final accept is withheld by `sampled-proofs-verifier`: `two-stage-form`, the two-round form's " \
@@ -202,7 +202,7 @@ def test_a_refused_outcome_and_no_outcome_are_said_as_they_are(tmp_path):
     # a second stage that reached no outcome holds no verdict; a proof the Lean verifier refused is counted as such
     verdicts = {"lean-verify/m0": True, "lean-verify/m1": False}
     doc = W.account(record_of(tmp_path, outcome=None, held=False, verdicts=verdicts), tree(tmp_path), holes=CLOSED)
-    assert doc["verdict"]["line"] == ("1 of 2 sampled proofs accepted by the Lean verifier; no final accept: the second "
+    assert doc["verdict"]["line"] == ("1 of 2 sampled proof blocks' proofs accepted by the Lean verifier; no final accept: the second "
                                       "stage reached no outcome")
     assert doc["verdict_record"] is None and doc["to_fully_proved"][-1]["said"] == "the final accept is not reached"
 
