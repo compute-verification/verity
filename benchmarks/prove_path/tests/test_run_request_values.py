@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-RUN_SH = Path(__file__).resolve().parents[1] / "run.sh"
+RUN_SH = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.sh"
 PROMPT = [918273, 827364, 736455]
 NEEDLES = (b"918273", b"prompt_ids", b"streamed_ids", b"prompt_token_ids")
 
