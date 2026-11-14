@@ -225,21 +225,26 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   too; that job's cost is the row alone, and `WITH=` joins it to the number's job.
 - **The verdict** of a load against the model's target (`Model.target`, or `--target PERCENT`) is `meets` where the
   whole interval is at or under the target, `misses` where all of it is over, else `cannot tell`. The output says
-  what the target rests on (`Model.target_basis`: `modelled` for a cost model's share, `given` for `--target`).
+  what the target rests on (`Model.target_basis`: `modeled` for a cost model's share, `given` for `--target`).
   `compiled-again` gives the noise floor, which reps inside one server lifetime don't see, and each load's verdict
   widens its interval by that load's floor at each end. The number's verdict follows from the loads':
   it misses where one load misses, meets only where both have run and meet, and otherwise cannot be told.
 - **The target's parts.** A model's target is the sum of its parts (`Model.target_parts`), each the cost model's
-  points for some of our changes (`serve_tax.CHANGES`, each read from an arm's data). GLM-5.3's are the certified
-  tick, the tie order of the canonical top-k, and the snapshot bundle (the pause to copy and hash the cache at each
-  edge and the carried pages' hash, with vLLM's prefix cache on). A cost is compared with the target only where its
+  points for some of our changes (`serve_tax.CHANGES`, each read from an arm's data), marked by what they rest on
+  (`serve_tax.PART_BASES`: modeled, simulated or measured). GLM-5.3's are the certified tick (simulated), the tie
+  order of the canonical top-k, the snapshot bundle (the pause to copy and hash the cache at each edge and the
+  carried pages' hash, with vLLM's prefix cache on), the step record, the two-stage boundary commitment and the
+  history tables, priced at one engine across eight H200s under the chat load at 384 requests at once. The output
+  puts each part's measurement beside its points: the step, at the number's load and rung, of an arm of the run that
+  turns on that part's changes and nothing else over the arm above it (`record` over `compiled` for the step record,
+  `boundary-rows` over `record` for the boundary commitment), or `not measured` where no arm does (no arm turns on
+  the history tables alone). A cost is compared with the target only where its
   arm has every part's changes on and no change on that no part counts (`serve_tax.not_in_target`). Otherwise every
   verdict is `not comparable`, a fourth value, and the output names the changes that are off with their parts and
   the changes the target has no part for: the cost is not of what the target is of, so it neither meets nor misses
   it, and no target is made of the parts that are on. The `two-stage` arm leaves off admission on the certified
-  tick and the edge snapshot, which need the corpus's client, and turns on four changes GLM-5.3's target has no
-  part for (the step record, prefix caching off, the two-stage boundary commitment, the history tables), so its
-  cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
+  tick and the edge snapshot, which need the corpus's client, and turns on prefix caching off, which GLM-5.3's
+  target has no part for, so its cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
   here is of it: vLLM's own client can't drive a tick arm whose certifier the corpus's client stands in for.
   `tick-certifier` is not comparable either (below). A target given with `--target` has no parts.
 - **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so does
@@ -256,8 +261,8 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   top-k's own (`canonical-topk`). Each arm's cost is printed over stock and over the nearest arm above it that ran,
   at the number's load and rung, with its share of the whole for the arms from the measured one up to stock, and
   with what its step turns on: beside each such change the target's part for it, with no verdict, or `not in the
-  model` for a change the target has no part for (the step record, prefix caching off, the two-stage boundary
-  commitment, the history tables). A
+  model` for a change the target has no part for (prefix caching off, the served ids, the network certifier
+  in front). A
   job of `compiled` alone prints no cost: it finds the rungs where stock is saturated and where its goodput peaks,
   which a later job's `--loads` names.
 - **The boundary commitment's line** says what the measured arm's commitment did, from its own records: the finished

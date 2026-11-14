@@ -139,7 +139,8 @@ its 95% interval over reps, its verdict against ``--target`` or the model's targ
 it, as text and as one JSON object whose first keys are value, unit, commit and run. The model's target is the sum of
 its parts, each of some of our changes (`Part`, `CHANGES`): an arm that leaves one of those off, or has a change on
 that no part counts (`not_in_target`), has no verdict against it but "not comparable" (`NOT_COMPARABLE`), and each
-arm's row names the target's part for what its step turns on (`in_target`). Under each load's cost are both sides'
+arm's row names the target's part for what its step turns on (`in_target`); each part is printed with the step of
+the arm that turns on its changes alone beside its points, where the run has such an arm. Under each load's cost are both sides'
 output and prompt tokens a second, the tokens a request and the engine's GPUs, and the load's cost within the SLO
 (`within_slo`: the reference's best goodput over the arm's, less one, each at the rung where its own is largest),
 which is the cost only where both sides meet the SLO for every
@@ -355,16 +356,20 @@ def changes_of(arm: str) -> list[str]:
     return [name for name, on in CHANGES.items() if on(ARMS[arm])] if arm in ARMS else []
 
 
+#: what a part's points rest on: a cost model's share, a simulation's, or a measurement's
+PART_BASES = ("modeled", "simulated", "measured")
+
+
 @dataclass(frozen=True)
 class Part:
     """One part of a model's target (`Model.target`): what the cost model counts for some of our changes, in points
-    of the target. An arm's cost holds the part only with every one of its changes (`CHANGES`) on, since the points
-    are of them together."""
+    of the target, and what those points rest on (one of `PART_BASES`). An arm's cost holds the part only with every
+    one of its changes (`CHANGES`) on, since the points are of them together."""
     name: str
     points: float
     changes: tuple[str, ...]
     what: str = ""
-    basis: str = "modelled"
+    basis: str = "modeled"
 
 
 #: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
@@ -384,7 +389,7 @@ class Model:
     slo: tuple[float, float]
     env: dict = field(default_factory=dict)
     #: the most serving it with our changes may cost over stock, in percent of stock's serving compute (`cost_report`),
-    #: what that figure rests on: modelled (a cost model's share, not a measurement) or measured, and the parts it is
+    #: what that figure rests on: modeled (a cost model's share, not a measurement) or measured, and the parts it is
     #: the sum of, each of some of our changes: a cost is compared with the target only where its arm has every part's
     #: changes on (`target_parts`) and no change on that no part counts (`not_in_target`)
     target: float | None = None
@@ -406,6 +411,9 @@ class Model:
         unknown = [c for p in self.target_parts for c in p.changes if c not in CHANGES]
         if unknown:
             raise ValueError(f"{self.served}: a part of the target names no change of CHANGES: {', '.join(unknown)}")
+        if bad := [p.name for p in self.target_parts if p.basis not in PART_BASES]:
+            raise ValueError(f"{self.served}: a part of the target rests on none of {', '.join(PART_BASES)}: "
+                             f"{', '.join(bad)}")
         total = round(sum(p.points for p in self.target_parts), 2)
         if self.target_parts and total != self.target:
             raise ValueError(f"{self.served}: the target's parts sum to {total}, and the target is {self.target}")
@@ -440,18 +448,29 @@ MODELS = {
                      ("--dtype", "bfloat16"), (2.0, 0.08)),
     "qwen3-30b": Model("Qwen/Qwen3-30B-A3B", "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39", "qwen3-30b-a3b",
                        ("--dtype", "bfloat16"), (2.0, 0.08)),
-    # glm53's target is the cost model's share for serving: extra GPU time at equal tokens, which reads no SLO, for a
-    # server that does not cut its cache at a phase edge and keeps vLLM's prefix cache on. Its parts are the model's,
-    # none of them measured here. It has none for the step record, the two-stage boundary commitment, the history
-    # tables or prefix caching off.
+    # glm53's target is the cost model's share for serving (the spot figures' serving cost card, its `tokens`
+    # configuration): extra GPU time at equal tokens, which reads no SLO, for a server that does not cut its cache at a
+    # phase edge and keeps vLLM's prefix cache on, priced at one engine across eight H200s under the chat load at 384
+    # requests at once. None of its parts is measured here: a run measures a part where one of its arms turns on that
+    # part's changes alone (`cost_report`'s `measured`). It has no part for prefix caching off, the served ids or
+    # the network certifier in front.
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
-                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.05, target_basis="modelled",
+                   ("--tensor-parallel-size", "8"), (2.0, 0.08), target=2.13, target_basis="modeled",
                    target_parts=(
-                       Part("the certified tick", 1.63, ("admission on the certified tick",)),
+                       Part("the certified tick", 1.63, ("admission on the certified tick",),
+                            "the queue-dependent tick's throughput, simulated on traces", "simulated"),
                        Part("the tie order", 0.25, ("the canonical top-k",)),
                        Part("the snapshot bundle", 0.17, ("the edge snapshot",),
                             "the pause to copy and hash the cache at each edge and the carried pages' hash, with "
-                            "the prefix cache on")),
+                            "the prefix cache on"),
+                       Part("the step record", 0.067, ("the step record",),
+                            "the scheduler's record of each step, written on the engine core's thread, as if it "
+                            "lengthened every step"),
+                       Part("the boundary commitment", 0.0098, ("the two-stage boundary commitment",),
+                            "its hooks on the engine core's thread at each step and each request admitted, as if they "
+                            "lengthened every step"),
+                       Part("the history tables", 0.004, ("the history tables",),
+                            "one attention layer's table rows a computed token, hashed at the commitment card's rate")),
                    metric="vllm/serving-cost-glm53", check="TokenSelect_v4{V=154880}",
                    # recipes/models/zai-org/GLM-5.3.yaml in vllm-project/vllm, its command "FP8 on 8xH200 (standard)":
                    # the FP8 checkpoint, tensor parallel, an FP8 KV cache, five draft tokens a step from the model's
@@ -3284,7 +3303,9 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
     run and meets, and else cannot be told (``not_run`` names the loads that have not run). The model's target is the
     sum of its parts (``target_parts``, `target_parts`), and where ``arm`` leaves off a change one of them counts, or
     has a change on that none of them counts (``not_in_target``, `not_in_target`), every verdict is `NOT_COMPARABLE`
-    instead: the cost is not of what the target is of. A target that is given has no parts. Each load's ``within`` is
+    instead: the cost is not of what the target is of. A target that is given has no parts. Each part's ``measured`` is
+    its measurement beside its points: the step, at the number's load and rung, of the first arm that turns on that
+    part's changes and nothing else over the arm above it, with both arms; None where no arm of the run does. Each load's ``within`` is
     its cost within the SLO (`within_slo`), which no target or verdict is of, and its ``saturated`` whether the reference's rungs show it saturated at the load's rung (`peak`), which no verdict
     reads. Beside them: the GPUs an engine serves on, what the arm's boundary commitment did (`commitment`), and every other
     arm's cost at the number's load and rung, over the reference and over the nearest arm above it that ran (its
@@ -3343,6 +3364,10 @@ def cost_report(arms: list[dict], arm: str = OURS, reference: str = REFERENCE, t
                  if name in chain and step and step["value"] is not None and whole is not None and whole > 0 else None)
         rows.append({"arm": name, **_cost(serving_cost(ref, by[name], load, rung)), "over": over, "step": _cost(step),
                      "share": share, "in_target": in_target(model, name, over) if parts else None})
+    for p in parts:
+        alone = next((x for x in rows if x["in_target"] and len(x["in_target"]) == 1
+                      and x["in_target"][0]["part"] == p["name"] and x["in_target"][0]["whole"]), None)
+        p["measured"] = alone and {"arm": alone["arm"], "over": alone["over"], **alone["step"]}
     slo = {"ttft": ours["slo"]["ttft_s"], "tpot": ours["slo"]["tpot_s"]}
 
     def within(c: dict) -> dict | None:
@@ -3405,8 +3430,14 @@ def _in_target(xs: list[dict] | None) -> str:
     if not xs:
         return "—"
     return "; ".join(f"{', '.join(x['changes'])}: " + ("not in the model" if x["part"] is None else
-                                                        f"{'' if x['whole'] else 'part of '}{x['part']}, {x['points']:.2f}%")
+                                                        f"{'' if x['whole'] else 'part of '}{x['part']}, "
+                                                        f"{_points(x['points'])}%")
                      for x in xs)
+
+
+def _points(x: float) -> str:
+    """A part's points with the digits it is stated to, so a part under a hundredth of a point does not print as 0."""
+    return f"{x:.3g}"
 
 
 def _rates(side: dict) -> str:
@@ -3544,14 +3575,20 @@ def cost_text(r: dict) -> str:
     parts = r["target_parts"]
     if parts:
         lines.append("  the target is the sum of its parts: " + ", ".join(
-            f"{p['name']} {p['points']:.2f}% ({p['basis']}{'; ' + p['what'] if p['what'] else ''})" for p in parts))
+            f"{p['name']} {_points(p['points'])}% ({p['basis']}{'; ' + p['what'] if p['what'] else ''})" for p in parts))
+        lines.append("  each part measured, as the step of the arm that turns on its changes alone over the arm above "
+                     "it: " + "; ".join(
+                         f"{p['name']} {_points(p['points'])}%: " + (
+                             "not measured, no arm here turns on its changes alone" if not p.get("measured") else
+                             f"{_c(p['measured'])} ({p['measured']['arm']} over {p['measured']['over']})")
+                         for p in parts))
     off, outside = [p for p in parts if p["off"]], r["not_in_target"]
     if off or outside:
         why = []
         if off:
             why.append("leaves off " + " and ".join(
                 f"{' and '.join(p['off'])} ({'in ' if len(p['off']) < len(p['changes']) else ''}{p['name']}, "
-                f"{p['points']:.2f}%)" for p in off) + ", which the target counts")
+                f"{_points(p['points'])}%)" for p in off) + ", which the target counts")
         if outside:
             why.append(f"turns on {', '.join(outside[:-1])}{' and ' if len(outside) > 1 else ''}{outside[-1]}, which "
                        "the target has no part for")
