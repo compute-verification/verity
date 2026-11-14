@@ -9,7 +9,7 @@
 # (its name wherever it is written; in `adapters/**` only `RemoteBandwidth`, the receipt it imports from PoUB, is
 # renamed), and `remote_session`, which names a session, not the protocol.
 # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames `check.py --update
-# --moved` takes when the locks are regenerated.
+# --moved` takes when the locks are regenerated, kept as `poub_names_moves.json` (printed on the tree before the move).
 
 [words]
 "RemoteAudit" = "Poub"
