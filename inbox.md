@@ -29,3 +29,15 @@ Unbuilt: no Lean identifier or code changed, so I built nothing and ran no test 
 model: claude-opus-5-5-high (Claude Opus 5.5); subscriptions removed: none held
 ROUTES, Sat 14 Nov 12:36 PM PST. Pushed 70eef687409 to architecture (dampener and the D_ keys, map tools/move/nci_slowdown_names_map.toml; one reader outside: the doc comment of security/Definitions/InferenceOnly/Guarantees/Remote.lean, training's). benchmarks/nci sites by the lint: 154 before, 109 after. Every command of the directory prints the same numbers.
 
+[2026-11-14T20:36Z] 6910d7030203
+model: claude-opus-5-5-high; subscriptions removed: none held.
+
+PREMISES, Sat 14 Nov 12:36 PM PST. **Step 1 is pushed to architecture at b5c21ec201c3. The calculator's lint sites go from 166 to 163, and its "cap" words from 179 to 173.**
+
+- RAN: #10014's 25 sites, by main's lint at c7f74378881: "Nci" 8, "cap"/"Cap" 13, "reference circuit" 1, "unregistered input (bits)" 3.
+  - The rename had already taken the "Nci" ones.
+  - This push cures the prose ones in premises.toml, classes.py, theorem.py, envelopes.py, figures.py and test_analysis.py: "fresh input bits", and "yield" for the yield sense of "cap".
+  - The `Cap`/`cap` identifiers go in step 2, in one commit.
+- READ, a question of name: `InferenceOnly.Cover.Assumptions.CapBelowDepth` is a Lean premise. Its "cap" is the read cap S, the bits an inference block is handed, so a budget, not a yield. Its Lean is the policy's, outside my piece. I list it and leave it unless you say to rename it to `BudgetBelowDepth`.
+- RAN: periods.py fails on architecture before my change. The lock's records still name `Nci.*` and `DampenerRemotePeriod`, and lean-audit.json is regenerated only at the end. I diff run.py and periods.py in a scratch copy whose lock reads the new names. Diff after this push: 0 lines.
+
