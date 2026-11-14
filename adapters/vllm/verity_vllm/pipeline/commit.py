@@ -1246,31 +1246,31 @@ def main(args: Options) -> None:
             # `--retain host` pins the whole run's raw bytes (+ ~1/4 for levels) in HOST memory; inside a container the
             # bound is the cgroup limit, not `free`. Over it the kernel OOM-killer SIGKILLs the process mid-warm-up with no Python error
             # (B=32 Llama 1024/128 on a 125 GB cp-dA container). Say so up front; the sound alternative is `--retain none` + replay openings.
-            host_cap = None
-            host_cap_src = None
+            host_limit = None
+            host_limit_src = None
             for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
                 try:
                     v = Path(cg).read_text().strip()
                     if v.isdigit() and int(v) < (1 << 60):
-                        host_cap = int(v)
-                        host_cap_src = cg
+                        host_limit = int(v)
+                        host_limit_src = cg
                         asz["host_memory_cap_source"] = cg
                         break
                 except OSError:
                     pass
-            if host_cap is None:
+            if host_limit is None:
                 # no cgroup limit visible (bare host / 'max'): the machine's MemTotal keeps the admission a bound instead of
                 # admitting unconditionally; the source is named on the record either way
                 try:
                     for line in Path("/proc/meminfo").read_text().splitlines():
                         if line.startswith("MemTotal:"):
-                            host_cap = int(line.split()[1]) * 1024
-                            host_cap_src = "/proc/meminfo MemTotal (no cgroup limit visible)"
+                            host_limit = int(line.split()[1]) * 1024
+                            host_limit_src = "/proc/meminfo MemTotal (no cgroup limit visible)"
                             break
                 except OSError:
                     pass
-            asz["host_memory_cap_bytes"] = host_cap
-            asz["host_memory_cap_source"] = host_cap_src
+            asz["host_memory_cap_bytes"] = host_limit
+            asz["host_memory_cap_source"] = host_limit_src
             # the record NAMES the admission that governs this run (a field, not an
             # inference from which file is present): a run must satisfy the admission whose domain is its retention mode -- the bounded
             # HOST BOUND (below) for --bounded-staging, the host-retention envelope for the unbounded --retain host path; the other
@@ -1280,11 +1280,11 @@ def main(args: Options) -> None:
                               else ("f_da_15_host_retention_envelope" if getattr(com, "retain", None) == "host" else None)),
                 "retain": getattr(com, "retain", None), "bounded_staging": bool(getattr(com, "bounded", False)),
                 "rule": "the admission whose domain is the run's retention mode governs; the other-mode admission is on the record and does not refuse alone"}
-            if host_cap is not None and getattr(com, "retain", None) == "host" and not getattr(com, "bounded", False):
+            if host_limit is not None and getattr(com, "retain", None) == "host" and not getattr(com, "bounded", False):
                 need = int(asz["retained_bytes_bound"] * 1.25)
-                if need > host_cap:
+                if need > host_limit:
                     print(f"[delta] WARNING host retention bound {need >> 20} MiB (raw x1.25 for levels) exceeds the container memory limit "
-                          f"{host_cap >> 20} MiB: expect a silent OOM-kill (rc 137) during the instrumented run; use --retain none (openings by "
+                          f"{host_limit >> 20} MiB: expect a silent OOM-kill (rc 137) during the instrumented run; use --retain none (openings by "
                           f"replay) or a larger container", flush=True)
             if getattr(com, "bounded", False):
                 # the HOST peak bound of a bounded run, every term named (bytes):
@@ -1335,7 +1335,7 @@ def main(args: Options) -> None:
                                             learn_budget_bytes=int(getattr(com, "learn_budget_bytes", 0) or 0), openings=int(args.openings),
                                             chunk_bytes=int(com.chunk), window_bytes=int(getattr(com, "win_bytes", 0) or 0),
                                             bounded=bool(getattr(com, "bounded", False)), open_after_release=bool(args.open_after_release),
-                                            host_cap_bytes=host_cap, hidden_factor=_f_hidden, other_factor=_f_other,
+                                            host_cap_bytes=host_limit, hidden_factor=_f_hidden, other_factor=_f_other,
                                             # engine growth after admission (torch host allocator, vLLM bookkeeping, CUDA context, the warm-ups'
                                             # buffers) + pool rounding: B1 timelines RSS 2,218 -> 5,757 MiB before the first pool block (+3,539
                                             # MiB), rounding <= 190 MiB -> 6 GiB (the earlier 4 GiB left 516 MiB on bounded-none try 3)
@@ -1377,19 +1377,19 @@ def main(args: Options) -> None:
                       f"{' + c2_residual ' + str(_admit.get('c2_residual_bytes', 0) >> 20) if _admit.get('c2_freed_before_replay', True) else ' + c2_programs'}"
                       f"{(' | later_pair_replay ' + str(_ph.get('later_pair_replay', 0) >> 20) + ' = replay + pool_carry ' + str(_admit.get('pool_carry_bytes', 0) >> 20)) if 'later_pair_replay' in _ph else ''}"
                       f" -> peak phase {_admit.get('peak_phase')} MiB; "
-                      f"cgroup {((host_cap or 0) >> 20) or None} MiB; margin "
-                      f"{(_admit['margin_bytes'] or 0) >> 20 if host_cap else None} MiB ({round(100 * (_admit['margin_frac'] or 0), 1) if host_cap else None} %)", flush=True)
+                      f"cgroup {((host_limit or 0) >> 20) or None} MiB; margin "
+                      f"{(_admit['margin_bytes'] or 0) >> 20 if host_limit else None} MiB ({round(100 * (_admit['margin_frac'] or 0), 1) if host_limit else None} %)", flush=True)
                 # the dominant contributor by name, on the print and on any refusal -- never merely "predicted OOM"
                 print(f"[delta] bounded staging DOMINANT CONTRIBUTOR ({kind}): {(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
                 (out / f"host_admission_{kind}.json").write_text(json.dumps(_admit, indent=1, default=str) + "\n")
                 (out / f"arena_sizing_{kind}.json").write_text(json.dumps(asz, indent=1, default=str) + "\n")   # + cap, admission_of_record, bound
                 if getattr(args, "host_admit", None) is not None:
-                    if host_cap is None:
+                    if host_limit is None:
                         print("[delta] REFUSE (--host-admit): no cgroup memory limit readable to admit against", flush=True)
                         sys.exit(3)
-                    if _bound > host_cap * (1.0 - float(args.host_admit)):
+                    if _bound > host_limit * (1.0 - float(args.host_admit)):
                         print(f"[delta] REFUSE (--host-admit {args.host_admit}): host peak bound {_bound >> 20} MiB > {(1.0 - float(args.host_admit)):.2f} x cgroup "
-                              f"{host_cap >> 20} MiB -- predicted OOM, not launched; dominant contributor: "
+                              f"{host_limit >> 20} MiB -- predicted OOM, not launched; dominant contributor: "
                               f"{(_admit.get('dominant_contributor') or {}).get('text')}", flush=True)
                         sys.exit(3)
             # step: arriving prompts, live decode rows, the M1 stream geometry the record shows; + the Program's LAG rows), x1.25 for levels,
@@ -1397,11 +1397,11 @@ def main(args: Options) -> None:
             # (rc 3 = COMMIT FAIL in row_pod; the record carries the numbers).  VERITY_ADMIT_OVER_BOUND=1 overrides -- named on the record.
             try:
                 from verity_vllm.pipeline import admission_bound as ADM
-                adm = ADM.admission(asz, reqs, host_cap, retain=str(getattr(com, "retain", "host")),
+                adm = ADM.admission(asz, reqs, host_limit, retain=str(getattr(com, "retain", "host")),
                                     max_num_batched_tokens=eng.kwargs.get("max_num_batched_tokens"), lag=admission_lag(wl),
-                                    envelope_bound_bytes=int(asz["retained_bytes_bound"]), resident=ADM.committer_resident(wl, host_cap, pairs=args.pairs, replay_workers=args.replay_workers))
+                                    envelope_bound_bytes=int(asz["retained_bytes_bound"]), resident=ADM.committer_resident(wl, host_limit, pairs=args.pairs, replay_workers=args.replay_workers))
                 adm["override"] = settings.VERITY_ADMIT_OVER_BOUND
-                adm["host_cap_source"] = host_cap_src
+                adm["host_cap_source"] = host_limit_src
                 adm["domain"] = "--retain host (the whole run's raw bytes pinned on host); a non-host retention is recorded, never refused"
                 # a --bounded-staging run pins the NON-excluded families sparsely and opens the excluded
                 # one by replay: its governing admission is the bounded HOST BOUND printed above (asz["admission_of_record"]); this envelope
@@ -1413,7 +1413,7 @@ def main(args: Options) -> None:
                 print(f"[delta] HOST ADMISSION ({kind}): scheduled raw {adm['scheduled_raw_bytes'] >> 20} MiB over {_s['steps']} steps "
                       f"({_s['prompt_tokens']} prompt tokens + {_s['decode_rows']} decode rows, lag {_s['lag']}; peak step {_s['peak_step']} = "
                       f"{_s['peak_step_bytes'] >> 20} MiB) -> predicted host {adm['predicted_host_bytes'] >> 20} MiB vs limit "
-                      f"{(host_cap or 0) >> 20 if host_cap else 'none'} MiB: {'ADMITTED' if adm['admitted'] else 'REFUSED'} -- {adm['why']}", flush=True)
+                      f"{(host_limit or 0) >> 20 if host_limit else 'none'} MiB: {'ADMITTED' if adm['admitted'] else 'REFUSED'} -- {adm['why']}", flush=True)
                 if not adm["admitted"] and not adm["override"] and adm["governs_this_run"]:
                     print(f"[delta] REFUSE: host admission -- {adm['why']} (VERITY_ADMIT_OVER_BOUND=1 launches anyway, named on the record)", flush=True)
                     sys.exit(3)
@@ -1429,7 +1429,7 @@ def main(args: Options) -> None:
                 # VERITY_ADMIT_OVER_BOUND=1; a non-host retention (nothing pinned for the run) records the error and proceeds
                 _host = str(getattr(com, "retain", "host")) == "host" and not bool(getattr(com, "bounded", False))   # a bounded run: the HOST BOUND above governs
                 _ovr = settings.VERITY_ADMIT_OVER_BOUND
-                asz["admission"] = {"admitted": (None if not _host else False), "override": _ovr, "host_cap_source": host_cap_src,
+                asz["admission"] = {"admitted": (None if not _host else False), "override": _ovr, "host_cap_source": host_limit_src,
                                     "why": f"admission not computed: {_ae!r}"[:300] + (" -- refused: an uncomputed admission is not an admission (--retain host)" if _host and not _ovr else "")}
                 (out / f"admission_{kind}.json").write_text(json.dumps(asz["admission"], indent=1, default=str) + "\n")
                 if _host and not _ovr:
