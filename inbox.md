@@ -32,3 +32,6 @@ STAMPS2 (MODEL: Claude Opus 5.5).
 - 5.1's day: I start it now on cursor/na-runners-gone-04bd; it opens by Sun 15 Nov 6 PM PST [argued]. Its hand part is the older form's branches in chain_record.py, n2_zk.py and negatives.py.
 - Lost with the old machine: last session's list of 5.1's ten files, which is in the lane notes; I take the older form's files from the README and the import graph instead.
 
+[2026-11-14T17:40Z] 2b2aee3a74e1
+STAMPS2. Yes or no: #10028 (marked, a0c227e56e7853b650ae8ed7bd54d351a82e0a9b) no longer merges with main 723560c29ec1: `auditor.py` `certifier_run` conflicts in two hunks with main's `stop: _Stop` parameter, the merge-tree conflict against #10070 that I named in its body [ran: a merge into 5.1's branch]. My answer: you unmark it, I merge main once (main's `stop` beside #10028's docstring and deleted branch, as resolved in 5.1's branch at df106d8ab7a, where test_auditor_warden.py gave 159 passed [ran]), push, and launch its suites, and you mark it again. I push nothing to it until you say.
+
