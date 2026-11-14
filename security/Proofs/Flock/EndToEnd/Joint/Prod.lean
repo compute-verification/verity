@@ -9,9 +9,9 @@ import Proofs.Flock.Soundness.Game
 /-!
 # A period's run: the product of the escapes
 
-`period_prod`: if at every strategy satisfying `good` a sampling block's records all carry one escape `e`, and the
+`monitoringPeriod_prod`: if at every strategy satisfying `good` a sampling block's records all carry one escape `e`, and the
 sampling block's "miss" event has probability at most `e`, then every sampling block misses with the product of their
-escapes below `c` with probability at most `c`. It is `period_horizon` with the escapes read off the records: sampling
+escapes below `c` with probability at most `c`. It is `monitoringPeriod_horizon` with the escapes read off the records: sampling
 block `i`'s escape is fixed by the strategy that plays it, before its coins, so the rest of the period has to miss below
 `c / e`.
 -/
@@ -25,7 +25,7 @@ open scoped ENNReal
 variable {β : ℕ → Type}
 
 /-- **The joint escape over a period's sampling blocks.** -/
-theorem period_prod {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
+theorem monitoringPeriod_prod {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (miss : ρ → Prop) (esc : ρ → ℝ≥0∞) (good : (i : ℕ) → Strategy (G i) → Prop)
     (hstage : ∀ i τ, good i τ →
       ∃ e : ℝ≥0∞, e ≠ ⊤ ∧ (∀ b, esc (rec i τ b) = e) ∧ prob (fun b => miss (rec i τ b)) (G i) τ ≤ e) :
@@ -64,7 +64,7 @@ theorem period_prod {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ)
             by_cases hm : miss (rec i (Strategy.ofBind _ (G i) s) b)
             · rw [if_pos hm, value_map]
               refine (value_mono (fun l hl => ?_) _).trans
-                (period_prod G rec miss esc good hstage T (i + 1) s' (c / e) hg)
+                (monitoringPeriod_prod G rec miss esc good hstage T (i + 1) s' (c / e) hg)
               obtain ⟨hall, hlt⟩ := hl
               refine ⟨fun r hr => hall r (List.mem_cons_of_mem _ hr), ?_⟩
               simp only [List.map_cons, List.prod_cons, hw b] at hlt

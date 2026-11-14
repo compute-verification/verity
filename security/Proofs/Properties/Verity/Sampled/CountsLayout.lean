@@ -8,7 +8,7 @@ import Proofs.Flock.Claims.Complete.Json.Stmt
 # The count match on the moves' reach, at the session's layout
 
 At the readings and the decoders at the session's layout (`Live.layout`, `Live.tables`) and the sample-coupled coin map
-under `fieldEnc`, every outcome the joint law reaches off the empty classes at their counts (`linkEmptyAt`,
+under `fieldEnc`, every outcome the joint distribution reaches off the empty classes at their counts (`linkEmptyAt`,
 `roundEmptyAt`), beside an accepted play that misses nowhere and whose log v2 read is the device's, it reaches off the
 empty classes (`CountsReach`): each stop's opening asks for the count of coins the stop releases. It needs no verifier
 fact beyond those `MovesReach` reads: v2 reads each opening frame's count off the line that opens its round, and
@@ -395,7 +395,7 @@ theorem link_frameCount {V : Vocab d α} {k : Verity.Registration.Composite} {θ
 
 -- `decodersAt`'s roots search `List.finRange A.rounds`, which unification would otherwise unfold at `A.rounds`'s value
 attribute [local irreducible] Live.rounds Live.N in
-/-- **The count match at a witness of the joint law's support, at the session's layout**: at the readings and the
+/-- **The count match at a witness of the joint distribution's support, at the session's layout**: at the readings and the
 decoders at `Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the
 empty classes at their counts, beside a play that the sampled verdict accepts, that misses nowhere, whose log v2's
 check read is the device's and whose blobs sent hold each pinned table at its registered file (`TablesSent`), is off the

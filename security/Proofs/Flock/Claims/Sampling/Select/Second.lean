@@ -15,7 +15,7 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 /-!
 # The second stage misses proof blocks no more often than the cells' escapes (`SecondMisses`)
 
-* `flockLaw_second`: `secondLaw`'s Flock law is the work sampling design at `k = 1`, its strata the cells in order, template by
+* `flockLaw_second`: `secondLaw`'s Flock sampling design is the work sampling design at `k = 1`, its strata the cells in order, template by
   template and in each by sampled replay block (`cellPairs`), cell `(t, i)` exactly
   `[off_t + i·n_t, off_t + (i+1)·n_t)` sampling `k_t` (`cellOf`).
 * `selectSecond_ok`: an accepted second stage passed `secondProblem`, drew its units from the coins under that sampling
@@ -137,7 +137,7 @@ theorem strata_second (sample ns ks : Array ℕ) :
         Select.cellObj (cellOff sample.size ns z.1) (ns.getD z.1 0) (ks.getD z.1 0) z.2 (sample.getD z.2 0) z.1 := by
   simp only [cellPairs, List.map_flatMap, List.map_map, Function.comp_def]
 
-/-- **`secondLaw`'s Flock law**: the work sampling design at `k = 1`, its strata the cells in order (`cellOf` over `cellPairs`). -/
+/-- **`secondLaw`'s Flock sampling design**: the work sampling design at `k = 1`, its strata the cells in order (`cellOf` over `cellPairs`). -/
 theorem flockLaw_second (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.Law)
     (h : Draw.flockLaw (Select.secondLaw sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
@@ -180,7 +180,7 @@ theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" =
   exact ⟨_, ⟨u, hu, rfl⟩, int_toJson u⟩
 
 /-- **`Select.selectSecond`'s steps**: an accepted second stage passed `secondProblem`, drew its units from the coins
-under `secondLaw`'s Flock law over the `|sample|·Σ n_t` proof blocks, and proves each of them. -/
+under `secondLaw`'s Flock sampling design over the `|sample|·Σ n_t` proof blocks, and proves each of them. -/
 theorem selectSecond_ok {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample ns ks src = .ok (draw, read)) :
     Select.secondProblem sample ns ks = none ∧

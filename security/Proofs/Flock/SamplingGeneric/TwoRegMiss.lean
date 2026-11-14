@@ -29,7 +29,7 @@ escapes at the committed boundary trace's footprint (`secondDraws`), each at mos
   interior.
 
 The miss, the threshold form and the headline are proved at any boundary values (`CompiledTwo.pr_missTwo_le_Pa`,
-`CompiledTwo.pr_missTwo_le_pow`, `CompiledTwo.threshold_of_event`, `CompiledTwo.headline_of_event`): the draw laws read
+`CompiledTwo.pr_missTwo_le_pow`, `CompiledTwo.threshold_of_event`, `CompiledTwo.headline_of_event`): the sampling designs read
 a set of proof blocks and no trace. The three above are those at the committed boundary trace
 (`CompiledTwo.FregTwo_eq`), and `SamplingGeneric/TwoRegX.lean` takes them at the boundary trace read at the statement.
 -/

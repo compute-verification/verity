@@ -5469,7 +5469,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             return tables_randomness_case(&tabs);
         }
         if name == "tables_unsplittable_draw_refused" {
-            // both sides refuse, before Hello, a sample two tables cannot split: a Bernoulli law's (its count is random), and an
+            // both sides refuse, before Hello, a sample two tables cannot split: a Bernoulli sampling design's (its count is random), and an
             // odd count, subset or stratified; the server also refuses them at configuration (`server_tables`)
             let n = inst.n as u64;
             let units = |k: u64| (0..k).collect::<Vec<_>>();

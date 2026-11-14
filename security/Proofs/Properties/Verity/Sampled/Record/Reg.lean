@@ -67,7 +67,7 @@ theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.
     exact (Flock.Bridge.nsOf_sum A.hpop).le.trans (by simp)
 
 /-- **At a session v2 sets up, the statement's registration is v2's parameters'**: the statement's descriptor parses as
-their verifier's program and its query is their verifier's, at the parameters whose verifier's law the sample reads over
+their verifier's program and its query is their verifier's, at the parameters whose verifier's sampling design the sample reads over
 the population. -/
 theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
@@ -137,7 +137,7 @@ theorem deriveLaw_congr (p : _root_.Spot.Program) (q : Json) (tbl : Option Json)
   unfold _root_.Spot.Draw.deriveLaw
   rw [hl, hn]
 
-/-- **`deriveLaw` expands neither a subset nor a Bernoulli law.** -/
+/-- **`deriveLaw` expands neither a subset nor a Bernoulli sampling design.** -/
 theorem deriveLaw_none (p : _root_.Spot.Program) (q : Json) (tbl : Option Json) {law : Json}
     (h1 : kindOf law ≠ "stratified") (h2 : kindOf law ≠ "work") :
     _root_.Spot.Draw.deriveLaw p q law tbl = .ok none := by
@@ -257,7 +257,7 @@ theorem flockLaw_bernoulli_text (a b n : ℕ) (hb : 0 < b) (hab : a ≤ b) :
   simp only [bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   rfl
 
-/-- **`lawAt`'s steps**: the verifier's law's expansion, the sampling design `flockLaw` reads from its sampling design object, and the
+/-- **`lawAt`'s steps**: the verifier's sampling design's expansion, the sampling design `flockLaw` reads from its sampling design object, and the
 expansion where there is one. -/
 theorem lawAt_ok {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Draw.Law}
     (h : lawAt v n = .ok L) :
@@ -274,7 +274,7 @@ theorem lawAt_ok {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Dr
   exact ⟨d, fl, hd, hf, (Except.ok.inj h).symm⟩
 
 /-- **A sampling design's text**, as a selection rule names it (`Select.Rule.law`): `kind:K` for a `subset`, `stratified` or
-`work` law of `K` units, and `bernoulli:NUM/DEN`, each number in `Nat.repr`'s digits. -/
+`work` sampling design of `K` units, and `bernoulli:NUM/DEN`, each number in `Nat.repr`'s digits. -/
 def lawText : Flock.Draw.Law → String
   | .subset k => "subset" ++ ":" ++ Nat.repr k
   | .bernoulli a b => "bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b)
@@ -316,7 +316,7 @@ theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L 
       exact deriveLaw_congr _ _ _ (getD_law_of_kindOf hw (by decide)).symm (by rw [hnat]; exact nat_toJson k)
 
 /-- **v2's design at the sampling design's text**: over the verifier's program and query of `A`'s population, where `lawAt` reads
-`A`'s law, the design under `law (lawText A.design)` is `designSlots A`. -/
+`A`'s sampling design, the design under `law (lawText A.design)` is `designSlots A`. -/
 theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Registration.Verifier}
     (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.design)
     (hk : ∀ k, A.design = .subset k → 1 ≤ k) :
