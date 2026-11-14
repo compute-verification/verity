@@ -95,7 +95,8 @@ def test_each_hook_records_its_events_key_names_and_of_its_values_only_the_model
 
     for name, event in (("shell_hook.py", shell), ("task_hook.py", task), ("stop_hook.py", stop)):
         run(name, event)
-    run("shell_hook.py", {**shell, "model": "m" * 500, "generation_id": "g" * 500})
+    run("shell_hook.py", {**shell, "conversation_id": "bc-45454545-4545-4545-8545-454545454545", "model": "m" * 500,
+                          "generation_id": "g" * 500})
     run("shell_hook.py", {**shell, "model": {"name": "not-to-be-copied"}, "generation_id": 7})
     run("shell_hook.py", {k: v for k, v in shell.items() if k not in ("model", "generation_id")})
     run("shell_hook.py", "not json")
@@ -890,6 +891,161 @@ def test_turns_prints_the_model_each_turn_of_an_agent_names_from_both_files_of_t
     nobody = turns("bc-nobody")
     assert nobody.returncode == 1 and nobody.stdout == (
         f"inbox: {event_log} holds no event of bc-nobody: no hook has run for it on this VM, or its events have rotated out\n")
+
+
+ALLOW = {"permission": "allow"}
+LAUNCH, OTHER = "launch-model", "other-model"
+AGENT, PEER = "bc-56565656-5656-4565-8565-565656565656", "bc-67676767-6767-4676-8676-676767676767"
+TURNS = [f"{n * 8}-1111-4111-8111-111111111111" for n in "123456789"]
+
+
+def on_model(command: str, agent: str, turn: str | None, model: str | None, inbox: Path) -> dict:
+    """The hook's verdict on `command` in the turn `turn` of `agent` on `model`; a None leaves that key out of the payload."""
+    event = {"hook_event_name": "beforeShellExecution", "command": command, "conversation_id": agent,
+             **({"generation_id": turn} if turn is not None else {}), **({"model": model} if model is not None else {})}
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                         env={**os.environ, "AGENT_INBOX": str(inbox), "AGENT_GUARD_MIN_AVAIL": "0"}).stdout
+    return json.loads(out)
+
+
+def settled(log: Path, event: str = "model_refusal") -> list[dict]:
+    return [e for e in map(json.loads, log.read_text().splitlines()) if e.get("event") == event]
+
+
+def logged(t: int, agent: str, **kept: str) -> str:
+    return json.dumps({"t": t, "hook": "shell_hook.py", "event": "beforeShellExecution", "conversation_id": agent,
+                       **kept}) + "\n"
+
+
+def test_a_turn_on_another_model_than_the_launchs_is_refused_once_at_its_first_command_with_both_models_and_both_ways_on(
+        tmp_path, event_log):
+    """A turn an agent's own timer or a subscription starts can take another model than its launcher named, and nothing in
+    the turn says so. Its first command is refused once, naming both models and the two ways on; the rest of the turn
+    passes, and so does every turn back on the launch model. Each turn on another model is told, not only the first."""
+    one, two, three, four = TURNS[:4]
+    assert on_model("ls", AGENT, one, LAUNCH, tmp_path) == ALLOW
+    assert on_model("pwd", AGENT, one, LAUNCH, tmp_path) == ALLOW
+    first = on_model("ls", AGENT, two, OTHER, tmp_path)
+    text = first["user_message"]
+    assert first["permission"] == "deny" and text == first["agent_message"]
+    assert f"this turn runs on `{OTHER}`, and you were launched on `{LAUNCH}`" in text
+    assert f"Task and `model: {LAUNCH}`" in text and "resumed by your lead" in text and "go by your brief" in text
+    assert on_model("ls", AGENT, two, OTHER, tmp_path) == ALLOW
+    assert on_model("pwd", AGENT, two, OTHER, tmp_path) == ALLOW
+    (line,) = settled(event_log)
+    assert sorted(line) == ["conversation_id", "event", "generation_id", "hook", "launch_model", "model", "t"]
+    assert (line["hook"], line["conversation_id"], line["generation_id"], line["model"], line["launch_model"]) == (
+        "shell_hook.py", AGENT, two, OTHER, LAUNCH)
+    assert on_model("ls", AGENT, three, LAUNCH, tmp_path) == ALLOW
+    assert on_model("pwd", AGENT, three, LAUNCH, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, four, OTHER, tmp_path)["permission"] == "deny"
+    assert on_model("ls", AGENT, four, OTHER, tmp_path) == ALLOW
+    assert [e["generation_id"] for e in settled(event_log)] == [two, four], "once a turn, not once an agent"
+
+
+def test_an_agent_whose_turns_all_run_on_its_launch_model_is_never_refused(tmp_path, event_log):
+    """The launch model is each agent's own: another agent's turns on another model, in the same log and the first in it,
+    refuse nothing of this one's."""
+    assert on_model("ls", PEER, TURNS[5], OTHER, tmp_path) == ALLOW
+    for mine, peers in zip(TURNS[:3], TURNS[5:8]):
+        for command in ("ls", "pwd"):
+            assert on_model(command, AGENT, mine, LAUNCH, tmp_path) == ALLOW
+            assert on_model(command, PEER, peers, OTHER, tmp_path) == ALLOW
+    assert settled(event_log) == []
+
+
+def test_no_launch_model_on_record_refuses_nothing(tmp_path, event_log):
+    """A payload that names no model or no turn, an agent whose first line names no turn or whose first turn names no
+    model, and a local session pass on any model. The launch model is the first model a line of the first turn names,
+    though that turn's first line names none."""
+    one, two, three = TURNS[:3]
+    assert on_model("ls", AGENT, one, LAUNCH, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, two, None, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, None, OTHER, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, two, OTHER, tmp_path)["permission"] == "deny", "the turn the two payloads would be in"
+
+    untold, unnamed = "bc-78787878-7878-4787-8787-787878787878", "bc-89898989-8989-4898-8898-898989898989"
+    with event_log.open("a") as log:
+        log.write(logged(1_000_000_000, untold, model="model-before-turns"))
+        log.write(logged(1_000_000_000, unnamed, generation_id=one))
+    for turn, model in ((one, LAUNCH), (two, OTHER), (three, LAUNCH)):
+        assert on_model("ls", untold, turn, model, tmp_path) == ALLOW, "its first line names no turn"
+    for turn, model in ((two, LAUNCH), (three, OTHER)):
+        assert on_model("ls", unnamed, turn, model, tmp_path) == ALLOW, "its first turn names no model"
+    local = "56565656-5656-4565-8565-565656565656"
+    assert on_model("ls", local, one, LAUNCH, tmp_path) == ALLOW
+    assert on_model("ls", local, two, OTHER, tmp_path) == ALLOW, "a local session's user picks its model turn by turn"
+
+    named_later = "bc-90909090-9090-4909-8909-909090909090"
+    with event_log.open("a") as log:
+        log.write(logged(1_000_000_000, named_later, generation_id=one))
+    assert on_model("ls", named_later, one, LAUNCH, tmp_path) == ALLOW
+    refused = on_model("ls", named_later, two, OTHER, tmp_path)
+    assert refused["permission"] == "deny" and f"launched on `{LAUNCH}`" in refused["user_message"]
+    assert [e["conversation_id"] for e in settled(event_log)] == [AGENT, named_later]
+
+
+def test_the_setting_in_a_turns_first_command_passes_it_and_settles_the_turn(tmp_path, event_log):
+    """`AGENT_GUARD_MODEL_OK=1` in the first command of a turn on another model passes it and settles the turn as a refusal
+    would, with a `model_ok` line; it settles only its own turn, and in a turn already refused it adds nothing."""
+    one, two, three = TURNS[:3]
+    assert on_model("ls", AGENT, one, LAUNCH, tmp_path) == ALLOW
+    assert on_model("AGENT_GUARD_MODEL_OK=1 ls", AGENT, two, OTHER, tmp_path) == ALLOW
+    assert on_model("ls", AGENT, two, OTHER, tmp_path) == ALLOW
+    assert [e["generation_id"] for e in settled(event_log, "model_ok")] == [two] and settled(event_log) == []
+    assert on_model("ls", AGENT, three, OTHER, tmp_path)["permission"] == "deny"
+    assert on_model("AGENT_GUARD_MODEL_OK=1 ls", AGENT, three, OTHER, tmp_path) == ALLOW
+    assert len(settled(event_log, "model_ok")) == 1 and [e["generation_id"] for e in settled(event_log)] == [three]
+
+
+def test_another_refusal_comes_first_and_a_waiting_message_after(tmp_path, event_log):
+    """A command the hook refuses for another reason is refused with that reason and leaves the turn unsettled, so the
+    next command it would pass is the one the model rule refuses; a waiting inbox message goes to the command after."""
+    one, two = TURNS[:2]
+    inbox = tmp_path / "inbox"
+    assert on_model("ls", AGENT, one, LAUNCH, inbox) == ALLOW
+    environment = on_model("env", AGENT, two, OTHER, inbox)
+    assert environment["permission"] == "deny" and "environment variables' values" in environment["user_message"]
+    assert "Refused once" not in environment["user_message"] and settled(event_log) == []
+    queue(AGENT, "a waiting message", inbox)
+    told = on_model("ls", AGENT, two, OTHER, inbox)
+    assert told["permission"] == "deny" and told["user_message"].startswith("Refused once")
+    assert "a waiting message" not in told["user_message"]
+    delivered = on_model("ls", AGENT, two, OTHER, inbox)
+    assert delivered["permission"] == "deny" and "a waiting message" in delivered["user_message"]
+    assert on_model("ls", AGENT, two, OTHER, inbox) == ALLOW
+
+
+def test_the_launch_model_is_the_first_turns_in_the_file_the_log_rotated_to_and_a_log_that_starts_late_names_what_it_holds(
+        tmp_path, event_log):
+    """The launch turn may sit in the file the log rotated to. A log that starts after the launch (rotated out, or a new
+    machine a wake booted) holds a later turn first, and that turn's model is on record: a turn on any other is refused
+    naming it, and the refusal says to go by the brief."""
+    one, two, three, five, six = (TURNS[i] for i in (0, 1, 2, 4, 5))
+    Path(f"{event_log}.1").write_text(logged(1_000_000_000, AGENT, generation_id=one, model=LAUNCH))
+    event_log.write_text(logged(1_000_003_600, AGENT, generation_id=two, model=OTHER))
+    refused = on_model("ls", AGENT, three, OTHER, tmp_path)
+    assert refused["permission"] == "deny" and f"launched on `{LAUNCH}`" in refused["user_message"]
+
+    late = "bc-a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1"
+    assert on_model("ls", late, five, "late-model", tmp_path) == ALLOW
+    told = on_model("ls", late, six, LAUNCH, tmp_path)["user_message"]
+    assert f"this turn runs on `{LAUNCH}`, and you were launched on `late-model`" in told and "go by your brief" in told
+
+
+def test_a_log_the_rule_cannot_write_refuses_nothing_and_says_so(tmp_path, event_log):
+    """A guard that can't record that a turn was told can't keep the telling to once, so it refuses nothing, and says so:
+    with the launch turn on record in the file the log rotated to and the log itself unwritable, a turn on another model
+    passes, each command saying on stderr why."""
+    Path(f"{event_log}.1").write_text(logged(1_000_000_000, AGENT, generation_id=TURNS[0], model=LAUNCH))
+    event_log.mkdir()
+    event = {"hook_event_name": "beforeShellExecution", "command": "ls", "conversation_id": AGENT,
+             "generation_id": TURNS[1], "model": OTHER}
+    for _ in range(2):
+        run = subprocess.run([sys.executable, HOOK], input=json.dumps(event), capture_output=True, text=True, check=True,
+                             env={**os.environ, "AGENT_INBOX": str(tmp_path / "inbox"), "AGENT_GUARD_MIN_AVAIL": "0"})
+        assert json.loads(run.stdout) == ALLOW
+        assert "the model rule refuses nothing, since it can't record a turn as told in" in run.stderr
 
 
 def test_send_refuses_an_id_the_hook_would_never_deliver_to(tmp_path):

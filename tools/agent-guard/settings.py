@@ -27,6 +27,12 @@ EVENT_VALUES = ("model", "generation_id")
 EVENT_VALUE_MAX = 64
 #: the head of a line `record_event` wrote for an agent's hook run: its time, the hook and the agent
 RUN = re.compile(r'^\{"t": (\d+), "hook": "([^"]*)", "event": (?:"[^"]*"|null), "conversation_id": "([^"]+)"', re.M)
+#: what a command carries, in its text, to pass where the model rule (`shell_hook.model_reason`) would refuse it: for a
+#: lead that has decided the turn stays on its model. Read in the command's text, as `AGENT_GUARD_LOCAL_OK=1` is, since
+#: a hook is handed the command and never the environment of the shell that runs it
+MODEL_OK = "AGENT_GUARD_MODEL_OK=1"
+#: the `event` of the line the model rule adds to EVENT_LOG for a turn it settles: refused once, or passed by MODEL_OK
+MODEL_REFUSAL, MODEL_PASS = "model_refusal", "model_ok"
 #: this agent's conversation id where Cursor's shell sets it: the agent `inbox.py selftest` checks when none is named
 CONVERSATION_ID = os.environ.get("CURSOR_CONVERSATION_ID", "")
 #: a regex for the push URLs the push rules judge, in place of verity's and infra's on GitHub (`worktree_guard.QUEUE_URL`)
@@ -68,3 +74,45 @@ def recorded_runs() -> list[tuple[int, str, str]]:
             with open(path, errors="replace") as f:
                 runs += [(int(t), hook, agent) for t, hook, agent in RUN.findall(f.read())]
     return runs
+
+
+def agent_events(agent: str) -> list[dict]:
+    """EVENT_LOG's lines for `agent`, oldest first: those of the file it last rotated to, then its own. A line counts
+    when it parses as a JSON object whose `conversation_id` is `agent`; one that doesn't hold the id as text is skipped
+    unparsed, since this runs on a shell command and the log holds up to twice EVENT_LOG_MAX_BYTES, and one that holds it
+    but is not JSON is skipped and said on stderr. A missing file is no lines; any other OSError rises to the caller."""
+    events = []
+    for path in (EVENT_LOG + ".1", EVENT_LOG):
+        if not os.path.isfile(path):
+            continue
+        with open(path, errors="replace") as f:
+            lines = [line for line in f if agent in line]
+        for line in lines:
+            try:
+                e = json.loads(line)
+            except ValueError as err:
+                print(f"agent-guard: a line of {path} is not JSON, skipped: {err}", file=sys.stderr)
+                continue
+            if isinstance(e, dict) and e.get("conversation_id") == agent:
+                events.append(e)
+    return events
+
+
+def launch_model(events: list[dict]) -> str | None:
+    """The model an agent was launched on, as this machine's log has it (`events`: its lines, oldest first): the model
+    its first turn here names. Its first line names that turn, and the first line of that turn that names a model, the
+    model. None where the agent has no line, its first line names no turn (a hook from before the log kept one recorded
+    it) or no line of its first turn names a model: then no launch model is on record, and the model rule
+    (`shell_hook.model_reason`) refuses nothing.
+
+    The rule is wrong where the log starts after the launch: it rotated the launch turn out, or the agent came to this
+    machine later (a wake or a resume boots a new machine, whose log holds none of its earlier turns). Nothing on the
+    machine tells such a first turn from a launch, so there the first turn the log holds stands for the launch. In that
+    turn the rule refuses nothing, since its model is the one on record; in a later turn here on another model it
+    refuses once and names the model on record, which is why the refusal says to go by the brief where the brief names
+    another launch model."""
+    first = events[0].get("generation_id") if events else None
+    if not isinstance(first, str) or not first:
+        return None
+    return next((e["model"] for e in events
+                 if e.get("generation_id") == first and isinstance(e.get("model"), str) and e["model"]), None)

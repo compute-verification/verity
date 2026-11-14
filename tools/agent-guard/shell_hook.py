@@ -116,6 +116,14 @@ still queued when the agent's turn ends is not delivered then (the stop hook, `s
 follow-up, and no delivery relies on that) and may be gone by the agent's next turn, since a cloud VM does not keep `/tmp`
 across a long pause: an agent whose turn has ended is resumed with the text itself.
 
+It tells a cloud agent whose turn runs on another model than it was launched on (`model_reason`): a turn the agent's own
+timer or a subscription starts can take another model than its launcher named, and nothing in the turn says so. The
+first command of such a turn that would pass is refused once, naming both models and the two ways on: hand the turn's
+job to a local child started with `Task` and the launch model, or end the turn and be resumed by the lead; the rest of
+the turn's commands pass, and `AGENT_GUARD_MODEL_OK=1` in that first command passes it too. The launch model is the one
+the agent's first turn in this machine's event log names, so a machine a wake or a resume booted, whose log holds no
+launch turn, takes its first turn there for the launch.
+
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
 every run clone do; without origin/main, from the checkout's own when lean-audit's is unset. A VM that never ran boot.sh (a
@@ -123,6 +131,7 @@ cloud worker's) otherwise merges each lean-audit.json line by line and shows con
 merge of a PR onto `next`; and one that kept an older command runs the merged-into branch's own merge.py, which collapsed
 Security's lock to one `reads` group when an old branch merged main.
 """
+import fcntl
 import fnmatch
 import glob
 import importlib
@@ -136,7 +145,8 @@ import sys
 import time
 from pathlib import Path
 
-from settings import INBOX, INBOX_POLL_S, record_event
+from settings import (EVENT_LOG, EVENT_VALUE_MAX, INBOX, INBOX_POLL_S, MODEL_OK, MODEL_PASS, MODEL_REFUSAL,
+                      agent_events, launch_model, record_event)
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -1360,6 +1370,56 @@ def delivery(conversation: str) -> str | None:
     return text if text.strip() else None
 
 
+#: a cloud agent's or a subagent's conversation id (`task_hook.AGENT_ID`); a local session's user picks its model turn
+#: by turn
+CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py): this turn runs on `{model}`, and you "
+              "were launched on `{launch}`, the model your first turn in this machine's event log names. A turn your own "
+              "timer or a subscription starts can take another model than your launcher named. Two ways on: hand this "
+              "turn's job to a child started with Task and `model: {launch}`, local (no `environment`), so it runs on "
+              "this machine and has your checkout; or end the turn and be resumed by your lead, which keeps your launch "
+              "model. Nothing is wrong with this command: it and the rest of this turn's commands now pass, so you can "
+              "read your notes, start the child and push. If your brief names another launch model than `{launch}`, "
+              "this machine's log began after your launch (a wake or a resume put you on a new machine): go by your "
+              "brief.")
+
+
+def model_reason(event: dict, command: str) -> str | None:
+    """The model rule: the refusal's text for the first command the hook would otherwise pass in a cloud agent's turn
+    whose model differs from its launch model (`settings.launch_model`), once a turn; else None. The refusal settles the
+    turn, and so does MODEL_OK in that command, which passes it: either adds a line to EVENT_LOG for the turn, and every
+    later command of a settled turn passes. Never refused: an agent whose turns all name one model, one with no launch
+    model on record, and a payload that names no model, no turn or no cloud agent. The lock on EVENT_LOG makes the check
+    and the line one step, so of two commands a turn starts at once exactly one is refused; a log that can't be opened,
+    locked or written refuses nothing, and says so on stderr, since a turn the rule can't record as told it can't keep to
+    once. Every other refusal comes first (`main`): a command refused for another reason leaves the turn unsettled."""
+    agent, turn, model = (event.get(k) for k in ("conversation_id", "generation_id", "model"))
+    if not all(isinstance(v, str) and v for v in (agent, turn, model)) or not CLOUD_AGENT.fullmatch(agent):
+        return None
+    turn, model = turn[:EVENT_VALUE_MAX], model[:EVENT_VALUE_MAX]
+    try:
+        with open(EVENT_LOG, "a") as log:
+            fcntl.flock(log, fcntl.LOCK_EX)
+            events = agent_events(agent)
+            launch = launch_model(events)
+            if launch is None or launch == model:
+                return None
+            if any(e.get("generation_id") == turn and e.get("event") in (MODEL_REFUSAL, MODEL_PASS) for e in events):
+                return None
+            passed = MODEL_OK in command
+            log.write(json.dumps({"t": int(time.time()), "hook": "shell_hook.py",
+                                  "event": MODEL_PASS if passed else MODEL_REFUSAL, "conversation_id": agent,
+                                  "generation_id": turn, "model": model, "launch_model": launch}) + "\n")
+    except OSError as e:
+        print(f"shell_hook: the model rule refuses nothing, since it can't record a turn as told in {EVENT_LOG}: {e}",
+              file=sys.stderr)
+        return None
+    if passed:
+        return None
+    shown = {k: "".join(c for c in v if c.isprintable()) for k, v in (("model", model), ("launch", launch))}
+    return MODEL_TOLD.format(**shown)
+
+
 def checkout(root: str, cwd: str) -> str:
     """The checkout an inbox pull runs from: the workspace root, or when the root isn't one (a Task-launched cloud agent's
     `/agent`), the first checkout under its `repos/`, else the command's directory."""
@@ -1437,7 +1497,7 @@ def main() -> int:
         record_event("shell_hook.py", event)
     except (ValueError, AttributeError):
         record_event("shell_hook.py", raw)
-        command, conversation, cwd, root = raw, "", os.getcwd(), ""
+        event, command, conversation, cwd, root = {}, raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
@@ -1465,6 +1525,15 @@ def main() -> int:
                           "user_message": "Refused by tools/agent-guard/shell_hook.py: " + reason,
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
+        try:
+            told = model_reason(event, command)
+        except (OSError, LookupError, TypeError, ValueError,
+                AttributeError) as e:                   # a bug in the model rule must not stop every command
+            print(f"shell_hook: model rule failed: {type(e).__name__}: {e}", file=sys.stderr)
+            told = None
+        if told:
+            print(json.dumps({"permission": "deny", "user_message": told, "agent_message": told}))
+            return 0
         try:
             poll(conversation, checkout(root, cwd))
         except (OSError, ValueError) as e:              # nor a failed poll: the next command's hook tries again
