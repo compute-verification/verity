@@ -13,10 +13,11 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD, id_request
+from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, ID_DIGITS, ID_REQUEST_HEAD, PAD, id_request
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import EOF, reasons, records, request, run
 from verity.protocols.accounting.certifier.verifier.warden import (END, FAIL, INTEGER_FIELDS, OPTIONAL_FIELDS, Released, WardenParams,
                                                     audit, cells, read_reason, reason_frame)
+from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head
 
 #: a schedule whose cells hold an id request's head, and the same with lengths rows
 PLAIN = WardenParams(cell_bytes=512, slots=2, bucket_ms=100, delay=5, lanes=2, queue=2, window=16, ingress_cells=4,
@@ -44,7 +45,7 @@ def test_the_lengths_rows_form_is_a_parameter_no_other_schedule_hashes():
     assert WardenParams().lengths is None and PLAIN.lengths is None
     assert WardenParams().digest.hex() == DEFAULT_DIGEST and PLAIN.digest.hex() == PLAIN_DIGEST
     assert LEN.digest != PLAIN.digest and dataclasses.replace(LEN, lengths=None) == PLAIN
-    assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content")
+    assert OPTIONAL_FIELDS == ("max_tokens_cap", "lengths", "content", "request_words")
     assert not set(OPTIONAL_FIELDS) & set(INTEGER_FIELDS)
     assert LEN.reasons == PLAIN.reasons
     capped = dataclasses.replace(PLAIN, max_tokens_cap=4)
@@ -314,16 +315,33 @@ def read_as_requests(warden, ordinal: int) -> tuple[int, int] | None:
     return carry
 
 
+def with_body(body: bytes) -> bytes:
+    """An id request's head before `body`, with that body's length as its content-length."""
+    return ID_REQUEST_HEAD + b"%*d" % (ID_DIGITS, len(body)) + b"\r\n\r\n" + body
+
+
 def no_id_requests() -> dict[str, tuple[bytes, int]]:
     """Requests that are no canonical id request in the network certifier's cells, each with the cells the ingress
-    proof block still reads as a request's before the one it refuses."""
+    proof block still reads as a request's before the one it refuses. Among them: a request without `max_tokens` at
+    its place, and one with an `ignore_eos` key, each with the content-length of its own body."""
     long, linked = id_req(2, 40), id_request(model="m", user="user-2", prompt=[2000 + k for k in range(40)],
                                              max_tokens=8, seed=2, temperature=0.7, top_p=0.95, frame_bytes=B)
     assert len(cells(long, B)) == 2 * B and len(long) > P and linked != long
     at = long.index(b",", P + 5) + 5
     length = b"%*d" % (10, len(long) - Q.BODY_AT)
     assert long.count(length) == 1
-    return {"bytes": (request(300, 5), 0),
+    short = id_req(2, 3)
+    body, asks, said = short[Q.BODY_AT:], b'{"max_tokens":         8,', b',"stop":[],"stream":true'
+    assert with_body(body) == short and body.startswith(asks) and body.count(said) == 1 and body.endswith(b"]}")
+    return {"no max_tokens": (with_body(b"{" + body[len(asks):]), 0),
+            "its max_tokens after another key": (
+                with_body(b'{"temperature":0.700000,"max_tokens":         8' + body[body.index(b',"top_p"'):]), 0),
+            "a max_tokens that is no number": (short.replace(asks, b'{"max_tokens":      null,'), 0),
+            "an ignore_eos key": (with_body(body.replace(said, said + b',"ignore_eos":true')), 0),
+            "an ignore_eos key where its stop and stream are": (
+                short.replace(said, b',"ignore_eos":true,"x":1'), 0),
+            "an ignore_eos key after its prompt": (with_body(body[:-1] + b',"ignore_eos":true}'), 0),
+            "bytes": (request(300, 5), 0),
             "a name that needs an escape": (id_req(2, 3, model='a "b"'), 0),
             "an id that is no number": (long[:at] + b"x" + long[at + 1:], 1),
             "another length than its head says": (long.replace(length, b"%*d" % (10, len(long) - Q.BODY_AT + 1)), 1),
@@ -378,6 +396,28 @@ def test_a_request_that_is_no_id_request_is_never_released_and_fails_as_its_clie
     assert scanned(plain, {1: out}) is None and plain.lengths == []
     assert audit(PLAIN, *records(plain))["windows"][0]["problems"] == \
         ["connection 2 failed closed (format) at egress cell 0"]
+
+
+def test_a_clients_request_to_the_watermarks_path_is_never_released_with_lengths_rows_or_without():
+    """Beside an honest request, a client's copy of the watermark stream: its head, the run's id on it, a line that
+    names release 0 lost. With lengths rows it has no cell, no place in the release order and no byte for the server,
+    and fails as its client's (malformed) at its first egress slot, failing no window of the audit, as every request
+    that is no id request does. Without them, where another such request is cut whole and released, it is refused in
+    the bucket after its first cell's bytes are read."""
+    run_id = bytes(range(32))
+    mine = watermark_head(run_id) + watermark_chunk(0, 1, (0,)) + WATERMARK_END
+    arrivals = {0: [cells(id_req(1, 3), B), cells(mine, B)]}
+    for params, ended in ((LEN, D), (PLAIN, 1)):
+        certifier, _, server = run([answer((7, 8)), []], arrivals, params=params, windows=2,
+                                   run_nonce=lambda n: run_id[:n])
+        log = {e["ordinal"]: e for e in certifier.log}
+        assert (log[2]["release"], log[2]["failed"], log[2]["failed_at"], log[2]["ended"]) == \
+            (None, "malformed", 0, ended)
+        assert server.conns[1].received == b"" and certifier.requests_released == 1
+        assert {k for _, k, _ in request_cells(certifier, 2)} == {PAD}
+        assert [(o, why) for _, o, why in reasons(certifier)] == [(2, "malformed")]
+        assert (log[1]["release"], log[1]["failed"], log[1]["egress_cells"]) == (0, None, 3)
+        assert audit(params, *records(certifier))["accepted"] == (params is LEN)
 
 
 def test_every_id_request_is_cut_and_released_as_without_lengths_rows():

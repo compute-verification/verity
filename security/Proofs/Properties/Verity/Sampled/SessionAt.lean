@@ -40,10 +40,10 @@ sampled verdict accepts holds each pinned table at its registered file (`TablesS
 public files on its blobs with tables that extend `A`'s (`filesOn_of`), its acceptance passes the ports and roots check
 there (`Accepted.ports`), and that check is `A`'s, the circuit file parsing with `A`'s tables
 (`Refine.portRoots_back`, `Live.hD`). -/
-theorem opensReady_of_accepted {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
-    {F : Array ByteArray} {c : ByteArray} {A : Live} {o : Verity.Exchange} (hA : SetsUp V θ F A)
-    (hD : DigestsAt V θ) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
-    (ht : TablesSent o.sent) : A.OpensReady := by
+theorem opensReady_of_accepted {V : Vocab d α} {T : PinnedTables} {k : Verity.Registration.Composite}
+    {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live} {o : Verity.Exchange} (hA : SetsUp V θ F A)
+    (hD : DigestsAt V T θ) (hreach : Verity.Game.Reaches (V.game θ F c) o) (hv : V.Verdict k .sampled o)
+    (ht : TablesSent T o.sent) : A.OpensReady := by
   obtain ⟨hθ, hFo, -⟩ := Binding.play_reaches hreach
   have hreg : V.Registered θ F := by
     have h1 := hv.1
@@ -102,7 +102,7 @@ def SessionRegistered (k : Verity.Registration.Composite) : Prop :=
   ∀ θ A, I.session θ = some A → (∃ p, ParamsAt θ p) →
     (∃ F c o, I.base.circuitFile θ F = I.base.circuitFile θ (I.base.registered θ) ∧
       I.base.publicFile θ F = I.base.publicFile θ (I.base.registered θ) ∧
-      Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent) →
+      Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent I.pinned o.sent) →
     SetsUp I.base θ (I.base.registered θ) A
 
 /-- **`SessionAt` from the deployment's session at the registered files**: the session the deployment sets up on the
@@ -112,7 +112,8 @@ and public files (`read_files`, `setsUp_files`), and that play's acceptance pass
 theorem sessionAt_of_registered (k : Verity.Registration.Composite) (h : I.SessionRegistered k) : I.SessionAt k := by
   intro θ F A hA hP hc hp ⟨c, o, hreach, hv, ht⟩
   have hs := I.setsUp_files hc.symm hp.symm (I.read_files hc hp) (h θ A hA hP ⟨F, c, o, hc, hp, hreach, hv, ht⟩)
-  exact ⟨hs, opensReady_of_accepted hs (digestsAt_of I.base I.programDigest I.publicDigest I.read θ) hreach hv ht⟩
+  exact ⟨hs, opensReady_of_accepted hs
+    (digestsAt_of I.base I.pinned I.programDigest I.publicDigest I.read θ) hreach hv ht⟩
 
 end Instance
 

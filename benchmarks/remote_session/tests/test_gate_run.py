@@ -1,7 +1,8 @@
 """`gate_run.sh --dry-run`: the prover run it would launch and what its gate steps are given. HOST_GIB is the node's
-`--host-gib` and that much more of the lease's host memory, and SESSIONS, WINDOWS, WINDOW_MS and SAMPLES reach gate.sh
-in place of PACED; with none of them the prover's run and the gate steps' variables are the launcher's defaults. A
-HOST_GIB that isn't whole GiB, and a form gate.sh refuses, end it before anything is written or run. The launcher is
+`--host-gib` and that much more of the lease's host memory, LEAF_CTAS is the node's `--leaf-ctas`, BIND reaches gate.sh
+(1 when unset), and SESSIONS, WINDOWS, WINDOW_MS and SAMPLES reach gate.sh in place of PACED; with none of them the
+prover's run and the gate steps' variables are the launcher's defaults. A HOST_GIB that isn't whole GiB, a LEAF_CTAS
+that isn't a count of CTAs, and a form or a BIND gate.sh refuses, end it before anything is written or run. The launcher is
 a copy in a throwaway repository whose origin's main names one role; `uv` is a stub on PATH that records
 each `research run` and answers with a run id, so nothing is launched."""
 from __future__ import annotations
@@ -17,7 +18,7 @@ import pytest
 RS = Path(__file__).resolve().parents[1]
 SNAP = "/workspace/hf/hub/models--org--tiny/snapshots/abc123"
 NODE_ARGS = f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {SNAP}"
-SET = ("HOST_GIB", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES", "PACED", "PACE_PASS_MS", "LEASE_MEM_GB", "LEASE_ON",
+SET = ("HOST_GIB", "LEAF_CTAS", "BIND", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES", "PACED", "PACE_PASS_MS", "LEASE_MEM_GB", "LEASE_ON",
        "LEASE_BY", "LEASE_FROM", "ENGINES", "ROLE", "PLAN", "ARENA_GIB", "UTIL", "PORT", "COMMIT", "PIN", "GATE_KEY",
        "GATE_ON", "PROVER_NODE", "PROVER_RUN", "CIRCUIT", "MAXMIN", "GATE_MEM", "SLOTS", "FETCH")
 GIT = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
@@ -70,19 +71,24 @@ FORM = {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273
 
 
 @pytest.mark.parametrize("given, node_args, mem_gb, form", [
-    ({}, NODE_ARGS, "256", {}),
-    ({"HOST_GIB": "8", **FORM}, f"{NODE_ARGS} --host-gib 8", "264", FORM),
+    ({}, NODE_ARGS, "256", {"BIND": "1"}),
+    ({"HOST_GIB": "8", **FORM}, f"{NODE_ARGS} --host-gib 8", "264", {"BIND": "1", **FORM}),
     ({"HOST_GIB": "08", "ENGINES": "4", "PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"},
-     f"{NODE_ARGS} --host-gib 8", "136", {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"}),
-    ({"HOST_GIB": "8", "LEASE_MEM_GB": "300"}, f"{NODE_ARGS} --host-gib 8", "300", {}),
-], ids=["default", "host-part-and-one-coin-a-window", "host-part-paced", "lease-memory-given"])
+     f"{NODE_ARGS} --host-gib 8", "136", {"BIND": "1", "PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"}),
+    ({"HOST_GIB": "8", "LEASE_MEM_GB": "300"}, f"{NODE_ARGS} --host-gib 8", "300", {"BIND": "1"}),
+    ({"HOST_GIB": "8", "LEAF_CTAS": "160", "BIND": "0", **FORM}, f"{NODE_ARGS} --host-gib 8 --leaf-ctas 160", "264",
+     {"BIND": "0", **FORM}),
+], ids=["default", "host-part-and-one-coin-a-window", "host-part-paced", "lease-memory-given",
+        "leaf-pass-unbound-host-part-one-coin-a-window"])
 def test_a_dry_run_prints_the_provers_run_with_the_host_part_and_hands_the_sessions_form_to_the_gate_steps(
         tmp_path, given, node_args, mem_gb, form):
     """HOST_GIB reaches the node as --host-gib and adds to the 32 GB an engine the lease is asked for, unless
-    LEASE_MEM_GB says otherwise; without it the node's arguments name no host part. The probe and the fire get the
-    form's variables that are set and no other."""
+    LEASE_MEM_GB says otherwise; without it the node's arguments name no host part, and without LEAF_CTAS no leaf
+    pass. The probe and the fire get BIND and the form's variables that are set and no other."""
     p, prover, calls = dry_run(tmp_path, **given)
     assert p.returncode == 0, p.stdout + p.stderr
+    unbound = "BIND=0: nothing checks that the node serves the pin's checkpoint" in p.stdout
+    assert unbound == (given.get("BIND") == "0") != ("the host's binding still refuses" in p.stdout)
     line = " ".join(prover)
     assert f"--env NODE_ARGS={node_args} --env VERIFIER_SSH=" in line
     assert after(prover, "--mem-gb") == mem_gb
@@ -91,7 +97,7 @@ def test_a_dry_run_prints_the_provers_run_with_the_host_part_and_hands_the_sessi
     for c in calls:
         got = envs(c)
         assert got["DRY"] == "1" and got["MODEL"] == "TINY"
-        assert {k: got[k] for k in ("PACED", "PACE_PASS_MS", *FORM) if k in got} == form
+        assert {k: got[k] for k in ("BIND", "PACED", "PACE_PASS_MS", *FORM) if k in got} == form
 
 
 @pytest.mark.parametrize("host_gib", ["8.5", "-1", "8G", "eight"])
@@ -110,4 +116,20 @@ def test_a_host_part_that_is_not_whole_gib_is_refused_before_anything_is_written
 def test_both_forms_of_the_hosts_run_or_half_of_one_is_refused_before_anything_is_written_or_run(tmp_path, given, why):
     p, prover, calls = dry_run(tmp_path, **given)
     assert p.returncode == 3 and why in p.stdout, p.stdout + p.stderr
+    assert prover == [] and calls == [] and not (tmp_path / "home" / ".research").exists()
+
+
+@pytest.mark.parametrize("leaf_ctas", ["0", "016", "-1", "160.5", "1000", "many"])
+def test_a_leaf_pass_that_is_not_a_count_of_ctas_is_refused_before_anything_is_written_or_run(tmp_path, leaf_ctas):
+    p, prover, calls = dry_run(tmp_path, LEAF_CTAS=leaf_ctas)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert f"LEAF_CTAS is {leaf_ctas}: the leaf pass's reading CTAs, 1 to 999, or unset for today's pass" in p.stdout
+    assert prover == [] and calls == [] and not (tmp_path / "home" / ".research").exists()
+
+
+@pytest.mark.parametrize("bind", ["2", "yes", "true"])
+def test_a_bind_that_is_not_0_or_1_is_refused_before_anything_is_written_or_run(tmp_path, bind):
+    p, prover, calls = dry_run(tmp_path, BIND=bind)
+    assert p.returncode == 3, p.stdout + p.stderr
+    assert f"BIND is {bind}: 1 binds the store to MODEL's pinned checkpoint, 0 to none" in p.stdout
     assert prover == [] and calls == [] and not (tmp_path / "home" / ".research").exists()
