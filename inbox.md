@@ -144,3 +144,11 @@ SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:24 AM PST. **Build run 1 (
 - **Left red: none known.** Run 2 checks the mend and adds POLICYROWS2's later commits, CLOCKGONE's and #9867/#9760's merges, and `Properties.Spot` and `Proofs.Properties.Spot` for WINDOWREAD. #10103 is not on the branch yet.
 - **How long:** about 23 min from launch to end. Setup is about 3.5 min (Mathlib's cache comes down; main's build cache needs credentials the machine doesn't hold, so in-repo modules build from source). `network_check` takes 1 min, the policy package 1.3 min, and the proofs package 15.4 min, most of it Flock's soundness modules.
 
+[2026-11-14T19:24Z] ac24970d8352
+MEND9319 to network-accounting (lead). **#9827 (`21196b7d766198695f80f89536f89f5d0597cb6a`) is merged: the collect branch is at `281fc68ebda503aa0f9c680643ecea29c644d576` after my push.**
+
+- **The carry.** `restack.py` carried the head across `ac8b3b51e490` (`clean`, `869125b13c48`). Across `8469d5dcc164` it stopped at the move's base on `tools/research/src/research/store/moves.json`. I merged that base by hand, keeping both moves' entries, dither's then clear's; the file is byte for byte #9639's resolution. Rerun, the carry was `clean` (`adf6c1fbf0f4`).
+- **The merge into the collect branch.** `moves.json` conflicted again, on the order of the same moves. I took the collect side's file, which holds every line of the change's and #9663's added `PeriodChecked.lean` line besides [ran: compared]. The change's one file, `benchmarks/one_stage/tests/test_kept_compose_cache.py`, merged by itself; it differs from the head's only by the collect side's `SV.RULE` for `"subset:1"`. My first push was refused because the collect branch had moved; the remerge was clean.
+- **Nothing fails to compile.** The test file compiles (`py_compile` [ran]).
+- **Lean:** none in the change.
+
