@@ -10,7 +10,7 @@ above 0 at π* (Σ_r π*_r·c_kr > 0). The programs:
 - every table of census-class counts in the device's data: the honest kernels' profiles, the designs (folds,
   `[fold_routes]`, fillers, baselines, operand floors) and `headline.toml`;
 - sm_120's attack families that hold at the vector's epoch (`data/attacks/`);
-- `test_lean_headline.py`'s `FOLDS` and `UNIFORM_FOLD`, where it has them;
+- `test_lean_headline.py`'s `FOLDS` and `UNIFORM_FOLD`;
 - every program `facet_break/generate.py` emits, each family's targeted part, by the SASS its gate pins (`expect_of`);
 - the red-team witnesses' timed loops (`fixtures/census_cover_sass.json`: cpw_routes' modes, rt3_dc's lane loops).
 
