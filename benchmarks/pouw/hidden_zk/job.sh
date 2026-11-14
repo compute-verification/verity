@@ -21,7 +21,8 @@
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
 #      (no --program, NO_PROGRAM): summarize.py holds an honest check as expected only with its config's refusal, and
-#      counts a NO_PROGRAM refusal in lean_refused_no_program, never in lean_accepted
+#      counts a NO_PROGRAM refusal in lean_refused_no_program, never in lean_accepted. A config whose stage writes a
+#      Program (program.json; served_units' bound statements) is checked with it (--program).
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
@@ -186,6 +187,7 @@ lean_jobs() {   # lean_jobs D O ROLE: every Lean check of one config, as many at
   par=$(( STAGE_GB / each )); [ $par -lt 1 ] && par=1; [ $par -gt 8 ] && par=8
   local base="--zk --circuit $D/circuit.txt"
   [ -e "$D/partition.json" ] && base+=" --partition $D/partition.json"   # the verifier's own copy of the partition the circuit binds
+  [ -e "$D/program.json" ] && base+=" --program $D/program.json"
   local cmds=()
   s=$(ls -d "$D"/sessions/*/ 2>/dev/null | tail -1)
   if [ -n "$s" ]; then

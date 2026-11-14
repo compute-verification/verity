@@ -260,7 +260,7 @@ def main(argv: Sequence[str]) -> int:
     try:
         writer = kit.writer(own.out)
         for m in measurements(lb, doc, head, up):
-            writer.measurement(**m)
+            writer.measurement(**m, mark="modeled")
     except ValueError as e:
         raise SystemExit(f"certifier_term: {e}") from e
     return lb.main(rest)
