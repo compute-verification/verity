@@ -62,7 +62,7 @@ calls on each path.
 On a GPU node:
 
 ~~~text
-research run --on NODE --project verity --source . --cwd source -- bash benchmarks/moe_align/run.sh
+research run --on NODE --project verity --source . --cwd source -- bash benchmarks/kernels/moe_align/run.sh
 ~~~
 
 `run.sh` builds a venv of the pin's vLLM wheel if `VENV` lacks one. It then runs these, all at DeepSeek-V4-Pro's routed
@@ -83,7 +83,7 @@ experts (E = 384, top-k 6) with the moe block Marlin picks:
 On DeepSeek-V4-Pro's 8 x H200 node, served TP8 eager with the plugin loaded from a site directory:
 
 ~~~text
-research run --on NODE --project verity --cwd source -- gpu-lease 8 --wait --mem-gb 64 -- bash benchmarks/moe_align/served.sh
+research run --on NODE --project verity --cwd source -- gpu-lease 8 --wait --mem-gb 64 -- bash benchmarks/kernels/moe_align/served.sh
 ~~~
 
 On a node without the checkpoint, `DUMMY_LAYERS=N` serves its first N layers with dummy weights. The config and tokenizer
@@ -91,7 +91,7 @@ come from the hub at the manifest's revision, each held to the manifest's sha256
 example two GPUs:
 
 ~~~text
-research run --on NODE --project verity --cwd source -- gpu-lease 2 --wait -- env TP=2 DUMMY_LAYERS=5 bash benchmarks/moe_align/served.sh
+research run --on NODE --project verity --cwd source -- gpu-lease 2 --wait -- env TP=2 DUMMY_LAYERS=5 bash benchmarks/kernels/moe_align/served.sh
 ~~~
 
 The expert count, top-k and widths are the checkpoint's, but the routing is not, so the run's figures are labelled
@@ -111,5 +111,5 @@ module's global (the guard `moe_align.install` holds, read back from each rank).
 
 ## Interface
 
-Nothing outside `benchmarks/moe_align` loads from it, so no file here is an interface. The kernel it measures is the
+Nothing outside `benchmarks/kernels/moe_align` loads from it, so no file here is an interface. The kernel it measures is the
 vLLM integration's (`verity_vllm.engine.moe_align`), which these scripts import.

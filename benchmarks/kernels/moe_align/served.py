@@ -2,7 +2,7 @@
 (`verity_vllm.engine.moe_align`, installed in every rank by the integration's vLLM plugin and the rank worker's import), on one
 8 x H200 node. Measurement only.
 
-    bash benchmarks/moe_align/served.sh      (its header has the parameters)
+    bash benchmarks/kernels/moe_align/served.sh      (its header has the parameters)
 
 One engine; every batch is the workload's first request with its prompt rotated by ``--rotate`` tokens per request
 (`served_commit.tp_decode.requests_at`), all arriving at once and decoding to the length limit. Its prefill budget
