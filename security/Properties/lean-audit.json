@@ -115,10 +115,25 @@
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
   },
+  "FlockSoundness.Built": {
+   "owner": "@network-accounting",
+   "digest": "548f5cb7cc68be48e8bf183062c88ea8d4c8d1f5b00cc16dcf13911c3165b96f",
+   "why": "The circuit files the statement speaks of: each whose unit net is one `Net.ofRows` built, as a parsed file's is."
+  },
+  "Hash.RowLeaf.accepts": {
+   "owner": "@network-accounting",
+   "digest": "7c85663b1fdb49ed17b4a905bb619ce5c1b2773925d43e9bacedc4ded938e6e0",
+   "why": "The tables the conclusion speaks of: each one committed under the root and the domain id the unit's ports hold."
+  },
   "NciCheck.Properties.Record.Accepts": {
    "owner": "@lean",
    "digest": "1b8274c56e081ec038185ca4d05cd647a23b791d47a12bb5b8d3759c02900667",
    "why": "The check accepts: the event the statement conditions on."
+  },
+  "NciCheck.Properties.Record.Holds": {
+   "owner": "@network-accounting",
+   "digest": "f36a3e34945395d842e31ab6ddd76e49560d7274c7d8e36838c42db176425c1d",
+   "why": "The bits the statement speaks of: what a port of the unit holds in the valuation of the Program's gates."
   },
   "NciCheck.Properties.Record.RowLeaf": {
    "owner": "@lean",
@@ -169,6 +184,11 @@
    "owner": "@proofs",
    "digest": "989296ea620a9031aaee6272fced0dac71d6df4f44d1ca6a5b0e3af490f80dcd",
    "why": "The requests the capped point describes: disjoint, those reading in each replay block serving at most its class's cap."
+  },
+  "Verity.Partition.Correct": {
+   "owner": "@network-accounting",
+   "digest": "71598c961502ae6e52b3f9f9b0a38c000a3208215229ba18bfb4531b5533b322",
+   "why": "The unit is correct in the transcript: the event the statement conditions on."
   },
   "Verity.Vocab.ComponentBound": {
    "owner": "@soundness",
@@ -341,6 +361,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Accounting.ReadUnit.GatesRefine": {
+   "owner": "@network-accounting",
+   "digest": "4beeac91bdcbe3e1d680b98850f558bbd870504b8acb4fbe15e89033e7017a16",
+   "issue": "NET-430",
+   "due": "2026-11-30"
+  },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "7a8c819fae43610cbc75553dce53068663b261f469c9c15658421a40cbeb18e8",
@@ -497,16 +523,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Accounting.ReadUnit.GatesRefine": {
-   "owner": "@network-accounting",
-   "issue": "NET-430",
-   "due": "2026-11-30"
-  },
-  "NciCheck.Properties.Record.OpeningTie": {
-   "owner": "@network-accounting",
-   "issue": "NET-430",
-   "due": "2026-11-30"
-  },
   "NciCheck.Properties.Record.Counts": {
    "owner": "@training",
    "digest": "b0ab053f893c7f33b2190b36602d03f1f589ceb330eaf53e34873884f2703887",
@@ -517,6 +533,12 @@
    "owner": "@training",
    "digest": "28b0ad169c51314e4eeaf969ee095f75548eb7b4f224548d1503c9fe36543661",
    "issue": "TRN-103",
+   "due": "2026-11-30"
+  },
+  "NciCheck.Properties.Record.OpeningTie": {
+   "owner": "@network-accounting",
+   "digest": "733df2a775f9db3b6bf90da80675d560270fcee85efa28a63d62a4d62b2f91fe",
+   "issue": "NET-430",
    "due": "2026-11-30"
   },
   "NciCheck.Properties.Record.Owns": {
