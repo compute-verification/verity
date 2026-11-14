@@ -86,3 +86,62 @@ Tests, by file [ran]: test_network_certifier_window_lean_difftest.py (3 passed, 
 
 Crossing: `restack.py na-charge --main origin/cursor/na-architecture-b51f` failed on 9f71545ac43, an `audit_code_map` rerun over #9896's lines whose base's rename.py can't read the map (KeyError 'words'). So I crossed by hand. Four maps were new to my branch: memory_gpu_weights (layout), pouw_sample, sampled_proofs_words and warden_tokens. The other seven had only reruns in the window. Across all eleven maps, none of the old names or paths is in my 18 added lines, and no commit in the window touches my two files [ran]. Then I made a plain merge, with no conflict. 4974327abaf, f7b30e1f7ce and b2112f543e46 were already in my branch.
 
+[2026-11-14T22:16Z] c06d6af82cce
+MEND9319, the certifier device place's `reaches`, read on the collect tip `572fed7d1b0`. I changed nothing.
+
+Sources:
+- the generator's dry run, `tools/check/import_order.py --check`, which writes nothing and prints the held lines;
+- the chains that `tests/test_boundaries.py::test_a_place_loads_only_the_places_the_listing_names` prints;
+- a scratch file-level import trace (module-level and in-function imports, package `__init__`s included), run from the device's 12 files.
+
+The dry run's lines for the place are the 7 `loads` and 10 `reaches` I sent, plus one I had missed: `loaded_by verity/protocols/accounting/certifier/prover/tests/test_scan_zk.py`, which imports `warden_serve` at its line 39.
+
+**1. The three extra `reaches` entries.** `certifier/verifier`'s `[[place]]` on the tip already reaches all three: its `reaches` is `channel.py`, `verity/circuits`, commitments, crypto, randomness, `spot/verifier`, `spot/verifier/profile.py` and the runtime. None of the three chains is new with the move.
+- **`verity/circuits`.**
+  - The test's chain: `device/connection_rows_run.py:130` → `certifier/verifier/connection_rows.py:155` (`from verity.circuits.partition_v2 import UNIT_CLASS_MAX`) → `verity/circuits/partition_v2.py`.
+  - The three files that came from `certifier/verifier/` (`coin_link`, `device_needs`, `device_party`; `certifier_device_map.toml:25-27`) already reach all 29 `verity/circuits` files the place reaches. Example: `device_party.py:32` → `certifier/verifier/parties.py:65` → `out_commit.py:52` → `verity/circuits/__init__.py`. Others go through `warden.py:552` → `connection_rows.py:155`, and through `parties.py:63` → `spot/verifier/parties.py:128` → `one_stage/docket.py:150` → `verity/circuits/codec.py`.
+  - The nine files from `benchmarks/network_traces` add no `verity/circuits` file.
+  - The place-level chain gives the same result: the `verity/commitments` place itself `loads` `verity/circuits`, so every trusted place that loads commitments reaches it.
+- **`verity/commitments/randomness`.** `device_party.py:32` → `certifier/verifier/parties.py:63` → `spot/verifier/parties.py:128` → `one_stage/docket.py:153` → `one_stage/link_points.py:17` → `spot/device/coins.py:37` (`from verity.commitments.randomness import uniform_from_words`).
+  - That is the old chain of a file that came from `certifier/verifier/`.
+  - The move adds a second, direct one: `load_relay.py:95` → `p2.py:77`.
+- **`spot/verifier/profile.py`.** No file chain: by file, the device reaches no `profile.py`. It is a place-level chain only: device → `spot/verifier` (through `coin_link.py:53` → `spot/device/challenger.py`, a file of the `spot/verifier` place) → `profile.py`, which the `spot/verifier` place `loads` by its own listing. `certifier/verifier` reaches it the same way.
+
+**2. `p2.py`'s imports.** Six are the tree's own:
+- `:76` `verity.commitments.scheme`: commitments;
+- `:77` `verity.commitments.randomness`: randomness;
+- `:79` `..codec`: pous/verifier;
+- `:80` `..labels`: pous/verifier;
+- `:81` `..params`: pous/verifier;
+- `:82` `..protocol`: pous/verifier.
+
+The rest are standard library: `hashlib`, `itertools`, `struct`, `collections.abc`, `dataclasses`, `fractions`, `functools`.
+
+What `p2.py` reaches, by file:
+- 15 pous/verifier files;
+- 8 commitments files, among them `scheme`, `merkle`, `rowleaf`, `identity` and `claim_ids`;
+- crypto's `blake3`;
+- `randomness`;
+- `verity/errors.py` and the package `__init__`s.
+
+So `p2` brings no `verity/circuits` file. The pous/verifier place's own `reaches` lists `verity/circuits`, but only through pous files `p2` doesn't import, and through the commitments place's `loads`.
+
+Nothing on any of the device's chains reaches the catalog (`verity/circuits/ops`, `silicon`), the kernels, `verity/definitions`, a `prover/` directory, `benchmarks/` or an adapter: my trace flagged none.
+
+The device's 29 circuits files are the format and its reading: `boolean/{forms,trace}`, `defs`, `types`, `program`, `codec`, `ports`, `refs`, `partition{,_v2,_object}`, `cut`, `parts`, `units`, `intervals`, `boundary`, `layout`, `query*`, `census`, `liveness`, `population` and `evaluation/{batch,bits,reference}`.
+
+What the nine `benchmarks` files add, by file, is only inside verifiers, commitments and crypto:
+- `crypto/chacha20.py` and `commitments/hm96/batch.py`;
+- 7 certifier/verifier files: `blob_files`, `connection_rows_check`, `load_check`, `record_files`, `relay_check`, `run_clock`, `transfer_rows`;
+- the pous verifier, 20 files through `p2` and `schemes/__init__` (which also imports `band`, `dense` and `p3`).
+
+**3. `load_relay`'s load at import time.** The device has 12 files. Only `warden_serve.py` imports `load_relay`, at module level (`:229`), and it uses `lr.` only inside functions (`:657-658` and `:1254-1268`). So no device file needs that load at import time. Outside the device:
+- `compose/device/live_challenger/auditor.py:1748` imports it inside a function;
+- `benchmarks/network_traces/load_bench.py:26` and the device's own test import it at module level.
+
+`load_relay` itself does need `P2` at import time: the default arguments `P2.POINT[0..2]` on `load_relay.py:201-202` are evaluated when the module is defined. Deferring `warden_serve`'s import would not change the listing, since `load_relay` is in the place.
+
+On private names, `P2._field` (`load_relay.py:363`, defined at `p2.py:293`) is the only private name it takes from another protocol's verifier. It also takes four private names of the shared commitments layer: `_FRAME`, `_LEAF`, `_NODE` and `_uint` from `verity.commitments.merkle` (`load_relay.py:90`).
+
+**The sentence to post:** "Outside verifiers, commitments and crypto, the certifier device place reaches only `verity/circuits`, the format and the Program dataclasses (29 files, no catalog, kernel, prover, benchmark or adapter). It reaches them through `certifier/verifier` (`connection_rows.py:155`'s `partition_v2`, `out_commit.py:52`, `io_tie.py:73-74`) and through `spot/verifier/one_stage/registered.py:79-83`, which `certifier/verifier`'s place already reaches. The commitments place's own load of `verity/circuits` gives the same. `p2` adds none of it: `p2.py` loads only commitments, randomness and pous/verifier."
+
