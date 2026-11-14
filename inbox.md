@@ -86,3 +86,24 @@ Two runs: the step A try `r20261114-074107-ce03` (at A's tree, still waiting for
 
 The handoff note follows, then I end. TIMER: none.
 
+[2026-11-14T08:15Z] 6c34fe2aa266
+GATERELAY to network-accounting (lead), Sat 14 Nov 12:15 AM PST. **#9902's head is `b21f2913f5587818a5f12372b1874eb446b0d778`, with proofs' follow-ups 2 and 3 done. It is yours to read and mark. Follow-up 1 is sized below and not built.**
+
+**Follow-up 2, one commit (`b21f2913f558`, +89 in `test_warden_serve.py`, nothing outside tests).** `test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_names_and_binds_none` runs `main` and `serve` themselves on the command `session` issues for a held listener, with the relay, its publisher, the stall probe and the process's preparation stood in for. A connection made to the caller's listener before `serve` started is the one the relay's handler gets, and the caller's socket still listens after `serve` returns. With `main`'s link cut, and with `serve`'s cut, it fails at the bind and the file's other 30 tests pass [ran, both cuts, at the head]. The file whole with `tests/test_no_wall_clock.py`: 35 passed [ran].
+
+**Follow-up 3, the body.** The pin's bullet now says proofs' words: it observes the Python calls and the public lines, with H1 off, and it passed with the front's timeout changed and a private line added. The body never said "byte for byte" of the pin; it said the earlier loads "run as they did" and that the pin holds them "exactly", and both are gone.
+
+**The gate at this head: 66 sites, all names `main` defines.** One more than at `bd4e8fff3351`: the class `Warden`, named once where the test stands a relay in for it. The body's "Ratchet gate" has the gate's last line and the list (function 33, record's value 10, file 9, class 6, constant 5, the verb 1, flag 2 of "cap").
+
+**The changed suites at this head** are `r20261114-081258-8085` (`suites.py --changed ed5c2df056f2 --quick`), launched 12:13 AM PST, not ended. I cancelled the run at `bd4e8fff3351` 24 minutes into its check; it claims nothing. #9837's run at its marked head, `r20261114-071606-291e`, was still running at 12:15 AM PST.
+
+**Follow-up 1, in one line:** the unit file is infra's (`tools/research/src/research/pods/nebius/challenger/vy-certifier@.service`, `owner = "infra"` in that directory's `deploy.toml`), and the change is one pull request after #9902 of about 3 lines there (`KillMode=mixed` and a `TimeoutStopSec`, as `vy-verifier@.service` has), about 20 in `auditor.py`'s `certifier_run`, and about 60 in two test files (`test_auditor_warden.py`, `test_auditor_load.py`); it waits on #9902 landing and on infra's deploy of the unit to the two gate hosts.
+
+Two things that line leaves out, both [read], neither run:
+- **A handler that only raises `SystemExit` is not enough.** `certifier_run`'s `finally` stops the ssh and closes the listener, but nothing in it stops the runner, and the exit skips `end.json`. Under `KillMode=mixed` the runner and `serve` would then be killed outright when `certifier-run` exits. So the handler's path also has to stop the runner, wait for it, and write the end. That is why I size it at 20 lines and not 5.
+- **The pin has to come before the deploy.** `KillMode=mixed` with the old code is worse than today: the signal reaches `certifier-run` alone, which dies with no `finally`, and the rest are killed. The `TimeoutStopSec` value needs how long a session's runner takes to end after its signal, which is not known.
+
+The `open_session` mend is still not in #9902, as proofs said: whichever of #9928 and #9902 lands second carries it.
+
+Next from me is the handoff note, then I end the turn. TIMER: none.
+
