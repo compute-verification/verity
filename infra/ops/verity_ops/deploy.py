@@ -264,8 +264,8 @@ print(json.dumps({"files": files, "found": sorted(found), "links": links, "procs
 # On the node as root: append lines to the record, owned as the directory above the record's. That directory's user owns the
 # record's directory and the record, so neither is ever named by path once the directory above is open: each is opened never
 # through a link, and the record is refused unless it is a regular file of one name. `record` opens and checks it before a
-# script changes anything (exit 3, nothing written); `append` writes through the descriptors it holds. The directories above
-# the record's are root's.
+# script changes anything (exit 3, nothing written); `append` writes through the descriptors it holds. The directory above
+# the record's is opened by its path never through a link at its own name, which only root's directories above it hold.
 APPEND = r'''
 import errno, json, os, stat, sys, time
 def record(rec):
