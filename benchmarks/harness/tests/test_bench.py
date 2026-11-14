@@ -1501,6 +1501,29 @@ def test_result_schema_and_identity_strict_judge():
     assert judge(doc, other, ("git_commit",))["accepted"]
 
 
+def test_a_points_numbers_are_measurements_of_its_result(tmp_path, monkeypatch):
+    preset, points, arms = inputs()
+    doc = run_benchmark(preset, arms, points[:1], sweep="quick", reps=2, factory=FakeFactory(), git_commit="abc")
+    monkeypatch.setattr(result_format.kit, "host_stamp", lambda: {"commit": "abc", "card": "none"})
+    (tmp_path / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "kind": "verity-vllm-benchmark/v1",
+                                                     "run_id": "r1", "measurements": []}))
+    result_format.record(doc, tmp_path, "r1", "out/benchmark.json")
+    held = json.loads((tmp_path / "result.json").read_text())
+    assert held["kind"] == "verity-vllm-benchmark/v1"
+    got = {m["name"]: m for m in held["measurements"]}
+    (row,) = doc["points"]
+    other = next(a for a in row["arms"] if a != doc["baseline"])
+    tpot = row["arms"][other]["metrics"]["time_per_output_token_s"]
+    assert got[f"{other}.time_per_output_token_s"]["value"] == tpot["mean"]
+    assert got[f"{other}.time_per_output_token_s"]["ci95"] == tpot["ci95"]
+    assert got[f"{other}.time_per_output_token_s"]["unit"] == "s"
+    assert got[f"{other}.time_per_output_token_s.ratio"]["value"] == tpot["ratio_to_stock"]["mean"]
+    assert f"{doc['baseline']}.time_per_output_token_s.ratio" not in got
+    assert {m["mark"] for m in got.values()} == {"measured"}
+    assert {m["point"] for m in got.values()} == {row["point"]["id"]}
+    assert len(got) == sum(len(a["metrics"]) * (1 if arm == doc["baseline"] else 2) for arm, a in row["arms"].items())
+
+
 def test_ratio_table_puts_the_headline_cell_first():
     preset, points, arms = inputs()
     points = (replace(points[0], batch=8), points[0])

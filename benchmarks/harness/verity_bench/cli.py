@@ -136,6 +136,7 @@ def _point(args: Any) -> int:
     temporary = run_dir / f"result.json.tmp.{os.getpid()}"
     temporary.write_text(json.dumps(envelope, indent=1) + "\n", encoding="utf-8")
     os.replace(temporary, target)
+    result.record(doc, run_dir, settings.RESEARCH_RUN_ID, "out/benchmark.json")
     print(render(doc), end="")
     return 0 if passed else 3
 
