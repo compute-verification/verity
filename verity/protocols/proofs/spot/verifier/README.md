@@ -193,6 +193,30 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   its module's docstring says; the refusal accepts nothing and never
   exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
   (`one_stage.closing`, `challenger.members_tree_reason`).
+- **A monitoring period's sessions in the auditor's ledger** (`Spot/MonitoringPeriod.lean`, Lean only; the Python it is held
+  to is a reference in `lean/tests/test_period_difftest.py`): from the ledger's signed lines, under the auditor's
+  challenger key, every session of a lane that the ledger opens on a root during a monitoring period, whatever its
+  layout (`sessionsOf`), and of those the windows, the sessions whose layout holds the sample's family (`windowsOf`),
+  with the lane's other sessions beside them. The monitoring period is a run of the ledger's entries, from the first
+  stamped at or after its start to the first stamped at or after its stop, so monitoring periods that follow one
+  another split the entries exactly whatever the stamps say. It refuses a ledger that does not reach the stop, a
+  window in no period of the lane, a period left open or listing a session that is no window, a reserve never opened
+  and a window that has not ended. It reads the ledger only: no window is audited here.
+- **SPOT's monitoring period** (`Spot/MonitoringPeriodAudit.lean`, `verity/sampled-proofs/period/v1`, Lean only, with the same
+  reference): the check that every window of a lane's monitoring period passed the one-stage audit on its proofs
+  (`OneStageZk`), on the one sample its challenger session gave it. Its commitment is the auditor's ledger; its
+  evidence is the host's pins log and, for each window, the session's files and one case. The verifier's parameters
+  are the period's alone, this registration's circuit among them, the SHA-512 a period of the lane commits when the
+  ledger opens it: a case supplies its registration's public file's digest and its sample's segment, and
+  nothing else of what one-stage reads. Only a window of one registration passes: the check reads the roots of every
+  family the window's session reserved, and a session whose signed log shows a second commitment in any of them
+  (another rank's or a second stage's in a family of its own, or the sample's family's second) is refused until the
+  check audits each, as is a public file that shares rows among members. Every window's period commits this
+  registration's circuit, and a session of the lane that holds no coin of the family is refused unless a period
+  that commits another circuit lists it: a root committed under this registration and never sampled refuses the
+  period. It publishes each window with the registration audited and each session of the lane that is another
+  registration's, by that registration's circuit and its session alone, of which it holds nothing. Nothing calls it
+  yet but its difftest, and it has no executable.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor device its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/protocols/compose/device/live_challenger/auditor.py`, the coins' path).
