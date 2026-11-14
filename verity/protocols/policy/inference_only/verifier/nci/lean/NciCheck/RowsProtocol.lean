@@ -1,8 +1,12 @@
 module
 
 public import NciCheck.Protocol
-public import NciCheck.Record
+public import NciCheck.RecordRows
+public import NciCheck.RecordChosen
 public import CoreProtocol.Blobs
+public import Spot.OneStageZk
+public import Spot.FilePart
+public import Std.Data.HashMap
 
 /-!
 # The inference-only policy's check in rows, as a core protocol: `verity/inference-only/rows/v1`
@@ -37,6 +41,32 @@ and it is never undecided.
 The rows table is no part: each template's rows of one unit are read from the file `circuits` names for it. `Γ`
 and `α` are in rows, and the rule in the Program's gates (`Record.rate`) is not decided here.
 
+## The check
+
+1. The record is read once (`Record.read`), with the params' Program, pins and log and the run's own registration
+   record: every stage of the record form, the wires' check among them.
+2. `circuits` is held to the record's templates.
+3. **A template's rows of one unit** are `Spot.FilePart.ofCircuit`'s `m` on the circuit its file holds, the file
+   read as SPOT's one-stage check reads the file of a statement it verifies (`circuitOf`): the unit circuit's
+   computed rows, stacked `units_per_vu` times. So a file is parsed whole, each of its rows once, and that is this
+   check's cost beside the record's: the files' size, one parse a template.
+4. **A block's rows** are the sum over the templates of a template's units in a block times its rows of one unit
+   (`RecordRows.ofSummary` on `Record.summarize`), and a block's fresh bits are the summary's.
+5. **The rule** is `RecordRows.rate` on that one pair: every block has the same rows, and the summary's fresh bits
+   are the greatest over the blocks.
+
+An accept publishes nothing (`{}`). Its profile is `{"blocks", "chosen", "fresh", "rows"}`: the blocks, the bits
+the prover chose over the execution phase (`RecordChosen.chosen`), and a block's fresh bits and rows. The four are
+counts of the record, which is private: where a system shows a profile, they are shown.
+
+## What it does not hold
+
+* That a file `circuits` names is the file SPOT's proofs of that template's units are verified against. Inside
+  this protocol a file with another SHA-512 is never read; that `circuits` is the list SPOT's check takes is a tie
+  between two protocols' params, stated where the two are composed.
+* The rule in the Program's gates, and any value of `Γ` and `α`: both are params.
+* What `Record` does not: its docstring says what an accepted record leaves to SPOT's proofs and to registration.
+
 ## What rejects, in the order checked
 
 A reject's reason opens with the name of what refused, and a colon follows where it says more.
@@ -58,7 +88,7 @@ A reject's reason opens with the name of what refused, and a colon follows where
 
 namespace InferenceOnly.RowsProtocol
 
-open Lean (Json)
+open Lean (Json toJson)
 open Flock (V)
 open NciCheck
 
@@ -149,5 +179,114 @@ def NO_ROWS : String := "one unit of the file has no computed row"
 def failureOf (code : String) : String :=
   if code == "size" then "size: a block has more than Γ rows"
   else "nci: a block reads more than α fresh bits a row"
+
+/-! ## The record -/
+
+/-- The instance `Record.read` reads. Its `gamma` and `alpha` are the params', in rows: `Record.read` holds them to
+their form and applies neither. -/
+def instanceOf (p : Params) (e : Evidence) : Json :=
+  Json.mkObj ([("alpha", Json.arr #[toJson p.num, toJson p.den]), ("gamma", toJson p.gamma),
+    ("pins", Json.arr (p.pins.map Json.str)), ("program", Json.str p.program), ("record", Json.str e.record)] ++
+    match e.order with
+    | some o => [("order", o)]
+    | none => [])
+
+/-- The trusted input `Record.read` reads: the log through the run's own record, which is the run. Its `params` is
+not read. -/
+def trustedOf (p : Params) (c : Protocol.Commitment) : Json :=
+  Json.mkObj [("log", Json.arr (p.log.push c.record)), ("params", Json.arr #[]), ("run", Json.str c.hex)]
+
+/-- A reject by `Record.read`'s refusal `code`, with what to fix where the refusal says it (`Record.messageOf`). -/
+def reasonOf (j tr : Json) (code : String) : String :=
+  match Record.messageOf j tr code with
+  | some m => s!"{code}: {m}"
+  | none => code
+
+/-- Whether `circuits` names the templates `ts`, each once, in order. -/
+def namesTemplates (circuits : Array (String × String)) (ts : List RecordText.Tmpl) : Bool :=
+  circuits.toList.map (·.1) == ts.map (·.tid)
+
+/-! ## The circuit files -/
+
+/-- The circuit a file holds, read as SPOT's one-stage check reads the file of a statement it verifies
+(`Spot.OneStageZk.run`): `Flock.ProvedScope.circuitOf` under that statement's tags (`Spot.OneStageZk.STATEMENT`)
+with one session's hooks at the file's own mask log (`Flock.Witness.zkTags`), `tables` the pinned lookup tables the
+file may look up. The file is parsed whole: every row of every circuit it holds, the row commitment's circuits
+held to the verifier's own. A file in another statement's form is refused. -/
+def circuitOf (tables : List (String × ByteArray)) (file : ByteArray) : V Flock.Circuit := do
+  let some tags := Flock.Tags.find? Spot.OneStageZk.STATEMENT
+    | throw s!"the statement {Spot.OneStageZk.STATEMENT} is not known"
+  Flock.ProvedScope.circuitOf (Flock.Zk.tags tags (Flock.Zk.maskLogOf file) 1) file tables
+
+/-- **The rows of one unit of a file's template**: `Spot.FilePart.ofCircuit`'s `m` on the circuit the file holds
+(`circuitOf`), the unit circuit's computed rows, stacked `units_per_vu` times. Refused where the reader refuses the
+file, and where the count would be 0. -/
+def rowsOf (tables : List (String × ByteArray)) (file : ByteArray) : V Nat := do
+  let m := (Spot.FilePart.ofCircuit (← circuitOf tables file) 1).m
+  if m = 0 then throw NO_ROWS
+  pure m
+
+/-- The blobs by their SHA-512 in lower-case hex. -/
+def filesOf (bs : Core.Blobs) : Std.HashMap String ByteArray :=
+  bs.entries.foldl (fun files (d, b) => files.insert (Flock.hexOf d) b) {}
+
+/-- **The rows table**: per template of `circuits`, by its id, the rows of one unit of the file its digest names
+among the blobs (`rowsOf`); or the reject for the first template whose file is no blob or is not counted. One lookup
+and one file a template, the blobs indexed once. -/
+def tableOf (circuits : Array (String × String)) (bs : Core.Blobs) : Except String (Std.HashMap String Nat) :=
+  let files := filesOf bs
+  let tables := Spot.OneStageZk.tablesOf bs
+  circuits.foldlM (init := {}) fun table (tid, digest) =>
+    match files[digest]? with
+    | none => throw (circuitFile tid (noBlob digest))
+    | some file => match rowsOf tables file with
+      | .ok m => pure (table.insert tid m)
+      | .error why => throw (circuitFile tid why)
+
+/-! ## The check -/
+
+/-- The accepted check's report: the blocks, a block's rows and its fresh bits, and the bits the prover chose over
+the execution phase. -/
+def reportOf (blocks rows fresh chosen : Nat) : Json :=
+  Json.mkObj [("blocks", toJson blocks), ("chosen", toJson chosen), ("fresh", toJson fresh), ("rows", toJson rows)]
+
+/-- The check, in the module docstring's order. The record is read once (`Record.read`), and the summary, the rule
+and the count of what the prover chose are taken of that one reading. With `circuits` held to the record's
+templates, the table has every template's rows, so a block's rows are counted (`RecordRows.ofSummary` gives none
+only for a template the table lacks). -/
+def checkBlobs (p : Params) (c : Protocol.Commitment) (e : Evidence) (bs : Core.Blobs) : Core.Outcome Unit Json :=
+  let j := instanceOf p e
+  let tr := trustedOf p c
+  match Record.read j tr with
+  | .error code => .reject (reasonOf j tr code)
+  | .ok r =>
+    if !namesTemplates p.circuits r.f.ts then .reject CIRCUITS else
+    match tableOf p.circuits bs with
+    | .error why => .reject why
+    | .ok table =>
+      let s := Record.summarize r
+      match RecordRows.ofSummary r.f.P (table[·]?) s with
+      | none => .reject CIRCUITS
+      | some rows =>
+        match RecordRows.rate p.gamma p.num p.den rows s.fresh with
+        | some code => .reject (failureOf code)
+        | none =>
+          .accept () (reportOf s.blocks rows s.fresh (RecordChosen.chosen (RecordChosen.executionPhaseBits r)))
+
+def protocol : Core.BlobProtocol where
+  id := protocolId
+  Params := Params
+  Commitment := Protocol.Commitment
+  Evidence := Evidence
+  Public := Unit
+  Profile := Json
+  params := paramsOf
+  commitment := Protocol.commitmentOf
+  evidence := evidenceOf
+  digest c := c.digest
+  check p c e := checkBlobs p c e Core.Blobs.empty
+  publicJson _ := Json.mkObj []
+  profileJson := id
+  checkBlobs := checkBlobs
 
 end InferenceOnly.RowsProtocol
