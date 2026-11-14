@@ -145,6 +145,15 @@ def test_measure_bf16_small_on_cuda(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert doc["flop_per_second"] > 0 and "1024^3" in doc["sizes"] and doc["sizes"]["1024^3"]["check_ok"]
 
 
+def test_the_cards_reading_by_path_is_verity_devices_rate_at_the_tensor_pipes_clock() -> None:
+    from verity.device import load_card, number, rate
+
+    m = _measure()
+    card = load_card("h200-sxm-141gb")
+    for fmt in ("bf16", "e4m3"):
+        assert m.tensor_reading("h200-sxm-141gb", fmt) == float(2 * rate(card, fmt=fmt, mhz=number(card["clock"]["tensor"])))
+
+
 def test_spec_peaks_agree_with_every_census_line() -> None:
     """The pod-side table reads nothing on a pod but the shipped tree's cards; it must quote benchmarks/census/hardware.json's peak
     for every line."""

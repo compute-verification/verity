@@ -34,4 +34,4 @@ declaration (`tool.py`) without a GPU; one test measures a small GEMM where CUDA
 - **Provides:** `measure.py`, run on a GPU, with its FP4 kernel (`mma_peak_fp4.cu`), and the store declaration
   (`tool.py`).
 - **Loaded by:** the evidence store's tool registry, which loads `tool.py` by name. Nothing else.
-- **Loads:** `verity_config`, `verity.device` (the H200's card), torch, and `research` in `tool.py`.
+- **Loads:** `verity_config`, the H200's card by path (`hardware/cards/`), torch, and `research` in `tool.py`.
