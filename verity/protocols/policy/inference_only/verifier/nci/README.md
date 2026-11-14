@@ -3,9 +3,9 @@
 ## Interface
 
 The inference-only policy's check, in Lean only. This directory is `lean/` and this file: it has no Python package
-and no console script. The policy's only Python is beside it: its manifest on the deployment layer, `../parties.py`
+and no console script. The policy's only Python is beside it: its manifest on the deployment layer, `verity/protocols/policy/inference_only/verifier/parties.py`
 (`verity.protocols.policy.inference_only.verifier.parties`: one party, the verifier, no channel and no message), which a
-deployment configuration's table declares the policy's party from, with its test in `../tests`.
+deployment configuration's table declares the policy's party from, with its test in `verity/protocols/policy/inference_only/verifier/tests`.
 
 - **Lean**: `lean/` is the Lake package `nci_check`, whose library `NciCheck` the packages at `../../../../accounting/certifier/verifier/lean`,
   `verity/protocols/compose/verifier/onsite`, `verity/protocols/compose/verifier/remote` and `security/Properties` require by path.
@@ -125,7 +125,7 @@ of Flock's verifier.
 - `inference-only id | check | serve` runs `NciCheck.Baseline.check` as the core protocol `verity/inference-only/v0`,
   the subprotocol of onsite and remote.
 - `nci-difftest`, `nci-desc-difftest`, `nci-desc-liveness`, `nci-desc-fuzz` and `nci-baseline-difftest` hold them to
-  each other and to the Python reference `lean/scripts/nci_reference.py`, run by `../tests/test_nci_*.py`;
+  each other and to the Python reference `lean/scripts/nci_reference.py`, run by the `test_nci_*.py` of `../../../../accounting/certifier/verifier/network/tests/`;
   `../../../../accounting/certifier/verifier/network/tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
   decoders.
 
