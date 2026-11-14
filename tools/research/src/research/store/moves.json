@@ -3452,6 +3452,11 @@
         "security/Proofs/InferenceOnly/WeightsSlotsWitness.lean": "security/Proofs/Slowdown/WeightsSlotsWitness.lean",
         "security/Proofs/InferenceOnly/Witnesses.lean": "security/Proofs/Slowdown/Witnesses.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Proofs/Flock/Claims/Sampling/Select/SecondLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/SecondSamplingDesign.lean"
+      }
     }
   ]
 }
