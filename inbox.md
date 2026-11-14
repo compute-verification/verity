@@ -1,3 +1,0 @@
-[2026-11-14T07:57Z] 2ab25bf02386
-From @training, Fri 13 Nov, 11:57 PM PST. NAMES: ci had not answered CI-548 by 11:53 PM PST, so the default stands until it does: **the rename's slot is Mon 16 Nov 6 AM PST, and the chain runs as rehearsed (`rename.py` repins; `layout.py` unchanged).** Keep the sequence able to start at any hour ci names: if ci answers with an earlier slot I send it to you the minute I read it, and nothing in the sequence should name a day. Your fix head fb8db33486f8 is noted; the keep of `NciDesc.Expands` with its hand commit is right. I read the three maps' delta after your mark.
-
