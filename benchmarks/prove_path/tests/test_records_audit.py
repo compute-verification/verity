@@ -837,7 +837,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
     assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
     assert seen["declared"] == {} and "day" not in summary
-    from verity.hardware import registration as G
+    from verity.protocols.accounting.registration.verifier import registration as G
     day = G.chain("remote", [G.Declaration(0, got.rec["program"])])
     (tmp_path / "log.json").write_bytes(G.committed("remote", day))
     named = tmp_path / "w-day.json"
@@ -872,7 +872,7 @@ def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declarat
     takes with the day. The window's program declared for its day passes R2; a day declared to another program is refused
     (``R2-declared``), and a day the log doesn't declare too (``R2-undeclared``). A log declaring a day twice is core's
     ``duplicate-declaration``, and day options without ``--day`` are refused, each before any session."""
-    from verity.hardware import registration as G
+    from verity.protocols.accounting.registration.verifier import registration as G
 
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     program, log = written.rec["program"], tmp_path / "log.json"
@@ -903,7 +903,7 @@ def test_a_declared_day_holds_the_tied_ws_naming_to_a_declaration_of_that_day_in
     naming another day, a digest the log doesn't hold for day 3 (day 4's), the log's chained digest of day 3's entry, or a
     day without ``--day`` is refused before any session. A W naming no day under no ``--day`` (Pearl+'s, every window
     without the switch) is as before."""
-    from verity.hardware import registration as G
+    from verity.protocols.accounting.registration.verifier import registration as G
 
     log = tmp_path / "log.json"
     entries = G.chain("remote", [G.Declaration(3, "5d" * 64), G.Declaration(4, "6e" * 64)])
@@ -979,7 +979,7 @@ def test_the_device_day_is_the_challengers_declared_day_over_its_own_ledger_and_
     UTC day of the window's signed open and the declarations its lane signed before it, which R2 takes in place of
     ``--day``. W's naming is held to the Declaration rebuilt from the device's entry (no ``previous``): the prover log's
     chained digest, or another day's, is refused."""
-    from verity.hardware import registration as G
+    from verity.protocols.accounting.registration.verifier import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     program, root = written.rec["program"], "01" * 64
     lines, key, _record = _device_ledger(tmp_path, [_declared(program), *_window(S1, 1, root)])
@@ -1001,7 +1001,7 @@ def test_a_window_opened_before_its_days_declaration_or_of_a_lane_that_never_dec
     (``R2-undeclared``) and W's naming of the later declaration is refused, while a window opened after it passes. A lane
     that never declares isn't gated at the challenger, so its windows open, but under ``--day-ledger`` they read no
     declaration (another lane's binds them not) and R2 refuses them too; with the switch off R2 reads no day."""
-    from verity.hardware import registration as G
+    from verity.protocols.accounting.registration.verifier import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     program = written.rec["program"]
 
@@ -1042,7 +1042,7 @@ def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tm
     though the lane declares D+1 after midnight while it runs, and W's naming of D+1's declaration is refused. Declared
     only for D+1, after midnight, it reads no declaration and R2 refuses it (``R2-undeclared``). Declared only for D+1
     ahead of the open, the device would have refused the open, and a ledger holding it is refused."""
-    from verity.hardware import registration as G
+    from verity.protocols.accounting.registration.verifier import registration as G
     mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_design(LAW), None)
     program, root = written.rec["program"], "01" * 64
 
