@@ -151,7 +151,8 @@ Rules:
 
 - **Do not write what you cannot explain** to that reader: what the thing is, and what breaks without it.
 - **Say what, never who.** No handle and no lead as the subject; the owner is a field. Another lead's part is that
-  lead's goal, linked. The exception is when who holds something is itself the content.
+  lead's goal, linked. The exception is when who holds something is itself the content: which lead owns a directory,
+  or an outcome that is one team's own number ("ci's changes refused for a merge conflict").
 - **No status diary:** no "where it stands", "so far" or "plan", no dated steps, nothing about what is in review or
   waiting to merge, no run counts, restarts, machines or GPU counts, no corrections, no history of the goal, no who
   approved what. The page shows when it was last written.
