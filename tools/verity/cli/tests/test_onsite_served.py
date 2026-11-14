@@ -399,12 +399,24 @@ def test_the_bandwidth_verifiers_start_reads_the_memory_challengers_run_beside_i
         got.update(bound=bound, state=state)
         raise NotImplementedError(T.NOT_YET)
 
-    monkeypatch.setitem(T.P2.STARTS, T.P2.VERIFIER, start)
+    monkeypatch.setitem(T.POUB.starts, T.P2.VERIFIER, start)
     with pytest.raises(NotImplementedError):
         T.prepare(R.load(CONFIG, REG), tmp_path, BINDINGS, T.PARTIES["bandwidth"][T.BANDWIDTH_VERIFIER])
     assert got["bound"] == {**BINDINGS["bandwidth-verifier"]["bandwidth"],
                             "challenger": str(tmp_path / "runs" / "pous" / T.MEMORY_CHALLENGER)}
     assert got["state"] == tmp_path / "runs" / "bandwidth" / T.BANDWIDTH_VERIFIER
+
+
+def test_the_bandwidth_verifiers_start_is_handed_pouss_pin_check(tmp_path):
+    """The table hands PoUB's verifier PoUS's device's pin check (`onsite.pin`, `onsite.signer`), which `p2_parties`
+    may not load: a configuration that pins no PoUS key is refused before the directory is read, and a directory holding
+    no key after."""
+    start = T.POUB.protocol().starts[T.P2.VERIFIER]
+    with pytest.raises(Refused, match="pins no key"):
+        start({}, {"challenger": str(tmp_path)}, None)
+    pin = {"party": T.CS.CHALLENGER, "protocol": T.CS.COMPONENT, "key-sha512": "00" * 64}
+    with pytest.raises(Refused, match="holds no memory challenger's key"):
+        start({"pin": [pin]}, {"challenger": str(tmp_path)}, None)
 
 
 def test_the_runtime_components_channels_are_their_protocols_manifests():

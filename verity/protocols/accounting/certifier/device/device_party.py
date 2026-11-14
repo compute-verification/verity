@@ -27,7 +27,7 @@ from dataclasses import dataclass
 
 from verity.channel import Message
 from verity.party import Action, Finish, Identity, Params, Received, Send, Timer
-from verity.runtime.runner import ProtocolDef
+from verity.protocol import ProtocolDef
 
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams

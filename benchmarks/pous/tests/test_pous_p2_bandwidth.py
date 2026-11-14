@@ -1,5 +1,6 @@
-"""The PoUB session's prover over the P2 store (`p2_v1/bandwidth.py`): SHA-512's midstate and the device's
-receipts held to hashlib and `p2.Sketcher`, the sketch of stored rows held to the unit sketch, the receipt tree built in
+"""The PoUB session's prover over the P2 store (`verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py`):
+SHA-512's midstate and the device's receipts held to hashlib and `p2.Sketcher`, the sketch of stored rows held to the
+unit sketch, the receipt tree built in
 worker processes held to `receipts.tree`, PoUS's vk paths from row digests held to the verifier's tree, the plan of a
 layout's tensors' units (the tracked registration's, the real layout's), and the toy's store served through
 kernels' staging decode (P2's reference on the CPU) to `p2_parties`'s verifier in its own process: accepted honest, under
@@ -24,7 +25,9 @@ HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
-from p2_v1 import bandwidth as B
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py").parent))
+import bandwidth as B  # noqa: E402
+from p2_v1 import bandwidth_toy as BT  # noqa: E402
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import verifier as V
@@ -136,7 +139,7 @@ def test_the_tracked_registrations_plan_is_the_real_layouts_tensors_units() -> N
 
 
 def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_layer_rejected(tmp_path) -> None:
-    reg = B.toy(tmp_path / "toy")
+    reg = BT.toy(tmp_path / "toy")
     assert B.registration_of_store(tmp_path / "toy" / "store", reg.node) == reg
     verifier = (f"{sys.executable} -m verity.protocols.accounting.poub.verifier.p2_parties "
                 f"--registration {tmp_path / 'toy' / 'registration.json'} --stdio {held_to()}")
@@ -159,7 +162,7 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
 def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_path) -> None:
     """The verifier's plan, sent with its registration, is what the prover reads and commits: the toy's units 0, 1 and
     4 to 6, every receipt sampled, accepted with those receipts alone."""
-    reg = B.toy(tmp_path / "toy")
+    reg = BT.toy(tmp_path / "toy")
     doc = json.loads((tmp_path / "toy" / "registration.json").read_text())
     assert doc["plan"] == [[0, reg.blocks]]
     path = tmp_path / "fewer.json"
@@ -179,7 +182,7 @@ def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_pa
 def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_path) -> None:
     """The gate's shape: `p2_parties --listen --sessions 2` on the auditor, the honest prover and then the cheat at
     `--connect`, each answer a line of `--answer`."""
-    reg = B.toy(tmp_path / "toy")
+    reg = BT.toy(tmp_path / "toy")
     verifier = subprocess.Popen([sys.executable, "-m", "verity.protocols.accounting.poub.verifier.p2_parties",
                                  "--registration", str(tmp_path / "toy" / "registration.json"), "--listen",
                                  "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl"),
@@ -211,7 +214,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     chain its signed close signs) the device's private case-digests.txt keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the
     toy's store, its log closed by the memory challenger's key (`p2_party_at_leaf`) under the session id the party was
     given, and `session.json` holds only its digest, store and verdict."""
-    reg = B.toy(tmp_path / "toy")
+    reg = BT.toy(tmp_path / "toy")
     (tmp_path / "challenger").mkdir()
     mc.SessionLog.create(tmp_path / "challenger" / "sessions")
 
@@ -264,7 +267,7 @@ for line in sys.stdin:
 def test_with_case_exe_the_case_answer_is_the_executables(tmp_path) -> None:
     """`--case-exe`: the executable answers the case (`p2_case.judged`, through `serve`), and its answer is the one
     written, not the session's own: a stand-in that rejects every case, against an honest session the party accepted."""
-    reg = B.toy(tmp_path / "toy")
+    reg = BT.toy(tmp_path / "toy")
     party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_parties "
              f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
              f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)}")
@@ -298,7 +301,7 @@ print(json.dumps({"killed": "the session's 1 min ran out"}), flush=True)
 def test_a_party_the_gate_kills_fails_the_session_naming_the_kill(tmp_path) -> None:
     """A party whose minutes ran out: the gate closes its session and says so on its stdout (`{"killed"}`), and the
     session fails with that reason, not a bare closed connection."""
-    reg = B.toy(tmp_path / "toy")
+    reg = BT.toy(tmp_path / "toy")
     (tmp_path / "killed.py").write_text(KILLED)
     out = tmp_path / "killed"
     assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
@@ -312,7 +315,10 @@ def test_a_party_the_gate_kills_fails_the_session_naming_the_kill(tmp_path) -> N
 
 
 def test_the_cli_runs_as_a_script(tmp_path) -> None:
-    p = subprocess.run([sys.executable, str(HERE / "p2_v1" / "bandwidth.py"), "toy", str(tmp_path)], check=False,
+    p = subprocess.run([sys.executable, str(HERE / "p2_v1" / "bandwidth_toy.py"), str(tmp_path)], check=False,
                        capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr
     assert json.loads(p.stdout)["units"] == 8
+    p = subprocess.run([sys.executable, str(ROOT / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py"), "--help"], check=False,
+                       capture_output=True, text=True, cwd=ROOT)
+    assert p.returncode == 0 and "session" in p.stdout, p.stderr

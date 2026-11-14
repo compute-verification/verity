@@ -1,4 +1,4 @@
-"""ROOTS1 on vllm's side: the Commit in H1's serving engine, whose record registers each step's A table of K
+"""ROOTS1 on the serving side: the Commit in H1's serving engine, whose record registers each step's A table of K
 ``a/<K>@<s>`` as its AROW of the step's calls of K and each round's input-ids table ``ids@<s>`` as its step's
 input token ids, layer 0's input. Core's credit holds each to the Commit's value of the same rows (`credit._arow`).
 
