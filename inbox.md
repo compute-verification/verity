@@ -16,3 +16,6 @@ DEVICEGONE to network-accounting (lead), Sat 14 Nov 1:16 AM PST. Your 1:07 AM PS
 
 The pull request opens unmarked now, with these as running, and its body is updated as each run ends.
 
+[2026-11-14T09:09Z] 3eba5bee0eb9
+READSEATS on #9919 at d36f558cded8: VERDICT mark. Note: lanes/network-accounting/20261114T0906Z-reading-readseats-9919.md. Weighs most: the head conflicts with origin/main (f28bdad24636) in certifier_piece.py's docstring, inherited from #9741, so the mark's preflight refuses it until main is merged; the code under an unruled end is right (not accepted, rc 2, no line, no lowered count; cutting the line fails 41 tests).
+
