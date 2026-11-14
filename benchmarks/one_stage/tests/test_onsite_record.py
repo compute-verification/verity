@@ -106,7 +106,7 @@ TREE = "ab12" * 10
 LINE = 'THE NETWORK CERTIFIER {"rc": 0, "verdict": "accept"}'
 #: SCHEDULE's egress capacity a phase: its 4 · 8 cells a bucket over 63 buckets exceed its caps' 252 · 4 = 1008 cells
 CAPACITY = 1008 * 512 * 8
-#: the auditor's record of its network certifier's key, as `certifier_serve.public_json` writes one, and session; and
+#: the auditor's record of its network certifier's key, as `record_files.public_json` writes one, and session; and
 #: the period's params stating them, as `scan_period.rows_case` does
 CERT_KEY = {"params": [64, 8, 10], "public": "c3" * 64, "key_id": "1d" * 16}
 SESSION = "5e" * 32
