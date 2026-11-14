@@ -315,6 +315,13 @@ not the verifier fills, pinned or takes the value from an earlier run. -/
 def CertifiedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
   ∀ x ∈ v.certified, ∃ e, Registration.entryOf rec x.1.value = some e ∧ jeq (getD e "root") (.str x.2) = true
 
+/-- The verdicts the caller's check holds (`Registration.portsAccepted`), a caller's fact (`CallerHeld`): no output
+value reads a port of a record the verifier's verdict log (`verdicts`) names refused, so no start is carried past a
+window the verifier refused. A record the log holds no verdict for is not refused; an output value that reuses a
+registered value is not held to it. -/
+def OutputPortsAccepted (v : Registration.Verifier) : Prop :=
+  ∀ o ∈ v.outputs, ∀ p, o.2.2 = .port p → (o.2.1, false) ∉ v.verdicts
+
 /-- R7's roots at the values the verifier pinned (`Registration.checkRegistered`'s `R7-held`), which R7 implies: of the
 verifier's own entries (`Registration.ownEntries`), each value it pinned before the record (`pinned`, the first root it
 pins the value to) and neither fills (`supplied`) nor takes from an earlier run (`outputs`) has that root in the record's
@@ -351,13 +358,14 @@ log's declarations); its window names the stream and the prover a verifier is bo
 verifier read from the challenger's log (`RunSeedSalt`) and its pool's reset, week and spent mark (`RunPoolReset`,
 `RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`), and the registration log's compiler and
 advice within its length (`RunCompiler`); and, when the verifier expects values registered, the window opens the pool
-the previous window of record left (`PoolChained`). -/
+the previous window of record left (`PoolChained`) and no output value reads a port of a record the verifier's verdict
+log names refused (`OutputPortsAccepted`). -/
 def CallerHeld (rec : Json) (v : Registration.Verifier) : Prop :=
   DeclaredDay rec v ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
   RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
-  RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v)
+  RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v ∧ OutputPortsAccepted v)
 
 /-! ## The sample: the registered sampling design over the registered population -/
 

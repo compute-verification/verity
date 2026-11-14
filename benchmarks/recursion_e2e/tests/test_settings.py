@@ -56,13 +56,13 @@ def test_the_jobs_first_command_refuses_an_unknown_variable_and_records_the_rest
     assert p.returncode == 2 and "unknown setting OPROVE_WARMUP" in p.stderr and not (tmp_path / "settings.json").exists()
     p = _record(tmp_path, K="4k")
     assert p.returncode == 2 and "K='4k'" in p.stderr
-    p = _record(tmp_path, K="64", N="16", MODES="firewall", TAG="t", LEVELS="L0")
+    p = _record(tmp_path, K="64", N="16", MODES="zk_server", TAG="t", LEVELS="L0")
     assert p.returncode == 0, p.stderr
     doc = json.loads((tmp_path / "settings.json").read_text())
-    assert doc["values"] == {"K": "64", "MODES": "firewall", "N": "16"} and p.stdout.strip() == doc["digest"]
-    assert doc["digest"] == RS.record({"K": "64", "N": "16", "MODES": "firewall", "TAG": "t"})["digest"] == (
-        "451b3c49825b835f8cd1fc20bf415bcea9d7eda13b5c169a4995e68e423aba28"
-        "9293a16edbd1edcead0ecf7085f45a747b8665d86fb3c1c7cfb67942f5b9a719")
+    assert doc["values"] == {"K": "64", "MODES": "zk_server", "N": "16"} and p.stdout.strip() == doc["digest"]
+    assert doc["digest"] == RS.record({"K": "64", "N": "16", "MODES": "zk_server", "TAG": "t"})["digest"] == (
+        "5d998584fae6908a841d67f12d6ceb9b2c93dcd0fce30a34b44367e0f4819030"
+        "a2ab44f5ba31949e3301df6f37d70883ffaa2932f5ffbe47262dbba959f57b76")
 
 
 def test_direct_environment_uses_only_shrink() -> None:
