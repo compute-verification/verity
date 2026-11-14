@@ -27,7 +27,6 @@ from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: 
 from test_session import run  # noqa: E402
 
 ROLE = "synthetic-bf16"
-NODE = b"test-node"
 FIGURES = timing.RTX_PRO_6000_NODE
 B = rstore.BLOCK
 TINY = {"layers": 1, "hidden": 16, "heads": 2, "kv_heads": 1, "intermediate": 32, "vocab": 64}
@@ -92,7 +91,7 @@ def test_verifier_py_takes_no_checkpoint(tmp_path):
     """verifier.py holds no checkpoint: `--model` and the store's shape are no arguments of it."""
     for flag, value in (("--model", ROLE), ("--checkpoint", str(tmp_path)), ("--arena-blocks", "7")):
         with pytest.raises(SystemExit):
-            verifier.main(["--out", str(tmp_path / "out"), flag, value])
+            verifier.main(["--out", str(tmp_path / "out"), flag, value], figures=FIGURES)
 
 
 def test_the_paced_line_reports_weights_held_and_filler_held_apart():

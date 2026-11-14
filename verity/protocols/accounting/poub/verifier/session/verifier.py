@@ -1615,7 +1615,6 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                          "session's paced line with --ingress-bytes-per-s (`recorded_paced`), and exit")
     a = ap.parse_args(argv)
     a.hbm_bytes = figures.hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
-    a.engines = figures.gpus if a.engines is None else a.engines
     capacities = None
     if a.node is not None:
         if a.disk_bytes_per_s or a.link_bytes_per_s or a.disk_burst_bytes is not None or a.link_burst_bytes is not None:
