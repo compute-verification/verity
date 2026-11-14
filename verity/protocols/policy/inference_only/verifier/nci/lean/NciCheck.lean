@@ -11,6 +11,7 @@ public import NciCheck.RecordText
 public import NciCheck.Record
 public import NciCheck.RecordCount
 public import NciCheck.RecordRows
+public import NciCheck.RecordChosen
 public import NciCheck.RecordDifftest
 public import NciCheck.BaselineDifftest
 public import NciCheck.Protocol
@@ -45,7 +46,9 @@ which imports nothing else of this package. `RecordCount` is the count of `(c, k
 summary. `RecordRows` counts that summary's block in the rows its units have in their templates' circuit
 files, each template's rows of one unit from a table it is handed, and decides the rate rule in rows; its
 `blockRows` is the one definition of a block's rows, which reads the templates' ids and units alone.
-All four are a library: no executable, protocol or verdict reads them. `RecordDifftest` holds them to the Python
+`RecordChosen` counts the whole execution phase where those count a block: the record's input bits of each kind over
+every slot, and of them the bits the prover chose, which no wire, ingress or θ fills.
+All five are a library: no executable, protocol or verdict reads them. `RecordDifftest` holds them to the Python
 reference, and the wiring the form reads to the one SPOT's reader reads.
 
 `NciCheck.Protocol` is the policy's check as a core protocol, `verity/inference-only/v0` (the `inference-only` exe):

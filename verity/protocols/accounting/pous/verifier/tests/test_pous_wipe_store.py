@@ -108,7 +108,7 @@ def test_a_store_keeping_prior_content_past_the_threshold_is_rejected() -> None:
     assert (n - 1) * sw.LABEL_BITS <= threshold < n * sw.LABEL_BITS
     store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(step=7), foreign=n)
     w = W.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(), schemes=ts.SCHEMES,
-              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), coin_secret=b"coins", egress_bits=0,
+              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), coin_secret=b"coins", egress_mib=0,
               prover=lambda _: store)
     store.close()
     assert w.verdict == "reject" and w.report["ended"] == sw.WRONG and "wrong answers" in w.answer["reason"]
@@ -333,11 +333,12 @@ def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatc
     monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or side)
     out = tmp_path / "out"
     assert W.main(["--period", str(period), "--out", str(out), "--node", "n0", "--expect", "reject"]) == 0
-    assert extras == [("--egress-bits", "0")], "the local challenger signs the period's egress count"
+    assert extras == [()], "the period's egress count is the check's evidence, never the challenger's"
+    assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
     record = json.loads((out / "wipe.json").read_text())
     n = W.foreign_labels("fM", W.params_for())
     assert record["answer"]["verdict"] == "reject" and record["prover"]["foreign"]["labels"] == n
-    assert record["placement"]["kind"] == "simulated" and record["placement"][WP.PREMISE].startswith("simulated: ")
+    assert record["placement"]["kind"] == "simulated" and record["placement"][WP.PREMISE].startswith(f"{WP.REHEARSAL}; ")
     assert W.summary(record)["foreign_labels"] == n == record["wipe"]["foreign_labels"]
 
 
@@ -413,7 +414,7 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
     store.gate()
     w = W.run("n0", params, signer=ts.TestSigner(b"disk %d" % foreign, 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(step=7), secret=KEY, session_id=bytes(32),
-              coin_secret=b"coins", egress_bits=0, prover=lambda _: store)
+              coin_secret=b"coins", egress_mib=0, prover=lambda _: store)
     [fill] = _fills(tmp_path)
     on_disk, key = fill.read_bytes(), sw.wipe_key(KEY, b"n0", bytes(32))
     assert store.sync_ns == 7 and store.record()["store"]["parts"][0]["tier"] == "disk"

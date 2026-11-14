@@ -535,12 +535,14 @@ def test_a_header_without_requests_is_refused(memory, workload):
 
 def test_a_weight_root_ahead_of_the_run_header_is_refused(memory):
     """`_Fold._weight_root`: the weights parameter is made by the run header, so a weight root logged ahead of it has no field to
-    bind and the fold refuses it by the root's name and path."""
+    bind and the fold refuses it by the root's name and path, as a lookup in no parameter."""
     evs = toy_log()
     alloc, root = evs[1], evs[2]
     assert isinstance(root, Root) and root.name == "model.embed_tokens.weight"
-    with pytest.raises(FoldError, match=r"weight field path \('embed',\) for 'model.embed_tokens.weight' is not in None"):
+    with pytest.raises(FoldError) as refused:
         fold([alloc, root, evs[0], *evs[3:]], toy_profile(), strict=True, with_program=False)
+    assert str(refused.value) == ("weight field path ('embed',) for 'model.embed_tokens.weight' is not in None: "
+                                  "'NoneType' object is not subscriptable")
 
 
 def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_note(memory):
@@ -557,6 +559,31 @@ def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_no
             evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
             r = fold(evs, toy_profile(), strict=True, with_program=False)
             assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, (more, notes)
+
+
+@pytest.mark.parametrize("place", ["sampling", "tp2"])
+def test_a_header_copies_its_sampling_and_its_tensor_parallel_note_as_dict_reads_them(memory, place):
+    """A workload's `sampling` and the notes' `tp2` that are not empty are copied with `dict`: pairs read as the mapping they spell,
+    and `dict` itself refuses what is neither."""
+    import dataclasses
+
+    hdr = toy_log()[0]
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+
+    def folded(value):
+        more, notes = ({"sampling": value}, None) if place == "sampling" else ({}, {"tp2": value})
+        evs = toy_log()
+        evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
+        return fold(evs, toy_profile(), strict=True, with_program=False)
+
+    pairs: list | tuple
+    for pairs in ([("world_size", 1)], (("world_size", 1),)):
+        r = folded(pairs)
+        assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, pairs
+    refused: tuple = ((7, TypeError, "'int' object is not iterable"), ("no", ValueError, "dictionary update sequence element #0 has length 1"))
+    for value, error, text in refused:
+        with pytest.raises(error, match=text):
+            folded(value)
 
 
 def test_registered_values_are_inputs_of_the_program(memory):

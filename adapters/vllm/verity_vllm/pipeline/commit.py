@@ -46,6 +46,7 @@ from __future__ import annotations
 import time
 
 from verity_vllm.records.commit_run import SCHEMA
+from verity_vllm.records.schema_ids import ORACLE_COMPARE_SCHEMA
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
@@ -78,7 +79,7 @@ from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_reco
 from verity_vllm.commit import opened as OV, step_rows as SR  # noqa: E402
 from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
-from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
+from verity_vllm.pipeline.compiled_merge import _bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
 
 # automatic stage telemetry of THIS process: the engine's build, warm-up, arms, validation
@@ -144,7 +145,7 @@ def c2_programs_forecast(programs_root: str | None, program_dir: str | None, fac
         files = [p] if os.path.exists(p) else []
     rows = 0
     jb = 0
-    per_file = []
+    per_file: list[dict[str, Any]] = []
     needle = b'{"i": '
     t0 = time.perf_counter()
     for f in files:
@@ -298,8 +299,9 @@ def engine_schedule(request_rows: dict[int, list[tuple[str, int, int]]] | None, 
     served + LAG on an EOS stop -- executed_prefix.executed_prefix_of_record)."""
     observed: dict[str, int] = {}
     steps_of: dict[str, list[int]] = {}
-    for st in sorted(request_rows or {}):
-        for rid, _lo, _hi in request_rows[st]:
+    rows = request_rows or {}
+    for st in sorted(rows):
+        for rid, _lo, _hi in rows[st]:
             observed.setdefault(str(rid), int(st))
             steps_of.setdefault(str(rid), []).append(int(st))
     contiguous = {r: v == list(range(v[0], v[0] + len(v))) for r, v in steps_of.items()}
@@ -439,6 +441,7 @@ def tensor_digests(com, out, pair: int, prev: dict) -> int:
     (out / f"tensor_digests_pair{pair}.json").write_text(json.dumps(cur) + "\n")
     if prev:
         p0, pk = prev["pair"], prev["digests"]
+        fam: _C[str]
         diff_steps, fam, perm_steps = [], _C(), 0
         for step, d in cur.items():
             e = pk.get(step) or {}
@@ -590,6 +593,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     picks = B.challenge_identities(pop, bmap, rc.run_root, args.openings, salt=b"population/" + str(pair).encode(), **CC.identities(rc))
     bound = [(i, e, leaf) for i, e, leaf in picks if e is not None]
     unbound = [B.identity_dict(i) for i, e, _ in picks if e is None]
+    ops: list[Any]
     ops, ok = [], []
     po_skipped: str | None = None
     po_deferred: list[tuple[int, int]] = []
@@ -663,16 +667,21 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
         fa2 = [m for m in metas if "fa2.m1/" in m.name or "fa3.m1/" in m.name]     # forced pick inside a hidden row of either tap
         if fa2:
             m = fa2[len(fa2) // 2]
-            forced.append((big, (m.stream_off + m.nbytes // 2) // frozen.chunk)); forced_why[forced[-1]] = "largest step: inside a hidden-m1 row"
+            forced.append((big, (m.stream_off + m.nbytes // 2) // frozen.chunk))
+            forced_why[forced[-1]] = "largest step: inside a hidden-m1 row"
         gem = [m for m in metas if "down_proj" in m.name]
         if gem:
-            forced.append((big, gem[-1].stream_off // frozen.chunk)); forced_why[forced[-1]] = "largest step: last down_proj output"
-        forced.append((big, 0)); forced_why[forced[-1]] = "largest step: first leaf (first window)"
+            forced.append((big, gem[-1].stream_off // frozen.chunk))
+            forced_why[forced[-1]] = "largest step: last down_proj output"
+        forced.append((big, 0))
+        forced_why[forced[-1]] = "largest step: first leaf (first window)"
         last = steps_sorted[-1]
-        forced.append((last, rc.steps[last].n_leaves - 1)); forced_why[forced[-1]] = "last step: last leaf (the FINAL window, opened after staging release)"
+        forced.append((last, rc.steps[last].n_leaves - 1))
+        forced_why[forced[-1]] = "last step: last leaf (the FINAL window, opened after staging release)"
         first = steps_sorted[0]
         if first != big:
-            forced.append((first, 0)); forced_why[forced[-1]] = "first step: first leaf"
+            forced.append((first, 0))
+            forced_why[forced[-1]] = "first step: first leaf"
     forced = [f for f in forced if f not in sample]
     # the in-run challenge / population picks this run could NOT open from host (excluded families' interior; handed over
     # by the openings and binding stages via com._oar_deferred) are opened here by replay -- every sampled leaf is opened by one of the paths
@@ -812,7 +821,7 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
     gc.collect()
     try:
         with open("/proc/self/status") as f:
-            _st = {l.split(":")[0]: int(l.split()[1]) for l in f if l.startswith(("VmRSS:", "VmHWM:"))}
+            _st = {status_line.split(":")[0]: int(status_line.split()[1]) for status_line in f if status_line.startswith(("VmRSS:", "VmHWM:"))}
         res["host_rss_gb_after"] = round(_st["VmRSS"] / 1e6, 2)
         # the process's kernel high-water mark AFTER the replay -- the in-process peak the bounded HOST BOUND must
         # cover (the replay phase is where a bounded arm peaks); sampler-independent (try 4's external sampler followed another process)
@@ -827,7 +836,10 @@ def resolve_staging(args: Options) -> Options:
     replay's ring): an omitted --window-mb is `native_collect.window_mb_default` when every committer kind is the windowed worker
     (per-step blocks otherwise), an omitted --window-slots the collector's ring, an omitted --bounded-staging is on whenever staging is
     windowed."""
-    from verity_vllm.commit.committer.native_collect import WINDOW_SLOTS, window_mb_default
+    from verity_vllm.commit.committer.native_collect import (
+        WINDOW_SLOTS,
+        window_mb_default,
+    )
 
     window, slots = args.window_mb, args.window_slots
     if window is None:
@@ -874,9 +886,9 @@ class Options:
     committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | hooks_only (an ablation, not a commitment) | plugin:<module>:<factory>")
     commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME,), help="the commitment scheme, rows-sha512 (hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), the windowed worker's (native_collect_v2b with --window-mb > 0)")
     chunk: int = option("--chunk", type=int, default=65536, help="hooks_only: the leaf, in bytes of the packed step stream, it reports (it hashes nothing); a rows-sha512 row is step_rows.ROW_BYTES")
-    arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
-    arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
-    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="where the weights registration hashes: host (default; Python on the CPU), device (the same leaves and per-tensor trees " "on the GPU: rows-sha512's hiding rows by native_rows.cu, verity_vllm.commit.committer.weights_rows), device-checked (both, each tensor's device root compared with its host " "root and a mismatch refused; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
+    arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
+    arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope (B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from --engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
+    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="where the weights registration hashes: host (default; Python on the CPU), device (the same leaves and per-tensor trees on the GPU: rows-sha512's hiding rows by native_rows.cu, verity_vllm.commit.committer.weights_rows), device-checked (both, each tensor's device root compared with its host root and a mismatch refused; validation runs); a leased Commit's row sets device unless the item sets it (pipeline.gpu_lease).  Recorded in versions.json weights.hash")
     hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     pinned_populate_threads: int | None = option("--pinned-populate-threads", env="VERITY_PINNED_POPULATE_THREADS", type=int, default=None, help="helper threads that fault a fresh exact pinned block's pages in (MADV_POPULATE_WRITE) before the caller registers it (default: commit.committer.pinned_pool.POPULATE_THREADS; recorded as pinned_populate_threads); 0 = the registration faults them in")
     openings: int = option("--openings", type=int, default=64)
@@ -888,39 +900,39 @@ class Options:
     label: str = option("--label", default="")
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
-    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, which OOMs)")
+    tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 (VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, which OOMs)")
     tap_sources: TAPS.TapSources = group(TAPS.TapSources)
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run with reference taps + re-execution (value_check.json)")
     arms: str | None = option("--arms", default=None, help="comma-separated committer kinds run as separate treatment arms in one process, interleaved with the control (order rotates per round)")
     profile_hooks: bool = option("--profile-hooks", default=False, action="store_true", help="native_collect: time the hook bodies (perf_counter per call) -- profiling run, not a headline timing")
     expect_root: str | None = option("--expect-root", default=None, help="fail if the instrumented run root (hex) differs from this reference root (the arm2/arm3 equality gate)")
-    late_read: str | None = option("--late-read", default=None, help="NEGATIVE TEST: drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the " "staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
-    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (a substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
-    window_mb: int | None = option("--window-mb", type=int, default=None, help="windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); omitted = the collector's " "(native_collect.window_mb_default: 256 on native_collect_v2b unless --retain device, else per-step blocks); 0 = per-step blocks")
+    late_read: str | None = option("--late-read", default=None, help="NEGATIVE TEST: drop this leaf (e.g. qkv_proj) from the gather arm's flush points so the staged values are read after the in-place overwriter -> the run root MUST differ from arm 2 (roots_equal_across_arms=false)")
+    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (a substituted weight input): <served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed (--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
+    window_mb: int | None = option("--window-mb", type=int, default=None, help="windowed staging -- lay the packed step stream over a ring of device windows of this size (MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); omitted = the collector's (native_collect.window_mb_default: 256 on native_collect_v2b unless --retain device, else per-step blocks); 0 = per-step blocks")
     window_slots: int | None = option("--window-slots", type=int, default=None, help="P0: number of ring slots (default 8; raised automatically so the largest tensor fits)")
-    retain: str = option("--retain", default="none", choices=["device", "host", "none"], help="retention policy for absorbed raw staging (sets VERITY_RETAIN): device = a compact device copy per step " "(the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none (default) = " "keep only the authentication state, openings by deterministic replay (--open-after-release)")
+    retain: str = option("--retain", default="none", choices=["device", "host", "none"], help="retention policy for absorbed raw staging (sets VERITY_RETAIN): device = a compact device copy per step (the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none (default) = keep only the authentication state, openings by deterministic replay (--open-after-release)")
     footprint: str | None = option("--footprint", default=None, help="write the per-step device-memory timeline (JSONL) to this path (sets VERITY_FOOTPRINT)")
-    bounded_staging: bool | None = option("--bounded-staging", default=None, action="boolean_optional", help="bounded host staging (sets VERITY_STAGING_BOUNDED; windowed path only; omitted = on whenever " "staging is windowed): a learning step's transient " "host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the " "plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named " "FAIL); roots identical to the unbounded path (same headers, leaf order, padding). --no-bounded-staging: the hedge copies")
+    bounded_staging: bool | None = option("--bounded-staging", default=None, action="boolean_optional", help="bounded host staging (sets VERITY_STAGING_BOUNDED; windowed path only; omitted = on whenever staging is windowed): a learning step's transient host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named FAIL); roots identical to the unbounded path (same headers, leaf order, padding). --no-bounded-staging: the hedge copies")
     learn_budget_mb: int = option("--learn-budget-mb", type=int, default=4096, help="bounded staging: transient pinned-host budget for a learning step (MiB; default 4096)")
-    retain_exclude: str | None = option("--retain-exclude", default=None, help="with --bounded-staging --retain host: comma-separated value families (e.g. fa3_hidden_m1) whose chunk-aligned " "interior is NOT copied to host (sets VERITY_RETAIN_EXCLUDE): those leaves open by REPLAY against the original root in " "openings_after_release (needs --open-after-release); everything else opens from host as before")
-    host_admit: float | None = option("--host-admit", type=float, default=None, metavar="MARGIN", help="with --bounded-staging: REFUSE (rc 3, named) before any run when the host peak bound exceeds (1 - MARGIN) x the " "cgroup memory limit (e.g. 0.15); without it the bound is only printed / recorded (host_admission_<kind>.json)")
-    replay_openings: str = option("--replay-openings", default="auto", choices=["auto", "always"], help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens " "EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots)")
-    open_after_release: bool = option("--open-after-release", default=True, action="boolean_optional", help="(default on) after each instrumented run, release every raw device copy, then open the 64 challenge positions " "(+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them " "against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL); " "--no-open-after-release opens in the run only (not under --retain none)")
-    required_classes: str | None = option("--required-classes", default=None, help="comma-separated class ids that MUST be declared with tensors > 0 by every " f"instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other " "evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
-    match_dir: str | None = option("--match-dir", "--oracle", default=None, help="the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, " "capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that " "identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; steps the Match did not snapshot are reported partial")
-    program_dir: str | None = option("--program-dir", default=None, help="B=1: the Build's request Program dir (instances.json.gz + result.json) -- enables the C2 OF RECORD: " "sampled exact VU replay of the committed bytes through the registered relation evaluators (commit.sampled_replay) and the " "exhaustive ordered boundary linkage (commit.boundary_linkage); a mismatch / unlinked boundary = COMMIT FAIL naming the VU")
+    retain_exclude: str | None = option("--retain-exclude", default=None, help="with --bounded-staging --retain host: comma-separated value families (e.g. fa3_hidden_m1) whose chunk-aligned interior is NOT copied to host (sets VERITY_RETAIN_EXCLUDE): those leaves open by REPLAY against the original root in openings_after_release (needs --open-after-release); everything else opens from host as before")
+    host_admit: float | None = option("--host-admit", type=float, default=None, metavar="MARGIN", help="with --bounded-staging: REFUSE (rc 3, named) before any run when the host peak bound exceeds (1 - MARGIN) x the cgroup memory limit (e.g. 0.15); without it the bound is only printed / recorded (host_admission_<kind>.json)")
+    replay_openings: str = option("--replay-openings", default="auto", choices=["auto", "always"], help="openings-after-release: 'auto' replays only when a pick is not retained on host; 'always' replays every time and opens EVERY pick from the replay (regenerated values + regenerated authentication paths vs the ORIGINAL roots)")
+    open_after_release: bool = option("--open-after-release", default=True, action="boolean_optional", help="(default on) after each instrumented run, release every raw device copy, then open the 64 challenge positions (+ forced picks from the prefill step and the FA2 hidden rows) from the host copy or from a REPLAY run, and verify them against the ORIGINAL run's roots (recorded as commit.openings_after_release; a failure is a Commit FAIL); --no-open-after-release opens in the run only (not under --retain none)")
+    required_classes: str | None = option("--required-classes", default=None, help=f"comma-separated class ids that MUST be declared with tensors > 0 by every instrumented run (default {','.join(REQUIRED_CLASSES_DEFAULT)}; the FA2 hidden class is required because the harness has no other evidence the attention producer fired). Override only when the model's producers genuinely differ; the set is recorded in verdict.json")
+    match_dir: str | None = option("--match-dir", "--oracle", default=None, help="the Match stage's run dir of THIS attempt (<row>/match: capture/snapshots.json + values/, instances.jsonl, capture/log.jsonl.gz): live C2 -- every bound identity's committed bytes are compared with the Match record's value for that identity (oracle-compare); any mismatch = COMMIT FAIL naming the identity; steps the Match did not snapshot are reported partial")
+    program_dir: str | None = option("--program-dir", default=None, help="B=1: the Build's request Program dir (instances.json.gz + result.json) -- enables the C2 OF RECORD: sampled exact VU replay of the committed bytes through the registered relation evaluators (commit.sampled_replay) and the exhaustive ordered boundary linkage (commit.boundary_linkage); a mismatch / unlinked boundary = COMMIT FAIL naming the VU")
     programs_root: str | None = option("--programs-root", default=None, help="B>=2: the directory holding the per-request Programs (build_request*/ or *LP<n>_T<t>; build-global's resolution) for the sampled replay")
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2, help="sampled replay: VUs per stratum (spec x request x phase); default 2")
-    replay_cache: bool = option("--replay-cache", default=False, action="store_true", help="reuse an earlier pair's C2 sampled-replay + boundary-linkage record within this Commit stage when the FULL key " "(run root, manifest digest, seed, binding map, weights root, sample parameters, code) is identical; the copy carries reused_from and " "evaluated_here=0 (default off)")
+    replay_cache: bool = option("--replay-cache", default=False, action="store_true", help="reuse an earlier pair's C2 sampled-replay + boundary-linkage record within this Commit stage when the FULL key (run root, manifest digest, seed, binding map, weights root, sample parameters, code) is identical; the copy carries reused_from and evaluated_here=0 (default off)")
     replay_bundle_cap_gb: float = option("--replay-bundle-cap-gb", type=float, default=300.0, help="--replay-deferred: the largest replay bundle this Commit writes (GB); a larger one is not written and the C2 replay runs in this process")
     replay_bundle_overlap: int = option("--replay-bundle-overlap", type=int, default=1, choices=(0, 1), help="--replay-deferred full: 1 writes the bundle's store from the moment the run root is fixed, beside the binding and manifest coverage (replay_bundle.start; the same files and digests); 0 writes it at the C2 site, after them")
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full", "slim"), help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes.  `slim`: the replay's reads are planned here and only the members they open are sealed, with their Merkle paths (the planning adds to the GPU hold)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed, prover-chosen (negatives / reproduction); default = the run root's first 8 bytes (recorded with its source): no coin, so a prover steers the sample by committing again, in about the lesser of 1/p and 2^64 tries -- a measurement")
-    replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a challenge string (hex/string) -- the seed becomes sha256(challenge | run_root)[:8]; who issued the string is not checked, " "and --challenger-gate refuses this flag (the gate's replay coin reaches the served C2 only); default = the run root alone, no coin (a measurement)")
-    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string (e.g. 'ssh -i KEY -o IdentitiesOnly=yes research@HOST'): the Commit reserves one session before its engine and opens it on its first run's root of record, and each run's openings and served C2 replay challenge are its coins, opened after that run's root (verity_vllm.pipeline.commit_coins); without it each run's coins are this process's own, a measurement that credits nothing")
-    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (its certifier coin link)")
-    weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
+    replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a challenge string (hex/string) -- the seed becomes sha256(challenge | run_root)[:8]; who issued the string is not checked, and --challenger-gate refuses this flag (the gate's replay coin reaches the served C2 only); default = the run root alone, no coin (a measurement)")
+    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor device's challenger gate, its command as one string (e.g. 'ssh -i KEY -o IdentitiesOnly=yes research@HOST'): the Commit reserves one session before its engine and opens it on its first run's root of record, and each run's openings and served C2 replay challenge are its coins, opened after that run's root (verity_vllm.pipeline.commit_coins); without it each run's coins are this process's own, a measurement that credits nothing")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor device's peers, where its challenger reaches the Commit (its certifier coin link)")
+    weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS (verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / --programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (sampled by --replay-draw) in place of the row's per-stratum sample")
     replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
@@ -937,17 +949,54 @@ class Options:
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0, help="the engine step a paced session's pass waits on, in ms: added to the calibration's pass times so the verifier's allowance covers it (a verifier at --paced 1:T_MS:DRAWS:WINDOWS runs each pass's step inside its coin's window); 0 for a session in stated windows")
     plan: str | None = option("--plan", default=None, metavar="JSON", help="the Commit's plan, derived before the GPU (verity_vllm.pipeline.commit_plan; the row's `plan` stage): the producer facts are taken from it when its key (Program digest, manifest, workload, Programs, code identity, vLLM version) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json plan)")
     call_boundary_plan: str | None = option("--call-boundary-plan", default=None, metavar="JSON", help="the call-boundary source's host plan, derived at the Build's call-boundary check (verity_vllm.pipeline.boundary_plan): taken when its key (as --plan's) equals this Commit's; else derived here and recorded as plan_recomputed with the reason (verdict.json call_boundary_plan)")
-    replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record " "(a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
-    program_digest: str | None = option("--program-digest", default=None, help="the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the " "required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
-    required_manifest: str | None = option("--required-manifest", default=None, help="the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every " "identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed " "tensor of every instrumented run (coverage_check); replaces the counts+classes source, which is the labelled fallback")
+    replay_target: list[str] | None = option("--replay-target", action="append", default=None, metavar="OP_PATH[@STEP]", help="sampled replay: add EVERY VU of a module (at a request-local step) to the sample, outside the cap -- the targeted negatives of record (a single-identity fault at a mid-phase step); repeatable; recorded under sample.targeted")
+    program_digest: str | None = option("--program-digest", default=None, help="the Build's Program digest of record (B=1: build_request's program_digest; B>=2: gprog's workload digest): the required manifest's program_digest must equal it or the Commit fails closed as wrong-Program; also the binding map's key digest")
+    required_manifest: str | None = option("--required-manifest", default=None, help="the Program/query-derived required-value manifest (verity_vllm.pipeline.cli build ...): every identity it lists (step, invocation, op_path, output_member, element range, request, rank) must be covered by a committed tensor of every instrumented run (coverage_check); replaces the counts+classes source, which is the labelled fallback")
     tensor_digests: bool = option("--tensor-digests", default=False, action="store_true", help="diagnostic: per-tensor digests of the retained host bytes per instrumented run, diffed across pairs")
-    moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, " "added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
+    moe_source: str = option("--moe-source", choices=["auto", "on", "off"], default="auto", help="[MOE-03] attach the fused-MoE block source (router_w/ids, up, act, down, sum per MoE layer per step; class moe_block_stream, added to the required classes): auto = when the model has MoE-runner modules (the default), on = refuse if it has none, off = never")
     compiled_taps: str = option("--compiled-taps", choices=["off", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
                                 "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
                                 "seed drawn after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
                                 "--only-arm control (verity_vllm/ops/served_commit.sh)")
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by `verity-vllm compiled-merge` from both processes")
+
+
+def required_engine_args(wl: dict) -> dict:
+    """The engine arguments a workload requires; none where it names none."""
+    required = wl.get("engine_args_required")
+    return required if required else {}
+
+
+def eos_source(stop_of_record: dict) -> Any:
+    """Where the stop rule of record took its EOS ids from; None where no stop rule was read."""
+    srule = stop_of_record.get("srule")
+    return srule.get("source") if srule else None
+
+
+def collector_errors_n(extra: dict) -> Any:
+    """How many errors a run's collector counted; where it gave no count, how many it listed, none where it listed none."""
+    errors = extra.get("errors")
+    return extra.get("errors_n", len(errors) if errors else 0)
+
+
+def coverage_ok(commit: dict) -> bool:
+    """Whether a run's binding covered its population; False where the run recorded no binding, or the binding no coverage."""
+    binding = commit.get("binding")
+    coverage = binding.get("coverage") if binding else None
+    return bool(coverage.get("ok")) if coverage else False
+
+
+def attribution_of(oc: dict) -> dict:
+    """An oracle compare's attribution; an empty one where the compare made none."""
+    attribution = oc.get("attribution")
+    return attribution if attribution else {}
+
+
+def generated_kernels_of(versions: dict) -> Any:
+    """What the versions' compilation records of its generated kernels; None where they record no compilation."""
+    compilation = versions.get("compilation")
+    return compilation.get("generated_kernels") if isinstance(compilation, dict) else None
 
 
 def main(args: Options) -> None:
@@ -969,7 +1018,7 @@ def main(args: Options) -> None:
     except _sid.SourceIdentityError as e:
         print(str(e), file=sys.stderr, flush=True)
         raise SystemExit(3) from None
-    print(f"[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
+    print("[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
           + f" tree={source_identity_doc['requested_root']}", flush=True)
     settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
     args = resolve_staging(args)
@@ -1003,14 +1052,14 @@ def main(args: Options) -> None:
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
-    engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
+    engine_args = {**required_engine_args(wl), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload))
     # `--arms k1,k2,...` runs several committers as separate treatment arms in ONE process against the same control, interleaved
     # (control, k1, k2, ...) with the order rotated every round so every arm takes every position; single-committer mode is unchanged
     # (a control-only process has no committer at all: nothing installed, nothing compiled in)
     kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
     multi = bool(args.arms)
-    coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor host's session, reserved before any root (or None: a measurement)
+    coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor device's session, reserved before any root (or None: a measurement)
     coms: dict[str, Any] = {}
     # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
     # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
@@ -1061,7 +1110,9 @@ def main(args: Options) -> None:
     versions["enforce_eager"] = eng.kwargs.get("enforce_eager")
     # what is actually compiled / graphed in THIS process (CompilationMode, CUDAGraphMode, capture sizes, splitting ops):
     # recorded for every attempt, control and treatment alike -- the paired processes must agree (compiled_merge checks)
-    from verity_vllm.acquire.sources.compiled_source import compile_settings as _compile_settings
+    from verity_vllm.acquire.sources.compiled_source import (
+        compile_settings as _compile_settings,
+    )
 
     versions["compilation"] = _compile_settings(eng.llm)
     versions["compilation"]["compiled_taps"] = args.compiled_taps
@@ -1129,12 +1180,14 @@ def main(args: Options) -> None:
             # `--retain host` pins the whole run's raw bytes (+ ~1/4 for levels) in HOST memory; inside a container the
             # bound is the cgroup limit, not `free`. Over it the kernel OOM-killer SIGKILLs the process mid-warm-up with no Python error
             # (B=32 Llama 1024/128 on a 125 GB cp-dA container). Say so up front; the sound alternative is `--retain none` + replay openings.
-            host_cap = None; host_cap_src = None
+            host_cap = None
+            host_cap_src = None
             for cg in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
                 try:
                     v = Path(cg).read_text().strip()
                     if v.isdigit() and int(v) < (1 << 60):
-                        host_cap = int(v); host_cap_src = cg
+                        host_cap = int(v)
+                        host_cap_src = cg
                         asz["host_memory_cap_source"] = cg
                         break
                 except OSError:
@@ -1145,7 +1198,8 @@ def main(args: Options) -> None:
                 try:
                     for line in Path("/proc/meminfo").read_text().splitlines():
                         if line.startswith("MemTotal:"):
-                            host_cap = int(line.split()[1]) * 1024; host_cap_src = "/proc/meminfo MemTotal (no cgroup limit visible)"
+                            host_cap = int(line.split()[1]) * 1024
+                            host_cap_src = "/proc/meminfo MemTotal (no cgroup limit visible)"
                             break
                 except OSError:
                     pass
@@ -1190,7 +1244,9 @@ def main(args: Options) -> None:
                 # the run's stream under the workload's DECLARED schedule (per step; the hidden family's share), not the envelope's
                 # any-packing worst case (`retained_bytes_bound` = ceil(B x max_prompt / T_prefill) prefills of the worst step: 3x for the
                 # B8 1024/128 row whose 8 prompts prefill in ONE step) -- both are on the record
-                from verity_vllm.commit.committer.native_host import schedule_stream_bound
+                from verity_vllm.commit.committer.native_host import (
+                    schedule_stream_bound,
+                )
                 _ssb = schedule_stream_bound(asz, reqs, sampling)
                 asz["schedule_stream_bound"] = _ssb
                 _excl = set(getattr(com, "retain_exclude", ()) or ())
@@ -1447,7 +1503,7 @@ def main(args: Options) -> None:
     # the Program's declared stop rule + LAG, read once for every consumer of every pair (population, composition,
     # linkage, replay); recorded in versions so the finalizer reads the same fact the Commit counted on
     stop_of_record = stop_rule_of_record(eng, wl, versions)
-    versions["stop_rule_of_record"] = {k: v for k, v in stop_of_record.items() if k != "srule"} | {"eos_source": (stop_of_record.get("srule") or {}).get("source")}
+    versions["stop_rule_of_record"] = {k: v for k, v in stop_of_record.items() if k != "srule"} | {"eos_source": eos_source(stop_of_record)}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     arms_all = ["control"] + (kinds if multi else ["instrumented"])
     # the measured runs start here; verdict.host_peak.printed_before_run = admission_monotonic_s < this (timestamps, not a literal)
@@ -1512,8 +1568,11 @@ def main(args: Options) -> None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
-                # the run's coins, flipped once its root of record is fixed (the auditor host's session; without one, this process's own)
-                from verity_vllm.commit.challenge import challenge_positions, run_root_of
+                # the run's coins, flipped once its root of record is fixed (the auditor device's session; without one, this process's own)
+                from verity_vllm.commit.challenge import (
+                    challenge_positions,
+                    run_root_of,
+                )
                 sample = challenge_positions(run_root_of(rc), [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode(), **CC.positions(rc, coins))
                 TL.start("validate.openings", pair=pair)
                 t_o = time.perf_counter()
@@ -1575,7 +1634,7 @@ def main(args: Options) -> None:
                 # X-03: fail-closed verdict per instrumented run (recorded; the process exits non-zero if any run fails)
                 row["commit"]["expected_tensors"] = rc.extra.get("expected_tensors")
                 row["commit"]["committed_tensors"] = rc.extra.get("committed_tensors")
-                row["commit"]["errors_n"] = rc.extra.get("errors_n", len(rc.extra.get("errors") or []))
+                row["commit"]["errors_n"] = collector_errors_n(rc.extra)
                 # binding map + identity coverage against the collector-independent expected population, and openings sampled
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
@@ -1603,7 +1662,7 @@ def main(args: Options) -> None:
                     site = " | ".join(ln.strip() for ln in traceback.format_exc().splitlines() if ln.strip().startswith("File "))[-400:]
                     row["commit"]["binding"] = {"error": repr(e)[:300], "site": site, "rules_version": "r14-v1"}
                     print(f"[delta] BINDING ERROR (pair {pair}): {e!r} at {site}", flush=True)
-                TL.end("validate.binding_coverage", pair=pair, ok=bool(((row["commit"].get("binding") or {}).get("coverage") or {}).get("ok")))
+                TL.end("validate.binding_coverage", pair=pair, ok=coverage_ok(row["commit"]))
                 _ids_full = None                                                          # the engine-step-annotated identities the reconciler re-derives the cell counts from
                 if required_manifest is not None and hasattr(com, "layouts_dump"):
                     TL.start("validate.manifest_coverage", pair=pair)
@@ -1742,7 +1801,7 @@ def main(args: Options) -> None:
                         oc["value_source"] = _ocr.record()
                         print(f"[delta] C2 ORACLE COMPARE opened values (pair {pair}): {OV.filed(row['commit'], 'oracle_compare', oc['value_source'])}", flush=True)
                     except Exception as e:  # noqa: BLE001  -- fail closed: an unreadable oracle is 'not checked', never PASS
-                        oc = {"schema": OC.SCHEMA if "OC" in dir() else "verity-sweep/oracle-compare/v1", "method": "oracle-compare", "result": None,
+                        oc = {"schema": ORACLE_COMPARE_SCHEMA, "method": "oracle-compare", "result": None,
                               "why": f"oracle compare not run: {e!r}"[:300], "compared": 0, "mismatch_n": 0, "error": repr(e)[:300]}
                     row["commit"]["oracle_compare"] = oc
                     vc = row["commit"]["value_correspondence"]
@@ -1754,7 +1813,7 @@ def main(args: Options) -> None:
                         vc["result"] = False
                     elif oc.get("result") is True and vc_result in (None, True):
                         vc["result"] = True
-                    _at = oc.get("attribution") or {}
+                    _at = attribution_of(oc)
                     TL.end("validate.oracle_compare", pair=pair, ok=oc.get("result"), n=oc.get("compared"))
                     print(f"[delta] C2 ORACLE COMPARE (pair {pair}): {'MISMATCH' if oc.get('result') is False else ('OK complete' if oc.get('complete') else str(oc.get('grade') or 'partial'))} "
                           f"attribution {_at.get('complete')} ({_at.get('pairs')} step/request pairs, unverified {_at.get('unverified_n')}, ambiguous {_at.get('ambiguous_steps')}) compared {oc.get('compared')} "
@@ -1880,7 +1939,7 @@ def main(args: Options) -> None:
     # objects LOADED in this process after the LAST measured run and compare with the build-time snapshot (compile + autotune + capture):
     # the CUDA graphs replay the launchers that existed at capture, so an unchanged executed set (no new module / kernel / binary / config)
     # is the evidence that the artifact identity recorded at build is the identity of every replayed and eager step of every run
-    _gk0 = (versions.get("compilation") or {}).get("generated_kernels") if isinstance(versions.get("compilation"), dict) else None
+    _gk0 = generated_kernels_of(versions)
     if isinstance(_gk0, dict) and isinstance(_gk0.get("loaded"), dict) and not _gk0["loaded"].get("error"):
         _end = va.loaded_code_objects()
         _delta = va.loaded_code_objects_delta(_gk0["loaded"], _end)
@@ -1942,8 +2001,8 @@ def main(args: Options) -> None:
     print(f"[delta] wrote {out}", flush=True)
     # X-03 fail-closed: Commit PASS only if every instrumented run passed `commit_verdict` (manifest count == bound count, no collector
     # error, openings all verified, tokens equal); otherwise the first reason is printed and recorded and the process exits 3
-    fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass") and not RB.awaits_replay(r["commit"])]
-    pending = [r["pair"] for r in rows if r["arm"] != "control" and RB.awaits_replay(r.get("commit") or {})]
+    fails = [(r["pair"], r["arm"], r["commit"].get("commit_fail_reason")) for r in rows if r["arm"] != "control" and not RB.commit_of(r).get("commit_pass") and not RB.awaits_replay(r["commit"])]
+    pending = [r["pair"] for r in rows if r["arm"] != "control" and RB.awaits_replay(RB.commit_of(r))]
     verdict = {"commit_pass": RB.pass_of(rows), "runs_instrumented": sum(1 for r in rows if r["arm"] != "control"),
                "runs_failed": len(fails), "first_fail_reason": (fails[0][2] if fails else None),
                "required_classes": list(required_classes), "required_classes_source": (
@@ -2026,9 +2085,9 @@ def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: 
     d_dec = [inst[p]["step_wall_decode_mean_s"] / ctrl[p]["step_wall_decode_mean_s"] - 1 for p in pairs if ctrl[p]["step_wall_decode_mean_s"]]
     d_pre = [inst[p]["step_wall_prefill_s"] / ctrl[p]["step_wall_prefill_s"] - 1 for p in pairs]
     abs_wall_ms = [(inst[p]["wall_s"] - ctrl[p]["wall_s"]) * 1e3 for p in pairs]
-    ci = bootstrap_ci(d_wall)
-    ci_dec = bootstrap_ci(d_dec)
-    ci_pre = bootstrap_ci(d_pre)
+    ci = _bootstrap_ci(d_wall, seed=0)
+    ci_dec = _bootstrap_ci(d_dec, seed=0)
+    ci_pre = _bootstrap_ci(d_pre, seed=0)
     sp_keys = ("acquisition", "movement", "hashing", "root_finalisation", "opening_generation", "wait")
     spans = {k: statistics.fmean(inst[p]["commit"]["spans_total_s"][k] for p in pairs) for k in sp_keys} if pairs else {}
     rr = [inst[p]["commit"]["root_ready_delay_s"] for p in pairs]
@@ -2068,11 +2127,11 @@ def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: 
         for k in sp_keys:
             lines.append(f"| {k} | {spans[k] * 1e3:.2f} | {sb.get(k, '')} | host wall of the component (hashing/root on the worker thread, overlapped) |")
         c = inst[pairs[0]]["commit"]
-        lines += ["", f"root-ready delay (last step end → run root): mean {statistics.fmean(rr) * 1e3:.2f} ms, max {max(rr) * 1e3:.2f} ms; "
-                  f"backlog max {backlog_max} steps; bytes bound per run {c['bytes_bound']:,} in {c['leaves']:,} leaves ({c['tensors']} tensors, {c['steps']} steps); "
-                  f"persistent {c['persistent_bytes']:,} B; staging (pinned, in use) {c['temporary_bytes_peak']:,} B; values retained {c['extra'].get('values_retained_bytes'):,} B; "
-                  f"openings {c['openings']['verified']}/{c['openings']['n']} verified ({(c['openings']['bytes_mean'] or 0):.0f} B mean); "
-                  f"weight registration {c['weight_registration']['wall_s']:.2f} s for {c['weight_registration']['bytes']:,} B (once, excluded)",
+        lines += ["", (f"root-ready delay (last step end → run root): mean {statistics.fmean(rr) * 1e3:.2f} ms, max {max(rr) * 1e3:.2f} ms; "
+                   f"backlog max {backlog_max} steps; bytes bound per run {c['bytes_bound']:,} in {c['leaves']:,} leaves ({c['tensors']} tensors, {c['steps']} steps); "
+                   f"persistent {c['persistent_bytes']:,} B; staging (pinned, in use) {c['temporary_bytes_peak']:,} B; values retained {c['extra'].get('values_retained_bytes'):,} B; "
+                   f"openings {c['openings']['verified']}/{c['openings']['n']} verified ({(c['openings']['bytes_mean'] or 0):.0f} B mean); "
+                   f"weight registration {c['weight_registration']['wall_s']:.2f} s for {c['weight_registration']['bytes']:,} B (once, excluded)"),
                   "", "steady state — mean hashing time per decode step (ms) by step index: " + ", ".join(f"{k}:{v * 1e3:.2f}" for k, v in steady.items()),
                   f"growth second half / first half: {growth:+.1%}" if growth is not None else "growth: n/a"]
     return {"schema": SCHEMA, "workload": args.workload, "committer": args.committer, "pairs": len(pairs), "delta_wall": d_wall, "delta_wall_mean": statistics.fmean(d_wall) if d_wall else None,
@@ -2081,7 +2140,7 @@ def summarize(rows: list[dict], step_rows: list[dict], args: Options, versions: 
             "backlog_max": backlog_max, "tokens_equal": tokens_eq, "versions": versions, "declaration": decl, "table_md": "\n".join(lines),
             # X-03 fail-closed verdict over the instrumented runs (see commit_verdict)
             "commit_pass": RB.pass_of(rows),
-            "commit_fail_reasons": [(r.get("commit") or {}).get("commit_fail_reason") for r in rows if r["arm"] != "control" and not (r.get("commit") or {}).get("commit_pass")],
-            "expected_tensors": [(r.get("commit") or {}).get("expected_tensors") for r in rows if r["arm"] != "control"],
-            "committed_tensors": [(r.get("commit") or {}).get("committed_tensors") for r in rows if r["arm"] != "control"],
+            "commit_fail_reasons": [RB.commit_of(r).get("commit_fail_reason") for r in rows if r["arm"] != "control" and not RB.commit_of(r).get("commit_pass")],
+            "expected_tensors": [RB.commit_of(r).get("expected_tensors") for r in rows if r["arm"] != "control"],
+            "committed_tensors": [RB.commit_of(r).get("committed_tensors") for r in rows if r["arm"] != "control"],
             "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
