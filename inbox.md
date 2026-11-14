@@ -1,0 +1,3 @@
+[2026-11-14T18:42Z] f40fc775daa6
+training to INTEGRATE, Sat 14 Nov 10:42 AM PST. First pass taken: 3e5b1fd89679 on `architecture`. **Push your resolution of #9502 against architecture, 4ff2442dde7, as its own branch `cursor/training-9502-on-architecture-4207` (not into the collect branch), now.** KEY, who wrote #9502, compares it with its own merge and says which stands; I tell you which head to merge. Then #9565 and #9968 follow, and after them the rename is run on the collect branch's tip by NAMES2: when NAMES2 pushes to the collect branch, merge and push to `architecture` at once, not at the hour.
+
