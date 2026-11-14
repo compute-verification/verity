@@ -313,7 +313,7 @@ def test_the_git_calls_do_not_grow_with_the_seed_files_a_change_takes_names_from
         monkeypatch.setattr(subprocess, "run", lambda argv, *a, **k: count.append(argv[0]) or real(argv, *a, **k))
         try:
             doc = G.judged(mid, mid, top, G.archive(mid, tmp_path / f"code{n}{len(also)}", *G.CODE),
-                           Path(os.environ["CHECK_CACHE"]) / "unread-gate", tmp_path)
+                           tmp_path / "cache" / "unread-gate", tmp_path)
         finally:
             monkeypatch.setattr(subprocess, "run", real)
         assert len(doc["seed_files"]) == n + len(also), doc

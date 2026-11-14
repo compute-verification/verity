@@ -1,13 +1,14 @@
 """What the unread gate (`tools/verity/lean/unread_gate.py`, drive's landing gate) costs on one change, and its guard.
 
-    research run --on auto --store-read --cwd source -- python3 benchmarks/lean_unread_gate/run.py MAIN HEAD [--against REV]
+    research run --on auto --store-read --cwd source -- \
+      bash -c 'python3 benchmarks/lean_unread_gate/run.py MAIN HEAD --out "$OUT" [--against REV]'
 
 It judges ``HEAD`` against ``MAIN`` as a ready mark's preflight runs the gate (`research.queue.run_gate`), in this process,
 with the time of each stage (`STAGES`, each inclusive of the stages it calls) and the count of git calls by subcommand. Each
-gate starts from an empty cache (`CHECK_CACHE` in a temporary directory), as on an agent VM that never ran it. With
+gate starts from an empty cache (its `cache_dir` a temporary directory), as on an agent VM that never ran it. With
 ``--against REV`` it judges the same change again with the gate as it is at ``REV`` and compares: the guard holds when both
-exit the same and print the same `--json`, or, when neither can judge, say the same why. It writes `unread-gate.json` under ``--out`` (`$OUT` under `research run`) and
-exits 1 when the guard fails.
+exit the same and print the same `--json`, or, when neither can judge, say the same why. It writes `unread-gate.json`
+under ``--out`` and exits 1 when the guard fails.
 """
 from __future__ import annotations
 
@@ -62,7 +63,9 @@ def load(path: Path, name: str):
     return m
 
 
-def instrument(gate, meter: Meter) -> None:
+def instrument(gate, meter: Meter, cache: Path) -> None:
+    """``gate`` with its stages timed, and its cache and that of the Lean check it reads kept passes from (`common.cache_dir`)
+    under ``cache``."""
     for fn, name in STAGES.items():
         if hasattr(gate, fn):
             setattr(gate, fn, meter.timed(name, getattr(gate, fn)))
@@ -70,6 +73,9 @@ def instrument(gate, meter: Meter) -> None:
 
     def load_timed(path, name):
         m = loader(path, name)
+        for common in (m, getattr(m, "COMMON", None)):
+            if hasattr(common, "cache_dir"):
+                common.cache_dir = lambda: cache
         if hasattr(m, "analyse"):
             analyse, n = m.analyse, [0]
 
@@ -97,11 +103,9 @@ def judge(script: Path, main: str, head: str, label: str) -> dict:
             super().__init__(argv, *a, **k)
 
     gate = load(script, f"unread_gate_{label}")
-    instrument(gate, meter)
     out, err = io.StringIO(), io.StringIO()
     with tempfile.TemporaryDirectory(prefix="unread-gate-bench-") as cache:
-        was = os.environ.get("CHECK_CACHE")
-        os.environ["CHECK_CACHE"] = cache
+        instrument(gate, meter, Path(cache))
         subprocess.run, subprocess.Popen = run_counted, Popen
         t = time.perf_counter()
         try:
@@ -110,14 +114,7 @@ def judge(script: Path, main: str, head: str, label: str) -> dict:
         finally:
             took = time.perf_counter() - t
             subprocess.run, subprocess.Popen = run, popen
-            if was is None:
-                os.environ.pop("CHECK_CACHE", None)
-            else:
-                os.environ["CHECK_CACHE"] = was
-    try:
-        doc = json.loads(out.getvalue()) if rc in (0, 1) else None
-    except ValueError:
-        doc = None
+    doc = json.loads(out.getvalue()) if rc in (0, 1) else None
     return {"script": str(script), "exit": rc, "doc": doc, "said": err.getvalue().strip()[-2000:],
             "seconds": round(took, 3), "stages": {k: {"seconds": round(v, 3), "calls": meter.calls[k]}
                                                   for k, v in sorted(meter.seconds.items())},
@@ -130,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("head")
     ap.add_argument("--against", metavar="REV", help="also judge with the gate as it is at REV, and compare (the guard)")
     ap.add_argument("--gate", type=Path, default=ROOT / GATE, help="the gate to time (default: this tree's)")
-    ap.add_argument("--out", type=Path, default=Path(os.environ.get("OUT") or "."))
+    ap.add_argument("--out", type=Path, required=True, help="where it writes unread-gate.json (`$OUT` under `research run`)")
     a = ap.parse_args(argv)
     os.chdir(ROOT)
     rows = {"gate": judge(a.gate, a.main, a.head, "here")}
