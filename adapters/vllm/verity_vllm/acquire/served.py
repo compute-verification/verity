@@ -678,13 +678,15 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     it (W rows past the probe's zero): x all ones against `bf16_gemm_check.splitk_count_probe`'s rows reads the split counts a
     partition could have (`fit_cublas_split_k`); of the routes those leave (`cublas_routes_at`), the one whose twin
     (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows (sampled from the generator of
-    seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words."""
+    seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words.  A shape
+    `splitk_count_probe` builds no rows for is refused with the builder's reason."""
     import torch
 
     from verity_vllm.commit import challenge as CH
     from verity.definitions.registry import bf16_gemm_check as BC
 
-    to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
+    def to(a: np.ndarray) -> torch.Tensor:
+        return torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
 
     def mm(M: int, K: int, N: int, x: np.ndarray, rows: np.ndarray) -> np.ndarray:
         w = torch.zeros((N, K), dtype=torch.bfloat16, device="cuda")
@@ -695,7 +697,11 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
 
     out: dict[str, Any] = {}
     for M, K, N in shapes:
-        probe, x = BC.splitk_count_probe(K, N), np.full((M, K), 0x3F80, np.uint16)
+        try:
+            probe = BC.splitk_count_probe(K, N)
+        except ValueError as e:
+            raise Unmodelled(f"cuBLAS at M={M} K={K} N={N}: {e}") from e
+        x = np.full((M, K), 0x3F80, np.uint16)
         fits = BC.fit_cublas_split_k(x[:1], probe, mm(M, K, N, x, probe)[:1], out="bf16")
         rows = sorted({0, M // 2, M - 1})
         tests = [(xr[rows], w, mm(M, K, N, xr, w)[rows])

@@ -78,7 +78,9 @@ def test_a_fold_summary_that_is_not_a_mapping_states_no_rank_and_no_collective(t
 def test_a_compare_a_decomposition_or_a_global_match_that_is_not_a_mapping_fails_as_one_that_wrote_none(tmp_path, monkeypatch, text):
     for name in ("match_compare", "match_dag", "match_decomp", "global_match"):
         (tmp_path / f"{name}.json").write_text(text)
-    assert FR._compare(tmp_path, monkeypatch, 0, [])["verdict"] == "FAIL canonical_equal=None dag_multiset_equal=False steps=None/None operands_different=None rc=0"
+    compared = FR._compare(tmp_path, monkeypatch, 0, [])
+    assert compared["verdict"] == "FAIL canonical_equal=None dag_multiset_equal=False steps=None/None operands_different=None rc=0"
+    assert compared["dag_multiset"] is None           # the record holds no document, where it would hold the one that is not a mapping
     assert FR._compare(tmp_path, monkeypatch, 0, ["d1"])["verdict"] == "FAIL batch_decomp None rc=0: "
     got = FM.global_match_rank("py", tmp_path, tmp_path / "gp.json", tmp_path / "wl.json", "dag", None)
     assert (got["verdict"], got["ok"], got["checks"], got["generated_lengths"]) == ("rc=0", False, {}, {})
