@@ -74,12 +74,26 @@ PUBLIC = {
     "verity_vllm.engine.pool_row": "I1: the carried pool's row, a prefix cache's block pool at a window's edge (snapshot, row, "
                                    "export), its genesis reset and its BlockKey_v1 keys (install_keys), which "
                                    "benchmarks/network_e2e/encodings drives over recorded traces",
+    "verity_vllm.engine.profiles.dense_generic": "I1: a checkpoint role's HF config.json: the checkpoints the manifests "
+                                                 "pin (MANIFEST, checkpoint_entries), a pin's config (pinned_hf_config, "
+                                                 "find_hf_config, hf_snapshot) and its profile module's name, which "
+                                                 "benchmarks/inference_only reads",
     "verity_vllm.observe.kernel_trace": "I2: a served engine's device kernels, read from a Kineto trace of its steps, which "
                                          "benchmarks/route_capture reads",
     "verity_vllm.program.predict.step_needs": "I7: what the DSA decoder calls for one served engine step at its launch, each "
                                               "refusal counted in its place, which benchmarks/route_capture's gap reads",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
                                           "own Build without a trace",
+    "verity_vllm.program.predict.phi": "I7: what a serve registers before execution, φ: its model, target and execution "
+                                       "(Phi, served_phi), which benchmarks/inference_only builds from",
+    "verity_vllm.program.predict.steps": "I2: the compiler, a served session's advice to the Programs its committed rows must "
+                                         "pass, and a serve's registration at φ and a seed (Registered, compile_steps), which "
+                                         "benchmarks/inference_only, compile_cost and one_stage build",
+    "verity_vllm.program.predict.common": "I7: the refusal every decoder writes (Unexpressible) and the vocabulary's kinds "
+                                          "(kind), which benchmarks/inference_only reports",
+    "verity_vllm.program.predict.window_circuit": "I2: a served window class as one Circuit (WindowClass, class_circuit, "
+                                                  "window_circuit, Tables, PearlTables), which benchmarks/inference_only "
+                                                  "prices",
     "verity_vllm.program.predict.block_counts": "I7: a circuit record's inference blocks counted as the Lean count counts "
                                                 "them (the session Definition, its Boolean gates by the gate table, a "
                                                 "block's fresh bits), which benchmarks/inference_only prices",
@@ -172,6 +186,9 @@ PUBLIC = {
                                         "byte source, an opening verified against the run commitment of record before its bytes "
                                         "are returned (OpenedReader), which benchmarks/one_stage and benchmarks/prove_path read a "
                                         "Commit through",
+    "verity_vllm.check.weights_of_record": "I7: the weights of record: a Commit's weights checked against the pinned "
+                                           "checkpoint (build_record, check, compose), and the Program parameter the record "
+                                           "is of (PARAM), which benchmarks/inference_only reads",
     "verity_vllm.commit.committer.native_host": "I7: the reference committer of the values a served engine materialises, hashed "
                                                 "on the host (NativeHostCommitter), its GPU chunk size and its bound on a "
                                                 "schedule's stream (schedule_stream_bound), which benchmarks/served_commit, the "
@@ -244,7 +261,6 @@ KNOWN = frozenset({
     "verity_vllm.check.replay.evaluate",
     "verity_vllm.check.replay.index",
     "verity_vllm.check.replay.opening",
-    "verity_vllm.check.weights_of_record",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.opened",
     # the served circuits (`verity_vllm.definitions`), which outside code imported from `verity` before the served circuits'
@@ -329,7 +345,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.int8_fused",
     "verity_vllm.engine.int8_ops",
     "verity_vllm.engine.int8_vllm",
-    "verity_vllm.engine.profiles.dense_generic",
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",
@@ -365,11 +380,7 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.targets",
     "verity_vllm.program.predict.batch",
     "verity_vllm.program.predict.build",
-    "verity_vllm.program.predict.common",
-    "verity_vllm.program.predict.phi",
     "verity_vllm.program.predict.score",
-    "verity_vllm.program.predict.steps",
-    "verity_vllm.program.predict.window_circuit",
     "verity.protocols.accounting.pouw.prover.serving.h1",
     "verity.protocols.accounting.pouw.prover.serving.h1.challenger",
     "verity.protocols.accounting.pouw.prover.serving.h1.window",
