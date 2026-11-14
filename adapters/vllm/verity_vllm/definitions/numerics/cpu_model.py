@@ -68,7 +68,7 @@ def _groups(model: TCModel):
 
 @dataclass(frozen=True)
 class GemmModelSpec:
-    """A candidate description of how a production GEMM orders and rounds its work.
+    """A candidate description of how a served GEMM orders and rounds its work.
 
     ``nsplit``/``bounds`` describe split-K over K-tiles of ``model.k`` (``bounds`` in
     tile units, ``nsplit + 1`` entries; ``None`` = equal splits); ``reduce_mode`` how the

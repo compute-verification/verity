@@ -31,7 +31,7 @@ def test_a_clock_above_fmax_is_refused(tmp_path):
     d = tmp_path / "sm_90"
     shutil.copytree(DEVICES / "sm_90", d)
     p = d / "sheet.toml"
-    p.write_text(p.read_text().replace("mhz = 1830", "mhz = 1990"))
+    p.write_text(p.read_text().replace('card = "clock.tensor"', "mhz = 1990"))
     with pytest.raises(SystemExit, match=r"\[clocks.tensor\] is 1990 MHz, above f_max's 1980"):
         sheet(d)
 

@@ -9,11 +9,11 @@ import Proofs.Pous.Prob
 /-!
 # The streamed-label wipe per server: each claim's honest and nontrivial lemmas
 
-For each claim of `Security/Definitions/Pous/Claims/StreamedWipeServer.lean`, whose guarantee is the claim at
+For each claim of `security/Definitions/Pous/Claims/StreamedWipeServer.lean`, whose guarantee is the claim at
 `StreamedWipe.Accepts`:
 
-* **The honest lemma** (`<claim>_meets`): its numeric antecedents hold at the deployed H200 as measured on
-  vy-dc-h200-2 (`StreamedWipe.h200`): `M_s = 512·n + R`, `0 < n`, `0 < r`,
+* **The honest lemma** (`<claim>_meets`): its numeric antecedents hold at the deployed H200 as measured
+  (`StreamedWipe.h200`): `M_s = 512·n + R`, `0 < n`, `0 < r`,
   `(r − 1)^k · 2^129 ≤ r^k` at the deployed `k = 5500` and its `r = 62`, and the 5 GB point, each decided by the kernel.
 * **The nontrivial lemma** (`<claim>_fails`): the claim is false at `StreamedWipe.acceptAll`, at the same numbers. The
   prover `keepAll` stays inside the physical model: its fill writes its prior content into the first `q` of its `M_s`
