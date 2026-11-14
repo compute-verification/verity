@@ -19,7 +19,7 @@ from pathlib import Path
 import slowdown
 from slowdown import lean, min_cut
 
-CALCULATOR = Path(rho.__file__).resolve().parents[1]
+CALCULATOR = Path(slowdown.__file__).resolve().parents[1]
 #: a dotted name, each namespace starting with a capital, as a Lean declaration reads
 NAME = re.compile(r"(?:[A-Z][A-Za-z0-9_']*\.)+[A-Za-z_][A-Za-z0-9_']*")
 #: {a cited Lean name no lock lists: why}
@@ -67,13 +67,13 @@ def calculator_cites() -> dict[str, str]:
     sources = {p.relative_to(CALCULATOR).as_posix(): p.read_text() for p in sorted(CALCULATOR.rglob("*.py"))
                if not {"tests", ".venv", "__pycache__"} & set(p.relative_to(CALCULATOR).parts)}
     values = {}
-    for m in pkgutil.iter_modules(rho.__path__):
-        mod = import_module(f"rho.{m.name}")
+    for m in pkgutil.iter_modules(slowdown.__path__):
+        mod = import_module(f"slowdown.{m.name}")
         for k, v in vars(mod).items():
             if inspect.isclass(v) and v.__module__ == mod.__name__:
-                values |= {f"rho.{m.name}.{k}.{a}": x for a, x in vars(v).items() if a.isupper()}
+                values |= {f"slowdown.{m.name}.{k}.{a}": x for a, x in vars(v).items() if a.isupper()}
             elif k.isupper() or isinstance(v, str):
-                values[f"rho.{m.name}.{k}"] = v
+                values[f"slowdown.{m.name}.{k}"] = v
     return cited(sources, values, listed())
 
 
@@ -104,13 +104,13 @@ def test_a_name_no_lock_lists_is_found(tmp_path):
                   "Area.Part": {"definitions": {"Area.Part.Read": {}}}},
     }))
     names = listed((lock,))
-    src = {"rho/x.py": "A = 'Area.Guarantees.Nowhere'\nB = 'Area.Guarantees.Stated'\nC = 'Area.Guarantees'\n"
+    src = {"slowdown/x.py": "A = 'Area.Guarantees.Nowhere'\nB = 'Area.Guarantees.Stated'\nC = 'Area.Guarantees'\n"
                        "D = 'Other.Name'\nF = 'Area.Part.Read'\nG = 'Area.Guarantees.noSuch'\n"
                        "H = 'Area.Proofs.stated_lower'\nI = 'Area.Assumptions.Named'\nJ = 'Area.Assumptions.Held'\n"}
-    got = cited(src, {"rho.x.E": ("Area.Guarantees.Composed", "draft:x")}, names)
+    got = cited(src, {"slowdown.x.E": ("Area.Guarantees.Composed", "draft:x")}, names)
     assert set(got) == {"Area.Guarantees.Nowhere", "Area.Guarantees.Stated", "Area.Part.Read", "Area.Guarantees.noSuch",
                         "Area.Proofs.stated_lower", "Area.Assumptions.Named", "Area.Assumptions.Held",
                         "Area.Guarantees.Composed"}
-    assert got["Area.Guarantees.Composed"] == "rho.x.E" and got["Area.Part.Read"] == "rho/x.py:5"
+    assert got["Area.Guarantees.Composed"] == "slowdown.x.E" and got["Area.Part.Read"] == "slowdown/x.py:5"
     assert {n for n in got if n not in names} == {"Area.Guarantees.Nowhere", "Area.Part.Read", "Area.Guarantees.noSuch",
                                                   "Area.Guarantees.Composed"}
