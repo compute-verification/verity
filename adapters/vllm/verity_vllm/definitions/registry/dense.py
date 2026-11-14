@@ -91,7 +91,7 @@ def SquareF32(B, S, x):
 #: 
 #: The per-thread ownership (`SIZE_PER_THREAD = 4`, two repetitions) is the layout the coalescing pass picks for a contiguous
 #: f32 load whose row pointer is provably 16-byte aligned (the same as the b1 `RMSNormTriton_v1` body's).  Evidence that it is
-#: the production order: the difftest adapter (`mean_triton_difftest.py`) is bit-exact against `mean_batch_invariant` on the
+#: the served order: the difftest adapter (`mean_triton_difftest.py`) is bit-exact against `mean_batch_invariant` on the
 #: pod at N = 2304 (Gemma-2's H: two full blocks + a masked 256-tail), 1024, 1280, 2048 and 256 with random f32 rows — a
 #: different register order or per-thread width changes the rounding of most random rows.  The 32-case
 #: seed-7 difftest found the layout is *specialisation-dependent*: for `N % 16 != 0` Triton cannot prove the alignment and
@@ -111,8 +111,8 @@ def size_per_thread(N: int) -> int:
     specialises integer arguments on divisibility by 16 (`tt.divisibility=16`) only.  With `N % 16 == 0` the row pointer
     `input_ptr + m_idx * input_stride0 + n_offsets` is provably 16-byte aligned, so the coalescing pass gives every thread
     4 contiguous f32 (`sizePerThread=4`, the layout above); otherwise the provable alignment is 4 bytes and the layout is
-    `sizePerThread=1`: thread t owns elements `t, t+128, ..., t+7*128` of the block.  Production evidence: the six N=4 `max`
-    cases of the seed-7 difftest (`(128 + -MAX) + (-MAX + MAX)` = -MAX in production; the 4-wide layout's sequential chain
+    `sizePerThread=1`: thread t owns elements `t, t+128, ..., t+7*128` of the block.  Serving evidence: the six N=4 `max`
+    cases of the seed-7 difftest (`(128 + -MAX) + (-MAX + MAX)` = -MAX when served; the 4-wide layout's sequential chain
     gives -inf) and the random-normal small-N cases of the adapter; N = 2304 / 2048 / 1280 / 1024 / 256 are all in the
     16-divisible specialisation and were bit-exact before and after."""
     return SIZE_PER_THREAD if N % 16 == 0 else 1

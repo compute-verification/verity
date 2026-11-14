@@ -14,7 +14,7 @@
   (`ex2_approx`); `rowsum` is the warp tree `((x0+x1)+(x4+x5)) + ((x2+x3)+(x6+x7))` over each warp's eight columns, then
   `(w0 + w2) + (w1 + w3)` over the four warps (shared memory at row * 4 + warp, butterflies 2 then 1);
 * a split's outputs: `tv = div.full(acc, e_sum)` and `tl = e_max + logf(e_sum)` (libdevice `__nv_logf`);
-* stage 2 over the nonempty splits in order: `n = max(tl, e_max)`, `old = EXP(e_max - n)`, `el = EXP(tl - n)`,
+* the merge over the nonempty splits in order: `n = max(tl, e_max)`, `old = EXP(e_max - n)`, `el = EXP(tl - n)`,
   `acc = fma(acc, old, RN(el * tv))`, `e_sum = fma(e_sum, old, el)`; `o = cvt.rn.bf16(div.full(acc, e_sum))` and
   `lse = cvt.rn.bf16(e_max + logf(e_sum))`. One split's unrolled first iteration (`fma(el, tv, old * 0)`) computes the same words.
 
@@ -160,7 +160,7 @@ def split_ranges(T: int, S: int) -> list[tuple[int, int]]:
     return [(s * per, min(s * per + per, T)) for s in range(S)]
 
 
-def stage1(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int, DL: int = DL) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def split_partial(qk: np.ndarray, kv: np.ndarray, lo: int, hi: int, DL: int = DL) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """One split of one request for every head: qk (H, T) scaled scores, kv (T, DL + DR) -> (tv (H, DL), e_max (H,),
     e_sum (H,))."""
     H = qk.shape[0]
@@ -198,7 +198,7 @@ def decode_rows(q: np.ndarray, kv: np.ndarray, splits: int, scale: int = 0x3D800
     for s, (lo, hi) in enumerate(split_ranges(T, splits)):
         if hi <= lo:
             continue
-        tv, m, l = stage1(qk, kv, lo, hi, DL)
+        tv, m, l = split_partial(qk, kv, lo, hi, DL)
         tl = add(m, logf(l))
         logits[:, s, :DL], logits[:, s, DL] = tv, tl
         present[s] = True
