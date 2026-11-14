@@ -17,7 +17,7 @@ from research.store.cli import main
 from research.store.index import flatten
 from research.store.local import AttemptExists, IntegrityError, LocalStore, NotFound, StoreError
 from research.store.model import ArtifactManifest, Payload, TreeFile, attempt_errors, validate_attempt_doc
-from research.store.remote import ConfigError, FsRemote, RemoteConflict, load_remote
+from research.store.remote import FsRemote, RemoteConflict, load_remote
 
 DRV = "drv:" + "a" * 64
 RK = "b" * 64
@@ -488,8 +488,8 @@ def test_the_registry_is_read_at_either_place_a_tree_holds_it(env, monkeypatch, 
     """A run's research can be older or newer than the tree it reads: wherever the tree holds the registry, it finds the
     repository from below, reads the map there and writes it back there.  The place from before the registry moved is
     spelled here in two parts, so a rewrite of the registry's path that left the store one place fails this test."""
-    from research.store import fixtures as F  # noqa: PLC0415
-    from research.store.local import REPLICA_MAPS, find_repo  # noqa: PLC0415
+    from research.store import fixtures as F
+    from research.store.local import REPLICA_MAPS, find_repo
 
     assert place in REPLICA_MAPS and len(set(REPLICA_MAPS)) == 2
     monkeypatch.delenv("RESEARCH_REPO")
@@ -702,7 +702,7 @@ def test_s3remote_against_a_fake_bucket(tmp_path):
     seen: list[tuple[str, str]] = []
 
     class H(http.server.BaseHTTPRequestHandler):
-        def log_message(self, *a):  # noqa: D102
+        def log_message(self, *a):
             pass
 
         def _key(self):
@@ -823,7 +823,7 @@ class FakeS3:
             return state.etags.get(key) or hashlib.md5(state.objects[key]).hexdigest()
 
         class H(http.server.BaseHTTPRequestHandler):
-            def log_message(self, *a):  # noqa: D102
+            def log_message(self, *a):
                 pass
 
             def _key(self):
@@ -1146,7 +1146,7 @@ def test_push_uploads_a_blob_above_the_single_put_limit_in_parts(fake_s3, tmp_pa
     shutil.copyfile(big, tree / "big.bin")
     shutil.copyfile(small, tree / "small.bin")
     art = st.put_artifact("run-files/v1", {}, tree=tree)
-    m = st.get_manifest(art)
+    st.get_manifest(art)
     big_sha = hashlib.sha256(big.read_bytes()).hexdigest()
     key = f"objects/sha256/{big_sha}"
     rep = st.push(art, jobs=4)

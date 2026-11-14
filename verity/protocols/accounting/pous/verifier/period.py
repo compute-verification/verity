@@ -30,11 +30,11 @@ so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `enc
 over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
 a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
-`leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
-`point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory challenger is a party
-of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
-parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
-node.
+`leg(period_dir, node, out, side_of=...)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's
+store up once at `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory
+challenger is a party of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key
+at S1's deployed parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the
+verifier run on the node.
 `trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_session.placement`). The setup's salt is
 still sampled on the node.
@@ -57,7 +57,6 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.runtime.stream import Side
 from verity.commitments.identity import canonical_json_bytes
 from verity.commitments.crypto import lms
 
@@ -327,13 +326,13 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: Side | None = None) -> Period:
-    """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
-    under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the tie on
-    the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of its own
-    (`challenger_party`): its side runs where `party` (a `stream.Side`) starts it, with its own coins, key and session
-    log, and the prover answers it over a socket; `signer`, `log` and `clock` are unused, and the verifier's list is by
-    default the key the side reports."""
+          party: challenger_session.Side | None = None) -> Period:
+    """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's
+    session under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the
+    tie on the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of
+    its own (`challenger_party`): its side runs where `party` (a `challenger_session.Side`) starts it, with its own
+    coins, key and session log, and the prover answers it over a socket; `signer`, `log` and `clock` are unused, and the
+    verifier's list is by default the key the side reports."""
     point, published = held.point, held.published
     q = point.params
     if party is None:
@@ -358,7 +357,7 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: Side | None = None) -> Period:
+        party: challenger_session.Side | None = None) -> Period:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
@@ -546,24 +545,24 @@ SETUP_WORKERS = 32
 CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)."""
 
 
-def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
-    set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records at its
-    first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up to
-    `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
-    audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With
-    `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
-    instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
-    (`challenger_session.side_of`; on this node by default, a process whose key and session log are beside the periods)
-    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
-    answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
-    `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
-    whether `trusted-host`'s premise holds (`challenger_session.placement`), go in `pous.json` and in an accepted
-    answer's profile (`placement`)."""
+def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challenger_session.Side]) -> dict[str, Any]:
+    """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`). By default the
+    node's store is set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records
+    at its first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up
+    to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period audits it with fresh
+    coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With `{"pous": {"point": "small"}}`
+    in `period.json`, each period sets the period's own records up at the small point instead, certifying nothing. The
+    memory challenger is a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local)`,
+    which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process whose key
+    and session log are beside the periods) and the prover is here. With `pous-run-protocol` and `pous-setup` among the
+    period's tools, the Lean verifier answers and must agree with the Python; it writes `out/pous.case.json` (onsite's
+    PoUS case), `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each
+    party, and whether `trusted-host`'s premise holds (`challenger_session.placement`), go in `pous.json` and in an
+    accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
-    party = challenger_session.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
+    party = side_of(doc, node, "pous", challenger_session.command(Path(period_dir).parent / "pous-challenger"))
     where = challenger_session.placement(node, party.host)
     kept = Path(period_dir).parent / "pous-store"
     t = time.monotonic()

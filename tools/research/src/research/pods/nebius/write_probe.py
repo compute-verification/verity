@@ -141,7 +141,8 @@ def kube_pods(kubeconfig: str = KUBECONFIG) -> dict[str, tuple[str, str, str | N
         r = subprocess.run(["kubectl", "get", "pods", "-A", "-o", "json"], capture_output=True, text=True, timeout=60,
                            env={**os.environ, "KUBECONFIG": kubeconfig})
         items = json.loads(r.stdout)["items"]
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as e:
+        print(f"write_probe: kubectl's pods unread, so no pod is named ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return {}
     return {p["metadata"]["uid"]: (p["metadata"]["namespace"], p["metadata"]["name"],
                                    (p["metadata"].get("labels") or {}).get("kueue.x-k8s.io/cluster-queue-name")) for p in items}
@@ -284,7 +285,8 @@ def relay(ns: argparse.Namespace) -> int:
             for n, ln in enumerate(lines[1:], seen + 1):
                 try:
                     row = json.loads(ln)
-                except ValueError:
+                except ValueError as e:
+                    print(f"write_probe relay: row {n} of unmatched.jsonl is not JSON, skipped ({e})", file=sys.stderr, flush=True)
                     continue
                 last = state["posted"].get(row["key"], 0)
                 if time.time() - last >= 3600:
