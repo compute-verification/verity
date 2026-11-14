@@ -4,6 +4,7 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.Live
 public import Proofs.Properties.Verity.Sampled.HonestSession.Params
 public import Proofs.Properties.Verity.Sampled.OpensAt
 public import Proofs.Properties.Verity.Sampled.SessionAt
+import all Lean.Data.Json.Basic
 
 /-!
 # The honest deployed instance with a session
@@ -23,13 +24,54 @@ namespace Verity.Sampled.Instance.HonestSession
 open Lean (Json)
 open scoped ENNReal
 
+private theorem toUTF8_head_of_toList {s : String} {c : Char} {cs : List Char} {b : UInt8}
+    (hb : String.utf8EncodeChar c = [b]) (h : s.toList = c :: cs) : s.toUTF8.data.toList.head? = some b := by
+  rw [← String.ofList_toList (s := s), h, String.toUTF8_eq_toByteArray, String.toByteArray_ofList]
+  simp [List.utf8Encode, hb]
+
+private theorem head_append {x : ByteArray} {b : UInt8} (h : x.data.toList.head? = some b) (y : ByteArray) :
+    (x ++ y).data.toList.head? = some b := by
+  rw [ByteArray.data_append, Array.toList_append]
+  cases hx : x.data.toList with
+  | nil => rw [hx] at h; simp at h
+  | cons a l => rw [hx] at h; simpa using h
+
+private theorem circuitFileOf_head (ls lh : Flock.HmNets.Laid) : (circuitFileOf ls lh).data.toList.head? = some 102 := by
+  obtain ⟨rest, h⟩ : ∃ rest, circuitLines ls lh = ("flock-circuit " ++ unitName) :: rest := ⟨_, rfl⟩
+  unfold circuitFileOf
+  rw [h, RecDeploy.VStarNets.joinNl_cons]
+  have e : ("flock-circuit " ++ unitName).toList = 'f' :: ("lock-circuit ".toList ++ unitName.toList) := by
+    rw [String.toList_append]; rfl
+  exact toUTF8_head_of_toList (c := 'f')
+    (cs := "lock-circuit ".toList ++ unitName.toList ++ "\n".toList ++ (RecDeploy.VStarNets.joinNl rest).toList)
+    (by decide) (by rw [String.toList_append, String.toList_append, e]; rfl)
+
+private theorem circuitFile_head : circuitFile.data.toList.head? = some 102 := circuitFileOf_head _ _
+
+private theorem jsonChars_mkObj (l : List (String × Json)) : ∃ cs, Flock.Firewall.jsonChars (Json.mkObj l) = '{' :: cs := by
+  unfold Json.mkObj
+  exact ⟨_, rfl⟩
+
+private theorem print_mkObj_head (l : List (String × Json)) (rest : ByteArray) :
+    ((Flock.Firewall.printJson (Json.mkObj l)).toUTF8 ++ "\n".toUTF8 ++ rest).data.toList.head? = some 123 := by
+  obtain ⟨cs, h⟩ := jsonChars_mkObj l
+  exact head_append (head_append (toUTF8_head_of_toList (c := '{') (cs := cs) (by decide)
+    (by rw [Flock.Firewall.printJson, String.toList_ofList, h])) _) _
+
+private theorem publicFile_head : publicFile.data.toList.head? = some 123 := by
+  unfold publicFile hdrJ
+  exact print_mkObj_head _ _
+
 /-- The two registered files have distinct SHA-512s. -/
 def Distinct : Prop := Verity.sha512 circuitFile.data.toList ≠ Verity.sha512 publicFile.data.toList
 
 /-- Where they don't, the two files are a SHA-512 collision: they differ, at their first bytes. -/
 theorem collision (h : ¬ Distinct) :
     Hash.Collision Verity.sha512 circuitFile.data.toList publicFile.data.toList := by
-  sorry -- piece P9 (instance): the files differ at their first byte (`f` against `{`)
+  refine ⟨fun e => ?_, Classical.not_not.1 h⟩
+  have := congrArg List.head? e
+  rw [circuitFile_head, publicFile_head] at this
+  simp at this
 
 /-- The challenger family the parameters name. -/
 def families (θ' : ByteArray) : List (String × ℕ) :=
@@ -133,17 +175,36 @@ noncomputable def inst : Instance Verity.Idle.device Unit where
 
 theorem namedFile_first (a b : ByteArray) :
     Verity.namedFile (some (Verity.sha512 a.data.toList)) #[a, b] = a := by
-  sorry -- piece P9 (instance)
+  simp [Verity.namedFile, Array.find?]
 
 theorem namedFile_second {a b : ByteArray} (h : Verity.sha512 a.data.toList ≠ Verity.sha512 b.data.toList) :
     Verity.namedFile (some (Verity.sha512 b.data.toList)) #[a, b] = b := by
-  sorry -- piece P9 (instance)
+  have h' : ¬ Verity.sha512 b.data.toList = Verity.sha512 a.data.toList := fun e => h e.symm
+  simp [Verity.namedFile, Array.find?, h']
+
+private theorem pinnedTables_empty (cf : ByteArray) : pinnedTables PinnedTables.empty cf = [] := by
+  unfold pinnedTables
+  rw [List.filterMap_eq_nil_iff]
+  intro t _
+  simp [PinnedTables.empty, PinnedTables.ofFiles, tableFile]
+
+private theorem registered_at : base.registered θ₀ = #[circuitFile, publicFile] := by
+  show #[circuitFileAt θ₀, publicFileAt θ₀] = _
+  simp [circuitFileAt, publicFileAt]
 
 theorem circuit_at : base.circuitFile θ₀ (base.registered θ₀) = circuitFile := by
-  sorry -- piece P9 (instance): `Params.digests` and `namedFile_first`
+  have hd : base.programDigest θ₀ = some (Verity.sha512 circuitFile.data.toList) :=
+    (inst.programDigest θ₀).trans (Params.digests JsonCanon.jsonFacts).1
+  unfold Vocab.circuitFile
+  rw [hd, registered_at]
+  exact namedFile_first _ _
 
 theorem public_at (h : Distinct) : base.publicFile θ₀ (base.registered θ₀) = publicFile := by
-  sorry -- piece P9 (instance): `Params.digests` and `namedFile_second`
+  have hd : base.publicDigest θ₀ = some (Verity.sha512 publicFile.data.toList) :=
+    (inst.publicDigest θ₀).trans (Params.digests JsonCanon.jsonFacts).2
+  unfold Vocab.publicFile
+  rw [hd, registered_at]
+  exact namedFile_second h
 
 /-- `live` is the session v2 sets up on `θ₀` and the registered files, where their SHA-512s differ. -/
 theorem sets_up (hd : Distinct) : SetsUp base θ₀ (base.registered θ₀) live := by
@@ -176,7 +237,7 @@ theorem sets_up (hd : Distinct) : SetsUp base θ₀ (base.registered θ₀) live
     · rw [hI]; exact tags_find
     · rw [hI]; rfl
     · rw [hI]
-      sorry -- piece P9 (instance): `pinnedTables` at no registered table is `[]`
+      exact (pinnedTables_empty _).symm
   · rw [live_epsilon]; rfl
 
 theorem sessions_ready : inst.SessionsReady := by
