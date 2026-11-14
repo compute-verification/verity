@@ -191,7 +191,7 @@
         "benchmarks/bool_build_cost/",
         "benchmarks/f32_exhaustive/",
         "benchmarks/mempool/",
-        "verity/circuits/ops/",
+        "verity/circuits/",
         "adapters/vllm/verity_vllm/program/",
         "adapters/vllm/verity_vllm/query/",
         "adapters/vllm/verity_vllm/correspondence/",
