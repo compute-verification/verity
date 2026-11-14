@@ -24,6 +24,16 @@ Nothing imports this directory: every entry point is `host.py` run by its path.
 it over ssh to every key, named or not, since a party's log holds what its device received and signed. The parties write
 their files as before.
 
+A party verb (`wipe_party`, `challenger_party`, `bw_party`) answers only a caller from a registered node, so every answer
+of a party goes into a node. The wrapper `vy-verifier-gate` passes the ssh caller's address (the first word of
+`SSH_CONNECTION`, which sudo would otherwise drop) as `--from`. The gate refuses the verb unless that address is one of a
+peer's `addresses` in `/etc/vy/verifier.json` (`node_of`), whatever the key. A peer lists the addresses its ssh to the
+host comes from:
+
+~~~json
+"peers": {"NODE": {"host_bytes": 1843153879040, "ingress_bytes_per_s": 4.4e9, "addresses": ["ADDRESS"]}}
+~~~
+
 ## A run
 
 ~~~text
