@@ -1059,7 +1059,7 @@ def hexList (ctx : String) (xs : Array String) : V (Array ByteArray) :=
 
 /-- **A rep's coins, by the transcript's rounds**: what the inner session's record (the prover's, which check 5 reads)
 holds of rep stream `s` at each of the transcript's rounds `0 … n-1` of it (`rs`, in round order): that round's coins, or
-`none` at the round the record has no counterpart of. A holo session's firewall splits z_partial's round in two (`rec_session`:
+`none` at the round the record has no counterpart of. A holo session's ZK server splits z_partial's round in two (`rec_session`:
 a round of no coins, then h's round), and the transcript records both where the prover's record has the one round. So with
 one round of no coins at `j` in the transcript's stream, the record has `n - 1` rounds, its round `k` the transcript's `k`
 below `j` and `k + 1` from `j` on (h's round taking z_partial's coins); with none, the two have the same rounds. -/
@@ -1082,7 +1082,7 @@ def repCoins (s : String) (rs : Array Json) (srec : Json) : V (Array (Option (Ar
 /-- A registered top's row: a 64-byte node as 32 u16 words, zero-padded to one SHA-512 block (`rec_live.ROW_WORDS`). -/
 def TOP_ROW_WORDS : Nat := 64
 
-def refused (what : String) : String := s!"FIREWALL-REFUSED: {what}"
+def refused (what : String) : String := s!"ZK-SERVER-REFUSED: {what}"
 
 /-- The registered entry of R whose rows' `b ‖ c` are `bcs` (`rec_live.top_entry`, `rec_residuals.commits_entry`): one row
 of `TOP_ROW_WORDS` 16-bit words a node, its domain `Registered.domain` under the registration's `program`, and the
@@ -1267,7 +1267,7 @@ def candidate3 (tr : Json) (rounds : Array Json) (t : String) (names : List Stri
   for b in all do
     let h := hexOf b
     if seen.contains h then
-      throw s!"rec inner transcript: the b ‖ c {(h.take 16).toString}… is committed twice; the firewall commits each under a fresh salt"
+      throw s!"rec inner transcript: the b ‖ c {(h.take 16).toString}… is committed twice; the ZK server commits each under a fresh salt"
     seen := seen.insert h
   return out
 

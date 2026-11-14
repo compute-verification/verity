@@ -1,8 +1,8 @@
 module
 
 public import Proofs.Flock.Recursive.LoopAny
-public import Proofs.Flock.Recursive.FirewallAccepts
-public import Proofs.Flock.Recursive.FirewallFixed
+public import Proofs.Flock.Recursive.ZkServerAccepts
+public import Proofs.Flock.Recursive.ZkServerFixed
 public import Proofs.Flock.Claims.Recursion.BaseParses
 public import Proofs.Flock.SessionLoop.TablesSide
 public import Proofs.Flock.Soundness.Audit.OneStage
@@ -29,8 +29,8 @@ fails at another.
 The instance:
 * the ZK server's schedule `sched`: one root table `t` of one node, no rounds, a Hello that links nothing. It is
   canonical (`sched_canonical`), and the honest worker at it, `hon`, fits it (`hon_fits`), so the ZK server sends its
-  transcript on the worker's requests and finishes (`sends`: `FirewallSends`, from `honestReqs_accepts`);
-* the same requests as a worker of the adaptive firewall (`wAny`): it finishes at every salt (`wAny_finishes`), by
+  transcript on the worker's requests and finishes (`sends`: `ZkServerSends`, from `honestReqs_accepts`);
+* the same requests as a worker of the adaptive zk_server (`wAny`): it finishes at every salt (`wAny_finishes`), by
   one kernel evaluation at the zero salt (`hon_finishes0`) and `liveFinished_chopReqs`;
 * one statement of V* (`m = 1`): the honest fixture's (`RecDeploy.BaseParses.fixture_stmt`), whose statement and
   witness are in the claims' relation at the deployed masked parser, `deployZk Readable.relation`;
@@ -53,7 +53,7 @@ the simulated view is unfinished only at the stop `false`).
 namespace FlockSoundness.Discharge.Recursion.LoopWitness
 
 open Lean (Json)
-open Flock.Firewall FirewallRun FirewallAny FirewallAdaptive
+open Flock.ZkServer ZkServerRun ZkServerAny ZkServerAdaptive
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
@@ -70,13 +70,13 @@ def sched : Schedule where
   streams := []
   rounds := #[]
 
-theorem roundSpec_null : Flock.Firewall.roundSpec Json.null = none := (rfl)
+theorem roundSpec_null : Flock.ZkServer.roundSpec Json.null = none := (rfl)
 
 /-- One 64-byte node of zeros. -/
 def top64 : ByteArray := ⟨Array.replicate 64 0⟩
 
 /-- **The honest worker at `sched`**: table `t`'s top is `top64`, with no root frame, label, opening or round. -/
-def hon : Flock.Firewall.Honest where
+def hon : Flock.ZkServer.Honest where
   sigma := ""
   rootF := .empty
   roots := [("t", top64)]
@@ -84,16 +84,16 @@ def hon : Flock.Firewall.Honest where
   opens _ := []
   round _ := {}
 
-theorem hon_fits : FirewallHonest.Fits sched hon where
+theorem hon_fits : ZkServerHonest.Fits sched hon where
   pings := by intro b hb; cases hb
   sigma := by
     show plainStr "" = true
     simp [plainStr]
   hello := by
-    show (Flock.Firewall.printJson (Flock.Firewall.helloWith sched.hello "")).toUTF8.size < 2 ^ 32
+    show (Flock.ZkServer.printJson (Flock.ZkServer.helloWith sched.hello "")).toUTF8.size < 2 ^ 32
     decide +kernel
   commit := by
-    simp only [FirewallWire.ReqFits, FirewallWire.PairsFit]
+    simp only [ZkServerWire.ReqFits, ZkServerWire.PairsFit]
     decide +kernel
   tables := by decide +kernel
   roots := by decide +kernel
@@ -101,15 +101,15 @@ theorem hon_fits : FirewallHonest.Fits sched hon where
   link := by decide
   opensFit := by
     intro j r hr
-    simp [Flock.Firewall.honestOpens, hon] at hr
+    simp [Flock.ZkServer.honestOpens, hon] at hr
   opened := by decide +kernel
   rounds := by
     intro i hi
     simp [sched] at hi
   roundsFit := by
     intro i r hr
-    have h0 : Flock.Firewall.honestRound sched hon i = [] := by
-      unfold Flock.Firewall.honestRound
+    have h0 : Flock.ZkServer.honestRound sched hon i = [] := by
+      unfold Flock.ZkServer.honestRound
       have hg : sched.rounds.getD i Json.null = Json.null := rfl
       rw [hg, roundSpec_null]
     rw [h0] at hr
@@ -126,42 +126,42 @@ theorem plain_hello : plain sched.hello = true := by
   decide +kernel
 
 /-- **The ZK server holds a session to `sched`**: `Schedule.canonical`, by evaluation once Hello is plain. -/
-theorem sched_canonical : FirewallHonest.Canonical sched := by
-  unfold FirewallHonest.Canonical Schedule.canonical
+theorem sched_canonical : ZkServerHonest.Canonical sched := by
+  unfold ZkServerHonest.Canonical Schedule.canonical
   rw [plain_hello]
   decide +kernel
 
 /-- The schedule's holes: its one row. -/
-abbrev nhS : ℕ := FirewallHonest.rowCount sched
+abbrev nhS : ℕ := ZkServerHonest.rowCount sched
 
 /-- The honest worker at every program, witness, randomness, tape and commit strings. -/
-def honD : Unit → Unit → Unit → Unit → Unit → (Fin nhS → ByteArray) → Flock.Firewall.Honest :=
+def honD : Unit → Unit → Unit → Unit → Unit → (Fin nhS → ByteArray) → Flock.ZkServer.Honest :=
   fun _ _ _ _ _ _ => hon
 
 /-- **The ZK server sends `sched`'s transcript on the honest worker's requests, and finishes.** -/
-theorem sends : Flock.Guarantees.FirewallSends (Prog := Unit) (Wit := Unit) (Rr := Unit) sched
-    (fun _ _ _ => fun (_ : Unit) (_ : Unit) (_ : Fin nhS → ByteArray) => Flock.Firewall.honestReqs sched hon)
-    (fun _ _ _ => FirewallHonest.honestMsgs sched honD () () ())
-    (Flock.Guarantees.firewallT sched sched.tables) :=
-  Flock.SecurityProofs.firewallSends_of_accepts sched _ _ _
+theorem sends : Flock.Guarantees.ZkServerSends (Prog := Unit) (Wit := Unit) (Rr := Unit) sched
+    (fun _ _ _ => fun (_ : Unit) (_ : Unit) (_ : Fin nhS → ByteArray) => Flock.ZkServer.honestReqs sched hon)
+    (fun _ _ _ => ZkServerHonest.honestMsgs sched honD () () ())
+    (Flock.Guarantees.zkServerT sched sched.tables) :=
+  Flock.SecurityProofs.zkServerSends_of_accepts sched _ _ _
     (Flock.SecurityProofs.honestReqs_accepts sched sched_canonical honD (fun _ _ _ _ _ _ => hon_fits)
-      (by unfold FirewallHonest.Causal; intros; rfl))
+      (by unfold ZkServerHonest.Causal; intros; rfl))
 
-/-! ## The adaptive firewall finishes at every salt -/
+/-! ## The adaptive zk_server finishes at every salt -/
 
 theorem fwHoles_sched : Flock.Guarantees.fwHoles sched = 1 := by decide +kernel
 
 /-- **At the zero salt, the live session on the honest worker's requests finishes**, by evaluation. -/
 theorem hon_finishes0 :
-    liveFinished sched (chopReqs (Flock.Firewall.honestReqs sched hon) [Flock.Guarantees.zeroSalt]) = true := by
+    liveFinished sched (chopReqs (Flock.ZkServer.honestReqs sched hon) [Flock.Guarantees.zeroSalt]) = true := by
   decide +kernel
 
-/-- **The honest worker as a worker of the adaptive firewall**: its `i`-th request is the `i`-th honest one, whatever
+/-- **The honest worker as a worker of the adaptive zk_server**: its `i`-th request is the `i`-th honest one, whatever
 the ZK server answered. -/
-def wAny : Unit → Unit → Worker := fun _ _ h => (Flock.Firewall.honestReqs sched hon)[h.length]?
+def wAny : Unit → Unit → Worker := fun _ _ h => (Flock.ZkServer.honestReqs sched hon)[h.length]?
 
 /-- Its request count. -/
-abbrev nA : ℕ := (Flock.Firewall.honestReqs sched hon).length
+abbrev nA : ℕ := (Flock.ZkServer.honestReqs sched hon).length
 
 /-- **It finishes at every salt.** -/
 theorem wAny_finishes (b : Fin (Flock.Guarantees.fwHoles sched + 0) → Fin 192 → Fin 256) :
@@ -169,8 +169,8 @@ theorem wAny_finishes (b : Fin (Flock.Guarantees.fwHoles sched + 0) → Fin 192 
   have hl : (Flock.Guarantees.saltsOf b).length = [Flock.Guarantees.zeroSalt].length := by
     rw [Flock.Guarantees.saltsOf, List.length_ofFn, fwHoles_sched]
     rfl
-  show adaptFinished sched (fun h => (Flock.Firewall.honestReqs sched hon)[h.length]?)
-    (Flock.Firewall.honestReqs sched hon).length (Flock.Guarantees.saltsOf b) = true
+  show adaptFinished sched (fun h => (Flock.ZkServer.honestReqs sched hon)[h.length]?)
+    (Flock.ZkServer.honestReqs sched hon).length (Flock.Guarantees.saltsOf b) = true
   rw [adaptFinished_fixed, liveFinished_chopReqs _ _ hl]
   exact hon_finishes0
 
@@ -229,7 +229,7 @@ end FlockSoundness.Discharge.Recursion.LoopWitness
 namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
-open Flock.Firewall FirewallAdaptive LoopWitness
+open Flock.ZkServer ZkServerAdaptive LoopWitness
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
@@ -246,15 +246,15 @@ theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
       Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE)
         Claims.ZKServer.Loop.finS.honestVals ∧
       Claims.ZKServer.Loop.finS.TapeOK ∧
-      Flock.Guarantees.FirewallSends (Prog := Unit) (Wit := Unit) (Rr := Unit) sched
-        (fun _ _ _ => fun (_ : Unit) (_ : Unit) (_ : Fin nhS → ByteArray) => Flock.Firewall.honestReqs sched hon)
-        (fun _ _ _ => FirewallHonest.honestMsgs sched honD () () ())
-        (Flock.Guarantees.firewallT sched sched.tables) ∧
+      Flock.Guarantees.ZkServerSends (Prog := Unit) (Wit := Unit) (Rr := Unit) sched
+        (fun _ _ _ => fun (_ : Unit) (_ : Unit) (_ : Fin nhS → ByteArray) => Flock.ZkServer.honestReqs sched hon)
+        (fun _ _ _ => ZkServerHonest.honestMsgs sched honD () () ())
+        (Flock.Guarantees.zkServerT sched sched.tables) ∧
       (OuterZK.LoopSessions.atWorker 1 (fun (_ : ℕ) (_ : Unit × (Fin nhS → ByteArray)) => y)
           (fun (_ : ℕ) (_ : OuterZK.WCtx Unit Unit nhS) => w)).Honest
         (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
         (fun u : (Unit × Unit) × (Fin nhS → ZkView.Salt) =>
-          OuterZK.wctxAt (FirewallHonest.honestMsgs sched honD () () ()) u.1.1 u.1.2 u.2) ∧
+          OuterZK.wctxAt (ZkServerHonest.honestMsgs sched honD () () ()) u.1.1 u.1.2 u.2) ∧
       ∀ (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
         (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
           _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (t : ℕ),
@@ -271,7 +271,7 @@ theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
 real view never finishes and the simulated one always does, so an event of not finishing has probability `1` against a
 bound of `0`. -/
 theorem RecursiveZKLoop_nontrivial :
-    ∃ (cut : Unit → Unit × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → Bool)
+    ∃ (cut : Unit → Unit × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → Bool)
       (stop : (((Unit × Unit) × (Fin 0 → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
         ((OuterZK.loopRef rel0 src0).swP Claims.ZKServer.Loop.finS.honestVals).Nonce
         ((OuterZK.loopRef rel0 src0).swP Claims.ZKServer.Loop.finS.honestVals).Rand 0) × Unit → Unit)
@@ -299,7 +299,7 @@ theorem RecursiveZKLoop_nontrivial :
   simp [OuterZK.LoopSessions.atWorker]
 
 /-- **`RecursiveZKLoopAnySum`'s premises hold at one instance**: the deployed tables (with `SwCausalOn` at the honest
-values); the honest worker's requests, as a worker of the adaptive firewall, finishing at every salt, so its contexts
+values); the honest worker's requests, as a worker of the adaptive zk_server, finishing at every salt, so its contexts
 are all of them; one statement of V*, the honest fixture's, in the claims' relation at the deployed masked parser at
 every context, its simulator's coins its own; and the deployed release reading no stop. -/
 theorem RecursiveZKLoopAnySum_honest (h : RecDeploy.HonestFixture) :
@@ -339,7 +339,7 @@ request, no hole and no statement of V*, the real view never finishes. Released 
 finished, it reads `(true, false)` with probability `1`; the simulated view, cut before its end, is released at the
 stop `false` unfinished, and at its end finished, so it never reads `(true, false)`, against a bound of `0`. -/
 theorem RecursiveZKLoopAnySum_nontrivial :
-    ∃ (cut : Bool → Unit × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → Bool × Bool)
+    ∃ (cut : Bool → Unit × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → Bool × Bool)
       (s₀ : Bool)
       (stop : (((Unit × Unit) × (Fin (Flock.Guarantees.fwHoles sched0 + 0) → Fin 192 → Fin 256)) ×
         Claims.Sampling.unitTape.at 0
@@ -349,8 +349,8 @@ theorem RecursiveZKLoopAnySum_nontrivial :
       ¬ Verity.Game.prCoin (fun u => E (cut (stop u) (Flock.Guarantees.anyReal Claims.ZKServer.Loop.finS.honestVals
             rel0 src0 sched0 (fun (_ : Unit) (_ : Unit) (_ : History) => none) 0 0 0 (fun _ _ => [])
             (fun _ _ => (⟨[]⟩ : Claims.Flock.Wit)) vs0 (fun _ _ => ()) u.1))) ≤
-        (Fintype.card (Fin ((FirewallTemplate.tmpl sched0 sched0.tables).length + 1) ⊕ Bool) : ℝ≥0∞) *
-          Verity.Game.prCoin (fun c : (Fin ((FirewallTemplate.tmpl sched0 sched0.tables).length + 1) ⊕ Bool) ×
+        (Fintype.card (Fin ((ZkServerTemplate.tmpl sched0 sched0.tables).length + 1) ⊕ Bool) : ℝ≥0∞) *
+          Verity.Game.prCoin (fun c : (Fin ((ZkServerTemplate.tmpl sched0 sched0.tables).length + 1) ⊕ Bool) ×
               ((Unit × (Fin (Flock.Guarantees.fwHoles sched0) → ZkView.Bits × ZkView.Salt)) ×
                 OuterZK.LoopSessions.SimCoins (fun _ => Unit) 0) =>
             E (Flock.Guarantees.sumCut s₀ cut c.1 (Flock.Guarantees.loopIdeal 1 rel0 src0

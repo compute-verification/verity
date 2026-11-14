@@ -1,13 +1,13 @@
 module
 
 public import Proofs.Flock.SessionLoop.Concrete.File
-public import Proofs.Flock.Recursive.FirewallJson
+public import Proofs.Flock.Recursive.ZkServerJson
 import Flock.HmRow
 import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement
@@ -65,14 +65,14 @@ import all Init.Data.Nat.Fold
 The public file (`pubOf`) is the header `hdrJ` (`circuit_sha512`, the frame-v3-sha512 roots of the one input row and the
 one output word, the units entry), printed by `printJson`, then a newline and the input row's digest `bc ‖ c` with the
 output word. `load_pubV` walks `HmRow.loadPublic` on it to `pubV`; the header's text reads back (`R1`–`R5`) because
-`printJson` of a plain JSON value holds no newline and parses back (`FirewallJson.parse_printJson`). `checkPublic_cW`
+`printJson` of a plain JSON value holds no newline and parses back (`ZkServerJson.parse_printJson`). `checkPublic_cW`
 holds its roots to the rows: `checkPublicP` is `checkPublic` with the key's digest, the tree leaf and the zero row as
 parameters, so that the kernel derives the key and its SHA-512 once (`keyHex_eq`, `lp_eq`, `sd_eq`) rather than in every
 leaf.
 -/
 
 @[expose] public section
-open Flock Flock.Firewall RecDeploy.VStarNets FlockVBridge.Names
+open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
 open Lean (Json JsonNumber)
 open Std.DTreeMap.Internal (Impl)
 
@@ -150,7 +150,7 @@ theorem findByte_eq (b : ByteArray) (x : UInt8) (f : Nat) :
   subst h
   cases List.findIdx? (· == x) (List.drop f l) <;> rfl
 
-open FlockSoundness.Discharge.Recursion.FirewallJson (toDigits_digits plainStr_chars)
+open FlockSoundness.Discharge.Recursion.ZkServerJson (toDigits_digits plainStr_chars)
 
 theorem mem_intercalate {c : Char} : ∀ (xs : List (List Char)), c ∈ [','].intercalate xs → c = ',' ∨ ∃ x ∈ xs, c ∈ x
   | [], h => by simp at h
@@ -231,7 +231,7 @@ theorem hdr_model (s : String) : (hdrT s).toListModel =
     [⟨"circuit_sha512", .str s⟩, ⟨"format", .str "flock-circuit-inputs"⟩, ⟨"frame_v3", fv3J⟩, ⟨"instances", jn 1⟩,
      ⟨"rows", .bool false⟩, ⟨"statement", .str "verity/flock-circuit"⟩, ⟨"units", unitsJ⟩] := by kernel_rfl'
 theorem hdr_asc (s : String) : ascending (hdrT s) = true := by kernel_rfl'
-theorem fj_norm (s : String) : FlockSoundness.Discharge.Recursion.FirewallJson.norm (hdrJ s) = hdrJ s := by kernel_rfl'
+theorem fj_norm (s : String) : FlockSoundness.Discharge.Recursion.ZkServerJson.norm (hdrJ s) = hdrJ s := by kernel_rfl'
 theorem RN' (s : String) : Flock.norm (hdrJ s) = hdrJ s := by kernel_rfl'
 
 /-! ### The hash's hex string -/
@@ -354,7 +354,7 @@ theorem utf8_noTen (l : List Char) (h : '\n' ∉ l) : (10 : UInt8) ∉ (String.o
 
 /-! ### The header's text -/
 
-open FlockSoundness.Discharge.Recursion.FirewallJson (plainObj_iff parse_printJson)
+open FlockSoundness.Discharge.Recursion.ZkServerJson (plainObj_iff parse_printJson)
 
 
 theorem plain_obj_of {t : Impl String (fun _ => Json)} {L : List ((_ : String) × Json)} (hm : t.toListModel = L)

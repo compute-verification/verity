@@ -5,13 +5,13 @@ public import Lean.Data.Json
 /-!
 A JSON value's canonical form (`rec_live.canonical`): its tokens as `Json.compress` writes them. `compress` and `Json`'s `==`
 are `partial def`s, which no proof can unfold; `canonForm` is total. It is a module of its own so that `Tags.plainLeaves`
-reads it without importing `Flock.Firewall`, whose `Schedule` would shadow `Flock.Schedule` in every `Flock.Firewall.*`
+reads it without importing `Flock.ZkServer`, whose `Schedule` would shadow `Flock.Schedule` in every `Flock.ZkServer.*`
 namespace that imports `Tags`.
 -/
 
 @[expose] public section
 
-namespace Flock.Firewall
+namespace Flock.ZkServer
 
 open Lean (Json)
 
@@ -46,4 +46,4 @@ def canonFormObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → List To
   | .inner _ k v l r => canonFormObj l ++ (.key k :: canonForm v) ++ canonFormObj r
 end
 
-end Flock.Firewall
+end Flock.ZkServer

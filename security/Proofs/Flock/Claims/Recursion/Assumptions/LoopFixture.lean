@@ -32,9 +32,9 @@ rounds so far (`Loop.schedSoFar`: the algebraic phase's, then the opening's) are
 proof's round 0.
 
 Assumption record. No claim: evaluations of deterministic deployed code on one run's bytes, which say nothing about the
-prover or the world. It is witnessed outside Lean by a run of `verity/ml/flock/verifier/firewall_finish_agree.sh` at
-5a7e015281, at its default statement (`hidden:256`, one instance, sampled): one firewalled CPU `prove --zk` session
-(`FC_FIREWALL=1`, `FC_HOST_WITNESS=1`) through that tree's Lean session loop, in which every round in a device round's
+prover or the world. It is witnessed outside Lean by a run of `verity/ml/flock/verifier/zk_server_finish_agree.sh` at
+5a7e015281, at its default statement (`hidden:256`, one instance, sampled): one zk_served CPU `prove --zk` session
+(`FC_ZK_SERVER=1`, `FC_HOST_WITNESS=1`) through that tree's Lean session loop, in which every round in a device round's
 place is the loop's own (`Skeleton.rounds`, then `Drive.openStep`, which `Loop.schedSoFar` reads) and the finish holds
 each rep's opening's and inner proof's rounds itself, on its table's level 0 from the loop (`Finish.tabOfLevel0`, which
 `Loop.realOf` reads). The session had one table and two reps. The table's root of record and its finish's were one, each
@@ -53,11 +53,11 @@ def Loop.ReachesInner : Prop :=
     (ρ : (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand)
     (h : List (Msg × Msg)) (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) (q k j : ℕ)
-    (tr : _root_.Flock.Firewall.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
+    (tr : _root_.Flock.ZkServer.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
     FlockDeploy.setupOf true x = some (s0, spec, sts) ∧ h.length = q + 2 ∧
     CoinLayer.locate (Loop.roundsOf spec sts) 0 q = (k, j + 1) ∧ Loop.realOf src x w ρ k = .ok (tr, hr) ∧
     Loop.schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+      (_root_.Flock.ZkServer.Drive.extras sts[k / 2]! (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]!
         (Loop.wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) 0))) hr
       ((Array.range (j + 1)).map
         fun i => Loop.wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched ∧

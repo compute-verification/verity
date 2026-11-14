@@ -245,7 +245,7 @@ def test_a_session_off_its_pinned_schedule_is_refused_before_the_coin_server_see
         edit(s)
         proxy = _proxy(s)
         why = next(r[1] for r in _session(proxy) if r[0] == RL.RESP_REFUSED)
-        assert why.startswith(f"rec proxy: FIREWALL-REFUSED: {what}: "), (what, why)
+        assert why.startswith(f"rec proxy: ZK-SERVER-REFUSED: {what}: "), (what, why)
     s = json.loads(json.dumps(SCHEDULE))
     s["rounds"][1]["n"] = 2
     proxy = _proxy(s)
@@ -259,7 +259,7 @@ def test_a_link_whose_y_is_not_zero_is_refused():
     assert RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_COMMIT, b"rf", [("circuit", CAP0)], [])))[0] == RL.RESP_COINS
     y = bytearray(32)
     y[17] = 1
-    assert _refusal(RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(y))))) == "rec proxy: FIREWALL-REFUSED: Link's y is not zero"
+    assert _refusal(RL.decode_resp(proxy.handle(RL.encode_req(RL.REQ_LINK, bytes(y))))) == "rec proxy: ZK-SERVER-REFUSED: Link's y is not zero"
     assert proxy.coins.link["y"] is None
 
 
@@ -293,7 +293,7 @@ def test_serve_writes_each_of_several_sessions_to_its_own_directory(tmp_path):
     assert [v[0] for v in verdicts] == [RL.RESP_VERDICT] * 3 and json.loads(verdicts[1][1])["accepted"] is False
     res = got["res"]
     assert [r["session"] for r in res] == [str(tmp_path / "s0" / "session"), None, str(tmp_path / "s2" / "session")]
-    assert res[1]["refused"].startswith("rec proxy: FIREWALL-REFUSED: round 1: ") and res[1]["rounds"] == 1
+    assert res[1]["refused"].startswith("rec proxy: ZK-SERVER-REFUSED: round 1: ") and res[1]["rounds"] == 1
     assert json.loads((tmp_path / "schedule.json").read_text()) == SCHEDULE
     assert RL.schedule_of(json.loads((tmp_path / "s0" / "public.json").read_text())) == SCHEDULE
     for k in (0, 2):
@@ -434,7 +434,7 @@ def test_on_the_coin_tree_a_coin_that_does_not_open_stops_the_session():
 
     proxy = _proxy(coins=Altered(_counter_rand(), TREE, RL.OsTree(_counter_rand())))
     why = next(r[1] for r in _tree_session(proxy) if r[0] == RL.RESP_REFUSED)
-    assert why.startswith("rec proxy: FIREWALL-REFUSED: ") and "circuit/rep0 round 1" in why
+    assert why.startswith("rec proxy: ZK-SERVER-REFUSED: ") and "circuit/rep0 round 1" in why
 
     class Forged(RL.CoinServer):
         def _draw(self, stream, k, n, after):
@@ -452,7 +452,7 @@ def test_the_prover_hello_names_the_challengers_tree_and_live_coins_refuse_one()
     other = CT.Spec(TREE.streams + ("sparse/rep0",), TREE.rounds_log, TREE.block)
     proxy = _proxy(coins=_tree_coins())
     why = next(r[1] for r in _tree_session(proxy, _tree_hello(other)) if r[0] == RL.RESP_REFUSED)
-    assert why.startswith("rec proxy: FIREWALL-REFUSED: Hello: coins ") and proxy.coins.hello is None
+    assert why.startswith("rec proxy: ZK-SERVER-REFUSED: Hello: coins ") and proxy.coins.hello is None
     live = _proxy()
     assert "live coins" in next(r[1] for r in _tree_session(live) if r[0] == RL.RESP_REFUSED) and live.coins.hello is None
     with pytest.raises(ValueError, match="at Hello"):
@@ -541,10 +541,10 @@ def test_tree_from_takes_the_trees_from_the_challengers_session_and_closes_it(tm
     (tmp_path / "s.json").write_text(json.dumps(SCHEDULE))
     (tmp_path / "secret").write_text("0a" * 32 + "\n")
     assert RL.main(["--listen", "127.0.0.1:0", "--out", str(tmp_path), "--schedule", str(tmp_path / "s.json"), "--coin-tree",
-                    "--tree-from", "challenger:7000", "--tree-secret-file", str(tmp_path / "secret"), "--lean", "flock-firewall"]) == 0
+                    "--tree-from", "challenger:7000", "--tree-secret-file", str(tmp_path / "secret"), "--lean", "flock-zk-server"]) == 0
     assert (got["at"], got["secret"]) == ("challenger:7000", bytes([10]) * 32)
     assert got["source"] is got["device"] and got["tree"] == RL.INNER_COIN_SPEC and got["device"].closed
-    assert got["lean"] == "flock-firewall"
+    assert got["lean"] == "flock-zk-server"
 
 
 def test_the_inner_coin_tree_holds_every_stream_a_schedule_opens():

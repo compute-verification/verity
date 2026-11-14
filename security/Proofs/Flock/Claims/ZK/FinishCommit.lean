@@ -1,13 +1,13 @@
 module
 
 public import Proofs.Flock.Claims.ZK.LinkRecheck
-public import Flock.Firewall.Finish
+public import Flock.ZkServer.Finish
 
 /-!
 # The ZK server's commitments are the masked prover's
 
-`Flock.Firewall.Finish` commits a level ≥ 1 by `commitFw` (each lane's codeword by the additive FFT, `rowsFft`, where
-`cols < d ≤ 64`; else `encodeRows`) and level 0 by `commit0` (`Flock.Firewall.Link`'s rows, `Link.rows`), its leaves in
+`Flock.ZkServer.Finish` commits a level ≥ 1 by `commitFw` (each lane's codeword by the additive FFT, `rowsFft`, where
+`cols < d ≤ 64`; else `encodeRows`) and level 0 by `commit0` (`Flock.ZkServer.Link`'s rows, `Link.rows`), its leaves in
 tasks and its tree a pure loop (`commitRows`). Here each is the analysis's, in any lawful monad, at SHA-512 and
 `hm96-sha512/v1`, read through `Commit.toC` (the port's `Commit` is its own structure, with the same fields):
 
@@ -17,13 +17,13 @@ tasks and its tree a pure loop (`commitRows`). Here each is the analysis's, in a
   (`hm96_leaf`, `hm96_node`), the leaves one map (`Link.parRange_eq`), and the tree's loop the port's
   (`forIn_range_pure`).
 * **`commitP_eq`**: a level ≥ 1's commitment, `FlockComplete.commitP`'s, is `commitFw`'s.
-* **`commitPZk_eq`**: level 0's, `FlockComplete.commitPZk`'s of the table `Flock.Firewall.Link` reads, is `commit0`'s.
+* **`commitPZk_eq`**: level 0's, `FlockComplete.commitPZk`'s of the table `Flock.ZkServer.Link` reads, is `commit0`'s.
 * `openP_eq`: the port's opening of a commitment is the analysis's of its `toC`.
 -/
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open FlockSoundness.Refine
 
@@ -145,10 +145,10 @@ theorem commitP_eq (lv : Level) (g : Array F128) (salt : ℕ → ByteArray) :
       FlockComplete.commitRowsP (Hashes.ofSha512 Sha512.hash) MerkleScheme.hm96Sha512 lv
         (FlockComplete.encodeRows lv g) salt from rfl, commitRowsP_eq, commitFw, rowsOf_eq]
 
-/-- **Level 0's commitment** (`FlockComplete.commitPZk`) of the table `Flock.Firewall.Link` reads is `commit0`'s. -/
+/-- **Level 0's commitment** (`FlockComplete.commitPZk`) of the table `Flock.ZkServer.Link` reads is `commit0`'s. -/
 theorem commitPZk_eq (lv : Level) (tPad : ℕ) (i : Link.In) :
     (FlockComplete.commitPZk (Hashes.ofSha512 Sha512.hash : Hashes M) MerkleScheme.hm96Sha512 lv tPad i.g i.extra
       i.lanePad i.salt) = pure (commit0 lv tPad i).toC := by
   rw [FlockComplete.commitPZk, commitRowsP_eq, commit0, Link.rows_eq]
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

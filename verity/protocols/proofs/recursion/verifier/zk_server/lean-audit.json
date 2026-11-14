@@ -1,0 +1,28 @@
+{
+ "format": 1,
+ "roots": ["ZkServer", "ZkServerHonestDifftest"],
+ "exempt": {
+  "ZkServerMain": "the core-zk-server executable's entry point: `session` is Core.ZkServer.Loop.main, every other command Core.Protocol.main of Core.ZkServer.protocol, audited under ZkServer and CoreProtocol",
+  "ZkServerDifftest": "the core-zk-server-difftest executable's entry point, one line: Difftest.serve over Core.ZkServer.opFn and outerFn, audited under ZkServer and Difftest",
+  "ZkServerHonestDifftestMain": "the ZK server-honest-difftest server's entry point, one line: Difftest.serve of ZkServerHonestDifftest.table, which verity/protocols/proofs/flock/prover/tests/test_honest_reqs.py drives against rec_live's requests; audited under ZkServerHonestDifftest"
+ },
+ "escapes": {
+  "Core.ZkServer.pyJson": "partial def: Python's json.dumps(sort_keys=True) of any JSON value, recursing through it, for the values an open's error message quotes; no proof is about it, and the agreement tests (tests/test_zk_server_release_agreement.py) cover it"
+ },
+ "layers": {
+  "ZkServer": {
+   "imports": ["Lean", "Std", "Flock", "CoreProtocol", "ZkServer"],
+   "except": [],
+   "why": "the release side is code: Lean core and its Std (the wall clock), C-Flock's verifier library (its canonical JSON, SHA-512, the ZK server's contract and its session loop) and the core protocol interface, no Mathlib and nothing of Security (the layout rule: Lean code never requires Security)"
+  },
+  "ZkServerHonestDifftest": {
+   "imports": ["Difftest", "Flock.ZkServer.Honest"],
+   "except": [],
+   "why": "the honest worker's requests' port reads C-Flock's Flock.ZkServer.honestReqs and what the ZK server's load check takes, through the harness"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
+ }
+}
