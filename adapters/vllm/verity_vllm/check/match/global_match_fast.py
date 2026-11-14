@@ -88,7 +88,7 @@ def reset() -> None:
 # the memo tables pin the RootView / Projection objects they were computed from; without a release a process that
 # checks several records in a row (harness in-process mode, tests, a profiler loop) grows by one record's caches per record.  check()
 # brackets its body with enter()/leave(): the OUTERMOST call (depth 0 again -- the alternate-criterion run is a nested check() and must
-# keep the memo) drops every table.  row_pod = one record per process, so the release changes nothing on a row of record.
+# keep the memo) drops every table.  row_pod = one record per process, so the release changes nothing on a workload of record.
 _depth = 0
 
 

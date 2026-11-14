@@ -22,7 +22,7 @@ and establishes (each a named check with PASS / FAIL and evidence; the verdict i
                            step; a request that stopped early (EOS) is compared over its executed prefix of the BOUNDED component
                            and labelled `eos_truncated` with the unexecuted step count -- never rebuilt at its stopping length.
   G4 identity_map          request-local identity (request, local step, local index) <-> global fold node is a bijection: total on
-                           the attributed fold, injective, and the local side is exactly the component's executed instance set.
+                           the attributed fold, injective, and the local side is exactly the component's executed instances.
   G5 shared_state          weights are ONE global prescribed input read by every request (same field map, no overlapping ranges);
                            every node operand of a request's instance is produced by the same request (0 cross-request reads) in the
                            same or an earlier engine step; the classes of cross-step producers are reported (KV cache, tokens).
@@ -72,7 +72,7 @@ PROTOCOL SUMMARY (Match stage: the record checker -- GM-01, the runtime match ve
     that stopped early is compared over its executed prefix and must end on a DECLARED EOS id with the declared LAG (G6, fail closed
     without the declaration); X-09 is evidence inside G3, never the verdict; the other within-step criterion is recorded beside the verdict,
     never merged; MATCH_IMPL selects fast (the Match of record, the CLI's default) | record (the audit checker) -- an unknown name is an
-    error, never a fallback; capture/tokens.json is required on a row of record.
+    error, never a fallback; capture/tokens.json is required on a workload of record.
 """
 from __future__ import annotations
 
@@ -376,7 +376,7 @@ class Options:
     component: list[str] = option("--component", action="append", default=[], help="request component dir (derive_step output); repeatable")
     log: str | None = option("--log", default=None, help="capture log (default <oracle>/capture/log.jsonl.gz)")
     tokens: str | None = option("--tokens", default=None, help="tokens file (default <oracle>/capture/tokens.json)")
-    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a row of record)")
+    tokens_optional: bool = option("--tokens-optional", default=False, action="store_true", help="accept a record without capture/tokens.json (G6 output-association legs skipped, LABELLED checks[G6].tokens_json=false; mechanism/fixture runs only, never a workload of record)")
     no_x09: bool = option("--no-x09", default=False, action="store_true")
     within_step: str = option("--within-step", choices=WITHIN_STEP_CRITERIA, default=DEFAULT_WITHIN_STEP, help="within-engine-step correspondence of a request's instances: dag (default of record) | sequence (the r14-v1 criterion); the other criterion's verdict is recorded beside it (alternate_verdict)")
     no_alternate: bool = option("--no-alternate", default=False, action="store_true", help="do not run/record the other criterion's verdict beside the verdict of record")
