@@ -36,7 +36,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity_vllm.commit import step_rows
 from verity_vllm.pipeline import cpu_replay as CPU
 from verity_vllm.pipeline import replay_bundle as RB

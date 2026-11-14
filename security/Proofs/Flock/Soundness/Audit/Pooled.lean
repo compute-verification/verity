@@ -1,14 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Periods
-public import Definitions.Flock.Audit.Law
-import Proofs.Flock.Soundness.Audit.Law
+public import Definitions.Flock.Audit.SamplingDesign
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 
 /-!
 # The pooled escape: incorrect proof blocks that escape every period's sample
 
 A monitoring period is `T` periods, each audited by a fresh uniform `kd`-subset of the same `N` units
-(`Law.subset N kd`), independent of the past. An adaptive adversary (`Pooled`) fixes period `t`'s wrong set `W_t` from
+(`SamplingDesign.subset N kd`), independent of the past. An adaptive adversary (`Pooled`) fixes period `t`'s wrong set `W_t` from
 the samples before `t`, before sample `t` is made. It escapes when no period's sample hits its wrong set (`Pooled.Escapes`),
 and its total is `Σ_t |W_t|` (`Pooled.total`), the incorrect proof blocks that went unaudited over the monitoring period, pooled.
 
@@ -41,7 +41,7 @@ namespace FlockSoundness.Audit
 open Game
 open scoped ENNReal
 
-namespace Law
+namespace SamplingDesign
 
 variable {N kd : ℕ}
 
@@ -164,6 +164,6 @@ theorem pooled_escape_adapted {hk : kd ≤ N} {T : ℕ}
   simp only [Pooled.Escapes, Pooled.total, Pooled.wrong_ofAdapted hW] at h
   exact h
 
-end Law
+end SamplingDesign
 
 end FlockSoundness.Audit

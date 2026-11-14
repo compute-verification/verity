@@ -214,7 +214,7 @@ theorem ligeritoPadZC_reqs {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accounti
     (hl : sch.levels = lv₀ :: lv₁ :: rest) (z₀ cβ₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1)
     (hβ₀ : cβ₀.size = 1) (y₀ : 𝔽) (m₀ : 𝕂 × 𝕂) {msF : List Msg} {csF : List (Array F128)}
     (hfold : ∀ s q, ∃ out, Plays fOf (ZkSession.foldRoundsZK execArith P sch.k0 0 s q) msF csF out)
-    (ev : Fin 2 → 𝕂) {csρ : List (Array F128)} (hρ : ∃ ρ, Plays fOf (Model.drawKs execArith 2) [] csρ ρ) (T' : 𝕂)
+    (ev : Fin 2 → 𝕂) {csρ : List (Array F128)} (hρ : ∃ ρ, Plays fOf (Model.sampleKs execArith 2) [] csρ ρ) (T' : 𝕂)
     (ybar : Fin tp → 𝕂) (m' : 𝕂 × 𝕂) (C₁ : Cap D) (req₀ : Req) {Q : PendL 𝔽 D → Prop}
     {msO msQ msR : List Msg} {csO csQ csR : List (Array F128)}
     (htwo : ∀ s q, ∃ out, Plays fOf (Model.twoOodC (D := D) execArith (sch.m - 7 - sch.k0 + 1) 0 s q) msO csO out)
@@ -230,7 +230,7 @@ theorem ligeritoPadZC_reqs {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accounti
   unfold ZkLink.ligeritoPadZC
   rw [hl]
   dsimp only
-  refine exQ_drawVec z₀ hz₀ hm7 fun z => exQ_recv y₀ (exQ_drawOne cβ₀ hβ₀ fun β => ?_)
+  refine exQ_sampleVec z₀ hz₀ hm7 fun z => exQ_recv y₀ (exQ_sampleOne cβ₀ hβ₀ fun β => ?_)
   refine exQ_recv m₀ (exQ_bind (hfold _ _) (fun ⟨ini, s⟩ => ?_) rfl rfl)
   dsimp only
   refine exQ_recv ev (exQ_bind0 hρ (fun ρ => ?_) rfl)
@@ -705,7 +705,7 @@ theorem zk_ligerito_reqs (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128) (
     (t.rounds[t.k]!).coins (t.rounds[t.k + 1]!).coins hz₀ (by show sch.m - 7 ≠ 1; omega) hβ₀
     (fOf p.oodValues[0]!) (gOf p.messages[0]!.1, gOf p.messages[0]!.2)
     (fun s q => foldRoundsZK_any P p sch.k0 0 1 s q _ hFl hFs)
-    ![gOf zl.msgs.e0, gOf zl.msgs.e1] (drawKs_any 2 _ hρl hρs) (gOf zl.msgs.tPrime)
+    ![gOf zl.msgs.e0, gOf zl.msgs.e1] (sampleKs_any 2 _ hρl hρs) (gOf zl.msgs.tPrime)
     (fun i => gOf zl.msgs.ybar[i.val]!) (gOf p.messages[sch.k0]!.1, gOf p.messages[sch.k0]!.2)
     (capDig p.recursiveCaps[0]!)
     ⟨0, Model.positions execArith (levelOf (sch.levels.getD 0 default)).queries

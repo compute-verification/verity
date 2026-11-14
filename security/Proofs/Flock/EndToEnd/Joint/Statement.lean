@@ -16,12 +16,12 @@ subcircuit and no sum of per-subcircuit worst cases.
 
 `StratifiedBlock` is such a sampling block: one hidden-output `--zk` session of one table (a stratified sample is a
 one-table session: verity-verify-proof takes only the subset sample at more than one table, `RecordCustodyZKJ`) whose units the
-challenger's coins sample by the live stratified sample (`Flock.Draw.drawWith` at `.stratified`, `Law.execOS`), with every
+challenger's coins sample by the live stratified sample (`Flock.Draw.drawWith` at `.stratified`, `SamplingDesign.execOS`), with every
 binder of `zk_session_soundH_custody` but the prover. Its incorrect proof blocks are `wrongRegZ` in the committed transcript fixed
 at registration (`XplurZC`), as `SamplingBlock`'s are.
 
 * `JointStratified`, per sampling block: except with probability `δ + ε_ks + ε_bind`, if verity-verify-proof accepts, the
-  sampling block's incorrect proof blocks `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so they
+  sampling block's incorrect proof blocks `B` lie in the confidence set (`SamplingDesign.stratified`'s escape of `B` is at least `δ`), so they
   spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)`, and their ANDs and their output bits are each at most the
   most any set in the confidence set holds (`StratifiedBlock.maxHarm`). Both harm bounds are read from the same sample,
   at the same `δ`.
@@ -56,7 +56,7 @@ open scoped ENNReal
 /-- **A sampling block whose sample is stratified by subcircuit**: one hidden-output `--zk` session of one table over `n`
 proof blocks, with every binder of `zk_session_soundH_custody` but the prover. Its statement (circuit descriptor, public
 file); its strata, unit `u` in subcircuit `sub u`, `ks s` of subcircuit `s`'s units sampled, the executable strata `St`
-describing them (`Law.ExecStrata`); its record (sample files, session writer, reference setup); the verifier's byte
+describing them (`SamplingDesign.ExecStrata`); its record (sample files, session writer, reference setup); the verifier's byte
 sources, one per subcircuit; the verify command's tags; `live-verifier` (`hCust`); the count curve's parameters; and the
 knowledge finders' budgets `qF`, `qS`. -/
 structure StratifiedBlock where
@@ -74,14 +74,14 @@ structure StratifiedBlock where
   m : ℕ
   sub : Fin n → Fin m
   ks : Fin m → ℕ
-  hks : ∀ s, ks s ≤ (Law.stratum sub s).card
+  hks : ∀ s, ks s ≤ (SamplingDesign.stratum sub s).card
   St : Fin m → Flock.Draw.Stratum
-  hS : Law.ExecStrata sub ks St
+  hS : SamplingDesign.ExecStrata sub ks St
   Kd : ℕ
   pop : ℕ
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
-  y₀ : DrawSetupZKH I (mPtsOf D.unroll.g (∑ s, ks s)) S₀ (dj S₀)
+  y₀ : SampleSetupZKH I (mPtsOf D.unroll.g (∑ s, ks s)) S₀ (dj S₀)
   wr : Finset (Fin n) → Reg → LiveOut (mPtsOf D.unroll.g (∑ s, ks s)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
   N : ℕ
@@ -115,11 +115,11 @@ open Classical
 variable (w : StratifiedBlock)
 
 /-- The sampling block's sample: `Flock.Draw.drawWith`'s stratified sample on the challenger's coins. -/
-def L : Law w.n := Law.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
+def L : SamplingDesign w.n := SamplingDesign.execOS (n := w.n) w.src (.stratified w.Kd (Array.ofFn w.St)) w.pop
 
-/-- The stratified sampling design the sample is held to under A3 (`Law.execOS_escape_le`): `ks s` of subcircuit `s`'s units, uniform
+/-- The stratified sampling design the sample is held to under A3 (`SamplingDesign.execOS_escape_le`): `ks s` of subcircuit `s`'s units, uniform
 without replacement, independently across subcircuits. -/
-def ideal : Law w.n := Law.stratified w.sub w.ks w.hks
+def ideal : SamplingDesign w.n := SamplingDesign.stratified w.sub w.ks w.hks
 
 /-- The sampling block's audit as it runs: `zk_session_soundH_custody`'s game. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
@@ -139,7 +139,7 @@ noncomputable def sim (τ : Strategy w.game) :=
     (decodesOnZK_of_runsOnZC execArith hs512 _ w.I w.wr _ _ _ _
       (runsZC_liveH w.I w.ht (Flock.Desc.parse_flat w.hD) (Discharge.Layout.scopeOkH_spec w.hU w.hscope).2.1 w.dj w.y₀
         w.wr _ tablesAtZKH_live w.hTags w.hCust.1
-        (fun ω => drawOkZKH_of_exec w.I (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src
+        (fun ω => sampleOkZKH_of_exec w.I (Flock.Desc.parse_flat w.hD) w.sub w.ks w.hks w.St w.hS w.Kd w.pop w.Lb w.src
           w.dj w.hCust.2 ω))) τ
 
 /-- **The sampling block's incorrect proof blocks** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
@@ -161,7 +161,7 @@ noncomputable def link : ℝ≥0∞ :=
 
 /-- **The detection budget an incorrect set `B` spends**, `Σ_s k_s·x_s/n_s`, with `x_s` its units in subcircuit `s`. -/
 noncomputable def spend (B : Finset (Fin w.n)) : ℝ :=
-  ∑ s, (w.ks s : ℝ) * (B.filter (w.sub · = s)).card / (Law.stratum w.sub s).card
+  ∑ s, (w.ks s : ℝ) * (B.filter (w.sub · = s)).card / (SamplingDesign.stratum w.sub s).card
 
 /-- **The most harm in the confidence set**: the largest total weight `Σ_{u ∈ B} h u` over the incorrect sets `B` the
 stratified sample misses with probability at least `δ`. Core's `harm_bound` returns a bound on it
@@ -204,7 +204,7 @@ structure BlockRec (W : ℕ → StratifiedBlock) where
   idx : ℕ
   accepted : Prop
   wrong : Finset (Fin (W idx).n)
-  drawnWrong : Prop
+  sampledWrong : Prop
 
 namespace BlockRec
 

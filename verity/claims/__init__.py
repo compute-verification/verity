@@ -487,7 +487,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
           "soundness at "
           "δ_ZK (ProofSoundAt: a proof is accepted with an opening that fails its relation with probability at most "
-          "δ_ZK), which Flock's EndToEndHiddenDrawn gives only for a cheater whose hash calls over the window are "
+          "δ_ZK), which Flock's EndToEndHiddenSampled gives only for a cheater whose hash calls over the window are "
           "capped, and only against its committed transcript: that the relation's rows are the leaves' committed rows "
           "is not stated there", "TS proofs sound", "standard"),
     Entry("accounting-ts-proofs-pin", "assumption",

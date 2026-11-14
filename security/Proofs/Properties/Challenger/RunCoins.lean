@@ -9,8 +9,8 @@ public import Proofs.Properties.Challenger.Drawn
 Each stage of an accepted two-stage run got no code from `Run.coinsCode` on the bytes it read, and where it read any,
 the challenger's check finds no reason under the verifier's key, window and family, after the record's digest
 (`SpotFlock.RunsAs.coinsCode_read`). The check reads the challenger's sample under that key, window and family
-(`Properties.Challenger.Coins.coinsReason_draw`), and the sample's challenges are the device's or the model's finder
-outputs a break (`Properties.Challenger.Drawn.drawnByDevice`), so the stage's bytes are (`fromDevice_of_reason`,
+(`Properties.Challenger.Coins.coinsReason_sample`), and the sample's challenges are the device's or the model's finder
+outputs a break (`Properties.Challenger.Drawn.sampledByDevice`), so the stage's bytes are (`fromDevice_of_reason`,
 `runCoinsFromDevice`). No premise names the key: it is the run's own (`Input.key`).
 
 `runCoinsFromDevice` is the proof of `SpotFlock.RunsAs.RunCoinsFromDevice`, which
@@ -30,9 +30,9 @@ theorem fromDevice_of_reason (dev : Properties.Challenger.History) {key : Spot.C
     {main coins : Json} {w label : String} {after read : ByteArray}
     (h : Spot.Challenger.coinsReason key main coins w label after read = none) :
     FromDevice dev key w label after coins read := by
-  obtain ⟨ξ, hd, hle, hpre⟩ := Properties.Challenger.Coins.coinsReason_draw h
+  obtain ⟨ξ, hd, hle, hpre⟩ := Properties.Challenger.Coins.coinsReason_sample h
   have hst : Starts read ξ := And.intro hle hpre
-  rcases Properties.Challenger.Drawn.drawnByDevice dev key w label after coins ξ hd with ⟨s, hs, ho, he⟩ | hb
+  rcases Properties.Challenger.Drawn.sampledByDevice dev key w label after coins ξ hd with ⟨s, hs, ho, he⟩ | hb
   · exact Or.inl ⟨s, hs, ho, he ▸ hst⟩
   · exact Or.inr hb
 

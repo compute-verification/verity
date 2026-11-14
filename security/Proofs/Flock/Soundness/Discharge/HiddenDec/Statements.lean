@@ -28,7 +28,7 @@ is set up:
 
 * `TagsOkH`: DecodeZL's `TagsOk` with hidden outputs (`hiddenOutputs = true`); `TagsOkHL` also admits plain SHA-512
   leaves.
-* `DrawOkH`: DecodeZL's `DrawOk` with `Stmt.setupHidden` for `Stmt.setupH`.
+* `SampleOkH`: DecodeZL's `SampleOk` with `Stmt.setupHidden` for `Stmt.setupH`.
 * `opnAtH`: DecodeZL's `opnAt` at `Stmt.setupHidden`'s statement.
 * `DecodesOnExecH`: `DecodesOn` at the hidden tables and the tags' leaf (`leafOfId`), the decoder `decAt` at
   DecodeZL's wires `wOP` and `wLIG`, `one := true`, no final messages, `capOfRoot`. `DecodesOnExecHSt` is it at the
@@ -63,8 +63,8 @@ variable {n mPts : ℕ} {Reg : Type}
 
 /-- **The challenger's sample at `S`, under hidden outputs**: it proves `S`, and setupHidden sets up at it with `mPts`
 link points. -/
-def DrawOkH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
-  (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
+def SampleOkH (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
+  (∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program =
       .ok st → st.mPts = mPts
 
@@ -85,9 +85,9 @@ single coins as field elements, no final messages and `capOfRoot`. -/
 def DecodesOnExecH : Prop :=
   ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (_ht : I.tags.typed = false)
     (_hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
-    TagsOkHL I → RecordsLive I dj wr → (∀ ω, DrawOkH I dj mPts (L.draw ω)) →
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (L : SamplingDesign n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
+    TagsOkHL I → RecordsLive I dj wr → (∀ ω, SampleOkH I dj mPts (L.draw ω)) →
     DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
       (opnAtH (tablesAtH dj x₀) I dj)
       (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L
@@ -97,9 +97,9 @@ unrolled) whose unit returns the outputs. -/
 def DecodesOnExecHSt : Prop :=
   ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (_ht : I.tags.typed = false)
     (_hc : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
-    TagsOkHL I → RecordsLive I dj wr → (∀ ω, DrawOkH I dj mPts (L.draw ω)) →
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (L : SamplingDesign n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript),
+    TagsOkHL I → RecordsLive I dj wr → (∀ ω, SampleOkH I dj mPts (L.draw ω)) →
     DecodesOn H512 enc512 (leafOfId I.tags.merkleLeaf) (tablesAtH (Reg := Reg) dj x₀) I wr
       (opnAtH (tablesAtH dj x₀) I dj)
       (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L

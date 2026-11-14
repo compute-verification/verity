@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 public import Proofs.Flock.Claims.DeployInputs
-public import Proofs.Flock.Recursive.FirewallWire
+public import Proofs.Flock.Recursive.ZkServerWire
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
 public import Proofs.Properties.Verity.Sampled.Record.PartSame
 
@@ -45,7 +45,7 @@ theorem printed_readsBack (what : String) {o : Json} (h : Claims.Json.Good o) :
   refine ⟨some j', ?_, .inr ⟨j', o, rfl, rfl, hs.symm⟩⟩
   rw [Option.mapM_some]
   unfold FlockDeploy.jsonOf
-  rw [FlockSoundness.Discharge.Recursion.FirewallWire.fromUTF8?_toUTF8]
+  rw [FlockSoundness.Discharge.Recursion.ZkServerWire.fromUTF8?_toUTF8]
   simp only [hp]
   rfl
 

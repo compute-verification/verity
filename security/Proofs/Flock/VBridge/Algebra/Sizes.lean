@@ -125,7 +125,7 @@ theorem ite' {R : A → B → Prop} {c c' : Prop} [Decidable c] [Decidable c'] (
   · simp only [h, mt hc.mpr h, ↓reduceIte]
     exact h₂ h
 
-theorem read' : RF (fun s s' : CoinSource => ∀ k, s.drawnAll k = s'.drawnAll k) (read : CM CoinSource) read := by
+theorem read' : RF (fun s s' : CoinSource => ∀ k, s.sampledAll k = s'.sampledAll k) (read : CM CoinSource) read := by
   intro r r' hr k a j hx
   have e : ∀ src : CoinSource, (read : CM CoinSource) k src = .ok (src, k) := fun _ => rfl
   rw [e] at hx

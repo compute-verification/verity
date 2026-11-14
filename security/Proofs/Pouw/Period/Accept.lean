@@ -139,7 +139,7 @@ theorem check_h1 (context format program partition : String) (bytes : ByteArray)
     protocol.check (h1Params context) (h1Reg context format program partition bytes)
         (h1Evidence (h1Reg context format program partition bytes) units) =
       .accept ⟨h1Check, Work.at 3 39, h1Fixed.sampling, [2, 2, 2, 2], none, units⟩ (h1Profile program partition) :=
-  Properties.Pouw.Check.acceptMeans_complete _ _ _ h1Fixed _ { law := .subset 24, population := 144, units }
+  Properties.Pouw.Check.acceptMeans_complete _ _ _ h1Fixed _ { samplingDesign := .subset 24, population := 144, units }
     (keeps_h1 context format program partition bytes)
     ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩ (saltKept_h1 _ _ _ _)
 

@@ -18,7 +18,7 @@ witness satisfies the flat twin off the unit input rows (`Hidden.Any.sat_flatFP`
 
 * `siteAddrHP a o x`: in-block column `x` of block `o`, as an address of `T`;
 * `bc_site_ofHP`: in a satisfying witness, the 128 bytes at row `p`'s `hm96` output are the population's `b ‖ c` of the
-  proved unit at rank `o · c.g + g` (`Hidden.bc_drawnWP`); `BcSiteHP` bundles what it reads;
+  proved unit at rank `o · c.g + g` (`Hidden.bc_sampledWP`); `BcSiteHP` bundles what it reads;
 * `copy_siteHP`: a stacked unit input off a public leaf whose Δ key is message bit `bit` of byte `byte` of row `q` holds
   the witness's bit at that message column (`copyPos_blockHP`, `Aliased.copyPos_key` at the flat twin);
 * `out_copyHP`: copy `u'`'s output `j`, bit `t` of the statement circuit `c` holds the witness's bit at output row
@@ -119,11 +119,11 @@ theorem bytesAt_siteHP (a : AcceptedHP T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)
 public inputs whose sample `d` decodes to `D`, whose proved units are in its population; whose public file
 `HmIn.loadPublic` loads to `pop`; with `g` below `2^⌊log₂ c.g⌋`; and whose proved unit at rank `o · c.g + g` is `u`. -/
 def BcSiteHP (a : AcceptedHP T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) : Prop :=
-  ∃ d D, a.draw = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
+  ∃ d D, a.draw = some d ∧ Draw.UnitSample.ofJson d = .ok D ∧ (∀ v ∈ D.proved, v < D.population) ∧
     HmIn.loadPublic a.tags a.st.c a.pi a.pf = .ok pop ∧ g < 2 ^ a.st.c.g.log2 ∧
     D.proved[o.val * a.st.c.g + g]? = some u
 
-/-- **The `b ‖ c` at a sampled proof block's site is the population's** (`Hidden.bc_drawnWP`), at a `BcSiteHP`, for every row
+/-- **The `b ‖ c` at a sampled proof block's site is the population's** (`Hidden.bc_sampledWP`), at a `BcSiteHP`, for every row
 `p`. -/
 theorem bc_site_ofHP {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteHP a pop o g u)
     {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
@@ -135,7 +135,7 @@ theorem bc_site_ofHP {a : AcceptedHP T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g 
   dsimp only at hd hpop hu hg hg2 hp ⊢
   subst hd
   obtain ⟨hr, rfl⟩ := Array.getElem?_eq_some_iff.1 hu
-  exact Hidden.bc_drawnWP s hpop hD hlt L regs hregs hz o hg hg2 hp hr
+  exact Hidden.bc_sampledWP s hpop hD hlt L regs hregs hz o hg hg2 hp hr
 
 /-! ## Copies at a site -/
 

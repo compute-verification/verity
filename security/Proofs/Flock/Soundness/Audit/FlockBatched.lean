@@ -120,7 +120,7 @@ theorem loweringSoundB_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (tab
   simp only [hu, ↓reduceDIte]
   exact (place S R u hu).correct hM
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The batched audit's analysis.** `X` is the committed transcript (the link theorem defines it),
 `decode` reads each sampled proof block from its table's witness, `Kr` is the extractor's rerun count. -/
@@ -180,7 +180,7 @@ theorem flock_batched_count
     (P.flock_batched_knowledgeSound H E plan tab decode Xc hK hlow) hlink K σ
 
 /-- **Sampled proof blocks of the batched Flock audit** are correct up to `ε_ks(σ) + δ_link(σ)`. -/
-theorem flock_batched_drawn
+theorem flock_batched_sampled
     (decode : DecoderB (C := C) (Reg := Reg) plan tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
@@ -190,7 +190,7 @@ theorem flock_batched_drawn
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgB H E plan Kr (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
-  extraction_audit_drawn (P.analysisB H E plan tab decode Xc Kr hlow)
+  extraction_audit_sampled (P.analysisB H E plan tab decode Xc Kr hlow)
     (P.flock_batched_knowledgeSound H E plan tab decode Xc hK hlow) hlink σ
 
 end Partition

@@ -698,7 +698,7 @@ theorem outer_of_answer {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {j r e s
     omega
   have hmb : t.st.m < 2 ^ 64 := by rw [hts']; exact Nat.lt_trans hm36 (by decide)
   have htm : t.st.m = (Masked.stsOf x)[j]!.m := by rw [hts', hst, hstj]; rfl
-  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact _root_.Claims.ZKServer.ofDraws_order _ _ _
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact _root_.Claims.ZKServer.ofSamples_order _ _ _
   have hnm : cfg.lay.nMlv = (Masked.stsOf x)[j]!.m - 6 := by
     rw [hlay]
     unfold startOf
@@ -787,7 +787,7 @@ rep's answer before the next rep's start. -/
 theorem answer_of_refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg → List Coin → Masker)
     (fc : Msg → List Coin → Except String Masker) (cc : Msg → List Coin → Array _root_.Flock.F128) (x : Msg)
     {cs : List Coin} {n : ℕ} (hn : cs.length = n) (h2 : 2 ≤ n) (h : L.refuseOf pc fc cc x cs = false) :
-    ∃ mk m, (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x n)) default mk) (cc x cs) = .ok m := by
+    ∃ mk m, (pc x cs).answer (Cfg.ofSamples (L.lay x (L.rep x n)) default mk) (cc x cs) = .ok m := by
   subst hn
   unfold refuseOf at h
   rw [Bool.not_eq_false'] at h
@@ -795,14 +795,14 @@ theorem answer_of_refuseOf {W R Coin : Type} (L : LeanRelease W R) (pc : Msg →
   rw [ite_eq_right (by omega)] at h
   by_cases hs : L.rep x (cs.length + 1) = L.rep x cs.length
   · rw [ite_eq_left (decide_eq_true hs), hs] at h
-    cases ha : (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default (L.slot x (L.rep x cs.length)))
+    cases ha : (pc x cs).answer (Cfg.ofSamples (L.lay x (L.rep x cs.length)) default (L.slot x (L.rep x cs.length)))
         (cc x cs) with
     | error e =>
       rw [ha] at h
       cases h
     | ok m => exact ⟨_, m, ha⟩
   · rw [ite_eq_right (fun e => hs (of_decide_eq_true e))] at h
-    cases ha : (pc x cs).answer (Cfg.ofDraws (L.lay x (L.rep x cs.length)) default none) (cc x cs) with
+    cases ha : (pc x cs).answer (Cfg.ofSamples (L.lay x (L.rep x cs.length)) default none) (cc x cs) with
     | error e =>
       rw [ha] at h
       cases h

@@ -93,7 +93,7 @@ omit [Nonempty Coin] in
 /-- **The two-stage contract at the one-wait proof system is the contract.** -/
 theorem CompiledTwo.Sessions.oneWait {H : Msg → Msg} {L : CompiledTwo Coin A} (hS : L.Sessions H) :
     L.oneWait.Sessions H :=
-  ⟨hS.replayDraws, hS.secondDraws, hS.slots, hS.shared, hS.unions, hS.refuses, hS.interior, hS.fixed, hS.runs,
+  ⟨hS.replaySamples, hS.secondSamples, hS.slots, hS.shared, hS.unions, hS.refuses, hS.interior, hS.fixed, hS.runs,
     hS.opens, hS.keys⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in

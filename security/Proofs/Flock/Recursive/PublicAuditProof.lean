@@ -73,7 +73,7 @@ checks pass, `innerAt` is the compiled table at `Refine.leafPlain` and `Refine.s
 `schedInner`'s, which no schedule changes. -/
 theorem vbridge_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (h : ClassOk (shapeOf st)) {s₀ : Flock.Schedule}
-    (hs : Flock.fast100 st.m = some s₀) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    (hs : Flock.fast100 st.m = some s₀) {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type}
     {zs : Reg → L.Ω → List (Cm × ((k : Fin r) → CT k)) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {x : Reg → L.Ω → Hidden (execClassAt st).cls}
@@ -93,7 +93,7 @@ theorem vbridge_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
 `vbridge_innerAt`. -/
 theorem vbridgeC_innerAt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (h : ClassOk (shapeOf st)) {s₀ : Flock.Schedule}
-    (hs : Flock.fast100 st.m = some s₀) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    (hs : Flock.fast100 st.m = some s₀) {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type}
     {zs : Reg → L.Ω → List (Cm × ((k : Fin r) → CT k)) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} {x : Reg → L.Ω → Hidden (execClassAt st).cls}

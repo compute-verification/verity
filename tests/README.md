@@ -11,7 +11,7 @@ tree; a package's tests live in its own `tests/`. Its tests read the whole tree,
 | prose that stays true | `test_retired_terms.py`, `test_provider_names.py`, `test_glossary_lean_names.py` |
 | the Lean packages, their pins, and a verifier's cost | `test_lean_packages.py`, `test_pins.py`, `test_verifier_cost.py` |
 | how tests run | `test_no_wall_clock.py`, `test_no_environment_in_asserts.py`, `test_circuit_check_inputs.py`, `test_uv_pin.py`, `test_merge_drivers.py` |
-| indexes and conventions | `test_benchmarks_index.py`, `test_examples.py`, `test_cli_conventions.py`, `test_seed_ports.py` |
+| indexes and conventions | `test_benchmarks_index.py`, `test_cli_conventions.py`, `test_seed_ports.py` |
 
 A test's docstring states its rule. Where a rule has exceptions, they are named in the test, one reason each (an `ALLOWED`
 table in the wall-clock, environment, retired-term, seed and verifier-cost tests); the import order's are the listing

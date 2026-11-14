@@ -602,9 +602,12 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 IMPORT_ALL: dict[str, str] = {
     "security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
         "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
+    "verity/protocols/accounting/pouw/verifier/lean/check/PouwCheck/CreditOnce.lean: Spot.ChallengerSession":
+        "`pinnedChallengePhaseWith` restates `pinnedChallengePhase`, which reads the private `strOf`, and is held to it by "
+        "`rfl`; a copy of `strOf` is another constant, so the `rfl` fails",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
-IMPORT_ALL_USES = {"security/Proofs": 1}
+IMPORT_ALL_USES = {"security/Proofs": 1, "verity/protocols/accounting/pouw/verifier/lean/check": 1}
 
 
 def imports_all(files: dict[str, str], in_tree) -> list[str]:

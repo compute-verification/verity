@@ -65,7 +65,7 @@ theorem framed_runSteps {e : ExecHolo} (u : C3Run e) : Framed u (runSteps u) := 
   simp only [List.drop_succ_cons, List.drop_zero, List.drop_left]
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 local notation "ℐ" => holoInnerAt T CT st hp
 
