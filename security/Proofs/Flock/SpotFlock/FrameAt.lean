@@ -38,7 +38,7 @@ frame fixed before the run checks each opening at the port, and the row, the run
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 open Lean (Json)
 
 /-! ## The entries, read back -/

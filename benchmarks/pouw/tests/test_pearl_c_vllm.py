@@ -1,4 +1,4 @@
-"""The vLLM device path for Pearl-C on sm_120 (`verity_vllm.protocols.pouw.pearl_c`) against GPU 1's pipeline
+"""The vLLM device path for Pearl-C on sm_120 (`verity.protocols.accounting.pouw.prover.serving.pearl_c`) against GPU 1's pipeline
 (``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120``) on the CPU, with a recording stand-in for the device; and the pass verifier
 (``benchmarks/pouw/pearl_c_vllm/verify_run.py``) on an honest transcript that the scheme's reference prover builds."""
 from __future__ import annotations
@@ -27,9 +27,9 @@ import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
-from verity_vllm.protocols.pouw.pearl_c import host as PH
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PH
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 
@@ -66,7 +66,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.serving import SchemeId
 from verity.protocols.proofs.spot.device import challenger as Ch
-from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
 # the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
@@ -866,7 +866,7 @@ def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(
 def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
     """`screen.excluded_host`, which a device's retained call decides its record by from the bytes its rows' write lands
     (the flags and A's rows as BF16), excludes the rows `screen.excluded` does from the flags and A's FP32 words."""
-    S = importlib.import_module("verity_vllm.protocols.pouw.pearl_c.screen")
+    S = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
     rng = np.random.default_rng(31)
     words = bf16_words(rng, 64, 1024).view(np.uint32)
     words[::3, 1::8] = 0x47000000                             # 2^15 off the screen's stride: rows live_row rejects
@@ -1602,7 +1602,7 @@ def test_served_passes_counts_a_passs_linear_macs_and_verify_run_its_credited_ce
     `clear_work` credits (`UnitRecord.credited` over the scheme's tiles, at kept K), `credit_at_assumption`'s ``macs`` over
     the pass alone: a filler row and an excluded A row each take their cells out, and an excluded B row its block of 64
     columns' (the band rule)."""
-    from verity_vllm.protocols.pouw.pearl_c.window import macs
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import macs
 
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     man = json.loads(path.read_text())
@@ -2249,8 +2249,8 @@ def test_the_live_draw_reserves_a_withheld_draw_session_outside_any_period_and_o
     --withhold``), marks the record with the reserve before its open, and returns the session's ``pouw/draw`` coin 0
     after C with the record's sample.  It refuses before reserving while the lane's period is open, and before its open
     when the gate reserves it plain or into a period; `live_draw` is None with neither setting and refused with one."""
-    from verity_vllm.protocols.pouw.h1 import challenger as PHC
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64
@@ -2312,7 +2312,7 @@ def test_the_live_draw_after_the_runs_pearl_c_period_is_the_lanes_first_reserve_
     is lane vllm's first reserve after P's close, the one a compose takes (`pouw_h1_window.after_close`): it is refused
     before reserving while the ledger doesn't close P or the lane (``for``, else ``by``) reserved since, and before its
     coin is asked when another reserve of the lane reached the gate first; another lane's reserve doesn't count."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate, root, sid = "ssh -i KEY -o BatchMode=yes research@gate", b"\xc1" * 64, "s20261104T120000Z-dr01"
@@ -3043,7 +3043,7 @@ def test_live_coins_reserve_a_salt_only_session_whose_settings_the_install_takes
     in-process, untouched; one alone is refused, and a reserve while the lane's open period is H1's is refused before it
     is asked."""
     from verity_vllm.protocols import pouw
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     BA = load("pearl_c_vllm_bench_arm", POUW / "pearl_c_vllm" / "bench_arm.py")
     gate = "ssh -i KEY -o BatchMode=yes research@gate"
@@ -3924,7 +3924,7 @@ def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monk
 
 
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
-    from verity_vllm.protocols.pouw import pearl_c as PPD2
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD2
     PF = load("pearl_c_vllm_profile", POUW / "pearl_c_vllm" / "profile_decode.py")
     make, _, weights, *_ = device_run
     before = (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm, PPD2.PearlCDeviceRun.end)
@@ -4064,7 +4064,7 @@ def test_the_screen_launches_tritons_compiled_kernel_directly_only_where_triton_
     """After Triton's own launch at a specialization, `launch` calls its compiled kernel with the same arguments; another
     alignment compiles again, and a launch hook (Triton's chains hold none by default) or a CPU tensor takes Triton's path."""
     # the module itself: under the layout move its package re-exports a function named as the module
-    PS = importlib.import_module("verity_vllm.protocols.pouw.pearl_c.screen")
+    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
     enter, exit_ = types.SimpleNamespace(calls=[]), types.SimpleNamespace(calls=[])
     knobs = types.SimpleNamespace(runtime=types.SimpleNamespace(debug=False, add_stages_inspection_hook=None, launch_enter_hook=enter,
                                                                 launch_exit_hook=exit_),
@@ -4119,7 +4119,7 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     """A graph's last launch under Triton's CPU interpreter: the flags it writes at the slot's flag offset are `screen_into`'s
     for its first `rows` rows, its leaves and A root land at their offsets, and no other byte of the pass's buffers changes."""
     interpreted_triton(monkeypatch)
-    PS = importlib.import_module("verity_vllm.protocols.pouw.pearl_c.screen")
+    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4136,7 +4136,7 @@ def test_a_grouped_scatter_screens_each_flag_pair_at_its_row_of_the_map(monkeypa
     """A grouped call's scatter under Triton's CPU interpreter, with a row map: flag pair i is `screen_into`'s for row at[i]
     (of x, α and (s, ρ)), at the slot's flag offset, and the leaves and A root land as without one."""
     interpreted_triton(monkeypatch)
-    from verity_vllm.protocols.pouw.pearl_c import screen as PS
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import screen as PS
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4735,8 +4735,8 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
     tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
     nothing, and its side lane's end becomes the set's event."""
-    from verity_vllm.protocols.pouw.pearl_c import host as PPH
-    from verity_vllm.protocols.pouw.pearl_c import lanes as PPL
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as PPL
     make, *_ = sm90_run
     run = make()
     calls = []
@@ -4779,7 +4779,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
     waits for stats_a before E' (``form_ep_a``, under FORM_EP) and for the whole fork at its end, so the per-row keying's
     end moves one step (the fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on
     the lane; without the driver (no graphs) the steps are as they were."""
-    from verity_vllm.protocols.pouw.pearl_c import graphs as PPG
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import graphs as PPG
     make, kernel, *_ = sm90_run
     run = make()
     calls = []
@@ -4822,7 +4822,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
 
 
 def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_drivers_code():
-    from verity_vllm.protocols.pouw.pearl_c import host as PPH
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
     got = []
 
     def cu(rc=0):

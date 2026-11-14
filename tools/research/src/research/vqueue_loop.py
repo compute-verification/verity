@@ -261,7 +261,7 @@ WIDE = Path("/data/vqueue/live/wide")
 #: `vqueue_slim.HEAVY_PART` on `--heavy-on`'s machines alone (`Loop._heavy_on`); `*`, every candidate, none of them wide
 HEAVY = Path("/data/vqueue/live/heavy")
 #: the pinned PRs, one number a line (`#` comments and blank lines allowed): while a pinned Lean PR waits, a Lean batch holds
-#: pinned Lean PRs only, under no `LEAN` cap: a pin orders a Lean batch or cuts it, and at `--lean 0` only a pinned Lean PR
+#: pinned Lean PRs only, under no `LEAN` limit: a pin orders a Lean batch or cuts it, and at `--lean 0` only a pinned Lean PR
 #: opens one; it puts no batch ahead of a PR changing a Lean input, which goes first (`vqueue._next`)
 PINS = Path("/data/drive/pins")
 #: how far back the decision log is read
@@ -4159,7 +4159,7 @@ def main(argv: list[str]) -> int:
                                                            f"alone): one opens whenever none is staged and no PR "
                                                            f"changing a Lean input with no Lean change waits, of the first "
                                                            f"in rank, whether or not another PR waits; 0: only pinned ones "
-                                                           f"open one, which take no cap (--pins-file) (default {LEAN})")
+                                                           f"open one, which take no limit (--pins-file) (default {LEAN})")
     ap.add_argument("--wide-file", type=Path, default=WIDE,
                     help=f"the PRs whose Lean change is wide, one number a line, read each tick as --priority-file is: a "
                          f"candidate taking one takes no other member --lean counts, and one stacked on a candidate holding "
@@ -4167,7 +4167,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--pins-file", type=Path, default=PINS,
                     help=f"the pinned PRs, one number a line, `#` comments and blank lines allowed, read each tick as "
                          f"--priority-file is: while a pinned Lean change waits, a Lean candidate holds pinned Lean changes "
-                         f"only, under no --lean cap, so a pin orders a Lean candidate or cuts it, and with --lean 0 it is the "
+                         f"only, under no --lean limit, so a pin orders a Lean candidate or cuts it, and with --lean 0 it is the "
                          f"only way into one; it puts none ahead of a PR changing a Lean input, which goes first; none while "
                          f"the file is missing or empty (default {PINS})")
     ap.add_argument("--heavy-file", type=Path, default=HEAVY,

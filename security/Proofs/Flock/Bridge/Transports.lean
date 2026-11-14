@@ -70,7 +70,7 @@ namespace Flock.Bridge
 open Claims Claims.Sampling
 open FlockSoundness.Refine FlockSoundness.Binding
 open FlockSoundness.Discharge.Layout (BitVal RowShaped rowEncP)
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 /-- A row's bits as the deployed data carries them, one byte each. -/
 def bitMsg (b : List Bool) : Msg := b.map fun x => if x then 1 else 0

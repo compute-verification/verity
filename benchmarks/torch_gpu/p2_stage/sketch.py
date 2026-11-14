@@ -51,7 +51,7 @@ from verity.protocols.accounting.poub.verifier import receipts as R
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
-ROWS_DIR = HERE.parent / "sha512_rows"
+ROWS_DIR = HERE.parents[2] / "verity" / "commitments" / "cuda" / "sha512_rows"
 sys.path.insert(0, str(ROWS_DIR))
 import engine as SE  # noqa: E402
 

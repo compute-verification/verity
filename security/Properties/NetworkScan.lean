@@ -2,7 +2,7 @@ module
 
 public import Properties.NetworkScan.Assumptions
 public import NetworkCheck.Period
-public import Definitions.NetworkCertifier.SampledAudit
+public import Definitions.Certifier.SampledAudit
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

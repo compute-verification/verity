@@ -21,7 +21,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # proof system), and what they import: `verity.ml`'s circuits codec, commitments, crypto and randomness, and `verity.errors`) with the packages
 # above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean and what it
 # requires (PoUW's commitments, the proof system's Lean with the LMS verifier, core's identity and randomness, Flock's
-# verifier with its configuration). The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
+# verifier with its configuration), and Pearl+'s Lean with the evaluator it requires. The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
 # what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.circuits.kernels` `tc.py` they reach).
 inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "verity/protocols/proofs/spot/device/remote.py",
           "tools/difftest", "verity/__init__.py",
@@ -58,7 +58,8 @@ inputs = ["verity/protocols/proofs/spot/verifier/one_stage/link_points.py", "ver
           "verity/protocols/proofs/spot/verifier/lean/Spot",
           "verity/errors.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",
           "verity/protocols/interface", "verity/protocols/accounting/pouw/verifier/lean/window",
-          "verity/protocols/accounting/pouw/verifier/lean/commit", "verity/commitments/identity", "verity/commitments/randomness",
+          "verity/protocols/accounting/pouw/verifier/lean/commit", "verity/protocols/accounting/pouw/verifier/lean/pearlplus",
+          "verity/commitments/identity", "verity/commitments/randomness",
           "verity/commitments/lms/lean/lakefile.toml", "verity/commitments/lms/lean/lake-manifest.json",
           "verity/commitments/lms/lean/lean-toolchain", "verity/commitments/lms/lean/Lms.lean",
           "verity/commitments/lms/lean/Lms",

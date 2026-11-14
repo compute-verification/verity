@@ -23,7 +23,7 @@ from tests.protocols import pouw_h1_gpu as G
 from verity_vllm.engine import build as B
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 
 
 class _Built(Exception):

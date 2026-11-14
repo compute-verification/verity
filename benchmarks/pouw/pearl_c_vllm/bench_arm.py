@@ -82,7 +82,7 @@ class _LiveSession:
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
-        from verity_vllm.protocols.pouw.h1 import window as PHW
+        from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
         self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
@@ -90,7 +90,7 @@ class _LiveSession:
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
-        from verity_vllm.protocols.pouw.h1 import window as PHW
+        from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
         self.client, self.commitment, opening, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root, self.k)
@@ -112,7 +112,7 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
     answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
     in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
     given, the coins then in-process. ValueError when one is given without the other, or the reserve is refused."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     if (gate, peer) == (None, None):
         return pouw, None
@@ -147,7 +147,7 @@ class LiveDraw:
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
         from verity.protocols.accounting.pouw.verifier import window as Wd
         from verity.protocols.proofs.spot.device.challenger import CoinError
-        from verity_vllm.protocols.pouw.h1 import window as PHW
+        from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
         lines = self.gate.ledger()
         period = PHW.open_period(lines, self.lane)
@@ -248,7 +248,7 @@ class PearlCArm:
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
         scheme = self.scheme
         sites = vllm_site.discover(target.model)
@@ -426,7 +426,7 @@ class PearlCWholeArm(PearlCArm):
 
     def ready(self, target: Any) -> None:
         from verity_vllm.engine import handle
-        from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c.whole import WholeStep
 
         super().ready(target)
         self.whole = WholeStep(self.run, self.stack, handle.model_runner(target.engine.vllm), target.hooks)
