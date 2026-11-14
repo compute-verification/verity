@@ -425,7 +425,7 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
     assert sum(t.devices * t.chip_bytes for t in n.tiers.values()) == n.chip_bytes == 3_105_652_736
     fast = ledger.Node.stated(reported_read_bytes_per_s=2e13)
     assert fast.tiers == n.tiers and fast.spec_bytes_per_s == fast.read_bytes_per_s == 2e13
-    assert node().tiers == {} and "tiers" not in n.to_json()
+    assert node().tiers == {} and node().to_json()["tiers"] == {}
     with pytest.raises(TypeError):
         n.tiers["disk"] = n.tiers["dram"]
     with pytest.raises(ValueError, match="tiers"):
@@ -438,20 +438,40 @@ def test_the_stated_nodes_tiers_add_up_to_its_read_rates_and_on_chip_bytes() -> 
 
 
 def test_a_nodes_capacities_are_handed_in_as_the_ledger_publishes_them() -> None:
-    """`Node.of_json` reads back what `to_json` publishes, through JSON, with no tiers; the stated node's is `timing`'s.
-    Any other key set, a squaring ceiling that isn't a map and a value `Node` refuses are refused."""
+    """`Node.of_json` reads back what `to_json` publishes, through JSON, its tiers included; the stated node's is
+    `timing`'s.  Any other key set, of the node or of a tier, a squaring ceiling that isn't a map and a value `Node`
+    or `Tier` refuses are refused."""
     for n in (ledger.Node.stated(), ledger.Node.stated(disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10), node()):
-        assert ledger.Node.of_json(json.loads(json.dumps(n.to_json()))) == dataclasses.replace(n, tiers={})
+        assert ledger.Node.of_json(json.loads(json.dumps(n.to_json()))) == n
     j = ledger.Node.stated().to_json()
     assert (j["read_bytes_per_s"], j["chip_bytes"], j["sha512_per_s"]) == (
         timing.READ_BYTES_PER_S, timing.CHIP_BYTES, timing.SHA512_PER_S)
-    for bad in ({**j, "tiers": {}}, {k: v for k, v in j.items() if k != "chip_bytes"}, [j]):
+    assert j["tiers"]["hbm"] == {"devices": timing.GPUS, "spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
+                                 "read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "chip_bytes": timing.GPU_CHIP_BYTES}
+    for bad in ({**j, "extra": {}}, {k: v for k, v in j.items() if k != "chip_bytes"}, [j]):
         with pytest.raises(ValueError, match="exactly"):
             ledger.Node.of_json(bad)
+    for tiers in ([], {"hbm": [8]}, {"hbm": {**j["tiers"]["hbm"], "bytes": 1}}):
+        with pytest.raises(ValueError, match="each memory tier"):
+            ledger.Node.of_json({**j, "tiers": tiers})
     with pytest.raises(ValueError, match="squarings_per_s"):
         ledger.Node.of_json({**j, "squarings_per_s": [1.0]})
     with pytest.raises(ValueError, match="read_bytes_per_s"):
         ledger.Node.of_json({**j, "read_bytes_per_s": -1.0})
+    with pytest.raises(ValueError, match="devices"):
+        ledger.Node.of_json({**j, "tiers": {"hbm": {**j["tiers"]["hbm"], "devices": 0}}})
+
+
+def test_a_reported_read_only_raises_a_nodes_rates() -> None:
+    """`Node.raised` lifts R measured to a faster reported read and R at spec with it, and leaves a slower report,
+    the tiers and every other capacity as they were; `Node.stated` is `timing`'s node raised."""
+    n = dataclasses.replace(ledger.Node.stated(), spec_bytes_per_s=2e13, read_bytes_per_s=1e13)
+    assert n.raised(1.0) == n and n.raised(1e13) == n
+    assert n.raised(1.5e13) == dataclasses.replace(n, read_bytes_per_s=1.5e13)
+    assert n.raised(3e13) == dataclasses.replace(n, spec_bytes_per_s=3e13, read_bytes_per_s=3e13)
+    assert ledger.Node.stated(reported_read_bytes_per_s=2e13) == ledger.Node.stated().raised(2e13)
+    with pytest.raises(ValueError, match="a reported read"):
+        n.raised(-1.0)
 
 
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:

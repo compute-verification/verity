@@ -152,12 +152,12 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
         layout: list | None = None, host_bytes: int = 0, paces: list | None = None, then=None,
         transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
-        binding=None, groups_per_coin: int = 1, **kv):
+        binding=None, groups_per_coin: int = 1, node=None, **kv):
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
-    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding`
-    the verifier binds the registration to its pinned model."""
+    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, with `binding`
+    the verifier binds the registration to its pinned model, and with `node` its ledgers are on that node."""
     clock = PassClock()
     vconn, pconn = clock.conns()
     backend = TickingBackend(clock, store.blocks if store else blocks, random.Random(7),
@@ -176,7 +176,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
                           lifetime=lifetime, host_bytes=host_bytes, transcript=transcript,
-                          challenger=challenger, appends=appends, binding=binding, groups_per_coin=groups_per_coin)
+                          challenger=challenger, appends=appends, binding=binding, groups_per_coin=groups_per_coin,
+                          node=node)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -228,6 +229,29 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
     assert slow["ledger"]["measured"]["capacity_bytes_per_s"] == timing.READ_BYTES_PER_S
     assert slow["ledger"]["spec"]["capacity_bytes_per_s"] == timing.SPEC_BYTES_PER_S
     assert fast["ledger"]["measured"]["capacity_bytes_per_s"] == fast["ledger"]["spec"]["capacity_bytes_per_s"] == 1e20
+
+
+def test_a_node_handed_in_is_the_ledgers_and_a_report_still_only_raises_it(monkeypatch):
+    """A node handed in (`Verifier(node=...)`, `--node`) takes `ledger.Node.stated`'s place: `timing`'s node handed in
+    is the default's, a node of twice the rates doubles both capacities, and a slower reported read lowers neither.
+    The ledger publishes the node whole (`capacities`), which `ledger.Node.of_json` reads back.  A node handed in
+    beside disk or link ceilings, or without the HBM and DRAM tiers, is refused."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    (default,), _ = run("honest", read_bytes_per_s=1.0)
+    (same,), _ = run("honest", read_bytes_per_s=1.0, node=ledger.Node.stated())
+    assert same["ledger"]["inputs"]["capacities"] == default["ledger"]["inputs"]["capacities"] == (
+        ledger.Node.stated().to_json())
+    fast = dataclasses.replace(ledger.Node.stated(), spec_bytes_per_s=2 * timing.SPEC_BYTES_PER_S,
+                               read_bytes_per_s=2 * timing.READ_BYTES_PER_S)
+    (r,), _ = run("honest", read_bytes_per_s=1.0, node=fast)
+    assert r["ledger"]["measured"]["capacity_bytes_per_s"] == 2 * timing.READ_BYTES_PER_S
+    assert r["ledger"]["spec"]["capacity_bytes_per_s"] == 2 * timing.SPEC_BYTES_PER_S
+    assert ledger.Node.of_json(r["ledger"]["inputs"]["capacities"]) == fast
+    kw = {"source": bytes(32), "windows": 3, "window_ns": 20, "samples": 6, "delta": 2.0 ** -40, "jitter_ns": 10}
+    with pytest.raises(ValueError, match="its own disk and link"):
+        verifier.Verifier(None, **kw, node=ledger.Node.stated(), disk_bytes_per_s=4.4e9)
+    with pytest.raises(ValueError, match="states its tiers"):
+        verifier.Verifier(None, **kw, node=dataclasses.replace(ledger.Node.stated(), tiers={}))
 
 
 def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
