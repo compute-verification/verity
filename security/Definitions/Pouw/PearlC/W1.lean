@@ -84,7 +84,7 @@ The prices:
   (the H100 whitepaper's Table 1 and the H200 data sheet: INT8 TOPS equal to FP8 TFLOPS); only `W1Device.s8H100` has
   its fragments, and it is the H200's setting too.
 - `W1Prices.h100Tensor`: `h100` at the tensor-clock reading, FP32, a cast and INT32 times `61/66` (the card file's
-  1830 MHz tensor clock over its 1980 MHz SM clock).
+  1830 MHz tensor clock over its 1980 MHz SM clock); `W1Device.s8H100Tensor` is the INT8 setting at it.
 - `W1Prices.fp4Sm120`: `sm120Loop` in FP4 units (an FP8 unit is 2), the record `devFp4Sm120` uses.
 
 `sha512` (a compression) and `fetch` (a first-fetched word) are unmeasured on both devices, so the records take them as
@@ -318,6 +318,10 @@ def W1Device.s8H100At (pr : W1Prices) : W1Device := ⟨pr, hopperE4m3K32, hopper
 
 /-- The Hopper INT8 setting, at `W1Prices.h100`: S8 and E4M3 1, BF16 2 per MAC. -/
 def W1Device.s8H100 (sha fetch : ℚ) : W1Device := W1Device.s8H100At (W1Prices.h100 sha fetch)
+
+/-- The Hopper INT8 setting per second at the tensor clock, at `W1Prices.h100Tensor`: S8 and E4M3 1, BF16 2 per MAC, the
+SM pipes at `61/66` of `W1Prices.h100`'s. -/
+def W1Device.s8H100Tensor (sha fetch : ℚ) : W1Device := W1Device.s8H100At (W1Prices.h100Tensor sha fetch)
 
 /-! ## Memory -/
 
