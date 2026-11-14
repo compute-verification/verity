@@ -391,6 +391,10 @@ files = [
 words = { "Audit/Law.lean" = "Audit/SamplingDesign.lean", "\"Law.lean\"" = "\"SamplingDesign.lean\"" }
 
 [[words_in]]
+files = ["*.lean", "*lakefile.toml"]
+words = { "sampledLaw_subset" = "sampledDesign_subset", "flockLaw_second_strata" = "flockSamplingDesign_second_strata", "flockLaw_cells" = "flockSamplingDesign_cells", "flockLaw_second_ok" = "flockSamplingDesign_second_ok", "lawOn_second" = "samplingDesignOn_second", "getD_secondLaw_cells" = "getD_secondSamplingDesign_cells", "keys_secondLaw" = "keys_secondSamplingDesign", "getD_obj_law" = "getD_obj_samplingDesign", "lawOf_secondObj" = "samplingDesignOf_secondObj", "good_secondLaw" = "good_secondSamplingDesign", "canon_secondLaw" = "canon_secondSamplingDesign", "lawAt_designAt" = "samplingDesignAt_designAt", "SecondLaw" = "SecondSamplingDesign" }
+
+[[words_in]]
 files = ["benchmarks/one_stage/served_verdicts.sh"]
 words = { "step 3's law" = "step 3's sampling design" }
 

@@ -16,7 +16,7 @@ samples `|sample| · Σ_t k_t` proof blocks.
 
 * `secondProblem_counts`: `secondProblem` passing gives `1 ≤ k_t ≤ n_t` for each template.
 * `cellSizes`, `cellSizes_sum`: the cells' sizes in the strata's order, `|sample| · Σ_t n_t` in all.
-* `lawOn_second`: the parsed sampling design is `SamplingDesignOn` the cells, sampling `|sample| · Σ_t k_t`.
+* `samplingDesignOn_second`: the parsed sampling design is `SamplingDesignOn` the cells, sampling `|sample| · Σ_t k_t`.
 * `secondRead`, `firstRead_second`: the bytes the strata read first, `|sample| · Σ_t (2·k_t·width n_t + 64)`.
 * `drawUnits_second_error_le`: on a uniform stream that holds those bytes, the second stage's units are not sampled
   with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴` (`Flock.Bridge.units_error_le`).
@@ -98,10 +98,10 @@ theorem cellPairs_fst {q T : ℕ} {z : ℕ × ℕ} (hz : z ∈ cellPairs q T) : 
 /-- **`secondSamplingDesign` is a sampling design on its cells that samples `|sample| · Σ_t k_t` proof blocks**: where
 `secondProblem` passes, what `Draw.flockSamplingDesign` reads from it has the cells as its strata, in order and tiling the
 interior, each stratum's count the work rule's. -/
-theorem lawOn_second {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) {m : ℕ}
+theorem samplingDesignOn_second {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none) {m : ℕ}
     {parsed : Flock.Draw.SamplingDesign} (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     Flock.Bridge.SamplingDesignOn parsed (cellSizes sample.size ns) (sample.size * ks.toList.sum) := by
-  obtain ⟨ws, rfl, hws⟩ := flockLaw_second_strata sample ns ks m parsed h
+  obtain ⟨ws, rfl, hws⟩ := flockSamplingDesign_second_strata sample ns ks m parsed h
   have hmap : ws.toList.map (fun s => (s.units, s.k)) =
       (cellPairs sample.size ns.size).map (cellOf sample.size ns ks) := by
     rw [hws, List.map_map]
@@ -169,7 +169,7 @@ theorem firstRead_work (K n : ℕ) (ws : Array Flock.Draw.WorkStratum) :
 theorem firstRead_second {sample ns ks : Array ℕ} {m : ℕ} {parsed : Flock.Draw.SamplingDesign}
     (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     Flock.Bridge.firstRead parsed m = secondRead sample.size ns ks := by
-  obtain ⟨ws, rfl, hws⟩ := flockLaw_second_strata sample ns ks m parsed h
+  obtain ⟨ws, rfl, hws⟩ := flockSamplingDesign_second_strata sample ns ks m parsed h
   have hf : (((cellPairs sample.size ns.size).map (cellStratum sample ns ks)).map (·.toStratum)).map (·.need) =
       (cellPairs sample.size ns.size).map
         fun z : ℕ × ℕ => 2 * ks.getD z.1 0 * Flock.Draw.width (ns.getD z.1 0) + 64 := by
@@ -192,6 +192,6 @@ theorem drawUnits_second_error_le {sample ns ks : Array ℕ} (hp : Select.second
     prCoin (fun f : Fin len → Fin 256 => ¬ ∃ units read,
       Draw.sampleUnits parsed (sample.size * ns.toList.sum) (bytesOf f) = .ok (units, read)) ≤
       ((sample.size * ks.toList.sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ :=
-  Flock.Bridge.units_error_le (lawOn_second hp h) (cellSizes_sum _ _) len (by rw [firstRead_second h]; exact hlen)
+  Flock.Bridge.units_error_le (samplingDesignOn_second hp h) (cellSizes_sum _ _) len (by rw [firstRead_second h]; exact hlen)
 
 end Properties.Spot.SecurityProofs

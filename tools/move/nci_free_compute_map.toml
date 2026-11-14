@@ -1,0 +1,27 @@
+# Free compute in `benchmarks/nci`'s names: what `tools/move/rename.py --map tools/move/nci_free_compute_map.toml`
+# renames, the older name "residual" for free compute, r̂ and r (GLOSSARY.md, Older names: "residual compute",
+# "monitored residual" (r, r̂), now free compute).
+# - `tiers.py`'s `audited_residual` (r̂), `residual_share` (r), `evaluate`'s `residual_mfu` and its output key
+#   `memory_caps_residual`, and `fit.py`'s `residual_with_lag`, each with every reader and test, and the tests whose
+#   names spell the residual for free compute.
+# - `tiers.py`'s parameter and term `residual`, the quoted key everywhere the directory spells it (and `fit.params`'s
+#   keyword), is a hand edit in the same commit: the bare word is also the wipe residual R_wipe and the model's
+#   residual stream, which stay. So are its readers outside the directory: `benchmarks/slowdown/tests/test_envelopes.py`
+#   (its table of the envelopes' fields and `evaluate`'s terms) and `benchmarks/slowdown/slowdown/envelopes.py`'s
+#   docstring of its PoUW fields.
+# What stays: `exposure.py`'s `wipe_residual` and the wipe residual R_wipe (the memory the fill misses), `kappa.py`'s
+# `RESIDUAL` and its residual adds (the model's residual stream), and `bracket.py`'s residual width.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/nci/*.py", "benchmarks/nci/tests/*.py", "benchmarks/nci/README.md"]
+words = { "audited_residual" = "audited_free", "residual_share" = "free_share", "residual_mfu" = "free_mfu", "memory_caps_residual" = "memory_caps_free", "residual_with_lag" = "free_with_lag", "test_at_the_design_eta_is_the_residual" = "test_at_the_design_eta_is_the_free_compute", "test_the_residual_threshold_is_the_closed_form" = "test_the_free_compute_threshold_is_the_closed_form", "test_without_memory_mechanisms_the_residual_trains_at_full_efficiency" = "test_without_memory_mechanisms_free_compute_trains_at_full_efficiency", "test_the_residual_charges_pouws_deficit_on_the_certified_work" = "test_free_compute_charges_pouws_deficit_on_the_certified_work", "test_the_gpus_residual_leaves_pouws_deficit_to_eps_w" = "test_the_gpus_free_compute_leaves_pouws_deficit_to_eps_w", "test_memory_caps_the_residual_below_the_state_threshold" = "test_memory_caps_free_compute_below_the_state_threshold" }
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock"]
+
+[keep]
+patterns = []
+strings = []
