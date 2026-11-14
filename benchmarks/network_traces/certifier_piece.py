@@ -154,6 +154,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 sys.path[:0] = [str(HERE)]
+sys.path.append(str(TREE))  # for benchmarks.network_traces
 import served_session as SS  # noqa: E402
 
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
@@ -714,7 +715,7 @@ def period_exe(lean: str | None) -> str:
 
 
 def period_check(exe: str, case: dict, d: Path) -> dict:
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
     try:
         return SP.lean_check(exe, case, d, run=captured)
     except (SystemExit, OSError, ValueError) as e:
@@ -722,7 +723,7 @@ def period_check(exe: str, case: dict, d: Path) -> dict:
 
 
 def case_of(warden: Path, scan: Path, v3c: Path | None = None) -> dict:
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
     try:
         return SP.rows_case(warden, scan, v3c=v3c)
     except (SystemExit, OSError, KeyError, ValueError) as e:
@@ -773,7 +774,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
     chain step). `NotRun` when a step can't run."""
     import chain_record as CR
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
     reqs = window_requests(serve_dir, window)
@@ -839,7 +840,7 @@ def certificates(evidence: bytes) -> dict:
     records' certificates (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
     with the link, direction and window its registration names, which the certificate's message signs. Nothing else of
     the evidence is here: no registration's head, no answer and no audit."""
-    from scan_period import CERTIFICATE_KEYS
+    from benchmarks.network_traces.scan_period import CERTIFICATE_KEYS
     windows = json.loads(evidence)["windows"]
     rows = [{"link": r["link"], "direction": r["direction"], "window": r["window"], "key_id": r["certificate"]["key"],
              "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}

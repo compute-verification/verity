@@ -43,6 +43,7 @@ SLOW_COMMIT_S = 0.4
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_warden_serve",
                                                   ROOT / "benchmarks/network_traces/warden_serve.py")
     mod = importlib.util.module_from_spec(spec)
@@ -660,7 +661,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     tau = params.bucket_ms / 1000
     height = 5 if load_heads or params.lengths else 4
     if process:
-        import warden_serve  # by name, so that the spawned process finds its functions
+        from benchmarks.network_traces import warden_serve  # by name, so that the spawned process finds its functions
 
         ws.cs.load_key(key, height)
         publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads)

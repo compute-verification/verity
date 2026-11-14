@@ -31,9 +31,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-import certifier_serve as cs
-import warden_serve as WS
+from benchmarks.network_traces import certifier_serve as cs
+from benchmarks.network_traces import warden_serve as WS
 
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import service as SVC

@@ -40,6 +40,7 @@ PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifi
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_scan_zk", HERE / "scan_zk.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -47,7 +48,7 @@ def _load():
 
 
 sz = _load()
-import warden_serve as WS
+from benchmarks.network_traces import warden_serve as WS
 
 
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
@@ -742,7 +743,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     egress form, are refused by name. Slow
     (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
     can stand for."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
     run = published(tmp_path / "run", sz.TEST, windows=1)
