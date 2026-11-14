@@ -15,7 +15,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import a0  # noqa: E402
 
-#: a stand-in for flock-verify: ``archive-put`` as Lean's (each file under its SHA-512, logged to ``puts``); ``verify``
+#: a stand-in for verity-verify-proof: ``archive-put`` as Lean's (each file under its SHA-512, logged to ``puts``); ``verify``
 #: accepting when the circuit and public objects it is named hash to their keys, as `archiveGet` holds them, with
 #: `verify`'s lines on standard error; and ``verify-members``, that check for each line of standard input, a member's
 #: arguments, then its ``MEMBER`` line (`Flock.VerifyMembers`). A session's ``mode`` file makes the stand-in misbehave on it.
@@ -74,7 +74,7 @@ def member(root: Path, k: int, circuit: Path, archived: dict) -> tuple[dict, Pat
 
 
 def test_a_runs_circuit_is_archived_once_and_read_from_every_members_archive(tmp_path):
-    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean, puts = tmp_path / "verity-verify-proof", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
     circuit = tmp_path / "circuit.txt"
@@ -94,7 +94,7 @@ def test_a_runs_circuit_is_archived_once_and_read_from_every_members_archive(tmp
 def window(tmp_path: Path) -> tuple[Path, Path, list[tuple[dict, Path]], dict]:
     """Three members of one circuit, each with its own public file and the window's one program; the second and third
     read one registered file and the tables."""
-    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean, puts = tmp_path / "verity-verify-proof", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
     circuit, program, table = tmp_path / "circuit.txt", tmp_path / "program.json", tmp_path / "t.u32"

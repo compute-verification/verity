@@ -13,7 +13,6 @@ import random
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
@@ -194,7 +193,9 @@ def _ties_rows(N: int, TOPK: int, rows: int) -> tuple[list[np.ndarray], list[lis
         eq = [int(rng.random() < p) for _ in range(N)]
         gt = [0 if q else rng.getrandbits(1) for q in eq] if t % 2 else [rng.getrandbits(1) for _ in range(N)]
         r = (0, 1, TOPK)[t % 3] if t < 9 else rng.randrange(1 << RB)
-        eqs.append(eq), gts.append(gt), rs.append([r >> i & 1 for i in range(RB)])
+        eqs.append(eq)
+        gts.append(gt)
+        rs.append([r >> i & 1 for i in range(RB)])
         before = np.cumsum(eq) - np.asarray(eq)
         want.append([g ^ (q & int(c < r)) for g, q, c in zip(gt, eq, before)])
     return [np.array(x, dtype=np.uint8) for x in (eqs, gts, rs)], want
@@ -242,6 +243,7 @@ def _pass_rows(N: int, TOPK: int, rows: int) -> tuple[list[np.ndarray], np.ndarr
     at random."""
     rng = random.Random(N * 1000 + TOPK)
     RB = TOPK.bit_length()
+    args: list[list]
     args, want = [[], [], [], []], []
     for t in range(rows):
         p = (0.1, 0.5, 0.9, 1.0)[t % 4]
@@ -298,6 +300,8 @@ def test_the_selects_pieces_are_their_steps() -> None:
     and n past a block's start, on random operands and at their edges."""
     rng = random.Random(11)
     n = 64
+    a: np.ndarray | list[int]
+    got: list[int] | list[list[int]]
     for N in (1, 2, 7, 44, 256):
         a = _masks(N, n, N)
         assert _one(bind(BM.DsaRadixPassCount, N=N), a, width=N.bit_length()) == a.sum(axis=1).tolist()
@@ -439,7 +443,7 @@ def test_the_pick_as_calls_is_the_traced_pick(N: int, TOPK: int, block: int) -> 
                 args.append(_bits([v[("pick", K - 1)][f] | rng.getrandbits(past) << read if past else v[("pick", K - 1)][f]
                                    for v in twin], X.wide(read)))
         widths = [X.wide(X.DIGIT * (K + 1)), *[X.wide(RB)] * (M if K == X.ROUNDS - 1 else 1)]
-        ends = np.cumsum(widths)
+        ends: np.ndarray = np.cumsum(widths)
         for unit in (calls, traced):
             got = _flat(BS.evaluate_bits(unit, *args), len(rows))
             fields = [_words(got[:, e - w:e], w) for w, e in zip(widths, ends)]
@@ -565,6 +569,8 @@ def test_the_positions_pieces_are_its_steps() -> None:
     """The indices 0 .. 2^L - 1 from the two constant bits, an index's position in its run, a bit after a row, and a key's
     tag of its mask bit and the count before it."""
     rng = random.Random(3)
+    zero: np.ndarray
+    one: np.ndarray
     zero, one = np.zeros((1, 1), np.uint8), np.ones((1, 1), np.uint8)
     for L in (1, 2, 7):
         got = np.asarray(BS.evaluate_bits(bind(R.DsaIndexBits, L=L), zero, one)).reshape(1 << L, L)

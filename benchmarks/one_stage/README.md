@@ -138,7 +138,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   step's verdict line is in `out/verdicts.txt`. The network certifier's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
   timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate, less the load's counts,
-  tokens and span, which `publish` holds in the serve dir's private/out.
+  tokens and span, which `publish` holds in the serve dir's private/out. It holds there too what Pearl+'s documents say
+  of its exclusion tiles, their count and every replayed tile's id, which the retained values decide, and the exact
+  credit of a run held to its class's fixed load (`exact_work`): such a run publishes its work in the grid form, the
+  class's structural credit less the give-up padded up to H1's window grid (`verify_run.grid_work`). And the give-up
+  before the coin itself: the piece's give-up document (`development.json`'s and its line's `give_up`: the A and B rows
+  given up, the tiles over a cap before and left after, those replayed on the CPU) and the same counts in
+  `served_passes.py volunteer`'s and `retain`'s lines in the piece's log.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified sampling design, stand-in values
   staged by Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -306,7 +312,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's utilization (the work its step trace's
   steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall), term by term, and its
   credited share (the MACs Pearl+'s verdict, `served_passes.py verify`'s answer, credited at θ, over the same wall), at
-  the tensor and boost clock readings.
+  each reading of the tensor's clock the card states (`verity.device.readings`: the tensor clock's and the SM clock's).
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
   (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s
@@ -330,7 +336,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 
 Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
-inputs sent with the run; it builds `flock-circuit` and `flock-verify` once per pod, then runs the driver, whose
+inputs sent with the run; it builds `flock-circuit` and `verity-verify-proof` once per pod, then runs the driver, whose
 `--m0-pythonpath` names that tree. The drivers' checks go through the verifier
 (`one_stage.verifier`), which builds the sampled-proofs Lean in the run's tree on its first check, hence `--cwd clone`:
 

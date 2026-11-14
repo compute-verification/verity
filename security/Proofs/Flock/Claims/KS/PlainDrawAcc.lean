@@ -38,7 +38,7 @@ import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
-# flock-verify's acceptance at a sample value
+# verity-verify-proof's acceptance at a sample value
 
 `PlainDrawAccK`'s lemmas at `keep := id`, where `AcceptsAtDK id` is `AcceptsAtD` (`acceptsAtD_iff_acceptsAtDK_id`) and
 the record decodes through `Record.decode` (`decodeWithK_id_std`):
@@ -66,7 +66,7 @@ open Flock FlockLevel3 Refine Game Transcript Model Accounting
 open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **flock-verify's acceptance at `dr`, round by round** (`accepts_rep_roundsAny`). -/
+/-- **verity-verify-proof's acceptance at `dr`, round by round** (`accepts_rep_roundsAny`). -/
 theorem accepts_rep_roundsAnyD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (hr : I.tags.retainRounds = true) (h : AcceptsAtD I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -76,7 +76,7 @@ theorem accepts_rep_roundsAnyD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Tr
         RepRounds spec (Setup.ofCircuit sts[j]) sch sess j 1 t.proofs[2 * j + 1]! := by
   simpa only [decodeWithK_id_std] using accepts_rep_roundsAnyDK id hr ((acceptsAtD_iff_acceptsAtDK_id I dr t).1 h)
 
-/-- **flock-verify's acceptance at `dr` makes each table's salted verdict accept** (`accepts_verdict_hm96Any`). -/
+/-- **verity-verify-proof's acceptance at `dr` makes each table's salted verdict accept** (`accepts_verdict_hm96Any`). -/
 theorem accepts_verdict_hm96AnyD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (h : AcceptsAtD I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -142,7 +142,7 @@ theorem accepts_req0D {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
             R.depth = Model.pathLen (lvOf (schedOf sch) R.level) := by
   simpa only [decodeWithK_id_std] using accepts_req0DK id ((acceptsAtD_iff_acceptsAtDK_id I dr t).1 h)
 
-/-- **At flock-verify's acceptance at `dr`, each table's level-0 openings are its reps' deployed entries**
+/-- **At verity-verify-proof's acceptance at `dr`, each table's level-0 openings are its reps' deployed entries**
 (`accepts_opens₀L`). -/
 theorem accepts_opens₀LD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
@@ -194,7 +194,7 @@ open Flock Refine Exec Game Model Accounting Audit
 open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **flock-verify's acceptance at `dr` of a one-table session, rep by rep**: `accepts_reps` and `accepts_repsH`, with
+/-- **verity-verify-proof's acceptance at `dr` of a one-table session, rep by rep**: `accepts_reps` and `accepts_repsH`, with
 the one table's statement `st` `setupOne`'s at `dr` under either tag. -/
 theorem accepts_repsOneD {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true)
     (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (hc1 : I.count ≤ 1) (h : AcceptsAtD I dr t) :
@@ -232,7 +232,7 @@ open Flock FlockLevel3 Refine
 open FlockSoundness.Discharge.Exec (Inputs)
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.HiddenExec
 
-/-- **At a sample flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
+/-- **At a sample verity-verify-proof accepts at, the headline's table is `stmtOf` of the statement it accepted**:
 `tableAt_of_accepts` at `AcceptsAtD I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAt_of_acceptsD {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
@@ -245,7 +245,7 @@ theorem tableAt_of_acceptsD {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c 
       ∃ hwf : StmtWF st, (tableAt ht dj x₀ S).T.S = stmtOf st hwf (regionsOf st) := by
   exact tableAt_of_acceptsDK id ht hc ho hh hc1 dj x₀ ((acceptsAtD_iff_acceptsAtDK_id I _ t).1 h) hS hmPts
 
-/-- **At a sample flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
+/-- **At a sample verity-verify-proof accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
 accepted**: `tableAtH_of_acceptsI` at `AcceptsAtD I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAtH_of_acceptsD {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)

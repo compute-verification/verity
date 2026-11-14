@@ -27,6 +27,8 @@ CV = {"schema": "cb-a/aot-artifact/v1", "rules": [{"id": "TritonGemm[vllm-bi]", 
 APPLIC = {"numerics_profile": "b1-eager-v3", "attention_impl": ["vllm.v1.attention.backends.flash_attn.FlashAttentionImpl"], "vllm_flash_attn_version": ["2"],
           "fused_add_rms_norm_dispatch": "batch_invariant", "vllm_version": "0.28.1rc1.dev472+gd9105ea80", "torch_version": "2.13.0+cu129",
           "triton_version": "3.7.1", "tuned_gemm_arch_family": "ada"}
+#: the keys of the engine block a compiled profile declares, sorted
+ENGINE_BLOCK_KEYS = ["claim", "compilation", "enforce_eager", "program_derivation"]
 
 
 def _applied(p: TargetProfile, **over) -> dict:
@@ -238,18 +240,34 @@ def test_compiled_profile_declares_the_execution_and_keeps_eager_digests():
 
 
 def test_a_compiled_profile_declares_its_program_and_its_claim_in_these_words():
-    """The two texts of a compiled profile's engine block: the derivation from its parenthesis on, the claim whole.  A Build that writes
-    the block puts them in the artifact's identity, and components compose only where their blocks are equal, so a word of them changes
-    here too.  They name no module and cite nothing."""
+    """The two texts of a compiled profile's engine block: the claim whole, and the derivation but for one word, a term the Glossary
+    retires, which named here would be one more site of it.  A Build that writes the block puts them in the artifact's identity, and
+    components compose only where their blocks are equal, so a word of them changes here too.  They name no module and cite nothing."""
     me = TargetProfile(compilation="piecewise").modelled_engine()
-    assert me["program_derivation"].endswith(
-        " artifact (GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
-        "compilation facts + kernel_set digest")
+    assert sorted(me) == ENGINE_BLOCK_KEYS
+    head = "P_compiled: one registered relation per Inductor-generated kernel of the "
+    tail = (" artifact (GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
+            "compilation facts + kernel_set digest")
+    derivation = me["program_derivation"]
+    assert derivation.startswith(head) and derivation.endswith(tail) and derivation[len(head):-len(tail)].isalpha()
     assert me["claim"] == (
         "P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay (wrapper-level "
         "hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; the eager Program is NOT a "
         "model of this execution (P_compiled != P_eager: roundings elided, residual recomputed unrounded, other reduction orders; tokens "
         "diverge from eager). Attention = eager FA2 splitting op; lm_head eager")
+
+
+def test_the_other_compiled_profiles_declare_theirs_in_these_words():
+    """The same two texts of the other two compiled profiles, whole, and for the same reason: the profile that emulates the precision
+    casts declares a derivation of its own under the claim above, and the breakable profile declares both its own."""
+    emulating = TargetProfile(compilation="piecewise-emu").modelled_engine()
+    assert sorted(emulating) == ENGINE_BLOCK_KEYS
+    assert emulating["program_derivation"] == "eager module-forward trace (the emulation performs the eager roundings inside the fused kernels)"
+    assert emulating["claim"] == TargetProfile(compilation="piecewise").modelled_engine()["claim"]
+    breakable = TargetProfile(batch_invariant=False, compilation="breakable").modelled_engine()
+    assert sorted(breakable) == ENGINE_BLOCK_KEYS
+    assert breakable["program_derivation"] == "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens"
+    assert breakable["claim"] == "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"
 
 
 def test_breakable_profile_applies_vllms_breakable_graphs_at_its_capture_sizes():

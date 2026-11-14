@@ -2653,7 +2653,7 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     runs after lean-build stand for lean-suites (`_job`): the graph lacks no job `main` waits for, and the lean-suites tasks
     its base lists may go.  A candidate whose base's check isn't listed waits for it."""
     env.gates = ["pytest", "lean-build", "lean-suites"]
-    lean, exe = "verity/protocols/proofs/flock/verifier", {"name": "flock-verify", "path": "verity/protocols/proofs/flock/verifier/.lake/build/bin/v"}
+    lean, exe = "verity/protocols/proofs/flock/verifier", {"name": "verity-verify-proof", "path": "verity/protocols/proofs/flock/verifier/.lake/build/bin/v"}
     build, outs = f"lean-build:{lean}", [exe, {"name": "build", "path": f"{lean}/.lake/build.tar.gz"}]
     env.put(1, {"a.txt": "1\n"})
     loop = env.loop(policy)
@@ -2663,14 +2663,14 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     env.graph2.list_graph(f"ready:{main}", _graph(main, [
         a, {"id": build, "kind": "lean-build", "inputs": [f"{lean}/Main.lean"], "key": "sha512:b0", "outputs": [exe]},
         {"id": "lean-suites:verity-flock", "kind": "lean-suites", "inputs": ["f/test_f.py"],
-         "reads": [{"task": build, "output": "flock-verify"}]}]))
+         "reads": [{"task": build, "output": "verity-verify-proof"}]}]))
     env.graph2.list_graph(f"ready:{sha}", _graph(sha, [
         a, {"id": build, "kind": "lean-build", "inputs": [f"{lean}/Main.lean"], "key": "sha512:b1", "outputs": outs},
         {"id": "test-file:f/test_f.py", "kind": "test-file", "inputs": ["f/test_f.py"],
          "reads": [{"task": build, "output": o["name"]} for o in outs]}]))
     env.result("sha512:a", "pytest:a", PASS)
     env.graph2.finish_result({"key": "sha512:b1", "task": build, "status": PASS,
-                              "outputs": {"flock-verify": "sha512:v", "build": "sha512:t"}})
+                              "outputs": {"verity-verify-proof": "sha512:v", "build": "sha512:t"}})
     _, made, _ = w._settled(w.tasks.graph_v2(f"ready:{sha}")[1])
     env.result(made["test-file:f/test_f.py"], "test-file:f/test_f.py", PASS)
     j = w.verdict(sha, main)
@@ -4206,7 +4206,7 @@ class Runs:
         self.tmp, self.launches, self.state, self.dirs, self.cancelled = env.tmp / "runs", [], {}, [], []
         loop.world.on = on
         d = loop.world.slim_driver()
-        d.launch_postland, d.states = self.launch, lambda repo, ids: {i: self.state[i] for i in ids}
+        d.launch_after_landing, d.states = self.launch, lambda repo, ids: {i: self.state[i] for i in ids}
         d.evidence = lambda repo, ids: [x for x in self.dirs if x.name in ids]
         d.cancel = lambda repo, ids, reason: self.cancelled.extend(ids)
 

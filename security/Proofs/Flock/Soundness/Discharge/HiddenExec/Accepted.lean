@@ -20,7 +20,7 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
-# A sample flock-verify accepts under hidden outputs sets up
+# A sample verity-verify-proof accepts under hidden outputs sets up
 
 Integrate's `Accepted.lean` for `Stmt.setupHidden`. A `DrawSetupH` is more than setupHidden's acceptance: the sample proves
 the sampled proof blocks, `0 < c.g`, the proved units fit the blocks, `m` has a `fast100` schedule of at least two levels, and
@@ -86,7 +86,7 @@ theorem drawSetupH_of_setupHidden (ho : c.outNet = c.unitNet) {st : Flock.Stmt}
     ∃ x : DrawSetupH I mPts S d, x.st = st :=
   drawSetupH_of_setupHiddenI ht hc h hf hD hS hmPts
 
-/-- **A sample flock-verify accepts under hidden outputs sets up.** A one-table acceptance whose record's sample is `d`:
+/-- **A sample verity-verify-proof accepts under hidden outputs sets up.** A one-table acceptance whose record's sample is `d`:
 setupHidden accepted its inputs at `d` (`st`), the sample decodes (`D`), and whenever `D` proves `S` and `st`'s link points
 are `mPts`, a `DrawSetupH` at `d` has statement `st`. -/
 theorem drawSetupH_of_accepts (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) {t : Exec.Transcript}
@@ -101,7 +101,7 @@ theorem drawSetupH_of_accepts (hh : I.tags.hiddenOutputs = true) (hc1 : I.count 
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
   exact ⟨st, D, hst, hD, fun hS hm => drawSetupH_of_setupHiddenI ht hc hst hf hD hS hm⟩
 
-/-- **At a sample flock-verify accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
+/-- **At a sample verity-verify-proof accepts under hidden outputs, the headline's table is `stmtOf` of the statement it
 accepted**, wherever the outputs are returned (`TableAtHOfAccepts` without `c.outNet = c.unitNet`). -/
 theorem tableAtH_of_acceptsI (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {t : Exec.Transcript} (h : Accepts I t)

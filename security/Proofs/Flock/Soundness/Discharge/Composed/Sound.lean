@@ -23,10 +23,10 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 `zk_session_sound`: `zk_session_composed`'s soundness conjunct, at the same law and parameters, with the same proof.
 For any live prover `τ` of a public-output one-table `--zk` session,
-`Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key
+`Pr[verity-verify-proof --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key
 program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits (lp-zkbind's
 `sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with `δ_tree = 0`
-(`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to flock-verify's acceptance
+(`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to verity-verify-proof's acceptance
 by `zk_headline_exec_on`. `RunsZC` at the sampling design's samples is `ZkExec.runsZC_live`, from the tags (`TagsOk`), the challenger's
 live-coin part's record of the live session (`RecordsLiveZK`) and its sample at each of the sampling design's samples (`DrawOkZK`).
 
@@ -37,9 +37,9 @@ it), A3 (`hA3`), A6 and the challenger (`RecordsLiveZK`, and `DrawOkZK` at each 
 `tagsOk_circuit967b8d06`: the citation of its tag hypotheses. Under `--statement verity/flock-circuit@967b8d06` with
 one table (no `--session-tables`), `TagsOk I` and `I.tags.typed = false` hold by `decide`. Under the default
 `--statement` (`verity/flock-circuit`, hidden outputs) and the typed statements they fail, so the bound covers
-`flock-verify verify --statement verity/flock-circuit@967b8d06 --zk` sessions of one table.
+`verity-verify-proof verify --statement verity/flock-circuit@967b8d06 --zk` sessions of one table.
 
-flock-verify refuses every statement failing one of its hypotheses on the statement's form (`I.tags.typed = false`, the
+verity-verify-proof refuses every statement failing one of its hypotheses on the statement's form (`I.tags.typed = false`, the
 parse and load, `pub.tables = none`, `scopeOk`, retained rounds and `hm96-sha512/v1` leaves: `Flock.ProvedScope`), so
 `FailClosed.zk_session_sound` states this bound over what it accepts (`LiveVerifiesZK`) without them.
 -/

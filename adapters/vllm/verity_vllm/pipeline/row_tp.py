@@ -221,7 +221,7 @@ class TpRow(Row):
         """``--build-jobs`` N; unset or auto: as many of the `derives` derives as the memory holds at the largest of `shapes`
         (`row_records.build_jobs_auto`: the headroom, or ``--build-ram-budget-gb`` when smaller), marked ``build.jobs``."""
         j = self.cb.build_jobs or "auto"
-        n = int(j) if j.isdigit() and int(j) > 0 else R.build_jobs_auto(shapes, R.model_layers(self.ck), derives=derives,
+        n = int(j) if j.isdecimal() and int(j) > 0 else R.build_jobs_auto(shapes, R.model_layers(self.ck), derives=derives,
                                                                           budget_gb=self.cb.build_ram_budget_gb)
         self.tl("build.jobs", "mark", ("jobs", n), ("requested", j), ("derives", derives))
         return n
@@ -437,7 +437,7 @@ class TpRow(Row):
             shutil.rmtree(f"{M}/fold_match", ignore_errors=True)      # an earlier capture's folds and stages, which --match-reuse must never keep
             rc_cap = self.run_gpu("match.capture", to_m, f"{M}/capture.log", [*cap, "--record-collectives", "--out", f"{M}/capture"],
                                   lease_dir=f"{M}/lease/capture", kept=GL.MATCH_LEG_KEPT)
-            ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdigit() and ":" in s[11:]))
+            ranks = " ".join(_grep(f"{M}/capture.log", lambda s: s.startswith("[tp2] rank ") and s[11:].split(":", 1)[0].isdecimal() and ":" in s[11:]))
             self.log(f"match capture rc={rc_cap} {(ranks + ' ' if ranks else '')[:300]}")
             rc_ctl = self.run_gpu("match.control", to_m, f"{M}/control.log", [*cap, "--no-observer", "--out", f"{M}/control"],
                                   lease_dir=f"{M}/lease/control", kept=GL.MATCH_LEG_KEPT)

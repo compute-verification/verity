@@ -22,7 +22,7 @@ export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
 # shellcheck source=../../../../../../benchmarks/pouw/hidden_zk/job.sh
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 setup
-FIREWALL=${LEAN%/flock-verify}/flock-firewall
+FIREWALL=${LEAN%/verity-verify-proof}/flock-firewall
 [ -x "$FIREWALL" ] || { log "missing: $FIREWALL"; exit 1; }
 role=${CFG%%:*} k=${CFG#*:} tag=${CFG%%:*}-k${CFG#*:}
 [ "$role" != h1 ] || { log "the controls run on a hidden tile's config, not $CFG"; exit 1; }

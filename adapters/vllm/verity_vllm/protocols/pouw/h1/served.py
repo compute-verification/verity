@@ -1,6 +1,6 @@
 """H1's served tables, committed as registered values of compute accounting's window Program
 (`h1window.program`, one tile template per K) as the window serves them, so the Lean verifier opens every row a proof block reads
-(`flock-verify --zk --registered`, `h1window.table_reads_file`).
+(`verity-verify-proof --zk --registered`, `h1window.table_reads_file`).
 
 * **The Program** is declared before the window serves (`declared`): every step calls every linear ``(module, K, n)`` in
   order, call (s, w) reading A block ``s·B_K + i`` of its K (`layout`: ``i`` the place of ``blocks[w]``, each linear's
@@ -398,8 +398,9 @@ class Served:
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
               session: str | None = None, row_salts: bytes | NR.PublicSalts | None = None, later: bool = False,
               rows: Sequence | None = None, also: tuple[bytes, int] | None = None) -> G.Registered | NR.Later:
-        return NR.commit(_now(self.program_digest, "Program digest"), value, words, run._key, first, row_salts is not None,
-                         row_salts, later=later, rows=rows, also=also, window=window, session=session)
+        # the digest as the window holds it, None until `declare`: `registered.commit` names it in the tree's domain
+        return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
+                         later=later, rows=rows, also=also, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
@@ -757,11 +758,6 @@ class Served:
         return ([pre + f"b/{k}" for k in ks] + list(dict.fromkeys(self.a_table(c) for c in cs))
                 + [HW.table(self.program, "zy", c) for c in cs] + [self.pub_table(c) for c in cs]
                 + ([self.receipt_table(c) for c in cs] if self.receipts is not None else []))
-
-    def values(self) -> dict[str, int]:
-        """Each registered value's words a row."""
-        self.settle()
-        return {v: r.words for v, r in self.registered.items()}
 
     def roots(self) -> dict[str, str]:
         self.settle()

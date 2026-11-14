@@ -11,10 +11,10 @@ Every `--poll` seconds (default 60), from the budgets in memory (the last good r
   tally      each pod's costPerHr x the time since the last poll (RunPod bills a running pod whether or not anything uses it), added
              to the pod and to the line that covers it.  A line's tally starts when the guard first sees the line and lives in the
              state file, so a restart continues it.
-  cap        a line whose spend reaches its cap_usd trips: the pods under it then are terminated.  The trip holds until cap_usd is raised
+  limit      a line whose spend reaches its cap_usd trips: the pods under it then are terminated.  The trip holds until cap_usd is raised
              above the spend; pods that appear under a tripped line are counted, not terminated (`pods create` refuses them).
   per day    the same for cap_usd_per_day over the rolling 24 hours (spend kept in BUCKET_S buckets in the state); that trip clears by
-             itself once the window's spend falls back under the cap.
+             itself once the window's spend falls back under the limit.
   balance    the account's clientBalance (GraphQL; account-wide) at or under `[guard] balance_floor`: every pod in scope is terminated,
              each poll while it holds.
   max age    a pod under a line older than the line's max_pod_hours (RunPod's createdAt) is terminated: the bound for a pod whose lease
@@ -27,7 +27,7 @@ termination is one log line and an entry in the state's `terminated`.  `--dry-ru
 its own files.  After acting, the guard records, then reads budgets.toml again for the next poll (a notes clone: from its origin).
 
 Fail closed.  A fault on the guard's own machine never stops enforcement and never loosens a limit (a full disk on the control pod
-must not end the guard on its state write and leave every cap unenforced).
+must not end the guard on its state write and leave every limit unenforced).
   * Each poll decides and terminates from memory first, then records.  Every log, state and pid write is best effort: a failure is
     kept in memory (`faults`), printed to stderr when it starts and when it clears, and written into the state once a write succeeds.
   * A read that fails keeps the last value read: budgets.toml that cannot be fetched, parsed or validated keeps the last good budgets
@@ -245,8 +245,8 @@ def refresh(cfg: Config, state: dict[str, Any], current: B.Budgets | None, now: 
     old = {p: ln.view() for p, ln in (current.lines.items() if current else [])}
     for p, v in sorted(new.view()["lines"].items()):
         if p not in old:
-            caps = [f"{k} ${v[k]:g}" for k in B.CAP_KEYS if v.get(k) is not None]
-            log(f"LINE {p!r} added: {', '.join(caps)}, expires {v['expires']}, max_pod_hours {v['max_pod_hours']:g}" + (f", by {v['by']}" if v.get("by") else ""))
+            limits = [f"{k} ${v[k]:g}" for k in B.LIMIT_KEYS if v.get(k) is not None]
+            log(f"LINE {p!r} added: {', '.join(limits)}, expires {v['expires']}, max_pod_hours {v['max_pod_hours']:g}" + (f", by {v['by']}" if v.get("by") else ""))
         elif old[p] != v:
             log(f"LINE {p!r} changed: " + ", ".join(f"{k} {old[p][k]} -> {v[k]}" for k in v if old[p].get(k) != v[k]))
     for p in sorted(set(old) - set(new.lines)):
@@ -321,21 +321,21 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
         members = [p for p, ln in scope if ln is line]
         over = []
         if line.cap_usd is not None and t["spent"] >= line.cap_usd:
-            over.append(("cap", f"{prefix!r} CAP ${line.cap_usd:g} reached (spent ${t['spent']:.2f})"))
+            over.append(("cap", f"{prefix!r} LIMIT ${line.cap_usd:g} reached (spent ${t['spent']:.2f})"))
         if line.cap_usd_per_day is not None and t["window_usd"] >= line.cap_usd_per_day:
-            over.append(("per_day", f"{prefix!r} DAILY CAP ${line.cap_usd_per_day:g} reached (${t['window_usd']:.2f} in the last 24 h)"))
+            over.append(("per_day", f"{prefix!r} DAILY LIMIT ${line.cap_usd_per_day:g} reached (${t['window_usd']:.2f} in the last 24 h)"))
         if t.get("tripped") and not over:
-            notes.append(f"UNTRIPPED {prefix!r}: " + (f"${t['window_usd']:.2f} in the last 24 h is under the daily cap ${line.cap_usd_per_day:g}"
+            notes.append(f"UNTRIPPED {prefix!r}: " + (f"${t['window_usd']:.2f} in the last 24 h is under the daily limit ${line.cap_usd_per_day:g}"
                                                      if t["tripped"].get("kind") == "per_day" else
-                                                     f"cap ${line.cap_usd:g} is over the spend ${t['spent']:.2f}" if line.cap_usd is not None else
-                                                     "no cap applies any more"))
+                                                     f"limit ${line.cap_usd:g} is over the spend ${t['spent']:.2f}" if line.cap_usd is not None else
+                                                     "no limit applies any more"))
             t["tripped"] = None
         if not t.get("tripped") and over:
             kind, why = over[0]
             t["tripped"] = {"at": iso(now), "why": why, "kind": kind, "pods": sorted(p["id"] for p in members)}
             notes.append(f"TRIPPED: {why}")
         elif t.get("tripped") and over and t["tripped"].get("kind", "cap") not in [k for k, _ in over]:
-            t["tripped"].update(kind=over[0][0], why=over[0][1])          # still over, now on the other cap: the trip holds
+            t["tripped"].update(kind=over[0][0], why=over[0][1])          # still over, now on the other limit: the trip holds
             notes.append(f"STILL TRIPPED: {over[0][1]}")
         if t.get("tripped"):
             for p in members:
@@ -343,7 +343,7 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
                     kills.setdefault(p["id"], (p, t["tripped"]["why"]))
                 elif not state["pods"][p["id"]].get("over_cap_noted"):
                     state["pods"][p["id"]]["over_cap_noted"] = True
-                    notes.append(f"OVER-CAP {p['id']} {p.get('name')} appeared under the tripped line {prefix!r}: counted, not terminated")
+                    notes.append(f"OVER-LIMIT {p['id']} {p.get('name')} appeared under the tripped line {prefix!r}: counted, not terminated")
     for p, line in scope:
         e = state["pods"][p["id"]]
         if below:
@@ -551,9 +551,9 @@ def status(dry_run: bool = False, as_json: bool = False, clock: Callable[[], flo
     print("  " + ", ".join(g) + (f"; balance ${out['balance']:.2f}" if out["balance"] is not None else "") + f"; ${out['rate_now'] or 0:.2f}/h in scope")
     for pre, ln in sorted((b.get("lines") or {}).items()):
         t = out["lines"].get(pre) or {}
-        caps = ([f"${t.get('spent', 0.0):.2f} of ${ln['cap_usd']:g}"] if ln.get("cap_usd") is not None else [f"${t.get('spent', 0.0):.2f}"]) \
+        limits = ([f"${t.get('spent', 0.0):.2f} of ${ln['cap_usd']:g}"] if ln.get("cap_usd") is not None else [f"${t.get('spent', 0.0):.2f}"]) \
             + ([f"${t.get('window_usd', 0.0):.2f} in 24 h of ${ln['cap_usd_per_day']:g}/day"] if ln.get("cap_usd_per_day") is not None else [])
-        print(f"  {pre!r}: {', '.join(caps)}, expires {ln['expires']}, max_pod_hours {ln['max_pod_hours']:g}"
+        print(f"  {pre!r}: {', '.join(limits)}, expires {ln['expires']}, max_pod_hours {ln['max_pod_hours']:g}"
               + (f" -- TRIPPED {t['tripped']['at']} ({t['tripped'].get('kind', 'cap')})" if t.get("tripped") else "")
               + (f" (by {ln['by']})" if ln.get("by") else ""))
     for pid_, e in sorted(out["pods"].items(), key=lambda kv: kv[1].get("created") or 0):

@@ -34,7 +34,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | Ligerito | `Flock.Ligerito`, `Flock.ZkLigerito` |
 | Merkle caps and openings | `Flock.Merkle` |
 | the `fast100` schedule, `m = 22 … 35` | `Flock.Schedule` |
-| the wide-leaf schedule, beside `fast100`: level 0 held at `2^19` symbols for `m = 32 … 35`; no verifier reads it yet | `Flock.WideLeaf` (`fast100Wide`, `Zk.scheduleWide`) |
+| the wide-leaf schedule, beside `fast100`: level 0 held at `2^19` symbols for `m = 32 … 35`; a wide-leaf statement's tables read it, under `--zk` only | `Flock.WideLeaf` (`fast100Wide`, `fast100At`), `Tags.wideLeaf`, `Zk.schedule`, `ProvedScope.wideLeafWhy` |
 | statements: block matrices, regions, Σ, the statement digest, `Hello` | `Flock.Statement`, `Flock.Net` |
 | the circuit file, lookup slots, row leaves, the proved range | `Flock.Circuit`, `Flock.Lookup`, `Flock.RowLeaf`, `Flock.Comp` (`checkInRange`) |
 | frame-v3 roots of the public file | `Flock.HmRow` (`checkPublic`) |
@@ -91,7 +91,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 ## Running it
 
 ~~~text
-cd verity/protocols/proofs/flock/verifier && lake build    # .lake/build/bin/flock-verify and the other executables
+cd verity/protocols/proofs/flock/verifier && lake build    # .lake/build/bin/verity-verify-proof and the other executables
 verity verify proof verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] \
     [--zk] [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] \
     --session DIR...
@@ -100,7 +100,7 @@ verity verify proof statement [--statement ID] --circuit F --public pub.bin [--t
 verity verify proof rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
 ~~~
 
-`verity verify proof ARGS` runs `flock-verify ARGS`, the executable that `lake build` wrote, in the directory you are in.
+`verity verify proof ARGS` runs `verity-verify-proof ARGS`, the executable that `lake build` wrote, in the directory you are in.
 
 - `--archive DIR` reads every object (circuit, public file, partition, program, tables) by its SHA-512 from the
   verifier's own store, never from the prover's session directory; without it the flags are paths, for the development
@@ -175,7 +175,7 @@ write, before the answer carrying the session's fresh coin key leaves; a Hello i
 with two sessions or none, a session opened and not composed, a composed session the record didn't open, a staging after
 the first Hello, a second staging or one of other inputs, and a record that isn't closed (`RecCompose.checkRun`;
 `check_oneRun` proves acceptance gives `OneRun`, and `ComposeParts.composed_run` reads it at the compiled verifier's
-parts). The record is the auditor's: it is read from the challenger's host (`trusted-host`), never from the prover's
+parts). The record is the auditor's: it is read from the challenger's host (`trusted-device`), never from the prover's
 bundle. `verity_flock.rec_compose` is its Python mirror (`verity/protocols/proofs/flock/prover/tests/test_lean_rec_compose.py`). The pod's Lean step
 (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files and composes V*'s parts over the run's
 record: on loopback the pod is the challenger's host, and under `MODES=firewall` (one session per staged statement) its
@@ -222,9 +222,9 @@ session, whether the checks pass exactly when upstream accepted, and never an ac
 the deployed form, and `verify`'s verdicts:
 
 ~~~text
-research run --tool flock-agreement --campaign flock-verifier -- python ci.py --lean flock-verify \
+research run --tool flock-agreement --campaign flock-verifier -- python ci.py --lean verity-verify-proof \
     --upstream fd02e847=flock-circuit --upstream 9294e161=flock-netlist --work DIR --seed S --fuzz N
-python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --circuit F --public pub.bin \
+python agree.py --lean verity-verify-proof --upstream flock-circuit [--statement ID] --circuit F --public pub.bin \
     [--expect mutants.json]... [--jobs J] --out DIR --sessions DIR...
 ~~~
 

@@ -21,14 +21,14 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 # The soundness half of one `--zk` sampled session of `J` tables
 
 `zk_session_soundJ`: `zk_session_sound` at any number of tables. For any live prover `τ` of a public-output `--zk`
-session of `J ≥ 1` tables (`flock-verify verify --zk --session-tables J`, `J = nTab I`),
-`Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+session of `J ≥ 1` tables (`verity-verify-proof verify --zk --session-tables J`, `J = nTab I`),
+`Pr[verity-verify-proof --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
 partition, each read at its site in the table it is sampled into (`sitesZJ`, `tabZJ`) and bound to the rows it commits
 (`rsZJ`), at the simulated prover `simZJ … τ` in the compiled batched session of the `J` tables `planZJ`.
 
 The same bound shape and assumptions as `zk_session_sound`, with two changes that `J > 1` forces:
 
-* the sampling design is the live subset sample `Law.execOS src (.subset kd) n`, the one flock-verify takes at more than one table
+* the sampling design is the live subset sample `Law.execOS src (.subset kd) n`, the one verity-verify-proof takes at more than one table
   (`accepts_tables`; at one table it takes either), so `miss(K)` is the uniform `kd`-subset's, `C(n − K, kd) / C(n, kd)`
   at `K ≤ n` (`Law.subset_miss`), under A3 at its one byte source;
 * the tags, the record and the samples are `TagsOk`, `RecordsLiveZK` and `DrawOkZK` at `J` tables (`TagsOkZJ`,
