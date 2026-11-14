@@ -59,8 +59,8 @@ from typing import Any, cast
 import numpy as np
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import _RunState, _Stages
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.passes import call_index
+from verity_torch.pouw.pearl_c.ends import _RunState, _Stages
+from verity_torch.pouw.pearl_c.passes import call_index
 
 #: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
 #: A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree, PD_G tiles a CTA (the pipeline's

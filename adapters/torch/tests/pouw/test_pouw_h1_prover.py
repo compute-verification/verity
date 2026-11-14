@@ -21,7 +21,7 @@ torch = pytest.importorskip("torch")
 @pytest.fixture(autouse=True)
 def _torch_tensors(monkeypatch):
     """The writer reads the tensors here through the PyTorch adapter's `tensors.Tensors`, as a served window's does."""
-    from verity.protocols.accounting.pouw.prover.serving.tensors_device import TENSORS
+    from verity_torch.pouw.tensors_device import TENSORS
 
     monkeypatch.setattr(TS, "_tensors", lambda: TENSORS)
 

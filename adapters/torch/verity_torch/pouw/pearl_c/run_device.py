@@ -97,14 +97,14 @@ from verity.protocols.accounting.pouw.prover.serving.pearl_c import (
     refusals,
     scheme_of,
 )
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import PassEnds, _Pass
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs import (
+from verity_torch.pouw.pearl_c.ends import PassEnds, _Pass
+from verity_torch.pouw.pearl_c.graphs import (
     GRAPH_ROWS,
     SLOT_BYTES,
     GraphCalls,
     _Graph,
 )
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import (
+from verity_torch.pouw.pearl_c.host import (
     _bytes,
     _constant_keys,
     _constants,
@@ -123,15 +123,15 @@ from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import (
 )
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.kernel import Kernel
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import STEP_GROUPS, admitted, rotated, schedule_of, whole_options
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes_device import LaneCalls
+from verity_torch.pouw.pearl_c.lanes_device import LaneCalls
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.manifest import SaltCoins, SaltOpening, epoch_of
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.passes import (
+from verity_torch.pouw.pearl_c.passes import (
     EpochCalls,
     call_index,
     pass_dir,
     room,
 )
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.screen import (
+from verity_torch.pouw.pearl_c.screen import (
     excluded,
     screen,
     screen_into,

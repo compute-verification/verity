@@ -8,9 +8,9 @@ from contextlib import nullcontext
 from typing import Any, cast
 
 
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.ends import _RunState
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.graphs import SLOT_BYTES
-from verity.protocols.accounting.pouw.prover.serving.pearl_c.host import _Driver, _event, _Lane, _stream
+from verity_torch.pouw.pearl_c.ends import _RunState
+from verity_torch.pouw.pearl_c.graphs import SLOT_BYTES
+from verity_torch.pouw.pearl_c.host import _Driver, _event, _Lane, _stream
 from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import (
     STEP_GROUPS,
     TREE_APART_ROWS,

@@ -31,7 +31,7 @@ torch = pytest.importorskip("torch")
 
 import producer as PR  # noqa: E402
 
-from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC  # noqa: E402
+from verity_torch.pouw.h1 import receipts as RC  # noqa: E402
 
 SETTINGS = of(__file__)
 SERVED_H1 = Path(__file__).resolve().parents[1] / "served_h1"
