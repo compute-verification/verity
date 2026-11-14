@@ -309,6 +309,23 @@ def test_a_policys_k_by_kind_is_the_run_circuits_and_sums_to_its_k(kinded, tmp_p
         assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: the policy's k_by_kind ") and why in pub["reason"]
 
 
+@pytest.mark.parametrize("split", [
+    {"linears": "16384", "scan_state": 2_048},
+    {"linears": 16_384.0, "scan_state": 2_048},
+    {"linears": 16_384, "scan_state": True},
+    {"linears": [16_384], "scan_state": 2_048},
+    {**KINDED, "salt": 0},
+    [16_384, 2_048],
+])
+def test_a_policys_k_by_kind_holds_only_its_kinds_each_an_int(kinded, tmp_path, split):
+    """A split whose keys are not of `KINDS`, or a value that is not an integer (a string of digits, a float, a bool, a
+    list), or that is no object, is refused as undecided, saying so, before any sum."""
+    row = IO.session_row(kinded, None, None)
+    pub, _ = IO.verdict(_policy(row, k_by_kind=split), kinded, _serve(tmp_path / "s", FULL), None, None)
+    assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: the policy's k_by_kind ")
+    assert "is not an object of linears, scan_state, each an integer of bits" in pub["reason"]
+
+
 @pytest.mark.parametrize(("over", "why"), [
     ({"n": 5}, "the blocks' exact count is more than n = 5"),
     ({"c": "gates-1"}, "gates, more than c ="),

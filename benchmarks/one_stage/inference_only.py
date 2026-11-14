@@ -515,7 +515,11 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
         row = session_row(doc, pins, roots)
         if "k_by_kind" in pol:
             split = pol["k_by_kind"]
-            if not isinstance(split, Mapping) or sum(map(int, split.values())) != k:
+            if not (isinstance(split, Mapping) and set(split) <= set(KINDS)
+                    and all(type(bits) is int for bits in split.values())):
+                raise Undecided(f"the policy's k_by_kind {split!r} is not an object of {', '.join(KINDS)}, each an "
+                                "integer of bits")
+            if sum(split.values()) != k:
                 raise Undecided(f"the policy's k_by_kind {split} doesn't sum to its k = {k}")
             if dict(split) != row["k_by_kind"]:
                 raise Undecided(f"the policy's k_by_kind {dict(split)} is not the run's circuit's {row['k_by_kind']}")
