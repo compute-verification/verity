@@ -1065,7 +1065,7 @@ def tile_debit(fmt: Fmt, a: Formed, b: Formed, rows: Sequence[int], cols: Sequen
                f1: RowF1 | None = None, memo: RowTerms | None = None) -> Debit:
     """The inert work over the credited words at tile positions rows x cols of a tile's formed operands (A′ = a, B̃ = b, with
     this salt's E lines e_a and e_b), for a unit of m x k x n (m defaults to n).  `f1` evaluates a row's F1′; a verifier
-    may pass a faster evaluation that charges at least the rule's (`benchmarks/pouw/pearl_c4/f1_fast.py`).  `memo` holds
+    may pass a faster evaluation that charges at least the rule's (`verity/protocols/experimental/pearl_c4/prover/f1_fast.py`).  `memo` holds
     rows already evaluated on these operands with this `f1` (`row_terms`)."""
     m = n if m is None else m
     f1 = row_f1 if f1 is None else f1

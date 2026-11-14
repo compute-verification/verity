@@ -2,7 +2,7 @@
 twin (`twin.py`) and `verity.protocols.accounting.pouw.prover.schemes.pearl_c4`'s hashing.  dev.py's check compares each device buffer with these
 byte for byte.
 
-  uv run python benchmarks/pouw/pearl_c4/fixture.py OUT [--fmt nvfp4|mxfp4|both] [--shape MxNxK]
+  uv run python verity/protocols/experimental/pearl_c4/prover/kernels/fixture.py OUT [--fmt nvfp4|mxfp4|both] [--shape MxNxK]
 
 OUT/<fmt>/ gets one raw little-endian file per buffer (the layouts are pearl_c4.cu's header) and manifest.json: the shape,
 the kernels' parameters, and each file's size and sha256.  Inputs are derived: word t of row i of operand X is the BF16 value

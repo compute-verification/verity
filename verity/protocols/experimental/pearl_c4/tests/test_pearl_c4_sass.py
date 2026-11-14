@@ -1,4 +1,4 @@
-"""Pearl-C4's offline gate (`pearl_c4/sass.py`) by its command line, on a ptxas log and a SASS listing written here: the
+"""Pearl-C4's offline gate (`../../verity/protocols/experimental/pearl_c4/prover/kernels/sass.py`) by its command line, on a ptxas log and a SASS listing written here: the
 kernels the cubin must hold pass with the tensor-core and cast instructions each is meant to issue, and each defect the
 gate names (a warning, a spill, a stack frame, local memory, an FP32 instruction with .FTZ, the other format's OMMA, a
 count that is no whole number of copies, a missing kernel) is refused with its reason, exit 1 and the same JSON."""
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-GATE = Path(__file__).resolve().parents[1] / "pearl_c4" / "sass.py"
+GATE = Path(__file__).resolve().parents[1] / "prover" / "kernels" / "sass.py"
 
 OMMA = {"NV": "OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X", "MX": "OMMA.SF.16864.F32.E2M1.E2M1.E8"}
 HMMA, E2M1 = "HMMA.16816.F32.BF16", "F2FP.SATFINITE.E2M1"
