@@ -34,16 +34,18 @@ WORDED = dataclasses.replace(BOUNDED, request_words=True)
 R = WORDED.phase_releases
 #: each class's four tables, in the head's order
 NAMES = tuple(CT.names_of(WORDED, i) for i in range(len(WORDED.content)))
-#: the form-2 schedule's digest, and `registrations` of the content tables tests' traffic under it, as each was
-#: before the request words were a parameter
+#: the form-2 schedule's digest, as it was before the request words were a parameter, and `registrations` of the
+#: content tables tests' traffic under it, whose `FAIL` before any `DATA` cell is filed in no class: the filing
+#: rule is in no digest, so the schedule's digest is one whichever rule filed a run
 HELD_DIGEST = ("fe09d8179188559f4744e18efbcc9371ecdf7bbaae4e2cc1fbe26e4df92299a4"
                "a378a5a47d2b1de609f79f8c81b54362d5dbb2e19b488c143839714b5f972069")
-HELD_REGISTERED = ("57251fa45c593f1c7bfdd05bee62a08a9caef4d78dc969c29609baf7e7ae7549"
-                   "c09710f4ccfc6b5ba00bfd0caef9f801ffb6f4208058e31ed472ae945ca50b10")
+HELD_REGISTERED = ("65bbc0b02c29f9d80d3761afcd4dc19299d6bd356b75eaa5166ac8d2eb819a06"
+                   "3755382f840ebac9ad2140bb4033a9760b2d664df08f5da3f7fb6ab7dd6b6142")
 
 #: each released request's `max_tokens` and its prompt's count of ids, by its place in the release order: a prompt
-#: of one cell, of two and of three, a `max_tokens` of 0 and one at the schedule's most
-ASKED = ((8, 3), (1, 40), (8, 100), (0, 3), (5, 16), (7, 2))
+#: of one cell, of two and of three, a `max_tokens` of 1, the least a released request asks for, and one at the
+#: schedule's most
+ASKED = ((8, 3), (1, 40), (8, 100), (1, 3), (5, 16), (7, 2))
 #: what the server sends on each, and on each in a second run of the same requests
 SENT = ((11, 22, 33), (9,), tuple(range(8)), (), (5,), (1, 2))
 OTHER = ((1,), (), (3, 4), (), (), (6, 7, 8))
@@ -140,8 +142,9 @@ def test_request_words_are_a_parameter_of_a_form_2_schedule_with_content_rows_an
 
 def test_a_schedule_without_request_words_has_the_digest_the_tables_and_the_heads_it_had(tmp_path):
     """The request words are hashed only by a schedule that has them, so a form-2 schedule without them has the
-    parameters digest it had, lists three tables a class, and its run's registrations are the ones it left, byte
-    for byte. Its tables take any released request, as they did: nothing reads its words."""
+    parameters digest it had, lists three tables a class, and its run's registrations are the pinned ones, byte
+    for byte: three tables a class, each of the releases the rule files in it. Its tables take any released
+    request, as they did: nothing reads its words."""
     assert HELD.digest.hex() == HELD_DIGEST and all(len(CT.names_of(p, 0)) == 3 for p in (HELD, BOUNDED, CON))
     _, arrivals, answers = mixed()
     device, _, _ = run(answers, arrivals, params=HELD, windows=3, client=leaving(GONE))
@@ -333,11 +336,11 @@ def test_a_hand_whose_request_has_no_words_is_refused_and_a_words_table_is_commi
     """The tables of a schedule with request words are laid only from releases whose requests the rule reads: a
     hand with a request that is no canonical id request is refused, naming the release and its class, and none of
     it is laid, where the same hand under the schedule without request words is laid as it was. So is a hand with
-    a request whose `max_tokens` is past the schedule's `max_tokens_cap`, or with more ids than its request's
-    `max_tokens`, which the device never releases; at each of the two it is laid. A request of more prompt ids than
-    a class's P is longer than the class holds, so it is no row of the class: filed there it is refused by its
-    bytes, and at P ids it is laid with a count of P. The commitment takes a class's words table only at the
-    class's count, in rows of 8 bytes."""
+    a request whose `max_tokens` is 0 or past the schedule's `max_tokens_cap`, or with more ids than its request's
+    `max_tokens`, which the device never releases; from 1 to that limit, with at most that many ids, it is laid. A
+    request of more prompt ids than a class's P is longer than the class holds, so it is no row of the class: filed
+    there it is refused by its bytes, and at P ids it is laid with a count of P. The commitment takes a class's
+    words table only at the class's count, in rows of 8 bytes."""
     _, _, handed = ran
     with pytest.raises(ValueError, match="release 0, filed in class 0, has a request without words: cell 0 of the "
                                          "request's 1 is not that cell of a canonical id request"):
@@ -349,12 +352,13 @@ def test_a_hand_whose_request_has_no_words_is_refused_and_a_words_table_is_commi
         return ((Released(0, len(request), ids, False, request, bytes(4 * ids)),), *((),) * (len(handed[0]) - 1))
 
     most = WORDED.max_tokens_cap
-    for max_tokens, ids in ((most + 1, 2), (2, 3), (0, 1)):
+    for max_tokens, ids in ((most + 1, 2), (2, 3), (0, 1), (0, 0)):
         with pytest.raises(ValueError, match=f"release 0, filed in class 0, has a max_tokens of {max_tokens} and {ids} "
-                                             f"ids where the schedule's max_tokens_cap is {most}: the network "):
+                                             f"ids where the schedule's max_tokens_cap is {most}: the network "
+                                             "certifier releases no request whose max_tokens is 0 or past it"):
             CR.tables(WORDED, hand(max_tokens, ids))
         assert len(CR.tables(BOUNDED, hand(max_tokens, ids))["request.0"]) == 1
-    for max_tokens, ids in ((most, 4), (2, 2), (0, 0)):
+    for max_tokens, ids in ((most, 4), (2, 2), (1, 0), (1, 1)):
         assert [CT.words_of(row) for row in CR.tables(WORDED, hand(max_tokens, ids))["words.0"]] == [(max_tokens, 3)]
     for i, (P, _) in enumerate(WORDED.content):
         at, past = id_req(0, P), id_req(0, P + 1)
