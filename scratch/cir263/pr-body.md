@@ -41,7 +41,14 @@ Node A, card 0, cores 0-9, Fri 13 Nov 15:45Z to 15:52Z, one lease each with `glm
 
 ## circuit-check
 
-<the report of r..., at this head>
+`r20261113-210950-1125` at `08d6acdced2231eafdf6b10bf0245d6e0d2a8ef0`, in its own clone [run]:
+
+- The update pass on both sidecars and the two slices: 14 targets, 0 failures, exit 0; the pins' diff after it is empty and the tree clean [run].
+- The report on both sidecars, `DsaRMSNormApply_v1{G=64}` (the apply the norm's cut uses, `dsa_norm`'s binding), the two slices and the two whole rows: 17 targets, 4 failures, 6 `vectors/none` warnings; 11 targets compared with a realization on random vectors [run].
+  - Every Definition added here passes: `MtpEhNorm_v2` at H 256 and 6144, `MtpEhZero_v2` at H 16, 256 and 6144, `TritonBlockRMSNormSumSq_v2` and `TritonBlockRMSNormMeanRsqrt_v1` at N 256 and 6144 [run].
+  - The word Definitions with no realization at their bound size (`MtpEhNorm_v1`, `MtpEhZero_v1` and `TritonBlockRMSNormSumSq_v1` at 6144, and `DsaRMSNormApply_v1{G=64}`) carry `vectors/none` and no failure; their Boolean versions above are compared at the same size [run].
+  - `Gemm_v2{K=12288, N=1, …}` and `CublasSplitKGemm_v1{K=12288, N=1, SPLIT_K=2, …}`: ok, 0 failures, each one unit of 16 bits out [run].
+  - The four failures are the two whole rows': `block/past-range` on both (2^38 bits; Flock's proved range is 2^27), and on the split-K row also `partition/unpartitioned` and `correspondence/unprobed-table` (75,497,472 leaves of W) [run]. `Gemm_v2`'s whole row matched its reference on correspondence (1,312 s) [run]. `circuit-check --all` checks neither whole row, since a family's members over 150,000 gates are left out unless pinned (`select` in `tools/verity/circuit_check/src/circuit_check/targets.py`) [read]. The served indexer's whole-row bindings in `cublas_bf16.circuit-check.py` are in the same position [read; that they too are past range is my arithmetic, inferred].
 
 ## Checks at this head
 
