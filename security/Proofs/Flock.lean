@@ -137,6 +137,8 @@ public import Proofs.Flock.SpotFlock.WiringOk
 public import Proofs.Flock.SpotFlock.RevealsWired
 public import Proofs.Flock.SpotFlock.WiredKS
 public import Proofs.Flock.SpotFlock.WiredRegX
+public import Proofs.Flock.SpotFlock.WiredClass
+public import Proofs.Flock.SpotFlock.ConnectedClassAt
 public import Proofs.Flock.SpotFlock.UnitRows
 public import Proofs.Flock.SpotFlock.UnitEmbeds
 public import Proofs.Flock.SpotFlock.Placement
