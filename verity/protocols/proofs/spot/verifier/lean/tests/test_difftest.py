@@ -64,9 +64,18 @@ from verity.protocols.accounting.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.profile import Bernoulli, Stratified, Stratum, work_k
 from verity.protocols.proofs.spot.device import challenger as CH
 from verity.protocols.proofs.spot.verifier import schedule as SCH, second_stage as SS, service
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                  link_points as LP, partition as P, produced as PD, proofs as PF,
-                                                  registered as G, registration as R)
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as DR,
+    hello as H,
+    hidden_draw as HD,
+    link_points as LP,
+    partition as P,
+    produced as PD,
+    proofs as PF,
+    registered as G,
+    docket as R,
+)
 from verity.protocols.proofs.spot.device.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.protocols.proofs.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
                                               coins_within, draw_coins, draw_first, law_problem)

@@ -47,7 +47,7 @@ from verity.protocols.accounting.pouw.verifier.audit import (
     weight_binding,
 )
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
 
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY

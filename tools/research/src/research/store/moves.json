@@ -2685,6 +2685,11 @@
       "paths": {
         "benchmarks/pouw/tests/fixtures/sass_gate/": "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/registration.py": "verity/protocols/proofs/spot/verifier/one_stage/docket.py"
+      }
     }
   ]
 }
