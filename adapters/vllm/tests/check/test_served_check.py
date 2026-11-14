@@ -338,7 +338,7 @@ def test_a_seed_samples_the_rows(served):
             return a
         return _with(steps, 2, DOWN, f)
     assert (2, DOWN) in _failed(SC.check(build, flip(sampled[3]), W.__getitem__, rows=8, prompts=prompts, seed=5))
-    assert (2, DOWN) not in _failed(SC.check(build, flip(undrawn), W.__getitem__, rows=8, prompts=prompts, seed=5))
+    assert (2, DOWN) not in _failed(SC.check(build, flip(unsampled), W.__getitem__, rows=8, prompts=prompts, seed=5))
 
 
 def test_steps_are_checked_in_order(served):

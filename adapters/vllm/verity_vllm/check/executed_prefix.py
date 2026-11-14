@@ -187,7 +187,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
     tokens_json, global_match = res["tokens_json"], res["global_match"]
     g6_lag = global_match["lag"] if global_match else {}
     _lags = [declared_lag, tokens_json["lag"] if tokens_json else None, g6_lag.get("declared"), g6_lag.get("record_attests")]
-    res["lag_attested"] = (declared_lag is not None and tok is not None and gm is not None and all(v is not None and int(v) == int(declared_lag) for v in _legs)
+    res["lag_attested"] = (declared_lag is not None and tok is not None and gm is not None and all(v is not None and int(v) == int(declared_lag) for v in _lags)
                            and not g6_lag.get("variable_lag"))
     res["problems"] = problems
     res["ok"] = not problems
