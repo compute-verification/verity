@@ -220,7 +220,7 @@ TABLES = ((Cr.commit_rows(0, K), f"pouw/h1/a/{K}@0", PW.chunks(K) * M), (Cr.comm
 LEDGER = "1e" * 64
 
 
-def h1_registration(previous: str | None = None, entry: int = 0) -> dict:
+def h1_docket(previous: str | None = None, entry: int = 0) -> dict:
     """H1's window docket W at the window's close (`pouw_h1_commit.registration`): a v2 record of the toy's
     tables under the H1 window Program, chained after ``previous``."""
     entries = []
@@ -272,7 +272,7 @@ def tied_serve(root: Path, commits: list | None = None) -> tuple[Path, dict, dic
     record R (``v3c-w0-…/audit``), H1's log of W then R (``h1/``), and PoUW's period case as `served_pouw.sh` has
     `pouw_piece.py period` write it (``private/pouw/period``), its windows' ``commit`` each of ``commits`` (default: one
     window naming R, its canonical JSON in hex as credit reads it). The dir, v1's case and W."""
-    w = h1_registration()
+    w = h1_docket()
     v1 = tied_v1_case(w)
     audit_dir(root / "v3c-w0-4-32-4", v1)
     h1_log(root / "h1", [(0, "registration", w), (0, "record", json.loads(bytes.fromhex(v1["commitment"])))])
@@ -768,7 +768,7 @@ def test_a_period_on_another_record_is_refused_before_any_composite(tmp_path, ca
     (the record H1 named before the tie), one window of two on W, none, or a v1 record, is refused here and so is handed to
     neither product; so is a period case with no windows, no answer, another protocol's answer or another key. v1's and
     the policy's cases are still written."""
-    w = h1_registration()
+    w = h1_docket()
     on_r, on_w = tied_v1_case(w)["commitment"], codec.canonical_json(w).hex()
     commits = {"h1-registration": [on_w], "second-window": [on_r, on_w], "no-commit": [None], "no-windows": [],
                "v1-record": [codec.canonical_json({**w, "format": R.FORMAT}).hex()]}.get(change)
@@ -865,11 +865,11 @@ def test_period_names_the_period_case_to_check_against_the_audits_record(tmp_pat
 def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_path):
     """Over a serve of several windows, each window's W then R, the log before a window's R is every record through its
     own W, which chains from the deployment's first record (null previous) to R; later windows' records aren't in it."""
-    w0 = h1_registration()
+    w0 = h1_docket()
     r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
-    w1 = h1_registration(R.digest(r0), entry=1)
+    w1 = h1_docket(R.digest(r0), entry=1)
     r1 = {"format": R.FORMAT_V2, "previous": R.digest(w1), "program": "11" * 64}
-    w2 = h1_registration(R.digest(r1), entry=2)
+    w2 = h1_docket(R.digest(r1), entry=2)
     h1_log(tmp_path, [(0, "registration", w0), (0, "record", r0), (1, "registration", w1), (1, "record", r1),
                       (2, "registration", w2)])
     assert SC.h1_log(tmp_path / "log.jsonl", r1) == [w0, r0, w1]
@@ -896,7 +896,7 @@ def test_the_policy_case_is_refused_when_the_serves_h1_log_does_not_reach_its_re
     elif change == "no-file":
         (h1 / "log.jsonl").write_text(json.dumps({"digest": R.digest(w), "kind": "registration", "window": 0}) + "\n")
     elif change == "unchained":
-        h1_log(h1, [(0, "registration", h1_registration(entry=5))])
+        h1_log(h1, [(0, "registration", h1_docket(entry=5))])
     elif change == "not-json":
         (h1 / "log.jsonl").write_text("{\n")
     else:
@@ -918,7 +918,7 @@ def test_v1s_parameters_name_the_windows_tables_and_are_its_programs(change, rea
     """The policy case's parameters are the ones the rebuilt population program over v1's templates and v1's tables has:
     tables of other leaves, another template parameter's type or a table that isn't an array of values is refused, and
     so is a window Program that takes tables when v1's params name none (a5's params before the v2 params)."""
-    w = h1_registration()
+    w = h1_docket()
     v1 = tied_v1_case(w)
     ps = v1["params"]["parameters"]
     at = {n: i for i, (n, _) in enumerate(ps)}
@@ -940,7 +940,7 @@ def test_the_lean_check_accepts_the_policy_case_on_the_tied_record(tmp_path, inf
     R as chained right after it, names R's digest, and accepts at no budget with the same profile as the toy's untied
     record, so the window's tables, parameters no node reads, add no gate and no fresh-input bit. Without W in the log
     R's chain breaks, and it rejects."""
-    w = h1_registration()
+    w = h1_docket()
     v1 = tied_v1_case(w)
     case = SC.inference_only_case(v1, *SC.UNBOUNDED, [w])
     got, _ = SC.lean_answer(inference_only_exe, case, tmp_path / "s")
