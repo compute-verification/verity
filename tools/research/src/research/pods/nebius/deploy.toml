@@ -987,12 +987,14 @@ nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
-# The collector on vy-nebius-2 alone also deletes the runs custody did not preserve, once their record has expired
-# (`--unpreserved-runs`): no other node passes the flag.
+# The collector on vy-nebius-2 and vy-nebius-cpu-1 to cpu-15 also deletes the runs custody did not preserve, once their record
+# has expired (`--unpreserved-runs`): no other node passes the flag. A pass takes them only while /workspace is over 80%.
 [[file]]
 path = "/etc/systemd/system/vy-retention-gc.service.d/20-unpreserved-runs.conf"
 src = "tools/research/src/research/pods/nebius/sky/retention_gc_unpreserved.conf"
-nodes = ["vy-nebius-2"]
+nodes = ["vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5",
+         "vy-nebius-cpu-6", "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11",
+         "vy-nebius-cpu-12", "vy-nebius-cpu-13", "vy-nebius-cpu-14", "vy-nebius-cpu-15"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
