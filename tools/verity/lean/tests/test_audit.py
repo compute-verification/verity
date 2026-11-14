@@ -6635,7 +6635,7 @@ def test_a_spec_whose_prover_s_sample_differs_fails_once_it_ends_and_stores_no_f
 def test_a_package_whose_path_dependency_s_sample_differs_fails_once_it_ends_and_stores_no_facts(
         tmp_path, monkeypatch, matches):
     """A package's build reads the modules of each package it requires by path, which that package's audit restored and
-    sampled; its own sample draws only a share of them, so a module that failed the dependency's sample may pass its own.
+    sampled; its own sample takes only a share of them, so a module that failed the dependency's sample may pass its own.
     Its verdict waits for each such dependency's sample (`sample_matched`) and fails if it differed or ended without
     saying (`requires.sampled`), and its facts are then not stored. A dependency outside the run (None) has none."""
     pkg, dep = tmp_path / "pkg", tmp_path / "dep"
