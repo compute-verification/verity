@@ -1,4 +1,4 @@
-"""Pearl-C's debit, replayed by the verifier on a sampled tile: `Pouw.PearlC.Skip` and `Game.lean`'s `debitOf`.
+"""Pearl-C's count of inert work, replayed by the verifier on a sampled tile: `Pouw.PearlC.Skip` and `Game.lean`'s `debitOf`.
 
 * `word_flags(a, b)` is `Skip.wordFlags` over a word's k/32 atoms (a, b: the word's A′ row and B̃ row as E4M3 codes).
   - The chain runs in groups of four atoms (`Params.pi.G`), each from +0, and each group's word is promoted into an FP32
@@ -14,11 +14,11 @@
   program may skip it. The first promotion of every word adds into T_0 = +0; rev1 takes it out of the credit instead
   (`pearl_c.PearlC.first_adds`).
 * `chain_debit(a_rows, b_rows)`: the flagged atoms and the later +0 promotions, each summed over the tile's words (the
-  chain debit is additive over words).
+  chain's inert work is additive over words).
 * `salt_dead(alpha, x, beta)`: P3's salt-dead predicate (`SaltDead.saltDead`) on each element of a formed A row: its
   A′ code has one value at every noise pair of the support, which by `saltDeadP_iff_ends` is the support's two ends
   agreeing, E′ the row's flat code c_β = e4m3(f32(β·44)) at all 32 positions and F e4m3(±11/4) at all 32, from the
-  forming's accumulator f32(α·x) (`circuit.words.ends_agree`, the hidden cap's bit).
+  forming's accumulator f32(α·x) (`circuit.words.ends_agree`, the hidden inert-work bound's bit).
 * `forming_elements(flags, dead)`: P3's per-tile rule (`tileDebitDev`'s `elems`): the A′ elements (i, l), l < k, of the
   tile's rows that are salt-dead or whose atom block l/32 every word of the row over the tile's columns flags.  Each
   counts fs·|cols|/n of inert work, the tile's share of an element its row band shares (`clear_work.tile_cap`).
@@ -30,14 +30,14 @@
   - `chain_cuts(a, b)`: those flags along a word's chain, from +0 at the first atom of each promotion group.
   - `word_mend(ends_a, ends_b)`: the elements l that are a dead pair (salt-dead in both the A row and the B row) or a
     forced zero (cut at both ends of the support), the one count.
-* `tile_debit(a_rows, b_rows, formed, formed_b)`: the chain debit, `forming_elements` and the words' `word_mend`, each
+* `tile_debit(a_rows, b_rows, formed, formed_b)`: the chain's inert work, `forming_elements` and the words' `word_mend`, each
   word's flags replayed once; ``formed_b`` is each B row's forming, as ``formed`` is each A row's.
 * `debit_units(atoms, elements, prices, device, zeros=…, mends=…)` is rev1's `tileDebitRev1` at a device's W1 prices
   (`pearl_c.Prices`, the device's own by default): `debitDev` (`debitOf` at `Params.pi`, `Costs.adopted` on the H100),
-  per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on the H100, 34 on sm_120) and fs per debited
+  per flagged atom-word its 32 MACs and a quarter of a promotion add (40 on the H100, 34 on sm_120) and fs per inert
   element (64 and 40; a tile's elements count |cols|/n each), an add per later +0 promotion (32 and 8), and one MAC
   per mend.
-* The cap ρ is the device record's (`Device.cap`; `CAP` is the H100's 1/400, sm_120's is 1/1,000): a tile whose debit
+* The inert-work bound ρ is the device record's (`Device.cap`; `CAP` is the H100's 1/400, sm_120's is 1/1,000): a tile whose inert work
   exceeds ρ times its credited cells' credit, their share of the unit's `creditDevRev1` (`clear_work.tile_cap`), is
   rejected (`pearlCTilesDevRev1`'s `capOK`, per tile: `Tile.lean`'s `tileShare`).
 
@@ -47,7 +47,7 @@ the H100's.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from fractions import Fraction
 
 from verity.circuits.silicon import fp32
@@ -61,7 +61,6 @@ G = H100.g                             # atoms per promotion group (`Params.pi.G
 ATOM = H100.atom.k
 CAP = H100.cap
 ATOM_UNITS = ATOM + Fraction(H100.prices.fadd, G)  # `debitOf`: 32 MACs and 1/G of a promotion add per flagged atom-word
-ELEMENT_UNITS = H100.prices.forming_credited       # `Costs.adopted`'s fs per debited forming element
 
 
 def _promoted(device: Device) -> int:
@@ -283,7 +282,6 @@ def word_mend(ends_a: tuple[Sequence[int], Sequence[int], Sequence[bool]],
     return sum(1 for l, (da, db) in enumerate(zip(ends_a[2], ends_b[2])) if (da and db) or (cp[l] and cm[l]))
 
 
-def forming_elements(flags: Sequence[Sequence[Sequence[bool]]], dead, device: Device = H100) -> int:
     """`tileDebitDev`'s inert forming elements: over the tile's rows i, the l < k with row i's atom block l/32 flagged
     by every word (i, j) of the tile's columns (``flags[i][j]``, `word_flags`), or salt-dead (``dead(i)``, row i's
     `salt_dead`, read only where some word leaves the block unflagged)."""
@@ -320,8 +318,8 @@ def tile_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]],
 
 def debit_units(atoms: int, elements: Fraction | int, prices: Prices | None = None, device: Device = H100, *, zeros: int,
                 mends: int = 0) -> Fraction:
-    """rev1's debit at a device's prices (`tileDebitRev1`): `debitDev` (`debitOf Params.pi Costs.adopted` at the H100's),
-    per flagged atom-word its 32 MACs and 1/G of a promotion add and fs per debited element (a tile's at |cols|/n
+    """rev1's inert work at a device's prices (`tileDebitRev1`): `debitDev` (`debitOf Params.pi Costs.adopted` at the H100's),
+    per flagged atom-word its 32 MACs and 1/G of a promotion add and fs per inert element (a tile's at |cols|/n
     each), an add per later promotion into a +0 total, and a MAC per product no salt makes count (`word_mend`);
     `prices` the device's own by default."""
     p = prices or device.prices

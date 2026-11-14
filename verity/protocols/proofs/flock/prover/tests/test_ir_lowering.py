@@ -1,5 +1,6 @@
-"""C-Flock's generic IR lowering: the pieces against the IR primitives, the units read off each template's IR graph, the
-lowered templates against the IR evaluator on captured served slices and synthetic sets, the pins, and the negatives."""
+"""Flock's generic IR lowering: the pieces against the circuits' primitives, the units read off each template's IR graph, the
+lowered templates against the circuits' reference evaluator on captured served slices and synthetic sets, the pins, and the
+negatives."""
 from __future__ import annotations
 
 import itertools
@@ -600,8 +601,8 @@ def test_pinned_rows_read_earlier_columns(template):
 
 
 def test_the_pin_covers_the_leaf_maps():
-    """IR6: the netlist's LEAVES line places every unit on its instance's words (flat input and output leaves, each port's
-    [leaves, bits]); another arrangement of the same unit is another pin with the same rows."""
+    """IR6: the circuit description's LEAVES line places every unit on its instance's words (flat input and output leaves, each
+    port's [leaves, bits]); another arrangement of the same unit is another pin with the same rows."""
     import json
 
     mod = REG.module("rope-head")
@@ -728,8 +729,8 @@ def test_rmsnorm_widths_refuse_unequal_warps():
 
 @pytest.mark.slow
 def test_the_pin_covers_the_cut_structure():
-    """IR4: N and eps are tail constants in the netlist's CUT line, so another eps is another pin; the unit rows do not
-    depend on eps (the row scalar is a cut word)."""
+    """IR4: N and eps are tail constants in the circuit description's CUT line, so another eps is another pin; the unit rows do
+    not depend on eps (the row scalar is a cut word)."""
     import struct
 
     f32 = lambda x: struct.unpack("<I", struct.pack("<f", x))[0]  # noqa: E731
@@ -1121,7 +1122,7 @@ def _gate_shape(U):
 @pytest.mark.parametrize("n", [2048, 4096])
 def test_rmsnorm_triton_v5_is_v1s_lowering(n):
     """v5 drops the 129 butterfly adds a warp that v1's lowering already left out (no output depends on them): the same warp units
-    (signature, leaf maps, cut words) and the same tail, so v5 takes v1's unit netlist and its pins."""
+    (signature, leaf maps, cut words) and the same tail, so v5 takes v1's unit circuit description and its pins."""
     v5, v1 = (IL.units(TM.subcircuit(t, N=n, EPS=1e-5).definition(), IL.reduction_cut(256)) for t in ("rmsnorm-triton-v5", "rmsnorm-triton"))
     assert (v5.n, len(v5.cut)) == (n // 256, n // 256 + 1)
     assert v5.signature == v1.signature and (v5.in_src, v5.out_src) == (v1.in_src, v1.out_src)

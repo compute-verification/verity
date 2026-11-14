@@ -41,7 +41,6 @@ from typing import Any
 
 from verity_vllm.check import oracle_compare as OC
 from verity_vllm.check import weights_of_record as WR
-from verity_vllm.check.replay.driver import PoolDoesNotFit
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.errors import Refused
@@ -159,6 +158,11 @@ def _peak_rss() -> int:
 def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int, ck: Callable[[], Any] | None = None) -> dict[str, Any]:
     """The rank's C2 from its bundle (module docstring), its record written to `sampled_replay_p<pair>_rank<r>.json`.  ``ck``: the
     checkpoint's index, shared by the ranks one process replays, since building it reads every shard whole for its sha256."""
+    # The driver loads Definitions of Verity's registry, and each enters the Definition table as it is built.  So it is imported
+    # here and in `main`, where a replay starts: a process that imports this module for a helper and starts no replay finds the
+    # table as it left it (`interface.resolve` and `codec.decode_program` answer for an id by whether the table holds it).
+    from verity_vllm.check.replay.driver import PoolDoesNotFit
+
     t0 = time.perf_counter()
     try:
         b = RB.open_bundle(RB.path(out, pair, rank=rank))
@@ -305,6 +309,8 @@ def fold(out: Path) -> bool | None:
 
 
 def main(o: Options) -> int:
+    from verity_vllm.check.replay.driver import PoolDoesNotFit  # as in `replay_rank`
+
     out = Path(o.commit_out)
     try:
         if not (out / C2.DEFERRED).is_file():
