@@ -100,7 +100,8 @@ research data SUBCOMMAND ...             # the store: put/show/fetch/select/... 
 research pods SUBCOMMAND ...             # the machines: registry, ssh, sync, leases, the budgets guard (src/research/pods/README.md)
 research tele SUBCOMMAND ...             # the harness's own surface (below)
 research jobs add|list|show|cancel|events ...   # the Job queue (below)
-research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page (goals.py)
+research goals show|set|confirm|done|remove|replace|priority|audit|blockers ...   # the Goals page (goals.py); blockers ranks
+                                         # the open blockers by what waits on each (goals_blockers.py)
 research velocity [--line|--json]  # the velocity score from records, never a gate (velocity.py)
 research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays (compare.py)
 research digest --as LANE   # what changed for a lane since its last digest (digest.py)
