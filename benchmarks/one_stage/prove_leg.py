@@ -745,7 +745,7 @@ def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Seque
               oks: Sequence[int] | None = None) -> Member:
     """N2's head checks (`n2_zk`'s ``NetworkHeadCheckRows`` around `head_check.unit(L, T, COUNTS)`, ``key``) as one
     member: instance i's ``pub`` and ``wit`` rows (`n2_zk.rows_of`), ``pub`` held to ``pubs[i]`` (the verifier's own
-    `n2_zk.public_words`: the registered root, the link-window, the signed digest), ``o0`` required to ``oks[i]`` (default
+    `n2_zk.public_words`: the registered root, the execution phase, the signed digest), ``o0`` required to ``oks[i]`` (default
     every check passes)."""
     from verity.protocols.accounting.certifier.prover import n2_zk as N
 

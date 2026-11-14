@@ -1499,9 +1499,9 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: C
     """The network certifier's scan of its run the certifier front kept under ``serve_dir``
     (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
     state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
-    None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
+    None for a slot no request starts (`scan_state.scan_state`). The window is the execution phase, of the class's
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
-    certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
+    certifier's certified ingress rows from execution phase 0 and the outputs its egress cells carry (`warden_chain.io`).
     ``window_rows`` reads one ingress record's rows: the network certifier's reader, which the caller passes, since SPOT
     reads the certifier's record as a certified input and never imports the certifier.
     None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan or the
@@ -1534,7 +1534,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: C
     T = params.window
     cls.scan.serves(params)
     if T != cls.buckets:
-        raise ValueError(f"the kept run's link-windows are {T} buckets, not a window of class {cls}'s "
+        raise ValueError(f"the kept run's execution phases are {T} buckets, not a window of class {cls}'s "
                          f"{cls.buckets}: serve at the class's scan schedule")
     if not io["accepted"]:
         raise ValueError(f"the kept run's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
@@ -1546,13 +1546,13 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: C
         raise ValueError("a request of the window has no END in the kept run's ingress")
     windows = sorted(r.window for r in records[RC.INGRESS])
     if windows != list(range(len(windows))):
-        raise ValueError(f"the kept run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
+        raise ValueError(f"the kept run's ingress records are execution phases {windows[:8]}, not 0, 1, …")
     ingress = [x for r in sorted(records[RC.INGRESS], key=lambda r: r.window) for x in window_rows(r, params)]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
     at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
     if len(at) != 1 or None in at:
-        raise ValueError(f"the window's requests start in the scan's link-windows {sorted(map(str, at))}, not one")
+        raise ValueError(f"the window's requests start in the scan's execution phases {sorted(map(str, at))}, not one")
     (w,) = at
     rows, starts = SS.scan_state(cls, ingress, outputs, w * T)
     user = {r["stream"]: r["user"] for r in io["records"]}

@@ -5,7 +5,7 @@ public import Lean.Data.Json.FromToJson.Basic
 public import Lean.Data.Json.Parser
 
 /-!
-# The executionPhase charge's difftest: advice v1's whole executionPhase against `window_charge.reference_window`, on random instances
+# The execution phase charge's difftest: advice v1's whole execution phase against `window_charge.reference_window`, on random instances
 
 `scripts/window_vectors.py` generates instances and runs
 `verity.ml.protocols.certifier.window_charge.reference_window` on them. `NetworkCertifier/WindowDifftestMain.lean`
@@ -14,17 +14,17 @@ reads both files and fails unless `evaluate`, which computes the same results fr
 compiled evaluation, a test and not a proof. `Proofs.Certifier.Code` (`CodeChargesWhole`) proves `charges` equal
 to the reference's (`Security/Definitions/Certifier/WindowCharge.lean`).
 
-An instance is a executionPhase's slot counts `N`, `H`, `O` and `L`, a book (each of `window_charge.SYMBOLS`' tables, its
-frequencies at the bins a executionPhase reaches and its total, and the contexts' `priors`), a carry, and windows, each its `N`
+An instance is an execution phase's slot counts `N`, `H`, `O` and `L`, a book (each of `window_charge.SYMBOLS`' tables, its
+frequencies at the bins an execution phase reaches and its total, and the contexts' `priors`), a carry, and windows, each its `N`
 decision slots (`en`, `bit`), `H` hit slots (`hen`, `short`), `O` order slots (`oen`, `p`, `r`) and `L` length slots
-(`qen`, `mt`, `olen`), as `ChargeCount_v2{N, H, O, L}`'s witness holds them. A executionPhase's advice is each field's values at
+(`qen`, `mt`, `olen`), as `ChargeCount_v2{N, H, O, L}`'s witness holds them. An execution phase's advice is each field's values at
 the slots that hold one, in order (`advice`).
 
 `evaluate` gives, from the definitions themselves:
-* `steps`: from the instance's carry, each executionPhase's `executionPhase`, its charge and the carry it passes on (`[charge, counts,
+* `steps`: from the instance's carry, each execution phase's `executionPhase`, its charge and the carry it passes on (`[charge, counts,
   run, pos, rank]`), up to and including the first executionPhase it refuses (`null`): Python's `reference_window` executionPhase by
-  executionPhase, each `ok` 0 a `null`;
-* `charges`: `charges` of the windows' advice, from the book's first carry, or `null` when a executionPhase refuses.
+  execution phase, each `ok` 0 a `null`;
+* `charges`: `charges` of the windows' advice, from the book's first carry, or `null` when an execution phase refuses.
 -/
 
 @[expose] public section
@@ -33,7 +33,7 @@ namespace NetworkCertifier.WindowCharge.WindowDifftest
 
 open Lean
 
-/-- A executionPhase's slots as read. -/
+/-- An execution phase's slots as read. -/
 structure Slots where
   en : List Bool
   bit : List Bool
@@ -103,18 +103,18 @@ def rawOfJson (j : Json) : Except String Raw := do
 def held {α : Type} (en : List Bool) (v : List α) : List α :=
   (en.zip v).filterMap fun (e, x) => if e then some x else none
 
-/-- A executionPhase's advice: each field's values at the slots that hold one. -/
+/-- An execution phase's advice: each field's values at the slots that hold one. -/
 def advice (s : Slots) : Advice :=
   ⟨held s.en s.bit, held s.hen s.short, held s.oen (s.p.zip s.r), held s.qen (s.mt.zip s.olen)⟩
 
-/-- The bins of each table a executionPhase of `N`, `H` and `O` slots reaches (`window_charge._bins`): bins `0 … bitlen v` of
+/-- The bins of each table an execution phase of `N`, `H` and `O` slots reaches (`window_charge._bins`): bins `0 … bitlen v` of
 the largest value `v` it codes, 0 for n_resumes and n_lag. -/
 def bins (N H O : Nat) : List Nat :=
   [N, H, HIT_CAP, 0, O, GAP_CAP, ZIG_CAP, 0].map (AdviceV1.bitlen · + 1)
 
 def pairsJson (l : List (Nat × Nat)) : Json := toJson (l.map fun p => [p.1, p.2])
 
-/-- `executionPhase` from `cy` on each executionPhase in turn, up to and including the first it refuses. -/
+/-- `executionPhase` from `cy` on each execution phase in turn, up to and including the first it refuses. -/
 def steps (bk : Book) (N H O L : Nat) : Carry → List Advice → List Json
   | _, [] => []
   | cy, x :: ws => match executionPhase bk N H O L cy x with
