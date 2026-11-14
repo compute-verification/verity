@@ -162,6 +162,18 @@ CAPITALS = LIVE_CAPS + REQUEST_CAPS + SOFTCAP_CAPS
 OWN_CAPS = {
     "verity/protocols/accounting/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
     "verity/protocols/accounting/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    **dict.fromkeys(tuple(f"security/{tree}/{area}"
+                          for tree in ("Definitions", "Properties", "Proofs", "Proofs/Properties")
+                          for area in ("Pous", "Poub")),
+                    "PoUS's and PoUB's caps in their Lean (an audit's duration, a schedule's bits, a chip's steps, an "
+                    "oracle's queries, a side channel's rate); Pearl's is PoUW's"),
+    **dict.fromkeys(("security/Definitions/Accounting/Gates", "security/Definitions/Accounting/Guarantees/Gates.lean",
+                     "security/Proofs/Accounting/Gates"),
+                    "the stacking gates' caps, what a block's outputs cap in units; Pearl's is PoUW's"),
+    **dict.fromkeys(tuple(f"benchmarks/{b}/"
+                          for b in ("pous", "remote_session", "vllm_encoded", "kv_filler", "codec_tensor")),
+                    "PoUS's and PoUB's benchmarks' caps (an RTT allowance, a period's cap, a buffer's rows, a fill's "
+                    "CTAs); Pearl's is PoUW's"),
     "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
     "verity/protocols/accounting/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
     "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
