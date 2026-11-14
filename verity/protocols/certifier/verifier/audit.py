@@ -46,7 +46,7 @@ does. A certified ingress record's status is the signed head's, and its grid par
 is a `mismatch`.
 
 A client holds its copy of one window's certificates, as a reveal endpoint served them, to the key and the session
-(`certificate_refusals`, whose Lean is `NetworkCheck.LinkWindow.refusals`): it refuses a certificate of another key or
+(`certificate_refusals`, whose Lean is `NetworkCheck.TransferBlocks.refusals`): it refuses a certificate of another key or
 link-window, a clock certificate that isn't egress, one whose signature doesn't verify (`Certificate.verify`), a second
 of its direction, and a clock certificate signing a digest that an earlier kept one signs, whose salt was reused.
 """
