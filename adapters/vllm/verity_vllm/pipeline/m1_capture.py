@@ -31,7 +31,11 @@ PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one ar
 
 from __future__ import annotations
 
+import json
+import sys
 import time
+from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from verity_vllm import settings
@@ -41,11 +45,6 @@ if TYPE_CHECKING:
     from verity_vllm.protocols import Composition
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports)
-
-import json
-import sys
-from dataclasses import dataclass
-from pathlib import Path
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.engine import engine_profile as prof  # apply_env before vllm import
