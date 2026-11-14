@@ -1,22 +1,22 @@
-"""The falsification test of `tt-out-tile-pearl-c-h100-rev1` (`TTOutTilePearlCH100Rev1W1`,
-security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean).
+"""The falsification test of `tt-out-tile-pearl-c-h100-rev1` (`Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8`,
+security/Definitions/Pouw/Assumptions/PearlC/TTOutS8.lean; `shape.conjectures` in security/lean-audit.json).
 
-The conjecture is TT_OUT(1/400) per audit tile, rev1, at the H100 record, over W1 on the H100 with INT8: no program
-outputs a good tile's words for less than (1 − g₀) of their credit, the credit (1 − ρ)·`creditDevRev1` per share. A
-tile is good when its debit is within its cap, so a class holds against the conjecture either way: the tile's debit
-exceeds its cap (TT_OUT does not range over it), or the class's cheapest program stays within the bound. Each test takes
-one of the census's known skip classes (`pearlc_census.py`) or a reviewer's planted class, builds the tile at the
-H100's atom and the cheapest program the class gives, checks that its words are the honest ones, and asserts one of
-the two.
+The conjecture is TT_OUT(1/400) per audit tile, rev1, at the H100 record per second at the tensor clock (`devH100Tensor`,
+`Prices.h100Tensor`), over W1 on the H100 with INT8 at that clock (`W1Prices.h100Tensor`): no program outputs a good
+tile's words for less than (1 − g₀) of their credit, the credit (1 − ρ)·`creditDevRev1` per share. A tile is good when
+its inert work is within its bound, so a class holds against the conjecture either way: the tile's inert work exceeds
+its bound (TT_OUT does not range over it), or the class's cheapest program stays within the bound. Each test takes one of
+the census's known skip classes (`pearlc_census.py`) or a reviewer's planted class, builds the tile at the H100's atom
+and the cheapest program the class gives, checks that its words are the honest ones, and asserts one of the two.
 
-The debit replayed here is rev1's (`DeviceRev1.tileDebitRev1`, `pearl_c_debit.tile_debit`): flagged atom-words, later
-promotions into +0, the forming of salt-dead and unread elements, and the words' mends (`Mend.wordMend`,
+The inert work replayed here is rev1's (`DeviceRev1.tileDebitRev1`, `pearl_c_debit.tile_debit`): flagged atom-words,
+later promotions into +0, the forming of salt-dead and unread elements, and the words' mends (`Mend.wordMend`,
 `pearl_c_debit.word_mend`): one MAC for each position where A's row and B's row are both salt-dead (a dead pair), and
 one for each other product whose contribution after the accumulator's alignment is zero at both ends of the noise
 support (a forced zero).
 
 It catches what the Lean proofs can't: a change to rev1's credit or W_ref (`pearl_c.PearlC.credit_of`, `wref`, the Python
-mirror of `creditDevRev1` and `wrefDevRev1`) that credits an operation a known skip removes, a change to the debit that
+mirror of `creditDevRev1` and `wrefDevRev1`) that credits an operation a known skip removes, a change to the inert work that
 drops a term a planted class needs, and a census tile on which a known class beats the bound. A new skip class that the
 census finds belongs here as another test.
 """
@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
 
@@ -49,6 +50,12 @@ spec.loader.exec_module(FT)
 G0 = RHO = Fraction(1, 400)
 #: the H100 record's atoms per promotion (`devH100`'s G)
 G = H100.g
+#: the tensor clock over the SM clock, `h100TensorMHz / h100SmMHz` (the H200 card file's clock.tensor and clock.sm)
+CLOCK = Fraction(1830, 1980)
+#: `Prices.h100Tensor`: the FP32 add at 32·CLOCK, and the forming fs = ⌈32 + 64·CLOCK/2⌉ = 62, qa = ⌈32·CLOCK/8⌉ = 4
+PRICES = replace(H100.prices, device="sm_90-tensor-clock", fadd=32 * CLOCK, forming_credited=62, forming_a_only=4)
+#: W1's forming per element of A at `W1Prices.h100Tensor`, exact: the noise atom (32 MACs), half a cast and ρ's FFMA per 8
+FORMING_W1 = 32 + 64 * CLOCK / 2 + 32 * CLOCK / 8
 #: census tiles: families that reach the chain's skip classes, formed under §5 at the H100's atom
 FAMILIES = ("gaussian", "spikes-first", "outliers-groupstart", "aligned-spikes-pm1-r444", "xcancel-spikes-r64",
             "xcancel-tail-f8")
@@ -83,6 +90,11 @@ def _mends(XA: np.ndarray, XB: np.ndarray) -> int:
     return FT._mends(ends[0], ends[1], H100)
 
 
+def _w1_wref(sch: PC.PearlC, s: Shape) -> Fraction:
+    """The honest program's W1 cost of a unit: `wref` with the record's rounded-up forming replaced by W1's exact one."""
+    return Fraction(sch.wref(s)) - (sch.prices.forming - FORMING_W1) * s.m * s.k
+
+
 def _fires(credit: Fraction, cost: Fraction) -> bool:
     """TT_OUT's event for one program on one unit or tile: its credited work beats its cost by more than the gap."""
     return (1 - RHO) * credit > cost / (1 - G0)
@@ -108,15 +120,15 @@ def test_first_promotion_skip_is_outside_rev1s_credit():
         A, B, ok, _, _ = _tile(fam, 1024)
         assert ok, fam
         assert (_skip_first(A, B) == C.group_sums(A, B, G)[1]).all(), fam
-    sch = PC.PearlC(forming="v1", device=H100)
+    sch = PC.PearlC(forming="v1", device=H100, prices=PRICES)
     ks = [k for k in (256, 1024, 2048, 4096, 8192, 16384, 32768, 65536) if k <= H100.k_max]
     fired_before = False
     for k in ks:
         for m, n in ((64, 64), (8192, 8192), (8192, 2048)):
             s = Shape(m, k, n)
             sch.check(Matmul(0, s, 0))
-            cost = Fraction(sch.wref(s))
-            assert sch.first_adds(s) == H100.prices.fadd * m * n > 0
+            cost = _w1_wref(sch, s)
+            assert sch.first_adds(s) == PRICES.fadd * m * n > 0
             assert not _fires(Fraction(sch.credit_of(s)), cost), s
             fired_before |= _fires(Fraction(sch.credit_of(s) + sch.first_adds(s)), cost)
     assert fired_before
@@ -132,11 +144,11 @@ def test_cross_group_joint_skips_stay_within_the_gap():
     at a MAC each against the tile's rev1 credit: the event never fires. Priced word by word instead, the same sets do
     fire, so the test reaches the class and the bound rests on the fragment."""
     C.set_atom("hopper")
-    sch = PC.PearlC(forming="v1", device=H100)
+    sch = PC.PearlC(forming="v1", device=H100, prices=PRICES)
     k = 1024
     s = Shape(64, k, 64)
     per_word_credit = Fraction(sch.credit_of(s), s.m * s.n)
-    per_word_wref = Fraction(sch.wref(s), s.m * s.n)
+    per_word_wref = _w1_wref(sch, s) / (s.m * s.n)
     fired_per_word = False
     for fam in FAMILIES:
         A, B, ok, _, _ = _tile(fam, k)

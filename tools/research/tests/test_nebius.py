@@ -162,7 +162,7 @@ def gpu_env(tmp_path: Path, count: int = 3) -> dict[str, str]:
 
 @needs_flock
 def test_gpu_lease_reports_each_gpus_held_and_busy_time_from_the_sampler_log_and_keeps_cmds_status(tmp_path):
-    # started long ago, so the lease's held time is far past its 30 s of readings and the cap at held time doesn't bite
+    # started long ago, so the lease's held time is far past its 30 s of readings and the limit at held time doesn't bite
     env = {**gpu_env(tmp_path, count=2), "GPU_LEASE_UUID_TABLE": "GPU-a0,GPU-b1", "GPU_LEASE_WHO": "bc-test",
            "RESEARCH_RUN_DIR": str(tmp_path / "run"), "GPU_LEASE_STARTED": "2026-01-01T00:00:00Z"}
     (tmp_path / "run").mkdir()
@@ -186,7 +186,7 @@ def test_gpu_lease_reports_each_gpus_held_and_busy_time_from_the_sampler_log_and
 
 
 @needs_flock
-def test_gpu_lease_caps_busy_and_sampled_time_at_the_held_time(tmp_path):
+def test_gpu_lease_limits_busy_and_sampled_time_to_the_held_time(tmp_path):
     """Each reading counts a whole cadence, so readings near a lease's ends added up to more than it held (pous infra, 18:56Z).
     Two busy readings of a cadence longer than any held time must record busy_s == sampled_s == held_s."""
     env = {**gpu_env(tmp_path, count=1), "GPU_LEASE_UUID_TABLE": "GPU-a0", "GPU_LEASE_STARTED": "2026-01-01T00:00:00Z",
@@ -1079,8 +1079,8 @@ def test_nebius_auth_reads_the_key_from_one_line_of_base64_and_refuses_the_multi
     assert r.returncode == 1 and "the Nebius key is not in this shell though this VM injects it" in r.stderr
 
 
-def test_nebius_auth_reads_a_der_key_whose_base64_fits_the_cursor_secret_cap(tmp_path):
-    """An RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) exceeds Cursor's 4096-byte secret cap, so the secret may
+def test_nebius_auth_reads_a_der_key_whose_base64_fits_the_cursor_secret_limit(tmp_path):
+    """An RSA-4096 key's PEM is ~3272 bytes, whose base64 (~4364) exceeds Cursor's 4096-byte secret limit, so the secret may
     hold base64 of the DER (~3132 chars) instead; nebius_auth converts it back to PEM through openssl.  A throwaway
     RSA-2048 key generated here keeps the test fast; the size arithmetic scales, and the decode path is identical."""
     auth = _auth_harness(tmp_path)
@@ -1189,7 +1189,7 @@ def test_a_direct_run_starts_on_the_hosts_direct_cpus_and_may_pin_itself_elsewhe
     assert remote.direct_cpus() == set()
 
 
-def test_fill_runner_gives_a_tp2_commit_two_gpus_on_one_numa_node_and_commits_a_longer_cap(tmp_path, monkeypatch):
+def test_fill_runner_gives_a_tp2_commit_two_gpus_on_one_numa_node_and_commits_a_longer_limit(tmp_path, monkeypatch):
     """With node 2 first, a Commit guest may take 2 GPUs (a TP2 row), from one NUMA node when it
     can, through `gpu-lease 2 --on a,b`; it runs up to FILL_COMMIT_MAX_MIN (a Gemma-2 Commit's CPU phases outlast 30 min) while
     other GPU fill stays at 30 and gpus 1; and a TP2 Commit short of GPUs reclaims as many as it lacks."""
@@ -1268,7 +1268,7 @@ def test_fill_runner_lets_a_verity_cpu_job_run_a_whole_build_and_freezes_its_sco
 
 
 def test_the_verity_pool_lends_idle_slots_to_pous_cpu_jobs_and_takes_them_back(tmp_path, monkeypatch):
-    """With no Verity job waiting, queued pous CPU jobs start in the Verity pool's free slots (its CPUs, a scope, its memory caps);
+    """With no Verity job waiting, queued pous CPU jobs start in the Verity pool's free slots (its CPUs, a scope, its memory limits);
     a Verity job that finds no slot requeues the newest lent job, and nothing more is lent while it waits."""
     monkeypatch.setenv("FILL_DIR", str(tmp_path / "fill"))
     monkeypatch.setenv("FILL_VERITY_CPU_SLOTS", "2")
@@ -3666,9 +3666,9 @@ def test_fill_runner_pauses_cpu_sets_jobs_on_slot_d_while_a_train_check_holds_it
     assert mine() == [("ver-0.sh", False), ("ver-1.sh", False)] and signals[2:] == [signal.SIGCONT, signal.SIGCONT]
 
 
-def test_fill_runner_fence_command_caps_a_fence_keeps_one_per_owner_and_logs_it(tmp_path, monkeypatch, capsys):
+def test_fill_runner_fence_command_limits_a_fence_keeps_one_per_owner_and_logs_it(tmp_path, monkeypatch, capsys):
     """A fence on node 2 (an honest-latency measurement's) would otherwise take four steps by hand: keep-free, a respawned pane for
-    fill's CPUs, a max-min line and a revert timer. `fill_runner.py fence` writes one self-expiring line within the caps instead
+    fill's CPUs, a max-min line and a revert timer. `fill_runner.py fence` writes one self-expiring line within the limits instead
     (1 GPU, at most 8 cores on its NUMA node, at most 4 h, one per owner, none on another's GPU or cores) and logs each change."""
     fill, log = tmp_path / "fill", tmp_path / "quota-changes.log"
     fill.mkdir()

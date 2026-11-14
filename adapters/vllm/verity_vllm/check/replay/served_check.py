@@ -425,13 +425,15 @@ def population(build: dict[str, Any], rep: dict[str, Any], *, ranks: list[int]) 
     reached: Counter = Counter()
     outside, disagree, seen = [], [], set()
     for s, notes in rep["steps"].items():
-        noted = notes["batch"].get("rows")                                       # a step in no step plan of the Build notes none
-        batch = noted if noted else {}
+        noted = notes.get("batch")                                               # a step in no step plan of the Build notes none
+        rows_of = noted.get("rows") if noted else None
+        batch = rows_of if rows_of else {}
         for name, v in notes.items():
             if name in ("batch", "coverage"):
                 continue
             op, member = split_name(name)
-            for r in (v["requests"] if name == IDS else batch):
+            listed = v.get("requests") if name == IDS else batch                 # an ids note that lists no request compared none
+            for r in (listed if listed else []):
                 at = {"request_id": r, "step": int(s), "op_path": op, "member": member}
                 i = want.get(key := (int(s), r, op, member))
                 if i is None:

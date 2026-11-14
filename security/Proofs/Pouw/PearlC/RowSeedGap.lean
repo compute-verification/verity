@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
-public import Definitions.Pouw.PearlC.DevicePrices
+public import Proofs.Pouw.PearlC.Records
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset

@@ -24,16 +24,18 @@
 #   case's `kind` and its key, a gate request's `device`, a class, a path label, a run's directory. The Lean's JSON
 #   reader, the difftest vectors, the pinned fixtures and every kept run's records carry it: a new format version, and
 #   those regenerated;
-# - a record's keys and a kept run's file names (`warden_run`, `warden_check`, `warden.json`, the negatives' names):
-#   the leak guard's rows and every kept run that a later step reads;
-# - the gate's verb `warden-rehearse` and its refusal `warden-fails`: the deployed gate serves them, so they change
-#   with the gate's own deployment;
+# - a report's key and a kept run's file that a program reads back (`"warden_run"`, `warden.json`): the leak guard's
+#   rows and every kept run that a later step reads;
+# - the gate's verb `warden-rehearse`, which the deployed gate serves, so it changes with the gate's own deployment;
+# - `warden-fails`, the link name of a window's fails certificate (`<link>-fails`), which signed certificates hold;
 # - the trace corpus's labels `warden-heavy` and `warden-smallkv`: the corpus artifact and the fixture cut from it.
 #
 # Kept for `warden_tokens_map.toml`, by the same [keep]: every other hyphenated name (the flags `--warden-run` and
-# `--warden` with the attributes argparse gives them, a tool's label such as `warden-serve`), and the word in a string
-# literal's sentence with its article, its possessive or the noun beside it, so that a message a test spells, or one
-# code makes from a kept value (`f"{label} thread"`), stays whole until that map rewords it.
+# `--warden`, a tool's label such as `warden-serve`), the attribute the flags' declarations name (`warden_run`,
+# `a.warden`), the names that programs only write (a record's keys such as `warden_check`, a kept run's registration
+# files, the negatives' names), and the word in a string literal's sentence with its article, its possessive or the
+# noun beside it, so that a message a test spells, or one code makes from a kept value (`f"{label} thread"`), stays
+# whole until that map rewords it.
 #
 # Not this concept: an "active warden" and a "passive warden" in network steganography's sense, which the architecture
 # and two Lean docstrings cite as that field's term.
@@ -42,19 +44,15 @@
 # directory's maps and toy fixtures, research's store vocabulary and `moves.json`, and fixtures, whose bytes tests pin.
 
 [[words_in]]                              # the link-window's constructor, in the Lean that declares and matches it
-files = ["verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean",
-         "Security/Properties/NetworkCertifier/*LinkWindow.lean",
-         "Security/Proofs/Properties/NetworkCertifier/*LinkWindow.lean"]
+files = ["verity/protocols/accounting/certifier/verifier/lean/NetworkCheck/TransferBlocks.lean",
+         "security/Properties/NetworkCertifier/Check/TransferBlocks.lean",
+         "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean"]
 
 [words_in.words]
 "warden" = "networkCertifier"
 
 [words]
 "Kind.warden" = "Kind.networkCertifier"
-"linkWindowAcceptMeans_honest_warden" = "linkWindowAcceptMeans_honest_certifier"
-"WardenSchedule" = "CertifierSchedule"
-"wardenCode" = "certifierCode"
-"wardenLane" = "certifierLane"
 "NetworkCertifier/Warden" = "NetworkCertifier/Cells"
 "NetworkCertifier.Warden" = "NetworkCertifier.Cells"
 "Warden.lean" = "Cells.lean"
@@ -83,7 +81,7 @@ patterns = [
     'warden\.json\b',                                 # a kept run's file
     'warden(?=-\w)',                                  # a hyphenated name
     '(?<=-)warden',
-    '(?<!\w)warden_run(?!\w)',                        # ... and the attributes argparse gives the flags
+    '(?<!\w)warden_run(?!\w)',                        # ... the attribute the flags' declarations name, and a report's key
     '\ba\.warden\b',
     # the word in a sentence, which after `warden_term_map.toml`'s move stands only in a string literal
     '''(?<![\w-])(?:[Tt]he|[Aa]|no|its|each|this|that|same|whose|active|honest|kept|synthetic|byte-cell|▶|\w+'s) warden(?![\w-])''',

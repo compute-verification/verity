@@ -153,6 +153,12 @@ def test_the_count_refuses_the_session_program_on_k(counted) -> None:
     assert (few["verdict"], few["failed"]) == ("refused", "n")
 
 
+@pytest.mark.parametrize(("value", "word"), [(1000, "within target"), (999.999, "misses"), (1, "misses")])
+def test_the_metrics_verdict_holds_its_value_to_the_goals_target(value, word) -> None:
+    """The goal wants a slowdown of at least 1,000: 1,000 itself is within target, and anything below misses."""
+    assert report.verdict(value) == word
+
+
 def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path) -> None:
     """The command on the served file and a small built record: the served number is first and is the JSON's value, the
     built class is labelled as not served, its refusal prints the verdict and what failed, and its number is the
@@ -165,6 +171,8 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     result = json.loads((tmp_path / "result.json").read_text())
     assert [(m["name"], m["value"], m["unit"], m["mark"]) for m in result["measurements"]] == [
         (report.METRIC, doc["value"], doc["unit"], "modeled")]
+    # the goal's target, which a value of 1 misses
+    assert [(m["target"], m["verdict"]) for m in result["measurements"]] == [(1000, "misses")] and report.TARGET == 1000
     assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")

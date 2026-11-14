@@ -1,12 +1,13 @@
 module
 
 public import Proofs.Pouw.PearlC.DeviceGap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TileGap
 import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # rev1: it asserts less than the granted TT_OUT, and g from it
