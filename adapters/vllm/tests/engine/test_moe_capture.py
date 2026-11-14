@@ -437,24 +437,31 @@ def test_a_step_in_micro_batches_and_one_not_dispatched_are_refused(workers: Wor
         run(w, STEPS[:1])
 
 
-def test_the_declared_plugin_arms_each_process_that_loads_it(workers: Workers, tmp_path,
-                                                            monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_declared_plugin_arms_each_process_whose_environment_names_a_capture(workers: Workers, tmp_path,
+                                                                                   monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValueError, match="no request or no module"):
         MC.declare(tmp_path, [], list(MODULES))
-    with pytest.raises(metadata.PackageNotFoundError):
-        MC.register()
-    site = MC.declare(tmp_path / "site", ["c", "a"], list(MODULES))
-    monkeypatch.syspath_prepend(str(site))
+    monkeypatch.delenv(MC.CAPTURE_ENV, raising=False)
+    env = MC.declare(tmp_path / "site", ["c", "a"], list(MODULES))
+    monkeypatch.syspath_prepend(str(tmp_path / "site"))
     [plugin] = [e for e in metadata.entry_points(group="vllm.general_plugins") if e.dist is not None
                 and e.dist.name == MC.DISTRIBUTION]
+    plugin.load()()
+    unarmed = workers(1, SIZES)
+    unarmed.compile_or_warm_up_model()
+    with pytest.raises(TypeError, match="no capture is on this worker's runner"):
+        MC.on(unarmed)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
     plugin.load()()
     plugin.load()()
     w = workers(0, SIZES)
     w.compile_or_warm_up_model()
     on = MC._ON[id(w.model_runner)]
-    assert on.targets == {"a", "c"} and on.names == tuple(sorted(MODULES)) and len(on.slots.plans) == 3
-    (site / f"{MC.DISTRIBUTION.replace('-', '_')}-0.0.dist-info" / MC.DECLARED).unlink()
-    with pytest.raises(ValueError, match="holds no capture.json"):
+    assert MC.on(w) == 0 and on.targets == {"a", "c"} and on.names == tuple(sorted(MODULES)) and len(on.slots.plans) == 3
+    MC.disarm()
+    monkeypatch.setenv(MC.CAPTURE_ENV, json.dumps({"requests": ["a"]}))
+    with pytest.raises(ValueError, match="a JSON object of requests and modules"):
         MC.register()
 
 

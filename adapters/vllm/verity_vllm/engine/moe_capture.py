@@ -34,8 +34,10 @@ captures graphs the capture is installed before it does: `arm`, in a process bef
 on the worker right before it warms up (`WORKER_SITE`). Installed later, it refuses the first replayed step of a
 target, and so does a forward compiled past the launcher, rather than keep less. An engine starts each rank's worker
 in a process of its own, so what arms them is a vLLM general plugin, which vLLM loads in each of its processes:
-`declare` writes a distribution that declares `register` as one, with the requests and modules to capture, under a
-directory the caller puts on those processes' path before vLLM is imported, and `register` arms with what it holds.
+`declare` writes a distribution that declares `register` as one under a directory the caller puts on those processes'
+path before vLLM is imported, and gives the setting (`CAPTURE_ENV`) that names the requests and modules to capture,
+which the caller puts in their environment; `register` arms with what the setting names, and does nothing without it.
+`on`, run in every worker, refuses a rank no capture is on (vLLM logs a plugin that fails to load and goes on).
 Refused too: a module whose launches carry no ``A_scale`` (experts that are not block FP8), a router other than the
 grouped one, a step that samples draft tokens or runs in micro-batches, and a runner whose module has no
 ``sort_batch_req_ids`` (the runner is vLLM's V2 model runner, `v1.worker.gpu.model_runner`, whose order the step's
@@ -50,18 +52,18 @@ import hashlib
 import importlib
 import json
 import sys
-from importlib import metadata
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from verity_vllm import settings
 from verity_vllm.engine import graph_slots, hooks, runner_step, step_trace
 
-__all__ = ["CAPTURE", "DECLARED", "DISPATCH", "DISTRIBUTION", "FUSED_MOE_SITE", "GRAPH_SITE", "KEPT", "LAUNCH_ARGS",
+__all__ = ["CAPTURE", "CAPTURE_ENV", "DISPATCH", "DISTRIBUTION", "FUSED_MOE_SITE", "GRAPH_SITE", "KEPT", "LAUNCH_ARGS",
            "ROUTER_SITE", "TAG", "TRITON_LAUNCH", "TRITON_MOE_SITE", "WORKER_SITE", "Capture", "arm", "declare", "disarm",
-           "install", "launch_arg", "read", "register", "spans", "take", "uninstall", "write"]
+           "install", "launch_arg", "on", "read", "register", "spans", "take", "uninstall", "write"]
 
 #: a capture's record, beside its ranks' files
 CAPTURE = "capture.json"
@@ -81,9 +83,10 @@ GRAPH_SITE = ("vllm.v1.worker.gpu.cudagraph_utils", "CudaGraphManager")
 DISPATCH = "dispatch_cg_and_sync_dp"
 #: the worker, whose ``compile_or_warm_up_model`` captures its runner's graphs: (module, name)
 WORKER_SITE = ("vllm.v1.worker.gpu_worker", "Worker")
-#: the distribution `declare` writes, and its file that names the requests and modules `register` arms with
+#: the distribution `declare` writes, which declares `register` as a vLLM general plugin
 DISTRIBUTION = "verity-moe-capture"
-DECLARED = "capture.json"
+#: the setting that names the requests and modules `register` arms with, a JSON object (`declare`)
+CAPTURE_ENV = "VERITY_MOE_CAPTURE"
 #: the launcher's positional index of each argument read from a launch, after (A, B, C):
 #: invoke_fused_moe_triton_kernel(A, B, C, A_scale, B_scale, topk_weights, sorted_token_ids, expert_ids,
 #: num_tokens_post_padded, mul_routed_weight, top_k, config, ...)
@@ -445,27 +448,29 @@ def disarm() -> None:
         _ARMED.pop()[0].uninstall()
 
 
-def declare(site: Path | str, targets: Sequence[str], modules: Sequence[str]) -> Path:
-    """Write under ``site`` the distribution that declares `register` as a vLLM general plugin and names ``targets``
-    and ``modules`` to it; ``site``, which goes on the path of every process the engine starts before vLLM is
-    imported in it."""
+def declare(site: Path | str, targets: Sequence[str], modules: Sequence[str]) -> dict[str, str]:
+    """Write under ``site`` the distribution that declares `register` as a vLLM general plugin; the setting that names
+    ``targets`` and ``modules`` to it (`CAPTURE_ENV`). ``site`` goes on the path, and the setting in the environment,
+    of every process the engine starts, before vLLM is imported in it."""
     if not targets or not modules:
         raise ValueError("no request or no module to capture")
     d = Path(site) / f"{DISTRIBUTION.replace('-', '_')}-0.0.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text(f"Metadata-Version: 2.1\nName: {DISTRIBUTION}\nVersion: 0.0\n")
     (d / "entry_points.txt").write_text(f"[vllm.general_plugins]\n{DISTRIBUTION.replace('-', '_')} = {__name__}:register\n")
-    (d / DECLARED).write_text(json.dumps({"requests": sorted(targets), "modules": sorted(modules)}))
-    return Path(site)
+    return {CAPTURE_ENV: json.dumps({"requests": sorted(targets), "modules": sorted(modules)})}
 
 
 def register() -> None:
-    """The vLLM general plugin `declare` declares: `arm` this process with the requests and modules the declaration
-    names. vLLM loads its general plugins in each of its processes, a rank's before it builds its worker."""
-    text = metadata.distribution(DISTRIBUTION).read_text(DECLARED)
-    if text is None:
-        raise ValueError(f"the distribution {DISTRIBUTION} holds no {DECLARED}: `declare` writes both")
-    named = json.loads(text)
+    """The vLLM general plugin `declare` declares: with `CAPTURE_ENV` set, `arm` this process with the requests and
+    modules it names; unset, nothing. vLLM loads its general plugins in each of its processes, a rank's before it
+    builds its worker."""
+    named = settings.get(CAPTURE_ENV)
+    if named is None:
+        return
+    if not isinstance(named, dict) or sorted(named) != ["modules", "requests"]:
+        raise ValueError(f"{CAPTURE_ENV}: a JSON object of requests and modules (`declare`), not one of "
+                         f"{sorted(named) if isinstance(named, dict) else type(named).__name__}")
     arm(named["requests"], named["modules"])
 
 
@@ -474,6 +479,12 @@ def _on(worker: Any) -> Capture:
     if capture is None:
         raise TypeError("no capture is on this worker's runner: `install` puts one there")
     return capture
+
+
+def on(worker: Any) -> int:
+    """``worker``'s rank, where a capture is on its runner; refused where none is."""
+    _on(worker)
+    return int(worker.rank)
 
 
 def uninstall(worker: Any) -> int:
