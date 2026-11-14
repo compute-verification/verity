@@ -753,7 +753,8 @@ partition every member's statement reads), and everything else as the one statem
 (`paramsParsed`, read at `proofs` of no file, so under any sampling design v1 parses and not the one statement's `subset` alone):
 `own` is that program and partition, with no file. The registration's check reads the members, each its units and its
 circuit's units a proof block (`Registration.Verifier.members`), so v1's check refuses a registration under which a
-member's sampled proof blocks give two counts of link points (`link-points`, `Registration.linkRefused`). -/
+sample that ends misses a member, or a member's sampled proof blocks give two counts of link points (`link-points`,
+`Registration.linkRefused`). -/
 def membersParamsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
   exactly pr #["members"] "proofs"

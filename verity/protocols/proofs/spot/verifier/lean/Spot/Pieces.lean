@@ -106,8 +106,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
 * `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
-  link points differ between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the per-member form's registration
-  refuses.
+  fewest is none or whose link points differ between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the
+  per-member form's registration refuses.
 * `history_root`, `history_check`, `history_order`, `history_strings`, `history_roots`: a history table
   (`HistoryTable`): its domain, placeholder and root over its writers' `b ‖ c` at a capacity, the registered root held
   to that root, each position's source from the program's runs, the strings at those sources from the writer's members'

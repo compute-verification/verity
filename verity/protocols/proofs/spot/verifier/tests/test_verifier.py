@@ -16,8 +16,8 @@ from test_service import DELTA, OTHER, PAIR, QUERY, RUN, SCHEMA, SESSION, _lean,
 from verity.circuits.codec import canonical_json
 from verity.protocols.proofs.spot.device import challenger as C, coins as T
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
-                                                            verifier as V)
+from verity.protocols.proofs.spot.verifier.one_stage import (audit, draw as D, hello as H, link_points as LP, partition as P,
+                                                            registration as R, verifier as V)
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
 
@@ -125,22 +125,45 @@ def _window(law: dict, counts=(2, 18)) -> tuple:
 
 def test_the_per_member_forms_link_points_are_held_by_both():
     """`link-points` by the verifier (`registration.check`'s ``members``, `Registration.linkRefused`), after R8, on a
-    window of two members at one unit a proof block: PAIR's two proof blocks and OTHER's eighteen. Under `subset:9` a
-    sample that ends holds seven to nine of OTHER's, and its session opens 3 link points at seven or eight and 4 at
-    nine, so the Lean and the Python both refuse the registration, for `link-points` alone. Under `stratified:10` each
-    member holds a stratum whole, PAIR's sampled once and OTHER's nine times, one count each, and both pass it. With
-    no members, the one-statement form's, both pass either record, and a member with a unit past the population is
-    refused by both under either."""
-    members, past = [([[0, 2]], 1), ([[2, 20]], 1)], [([[0, 2]], 1), ([[2, 21]], 1)]
-    for law, codes in (({"law": "subset", "k": 9}, ("link-points",)), ({"law": "stratified", "k": 10}, ())):
-        rec, program, query, ports = _window(law)
+    window of two members at one unit a proof block, PAIR's proof blocks then OTHER's: two and eighteen, or ten each.
+    A row is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the
+    members a sample that ends misses (fewest none) and the members whose fewest and most open different link points
+    (3 up to eight proof blocks, 4 up to sixteen, 5 past). The Lean and the Python both refuse the registration, for
+    `link-points` alone and naming the members of either list, and pass it where both lists are empty:
+
+    * a stratum inside each member (`stratified:10`), or a subset that leaves out one proof block (`subset:19`): no
+      sample misses a member, each has one count, and both pass;
+    * `subset:9` over two and eighteen misses PAIR's member and holds seven to nine of OTHER's, 3 link points or 4;
+    * `subset:2` over ten and ten misses either member and gives each one count: link points alone pass it;
+    * `subset:17` over ten and ten holds seven to ten of each, 3 link points or 4, and misses neither;
+    * a Bernoulli law of rate 0 samples nothing, so each member's fewest and most are none: link points alone pass it.
+
+    With no members, the one-statement form's, both pass every record, and a member with a unit past the population
+    is refused by both under each."""
+    rows = [((2, 18), {"law": "stratified", "k": 10}, [(1, 1), (9, 9)], [], []),
+            ((10, 10), {"law": "stratified", "k": 10}, [(5, 5), (5, 5)], [], []),
+            ((2, 18), {"law": "subset", "k": 19}, [(1, 2), (17, 18)], [], []),
+            ((2, 18), {"law": "subset", "k": 9}, [(0, 2), (7, 9)], [0], [1]),
+            ((10, 10), {"law": "subset", "k": 2}, [(0, 2), (0, 2)], [0, 1], []),
+            ((10, 10), {"law": "subset", "k": 17}, [(7, 10), (7, 10)], [], [0, 1]),
+            ((2, 18), {"law": "bernoulli", "p": "0/1"}, [(0, 0), (0, 0)], [0, 1], [])]
+    for counts, law, bounds, missed, differ in rows:
+        rec, program, query, ports = _window(law, counts)
+        n = sum(counts)
+        members, past = [([[0, counts[0]]], 1), ([[counts[0], n]], 1)], [([[0, counts[0]]], 1), ([[counts[0], n + 1]], 1)]
+        assert LP.bounds(*LP.law_of(program, query, law), members) == bounds, law
+        assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, law
+        assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, law
+        refused = sorted({*missed, *differ})
+        codes = ("link-points",) if refused else ()
         for ms, want in ((members, codes), ((), ()), (past, ("link-points",))):
             v = V.check(rec, program, query, law, S.SCHEME, ports, members=ms)
             side = {"ok": not want, "codes": list(want)}
             assert v.codes == want and v.verifiers == {"of_record": "lean", "lean": side, "python": side}, (law, ms)
         py = R.check(rec, program, query, law, S.SCHEME, ports, members=members)
-        assert py.codes == codes and py.detail == ({"link-points": {"members": [1]}} if codes else {})
-    assert [s["k"] for s in rec["law"]["strata"]] == [1, 9]
+        assert py.codes == codes and py.detail == ({"link-points": {"members": refused}} if refused else {}), law
+        if law["law"] == "stratified":
+            assert [s["k"] for s in rec["law"]["strata"]] == [lo for lo, _ in bounds]
 
 
 def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():

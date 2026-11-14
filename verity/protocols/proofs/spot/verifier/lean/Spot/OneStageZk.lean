@@ -59,9 +59,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
   accepts where every statement's session accepted and v1's check at the coins accepts on their verdicts, as the one
   statement's check does (`checkMembersAt_accept`). v1's check reads the members there
-  (`membersParamsOfJson_linked`), so its registration check refuses a registration under which a member's sampled
-  proof blocks give two counts of link points (`link-points`). `protocol` reads either form (`paramsEitherOfJson`,
-  `evidenceEitherOf`): `proofs` of the one statement's keys is read by `paramsOfJson` and `evidenceOf`, whose
+  (`membersParamsOfJson_linked`), so its registration check refuses a registration under which a sample that ends
+  misses a member, or a member's sampled proof blocks give two counts of link points (`link-points`). `protocol`
+  reads either form (`paramsEitherOfJson`, `evidenceEitherOf`): `proofs` of the one statement's keys is read by
+  `paramsOfJson` and `evidenceOf`, whose
   parameters name no members (`paramsOfJson_members`) and whose evidence names no statements
   (`evidenceOf_statements`), and `proofs` of the form's keys by the form's own parsers (`membersParamsOfJson`,
   `membersEvidenceOf`). The check at the coins (`checkBlobsAt`, which `live` runs) is the one statement's

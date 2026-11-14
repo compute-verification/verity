@@ -294,9 +294,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the
     supplied values' `history` sources. History tables both verifiers refuse fail it with `R.HISTORY` alone. With
     `members`, the per-member form's (each its units' ``[lo, hi)`` ranges and its circuit's units a proof block), both
-    hold them to `link-points` after R8 (`registration.check`'s ``members``, `Registration.linkRefused`), as the
-    compiled check of that form does the members its parameters name (`OneStageZk.membersParamsOfJson`); with none,
-    the one-statement form's, neither does."""
+    hold them to `link-points` after R8 (`registration.check`'s ``members``, `Registration.linkRefused`: a sample
+    that ends misses no member and gives each one count of link points), as the compiled check of that form does the
+    members its parameters name (`OneStageZk.membersParamsOfJson`); with none, the one-statement form's, neither does."""
     log, members = list(log), [([list(r) for r in us], g) for us, g in members]
     try:
         py: Verdict | None = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition,

@@ -5813,25 +5813,53 @@ def test_a_piece_agrees(pieces, port, examples):
 def test_link_points_holds_the_per_member_forms_members_as_the_python_does(pieces):
     """The registration's `link-points` on the per-member form's members, Lean's answers the Python's (the piece's
     ``members``, which `Registration.check` reads as it reads the ones `OneStageZk.membersParamsOfJson` hands it from a
-    case's parameters; `registration.check`'s ``members``). A window of PAIR's two proof blocks and TRIPLE's eighteen,
-    a member each at one unit a proof block: under `subset:9` a sample that ends holds seven to nine of TRIPLE's, whose
-    session opens 3 link points at seven or eight and 4 at nine, and the registration is refused for `link-points`
-    alone; under `stratified:10` each member holds a stratum whole, sampled once and nine times, one count each, and
-    the registration passes. With no members, the one-statement form's, both records pass. Then registrations of
-    such windows and of small ones, their members cut at random and some broken, agree, a share of them refused for
-    their link points and a share passed."""
-    s = LINK_SETUPS[1]
-    members = [{"units": [[0, 2]], "vus_per_block": 1}, {"units": [[2, 20]], "vus_per_block": 1}]
-    for law, codes in (({"k": 9, "law": "subset"}, ["link-points"]), ({"k": 10, "law": "stratified"}, [])):
+    case's parameters; `registration.check`'s ``members``). Two windows of two members at one unit a proof block:
+    PAIR's two proof blocks and TRIPLE's eighteen, a template each, and one template's twenty-four cut in half. A row
+    is a sampling design with each member's fewest and most sampled proof blocks over the samples that end, the members
+    a sample that ends misses (fewest none) and the members whose fewest and most open different link points (3 up to
+    eight proof blocks, 4 up to sixteen, 5 past). The `link_points` piece answers those counts and the members of
+    either list, and the registration is refused, for `link-points` alone, exactly where a list holds a member:
+
+    * a stratum inside each member (`stratified:10` over the two templates), or a subset that leaves out one proof
+      block (`subset:19`, `subset:23`): no sample misses a member and each has one count, so the registration passes;
+    * `subset:9` over two and eighteen misses PAIR's member and holds seven to nine of TRIPLE's, 3 link points or 4;
+    * `subset:20` over the halves holds eight to twelve of each, 3 link points or 4, and misses neither;
+    * `subset:2` over two and eighteen, and `stratified:1` over the halves, whose one stratum holds both members,
+      miss either member and give each one count: link points alone pass them;
+    * a Bernoulli law of rate 0 samples nothing, so each member's fewest and most are none: link points alone pass it.
+
+    With no members, the one-statement form's, every record passes. Then registrations of such windows and of small
+    ones, their members cut at random and some broken, agree, a share of them refused for their link points and a
+    share passed."""
+    two = [{"units": [[0, 2]], "vus_per_block": 1}, {"units": [[2, 20]], "vus_per_block": 1}]
+    half = [{"units": [[0, 12]], "vus_per_block": 1}, {"units": [[12, 24]], "vus_per_block": 1}]
+    rows = [(1, two, {"k": 10, "law": "stratified"}, [[1, 1], [9, 9]], [], []),
+            (1, two, {"k": 19, "law": "subset"}, [[1, 2], [17, 18]], [], []),
+            (0, half, {"k": 23, "law": "subset"}, [[11, 12], [11, 12]], [], []),
+            (1, two, {"k": 9, "law": "subset"}, [[0, 2], [7, 9]], [0], [1]),
+            (0, half, {"k": 20, "law": "subset"}, [[8, 12], [8, 12]], [], [0, 1]),
+            (1, two, {"k": 2, "law": "subset"}, [[0, 2], [0, 2]], [0, 1], []),
+            (0, half, {"k": 1, "law": "stratified"}, [[0, 1], [0, 1]], [0, 1], []),
+            (1, two, {"law": "bernoulli", "p": "0/1"}, [[0, 0], [0, 0]], [0, 1], [])]
+    for setup, members, law, bounds, missed, differ in rows:
+        s = LINK_SETUPS[setup]
         rec = _record_of(s, None, law, WINDOW, leaf_layer=LEAF)
+        assert [i for i, (lo, _) in enumerate(bounds) if lo == 0] == missed, law
+        assert [i for i, (lo, hi) in enumerate(bounds) if LP.nbl(1, lo) != LP.nbl(1, hi)] == differ, law
+        refused = sorted({*missed, *differ})
+        counts = {"law": rec["law"], "members": members, "population": rec["population"]}
+        assert link_points(counts) == {"bounds": bounds, "refused": refused}, law
+        assert D.replay(LINK_POINTS, counts, pieces) == ("output", D.canonical(link_points(counts))), law
         given = {"params": {"anchors": [], "delta": "1/1000", "law": law, "leaf_layer": LEAF, "log": [],
                             "partition": None, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
                             "scheme": SCHEME, "work_table": None}, "record": rec}
+        codes = ["link-points"] if refused else []
         for case, want in (({**given, "members": members}, codes), (given, []), ({**given, "members": []}, [])):
             reg = registration(case)
             assert reg["codes"] == want, (law, case.get("members"))
             assert D.replay(REGISTRATION, case, pieces) == ("output", D.canonical(reg))
-    assert [t["k"] for t in rec["law"]["strata"]] == [1, 9]
+        if law["law"] == "stratified":
+            assert [t["k"] for t in rec["law"]["strata"]] == ([1, 9] if setup else [1])
     seen: dict[bool, int] = {}
 
     def counted(j):
