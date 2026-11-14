@@ -6,8 +6,8 @@ import json
 from fractions import Fraction
 from pathlib import Path
 
-import lean_headline as H
 import loads
+from verity_machine_model import lean_headline as H
 from verity_machine_model.model import census, model, vector
 
 PROGRAMS = Path(__file__).resolve().parent / "fixtures" / "census_programs.json"

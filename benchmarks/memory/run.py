@@ -39,8 +39,11 @@ prints afterwards, since that document is how `--from` knows the run's session f
 Under `research run` an accepted session of a node run or of `--from` also writes the run's result,
 `$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
 (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
-alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), `verified` (the bytes
-the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each reading the
+alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), the same number under
+`METRIC`, the id this directory's `metrics.toml` holds it to on the console's Metrics tab, with its `TARGET` (and, unbound,
+`"bound": false` and the premise in its verdict, which also names an error above 2^`ERROR_BOUND_LOG2`), `verified`
+(the bytes the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each
+reading the
 ledger holds (`READINGS`: the node's read rate times the span, and γ of it), and `error` (the probability the verified
 amount doesn't hold). A reading's rate is the verifier's own figure for the node (`timing.py`), not the registered
 hardware's, and the capacity's unit says so. The references are other runs' numbers and are not in the result; a
@@ -73,6 +76,8 @@ SETTINGS = of(__file__)
 #: openings a window
 UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
+#: the number's row on the console's Metrics tab (this directory's `metrics.toml`), and the goal's target for it
+METRIC, TARGET = "memory-accounting/node-read-rate-uncertified", 0.14
 #: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
 #: ledger, and the windows' PRF advantages are in no δ
 ERROR_FORM = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
@@ -85,8 +90,14 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
+#: what an unbound session's number rests on, in its Metrics row's verdict
+HELD_NONE = "the verifier held no checkpoint"
 #: a node's store that its verifier bound to no model, in the store's line
-UNBOUND = "the verifier held no checkpoint: the store's bytes are the developer's choice"
+UNBOUND = f"{HELD_NONE}: the store's bytes are the developer's choice"
+#: the goal's bound on the number's error, as log2: a Metrics row whose error the record holds above it, or holds
+#: none of, names that premise in its verdict
+ERROR_BOUND_LOG2 = -100
+ABOVE_BOUND = f"its error is above 2^{ERROR_BOUND_LOG2}"
 #: the readings of the verifier's ledger, each the key it holds one under and the read rate it takes for the node: the
 #: number is printed at the first
 READINGS = {"spec": "the data sheet's read bandwidth", "measured": "the measured read rate"}
@@ -408,6 +419,11 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     run and the keys of the session's entry in that record it was read from.
 
     - `metric`: the printed number in its unit.
+    - `METRIC`: the same number, the Metrics tab's row (this directory's `metrics.toml`), with `TARGET` and where the number
+      stands against it. A session whose verifier held no checkpoint still writes the row, with `"bound": false` and
+      its verdict naming that premise (`HELD_NONE`); a bound session's row holds neither. Where the number's error is
+      above 2^`ERROR_BOUND_LOG2` the verdict names that too (`ABOVE_BOUND`): the record's declared error at the first
+      reading where it holds one, else the ledger's own, and above it where the record holds neither.
     - `verified`: the bytes the verifier certified read over the session's span, its own `certified_bytes` at the
       reading the number is printed at; none at a share of 1 or more, which certifies nothing.
     - `capacity at READING`, for each reading the ledger holds (`READINGS`): the reading's read rate times the
@@ -424,7 +440,16 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     A measurement whose keys the record doesn't hold as numbers is left out."""
     run = [doc["run"]] if doc["run"] else []
     first = next(iter(READINGS))
-    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}]
+    error = _at(ledger, "declared", "gamma", first, "error", "windows")
+    error = _at(ledger, first, "error", "windows") if error is None else error
+    premises = [*([] if doc.get("bound") is True else [HELD_NONE]),
+                *([ABOVE_BOUND] if error is None or error > 2.0 ** ERROR_BOUND_LOG2 else [])]
+    row = {"name": METRIC, "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"],
+           "target": TARGET,
+           "verdict": "; ".join(["within target" if doc["value"] <= TARGET else "past target", *premises])}
+    if doc.get("bound") is not True:
+        row["extra"] = {"bound": False}
+    out = [{"name": "metric", "value": doc["value"], "unit": doc["unit"], "inputs": [*run, f"ledger.{first}.gamma"]}, row]
     if (verified := _at(ledger, first, "certified_bytes")) is not None:
         out.append({"name": "verified", "value": max(verified, 0.0), "unit": BYTES,
                     "inputs": [*run, f"ledger.{first}.certified_bytes"]})

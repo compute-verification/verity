@@ -305,7 +305,7 @@ first 16 bytes) and one session twice; two entries with one key identifier; a pe
 entry's stretch; parameters that still name `"key"`, `"session"` or `"sessions"`; and, at a link-window, a signer
 that is a listed key outside its stretch or is not listed. `certifierEntries` and `certifierLink` read the entries
 and the link off the parameters through the period's own decoder, for a composition that pins them. The period check
-is not in the public tree, because it reads the inference-only policy's layout check, which is withheld.
+reads the inference-only policy's layout check.
 
 ## A served link (`served`)
 

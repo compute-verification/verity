@@ -1,6 +1,7 @@
 """The adapter's fixed cases: case name -> the Hugging Face repo whose `manifests/checkpoints.json` entry the case runs.
 
-`engine_profile.checkpoint_for` resolves a case here first, and a role registered by `add_checkpoint.py` (`role == case`) otherwise.
+`engine_profile.checkpoint_for` resolves a case here first, and a role of the manifest (`role == case`) otherwise: an entry added
+by hand, or by `fp8-checkpoint pin` or `int8-checkpoint pin` for a recipe pin.
 `ACCEPTED` names the accepted record of the cases that have one.
 Imports nothing, so every layer may read it."""
 
