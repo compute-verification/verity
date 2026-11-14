@@ -1,4 +1,4 @@
-"""`verity_vllm.pipeline.m1_capture`: the Match stage's capture and control arms, `main` whole, on the CPU.
+"""`verity_vllm.pipeline.match_capture`: the Match stage's capture and control arms, `main` whole, on the CPU.
 
 Stood in, each because it needs a GPU, vLLM or a checkpoint: the workload's reading, the engine's build, its run of the
 requests, its version facts and its scheduler's lag, the observer and its header, the acquisition's stage and its hooks, and
@@ -26,7 +26,7 @@ pytest.importorskip("torch")
 
 import torch
 
-import verity_vllm.pipeline.m1_capture as M1
+import verity_vllm.pipeline.match_capture as M1
 from verity_vllm.acquire import install, stage
 from verity_vllm.observe import capture as OC
 

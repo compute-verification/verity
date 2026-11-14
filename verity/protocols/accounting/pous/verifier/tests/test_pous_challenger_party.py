@@ -388,7 +388,9 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert CS.placement("n0", "auditor-host", key, **under) == {
         "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"}, "kind": "own-host",
         CS.PREMISE: f"holds: the session is signed under the key configuration {conf} pins for memory-challenger's "
-                    "pous sessions; the memory challenger ran on auditor-host, not the prover's n0"}
+                    "pous sessions; the memory challenger ran on auditor-host, not the prover's n0",
+        "setup": CS.SETUP}
+    assert CS.SETUP == "setup checked by the developer, not the auditor"
     assert not mc.holds(CS.placement("n0", "auditor-host", "ef" * 64, **under))
     assert not mc.holds(CS.placement("n0", "auditor-host", key, **under | {"committed": frozenset()}))
     assert CS.placement("n0", "auditor-host")[CS.PREMISE].startswith(f"{mc.UNCOMMITTED} (no configuration); ")

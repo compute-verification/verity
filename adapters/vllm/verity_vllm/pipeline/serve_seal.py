@@ -224,7 +224,7 @@ def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:
         com.device_pool_record = com.enable_device_pool(int(opts.retention.retain_device_gb * (1 << 30)))
     if opts.seal:
         com.register_weights()           # the weights tree every sealed window's bundle carries (hashed as VERITY_WEIGHTS_HASH says)
-    from verity_vllm.pipeline.m1_capture import dump_cos_sin
+    from verity_vllm.pipeline.match_capture import dump_cos_sin
 
     (private := Path(opts.out) / "private").mkdir(exist_ok=True)
     dump_cos_sin(llm, private)
