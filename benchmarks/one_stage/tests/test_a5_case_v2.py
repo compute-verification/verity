@@ -302,7 +302,9 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     over 40 units a sample that ends holds 8 to 20 of a member of 28, whose link points differ at one unit a proof block,
     so it is recorded refused, and not at four; one of 8, or of 4 at two a proof block, is not. Under `subset:2` a sample
     that ends holds at most 2 of it, so it is not refused (one that runs out of coins fails the window:
-    `a5.draw_ran_out`). A sampling design that doesn't apply refuses every member, recorded with why."""
+    `a5.draw_ran_out`). A sampling design that doesn't apply refuses every member, recorded with why. The registration's
+    check is handed those members (`a5.link_members`), and refuses the recorded one, where the audit's case is of the
+    per-member form (`a5.per_member`): several members under `--zk` sessions, where `a5.members_proof` writes one."""
     def member(k: int, template: str, base: int, n: int, g: int) -> dict:
         return {"k": k, "m": SimpleNamespace(template=template, base=base, n=n), "st": {"meta": {"vus_per_block": g}}}
 
@@ -313,6 +315,12 @@ def test_a5_records_the_members_whose_link_points_the_registration_refuses():
     assert a5.link_points({"k": 2, "law": "subset"}, 40, ms) == {"members": 3, "refused": []}
     got = a5.link_points({"k": 41, "law": "subset"}, 40, ms)
     assert got == {"members": 3, "error": "a subset draw of 41 exceeds the population of 40"}
+    from verity.protocols.proofs.spot.verifier.one_stage import link_points as LP
+
+    assert a5.link_members(ms) == [([[0, 28]], 1), ([[28, 36]], 1), ([[36, 40]], 2)]
+    assert LP.refused({"k": 20, "law": "subset"}, 40, a5.link_members(ms)) == [0]
+    assert [a5.per_member(ms[:n], zk) for n in (1, 2, 3) for zk in (True, False)] == [False, False, True, False, True, False]
+    assert a5.members_proof(ms[:1], [], True) is None and isinstance(a5.members_proof(ms, [], False), str)
 
 
 def test_a5_records_a_law_none_of_whose_draws_ends(monkeypatch):
