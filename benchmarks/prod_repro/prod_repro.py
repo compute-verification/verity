@@ -82,7 +82,7 @@ ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "benchmarks/serve_tax"))
 import replay as R  # noqa: E402 (benchmarks/serve_tax, put on sys.path above)
 import serve_tax as S  # noqa: E402
-from verity_config.settings import SHARED  # noqa: E402 (the tree's verity/configuration/config, which serve_tax put on sys.path)
+from verity_config.settings import SHARED  # noqa: E402 (the tree's tools/config, which serve_tax put on sys.path)
 
 SCHEMA = "verity-bench/prod-repro/v0"
 #: the arms a job serves by default, stock, stock again and ours: the arms at vLLM's published serving settings
