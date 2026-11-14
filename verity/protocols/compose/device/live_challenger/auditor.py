@@ -791,7 +791,7 @@ def policy_name_of(s: str) -> str:
 
 def alpha_of(s: str) -> list[int]:
     """A period-open's α (`--alpha N/D`, written as `alpha`, ``[N, D]``): the most novel bits a gate the inference-only
-    policy lets an isolation unit read, as its check's params read it (`InferenceOnlyCheck.Protocol`: naturals, D at least 1). It
+    policy lets an inference block read, as its check's params read it (`InferenceOnlyCheck.Protocol`: naturals, D at least 1). It
     is signed as given, never reduced; or Refused."""
     n, slash, d = s.partition("/")
     if not (slash and NATURAL.fullmatch(n) and NATURAL.fullmatch(d) and int(d)):
@@ -801,8 +801,8 @@ def alpha_of(s: str) -> list[int]:
 
 
 def gamma_of(s: str) -> int:
-    """A period-open's Γ (`--gamma`, written as `gamma`): the most gates the inference-only policy lets an isolation
-    unit hold, a natural as its check's params read it (`InferenceOnlyCheck.Protocol`), or Refused."""
+    """A period-open's Γ (`--gamma`, written as `gamma`): the most gates the inference-only policy lets an inference
+    block hold, a natural as its check's params read it (`InferenceOnlyCheck.Protocol`), or Refused."""
     if not NATURAL.fullmatch(s):
         raise Refused(f"--gamma {s[:200]!r}: the inference-only policy's Γ, a natural in plain decimal of at most 39 "
                       "digits with no sign or leading zero")
