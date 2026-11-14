@@ -20,7 +20,7 @@ Run (pod, venv with the pinned vLLM, SmolLM2 snapshot under $HF_HOME):
       python -m pytest tests/program/test_artifact_applicability_independent.py -q -rA
 Env: CBTEST_OUT (build outputs; default a tmp dir), CBTEST_REUSE=1 (reuse finished builds under CBTEST_OUT), CBTEST_JOBS (parallel
 builds, default 6), CBTEST_GPU_HOST=1 (also run the GPU-visible host-mismatch build), CBTEST_SKIP_BUILDS=1 (static tests only).
-The reference hosts' recorded manifests are `test_artifact_applicability_independent_of_record`.
+The reference hosts' recorded manifests (`R9_REFERENCE_MANIFESTS`) are read only where a checkout holds them.
 """
 
 from __future__ import annotations
