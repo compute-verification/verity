@@ -239,7 +239,7 @@ def test_a_workload_without_registered_values_keeps_its_digest():
 
 
 def test_theta_registered_binds_the_weights_at_registration_and_moves_only_the_workload_digest():
-    """The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`): `theta_registered` lowers the
+    """The inference-only check reads only registered inputs as θ (inference-only-check's `theta-not-registered`): `theta_registered` lowers the
     weights as `RegisteredInput<w>_v1`, still θ, and every other input as before. The components are the same Definitions, so
     their request digests stand and only the workload digest moves; off, it is the digest pinned above."""
     from verity.circuits.ports import facts
