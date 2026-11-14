@@ -312,6 +312,69 @@ def test_a_producer_whose_first_view_leaves_its_allocation_or_offset_out_is_foun
     assert refused(e, field, None)
 
 
+# ------------------------------------------------------------------------------------------------------------ a view's numbers, as `int` reads them
+
+def test_a_member_is_read_through_a_view_that_states_its_allocation_or_offset_as_int_reads_it(tmp_path):
+    whole = oracle(tmp_path / "whole").member_bytes(0, EMBED, "out", "r1")
+    assert whole[0] is not None and len(whole[0]) == 3 * 2 * H and whole[1:] == (None, 3)
+    for field, stated in [("alloc", "11"), ("alloc", 11.0), ("offset", "4"), ("offset", 4.9), ("offset", True)]:
+        def second_row(lines: list[dict[str, Any]], field: str = field, stated: Any = stated) -> None:
+            put(embed_instances(lines)[1]["output_views"][0], (field,), stated)      # request r1's second row: allocation 11, offset 4
+
+        read = oracle(tmp_path / f"{field}-{stated}", "instances", second_row).member_bytes(0, EMBED, "out", "r1")
+        if stated is True:
+            assert read[0] is not None and read[0][2 * H:4 * H] == whole[0][2:2 + 2 * H] and read[1:] == (None, 3)      # the row at element 1
+        else:
+            assert read == whole
+
+
+def test_instances_are_ordered_by_the_offset_their_first_view_states_as_int_reads_it(tmp_path):
+    whole = oracle(tmp_path / "whole").member_bytes(0, EMBED, "out", None)
+    assert whole[0] is not None and len(whole[0]) == 8 * 2 * H and whole[1:] == (None, 8)
+
+    def as_text(lines: list[dict[str, Any]]) -> None:
+        for m in embed_instances(lines):
+            m["output_views"][0]["offset"] = str(m["output_views"][0]["offset"])      # "8" sorts after "20", and 8 before 20
+
+    assert oracle(tmp_path / "text", "instances", as_text).member_bytes(0, EMBED, "out", None) == whole
+
+
+def a_producer_a_row(text_at: str | None = None) -> Callable[[list[dict[str, Any]]], None]:
+    """Before each instance of the embedding, in its row's group, a producer whose one output view is the embedding's operand view;
+    with `text_at`, the views of `text_at` ("output_views": the producers'; "operand_views": the embeddings') state their allocation
+    and their offset as text."""
+    def change(lines: list[dict[str, Any]]) -> None:
+        for m in embed_instances(lines):
+            fed_by = dict(copy.deepcopy(m), operand_views=[], output_views=copy.deepcopy(m["operand_views"]))
+            lines.insert(lines.index(m), fed_by)
+            if text_at is not None:
+                view = (fed_by if text_at == "output_views" else m)[text_at][0]
+                view.update(alloc=str(view["alloc"]), offset=str(view["offset"]))
+    return change
+
+
+@pytest.mark.parametrize("text_at", [None, "output_views", "operand_views"])
+def test_the_producer_an_operand_names_is_found_by_the_allocation_and_offset_as_int_reads_them(tmp_path, text_at):
+    whole = oracle(tmp_path / "whole").member_bytes(0, EMBED, "out", "r1")
+    fed = oracle(tmp_path / "fed", "instances", a_producer_a_row(text_at))
+    assert fed.member_bytes(0, EMBED, "out", "r1", producer={"spec": "X_v1", "operand": "X_v1"}) == whole and whole[0] is not None
+
+
+@pytest.mark.parametrize("field", ["alloc", "offset"])
+def test_a_promoted_members_producer_is_one_instance_whichever_way_its_first_view_states_its_allocation_and_offset(tmp_path, field):
+    whole = oracle(tmp_path / "whole", "instances", read_through_the_second_view()).member_bytes(0, "top", "out", "r1", producer=PROMOTED)
+    assert whole[0] is not None and len(whole[0]) == 3 * 2 * H and whole[1:] == (None, 3)
+
+    def twice(lines: list[dict[str, Any]]) -> None:
+        read_through_the_second_view()(lines)
+        for norm in [m for m in lines[1:] if m["hint"].startswith(NORM + "/")]:
+            again = copy.deepcopy(norm)
+            again["output_views"][0][field] = str(norm["output_views"][0][field])
+            lines.insert(lines.index(norm) + 1, again)
+
+    assert oracle(tmp_path / "twice", "instances", twice).member_bytes(0, "top", "out", "r1", producer=PROMOTED) == whole
+
+
 # ------------------------------------------------------------------------------------------------------------ a view's shape, strides and dtype
 
 #: what a view states under `shape` or `strides` that tests true and is no list of numbers
