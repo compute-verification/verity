@@ -20,8 +20,9 @@ CONTROL = Path(__file__).resolve().parent / "fixtures" / "control"
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
 
 FAKE = {
-    # the mount points mountinfo lists, one per line of $MOUNTS, as `awk '{print $5}' /proc/self/mountinfo` prints them
-    "awk": '#!/bin/sh\ncat "$MOUNTS"\n',
+    # the mount points mountinfo lists, one per line of $MOUNTS, as `awk '{print $5}' /proc/self/mountinfo` prints them;
+    # the mounts are never made, so the check that each stays read-only finds none writable
+    "awk": '#!/bin/sh\ncase "$*" in *SANDBOX_KEPT*) exit 0;; esac\ncat "$MOUNTS"\n',
     "mount": '#!/bin/sh\necho "$*" >> "$LOG"\nexit 0\n',
     "setpriv": '#!/bin/sh\nwhile [ "$1" != -- ]; do shift; done\nshift\nexec "$@"\n',
 }
@@ -139,6 +140,32 @@ def test_inside_the_sandbox_a_read_only_dir_is_read_and_never_written(tmp_path):
                        capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert (out / "got").read_bytes() == b"sealed" and not (seal / "no").exists()
+
+
+@needs_unshare
+@pytest.mark.parametrize("refused", ["tree", "cache"])
+def test_a_mount_whose_read_only_remount_fails_stops_the_sandbox_before_its_command_runs(tmp_path, refused):
+    """The tree and an RO_DIR (Lake's artifact cache, or a seal) are each a mount of their own, made in a mount namespace
+    of the test's own, and a `mount` before the real one refuses the read-only remount of one of them, as a node's
+    kernel or mount can. That mount would stay writable inside, so the sandbox names it and exits before CMD runs: no
+    write lands in the tree or the cache."""
+    tmp = tmp_path.resolve()
+    tree, cache = tmp / "tree", tmp / "cache"
+    (tree / "pkg").mkdir(parents=True)
+    cache.mkdir()
+    (bin_ := tmp / "bin").mkdir()
+    (bin_ / "mount").write_text(f'#!/bin/sh\n[ "$*" != "-o remount,bind,ro {tmp / refused}" ] || exit 32\n'
+                                f'exec {shutil.which("mount")} "$@"\n')
+    (bin_ / "mount").chmod(0o755)
+    r = subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c",
+                        'mount --bind "$0" "$0" && mount --bind "$1" "$1" && exec "${@:2}"', str(tree), str(cache),
+                        *UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(cache), str(tree / "pkg" / ".lake"), "--",
+                        "sh", "-c", 'touch "$0/pkg/no" "$1/no"; touch "$0/pkg/.lake/ran"', str(tree), str(cache)],
+                       env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}, capture_output=True, text=True)
+    assert r.returncode == 3, r.stdout + r.stderr
+    assert f"these mounts stay writable here, which the build could write through: {tmp / refused} (" in r.stderr, r.stderr
+    assert not (tree / "pkg" / "no").exists() and not (cache / "no").exists()
+    assert not (tree / "pkg" / ".lake" / "ran").exists(), "CMD never ran"
 
 
 @needs_unshare

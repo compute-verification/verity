@@ -4598,7 +4598,8 @@ _SANDBOX: bool | None = None
 
 def sandboxed() -> bool:
     """Whether builds run in `sandbox.sh` here: it needs `unshare` and unprivileged user namespaces, and it must leave this
-    tool's own directory read-only (checked, not assumed). The audit says when it had to build without one; the
+    tool's own directory read-only (checked, not assumed); where a mount's read-only remount fails, the sandbox refuses
+    to run anything, so there is none here. The audit says when it had to build without one; the
     `compile-time` check then stands in for the sandbox."""
     global _SANDBOX
     if _SANDBOX is None:

@@ -7,7 +7,7 @@
 # artifact cache, or the seal the sampled recompile reads) lives under one, no network, and a fresh /proc. TMPDIR, TEMP
 # and TMP name a writable directory: TMPDIR if it is under an RW_DIR, else the private /tmp, else a private tmpfs on the
 # first RW_DIR's `.sandbox-tmp` (a tmpfs is gone with the sandbox), so a build writes nothing outside the RW_DIRs that
-# outlives it.
+# outlives it. Where a mount CMD could reach stays writable (its remount was refused), the sandbox refuses to run CMD.
 # An RO_DIR under an RW_DIR (a build's fetched dependencies) is bound read-only over itself.
 # With --at, TREE is also bound at FIXED, with every RW_DIR under it, and CMD starts in FIXED's copy of the directory it
 # was started in (one under TREE). Lean writes a source's absolute path into what it compiles, so a build that reads its
@@ -47,14 +47,17 @@ for d in "${ro[@]}"; do
 done
 private_tmp=
 private_var_tmp=
+ours=()
 for t in /tmp /dev/shm /var/tmp; do
   [ -d "$t" ] || continue
   case "$seen" in *" $t/"*) continue;; esac
   mount -t tmpfs -o mode=1777 tmpfs "$t"
+  ours+=("$t")
   [ "$t" != /tmp ] || private_tmp=1
   [ "$t" != /var/tmp ] || private_var_tmp=1
 done
 mount -t proc proc /proc
+ours+=(/proc)
 if [ -n "$at" ]; then
   case "$at" in
     /var/tmp/*/*|/var/tmp/.|/var/tmp/..) echo "sandbox.sh: --at $at: the fixed path is one name in /var/tmp" >&2; exit 2;;
@@ -96,6 +99,28 @@ elif [ -z "$tmp" ]; then
   tmp="${rw[0]}/.sandbox-tmp"
   mkdir -p "$tmp"
   mount -t tmpfs -o mode=1777 tmpfs "$tmp"
+  ours+=("$tmp")
+fi
+# A mount whose read-only remount failed would leave the tree, an RO_DIR or a cache writable, so every mount CMD can
+# reach must now be read-only but the RW_DIRs (and their copies at FIXED) and the tmpfs and /proc made here. A mount
+# is out of reach when a later one sits at its point or above it (mountinfo lists mounts in the order they were made).
+for w in "${rw[@]}"; do
+  [ -z "$at" ] || case "$w/" in "$tree"/*) ours+=("$at${w#"$tree"}");; esac
+done
+stuck=$(SANDBOX_KEPT=$(printf '%s\n' "${rw[@]}" "${ours[@]}") awk '
+  BEGIN { n = split(ENVIRON["SANDBOX_KEPT"], k, "\n"); for (i = 1; i <= n; i++) kept[k[i]] = 1 }
+  { m[NR] = $5; o[NR] = $6 }
+  END {
+    for (i = 1; i <= NR; i++) {
+      hid = 0
+      for (j = i + 1; j <= NR && !hid; j++) hid = m[j] == "/" || m[j] == m[i] || index(m[i], m[j] "/") == 1
+      if (!hid && o[i] !~ /^ro(,|$)/ && !(m[i] in kept)) print m[i]
+    }
+  }' /proc/self/mountinfo)
+if [ -n "$stuck" ]; then
+  echo "sandbox.sh: these mounts stay writable here, which the build could write through:" $stuck "(their read-only" \
+    "remount failed). Run the build where every mount can be remounted read-only in a user namespace." >&2
+  exit 3
 fi
 export TMPDIR="$tmp" TEMP="$tmp" TMP="$tmp"
 echo 0 > /proc/sys/user/max_user_namespaces
