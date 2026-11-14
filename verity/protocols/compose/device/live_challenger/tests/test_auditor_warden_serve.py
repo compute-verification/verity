@@ -6,7 +6,6 @@ hold a run's own lines, which the released keys' lists declare; and its relay se
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
 import json
 import math
 import re
@@ -17,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.certifier.device import released_keys as RK, warden_serve as ws
+from verity.protocols.accounting.certifier.device.tests.relay_runs import _response, _run, _session_argv
 from verity.protocols.accounting.certifier.prover import scan_zk as sz
 from verity.protocols.accounting.certifier.verifier import load_check as LK, relay_check as RC, warden_rows as WR
 
@@ -24,12 +24,6 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location(
-    "device_warden_serve_cases",
-    Path(__file__).resolve().parents[6] / "verity/protocols/accounting/certifier/device/tests/test_warden_serve.py")
-T = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(T)
-_run, _response = T._run, T._response
 
 
 def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
@@ -374,7 +368,7 @@ def test_the_gates_relay_session_is_the_session_the_devices_tests_run(tmp_path):
     for fd in (None, 9):
         gate = A.warden_command(req, tmp_path / "run", "http://127.0.0.1:40001", listen=40002, listen_fd=fd)
         assert ws.parser().parse_args(gate[2:]) == \
-            ws.parser().parse_args(T._session_argv(tmp_path / "run", 3, listen_fd=fd)), fd
+            ws.parser().parse_args(_session_argv(tmp_path / "run", 3, listen_fd=fd)), fd
     held = A.held_listener()
     assert held.getsockname()[0] == "127.0.0.1"
     with socket.create_connection(held.getsockname()):
