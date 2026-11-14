@@ -1,8 +1,10 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import RemoteAudit.Difftest
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import RemoteAudit.Difftest
@@ -168,8 +170,24 @@ def protocol : Core.Protocol where
   publicJson := Public.toJson
   profileJson := id
 
+/-- **What a session accounts for** (`Core.Account`): the reads of the node's memory its openings certify
+(`q_bytes`), verified from below at `eps`, over the session. A session the pooled bound refuses publishes 0 reads at
+`eps` 0, a true lower bound, so nothing is flagged.
+
+It names no device and no registration's head, and states no span: the session publishes none. What it would say
+beyond what `Core.Account` holds: which tiers the registered blocks were read from, which the answer doesn't publish
+(the node's GPUs' memory and its host's DRAM, the session ledger's two tiers); and the bytes the node held through the
+session, which is the ledger's line on these reads and the node's rates, an amount of memory over a span, not an
+answer of this protocol. -/
+def account : Core.Account :=
+  { protocol := ID, head := none
+    amounts := [{ metric := "reads", part := .read [.hbm, .dram], key := .published "q_bytes",
+                  unit := Core.Account.bytes, side := .verified, time := .unstated, error := .published "eps",
+                  uncertified := .safe }] }
+
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
   some "params: params: the keys must be [not_before_ns, params], not []"
+#guard account.Formed ∧ account.protocol = protocol.id
 #guard (ratio DELTA).toString == "1/1099511627776"
 private def three : Session.Params :=
   { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }

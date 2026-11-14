@@ -1,9 +1,11 @@
 module
 
+public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
 public import PousCheck.Certificate
 public import PousCheck.Run
+meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import PousCheck.Certificate
@@ -306,6 +308,21 @@ def protocol : Core.Protocol := mkProtocol ID SCHEMES
 /-- The same check under the test signers' schemes alone, its id `test/verity/pous/p2/v4/run`. -/
 def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
+/-- **What a run accounts for** (`Core.Account`): the bits of `C*` a node held in its GPUs' memory when the challenges
+arrived (`s_bits`), verified from below at the error its certificate states (`eps`), at a moment. A run off every
+certificate publishes `certified` false, and its rows say so. The capacity a run is checked at is its certificate's
+`call_ns`, which its profile names and `Certificate.ROOT_CALL_NS` fixes.
+
+It names no device and no registration's head. What it would say beyond what `Core.Account` holds: when in the period
+the node held the bits (an amount at a moment states no span, and a series names no time); the tier the store is in,
+which the answer doesn't publish (the GPUs' memory, `.hbm`, is where PoUS keeps `C*`); and the memory challenger's key
+the session was signed under, which is in the parameters' `trusted` list and not in the answer. -/
+def account : Core.Account :=
+  { protocol := ID, head := none
+    amounts := [{ metric := "held", part := .memory [.hbm], key := .published "s_bits", unit := Core.Account.bits,
+                  side := .verified, time := .moment, error := .published "eps",
+                  uncertified := .flagged (.published "certified") }] }
+
 /-- **The protocol accepts exactly when `accepts` does**, on the case's point, keys, setup, table, session and id. -/
 theorem protocol_accepts (p : Params) (pub : SetupProtocol.Public) (e : Evidence) :
     protocol.Accepts p pub e ↔
@@ -376,5 +393,6 @@ private def TIE_PUB : SetupProtocol.Public :=
   s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"
 #guard ((wide320Certificate 16448 21065 (2 ^ 19)).map (·.theoremName)) == some "Pous.SecurityProofs.ObligationWide320"
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason.map (·.startsWith "params: ") == some true
+#guard account.Formed ∧ account.protocol = protocol.id
 
 end PousCheck.RunProtocol
