@@ -14,7 +14,7 @@ Nothing in `verity` reads this directory. The theorem it cites is in `security/`
 
 The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
-`rho.theorem.multiple_bound` in Lean's form (`InferenceOnly.Dampener.remoteDampener` at the reference's MFU), which `statement.py`
+`rho.theorem.multiple_bound` in Lean's form (`InferenceOnly.Slowdown.remoteSlowdown` at the reference's MFU), which `statement.py`
 and `fit.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
 `host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
