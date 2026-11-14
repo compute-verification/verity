@@ -48,7 +48,7 @@ import json
 import math
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -127,7 +127,7 @@ def fleets(census: Path = CENSUS) -> dict[str, dict[str, Any]]:
                       "window_s": dc["window_s"], "flop_per_year": world["total_flop"]}}
 
 
-def session(doc: dict[str, Any], times: dict[str, dict[str, float] | None]) -> dict[str, Any]:
+def session(doc: dict[str, Any], times: Mapping[str, Mapping[str, float] | None]) -> dict[str, Any]:
     """The measured session: its statement's ANDs, each session step's wall and CPU seconds (``times``, each step's first
     invocation's ``/usr/bin/time -v``), its proofs and its schedule."""
     st = doc.get("staged") or {}
@@ -151,7 +151,7 @@ def session(doc: dict[str, Any], times: dict[str, dict[str, float] | None]) -> d
                                     for p in rel.get("parts", [])]} if rel else None}
 
 
-def figures(doc: dict[str, Any], times: dict[str, dict[str, float] | None], census: Path = CENSUS,
+def figures(doc: dict[str, Any], times: Mapping[str, Mapping[str, float] | None], census: Path = CENSUS,
             budget: int | None = None) -> dict[str, Any]:
     """Every figure, per window and per period for each fleet (module docstring)."""
     s = session(doc, times)

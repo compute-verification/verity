@@ -116,7 +116,8 @@ class _Store:
     """The evidence store as `recorded` reads it: one run whose record is `art:rec`."""
 
     def __init__(self, outputs: dict):
-        self.outputs, self.fetched = outputs, []
+        self.outputs = outputs
+        self.fetched: list[tuple[str, list[str]]] = []
 
     def get_attempt(self, run):
         return {"run_id": run, "outputs": self.outputs} if run == "r1" else None
@@ -132,7 +133,12 @@ def test_from_a_run_reads_its_record_with_this_trees_reader(tmp_path, monkeypatc
     before ``session_times`` has them; a run the store doesn't hold, or one that kept no record, is refused."""
     times = {s: {"wall_s": 10.0, "cpu_s": 60.0} for s in F.SESSION_STEPS}
     read = []
-    monkeypatch.setattr(F.RP, "read", lambda root: read.append(root) or _doc() | {"session_times": times})
+
+    def reread(root):
+        read.append(root)
+        return _doc() | {"session_times": times}
+
+    monkeypatch.setattr(F.RP, "read", reread)
     store = _Store({"run_record": "art:rec"})
     doc = F.recorded("r1", tmp_path, lambda: store)
     assert store.fetched == [("art:rec", ["out"])] and read == [tmp_path / "out"]
