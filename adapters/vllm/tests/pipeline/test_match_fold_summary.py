@@ -24,6 +24,7 @@ from verity.circuits import codec
 from verity.circuits.refs import Affine, Strided
 
 from verity_vllm.check import gates as G
+from verity_vllm.errors import Refused
 from verity_vllm.observe import events as EV
 from verity_vllm.observe import log as LOG
 from verity_vllm.observe.fold import fold as FOLD
@@ -182,7 +183,7 @@ def test_the_programs_options_reach_the_profile_and_a_pouw_run_folds_pouw_s_call
     assert calls[-1]["profile"].registered_values is True and [type(p).__name__ for p in calls[-1]["profile"].patterns] == ["PouwLinear", "Linear"]
     MF.fold_summary_result(_log(tmp_path, notes={"protocols": ["other:x"]}), "stand_in")
     assert calls[-1]["profile"].registered_values is False and [type(p).__name__ for p in calls[-1]["profile"].patterns] == ["Linear"]
-    with pytest.raises(SystemExit, match=r"^sampler construction 'no-such' is not one of \["):
+    with pytest.raises(Refused, match=r"^sampler construction 'no-such' is not one of \["):
         MF.fold_summary_result(tmp_path / "no-log-is-read.jsonl.gz", "stand_in", sampler_construction="no-such")
 
 

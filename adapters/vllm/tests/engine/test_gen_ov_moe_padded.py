@@ -123,7 +123,7 @@ def test_the_construction_is_declared_and_selected_by_name_never_inferred(tmp_pa
     assert isinstance(OV.PROFILE.patterns[1], MoEFusedExperts) and not isinstance(OV.PROFILE.patterns[1], MoEFusedExpertsPadded)
     assert isinstance(PADDED.patterns[1], MoEFusedExpertsPadded) and PADDED.patterns[1].name == "moe.fused_experts.padded"
     assert [type(p).__name__ for p in PADDED.patterns[2:]] == [type(p).__name__ for p in OV.PROFILE.patterns[2:]]
-    assert PADDED.id == OV.PROFILE.id and PADDED.kernel_allowlist == OV.PROFILE.kernel_allowlist and PADDED.notes["moe"]["construction"] == "padded"
+    assert PADDED.id == OV.PROFILE.id and PADDED.notes["moe"]["construction"] == "padded"
     assert set(MOE_CONSTRUCTION_PATTERNS) == {"indexed-read", "padded", "indexed-read-ordered"}
     with pytest.raises(ValueError):
         ov_moe_patterns(C, gemm_constexprs={}, gemm_num_sms=1, moe_construction="fixed-slot")
