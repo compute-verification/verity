@@ -79,7 +79,7 @@ from verity_vllm.protocols.interface import Context, Option, Target
 from verity.protocols.accounting.pouw.prover.serving import circuit as PC
 from verity.protocols.accounting.pouw.prover.serving import device as PD
 from verity.protocols.accounting.pouw.prover.serving import h1 as PH
-from verity.protocols.accounting.pouw.prover.serving import int8_arm
+from verity.protocols.accounting.pouw.prover.serving import int8_arm, run_matmul
 from verity.protocols.accounting.pouw.prover.serving import lead as PL
 from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
@@ -547,7 +547,7 @@ def ncp_linear_op() -> Any:
 
     @torch.library.custom_op("verity_pouw::ncp_linear", mutates_args=(), schema="(Tensor x, Tensor weight, Tensor? bias, str entry, int w) -> Tensor")
     def ncp_linear(x, weight, bias, entry, w):
-        return _CIRCUIT_RUNS[entry][0].gemm(w, x, weight, bias)
+        return run_matmul(_CIRCUIT_RUNS[entry][0], w, x, weight, bias)
 
     @ncp_linear.register_fake
     def _(x, weight, bias, entry, w):
@@ -565,7 +565,7 @@ def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int, _orig: Any)
         return call
 
     def apply(layer: Any, x: Any, bias: Any = None) -> Any:
-        return run.gemm(w, x, layer.weight, bias)
+        return run_matmul(run, w, x, layer.weight, bias)
     return apply
 
 
