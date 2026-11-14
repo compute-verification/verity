@@ -29,22 +29,22 @@ namespace Accounting.SecurityProofs.Remote.Meets
 
 open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Instances Pouw
 
-theorem over_pulse {Ω : Type} (t₁ B : ℕ) (ω : Ω) (u v : ℕ) : over (pulse t₁ B) ω u v ≤ B := by
-  simp only [over, pulse, sum_ite_eq']
+theorem over_pulse {Ω : Type} (t₁ B : ℕ) (ω : Ω) (u v : ℕ) : «over» (pulse t₁ B) ω u v ≤ B := by
+  simp only [«over», pulse, sum_ite_eq']
   split_ifs <;> omega
 
 /-- A pulse meets the token bucket at any rate with itself for the burst. -/
 theorem bucket_pulse {Ω : Type} {r : ℝ} (hr : 0 ≤ r) (t₁ B : ℕ) (ω : Ω) {u v : ℕ} :
-    (over (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + B := by
-  have h : (over (pulse t₁ B) ω u v : ℝ) ≤ B := by exact_mod_cast over_pulse t₁ B ω u v
+    («over» (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + B := by
+  have h : («over» (pulse t₁ B) ω u v : ℝ) ≤ B := by exact_mod_cast over_pulse t₁ B ω u v
   have h0 : 0 ≤ r * ((v - u : ℕ) : ℝ) := mul_nonneg hr (Nat.cast_nonneg _)
   linarith
 
 /-- A pulse of `B` meets no ceiling of rate below `B` with burst 0: over its one tick, it brings in `B`. -/
 theorem not_bucket_pulse {r : ℝ} {t₁ B : ℕ} (hr : r < B) :
-    ¬ ∀ (ω : Unit) u v, u ≤ v → (over (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + 0 := fun h => by
+    ¬ ∀ (ω : Unit) u v, u ≤ v → («over» (pulse t₁ B) ω u v : ℝ) ≤ r * (v - u : ℕ) + 0 := fun h => by
   have h1 := h () t₁ (t₁ + 1) (Nat.le_succ t₁)
-  have h2 : over (pulse t₁ B) () t₁ (t₁ + 1) = B := by simp [over, pulse]
+  have h2 : «over» (pulse t₁ B) () t₁ (t₁ + 1) = B := by simp [«over», pulse]
   have h3 : t₁ + 1 - t₁ = 1 := by omega
   rw [h2, h3, Nat.cast_one, mul_one, add_zero] at h1
   linarith
