@@ -6,8 +6,8 @@ requires-python = ">=3.12"
 dependencies = ["verity", "verity-vllm", "verity-difftest", "numpy", "blake3>=1.0", "scipy==1.18.1", "z3-solver>=4.13"]
 
 [project.optional-dependencies]
-# The team's run and store tool and the exact kit, which the suite's tests and the theory scripts use and the public tree
-# doesn't hold (Pearl-C's kernels, which it does, need neither); the workspace installs both with every member.
+# The team's run and store tool and the exact kit, which the suite's tests and the theory scripts use (Pearl-C's kernels
+# need neither); the workspace installs both with every member.
 research = ["research"]
 exact-kit = ["verity-exact-kit"]
 
@@ -75,7 +75,6 @@ untraced = [
 inputs_only = true
 inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
-          "verity/hardware/record.py",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/accounting/pouw/verifier", "verity/protocols/proofs/spot",
           "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/certifier/prover",
           "verity/protocols/accounting/certifier",
@@ -149,12 +148,8 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "adapters/vllm/verity_vllm/program/frontend/correspond.py",
           "adapters/vllm/verity_vllm/program/frontend/kernel_readback.py",
           "adapters/vllm/verity_vllm/program/frontend/provenance.py",
-          "adapters/vllm/verity_vllm/program/frontend/torch_frontend.py",
           "adapters/vllm/verity_vllm/program/frontend/errors.py",
-          "adapters/vllm/verity_vllm/program/frontend/graph_translate.py",
-          "adapters/vllm/verity_vllm/program/frontend/minted_ops.py",
           "adapters/vllm/verity_vllm/program/frontend/program_identity.py",
-          "adapters/vllm/verity_vllm/program/frontend/schemas.py",
           "adapters/vllm/verity_vllm/program/frontend/strided_views.py",
           "adapters/vllm/verity_vllm/program/frontend/value_types.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/env.py", "tools/research/src/research/record.py",
@@ -177,7 +172,9 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "adapters/vllm/verity_vllm/protocols/pouw/h1/words.py",
           "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
-          "verity/protocols/accounting/pouw/__init__.py", "benchmarks/datacenter/datacenter", "verity/protocols/accounting/registration/verifier/registration.py",
+          "verity/protocols/accounting/pouw/__init__.py", "benchmarks/datacenter/datacenter",
+          "verity/protocols/accounting/registration/__init__.py", "verity/protocols/accounting/registration/verifier/__init__.py",
+          "verity/protocols/accounting/registration/verifier/registration.py",
           "verity/protocols/accounting/poub/__init__.py", "verity/protocols/accounting/poub/verifier/__init__.py",
           "verity/protocols/accounting/poub/verifier/codec.py", "verity/device.py",
           "verity/channel.py", "verity/definitions/__init__.py",

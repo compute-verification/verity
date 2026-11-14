@@ -22,7 +22,7 @@ from verity.definitions.numerics import marlin_moe_rows as MR
 
 from tests import fake_vllm
 from tests.properties import dsv4_marlin_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 E, K, N, SMS = 8, 256, 128, 3
 #: the config the stand-in kernel runs: TK 64 (two warp rows), TN 128, 4 blocks per SM, so GRID 12 splits K
