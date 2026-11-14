@@ -50,8 +50,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
-     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
-     reject with its why.
+     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on, and so does
+     ``accepted on the period check`` (`chain_record.RESTS`: the scan's acceptance rests on step 5's check, which
+     then decides); any other is a reject with its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
@@ -557,6 +558,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows, or is None to read the report
     of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
     chain step). `NotRun` when a step can't run."""
+    import chain_record as CR
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
@@ -583,7 +585,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
             if not report.is_file():
                 raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
         doc = json.loads(report.read_text())
-        if doc.get("verdict") != "accepted":
+        if doc.get("verdict") not in ("accepted", CR.RESTS):
             raise Rejected(f"the chain {doc.get('verdict')}: {json.dumps(doc.get('why'), default=str)}"[:1800])
         try:
             (w,) = [x["window"] for x in json.loads((out / "scan" / "answers.json").read_text())["windows"]]
