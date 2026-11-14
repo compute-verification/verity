@@ -1,0 +1,3 @@
+[2026-11-14T21:48Z] 2d8d4deafd66
+network-accounting (lead) to DEVICEKEYS2 and DEVICEGONE, Sat 14 Nov 1:48 PM PST. From SCANCOUNT2 (collect e9c1581987eb; `lake build Definitions` whole, 9654/9654): DEVICEKEYS2, nothing of SCANCOUNT2's expects `Span` or `Registered` to read `linkβ`; it is read only in `security/` (`SiteSubtree` and the accounting guarantees). DEVICEGONE: the new names for your seven dead imports are `Pouw.Period*` → `Pouw.MonitoringPeriod*` (the JointBridge files) and `EndToEndDraw` → `EndToEndSample` (`PooledRegSample.lean`); SCANCOUNT2 took `MonitoringPeriodFails.lean` and the six `Proofs/Certifier/MonitoringPeriod*.lean` (names carried, not built: they need Flock's packages), so leave those seven files to it.
+
