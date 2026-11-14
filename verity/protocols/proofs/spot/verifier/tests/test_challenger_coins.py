@@ -222,7 +222,7 @@ def test_the_proof_system_draws_from_the_challengers_coins_after_the_receipt():
 #: The samples `coin_outcomes` runs: the honest one, then each the Lean run refuses at its select (`coins`, or the code
 #: `COIN_CODES` names). `other-window` stays last: a second host serves it.
 COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "off-main", "second-root",
-              "other-family", "other-window"]
+              "other-family", "other-key", "no-key", "other-main", "old-form", "other-window"]
 #: the select step's code for the cases it refuses under another than `coins`
 COIN_CODES = {"second-root": "family"}
 
@@ -230,13 +230,18 @@ COIN_CODES = {"second-root": "family"}
 def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):  # noqa: F811
     """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root)` is case i's stream on
     the challenger's `coins` and its registration under `window_root`, sampled after the registration's digest, its proof
-    delivered, and its outcome run with the case's evidence (`coins_reason`'s: the challenger key, the auditor's
+    delivered, and its outcome run with the case's evidence (`coins_reason`'s, which is `draw_coins`'s: the auditor's
     ledger, the verifier's copy of main's first-parent history, the host's pins log, the segment and the session's
-    files): the honest one; a segment that skips a coin opened after the digest, one with a wrong opening, one that
+    files) on a stream that holds the challenger's key and that copy of main's history, which this gives each case's
+    stream (`Stream.key`, `Stream.main`): the honest one; a
+    segment that skips a coin opened after the digest, one with a wrong opening, one that
     adds another registration's coins in front; no evidence, empty evidence; a registration without its window root; a
-    session whose pin isn't on the verifier's copy of main (`pinned_session`); a family in which the client opened a
-    coin after another root once it had read the sample (the run's `family`); another case's segment, a family the
-    stream did not read; and coins a session of another window released after the same digest. Each case's
+    session whose pin isn't on the verifier's copy of main (`pinned_session`), the evidence carrying that copy; a family
+    in which the client opened a coin after another root once it had read the sample (the run's `family`); another
+    case's segment, a family the stream did not read; honest evidence on a stream that holds another key than the one
+    the session is signed under, on one that holds none, and on one whose copy of main's history is not the evidence's;
+    honest evidence that names a key of its own, the form the reader took before the key was the stream's; and coins a
+    session of another window released after the same digest. Each case's
     registration has a family of its own (`positions/<case>`, `positions` coins), since a family's coins follow one.
     -> ({case: (its stream, its outcome, its audit record)}, {case: its segment})."""
     import test_remote
@@ -280,11 +285,17 @@ def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
     segments["before"] = {**s, "openings": earlier + s["openings"]}
     segments["other-family"] = draws["honest"][2]
     out = {}
+    key = test_remote.pinned_key()
+    other_key = dataclasses.replace(key, public=bytes(b ^ 1 for b in key.public))
     for name, (stream, draw, _) in draws.items():
-        evidence = {"key": test_remote.pinned_key().to_json(), "ledger": ledger,
-                    "main": [] if name == "off-main" else test_remote.MAIN, "pins": test_remote.HOST_PINS,
-                    "segment": segments[name], "session": files[name]}
+        main = [] if name == "off-main" else test_remote.MAIN
+        evidence = {"ledger": ledger, "main": main, "pins": test_remote.HOST_PINS, "segment": segments[name],
+                    "session": files[name]}
+        if name == "old-form":
+            evidence = {**evidence, "key": key.to_json()}
         evidence = {"missing": None, "empty": {}}.get(name, evidence)
+        stream.key = {"other-key": other_key, "no-key": None}.get(name, key)
+        stream.main = tuple([*main, "0" * 40] if name == "other-main" else main)
         assert stream.deliver(draw, [SESSION]) is None
         out[name] = (stream, stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence),
                      stream.records[-1]["audit"])
@@ -363,13 +374,21 @@ def test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several
     assert len(client.opened) > test_remote.RELEASED and segment.start == 0 and stream.family(draw) == "positions"
     assert len(R.release_frames(client.commitment, list(client.opened.values()))) > 1
     read = stream._entries[reg.order].read
-    evidence = {"key": test_remote.pinned_key().to_json(), "ledger": R.ledger_lines(host.ledger.path),
-                "main": test_remote.MAIN, "pins": test_remote.HOST_PINS, "segment": segment.to_json(),
-                "session": R.session_files(host.directory)}
+    key, main = test_remote.pinned_key(), test_remote.MAIN
+    evidence = {"ledger": R.ledger_lines(host.ledger.path), "main": main, "pins": test_remote.HOST_PINS,
+                "segment": segment.to_json(), "session": R.session_files(host.directory)}
     after = bytes.fromhex(reg.digest)
-    assert T.coins_reason(evidence, window, "positions", after, read, lms_verify) is None
-    assert "coin opening is malformed" in T.coins_reason({**evidence, "segment": raw}, window, "positions", after, read,
-                                                         lms_verify)
+    # one object for both readers: the stream's check and the subprotocol's read the same evidence under the same key
+    assert T.coins_reason(key, main, evidence, window, "positions", after, read, lms_verify) is None
+    assert T.draw_coins(key, window, "positions", after, evidence, lms_verify)[:len(read)] == read
+    assert "coin opening is malformed" in T.coins_reason(key, main, {**evidence, "segment": raw}, window, "positions",
+                                                         after, read, lms_verify)
+    other_key = dataclasses.replace(key, public=bytes(b ^ 1 for b in key.public))
+    assert T.coins_reason(other_key, main, evidence, window, "positions", after, read, lms_verify) is not None
+    assert T.coins_reason(key, main, {**evidence, "key": key.to_json()}, window, "positions", after, read,
+                          lms_verify) == T.DRAW_FORM
+    for mine in (main[1:], [*main, "0" * 40], None, tuple(main)):
+        assert T.coins_reason(key, mine, evidence, window, "positions", after, read, lms_verify) == T.COINS_MAIN
     assert stream.deliver(draw, [SESSION]) is None
     out = stream.outcome(draw, _lean(), {"statement": "stub"}, coins=evidence)
     assert out.accepted and "run" not in stream.records[-1]["audit"]["checks"], stream.records[-1]["audit"]["checks"]
@@ -440,17 +459,16 @@ def test_a_registration_made_after_an_earlier_ones_sample_is_read_is_refused_for
     _, roots = host.trusted()
     assert list(dict.fromkeys(r.hex() for r in roots["positions"])) == [t[1].digest for t in tries]
     assert segment.start == sum(len(t[2].openings) for t in tries[:-1]) > 0 == tries[0][2].start
-    evidence = {"key": test_remote.pinned_key().to_json(), "ledger": R.ledger_lines(host.ledger.path),
-                "main": test_remote.MAIN, "pins": test_remote.HOST_PINS, "segment": segment.to_json(),
-                "session": R.session_files(host.directory)}
-    mine = {k: v for k, v in evidence.items() if k != "key"}
+    key, main = test_remote.pinned_key(), test_remote.MAIN
+    evidence = {"ledger": R.ledger_lines(host.ledger.path), "main": main, "pins": test_remote.HOST_PINS,
+                "segment": segment.to_json(), "session": R.session_files(host.directory)}
     for t in tries:
         after, read = bytes.fromhex(t[1].digest), t[0]._entries[t[1].order].read
         assert t[0].family(t[3]) == "positions"
-        assert T.coins_reason({**evidence, "segment": t[2].to_json()}, window, "positions", after, read,
+        assert T.coins_reason(key, main, {**evidence, "segment": t[2].to_json()}, window, "positions", after, read,
                               lms_verify) == T.FAMILY_ROOT
         with pytest.raises(C.CoinError, match=re.escape(T.FAMILY_ROOT)):
-            T.draw_coins(test_remote.pinned_key(), window, "positions", after, {**mine, "segment": t[2].to_json()},
+            T.draw_coins(test_remote.pinned_key(), window, "positions", after, {**evidence, "segment": t[2].to_json()},
                          lms_verify)
     for t in (tries[0], tries[-1]):
         assert t[0].deliver(t[3], [SESSION]) is None

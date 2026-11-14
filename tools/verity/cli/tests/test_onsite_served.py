@@ -20,6 +20,7 @@ from verity.protocol import Channel
 from verity.channel import Refused
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.proofs.spot.verifier.service import Law
 from verity_cli import run as R
 
 ROOT = Path(R.ROOT)
@@ -49,7 +50,7 @@ VARIABLES = {
                  f"start-side --trusted-sha512 {KEY}",
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "PRECISION": "verity_int8",
     "REPO": "verity-int8/Llama-3.2-1B-INT8", "REV": "15b0976d400d796ee589e7737d03a919526bf800",
-    "SERVE_ARGS": "--remote-verifier 192.0.2.2:7002", "SLOTS": "4", "V3C_LAW": "subset:1", "WINDOW_STEPS": "16",
+    "SERVE_ARGS": "--remote-verifier 192.0.2.2:7002", "SLOTS": "4", "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
     "WIPE_ADDRESS": "192.0.2.1:7001", "WIPE_CHALLENGER": "auditor-1",
     "WIPE_CMD": 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"', "WIPE_COMMAND": "start-wipe",
     "WIPE_KEY_SHA512": "1" * 128,
@@ -245,6 +246,20 @@ def test_a_component_declaring_a_channel_to_an_undeclared_party_is_refused():
     assert e.value.name == "declaration" and "oracle" in e.value.detail
 
 
+@pytest.mark.parametrize("fixed", ["subset:1", "stratified:1", "work:1", "work-rate:1/8", "bernoulli:1/8"])
+def test_a_served_windows_rule_that_is_no_rate_is_refused_by_name_with_the_rate_to_state(fixed):
+    """The served window's audit states the configuration's rule to its stream, which takes a rate: the file's own rule is
+    one, and a configuration whose rule is a fixed count, or a work rate, for which the window has no work table, is
+    refused at its check, by name, with the rate to state in its place."""
+    cfg = K.parse(CONFIG.read_text())
+    assert Law(cfg["service"]["law"]).text == cfg["service"]["law"]
+    K.check(cfg, REG.components, REG.workloads)
+    cfg["service"]["law"] = fixed
+    with pytest.raises(Refused) as e:
+        K.check(cfg, REG.components, REG.workloads)
+    assert e.value.name == "law" and repr(fixed) in e.value.detail and "rate:K/N" in e.value.detail
+
+
 # --- the run -----------------------------------------------------------------------------------------------------------
 
 def stand_in(tmp: Path, name: str, body: str) -> str:
@@ -269,6 +284,8 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert said(out, "PARTY") == [{"party": p, "refused": None} for p in ("firewall", "prover", "workers")]
     hooks = dict(x.split("=", 1) for x in (state / "out" / "hooks.txt").read_text().splitlines())
     assert hooks["POUS_ARGS"].startswith("--rounds 320 ") and hooks["SLOTS"] == "4"
+    # the served window's rule is the configuration's, a rate: its audit states it to its stream, which takes no fixed count
+    assert Law(hooks["V3C_LAW"]).text == K.parse(CONFIG.read_text())["service"]["law"]
     kept = set(VARIABLES) - {"PRECISION", "WINDOW_STEPS", "DEVELOPMENT"}
     assert {k: hooks.get(k) for k in kept} == {k: VARIABLES[k] for k in kept}
     assert {"WIPE_CMD", "SERVE_ARGS", "H1_GATE", "CERTIFIER_FRONT", "CERTIFIER_CMD"} <= set(hooks)

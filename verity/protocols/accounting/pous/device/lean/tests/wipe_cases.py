@@ -2,12 +2,14 @@
 JSON formats (`MemoryChallenger.WipeJudge`), and the sessions the tests sample.
 
 The decoders mirror the Lean's: byte strings lowercase hex, the parameters naturals that `WipeParams` accepts, a batch
-record's fields, the fill's times and the egress integers of either sign, and the record exactly the canonical JSON of
-what it decodes to. Past decoding every reference is the Python's own function on the decoded objects.
+record's fields and the fill's times integers of either sign, a start mark empty or 64 bytes, and the record
+exactly the canonical JSON of what it decodes to. Past decoding every reference is the Python's own function on the
+decoded objects.
 
 Sessions are run by `streamed_wipe.WipeMemoryChallenger` itself against `streamed_wipe.Prover`, on an injected clock,
-and signed by a test signer's key at a leaf the test picks (`mc_cases.AtLeaf`) or by a deployed-parameter key
-(`mc_cases.deployed_signer`). No real key is read."""
+with a mark source that returns the start certificate a test gives or with none, and signed by a test signer's key at a
+leaf the test picks (`mc_cases.AtLeaf`) or by a deployed-parameter key (`mc_cases.deployed_signer`). No real key is
+read."""
 
 from __future__ import annotations
 
@@ -63,9 +65,18 @@ def batch_of(j: Any) -> sw.BatchRecord:
                           int_(j, "wrong"), M.hex_(j, "digest"))
 
 
+def mark_of(j: Any) -> bytes:
+    """`Signed.ofJson`'s start mark: lowercase hex of no bytes or of `MARK_BYTES`."""
+    mark = M.hex_(j, "start_mark")
+    if len(mark) not in (0, sw.MARK_BYTES):
+        raise D.Reject("start_mark: a start mark is 128 lowercase hex digits, or empty")
+    return mark
+
+
 def signed_of(j: Any) -> sw.SignedWipe:
-    return sw.SignedWipe(commitment_of(M._get(j, "commitment")), M._str(j, "ended"), int_(j, "fill_start_ns"),
-                         int_(j, "fill_end_ns"), tuple(batch_of(r) for r in M.list_(j, "batches")), int_(j, "egress_bits"),
+    return sw.SignedWipe(commitment_of(M._get(j, "commitment")), M._str(j, "ended"), mark_of(j),
+                         int_(j, "fill_start_ns"), int_(j, "fill_end_ns"),
+                         tuple(batch_of(r) for r in M.list_(j, "batches")),
                          M._str(j, "scheme"), M.hex_(j, "public_key"), M.hex_(j, "signature"))
 
 
@@ -99,13 +110,14 @@ def tiers_of(labels: int, cuts: list[int], names: list[str], outside: int = 0) -
 
 
 def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], session_id: bytes = bytes(32),
-        start: int = 1_000, fill_ns: int = 7, spends=lambda b: 1, tampered=frozenset(), egress_bits: int = 1234,
-        coins: bytes = b"coins") -> Session:
+        start: int = 1_000, fill_ns: int = 7, spends=lambda b: 1, tampered=frozenset(),
+        coins: bytes = b"coins", certificate: bytes | None = None) -> Session:
     """One session of `WipeMemoryChallenger` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and
-    the batches in `tampered` have their first answer's last bit flipped."""
+    the batches in `tampered` have their first answer's last bit flipped. With `certificate`, the challenger's mark source returns it,
+    and the session signs its SHA-512 as its start mark; with none the mark is empty."""
     clock = M.Clock(start)
     c = sw.WipeMemoryChallenger(SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
-                                coin_secret=coins)
+                                coin_secret=coins, mark_source=None if certificate is None else lambda m: certificate)
     prover = sw.Prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):
         prover.receive(first, data)
@@ -122,18 +134,23 @@ def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], 
         return out
 
     c.run(answer)
-    return Session(c.close(egress_bits), c.commitment, (signer.public_key,), signer)
+    return Session(c.close(), c.commitment, (signer.public_key,), signer)
 
 
-#: Egress counts: none, one bit, whole MiB and one past, past the 15-bit saturation.
-EGRESS = st.one_of(st.integers(0, 4 * U), st.sampled_from([0, 1, U, U + 1, sw.EGRESS_MAX_UNITS * U,
-                                                           sw.EGRESS_MAX_UNITS * U + 1, 10 ** 15]))
+#: The evidence's egress, in MiB: none given, a count in range, the range's ends, and now and then one outside it.
+EGRESS = st.one_of(st.none(), st.integers(0, 4), st.integers(0, sw.EGRESS_MAX_UNITS),
+                   st.sampled_from([None, 0, 1, sw.EGRESS_MAX_UNITS - 1, sw.EGRESS_MAX_UNITS,
+                                    sw.EGRESS_MAX_UNITS + 1, -1, 10 ** 15]))
+#: A sampled session's start certificate, by the number its coins are sampled under: none (no mark source, an empty
+#: mark), or the bytes its mark source returns.
+CERTIFICATES = [None, b"a start certificate", b"\0", bytes(range(256)) * 3]
 
 
 @st.composite
 def sessions(draw, signer: M.AtLeaf | None = None) -> Session:
     """An honest run of `Challenger` at a sampled batch size, every answer on time and right (some at the deadline itself),
-    or one batch late or one answer wrong; signed by `signer` or a sampled test signer at a sampled leaf."""
+    or one batch late or one answer wrong, with a start mark or none; signed by `signer` or a sampled test signer at a
+    sampled leaf."""
     if signer is None:
         height = draw(st.integers(1, 2))
         signer = M.test_signer(draw(st.sampled_from(M.SECRETS)), height, draw(st.integers(0, 2 ** height - 1)))
@@ -152,8 +169,8 @@ def sessions(draw, signer: M.AtLeaf | None = None) -> Session:
     return run(params, signer, server=draw(st.sampled_from(SERVERS)),
                session_id=hashlib.sha512(b"wipe session %d" % draw(st.integers(0, 3))).digest()[:32],
                start=draw(st.integers(0, 2 ** 40)), fill_ns=draw(st.integers(0, 10 ** 6)), spends=lambda b: spend[b],
-               tampered=frozenset({at} if fault == "wrong" else ()), egress_bits=draw(EGRESS),
-               coins=b"coins %d" % draw(st.integers(0, 3)))
+               tampered=frozenset({at} if fault == "wrong" else ()),
+               coins=b"coins %d" % (n := draw(st.integers(0, 3))), certificate=CERTIFICATES[n])
 
 
 def _batch(s: Session, x: int, **edits) -> Session:
@@ -203,10 +220,18 @@ def _scheme(s: Session, x: int) -> Session:
     return _unsigned(s, scheme=M.PRINTABLE_SCHEMES[x % len(M.PRINTABLE_SCHEMES)])
 
 
+def _other_mark(s: Session, x: int) -> bytes:
+    """A start mark that is not the session's: another certificate's, the session's with one bit flipped, or none."""
+    mark = s.signed.start_mark
+    others = [hashlib.sha512(b"another certificate %d" % (x % 5)).digest(), M._flip(mark, x) if mark else bytes(64), b""]
+    return next(m for m in others[x % 3:] + others if m != mark)
+
+
 #: One adversarial edit of a session, `(session, x) -> session`, `x` a sampled natural: a signature or key that isn't the
 #: session's, a commitment that isn't the published one, a wrong label, a late or early answer, a wrong batch number,
 #: first index or count, a batch dropped or added, a session that didn't complete, the fill not before the first batch,
-#: a field past its width, and the egress edited.
+#: a field past its width, and the start mark edited under the old signature or signed anew (a mark
+#: the judge reads as any other).
 MUTATIONS = [
     lambda s, x: _signature(s, M._flip(s.signed.signature, x)),
     lambda s, x: _signature(s, s.signed.signature[:-1 - x % 3]),
@@ -244,8 +269,8 @@ MUTATIONS = [
     lambda s, x: s.resign(batches=s.signed.batches[:-1]),
     lambda s, x: s.resign(batches=()),
     lambda s, x: s.resign(ended=[sw.LATE, sw.WRONG, sw.COMPLETE, "", "ünïcode\n\x01"][x % 5]),
-    lambda s, x: s.resign(egress_bits=[0, 1, U, U + 1, sw.EGRESS_MAX_UNITS * U + 1, 10 ** 30, -1, -U, -U - 1][x % 9]),
-    lambda s, x: _unsigned(s, egress_bits=s.signed.egress_bits + 1),
+    lambda s, x: _unsigned(s, start_mark=_other_mark(s, x)),
+    lambda s, x: s.resign(start_mark=_other_mark(s, x)),
 ]
 
 
@@ -265,17 +290,48 @@ def _tiers(f):
     return _at(("commitment",), lambda c, x: c | {"tiers": f(c["tiers"], x)})
 
 
-#: One edit of a valid record's JSON: a field extra or missing, a header constant not the protocol's, parameters
-#: `WipeParams` refuses, a tier not a pair, hex not lowercase, a boolean or string where an integer goes, a scheme id the
-#: port doesn't verify.
+def _v1(j: dict, x: int) -> dict:
+    """The record as the v1 format wrote it: no start mark, a signed egress count, and the v1 protocol in both
+    commitments."""
+    v1 = {"protocol": "verity-pous/streamed-wipe/v1"}
+    signed = {k: v for k, v in j["signed"].items() if k != "start_mark"} | {"egress_bits": x}
+    return j | {"commitment": j["commitment"] | v1, "signed": signed | {"commitment": signed["commitment"] | v1}}
+
+
+def _slewed_clock(j: dict, x: int) -> dict:
+    """The record with `CLOCK_MONOTONIC ns`, the memory challenger's clock, named in both commitments where a wipe's
+    header names the raw clock."""
+    slewed = {"clock": "CLOCK_MONOTONIC ns"}
+    return j | {"commitment": j["commitment"] | slewed,
+                "signed": j["signed"] | {"commitment": j["signed"]["commitment"] | slewed}}
+
+
+def _marks(mark: str, x: int) -> str:
+    """A `start_mark` that is not one: upper case, or hex of another length."""
+    other = mark or hashlib.sha512(b"a certificate").hexdigest()
+    return [other.upper(), other[:-2], other + "00", other[:64], "00", other[:-1], other + other][x % 7]
+
+
+#: One edit of a valid record's JSON: a field extra or missing, a header constant not the protocol's, the v1 format,
+#: the slewed monotonic clock named for the raw one, parameters `WipeParams` refuses, a tier not a pair, hex not
+#: lowercase, a start mark of another length, a signed session that names an egress, a boolean or string where an
+#: integer goes, a scheme id the port doesn't verify.
 JSON_MUTATIONS = [
     lambda j, x: j | {"extra": x},
     _drop,
     _at(("commitment",), _drop),
     _at(("commitment",), lambda c, x: c | {"protocol": "verity-pous/streamed-wipe/v0"}),
+    _at(("commitment",), lambda c, x: c | {"protocol": "verity-pous/streamed-wipe/v1"}),
+    _at(("signed", "commitment"), lambda c, x: c | {"protocol": "verity-pous/streamed-wipe/v1"}),
+    _v1,
+    _at(("signed",), lambda s, x: s | {"start_mark": _marks(s["start_mark"], x)}),
+    _at(("signed",), lambda s, x: s | {"start_mark": [None, 0, True, [s["start_mark"]]][x % 4]}),
     _at(("commitment",), lambda c, x: c | {"records_tree": "verity-pous/round-records/frame-v3-sha512/v1"}),
     _at(("commitment",), lambda c, x: c | {"label_bytes": 32}),
     _at(("commitment",), lambda c, x: c | {"clock": "CLOCK_REALTIME ns"}),
+    _at(("commitment",), lambda c, x: c | {"clock": "CLOCK_MONOTONIC ns"}),
+    _at(("signed", "commitment"), lambda c, x: c | {"clock": "CLOCK_MONOTONIC ns"}),
+    _slewed_clock,
     _at(("commitment",), lambda c, x: c | {"session": c["session"].upper() or "A"}),
     _at(("commitment",), lambda c, x: c | {"labels": [-1, 0, c["labels"] + 1, str(c["labels"]), True][x % 5]}),
     _at(("commitment",), lambda c, x: c | {"k": [0, c["batch"] - 1, 2 ** 32, -c["k"]][x % 4]}),
@@ -299,7 +355,7 @@ JSON_MUTATIONS = [
     _at(("signed", "batches"), lambda b, x: [b[0] | {"receipt_ns": [str(b[0]["receipt_ns"]), True, None][x % 3]}]
         + b[1:] if b else [None]),
     _at(("signed", "batches"), lambda b, x: {"0": b}),
-    _at(("signed",), lambda s, x: s | {"egress_bits": [True, "0", None, [0]][x % 4]}),
+    _at(("signed",), lambda s, x: s | {"egress_bits": [0, x, True, None][x % 4]}),
     _at(("signed",), lambda s, x: s | {"fill_end_ns": False}),
     _at(("signed",), lambda s, x: s | {"ended": 1}),
     _at(("signed",), lambda s, x: s | {"signature": s["signature"].upper() if s["signature"] else "0"}),
