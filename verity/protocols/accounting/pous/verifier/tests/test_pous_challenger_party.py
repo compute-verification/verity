@@ -168,7 +168,8 @@ def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
                    capabilities=capabilities, authenticate=False,
                    sources={CS.CHALLENGER: {"clock": clock, "coins": GivenCoins(S.SeededCoins(b"hiding").draw)}})
     assert r.status == "completed", r.outcomes
-    assert r.outcomes[CS.CHALLENGER] == {"outcome": {"session": old.to_json(), "session_id": sid.hex()},
+    assert r.outcomes[CS.CHALLENGER] == {"outcome": {"public_key": ts.TestSigner(b"same key", 2).public_key.hex(),
+                                                     "session": old.to_json(), "session_id": sid.hex()},
                                          "refused": None}
     assert r.outcomes[CS.PROVER] == {"outcome": rounds, "refused": None}
 
