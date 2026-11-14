@@ -1419,7 +1419,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     (tmp_path / "advice.json").write_text(json.dumps(advice))
     (tmp_path / "params.json").write_text(json.dumps(params))
     SC.save(tmp_path / "prover.npz", priv)
-    stage = Path(__file__).resolve().parents[1] / "served_zk" / "stage_tile.py"
+    stage = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "served_zk" / "stage_tile.py"
     sample = {"law": "subset", "population": 26, "k": 2, "units": [7, 25]}
     runs = {t: subprocess.Popen([sys.executable, str(stage), str(tmp_path), str(tmp_path / "params.json"), str(t),
                                  str(tmp_path / f"u{t}")], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

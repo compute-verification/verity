@@ -30,8 +30,8 @@ from verity_flock import class_statement as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
-import a5  # noqa: E402
-import compose_circuit as CC  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as a5  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import compose_circuit as CC  # noqa: E402
 
 #: a + b over 16 bits with its carry, and w[0] & w[2047]: w's row spans SHA-512 blocks, as a composed circuit needs one row to
 TOY = bind(definition("ComposeCacheToy", 1, lambda C, a, b, w: add(C, a, b, width=16, carry_out=True) + [C.AND(w[0], w[2047])],

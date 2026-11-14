@@ -5,7 +5,7 @@
 # serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN.
 #   research run --on MACHINE --project verity --source <tree> --cwd source --declared-output 'out/*' \
 #     --declared-output 'out/*/*' --env SERVED_RUN=<serve.sh run id> --env HZ_MEM_GB=<GB> \
-#     --env HZ_CACHE=/workspace/research/cache/pouw-hidden-zk --env HZ_JOB=benchmarks/pouw/served_zk/job.sh -- bash benchmarks/pouw/hidden_zk/scope.sh CPUS GB
+#     --env HZ_CACHE=/workspace/research/cache/pouw-hidden-zk --env HZ_JOB=verity/protocols/accounting/pouw/prover/kernels/served_zk/job.sh -- bash benchmarks/pouw/hidden_zk/scope.sh CPUS GB
 # The sampled proof blocks run as a parallel fan-out across the scope's cores (step 5): SZ_JOBS workers at once (default HZ_MEM_GB * 3/4 /
 # SZ_MEM_PER_JOB, capped to the CPUs; SZ_JOBS=1 is the old serial loop), SZ_MEM_PER_JOB the GB each is budgeted (default 13, the
 # session's serve + prove peak). Each unit's verdicts go to its own file; a reduce after the fan-out folds them into the summary.
@@ -65,10 +65,10 @@
 #        replay-twin           the same, stream_subset (Lean's sample's Python twin) sampling                    SAME
 set -uo pipefail
 SRC=$(pwd)
-Z=$SRC/benchmarks/pouw/served_zk   # not J: hidden_zk/job.sh sets J to its own directory
+Z=$SRC/verity/protocols/accounting/pouw/prover/kernels/served_zk   # not J: hidden_zk/job.sh sets J to its own directory
 export HZ_CONFIGS=served HZ_N=1 HZ_MEM_GB=${HZ_MEM_GB:-96} HZ_RUNS=${HZ_RUNS:-1} HZ_WARM=${HZ_WARM:-0}
 export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row output_row_committed_false unit_internal_bit_flipped}
-# shellcheck source=../hidden_zk/job.sh
+# shellcheck source=../../../../../../../benchmarks/pouw/hidden_zk/job.sh
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}

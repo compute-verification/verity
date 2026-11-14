@@ -446,8 +446,8 @@ def main(argv=None) -> int:
         ap.error("one refused statement a run: --altered or --made-for")
     if a.requests < 2:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
-    import a5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     out = a.out
     parts = partials(a.hidden, a.tokens, a.requests, a.seed)

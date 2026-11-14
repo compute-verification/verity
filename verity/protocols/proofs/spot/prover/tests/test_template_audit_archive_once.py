@@ -13,7 +13,7 @@ from pathlib import Path
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 
 #: a stand-in for verity-verify-proof: ``archive-put`` as Lean's (each file under its SHA-512, logged to ``puts``); ``verify``
 #: accepting when the circuit and public objects it is named hash to their keys, as `archiveGet` holds them, with

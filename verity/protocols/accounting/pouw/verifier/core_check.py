@@ -1,10 +1,10 @@
 """PoUW's check of one audit execution phase as a core protocol (`verity/protocols/interface`): the Python
 reference beside the Lean `pouw_check` (`verity/protocols/accounting/pouw/verifier/lean/check`), the served execution phase's verifier
-(`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
+(`verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
 The proof system registers the execution phase, samples, proves and verifies; PoUW states what it registers and what the outcome
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
-`benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
+`verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
 * **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
   the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio

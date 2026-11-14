@@ -444,8 +444,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.altered and a.made_for:
         ap.error("one refused statement a run: --altered or --made-for")
-    import a5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     out = a.out
     at = links(a.run, a.units)

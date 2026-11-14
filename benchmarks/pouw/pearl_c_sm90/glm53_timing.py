@@ -65,7 +65,7 @@ HERE = Path(__file__).resolve().parent
 KERNEL = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 sys.path.insert(0, str(HERE))
 
-import glm53  # noqa: E402
+from verity.protocols.proofs.spot.prover.cost import glm53  # noqa: E402
 
 INNER = 8
 #: --whole --nvtx: each arm's ranged forwards; lanes reads all but the first and the last
