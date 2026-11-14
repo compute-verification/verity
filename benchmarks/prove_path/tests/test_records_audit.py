@@ -1,7 +1,7 @@
 """The audit from a window's records alone (`records_audit`), without proving, on a window written through the interface
 (`verity.commitments.windows.interface`) under core's registration:
 
-* the verifier's window is the circuit record's, each template resolved in Verity's catalog, and the record must be the one
+* the verifier's window is the circuit record's, each template a Definition a catalog registers, and the record must be the one
   the registration binds; a window with row tables is refused until its records carry their segment roots;
 * the compile check runs the registered compiler as the verifier's table names it, on advice that opens the registered root,
   and refuses by name a compiler it doesn't hold, an opening of another root, a compiler that refuses the advice, one whose
@@ -24,8 +24,9 @@
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, a table
   read's by the verifier's executable too, and the audit takes that cache;
-* none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
-  compile and charges the length the registration does;
+* of `verity_vllm` it loads only a catalog package (`verity.circuits.defs.catalog_package`) and nothing else of the adapter,
+  and the served compiler's command (``prove_path.py circuit``) refuses advice it can't compile and charges the length the
+  registration does;
 * that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
   another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
 from __future__ import annotations
@@ -1243,9 +1244,9 @@ def _io_shell_window(d: Path, n: int = 8, cap: int = 4, shell: int = 3) -> Simpl
 def test_a_period_counts_an_io_shell_window_in_a_process_that_loaded_no_registry_definition(tmp_path):
     """``records_audit.py period`` as V3c runs it, in a process of its own, on a window whose circuit holds an io
     shell's `ScanSlots_v2` beside the coordinates that read its scan state. `ScanSlots_v2` is a registry Definition,
-    which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates in Verity's
-    whole catalog (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
-    `interface.resolve` alone refuses the window ("names no Definition in Verity's catalog")."""
+    which `interface.resolve`'s own walk doesn't import, so the period resolves the circuit's templates with the
+    registry loaded (`catalog_resolve`): it counts the shell's state rows free beside the coordinates' own, where
+    `interface.resolve` alone refuses the window ("names no Definition a catalog registers")."""
     got = _io_shell_window(tmp_path / "w")
     audit = _audited(got.dir, tmp_path / "a")
     p = subprocess.run([sys.executable, str(HERE.parent / "records_audit.py"), "period", "--window", str(got.dir),
@@ -1555,9 +1556,11 @@ def test_a_table_reads_composer_is_keyed_by_the_verifiers_executable_and_no_othe
     assert A5.compose_key(compose, COORD, TID) not in keys
 
 
-def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):
-    """The verifier's window, the compile check, `source`, the negatives and the sample-order check, in a fresh process: no
-    `verity_vllm` module is loaded."""
+def test_the_audit_from_the_records_loads_of_verity_vllm_only_a_catalog_package(written, tmp_path):
+    """The verifier's window, the compile check, `source`, the negatives and the sample-order check, in a fresh process: every
+    `verity_vllm` module it loads is a catalog package (`verity.circuits.defs.CATALOG_PACKAGES`, where a served template's
+    Definition is registered), a module under one or a package above one. Any other module of the adapter fails, by name;
+    while no catalog package is the adapter's, none of it loads."""
     compilers = tmp_path / "compilers.json"
     compilers.write_text(json.dumps(_compilers(tmp_path, written.doc)))
     (tmp_path / "opening.json").write_text(json.dumps(written.opening))
@@ -1579,11 +1582,14 @@ assert v["ok"] and RA.source(rec["window"], held)["ok"]
 assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n").values())
 receipt = {{"registration": R.digest(rec), "verifier": A5.CHALLENGER}}
 assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
-print(json.dumps(sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm")))
+from verity.circuits.defs import CATALOG_PACKAGES
+print(json.dumps([sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm"), sorted(CATALOG_PACKAGES)]))
 """
     p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert p.returncode == 0, p.stderr[-3000:]
-    assert json.loads(p.stdout.strip().splitlines()[-1]) == []
+    loaded, catalogs = json.loads(p.stdout.strip().splitlines()[-1])
+    other = [m for m in loaded if not any(m == c or m.startswith(f"{c}.") or c.startswith(f"{m}.") for c in catalogs)]
+    assert other == [], f"the audit loaded these modules of the adapter, outside every catalog package ({catalogs}): {other}"
 
 
 def test_the_served_compilers_command_charges_the_registered_length_and_refuses_what_it_cant_compile(tmp_path, monkeypatch, capsys):

@@ -109,7 +109,8 @@ Two kinds of committed run:
   compile check runs: the circuit record the advice compiles to, over its own Build of each Program (`own_builds`; it takes
   no row dir), and the length it charges. ``records_audit.py`` audits a window
   from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
-  opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
+  opening) and loads of `verity_vllm` only a catalog package (`verity.circuits.defs.catalog_package`); this file's
+  ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
   class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
   and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at the fixed slots; every slot's

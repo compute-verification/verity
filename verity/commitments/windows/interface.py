@@ -1,8 +1,9 @@
 """What an integration hands Verity (integrations are frontends, and Verity is agnostic to them), one window
 at a time, in four records:
 
-1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
-   (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
+1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition a catalog registers
+   (`catalog`: Verity's own, or a catalog package's, as the circuits of the kernels an adapter serves are the adapter's),
+   with its unit count, in order. Their population program and template query (`rows.population_program`)
    partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
    (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as the network certifier states it. The
@@ -109,7 +110,8 @@ import numpy as np
 
 from verity.circuits import boolean as B, partition_object as PO
 from verity.circuits.codec import canonical_json, descriptor_id
-from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import (CATALOG_PACKAGES, REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition,
+                                  bind)
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.types import Array
 from verity.commitments import advice as AC, history as HT
@@ -141,19 +143,26 @@ _ID = re.compile(r"([A-Za-z][A-Za-z0-9]*_v[0-9]+)(?:\{(.*)\})?", re.S)
 
 
 def _verity(d: Any) -> bool:
+    """Whether a catalog registers ``d``: the registry holds this object under its id, and its code is in a ``verity`` module
+    or in a catalog package (`defs.catalog_package`: the package that named itself, or a module under it). The catalog that
+    registered it decides, not where its file is."""
     code = d.evaluate if isinstance(d, PrimitiveDefinition) else d.body
-    return d.id in REGISTRY.defs and REGISTRY[d.id] is d and code.__module__.startswith("verity.")
+    at = code.__module__
+    return (d.id in REGISTRY.defs and REGISTRY[d.id] is d
+            and (at.startswith("verity.") or any(at == p or at.startswith(f"{p}.") for p in CATALOG_PACKAGES)))
 
 
 def catalog(fn: Any) -> None:
-    """Refuse (ValueError) a template that is not a complete binding of a Definition Verity registers from a ``verity`` module:
-    an integration's own Definition never defines what a unit computes."""
+    """Refuse (ValueError) a template that is not a complete binding of a Definition a catalog registers (`_verity`): Verity's
+    own, from a ``verity`` module, or a catalog package's. A Definition no catalog registers never defines what a unit
+    computes."""
     base = fn.defn if isinstance(fn, SpecializedDefinition) else fn
     if not isinstance(base, CompositeDefinition) or (isinstance(fn, SpecializedDefinition) and not fn.complete):
         raise ValueError(f"{getattr(fn, 'id', fn)!r}: a template is a complete binding of a composite Definition")
     if not _verity(base):
-        raise ValueError(f"{base.id}: not a Definition Verity registers (defined in {base.body.__module__}); an integration "
-                         "builds its units from Verity's Definitions and silicon semantics, never its own")
+        raise ValueError(f"{base.id}: not a Definition a catalog registers (defined in {base.body.__module__}); a unit's "
+                         "Definition is registered from a verity module or from a catalog package, one that names itself "
+                         "with verity.circuits.defs.catalog_package as it loads, and from nowhere else")
 
 
 def _bindings(record: str) -> dict[str, Any]:
@@ -202,13 +211,14 @@ def _load_catalog() -> None:
 
 
 def resolve(tid: str, *, template: bool = True) -> Any:
-    """The Definition descriptor id ``tid`` names in Verity's catalog (every Definition registered from a ``verity`` module):
+    """The Definition descriptor id ``tid`` names among those a catalog registers (every Definition registered from a
+    ``verity`` module or from a catalog package, `_verity`):
     its base and binding record parsed (`codec.descriptor_id`'s form) and bound; a ``template`` refused unless `catalog`'s.
     Refused (ValueError) unless the Definition it binds is named exactly ``tid``."""
     _load_catalog()
     m = _ID.fullmatch(tid)
     if m is None or m[1] not in REGISTRY.defs or not _verity(REGISTRY[m[1]]):
-        raise ValueError(f"{tid}: names no Definition in Verity's catalog")
+        raise ValueError(f"{tid}: names no Definition a catalog registers")
     base = REGISTRY[m[1]]
     try:
         if m[2] is not None:
