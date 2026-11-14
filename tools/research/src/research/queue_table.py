@@ -26,7 +26,8 @@ file, or failed step's end, among the candidate's shards.
 
 `--until TIME` ends the windows at a past time (`cut`): the loop's lines, the labels and the runs after it are left out, and
 what can only be read from the machines as they are is not shown. `--rounds` prints one row for each candidate of the long
-window instead of the table (`rounds`).
+window instead of the table (`rounds`), and `--reds` each candidate being checked, its members above `main`, its shards and
+only the reds on the merge gate (`reds`).
 
 `collect` does the reading and returns plain data; everything below it is a pure function of that data, so the table can be
 rebuilt from a saved `--json` document. Stdlib only."""
@@ -43,6 +44,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from .auto import SPILL_POOL
+from .reds import CIRCUIT_STEP, RATCHET_STEP
 
 CONTROL = "vy-control-verity"
 #: the live loop's directory on the control pod: its decision log, its log, and the flags it runs with (`--on`: the check nodes)
@@ -54,7 +56,7 @@ REPO = "compute-verification/verity"
 #: the target: nine in ten PRs on `main` within two hours of the mark
 TARGET_MIN, TARGET_SHARE = 120.0, 0.9
 #: the steps off the merge gate when the checkout's policy.toml can't be read: a candidate's verdict doesn't wait for them
-OFF_GATE = ("circuit-check", "ratchet-gate")
+OFF_GATE = (CIRCUIT_STEP, RATCHET_STEP)
 #: a file whose change is a Lean change: a module, a lakefile, a Lake manifest, a toolchain, a lock, or the Lean check's own
 #: code less its tests and docs, most of which every package's audit is keyed on (`lean_audit.tool_files`)
 LEAN_FILE = re.compile(r"\.lean$|(^|/)lakefile\.|(^|/)lake-manifest\.json$|(^|/)lean-toolchain$|(^|/)lean-audit\.json$"
@@ -1541,6 +1543,56 @@ def render_rounds(rows: list[dict], doc: dict) -> str:
     return "\n".join(lines)
 
 
+def reds(doc: dict) -> list[dict]:
+    """Each candidate being checked now (`candidates`' `running`), oldest build first: its members above `main` (those of each
+    candidate under it still being checked, lowest first, then its own) and each of its shards: node, run, state, the steps on
+    the merge gate that have started, and its gating reds, each failed step on the gate and each suite its reports say failed.
+    A step off the gate (``doc["off_gate"]``, policy.toml's) is neither a step nor a red here."""
+    off_gate = tuple(doc.get("off_gate") or OFF_GATE)
+    cands = {c["sha"]: c for c in candidates(doc["control"].get("decisions") or [], window_runs(doc), window_start(doc), off_gate)}
+    out = []
+    for c in cands.values():
+        if c["outcome"] != "running":
+            continue
+        members, b = list(c["members"]), cands.get(c["base"])
+        while b and b["outcome"] == "running":
+            members, b = [*b["members"], *members], cands.get(b["base"])
+        shards = []
+        for sh in c["shards"]:
+            steps = [{"step": st["step"], "state": st.get("state"), "seconds": st.get("seconds")} for st in sh.get("steps") or []
+                     if st.get("step") not in off_gate and st.get("state") not in (None, "pending", "skipped")]
+            shards.append({"shard": sh.get("shard"), "node": sh.get("node"), "id": sh["id"], "state": sh.get("state"),
+                           "rc": sh.get("rc"), "steps": steps,
+                           "reds": [f"step {st['step']}" for st in steps if st["state"] == "failed"]
+                           + [f"suite {f[0]}" for f in sh.get("failed") or []]})
+        out.append({"sha": c["sha"], "base": c["base"], "build_min": _m(doc["now"] - c["build"]), "members": members,
+                    "shards": shards})
+    return out
+
+
+def render_reds(rows: list[dict], doc: dict) -> str:
+    """The candidates being checked, each with its members and a line a shard, and a `RED:` line under a shard with a gating red."""
+    off = ", ".join(doc.get("off_gate") or OFF_GATE)
+    lines = [f"The candidates being checked at {datetime.fromtimestamp(doc['now'], UTC):%Y-%m-%d %H:%MZ}: {len(rows)}. Only the "
+             f"steps and reds on the merge gate are shown; those off it ({off}) are left out."]
+    for r in rows:
+        lines.append(f"queue/{r['sha']} on {r['base'] or '?'}, built {r['build_min']:.0f} min ago, above `main`: "
+                     + (" ".join(f"#{n}" for n in r["members"]) or "no member named"))
+        for s in r["shards"]:
+            steps = ", ".join(f"{st['step']} {st['state']}" + (f" {st['seconds']:,.0f} s" if isinstance(st["seconds"], (int, float))
+                                                              else "") for st in s["steps"])
+            rc = f" rc {s['rc']}" if s["rc"] is not None else ""
+            lines.append(f"  {s['shard'] or '-'} {(s['node'] or '?').replace('vy-nebius-', '')} {s['id']} {s['state'] or '?'}{rc}: "
+                         f"{steps or 'no step on the gate started'}")
+            if s["reds"]:
+                lines.append(f"    RED: {', '.join(s['reds'])}")
+        if not r["shards"]:
+            lines.append("  no shard run found")
+    if doc["errors"]:
+        lines += ["", "Not read: " + "; ".join(doc["errors"])]
+    return "\n".join(lines)
+
+
 def render(rows: list[dict], doc: dict, short: bool = False) -> str:
     """The table as Markdown; ``short`` leaves out the column saying how each number is measured."""
     at = datetime.fromtimestamp(doc["now"], UTC)
@@ -1588,8 +1640,9 @@ def window_end(until: str, now: float) -> float:
 
 
 def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: bool = False, until: str | None = None,
-         by_round: bool = False) -> int:
-    """Print the table, or with ``by_round`` the rounds; ``until`` ends the windows at a past time, written with its offset."""
+         by_round: bool = False, by_red: bool = False) -> int:
+    """Print the table, or with ``by_round`` the rounds, or with ``by_red`` the candidates being checked and their gating reds
+    (`reds`); ``until`` ends the windows at a past time, written with its offset."""
     end = None
     if until is not None:
         try:
@@ -1615,9 +1668,10 @@ def main(store_root=None, as_json: bool = False, sample_s: float = 5.0, short: b
         print(f"research queue stats: {STATE} not written ({e}): the next run has no reading from this one for its last-hour cores",
               file=sys.stderr)
     # `pools`: the slots as the table adds them up, which the machines only say of now, so none for a window that ended
-    print(json.dumps({"at": doc["now"], "rows": rows, "rounds": rounds(doc), "pools": None if end is not None else slot_groups(doc),
-                      "errors": doc["errors"], "data": doc}, default=str)
-          if as_json else render_rounds(rounds(doc), doc) if by_round else render(rows, doc, short))
+    print(json.dumps({"at": doc["now"], "rows": rows, "rounds": rounds(doc), "reds": reds(doc),
+                      "pools": None if end is not None else slot_groups(doc), "errors": doc["errors"], "data": doc}, default=str)
+          if as_json else render_rounds(rounds(doc), doc) if by_round else render_reds(reds(doc), doc) if by_red
+          else render(rows, doc, short))
     return 0
 
 
