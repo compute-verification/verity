@@ -14,10 +14,13 @@
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
   each unit's public input regions), and the execution phase's refusal of a repeated call index.
 * `plan`: closure samples behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
-* `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
-  their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed
-  ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
-* `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
+* `tile_units`: what the tile checks share: their emitter, the ok word, the digest families, the row cut's shape
+  (`RowK`), the unit roles and the cut of a root into units (`units`, `unit_cut`).
+* `pc8`: Pearl-C's (FP8, forming v1) tile check as a Program, cut into row and tile units, and its hiding Program
+  (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed ports and the anchored
+  inputs public input regions (`PORTS`).  Its scheme has no entry in `SCHEMES` yet.  Pearl-C4's (`pc4`) is
+  `verity.protocols.experimental.pearl_c4.prover`'s.
+* `rowk`: the tile checks' row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
   piece fits Flock's block.
 * `compile`: PoUW as one pass over a served Program: `compile(program, scheme,
   groups)` replaces every registered matmul's dots (`MATMULS`) with the scheme's r × c tile units, each deriving its seed
@@ -45,6 +48,9 @@
   `window.window_problem` in gates), one unit an execution phase: ok iff the P rows are entry rows of the layout, the
   calls, one filler, then empty entries, whose ranges tile [0, N) at the public registered level, every call's -h3 root
   the pass's public one and the calls' pass tiles in order.
+* `pearl_c_call`, `pearl_c_forming`, `pearl_c_noise`, `pearl_c_tile`: Pearl-C -h3's rows and cells, its forming, its noise
+  derivation and its tile's checked words as registered Definitions, each with its Boolean version, which
+  `pearl_plus_tile`, Pearl+'s tile check, calls.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs SPOT traces for one PoUW linear and its weight, their partition queries, the served outputs

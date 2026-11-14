@@ -20,11 +20,11 @@ The training formalism v2, the one statement of the training slowdown, in Lean:
   and the token kind: the token work `W_T(x, ν)` reachable from an entry at A1's values, and the work per bit of state;
 * runs, losses and the honest cost (`Definitions.Slowdown.Formalism.Runs`), which A2 and Security read.
 
-The assumptions A1, the token-work bound and A2 are `InferenceOnly.Formalism.Assumptions`
-(`Definitions.Assumptions`), the theorems of §5 are `InferenceOnly.Formalism.Guarantees`
-(`Definitions.Slowdown.Guarantees.Formalism`), and their proofs `InferenceOnly.Formalism.SecurityProofs`; the reconstruction lemma and
-the split of a block's inputs are proved beside them (`InferenceOnly.Formalism.reconstruction`,
-`InferenceOnly.Formalism.reads_split`). Units: `|C|`, `c`, `d`, `|B_K|` and `cap_K` count gates; `k`, `τ`, `a`, `u`, `Δ`, `Δ_t`
+The assumptions A1, the token-work bound and A2 are `Slowdown.Formalism.Assumptions`
+(`Definitions.Assumptions`), the theorems of §5 are `Slowdown.Formalism.Guarantees`
+(`Definitions.Slowdown.Guarantees.Formalism`), and their proofs `Slowdown.Formalism.SecurityProofs`; the reconstruction lemma and
+the split of a block's inputs are proved beside them (`Slowdown.Formalism.reconstruction`,
+`Slowdown.Formalism.reads_split`). Units: `|C|`, `c`, `d`, `|B_K|` and `cap_K` count gates; `k`, `τ`, `a`, `u`, `Δ`, `Δ_t`
 and `Δ_grad` count values, which are bits; `s` is tokens and `r` gates a bit. The instances the theorems' witnesses are
 stated at are `Definitions.Slowdown.Formalism.Instances`.
 -/

@@ -13,7 +13,7 @@ when its cells lie among the block's gates and what they read. Every information
 
 @[expose] public section
 
-namespace InferenceOnly.Capability
+namespace Slowdown.Capability
 
 open Verity Finset
 
@@ -46,4 +46,4 @@ def HeldPriceAtMost (R : Committed) {ι : Type} (X : Items R.d.D ι) (h : ℝ) :
   ∀ (u : Fin R.d.n) (U : Finset ι) (σ : ι → Finset (Fin R.d.D.N)), Selects X U σ →
     (∀ i ∈ U, σ i ⊆ holds R.d.D (R.d.𝓘.gates u)) → ∑ i ∈ U, X.price i ≤ h
 
-end InferenceOnly.Capability
+end Slowdown.Capability

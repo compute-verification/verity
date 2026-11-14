@@ -17,9 +17,9 @@ other), so their expected work is at most the escaped blocks' plus `B`; and each
 
 open Verity.Game renaming prPMFReal → prob
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open InferenceOnly.Slowdown
+open Slowdown.Slowdown
 
 open scoped Classical in
 /-- On a finite outcome space, `prob μ E` is `∑_{ω ∈ E} μ(ω)`. -/
@@ -164,4 +164,4 @@ theorem sampled_escape {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF
   rw [div_mul_eq_mul_div, le_div_iff₀ hq]
   nlinarith [h3]
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

@@ -318,6 +318,17 @@ def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merg
     assert A.judge(regen, tree, FILES)[0] == [] and "P.Hyp" not in regen.get("assumptions", {})
 
 
+def test_a_premise_s_claim_id_merges_apart_from_its_owner_and_digest():
+    """A premise entry's `id` is written by hand, as its owner is: one side's new id and the other's new owner and digest
+    both stand."""
+    base = record(t=thm([F]))
+    def hyp(**entry):
+        return base | {"open": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "due": "2026-12-01"} | entry}}
+    merged, why = M.merge(hyp(), hyp(id="trusted-device"), hyp(owner="@proofs", digest="b" * 64), candidate := [])
+    assert why == [] and merged["open"]["P.Hyp"] == {"id": "trusted-device", "owner": "@proofs", "digest": "b" * 64,
+                                                      "due": "2026-12-01"}
+
+
 def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_changed_its_owner_which_keeps_it():
     """A restatement is the build's, so the removal applies over it; an owner is a person's, so the side that changed it
     keeps the guarantee, named (a changed side beats a removed one)."""
@@ -425,12 +436,12 @@ def test_a_definition_taken_out_of_a_module_next_adds_readers_to_merges_as_the_s
 
 def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
     """A branch that renames `J10R.Layout` to `NoiseLayout`, merged onto `next` as drive merged it: `next` added readers of
-    `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
+    `Definitions.Pouw.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
     after-landing Lean check, with no regenerate, fails on.  The fixture is that group on each side with the records of its
     readers, as locks once listed them.  Read without them, `next`'s group is the base's, so the merge is the renaming
     branch's group, cleanly."""
     sides = json.loads((FIXTURES / "j10r-layout-renamed-onto-next.json").read_text())
-    m = "Definitions.Accounting.TS.J10R"
+    m = "Definitions.Pouw.TS.J10R"
     old = [d for d in sides["base"]["reads"][m]["definitions"] if ".Layout" in d]
     assert len(old) == 5 and all(d in sides["ours"]["reads"][m]["definitions"] for d in old)
     assert sides["ours"]["reads"][m]["guarantees"] != sides["base"]["reads"][m]["guarantees"]
@@ -803,7 +814,7 @@ def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_s
 
     def lock(h: str, *texts: str) -> dict:
         """A lock listing ``g`` with the premises ``texts``, reading ``d`` at hash ``h``."""
-        return {"guarantees": {g: rec}, "reads": {"Definitions.Accounting.Guarantees.Pouw": {"definitions": {d: h * 64}}},
+        return {"guarantees": {g: rec}, "reads": {"Definitions.Pouw.Guarantees.Pouw": {"definitions": {d: h * 64}}},
                 "shape": {"inline": {g: dict.fromkeys(texts, why)}}}
     merged, _ = M.merge(lock("1", old), lock("1", old), lock("2", new), candidate := [])
     assert merged["shape"]["inline"] == {g: {new: why}} and candidate == []

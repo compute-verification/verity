@@ -1785,7 +1785,7 @@ def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × Str
   let found := fun (es : Array Entry) =>
     let p : Params := {
       audits := #[], cells := #[], first := 0, jitter := 1, link := "a", lms := Lms.deployed, entries := es,
-      program := "", form := .rows defaultSchedule .empty ⟨0, 0, 0, 0, 0⟩, windows := 1 }
+      program := "", form := .rows defaultSchedule .empty ⟨0, 0, 0, 0, 0, 0⟩, windows := 1 }
     (startChecks p ⟨#[], #[], #[]⟩).map (·.map (·.2))
   found #[⟨key 1 1, session 7, 3⟩, ⟨key 2 2, session 8, 2⟩] == #[some "entries: out of order: entry 1 starts at 2, \
       not after entry 0's 3: list the entries by their stretches' starts, no two at one"] &&

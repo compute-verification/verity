@@ -21,7 +21,7 @@ public import Definitions.Slowdown.Cut.Toy
 # The inference-only policy's guarantees: their witnesses
 
 Each guarantee over the inference-only policy that concludes a bound is of the lock's `exclusion` kind, and has two
-witnesses at the toy circuit (`InferenceOnly.Capability.Toy`, with the instances of `InferenceOnly.Witness`), listed under the lock's
+witnesses at the toy circuit (`Slowdown.Capability.Toy`, with the instances of `Slowdown.Witness`), listed under the lock's
 `witnesses`. `Inference` concludes the policy at `(c, k)` (`Complies`); every other guarantee takes it at a rate
 (`CompliesRate Γ α`), and its witnesses are at `Γ = 2` and `α = 1/2`, so that the read cap `α Γ` is `1`:
 
@@ -34,8 +34,8 @@ The premise each `X_nontrivial` drops is the one the bound rests on: the coverag
 reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `ExecutionPhasesHold`
 for the slowdown, and PoUW's soundness (`PouwSound`) for the remote slowdown, whose witnesses take its declared
-computation at the min-cut toy (`InferenceOnly.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E). The cover theorem's join
-(`InferenceOnly.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
+computation at the min-cut toy (`Slowdown.Cut.Toy`), where the count verdict `CompliesAtMost` holds under (H) and (E). The cover theorem's join
+(`Slowdown.Cover.Guarantees.CoverTraining`) is stated at the multiplication blocks `mb0` of no product, where coverage
 `α₀ > 0` fails.
 -/
 
@@ -43,9 +43,11 @@ computation at the min-cut toy (`InferenceOnly.Cut.Toy`), where the count verdic
 
 open Verity.Game renaming prPMFReal → prob
 
-namespace InferenceOnly.Guarantees
+open InferenceOnly
 
-open Verity Finset InferenceOnly.Capability.Toy InferenceOnly.Witness InferenceOnly.Slowdown
+namespace Slowdown.Guarantees
+
+open Verity Finset Slowdown.Capability.Toy Slowdown.Witness Slowdown.Slowdown
 
 /-- **`ThreadedTraining`'s and `ThreadedTrainingOn`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`,
 `b_w = b_a = 1/2`, `κ = 1`, `r = d = Toy.D` through the containment of the toy in itself, the threading `T1` and
@@ -212,7 +214,7 @@ def SlowdownThreadedSlots_nontrivial : Prop :=
 
 /-- **`SlowdownRemote`'s premises hold together** over the outcomes `Bool` sampled uniformly: one PoUW window of capacity
 `C = 2`, its certificate never incorrect (`p = 0`), all of it certified (`W = 2`), no incorrect proof block, so that every
-detection holds at `q = 1` and the residual is `0`, and the declaration the toy `InferenceOnly.Cut.Toy`, complying with
+detection holds at `q = 1` and the residual is `0`, and the declaration the toy `Slowdown.Cut.Toy`, complying with
 `CompliesAtMost 1 2 2` under (H) at unit costs and (E) at `b = 2`, whose two MACs are the counted multiplications. -/
 def SlowdownRemote_honest : Prop :=
   Assumptions.WithinCompute OneWindow.cap 2 ∧ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 ∧
@@ -263,11 +265,11 @@ def SlowdownRemote_nontrivial : Prop :=
               efficiency 2 (Cut.workHE 2 2 (1 * 1) 2 Cut.Toy.W.O) 100 0 + 0) ≤
           hardwareMultiple 1 2 100 100 0))
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees
 
-namespace InferenceOnly.Cover.Guarantees
+namespace Slowdown.Cover.Guarantees
 
-open Verity InferenceOnly.Capability.Toy InferenceOnly.Witness
+open Verity Slowdown.Capability.Toy Slowdown.Witness
 
 /-- **`CoverTraining`'s premises hold together** at the toy, with `Γ = 2`, `α = 1/2`, `b = 1`, `r = d = Toy.D` through
 the containment of the toy in itself, the multiplication blocks `mb0` of no product at depth `D = 2`, block size
@@ -285,4 +287,4 @@ def CoverTraining_nontrivial : Prop :=
     Assumptions.BlockFits D 2 1 1 4 ∧ ¬ InferenceOnly.Assumptions.Coverage 2 D (mb0 D).P.card ∧
     ¬ (2 * 1 * D.D.size D.D.computed ≤ ((1 / 2 : ℝ) * (1 / 2) * 2 + 1 * (1 / 2)) * D.D.size D.D.computed)
 
-end InferenceOnly.Cover.Guarantees
+end Slowdown.Cover.Guarantees

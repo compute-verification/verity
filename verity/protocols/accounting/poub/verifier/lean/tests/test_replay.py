@@ -178,7 +178,7 @@ def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_record
     row, = R.replay_record(path, server)
     assert row["agree"] and row["held"] and row["lean"]["refused"] == 0, row
     if outcome == "accepted":
-        assert len(row["lean"]["drawn"]) == -(-W // g) and row["why"] == "every draw drawn, as many as recorded"
+        assert len(row["lean"]["drawn"]) == -(-W // g) and row["why"] == "every sample taken, as many as recorded"
 
 
 def test_a_verifier_json_drawn_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed(server, tmp_path) -> None:

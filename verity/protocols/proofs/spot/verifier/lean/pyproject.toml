@@ -31,6 +31,6 @@ untraced = [
 # commitments' domains, and LMS for the challenger's signed record).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/protocols",
           "verity/protocols/proofs/flock/verifier",
-          "verity/circuits", "verity/claims", "verity/commitments", "adapters/vllm/verity_vllm/definitions",
-          "tools/difftest", "verity/channel.py",
+          "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "tools/difftest",
+          "verity/channel.py",
           "verity"]
