@@ -18,7 +18,7 @@
 #   research run --on NODE --project verity --source . --cwd source --mem-gb 128 --timeout 4h --declared-output 'out/*' \
 #     --env LEGS=j10r-live [--env GATE=... --env CHALLENGER=127.0.0.1:7811 --env PEER=NODE --env CIRCUITS=DIR] \
 #     -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE \
-#     --run-max 12600 -- bash benchmarks/pouw/served_h1/commit_legs.sh
+#     --run-max 12600 -- bash benchmarks/pouw/served_h1/commit_variants.sh
 set -u
 . "$(dirname "$0")/arch.sh"
 S=$(mktemp -d); trap 'rm -rf "$S" || true' EXIT
