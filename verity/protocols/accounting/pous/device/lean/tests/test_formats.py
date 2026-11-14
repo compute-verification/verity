@@ -11,21 +11,21 @@ import hashlib
 import json
 import shutil
 
-import pytest
-from hypothesis import strategies as st
-
 import mc_cases as M
+import pytest
 import verity_difftest as D
 import wipe_cases as W
+from hypothesis import strategies as st
+
+from verity.commitments.crypto import lms
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
-from verity.commitments.crypto import lms
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 EXE = "memory-challenger-difftest"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, a refusal of its own (`ValueError`, which
-#: `InvalidArtifact` is), an empty randomness source (`TypeError`) and a width overflowed (`OverflowError`).
+#: `InvalidArtifact` is), an empty `source` (`TypeError`) and a width overflowed (`OverflowError`).
 REFUSALS = (D.Reject, ValueError, TypeError, OverflowError)
 
 
@@ -88,15 +88,15 @@ SALT = mostly(st.binary(min_size=192, max_size=192), st.binary(min_size=191, max
 
 
 @st.composite
-def coin_tree_inputs(draw) -> dict:
+def coin_tree_inputs(sample) -> dict:
     """Each refusal now and then: no rounds, a salt too many or too few or short, a bad key, a session not 32 bytes, no
     labels or more than a u64 index holds, no source."""
-    k = draw(mostly(st.integers(1, 5), st.just(0)))
-    n = draw(mostly(st.just(k), st.sampled_from([k + 1, max(0, k - 1)])))
-    session = draw(mostly(st.just(32), st.sampled_from([31, 33])).flatmap(lambda m: st.binary(min_size=m, max_size=m)))
-    return {"source": draw(hexed(mostly(st.binary(min_size=1, max_size=6), st.just(b"")))), "session": session.hex(),
-            "blocks": draw(mostly(st.integers(1, 60), st.one_of(st.just(0), WIDE(64)))), "k": k, "key": draw(hexed(KEYS)),
-            "salts": [s.hex() for s in draw(st.lists(SALT, min_size=n, max_size=n))]}
+    k = sample(mostly(st.integers(1, 5), st.just(0)))
+    n = sample(mostly(st.just(k), st.sampled_from([k + 1, max(0, k - 1)])))
+    session = sample(mostly(st.just(32), st.sampled_from([31, 33])).flatmap(lambda m: st.binary(min_size=m, max_size=m)))
+    return {"source": sample(hexed(mostly(st.binary(min_size=1, max_size=6), st.just(b"")))), "session": session.hex(),
+            "blocks": sample(mostly(st.integers(1, 60), st.one_of(st.just(0), WIDE(64)))), "k": k, "key": sample(hexed(KEYS)),
+            "salts": [s.hex() for s in sample(st.lists(SALT, min_size=n, max_size=n))]}
 
 
 def test_coin_tree(server):
@@ -109,16 +109,16 @@ def verify_coin(v) -> bool:
 
 
 @st.composite
-def verify_coin_inputs(draw) -> dict:
-    s = draw(M.sessions())
-    c, o = s.commitment, draw(st.sampled_from(s.openings))
-    x = draw(st.integers(0, 2 ** 16))
-    o = draw(st.sampled_from([
+def verify_coin_inputs(sample) -> dict:
+    s = sample(M.sessions())
+    c, o = s.commitment, sample(st.sampled_from(s.openings))
+    x = sample(st.integers(0, 2 ** 16))
+    o = sample(st.sampled_from([
         o, dataclasses.replace(o, index=o.index + 1), dataclasses.replace(o, index=o.index + c.blocks),
         dataclasses.replace(o, j=o.j + 1), dataclasses.replace(o, j=2 ** 32 + o.j), dataclasses.replace(o, salt=M._flip(o.salt, x)),
         dataclasses.replace(o, salt=o.salt[:-1]), dataclasses.replace(o, path=o.path[:-1]), dataclasses.replace(o, path=o.path + (bytes(64),)),
         dataclasses.replace(o, path=tuple(p[:-1] for p in o.path))]))
-    c = draw(st.sampled_from([
+    c = sample(st.sampled_from([
         c, dataclasses.replace(c, session=hashlib.sha512(b"other").digest()[:32]), dataclasses.replace(c, k=c.k + 1),
         dataclasses.replace(c, k=2 ** 33), dataclasses.replace(c, blocks=o.index), dataclasses.replace(c, coin_key=c.coin_key[:-1]),
         dataclasses.replace(c, coin_root=M._flip(c.coin_root, x)), dataclasses.replace(c, coin_root=c.coin_root[:-1])]))
@@ -196,8 +196,8 @@ def mc_message(v) -> str:
 
 
 def test_mc_message(server):
-    I = st.one_of(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
-    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(I), "session": hexed(st.binary(max_size=40)),
+    identifiers = st.one_of(st.binary(min_size=16, max_size=16), st.binary(max_size=20))
+    inputs = with_malformed(st.fixed_dictionaries({"I": hexed(identifiers), "session": hexed(st.binary(max_size=40)),
                                                    "record": hexed(st.binary(max_size=70))}))
     stats = D.run(port("mc_message", mc_message, inputs), examples=300, server=server)
     assert stats.outputs > 100, stats
@@ -231,16 +231,16 @@ def lms_verify(v) -> bool:
 
 
 @st.composite
-def lms_verify_inputs(draw) -> dict:
-    signer = draw(st.one_of(st.builds(M.test_signer, st.sampled_from(M.SECRETS), st.just(2), st.integers(0, 3)),
+def lms_verify_inputs(sample) -> dict:
+    signer = sample(st.one_of(st.builds(M.test_signer, st.sampled_from(M.SECRETS), st.just(2), st.integers(0, 3)),
                             st.just(M.test_signer(M.SECRETS[0], 1, 1)), st.builds(M.deployed_signer)))
-    session, record = draw(st.binary(max_size=40)), draw(st.binary(max_size=64))
-    sig, pub, x = signer.sign(session, record), signer.public_key, draw(st.integers(0, 2 ** 16))
-    sig = draw(mostly(st.just(sig), st.sampled_from([M._flip(sig, x), sig[:-1], b"", (2 ** 32 - 1 - x).to_bytes(4, "big") + sig[4:],
+    session, record = sample(st.binary(max_size=40)), sample(st.binary(max_size=64))
+    sig, pub, x = signer.sign(session, record), signer.public_key, sample(st.integers(0, 2 ** 16))
+    sig = sample(mostly(st.just(sig), st.sampled_from([M._flip(sig, x), sig[:-1], b"", (2 ** 32 - 1 - x).to_bytes(4, "big") + sig[4:],
                                 (x % 4 + 4).to_bytes(4, "big") + sig[4:], bytes(len(sig))]), 2))
-    pub = draw(mostly(st.just(pub), st.sampled_from([pub[:-1], M._flip(pub, x), M.test_signer(M.STRANGER, 2, 0).public_key]), 3))
-    session, record = draw(mostly(st.just((session, record)), st.sampled_from([(session + b"x", record), (session, M._flip(record, x))]), 3))
-    scheme = draw(mostly(st.just(signer.scheme), st.sampled_from([mc.LMS, M.ts.scheme(1), M.ts.scheme(3), "none"]), 3))
+    pub = sample(mostly(st.just(pub), st.sampled_from([pub[:-1], M._flip(pub, x), M.test_signer(M.STRANGER, 2, 0).public_key]), 3))
+    session, record = sample(mostly(st.just((session, record)), st.sampled_from([(session + b"x", record), (session, M._flip(record, x))]), 3))
+    scheme = sample(mostly(st.just(signer.scheme), st.sampled_from([mc.LMS, M.ts.scheme(1), M.ts.scheme(3), "none"]), 3))
     return {"scheme": scheme, "public_key": pub.hex(), "session": session.hex(), "record": record.hex(), "signature": sig.hex()}
 
 
