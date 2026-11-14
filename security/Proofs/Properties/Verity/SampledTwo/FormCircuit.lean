@@ -12,6 +12,7 @@ public import Proofs.Properties.Verity.SampledTwo.FormBytes
 public import Proofs.Properties.Verity.SampledTwo.FormMember
 public import Proofs.Properties.Verity.SampledTwo.FirstEarly
 public import Proofs.Properties.Verity.SampledTwo.Reached
+public import Proofs.Properties.Verity.SampledTwo.SessionSent
 
 /-!
 # The messages' piece at the form's reading, at the circuit statement's table
@@ -60,6 +61,10 @@ piece at that table, where the three are theorems, and with them the statements'
   (`SessionCoins.verdictsAt_of`) and each session's evidence on the case (`SessionCoins.logCloses_run`).
 * `LinkFixed` is `linkFixed_of` (`FormLink.lean`), from `StmtAtFixed`, the sessions the verdict accepted and the
   members' check on the log the check read (`SessionCoins.membersNamed`).
+* `SessionMsgs` is `sessionMsgs_form`, at the sessions' replaying provers (`SessionMsgs.replayProver`), which
+  `agreed_form` is taken at: from the join's fields and `PlayAccepts` at those provers (`sessionMsgs_replay`,
+  `SessionSent.lean`). A replaying prover's messages are its session's on the case, each but the last answered with
+  a coin, so the sequential prover sends them in the session's rounds.
 * `agreed_form`'s `hR`, that the frame's run on agreeing coins has all the verifier's messages where its messages are
   the check's wherever it has one, is `reaches_frame` (`Reached.lean`), from `PlayAccepts`, `SessionMsgs`
   (`reachedAccepts`) and the frame's statement being the one the check reads (`stmtAt`).
@@ -81,9 +86,25 @@ open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
+/-- **The replaying provers' messages are the ones the check read, at the form** (`SessionMsgs` at
+`SessionMsgs.replayProver`): `sessionMsgs_replay` where the statements' count, their fit and the sessions' verdicts
+are the form's (`stmtsCount_of`, `SessionCoins.stmtsFit_of`, `SessionCoins.verdictsAt_of`), at every play. -/
+theorem sessionMsgs_form {A : Live₂} {C : CaseOf} {S : SessionReading}
+    (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
+    (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j) (hof : HeldOfAt A C)
+    (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S)
+    (hplay : PlayAccepts A C S (SessionMsgs.replayProver C)) :
+    SessionMsgs A C S (SessionMsgs.replayProver C) := by
+  have hcount : StmtsCount A C fun _ => True :=
+    stmtsCount_of _ hof (partsHeldAt_of_accepts hof (partsSizedAt_of_formAccepts hof))
+  have hfit : SessionCoins.StmtsFit C fun _ => True := SessionCoins.stmtsFit_of C _
+  exact sessionMsgs_replay hS hM hcount hfit
+    (SessionCoins.verdictsAt_of hS hof hst hrounds hscope hcount (stmtsPrint_of C _) hfit) hplay
+
 /-- **The messages fixed where the coins agree, at the form's reading and the circuit statement's table**:
-`agreed_form` at the locator whose table names are all `Flock.Tags.circuit.table`, where the reading's statements
-and messages are the case's. Its hypotheses on the sessions' records are theorems there: the log's rounds rise
+`agreed_form` at the locator whose table names are all `Flock.Tags.circuit.table` and the sessions' replaying provers
+(`SessionMsgs.replayProver`), where the reading's statements and messages are the case's. Its hypotheses on the
+sessions' records are theorems there: the log's rounds rise
 (`SessionCoins.logRising_of`), the check read a record for every template (`SessionCoins.recordsCover_of`), and each
 record is its session's, accepted at its statement's setup (`SessionCoins.msgsOfRecords_form`), what each member's
 statement prints of the member reading back (`stmtsPrint_of`). The evidence holds one statement a template
@@ -93,12 +114,13 @@ one pair of stage coins carries the bytes both plays' samples read (`memberAtFix
 `stageCoinsOne_of_play`), which one does where each stage's bytes start the coins the log shows before every
 opening (`playCoinsOne_of_shown`), as the first stage's do at the cut's read (`firstShownEarly`); and where its
 statement is fixed, a session's first message is fixed by the string shown at its first round (`linkFixed_of`) and
-its last by its evidence (`lastFixed_of`). The frame's run on agreeing coins, its messages the check's wherever it
-has one, has every message (`reaches_frame`), as the accepted play's own prover's run does. -/
+its last by its evidence (`lastFixed_of`). The replaying provers send each session's messages as the check read
+them (`sessionMsgs_form`). The frame's run on agreeing coins, its messages the check's wherever it has one, has
+every message (`reaches_frame`), as the replaying provers' run does. -/
 theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
-    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
-    (ℓ₁ ℓ₂ : String) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (ℓ₁ ℓ₂ : String) (Good : Verity.Exchange → Prop)
+    (L : CoinMap.Locate)
     (hL : L = SessionCoins.runLocate A (CoinMap.stageLocate ℓ₁ ℓ₂) fun _ => Flock.Tags.circuit.table) (q : ℕ)
     (hne : ℓ₁ ≠ ℓ₂) (hG : ∀ o, Good o → ReadIsDevice o)
     (hDraw₁ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind firstDraw) ℓ₁)
@@ -107,12 +129,13 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (hlog : SessionCoins.InteriorLogged C Good) (hθ : ∀ o, FormAccepts C o → Good o → o.params = θ)
     (hS : ∀ o, S.stmts o = (C o).bind SessionMsgs.stmtsMsg)
     (hM : ∀ o t j, S.msg o t j = (C o).bind fun k => SessionMsgs.msgAtCase k t j)
-    (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S)
+    (hplay : PlayAccepts A C S (SessionMsgs.replayProver C)) (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
     (hsent : CaseIsSent C) (hC : CaseCommits C) (hx : stmtOf c = some x) :
     MessagesFixedAgreed V A x θ F c σ (formFrame V A x θ F c σ C S dev Good L) (formReading A C S dev)
       (FormAccepts C) Good (formMiss V A x θ F c σ C S dev Good L q) := by
   have hparts : PartsHeldAt A C := partsHeldAt_of_accepts hof (partsSizedAt_of_formAccepts hof)
+  have hsess : SessionMsgs A C S (SessionMsgs.replayProver C) := sessionMsgs_form hS hM hof hst hrounds hscope hplay
   have hcount : StmtsCount A C Good := stmtsCount_of Good hof hparts
   have hfit : SessionCoins.StmtsFit C Good := SessionCoins.stmtsFit_of C Good
   have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
@@ -133,8 +156,8 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     SessionCoins.verdictsAt_of hS hof hst hrounds hscope hcount hprint hfit
   have hLast : LastFixed A C S Good L := lastFixed_of A C S Good L _ hM hverd hclose hfix
   have hLink : LinkFixed A C S Good L := linkFixed_of A C S Good L hM hsz hverd hfix
-  exact agreed_form V A x θ F c σ C S dev P' (fun _ => Flock.Tags.circuit.table) ℓ₁ ℓ₂ Good L hL q hne hSecond hDraw
-    hsz hlog hθ
+  exact agreed_form V A x θ F c σ C S dev (SessionMsgs.replayProver C) (fun _ => Flock.Tags.circuit.table) ℓ₁ ℓ₂ Good L
+    hL q hne hSecond hDraw hsz hlog hθ
     (SessionCoins.logRising_of (SessionCoins.located_rising A C _ hsz) hlog (SessionCoins.interiorReads C hsz))
     hcov
     (SessionCoins.msgsOfRecords_form hS hM hof hst hrounds hscope hcount hprint hfit) hplay hsess hof hst hrounds
@@ -143,6 +166,6 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     fun ω r hA _ hc hm =>
       reaches_frame (formFrame V A x θ F c σ C S dev Good L)
         (stmtAt V A x θ F c σ (formFrame V A x θ F c σ C S dev Good L) C S dev hC hx)
-        (reachedAccepts A x C S dev P' (sourcesFit A C) hplay hsess) ω r hA hc hm
+        (reachedAccepts A x C S dev (SessionMsgs.replayProver C) (sourcesFit A C) hplay hsess) ω r hA hc hm
 
 end Verity.SampledTwo
