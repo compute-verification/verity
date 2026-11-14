@@ -171,7 +171,8 @@ memory, or its compose hand-off), which composes the final record on another hos
 and with ``--served-compare`` the served compare's verdict line (``served_compare``, `served_compare_line`).
 ``--steps LO,HI`` gives the window's engine steps, which the record otherwise picks from the serve dir's seals, windows
 and requests (`pick`): a compose follow-on holds no requests file. ``--off-node`` composes from the served node's compose
-hand-off (``composed_on``'s ``from`` `HANDED_FROM`), and is refused on the record's node itself. ``--sampled-lean``
+hand-off (``composed_on``'s ``from`` `HANDED_FROM`, which says that a verdict handed in is taken as given, with every
+check behind it: `TAKEN_AS_GIVEN`), and is refused on the record's node itself. ``--sampled-lean``
 takes sampled proofs' row from this host's own run of its Lean verifier on the records audit's v2 case, its proofs and
 public files (`lean_sampled_row`, ``--sampled-exe`` or built here), not from the summary and audit record the served node
 wrote, so an edit to those leaves the row as it is. Each row with an answer says where it came from (its
@@ -324,11 +325,14 @@ COMPOSED_FROM = ("each piece's answer file as the served node wrote it, not the 
 #: what `record` composes from off the served node (a deferral's follow-on): the prover's copy of those files
 COPIED_FROM = ("a prover-side copy of each piece's answer file as the served node wrote it, not the party that produced it: "
                "an edit to that file on the node or to its copy changes its row")
+#: What a record says of a verdict it was handed: every check behind it, a piece's whole chain of them, ran where the
+#: verdict was computed, and where the record is composed none of them is run again or held to anything.
+TAKEN_AS_GIVEN = "a verdict computed off the auditor's device and handed in is taken as given, for the whole chain"
 #: what `record --off-node` composes from: the served node's compose hand-off (`served_verdicts.sh handoff`), no witness
 HANDED_FROM = ("the served node's compose hand-off, held here to the sums it wrote, never a witness: each row's answer from "
                "where its answer_from says, sampled proofs' recomputed here by its Lean verifier from the case's proofs "
                "where the hand-off carries them, and each other's answer file as the served node wrote it, not the party "
-               "that produced it: an edit to such a file on the node before its hand-off changes its row")
+               f"that produced it: an edit to such a file on the node before its hand-off changes its row; {TAKEN_AS_GIVEN}")
 #: where a row's answer came from (``answer_from``: the report's row, and the ``RECORD`` line's ``answers``)
 AS_WRITTEN = "as the served node wrote it"
 #: ... sampled proofs' under ``record --sampled-lean`` (`lean_sampled_row`)

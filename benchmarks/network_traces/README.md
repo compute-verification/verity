@@ -130,8 +130,10 @@ rehearsal's is. The runner refuses a session without all three, and under any ot
 records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
 Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
-form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every
-request of the audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
+form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the network certifier's
+records pass `network-rows check` (each record held to its certified head, then the certifier program's rows audit,
+which refuses cells cut, clocked or ordered otherwise than the schedule), the chain accepted, every request of the
+audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
 `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window), is witness, as every
 case's evidence and params are: it is kept in the serve dir's `private/pieces/certifier` (0700, the file 0600) and is
 never in the piece's directory, which the run publishes. The certificates of its evidence, the link-window's three
@@ -139,8 +141,8 @@ records' and its two row registrations', which the network certifier signed wher
 published beside the answer as `certificates.json`, each certificate with its own fields alone. Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
-profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
-on the developer's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
+profile names its placement, as labels read from the run: the machine the certifier ran on, and the machine that ran
+each of the piece's steps; the piece establishes no `trusted-host` and gives no bound on that ground. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
 other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's
@@ -149,7 +151,9 @@ declare out of its directory. Split in two around V3c
 (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
 (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
 consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
-releases through its own hold.
+releases through its own hold. The check reads an audit's state entry among its `roots` and its `registered` alone,
+and a served window's registration holds its `SCAN_STATE` in its window's `activations.values` alone, so a served
+period's answer is a reject at the state tie.
 
 ## A cheating server
 
@@ -456,11 +460,23 @@ passes the scan), so `NetworkCheck.Period` refuses the execution phase by name (
 whole body by its closure digest (`entryPins`, `io_shell.SlotEntry_v1` at its circuit-check rows, and
 `SelectEntry_v1`'s), so the block round's `prog<j>`, the o0 of scan_zk's `SlotEntry_v1` stand-in's lane-j member,
 whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the
-requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, an execution phase whose scan's
+requests from its own registered `SCAN_STATE`, and the check refuses, next, by name, an execution phase whose scan's
 state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
 (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the proof block
 that computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
 refused at that proof block's o1; the block round's registration names it as `scan/state`.
+A scan proof block's public word, o0, is its ok bit. scan_zk commits a member's o0 rows under the verifier's public
+salts (`ok_salts`, `scan_ok.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
+ok is a constant of its template and count, and one execution phase's members are a function of the schedule's T
+(`scan_ok.members`: `first`, `ingress-0`, `last` and `egress-0`). The check computes those constants once a period
+(`scan_ok.constants`, Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
+names a member's `<member>/o0` at another root, leaf count or domain, names none for it, or names another port ending
+`/o0` (`held`): comparisons alone, no hash an execution phase. An ok bit is then the verifier's own computation from
+public parameters, never a row the prover's registered file states. Two members of one template and one count (at
+T = 3, `ingress-0` and `last`) are at one domain and root, and each is held to it. The table is one execution phase a
+registration's (`--group 1`, the only group the rows form reads). A schedule of fewer than two ticks has no constants
+(its one bucket would be the scan's first and its last, a member no scan is staged with), and the check refuses
+every execution phase under one.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
 K charges to the execution phase's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the

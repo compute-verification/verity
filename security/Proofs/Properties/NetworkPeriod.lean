@@ -133,7 +133,8 @@ theorem rowsProgWired : RowsProgWired := by
   · cases h
   · rename_i hF
     have h0 := firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))))
     unfold wiredCheck at h0
     split at h0
     · assumption
@@ -144,10 +145,10 @@ def tiedExecutionPhase : Lean.Json :=
   Lean.Json.mkObj [("roots", Lean.Json.arr #[Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")]])]
 
 /-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
-digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
+digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 2, `every` 2). -/
 def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)]⟩
 
-def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, none⟩
+def slotSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, none⟩
 
 /-- Its registration, with that template's entries port at the root `r` and the domain `d`. -/
 def slotReg : Lean.Json :=
@@ -183,7 +184,7 @@ accepts a rows-form period of one link-window with no audit, whose scan's `prog`
 theorem rowsProgWired_nontrivial : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hw : wired #[] slotSchedule #[] tiedExecutionPhase = true :=
     h p ⟨#[], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
   rw [tiedExecutionPhase_unwired] at hw
@@ -204,7 +205,7 @@ lemma at the pin): such a check accepts a rows-form period whose scan's `prog` i
 theorem rowsProgWired_renamed : ¬ RowsProgWiredOf acceptAllRows := by
   intro h
   let p : Params := ⟨#[renamedAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
-    .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hw : wired #[renamedAudit] slotSchedule #[slotReg] tiedExecutionPhase = true :=
     h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase rfl
   rw [renamedAudit_unwired] at hw
@@ -217,8 +218,22 @@ theorem stateChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : 
     (stateChecks p c)[i]? = some (stateCheck p s c.audits (p.first + i) reg) := by
   simp [stateChecks, hform, Array.getElem?_zipIdx, hreg]
 
-theorem rowsStateTied : RowsStateTied := by
-  intro p c e pub prof h s sd scan hform i reg hreg
+/-- The state finding of an execution phase's transfer blocks is none only when their scan's state is tied
+(`stateTied`) and its row 0 opened to the empty state (`stateEmpty`). -/
+theorem stateCheck_none {p : Params} {s : Schedule} {audits : Array Lean.Json} {w : ℕ} {reg : Lean.Json}
+    (h : stateCheck p s audits w reg = none) : stateTied p.audits s audits reg = true ∧ stateEmpty s reg = true := by
+  unfold stateCheck at h
+  split at h
+  · split at h
+    · exact ⟨by assumption, by assumption⟩
+    · cases h
+  · cases h
+
+/-- The transfer blocks of an accepted rows-form period's execution phase have no state finding. -/
+theorem stateCheck_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    (h : check p c e = .accept pub prof) {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    stateCheck p s c.audits (p.first + i) reg = none := by
   have hmem := Array.mem_of_getElem? (stateChecks_getElem? hform hreg)
   unfold check at h
   split at h
@@ -234,11 +249,16 @@ theorem rowsStateTied : RowsStateTied := by
   · cases h
   · cases h
   · rename_i hF
-    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
-    unfold stateCheck at h0
-    split at h0
-    · assumption
-    · cases h0
+    exact firstFinding_none hF _
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))
+
+theorem rowsStateTied : RowsStateTied := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  exact (stateCheck_none (stateCheck_of_accept h hform hreg)).1
+
+theorem rowsStateEmpty : RowsStateEmpty := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  exact (stateCheck_none (stateCheck_of_accept h hform hreg)).2
 
 /-- The slot audit's registration with its `SCAN_STATE` registered at the root `root` and the domain `e`, beside its
 entries port at `r` and `d`. -/
@@ -249,16 +269,56 @@ def stateReg (root : String) : Lean.Json :=
     ("roots", Lean.Json.arr #[Lean.Json.mkObj
       [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
-/-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, and whose state, the tree
-its units read and register their states in, is at the root `s` and the domain `e`. -/
-def stateExecutionPhase : Lean.Json :=
-  Lean.Json.mkObj [("roots", Lean.Json.arr #[
-    Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
-    Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]])]
+/-- A run of the scan's state reads: units `lo` to `hi − 1`, unit `lo + i` at leaf `l + i` (`isRun`). -/
+def stateRun (l lo hi : ℕ) : Lean.Json :=
+  Lean.Json.mkObj [("leaf", Lean.toJson l), ("units", Lean.Json.arr #[Lean.toJson lo, Lean.toJson hi])]
+
+/-- An execution phase's transfer blocks whose scan's `prog` is at the slot audit's entries port's root and domain,
+whose state, the tree its units read and register their states in, is at the root `s` and the domain `e`, and whose
+registration states its units' `sin` reads as the run `sin` and their `o1` as `o1`. -/
+def stateExecutionPhaseOf (sin o1 : Lean.Json) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("roots", Lean.Json.arr #[
+      Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
+      Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]]),
+    ("window", Lean.Json.mkObj [("reads", Lean.Json.mkObj [("scan/state", Lean.Json.mkObj [("o1", o1), ("sin", sin)])])])]
+
+/-- Those transfer blocks under the slot audit's schedule, T = 2: unit 1 reads `sin` at leaf 1, where unit 0 registers
+its `o1`. Their registration opens no row 0. -/
+def stateExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 1 1 2) (stateRun 1 0 1)
 
 /-- Its honest side: a slot audit whose `SCAN_STATE` is the scan's state, at its root and domain, ties it. -/
 theorem rowsStateTied_honest : stateTied #[slotAudit] slotSchedule #[stateReg "s"] stateExecutionPhase = true := by
   decide +kernel
+
+/-- The slot audit's registration holding its `SCAN_STATE` in its window's `activations.values` alone, as a window
+circuit's registration commits its per-window values, at the root `root` and the domain `e`. -/
+def activationsReg (root : String) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]]),
+    ("window", Lean.Json.mkObj [("activations", Lean.Json.mkObj [("values", Lean.Json.mkObj [
+      ("verity/certifier/scan-state/v1", Lean.Json.mkObj
+        [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")])])])])]
+
+/-- An audit's state entry in its window's activations alone is no state entry of its registration (`stateEntries`
+reads its `roots` and its `registered`): it ties no scan's state, at the scan's state's root and domain as at any
+other. -/
+theorem activationsReg_untied : stateTied #[slotAudit] slotSchedule #[activationsReg "s"] stateExecutionPhase = false := by
+  decide +kernel
+
+/-- **The rows form refuses a tied audit whose state entry is in its window's activations alone**: a period whose one
+execution phase's scan is wired to the slot audit and reads its state on the chain, and whose audit's registration holds
+its `SCAN_STATE` at the scan's state's root and domain in its `window.activations.values` and nowhere else
+(`activationsReg`), is accepted by no evidence (`rowsStateTied`). -/
+theorem rowsStateTied_activations {p : Params} {sd : ByteArray} {scan : Scan} (e : Evidence) (pub : Public)
+    (prof : Profile) (hform : p.form = .rows slotSchedule sd scan) (ha : p.audits = #[slotAudit]) :
+    check p ⟨#[activationsReg "s"], #[stateExecutionPhase], .empty⟩ e ≠ .accept pub prof := by
+  intro hacc
+  have hs : stateTied p.audits slotSchedule #[activationsReg "s"] stateExecutionPhase = true :=
+    rowsStateTied p _ e pub prof hacc slotSchedule sd scan hform 0 stateExecutionPhase rfl
+  rw [ha, activationsReg_untied] at hs
+  cases hs
 
 /-- A slot audit whose `SCAN_STATE` skips or alters one of the scan's transitions: a tree of other rows, at another
 root (`t`) than the scan's state's, so its Programs compute on states the scan never reached. -/
@@ -269,18 +329,127 @@ theorem stateExecutionPhase_skipped : stateTied #[slotAudit] slotSchedule #[stat
 theorem tiedExecutionPhase_unstated : stateTied #[slotAudit] slotSchedule #[stateReg "s"] tiedExecutionPhase = false := by
   decide +kernel
 
+/-- A registration whose units read their state off the chain: unit 1's `sin` at leaf 2, a leaf no unit registered,
+and unit 0's `o1` at leaf 0, the empty state's, at the state's root and domain all the same. -/
+def misindexedExecutionPhase : Lean.Json := stateExecutionPhaseOf (stateRun 2 1 2) (stateRun 0 0 1)
+
+theorem misindexedExecutionPhase_untied : stateTied #[slotAudit] slotSchedule #[stateReg "s"] misindexedExecutionPhase = false := by
+  decide +kernel
+
+/-- **The rows form refuses a scan whose units read their state off the chain**: a period of one execution
+phase's transfer blocks, their scan wired to the slot audit, its state that audit's `SCAN_STATE` by root and domain, but
+their registration's reads misindexed (`misindexedExecutionPhase`), is accepted by no evidence (`rowsStateTied`). -/
+theorem rowsStateTied_misindexed {p : Params} {sd : ByteArray} {scan : Scan} (e : Evidence) (pub : Public)
+    (prof : Profile) (hform : p.form = .rows slotSchedule sd scan) (ha : p.audits = #[slotAudit]) :
+    check p ⟨#[stateReg "s"], #[misindexedExecutionPhase], .empty⟩ e ≠ .accept pub prof := by
+  intro hacc
+  have hs : stateTied p.audits slotSchedule #[stateReg "s"] misindexedExecutionPhase = true :=
+    rowsStateTied p _ e pub prof hacc slotSchedule sd scan hform 0 misindexedExecutionPhase rfl
+  rw [ha, misindexedExecutionPhase_untied] at hs
+  cases hs
+
 /-- **No period check that accepts every period has `RowsStateTied`'s property** (its nontrivial lemma): such a check
 accepts a rows-form period of one link-window whose scan's `prog` is wired to the slot audit, and whose state is not
 that audit's `SCAN_STATE`, which skips or alters a transition of the scan's. -/
 theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   have hs : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateExecutionPhase = true :=
     h p ⟨#[stateReg "t"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
       stateExecutionPhase rfl
   rw [stateExecutionPhase_skipped] at hs
   cases hs
+
+/-- The registration of the honest execution phase's transfer blocks opens no row 0: it states no `window.empty`. -/
+theorem stateExecutionPhase_unopened : stateEmpty slotSchedule stateExecutionPhase = false := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsStateEmpty`'s property** (its nontrivial lemma): such a check
+accepts a rows-form period of one execution phase's transfer blocks whose scan's state is the slot audit's
+`SCAN_STATE`, read as the chain, and whose registration opens no row 0, so the Programs anchored at bucket 0 read a row
+the prover chose. -/
+theorem rowsStateEmpty_nontrivial : ¬ RowsStateEmptyOf acceptAllRows := by
+  intro h
+  let p : Params :=
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
+  have hs : stateEmpty slotSchedule stateExecutionPhase = true :=
+    h p ⟨#[stateReg "s"], #[stateExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      stateExecutionPhase rfl
+  rw [stateExecutionPhase_unopened] at hs
+  cases hs
+
+/-! ## The rows form's tied audits run the class circuit -/
+
+theorem heldChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    (heldChecks p c)[i]? = some (heldCheck p c.audits (p.first + i) reg) := by
+  simp [heldChecks, hform, Array.getElem?_zipIdx, hreg]
+
+theorem rowsCircuitHeld : RowsCircuitHeld := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  have hmem := Array.mem_of_getElem? (heldChecks_getElem? hform hreg)
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
+    unfold heldCheck at h0
+    split at h0
+    · assumption
+    · cases h0
+
+/-- The slot audit's registration under the Program `d`: its entries port at the root `r` and the domain `d`, so
+`tiedExecutionPhase`'s scan's `prog` is its output. -/
+def heldReg (d : String) : Lean.Json :=
+  Lean.Json.mkObj [("program", .str d), ("roots", Lean.Json.arr #[Lean.Json.mkObj
+    [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
+
+/-- An execution phase whose tied audit is registered under the class circuit `c` is held to it. -/
+theorem tiedExecutionPhase_held : held (some "c") #[heldReg "c"] tiedExecutionPhase = true := by
+  decide +kernel
+
+/-- An execution phase whose tied audit is registered under another Program than the class circuit `c` does not. -/
+theorem tiedExecutionPhase_swapped : held (some "c") #[heldReg "d"] tiedExecutionPhase = false := by
+  decide +kernel
+
+/-- **No period check that accepts every period has `RowsCircuitHeld`'s property** (its nontrivial lemma): such a
+check accepts a rows-form period of one execution phase whose tied audit is registered under another Program than
+the class circuit `c`. -/
+theorem rowsCircuitHeld_nontrivial : ¬ RowsCircuitHeldOf acceptAllRows := by
+  intro h
+  let p : Params :=
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1,
+      some "c"⟩
+  have hh : held (some "c") #[heldReg "d"] tiedExecutionPhase = true :=
+    h p ⟨#[heldReg "d"], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0
+      tiedExecutionPhase rfl
+  rw [tiedExecutionPhase_swapped] at hh
+  cases hh
+
+/-- **`RowsCircuitHeld`'s honest lemma**: the period check accepts a period in the rows form whose parameters name a
+class circuit, `heldMonitoringPeriod` with nothing registered. A period with an execution phase needs the network certifier's
+LMS signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
+tied audit registered under the class circuit; `tiedExecutionPhase_held` is `held` of such a phase's registrations. -/
+theorem rowsCircuitHeld_honest :
+    ∃ (pub : Public) (prof : Profile), check heldMonitoringPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
+  have hb : (match check heldMonitoringPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+      | .accept _ _ => true
+      | _ => false) = true := by
+    decide +kernel
+  split at hb
+  · exact ⟨_, _, ‹_›⟩
+  · cases hb
 
 /-! ## The rows form charges a tied audit sampled in part -/
 
@@ -350,10 +519,10 @@ theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {
     refine ⟨by omega, by omega, by omega, ?_, ?_, ?_⟩
     · intro y hy
       exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))
+        (List.mem_append_left _ (List.mem_append_left _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))))
     · intro y hy
-      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))
+      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))))
     · injection h with hp
       rw [hform]
       exact hp.symm
@@ -540,7 +709,7 @@ def otherAnswer : Core.Answer :=
 
 /-- The parameters of one compute audit, the slot audit, under `slotSchedule` and a scan of 7 slot entry bits. -/
 def chargedParams : Params :=
-  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1⟩
+  ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 7⟩, 1, none⟩
 
 /-- Its commitment: the slot audit's registration and the link-window whose scan's `prog` is its entries port. -/
 def chargedCommitment : Commitment := ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩
@@ -561,7 +730,7 @@ charge. -/
 theorem rowsTiedCharged_nontrivial : ¬ RowsTiedChargedOf acceptAllRows := by
   intro h
   let p : Params :=
-    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
   obtain ⟨-, h1⟩ := h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[otherAnswer], #[]⟩ _ _ rfl slotSchedule .empty
     ⟨0, 0, 0, 0, 0⟩ rfl
   obtain ⟨x, f, -, -, hf, -⟩ := h1 0 slotReg rfl rowsProgWired_honest.2
@@ -606,5 +775,225 @@ theorem rowsCapPublished_nontrivial :
 /-- **No period check that accepts every period has `RowsCapPublished`'s property.** -/
 theorem rowsCapPublished_acceptAll : ¬ RowsCapPublishedOf acceptAllRows :=
   fun h => rowsCapPublished_nontrivial (h cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl)
+
+/-! ## The rows form's scan's ok bits are at the constants of its schedule -/
+
+section Ok
+
+theorem okChecks_getElem? {p : Params} {c : Commitment} {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) {i : ℕ} {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    (okChecks p c)[i]? = some (okCheck (NetworkCheck.ScanOk.consts s.window) (p.first + i) reg) := by
+  simp [okChecks, okChecksAt, hform, Array.getElem?_zipIdx, hreg]
+
+/-- On acceptance in the rows form, the schedule's constants computed and each execution phase's scan's registration
+is held to them (`ScanOk.held`): `okCheck` is no finding. -/
+theorem check_okHeld {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile} {s : Schedule}
+    {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan) (h : check p c e = .accept pub prof) {i : ℕ}
+    {reg : Lean.Json} (hreg : c.windows[i]? = some reg) :
+    ∃ ks, NetworkCheck.ScanOk.consts s.window = .ok ks ∧ NetworkCheck.ScanOk.held ks reg = true := by
+  have hmem := Array.mem_of_getElem? (okChecks_getElem? hform hreg)
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF _
+      (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
+    unfold okCheck at h0
+    split at h0
+    · rename_i ks hks
+      split at h0
+      · exact ⟨ks, hks, ‹_›⟩
+      · cases h0
+    · cases h0
+
+theorem ok_bind {α β : Type} {x : Except String α} {f : α → Except String β} {b : β} (h : x >>= f = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+/-- A list mapped without an error: each result is an element's and each element has its result. -/
+theorem ok_list_mapM {α β : Type} {f : α → Except String β} :
+    ∀ {l : List α} {ys : List β}, l.mapM f = .ok ys →
+      (∀ y ∈ ys, ∃ x ∈ l, f x = .ok y) ∧ ∀ x ∈ l, ∃ y ∈ ys, f x = .ok y
+  | [], ys, h => by
+    rw [List.mapM_nil] at h
+    cases h
+    simp
+  | a :: l, ys, h => by
+    rw [List.mapM_cons] at h
+    obtain ⟨b, hb, h⟩ := ok_bind h
+    obtain ⟨bs, hbs, h⟩ := ok_bind h
+    cases h
+    obtain ⟨h1, h2⟩ := ok_list_mapM hbs
+    refine ⟨fun y hy => ?_, fun x hx => ?_⟩
+    · rcases List.mem_cons.1 hy with rfl | hy
+      · exact ⟨a, List.mem_cons_self, hb⟩
+      · obtain ⟨x, hx, hfx⟩ := h1 y hy
+        exact ⟨x, List.mem_cons_of_mem _ hx, hfx⟩
+    · rcases List.mem_cons.1 hx with rfl | hx
+      · exact ⟨b, List.mem_cons_self, hb⟩
+      · obtain ⟨y, hy, hfx⟩ := h2 x hx
+        exact ⟨y, List.mem_cons_of_mem _ hy, hfx⟩
+
+theorem ok_array_mapM {α β : Type} {f : α → Except String β} {xs : Array α} {ys : Array β}
+    (h : xs.mapM f = .ok ys) : (∀ y ∈ ys, ∃ x ∈ xs, f x = .ok y) ∧ ∀ x ∈ xs, ∃ y ∈ ys, f x = .ok y := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  rcases hm : xs.toList.mapM f with e | zs
+  · rw [hm] at h
+    cases h
+  · rw [hm] at h
+    cases h
+    simpa using ok_list_mapM hm
+
+/-- A member's constant is its port, its proof blocks' count and its domain and root in hex. -/
+theorem constOf_ok {m : String × String × ℕ} {k : NetworkCheck.ScanOk.Const}
+    (h : NetworkCheck.ScanOk.constOf m = .ok k) :
+    ∃ dom : ByteArray, NetworkCheck.ScanOk.domain m.2.1 m.2.2 = .ok dom ∧
+      k = { port := m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT), leaves := m.2.2, domain := Flock.hexOf dom,
+            root := Flock.hexOf (NetworkCheck.ScanOk.root dom m.2.2) } := by
+  unfold NetworkCheck.ScanOk.constOf at h
+  obtain ⟨dom, hd, h⟩ := ok_bind h
+  cases h
+  exact ⟨dom, hd, rfl⟩
+
+/-- The constants that compute are a schedule's of at least two ticks, one a member: each is a member's and each
+member has its own. -/
+theorem consts_ok {T : ℕ} {ks : Array NetworkCheck.ScanOk.Const} (h : NetworkCheck.ScanOk.consts T = .ok ks) :
+    2 ≤ T ∧ (∀ k ∈ ks, ∃ m ∈ NetworkCheck.ScanOk.members T, NetworkCheck.ScanOk.constOf m = .ok k) ∧
+      ∀ m ∈ NetworkCheck.ScanOk.members T, ∃ k ∈ ks, NetworkCheck.ScanOk.constOf m = .ok k := by
+  unfold NetworkCheck.ScanOk.consts at h
+  split at h
+  · cases h
+  · exact ⟨by omega, ok_array_mapM h⟩
+
+theorem named_iff {k n : String} {e : Lean.Json} :
+    NetworkCheck.ScanOk.named k n e = true ↔ e.getObjValD k = .str n := by
+  cases h : e.getObjValD k <;> simp [NetworkCheck.ScanOk.named, h]
+
+theorem counted_iff {n : ℕ} {e : Lean.Json} :
+    NetworkCheck.ScanOk.counted n e = true ↔ (e.getObjValD "leaves").getNat? = .ok n := by
+  cases h : (e.getObjValD "leaves").getNat? <;> simp [NetworkCheck.ScanOk.counted, h]
+
+/-- A `roots` entry held to the constants whose port ends `/o0` is at a constant of that port, in leaves, domain and
+root. -/
+theorem entryHeld_ok {cs : Array NetworkCheck.ScanOk.Const} {e : Lean.Json}
+    (h : NetworkCheck.ScanOk.entryHeld cs e = true) {q : String} (hq : e.getObjValD "port" = .str q)
+    (hok : NetworkCheck.ScanOk.okPort q = true) :
+    ∃ c ∈ cs, c.port = q ∧ (e.getObjValD "leaves").getNat? = .ok c.leaves ∧
+      e.getObjValD "domain" = .str c.domain ∧ e.getObjValD "root" = .str c.root := by
+  simp only [NetworkCheck.ScanOk.entryHeld, hq, hok, Bool.not_true, Bool.false_or] at h
+  obtain ⟨c, hc, hp⟩ := Array.any_eq_true'.mp h
+  simp only [Bool.and_eq_true, beq_iff_eq] at hp
+  exact ⟨c, hc, hp.1.1.1, counted_iff.mp hp.1.1.2, named_iff.mp hp.1.2, named_iff.mp hp.2⟩
+
+/-- `ScanOk.held` unfolded: every constant's port is some `roots` entry's, and every `roots` entry is held. -/
+theorem held_ok {cs : Array NetworkCheck.ScanOk.Const} {reg : Lean.Json}
+    (h : NetworkCheck.ScanOk.held cs reg = true) :
+    (∀ c ∈ cs, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, e.getObjValD "port" = .str c.port) ∧
+      ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, NetworkCheck.ScanOk.entryHeld cs e = true := by
+  simp only [NetworkCheck.ScanOk.held, Bool.and_eq_true] at h
+  refine ⟨fun c hc => ?_, fun e he => ?_⟩
+  · obtain ⟨e, he, hn⟩ := Array.any_eq_true'.mp (Array.all_eq_true'.mp h.1 c hc)
+    exact ⟨e, he, named_iff.mp hn⟩
+  · exact Array.all_eq_true'.mp h.2 e he
+
+/-- A member's port ends `/o0`. -/
+theorem okPort_port (name : String) :
+    NetworkCheck.ScanOk.okPort (name ++ ("/" ++ NetworkCheck.ScanOk.PORT)) = true := by
+  simp [NetworkCheck.ScanOk.okPort, String.toList_append]
+
+/-- Two names with one port are one name. -/
+theorem port_inj {a b : String}
+    (h : a ++ ("/" ++ NetworkCheck.ScanOk.PORT) = b ++ ("/" ++ NetworkCheck.ScanOk.PORT)) : a = b := by
+  have := congrArg String.toList h
+  simp only [String.toList_append, List.append_cancel_right_eq] at this
+  exact String.toList_inj.mp this
+
+/-- A scan's members have distinct names. -/
+theorem members_name_inj {T : ℕ} {m m' : String × String × ℕ} (hm : m ∈ NetworkCheck.ScanOk.members T)
+    (hm' : m' ∈ NetworkCheck.ScanOk.members T) (h : m.1 = m'.1) : m = m' := by
+  unfold NetworkCheck.ScanOk.members at hm hm'
+  split_ifs at hm hm' <;> simp at hm hm' <;> rcases hm with rfl | rfl | rfl | rfl <;>
+    rcases hm' with rfl | rfl | rfl | rfl <;> first | rfl | simp at h
+
+/-- **What `ScanOk.held` holds, in the constants' terms.** A registration held to the constants of `T` has `T ≥ 2`, a
+`roots` entry that is each member's constant (`OkEntry`), and no entry whose port ends `/o0` that is not a member's
+constant. A member's entry is found by its port: the constants hold a port ending `/o0` to the one member of that
+name (`members_name_inj`, `port_inj`). -/
+theorem held_members {T : ℕ} {ks : Array NetworkCheck.ScanOk.Const} {reg : Lean.Json}
+    (hk : NetworkCheck.ScanOk.consts T = .ok ks) (h : NetworkCheck.ScanOk.held ks reg = true) :
+    2 ≤ T ∧ (∀ m ∈ NetworkCheck.ScanOk.members T, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, OkEntry m e) ∧
+      ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
+        NetworkCheck.ScanOk.okPort q = true → ∃ m ∈ NetworkCheck.ScanOk.members T, OkEntry m e := by
+  obtain ⟨hT, hback, hforth⟩ := consts_ok hk
+  obtain ⟨hnamed, hall⟩ := held_ok h
+  have entry : ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
+      NetworkCheck.ScanOk.okPort q = true →
+        ∃ m ∈ NetworkCheck.ScanOk.members T, m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT) = q ∧ OkEntry m e := by
+    intro e he q hq hok
+    obtain ⟨k, hkm, hp, hl, hd, hr⟩ := entryHeld_ok (hall e he) hq hok
+    obtain ⟨m, hm, hc⟩ := hback k hkm
+    obtain ⟨dom, hdom, rfl⟩ := constOf_ok hc
+    have hp' : m.1 ++ ("/" ++ NetworkCheck.ScanOk.PORT) = q := hp
+    exact ⟨m, hm, hp', dom, hdom, by rw [hp']; exact hq, hl, hd, hr⟩
+  refine ⟨hT, fun m hm => ?_, fun e he q hq hok => ?_⟩
+  · obtain ⟨k, hkm, hc⟩ := hforth m hm
+    obtain ⟨dom, hdom, rfl⟩ := constOf_ok hc
+    obtain ⟨e, he, hq⟩ := hnamed _ hkm
+    obtain ⟨m', hm', hp, hat⟩ := entry e he _ hq (okPort_port m.1)
+    exact ⟨e, he, members_name_inj hm' hm (port_inj hp) ▸ hat⟩
+  · obtain ⟨m, hm, -, hat⟩ := entry e he q hq hok
+    exact ⟨m, hm, hat⟩
+
+theorem rowsOkHeld : RowsOkHeld := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  obtain ⟨ks, hk, hheld⟩ := check_okHeld hform h hreg
+  exact held_members hk hheld
+
+/-- **`RowsOkHeld`'s honest lemma**: the period check accepts a period in the rows form under a schedule of two
+ticks, `pairParams 0` with nothing registered. A period with an execution phase needs the network certifier's LMS
+signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
+scans' registrations at the constants. -/
+theorem rowsOkHeld_honest :
+    ∃ (pub : Public) (prof : Profile), check (pairParams 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
+  have hb : (match check (pairParams 0) ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+      | .accept _ _ => true
+      | _ => false) = true := by
+    decide +kernel
+  split at hb
+  · exact ⟨_, _, ‹_›⟩
+  · cases hb
+
+/-- A registration that names no root has no `roots` entry. -/
+theorem rootsOf_unnamed : NetworkCheck.ScanOk.rootsOf (Lean.Json.mkObj []) = #[] := by
+  have h : (NetworkCheck.ScanOk.rootsOf (Lean.Json.mkObj [])).size = 0 := by decide +kernel
+  exact Array.eq_empty_of_size_eq_zero h
+
+/-- **`RowsOkHeld`'s nontrivial lemma**: a rows-form period of one execution phase under a schedule of two ticks whose
+scan's registration names no root (`unnamedCommitment`) is not held: the scan's member `first` has no `first/o0` among
+its `roots`, so its proof block's ok bit is at no constant. -/
+theorem rowsOkHeld_nontrivial : ¬ RowsOkHeldAt (pairParams 1) unnamedCommitment := by
+  intro h
+  obtain ⟨-, hm, -⟩ := h pairSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 (Lean.Json.mkObj []) rfl
+  obtain ⟨e, he, -⟩ := hm ("first", "first", 1) (by simp [NetworkCheck.ScanOk.members])
+  rw [rootsOf_unnamed] at he
+  simp at he
+
+/-- **No period check that accepts every period has `RowsOkHeld`'s property.** -/
+theorem rowsOkHeld_acceptAll : ¬ RowsOkHeldOf acceptAllRows :=
+  fun h => rowsOkHeld_nontrivial (h (pairParams 1) unnamedCommitment ⟨#[], #[]⟩ _ _ rfl)
+
+end Ok
 
 end Properties.NetworkPeriod

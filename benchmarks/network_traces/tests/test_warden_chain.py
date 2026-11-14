@@ -2,7 +2,9 @@
 here the synthetic run published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness
 under ``witness/``, its public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the
 certificates step reruns the network certifier's own check and holds the public certificates to the certified lines,
-refusing a changed one and a changed cell; the certified I/O read off the cells is the requests and responses served;
+refusing a changed one and a changed cell; the run's deployment is the auditor's record's (`warden_chain.deployment_of`),
+and a copy of it re-signed, rewritten or in other bytes is refused; the certified I/O read off the cells is the requests
+and responses served;
 N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
 accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through active.Proxy)
 is refused by name (`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
@@ -42,10 +44,11 @@ cr, n2 = _load("chain_record"), _load("n2_zk")
 PUBLIC = ("deployment.json", "cells.jsonl")
 
 
-def gate_run(d: Path) -> Path:
-    """The synthetic network certifier run in the gate's layout: its files under ``witness/``, its public ones copied to
-    ``out/`` with ``certificates.jsonl``, each certified line's certificate or refusal (`auditor.warden_outcome`)."""
-    run = published(d / "flat")
+def gate_run(d: Path, seed: bytes = b"warden-run") -> Path:
+    """The synthetic network certifier run in the gate's layout, under the network certifier key ``seed`` makes: its
+    files under ``witness/``, its public ones copied to ``out/`` with ``certificates.jsonl``, each certified line's
+    certificate or refusal (`auditor.warden_outcome`)."""
+    run = published(d / "flat", seed=seed)
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
     for name in PUBLIC:
@@ -92,6 +95,35 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
         WC.WS.ar.write_blobs(path, b)
     got = WC.certificates(run)
     assert got["verdict"] == "refused" and "responses window 0 isn't certified" in got["why"]
+
+
+def test_a_runs_deployment_is_the_auditors_record_or_refused_naming_its_copy_and_field(tmp_path):
+    """`deployment_of`: a run whose every deployment.json (its witness/'s and out/'s, the gate's layout) is the
+    auditor's record's deployment, in the bytes the record hashes, gives the record's deployment and schedule. A run
+    re-signed under another key, one copy of it rewritten, or the same deployment in other bytes is refused naming the
+    copy and the field; a record that isn't a `RECORD` whose key and session are its deployment's is refused."""
+    run = gate_run(tmp_path / "honest")
+    record = WC.own_record(run)
+    assert (record["schema"], record["key"], record["session"]) == (WC.RECORD, *map(WC.deployment(run)[0].get,
+                                                                                    ("key", "session")))
+    assert WC.deployment_of(run, record) == WC.deployment(run)
+    other = gate_run(tmp_path / "other", seed=b"another network certifier")
+    with pytest.raises(SystemExit, match="witness/deployment.json names another key than the auditor's record's$"):
+        WC.deployment_of(other, record)
+    out = run / "out" / "deployment.json"
+    kept = out.read_bytes()
+    shutil.copyfile(other / "out" / "deployment.json", out)
+    with pytest.raises(SystemExit, match="out/deployment.json names another key than the auditor's record's$"):
+        WC.deployment_of(run, record)
+    out.write_text(json.dumps(json.loads(kept), indent=2))
+    with pytest.raises(SystemExit, match="out/deployment.json isn't the bytes the auditor's record hashes$"):
+        WC.deployment_of(run, record)
+    out.write_bytes(kept)
+    for bad in ({**record, "schema": "challenger-key/v1"}, {**record, "session": "00" * 32}, {**record, "key": {}},
+                {k: v for k, v in record.items() if k != "deployment"}, None):
+        with pytest.raises(SystemExit, match=f"the auditor's record isn't a {WC.RECORD} whose key and session are its "
+                                             "deployment's$"):
+            WC.deployment_of(run, bad)
 
 
 @pytest.fixture(scope="module")
