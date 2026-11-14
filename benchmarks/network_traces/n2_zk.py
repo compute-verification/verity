@@ -623,9 +623,10 @@ def prove(a) -> int:
                   "the auditor's challenger's"}})
     if network_certifier:
         summary["warden_run"] = members["honest"].plan["warden_run"]
-        summary["warden"] = {"syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the "
-                                      "link's charge is 0",
-                             "counts": "the network certifier's schedule's (service.NetworkCertifierProfile), not a profile's"}
+        summary["network_certifier"] = {
+            "syncs": "none: the network certifier runs no shaper clock, so a window declares no sync and the link's "
+                     "charge is 0",
+            "counts": "the network certifier's schedule's (service.NetworkCertifierProfile), not a profile's"}
     for name in ("extra", "late"):
         if getattr(a, name):
             members[name] = link_windows(Path(getattr(a, name)))

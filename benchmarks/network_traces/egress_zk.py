@@ -390,7 +390,7 @@ def predicted(name: str, m: dict) -> bool:
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    at = link(out / "warden")
+    at = link(out / "network_certifier")
     T, n = PARAMS.window, PARAMS.window
     rows = list(at.cells.rows)
     summary: dict = {"params": {"cell_bytes": PARAMS.cell_bytes, "slots": PARAMS.slots, "delay": PARAMS.delay,

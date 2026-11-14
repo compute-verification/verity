@@ -1807,7 +1807,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SETUPS[a.setup]
-    h = host(out / "warden", a.network_certifier_run, a.draw, setup, a.group, v3c=a.v3c)
+    h = host(out / "network_certifier", a.network_certifier_run, a.draw, setup, a.group, v3c=a.v3c)
     at, T, G = h.at, h.at.T, h.at.G
     ch, cls, N = at.chain, setup.cls, 2 * G * T
     if a.draw is not None and not 3 <= a.draw <= N:
