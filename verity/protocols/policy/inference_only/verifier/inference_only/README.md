@@ -89,11 +89,11 @@ scenarios register a policy as if it were a subprotocol.
 - **The guarantees**, `security/Definitions/InferenceOnly/Guarantees/`, each proved in `security/Proofs/InferenceOnly/` as
   `InferenceOnly.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
-  `InferenceOnly.Guarantees.DampenerRemote` and its relatives state the remote composition's overhead at (c, k).
+  `InferenceOnly.Guarantees.SlowdownRemote` and its relatives state the remote composition's overhead at (c, k).
 - **The count of (c, k)-inference blocks**, `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`): D's
   computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
   `security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit
-  (`InferenceOnly.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `DampenerRemote` and `DampenerRemotePeriod` take
+  (`InferenceOnly.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `SlowdownRemote` and `SlowdownRemotePeriod` take
   it for each declared day.
 - **The registered information's provenance**, `InferenceOnly.Assumptions.BaselineRegistered`: every θ entry is registered
   public data, never an earlier run's output.

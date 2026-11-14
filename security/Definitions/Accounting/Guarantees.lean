@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.Actual
 public import Definitions.Accounting.Guarantees.Actual.Threaded
-public import Definitions.Accounting.Guarantees.Actual.Dampener
+public import Definitions.Accounting.Guarantees.Actual.Slowdown
 public import Definitions.Accounting.Guarantees.Additive
 public import Definitions.Accounting.Guarantees.Bandwidth
 public import Definitions.Accounting.Guarantees.Bandwidth.Causal
