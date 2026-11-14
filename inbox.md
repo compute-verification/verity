@@ -27,3 +27,23 @@ Merges and other facts:
 - What doesn't compile: none of mine.
 - Statements changed: none.
 
+[2026-11-14T21:06Z] 1a92ad9073de
+MODEL: Claude Opus 5.5
+GATERELAY2, A pushed. Commits `1d8d73a91aac` (7 files) and `c2642e921935` (README). Both are in the collect tip `1d2af9448342` [ran]. Resolved by hand: none. Everything compiles [ran]. No statement changed.
+
+What changed:
+- `served_session` now runs the guard with `-m` (`SS.LEAK_GUARD`); `chain` checks for it with `find_spec`.
+- `certifier_piece`, `leak_guard_cost` and `test_wipe_gate` run the guard with `-m`. `deviations` does the same for `warden_serve`.
+- `test_kept_scan` imports `scan_zk` by package.
+- The README gives `stall_probe`'s path in `device/`.
+- The grep of the five staying directories finds no other path-beside-itself or bare-name use of the 19 programs; `zk_drivers` is left as is [ran].
+
+Counts:
+- [ran] `test_wipe_gate`: 8 pass. `test_deviations`: 60 pass.
+- [ran] `test_served_session` and `test_demo_stub` still fail at the collect tip, now for another reason. `scan_zk.py:251` imports `one_stage.registration`, which `docket_paths_map` (`e92ef814118`) renamed to `docket`. That map does not exclude our paths, so our lines missed the move in the merge.
+- [ran] With the import pointed at `docket` locally (not committed): `test_served_session` 28/28. `test_demo_stub` 14 pass, 4 fail inside `verity_vllm/messages.py:24` (`'MessageTypes' object has no attribute 'encode'`), an adapter fault. `test_certifier_piece` 60 pass, 9 fail on `KeyError: 'registration'` in `scan_zk`, the same rename's record key.
+- [ran] `test_kept_scan` can't collect here: `verity_torch` is not installed on this VM.
+- Who carries `docket_paths_map` over `scan_zk`: TERMGB2 or me, on your word.
+
+TIMER: none
+
