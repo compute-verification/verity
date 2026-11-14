@@ -18,12 +18,9 @@ inputs and the network's own terms. Given no N2 summary the report is the scan's
 (exit 0) when the honest round is accepted, every other refused and no witness piece reached the verifier (`scan
 accepted on the period check` when the honest round's registration let a tied value through), and `scan refused`
 (exit 1) on a wrong verdict, a leak or a missing record; the full report holds the scan to its negatives too. On
-certifier/v0's period answer, an accepted report writes the block record's certifier entry by `block_certifier.block_leg`, in the
-block record's schema, only when the answer is this chain's (its case's commitment the answer's, the chain's link,
-session and key, execution phases the chain certified under N2's own registrations, the report's compute audits) and the
-verifier's own on its case, and none for another session's period, another case, the rows form, an answer the check
-doesn't give, other audits, another registration, an execution phase N2 didn't register, a missing case, no verifier, a
-refused or scan-only chain or no server."""
+certifier/v0's period answer, a report writes no block record's certifier entry: an answer the check accepts on an
+accepted chain gets the rows form's reason, and another case, a missing case or answer, and a refused or scan-only
+chain each their own."""
 
 from __future__ import annotations
 
@@ -326,62 +323,31 @@ def _period(d: Path, case: dict, answer: dict) -> str:
     return str(d / "certifier.answer.json")
 
 
-def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
-    """An accepted chain whose certifier session, execution phases, N2 registrations and compute audits are
-    ``case``'s."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+def _chain_of(tmp_path) -> SimpleNamespace:
+    """An accepted chain with no compute audits."""
     tmp_path.mkdir(parents=True, exist_ok=True)
     steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}, "run": "r-chain"})
     Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [{"gate_run": "c1"}]}))
-    p, c = case["params"], json.loads(bytes.fromhex(case["commitment"]))
-    regs = {r["window"]["window"]: R.digest(r) for r in c["windows"]}
-    Path(steps.certs).write_text(json.dumps({"verdict": "accepted", "link": p["link"], "session": p["session"],
-                                             "key": {"public": p["key"]},
-                                             "rows": [{"window": w, "certified": True} for w in regs]}))
-    n2 = json.loads(Path(steps.n2).read_text())
-    n2["members"]["honest"]["windows"] = [{"window": w, "registration": d, "accepted": True, "proof": {"proved": True},
-                                           "as_expected": True} for w, d in regs.items()]
-    Path(steps.n2).write_text(json.dumps(n2))
-    circuit = {"templates": [["T", 4]], "external": ["T/y"], "wires": [],
-               "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
     steps.audit = []
-    for i, reg in enumerate(c["audits"]):
-        d = tmp_path / f"audit{i}"
-        d.mkdir()
-        (d / "registration.json").write_text(json.dumps(reg))
-        (d / "circuit.json").write_text(json.dumps(circuit))
-        steps.audit.append(str(d))
-    steps.server = "node-1"
     return steps
 
 
-def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifiers_own_answer(tmp_path, period,
-                                                                                             monkeypatch):
-    """certifier/v0 cases from its Python mirror (`period_case`, held to `NetworkCheck.Period` by its difftest), which
-    also re-decides them here in the Lean executable's place."""
-    import jsonschema
-    from block_certifier import block_leg
-    monkeypatch.setattr(cr, "decide_period", period.reference)
-    case = period.case("accept", 1, "clock")
+def test_no_block_entry_is_written_for_an_answer_the_period_check_accepts(tmp_path, period):
+    """A certifier/v0 case from its Python mirror (`period_case`, held to `NetworkCheck.Period` by its difftest),
+    accepted, on an accepted chain."""
+    case = period.case("accept", 1)
     answer = period.reference(case)
-    steps = _chain_of(tmp_path, case)
+    assert answer["verdict"] == "accept"
+    steps = _chain_of(tmp_path)
     honest = steps.period_answer = _period(tmp_path / "period", case, answer)
     got = cr.report(steps)
-    assert got["verdict"] == "accepted" and got["block"]["written"] is True, got["block"]
-    entry = got["block"]["entry"]
-    assert entry == block_leg(answer, server="node-1", runs=["r-chain", "c1"])
-    schema = json.loads(BLOCK_SCHEMA.read_text())
-    jsonschema.Draft202012Validator({"$schema": schema["$schema"], "$defs": schema["$defs"],
-                                     "$ref": "#/$defs/leg"}).validate(entry)
-    K, eps = answer["public"]["K"], answer["public"]["eps"]
-    at = f"K = {K}" if Fraction(eps) <= Fraction(1, 100) else "not established"
-    assert f"K = {K} bits over 1 link-windows, error {eps} (quantity.eps); at δ = 1/100: {at}" in cr.markdown(got)
+    assert got["verdict"] == "accepted" and got["block"] == {"written": False, "why": cr.ROWS_FORM}
+    assert f"no certifier entry: {cr.ROWS_FORM}" in cr.markdown(got)
     out = tmp_path / "out"
     assert cr.main(["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint,
                     "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.warden_run,
-                    "--audit", *steps.audit, "--period-answer", steps.period_answer, "--server", steps.server,
-                    "--out", str(out)]) == 0
-    assert json.loads((out / "block.json").read_text()) == entry
+                    "--audit", *steps.audit, "--period-answer", steps.period_answer, "--out", str(out)]) == 0
+    assert not (out / "block.json").exists()
 
     def why(**change):
         for k, v in change.items():
@@ -390,42 +356,19 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         assert block["written"] is False
         return block["why"]
 
-    foreign = period.case("accept", 0, "clock")
-    assert why(period_answer=_period(tmp_path / "foreign", foreign, period.reference(foreign))) == (
-        "the case's link, session: not the chain's, so another certifier session's period")
-    assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
+    other = period.case("accept", 0)
+    assert why(period_answer=_period(tmp_path / "mixed", other, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
-    rows = period.build("rows-honest", 0, small=True)
-    assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
-    assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
-        f"network-period check on the case answers accept with K {answer['public']['K']}, not the given answer: it "
-        "isn't the verifier's on this case")
-    audits, steps.period_answer = steps.audit, honest
-    assert why(audit=[]) == "the answer's 1 compute audits aren't this report's 0 --audit registrations"
-    steps.audit = audits
-    n2 = json.loads(Path(steps.n2).read_text())
-    n2["members"]["honest"]["windows"][0]["registration"] = "0" * 128
-    Path(steps.n2).write_text(json.dumps(n2))
-    assert why() == "link-windows [0]: the answer's registrations aren't N2's on this chain (another period's or run's)"
-    n2["members"]["honest"]["windows"][0]["window"] = 5
-    Path(steps.n2).write_text(json.dumps(n2))
-    assert why() == "the answer covers link-windows [0] the chain doesn't have: it certified [0] and N2 registered [5]"
-    steps = _chain_of(tmp_path / "again", case)
     steps.period_answer = honest
     assert why(period_case=str(tmp_path / "none.json")).endswith("none.json (--period-case): what the answer commits "
                                                                  "to can't be held to the chain")
     steps.period_case = None
-    monkeypatch.undo()
-    monkeypatch.delenv("VERITY_NETWORK_PERIOD_EXE", raising=False)
-    assert why().startswith("network-period check on the case: no VERITY_NETWORK_PERIOD_EXE")
     assert why(period_answer=str(tmp_path / "none.json")).endswith("none.json: not a file")
-    assert why(period_answer=honest, server=None).startswith("no --server")
     assert why(period_answer=None) == cr.NO_PERIOD_ANSWER
-    refused = cr.report(SimpleNamespace(**{**vars(steps), "period_answer": honest, "server": "node-1",
-                                           "warden_run": None}))
+    refused = cr.report(SimpleNamespace(**{**vars(steps), "period_answer": honest, "warden_run": None}))
     assert refused["verdict"] == "refused" and refused["block"]["why"].startswith("the chain is refused")
     assert "no certifier entry: the chain is refused" in cr.markdown(refused)
-    scan_only = cr.report(SimpleNamespace(**{**vars(steps), "n2": None, "period_answer": honest, "server": "node-1"}))
+    scan_only = cr.report(SimpleNamespace(**{**vars(steps), "n2": None, "period_answer": honest}))
     assert scan_only["verdict"] == "scan accepted" and scan_only["block"]["why"] == (
         "the chain is scan accepted: only an accepted chain carries a K")
 
