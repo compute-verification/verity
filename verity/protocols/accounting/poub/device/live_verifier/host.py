@@ -794,7 +794,7 @@ def gate_party_log(rest: list[str], host: Host) -> dict:
     return {"party": rest[0], "log": rest[1], "lines": lines}
 
 
-KEYGEN = "import sys; from verity.protocols.accounting.pous.verifier import period; print(period.challenger(sys.argv[1]).public_key.hex())"
+KEYGEN = "import sys; from verity.protocols.accounting.pous.device import challenger_party; print(challenger_party.device_key(sys.argv[1]).public_key.hex())"
 
 
 def gate_party_key(rest: list[str], host: Host, *, own: Callable[[Path], None],

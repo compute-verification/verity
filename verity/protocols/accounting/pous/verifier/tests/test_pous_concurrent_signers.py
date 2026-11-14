@@ -1,4 +1,4 @@
-"""Concurrent sessions on one memory-challenger key (`memory_challenger.LmsSigner`, `period.challenger`), as the
+"""Concurrent sessions on one memory-challenger key (`memory_challenger.LmsSigner`, `challenger_party.device_key`), as the
 all-protocols runner's windows share their device's: they take turns at the key's leaf state, each signing at a leaf of
 its own; a crash between a leaf's reservation and its signature never reuses the leaf; and windows that start at once on
 a fresh device make its key and session log once.  No clock: a thread's wait on a lock is seen through `fcntl.flock`."""
@@ -17,7 +17,7 @@ from test_pous_memory_challenger import SESSION, judge, session
 
 from verity.commitments.crypto import lms
 from verity.protocols.accounting.pous.device import memory_challenger as mc
-from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.device import challenger_party
 
 
 def _waiting(monkeypatch) -> queue.SimpleQueue:
@@ -103,7 +103,7 @@ def test_a_crash_between_a_leafs_reservation_and_its_signature_never_reuses_the_
 
 
 def test_windows_that_start_at_once_make_the_challengers_key_once(tmp_path, monkeypatch):
-    """`period.challenger` on one fresh device directory from three windows at once (the all-protocols runner's
+    """`challenger_party.device_key` on one fresh device directory from three windows at once (the all-protocols runner's
     `--jobs 3`): the first makes the key and the session log under the directory's lock while the others wait on it, so
     there is one keygen and one key on disk, and each window's signer signs at a leaf of its own. The deployed parameters
     at a small height."""
@@ -116,9 +116,9 @@ def test_windows_that_start_at_once_make_the_challengers_key_once(tmp_path, monk
     with open(device / "device.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         said = _waiting(monkeypatch)
-        first, signers = _at_once(said, lock.close, [lambda: period.challenger(device, workers=1)] * 3)
+        first, signers = _at_once(said, lock.close, [lambda: challenger_party.device_key(device, workers=1)] * 3)
     assert first == ["waiting"] * 3, signers
     assert len(made) == 1 and len({s.public_key for s in signers}) == 1
-    assert period.challenger(device, workers=1).public_key == signers[0].public_key and len(made) == 1
+    assert challenger_party.device_key(device, workers=1).public_key == signers[0].public_key and len(made) == 1
     mc.SessionLog(device / "sessions").claim(SESSION)
     assert [lms.Signature.decode(small, s.sign(SESSION, b"record")).q for s in signers] == [0, 1, 2]

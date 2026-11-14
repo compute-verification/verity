@@ -11,7 +11,7 @@ The challenger flips its coins on its own host, designates the session id from t
 a round, goes on the wire: the coin tree's root, the session id and the openings leave only in its report, `{"host",
 "public_key", "session", "session_id", "warmups"}`, after the session's last answer and its signature.
 
-That id is a request's that names no audit (`period.audit`'s), whose salt is sampled where setup ran. An audit's two coins
+That id is a request's that names no audit (`period_prover.audit`'s), whose salt is sampled where setup ran. An audit's two coins
 are the challenger's, the setup's salt and the session's:
 
 - **The salt.** Before setup encodes `C*`, the prover's side sends `{"salt": {"audit", "commitment"}}`: the audit's
@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import secrets
@@ -65,6 +66,7 @@ from typing import Any, BinaryIO
 from verity.protocol import ProtocolDef
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message, Phase, Refused
+from verity.commitments.crypto import lms
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device.challenger_session import (
     CHALLENGER,
@@ -300,8 +302,37 @@ def keep(device: Path, sid: bytes, request: Mapping[str, Any]) -> Path:
     return path
 
 
+def device_key(directory: str | os.PathLike, *, workers: int | None = None) -> mc.LmsSigner:
+    """The memory challenger's key at S1's deployed parameters in `directory`, made there once (its seed from the OS, its
+    tree computed in `workers` processes, all of them by default) with its leaf state beside it, so each session signs at
+    a fresh leaf, and its session log (`sessions`). Windows that run at once share them: the first makes them under the
+    directory's lock (`device.lock`) while the others wait on it, and each window's signer takes the leaf state only to
+    sign (`memory_challenger.LmsSigner`)."""
+    d = Path(directory)
+    d.mkdir(parents=True, exist_ok=True)
+    p, top = lms.DEPLOYED, 2 ** (lms.DEPLOYED.H + 1)
+    seed_file, tree_file, state = d / "seed", d / "tree.bin", d / "leaf-state.json"
+    with open(d / "device.lock", "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not seed_file.exists():
+            seed = secrets.token_bytes(p.N)
+            key = lms.keygen(p, seed, (os.cpu_count() or 1) if workers is None else workers)
+            tree_file.write_bytes(b"".join(key.tree[1:]))
+            fd = os.open(seed_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "wb") as f:
+                f.write(seed)
+            lms.LeafState.create(state, lms.public_key(key), p.H)
+        else:
+            seed, data = seed_file.read_bytes(), tree_file.read_bytes()
+            tree = (b"", *(data[p.N * r:p.N * (r + 1)] for r in range(top - 1)))
+            key = lms.PrivateKey(p, hashlib.sha512(b"verity/lms/v0/I" + seed).digest()[:16], seed, tree)
+        if not (d / "sessions").exists():
+            mc.SessionLog.create(d / "sessions")
+    return mc.LmsSigner(key, state)
+
+
 def _logs(device: Path) -> tuple[mc.SaltLog, mc.SessionLog]:
-    """The salt log and session log in `device`, made there the first time under its lock (`period.challenger`'s)."""
+    """The salt log and session log in `device`, made there the first time under its lock (`device_key`'s)."""
     device.mkdir(parents=True, exist_ok=True)
     with open(device / "device.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -324,7 +355,7 @@ def _refused(why: str) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
-    ap.add_argument("--device", required=True, help="the challenger's key, session log and salt log (`period.challenger`)")
+    ap.add_argument("--device", required=True, help="the challenger's key, session log and salt log (`device_key`)")
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
@@ -344,7 +375,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _refused(str(e))
     except (KeyError, TypeError) as e:
         return _refused(f"the request is not a session's request ({type(e).__name__})")
-    signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
+    signer = device_key(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:
         _reply(json.dumps({"listening": srv.getsockname()[1]}))
@@ -358,7 +389,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PROTOCOL", "SOURCE_BYTES", "Refusal", "designate", "give_salt", "keep", "report", "serve"]
+__all__ = ["PROTOCOL", "SOURCE_BYTES", "Refusal", "designate", "device_key", "give_salt", "keep", "report", "serve"]
 
 if __name__ == "__main__":
     sys.exit(main())

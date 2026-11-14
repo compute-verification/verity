@@ -40,9 +40,10 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
+from verity.protocols.accounting.pous.device import challenger_party
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
-from . import period, wipe_stream
+from . import wipe_stream
 from . import streamed_wipe as sw
 
 MODULE = "verity.protocols.accounting.pous.verifier.wipe_party"
@@ -263,7 +264,7 @@ def session(side: Side, request: Mapping[str, Any], prover: sw.Prover, *,
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
-    ap.add_argument("--device", required=True, help="the challenger's key and session log (`period.challenger`)")
+    ap.add_argument("--device", required=True, help="the challenger's key and session log (`challenger_party.device_key`)")
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
     ap.add_argument("--reads", type=int, default=READS,
                     help=f"the timed spot reads, which the certificate is computed at (default {READS})")
@@ -279,7 +280,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         streamer = (wipe_stream.Streamer.build(device, threads=a.threads) if a.streamer == "build" else
                     wipe_stream.Streamer(Path(a.streamer), a.threads))
         extra["streamer"] = streamer.gate()
-    signer = period.challenger(device, workers=len(os.sched_getaffinity(0)))
+    signer = challenger_party.device_key(device, workers=len(os.sched_getaffinity(0)))
     if not (device / "sessions").exists():
         mc.SessionLog.create(device / "sessions")
     host, _, port = a.listen.rpartition(":")

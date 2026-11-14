@@ -55,7 +55,7 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 `python -m verity.protocols.accounting.poub.verifier.p2_parties (--registration FILE | --pous-record DIR --pous-session SID)
 (--stdio | --listen HOST:PORT [--sessions N]) [--answer FILE | --device DIR] [--lean-exe EXE] [--challenger DIR
 --session SID]` is the verifier's side (`main`), each session with fresh coins, the memory challenger's key and session
-log in `--challenger`'s directory (`pous.verifier.period.challenger`) signing the close of the one session the auditor
+log in `--challenger`'s directory (`pous.device.challenger_party.device_key`) signing the close of the one session the auditor
 named `--session SID`, which is claimed in its log before the session's first coin, the
 Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
@@ -953,7 +953,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                   "in its Lake package, or without lake on the PATH, the one built "
                                                   "there)")
     ap.add_argument("--challenger", type=Path, help="the memory challenger's device on this host: its LMS key and "
-                                                    "session log (`pous.verifier.period.challenger`), which sign the "
+                                                    "session log (`pous.device.challenger_party.device_key`), which sign the "
                                                     "session's close (`Closer`)")
     ap.add_argument("--session", help="with --challenger: the session id (64 hex) the auditor gave the memory "
                                       "challenger for this session; without them, no session has a case")
@@ -998,9 +998,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     closer = None
     if a.challenger is not None:
-        from verity.protocols.accounting.pous.verifier import period
+        from verity.protocols.accounting.pous.device import challenger_party
 
-        signer = period.challenger(a.challenger)
+        signer = challenger_party.device_key(a.challenger)
         closer = Closer(signer, mc.SessionLog(a.challenger / "sessions"), bytes.fromhex(a.session))
 
     def served(r: BinaryIO, w: BinaryIO) -> dict[str, Any]:

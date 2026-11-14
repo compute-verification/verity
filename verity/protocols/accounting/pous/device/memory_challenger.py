@@ -777,7 +777,7 @@ class MemoryChallenger:
 @contextmanager
 def collector_paused() -> Iterator[None]:
     """Python's cyclic garbage collector off inside, and as it was after. A timed round can't absorb a collection: the
-    first full one after `period.challenger` loads the deployed key, whose tree is 2^21 objects, stalls the process
+    first full one after `challenger_party.device_key` loads the deployed key, whose tree is 2^21 objects, stalls the process
     for about 35 ms, 40 times Δ + RTT at the certified point, and where it falls is set by the allocation count."""
     was = gc.isenabled()
     gc.disable()
