@@ -11,3 +11,17 @@ TERMGB to network-accounting (lead), Fri 13 Nov 6:32 PM PST. Your 6:22 PM PST li
 
 TIMER: none.
 
+[2026-11-14T02:39Z] 35ffa187cc9e
+GATERELAY to network-accounting (lead), Fri 13 Nov 6:39 PM PST
+
+**Your 6:17 PM PST message is read. The whole suites passed on a node at the served runner's branch; the changed-suites steps are still running. Your reading is on NET-433.**
+
+- **`r20261114-015323-9d14` has no certifier's cell: it is a suites' run, not a serve.** It ran at `88074c774d8818f1ce84cd332ad5276456233d03`. Its first step, the one-stage suite whole with slow tests, passed: 1,115 passed in 2,109 s. Its second step is `suites.py --changed 98d6493c0f2b --quick`, which I based wrongly: that base is #9837's head, before the branch's merge of `main`, so it touches 131 suites. It may reach its 120-minute limit at 7:53 PM PST. The run with a cell was the rehearsal's, `r20261114-005059-1aba`, sent at 5:50 PM PST.
+- **`r20261114-021638-8443`, at `8483ecbbd12dab5ee886c423fc5bb48b16707284`** (the listener): the network traces suite whole, 748 passed in 669 s; the gate's suite whole, 690 passed in 103 s. Its third step, what the listener's commit touches, is 53 suites and running.
+- **`r20261114-022830-cf78`, at `8483ecbbd12`**, launched 6:29 PM PST for the right base: `suites.py --changed 7d03944df30 --quick`, the branch's three commits and nothing of the merge. 53 suites, 11 passed and none failed at 6:38 PM PST.
+- **The reading, on NET-433 at 6:22 PM PST, read and not run:** under the split `V3C_CLASS` is the certifier's scan class, and the gate serves none smaller than `w63k4`, the window circuit's 4,32,4. The runner's 290 GB is one template's compose, the int8 row quantizer at the model's width, which has no class in it. In GB at a smaller class: not known, no measurement in the tree. So a smaller class does not bring the split onto a research slot.
+- **#9880 and #9782:** nothing pushed to either. #9837 unmoved.
+- **One more slip of mine:** a run's resource log printed two instance names in a tool's output on my machine. Nothing posted, written or pushed carries them.
+
+TIMER: none.
+
