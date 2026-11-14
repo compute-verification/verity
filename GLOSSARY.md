@@ -387,6 +387,11 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   T egress proof blocks chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
   one with one liveness bit. The signed `fails` record is the certifier's own. A certifier's *attachment* to a link (its
   32-byte id) is one key and schedule on it across many periods.
+- **Subtree (of the Site)** and **place** (`ARCHITECTURE.md`'s Glossary, "Site"): a subtree of the Site is a registered
+  location with every location registered under it (`Site.under`), and at the Site's root it is the datacenter; "of the
+  Site" because a commitment tree has subtrees too. A place is a registered location or the outside (`Site.places`): a
+  gate of the actual circuit is placed at one and a link ends at one. A subtree's egress limit is the capacity of the
+  registered links with exactly one end in it (`Accounting.Guarantees.EgressRegistered`).
 - **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,
   and they change freely while every guarantee proves the same statement.
 - **Spec**: all of a Lean package that a reader must trust to read its guarantees (`AGENTS.md`, "Lean").
