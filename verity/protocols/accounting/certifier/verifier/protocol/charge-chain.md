@@ -29,7 +29,7 @@ fixture's async-kv-pressure stream, window 1 costs 23 bits from window 0's carry
 counts. The tests check that each forged carry is refused, whether it is committed under a fresh salt or under the
 public start salt, and whether window 0's carry-out claims it.
 
-**Why a value of its own.** The carry-out isn't a field of `replay_chain`'s window row. `ReplayLoad` writes that row
+**Why a value of its own.** The carry-out isn't a field of `verity_vllm.compiler.replay_chain`'s window row. `ReplayLoad` writes that row
 and checks it in full at the window's start, before any decision is coded, so a carry-out there would need ReplayLoad
 to leave a field unchecked and change its pins. A sibling value under the same carry rule gives the same guarantee and
 leaves the scan's chain as it is.
@@ -45,7 +45,7 @@ leaves the scan's chain as it is.
 
 ## One carry for proof blocks and windows
 
-The charge's one carried representation is `replay-charge`'s two rows above, and `replay_chain`'s state row holds none
+The charge's one carried representation is `replay-charge`'s two rows above, and `verity_vllm.compiler.replay_chain`'s state row holds none
 of it: the charge runs whole in the window's load proof block, so no step proof block carries a coder state, KT counts,
 a context or a code position.
 

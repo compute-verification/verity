@@ -15,9 +15,11 @@ to the output count its request row states, the count a tied audit already count
 
 **The request row** (`request_fields`) is K slots as a struct of arrays, each field's elements in turn and each element
 least significant bit first, then zero bits to a whole 16-bit word (unread): `valid` K×1, `id` K×IW, `P` K×LW and
-`O` K×LW, the layout of `replay_chain.arrival_fields` for K arrival slots without a cap bit. A slot's `id` is the
-request's place N in the network certifier's release order, `P` its prompt's ids and `O` its outputs. A slot whose
-`valid` is 0 reads as empty whatever its other fields hold.
+`O` K×LW: the layout vLLM's compiler commits for K arrival slots, without a cap bit
+(`verity_vllm.compiler.replay_chain.arrival_fields`), to which
+`benchmarks/network_traces/tests/test_lengths_row_arrivals.py` holds this row. A slot's `id` is the request's place N
+in the network certifier's release order, `P` its prompt's ids and `O` its outputs. A slot whose `valid` is 0 reads as
+empty whatever its other fields hold.
 
 **The fails row** is `connection_rows`' (`SLOT`): slot k is u16 class ‖ u16 at, little-endian, (0, 0) where the
 connection ended in its `END` and in an empty slot, (1, n) where it ended in a `FAIL` after n `DATA` cells.
@@ -50,7 +52,7 @@ the gaps; a mux of `at` and `O`; and the verdict's comparison of `at` with `O`. 
         RB = `Shape.request_bits`: K·(1 + IW + 2·LW) rounded up to a multiple of 16
 
 Every array is of bits, least significant first. K is at least 1 and at most 2,730, so the outputs fit the widest
-public size class (32 + 96·K bits of at most `UNIT_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
+public size class (32 + 96·K bits of at most `SIZE_CLASS_MAX`): `connection_rows.check_slots` is that rule, which a
 schedule with lengths rows is held to when its parameters are built (`WardenParams.stride_releases`). B is a cell
 size an id request's head and first prompt field fit (`io_request.layout`); 1 <= IW <= 32; 1 <= LW <= 32 with the
 longest prompt's request below 2^32 bytes.

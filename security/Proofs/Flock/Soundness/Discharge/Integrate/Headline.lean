@@ -79,7 +79,7 @@ challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up). L
 session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, verity-verify-proof
 accepts with at least `K` incorrect proof blocks of the proving program `Placed.keyProg c hU n`, at the simulated prover's
 committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
-at most `miss(K) + ε_ks + δ_link`.
+at most `miss(K) + ε_ks + ε_bind`.
 
 Its hypotheses, past the session's inputs:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOk c = true`: a check that runs on the parsed circuit, that the

@@ -1173,10 +1173,10 @@ part's tests carry.
 
 Moved to [protocol/advice-v0.md](protocol/advice-v0.md).
 
-## The replay's state chain (`replay_chain`)
+## The replay's state chain (`verity_vllm.compiler.replay_chain`)
 
 Under advice v1 (the next section's end) the compile slice's proof block replays the scheduler one step proof block per
-engine step. Each proof block is `ReplayStep_v1` (`replay_step`): the committed queue state, the next A certified
+engine step. Each proof block is `ReplayStep_v1` (`verity_vllm.compiler.replay_step`): the committed queue state, the next A certified
 arrivals and the next A decisions go in, and the step's rows and next state come out. The chain hands the state from
 proof block to proof block as the state rows of one produced value a window (`one_stage.produced`, value `replay-state`,
 `hm96-sha512/row/v2` bit rows), beside a window row (value `replay-window`). Each proof block reads its rows at public
@@ -1194,7 +1194,7 @@ cursor. So:
   log shifter that computes only the A entries it returns: about Q + A·bitlen(Q) muxes an element bit, where moving
   the whole queue would take Q·bitlen(A).
 
-**The rows'** layouts are `replay_chain`'s (`row_fields`, `window_fields`). The state row's state group is
+**The rows'** layouts are `verity_vllm.compiler.replay_chain`'s (`row_fields`, `window_fields`). The state row's state group is
 ReplayStep_v1's state input and next-state output, bit for bit, at the shape's AS and EW (`Shape`'s two statics):
 with EW, `run_pfx R×EW` after `run_comp`; with AS, `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free`. It adds
 the heads `qh` and `dh` and `steps`, the window's executed steps still to come. The window row is the queue (at most
@@ -1399,7 +1399,7 @@ charge (the composition below): what the bound counts is the charge, not the com
 - *v0's per-window parts.* Each window's part is self-delimited.
 **Composition**, all in one ZK proof under the advice's hiding root:
 1. *The values are the committed advice.* The advice's hiding rows hold each window's residual raw, as
-   `replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window (4,391 on the corpus'
+   `verity_vllm.compiler.replay_chain`'s window row: its decisions as bits in the scan's order, at most D a window (4,391 on the corpus'
    largest), in `dec` with their count `left`; its `hits` group ("The rows" below), which v1 leaves empty; and its
    order entries (position, rank). No decoder runs in the circuit: the scan reads each field at a private head of the
    chain's (`dh`, `hh`).
@@ -1506,7 +1506,7 @@ in `ReplayStep_v1`'s scheduling order:
     walk input is `row_pfx R×EW`, each row's entry after its last `CacheStep_v1` call, and it outputs
     `looked (W + A)×1` after `used`, the candidates whose lookup it read, which `replay_vectors --EW` holds to the
     replay's `BlockPool.hit` calls (`verity_vllm.pipeline.advice_code.pool`).
-  - `replay_chain`'s state row gains `hh 1×HCW` after its heads' `steps`, and then one group in
+  - `verity_vllm.compiler.replay_chain`'s state row gains `hh 1×HCW` after its heads' `steps`, and then one group in
     `CacheStep_v1`'s `_in_fields` order:
 
         cache    c_valid N×1 | c_parent N×EW | c_tok N×(U·TW) | c_owner N×RW | filled 1×BW | sent 1×1

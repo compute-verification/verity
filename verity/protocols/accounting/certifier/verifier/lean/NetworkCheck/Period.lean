@@ -992,7 +992,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       s.lanes * nb * bitsOf ety)
     "scan: an input gate that is no template's row, state or egress parameter, nor one of the slot entries"
   need (InferenceOnlyCheck.Desc.rootLaidOut prog && InferenceOnlyCheck.Desc.inputsAtRoot prog && InferenceOnlyCheck.Desc.walkable prog)
-    "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
+    "scan: not laid out as Flock's decoder lays a Program out, or past what its resolution walks \
       (NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"
   let ke := (templateNodes prog).getLast?.getD 0
   need (root.body.ret.parts.any fun q => match q with

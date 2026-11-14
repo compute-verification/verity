@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.SampledTwo.InputMap
 public import Proofs.Flock.Claims.Sampling.Select.Code
 public import Proofs.Flock.Claims.Complete.Json.Record
 public import Proofs.Flock.SpotFlock.Jeq
-public import all Spot.Run
+public import Spot.Run
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 

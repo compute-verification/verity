@@ -6628,7 +6628,7 @@ def test_the_select_piece_samples_every_rule(pieces):
 
 
 def test_a_work_samples_design_is_cores(pieces):
-    """C-Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Spot.Pieces.designOfSamplingDesign`) the Python's
+    """Flock's work sampling design held to `Core.SamplingDesign`: a work sample's sampling design, Lean's (`Spot.Pieces.designOfSamplingDesign`) the Python's
     (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
     stratified one at its k_s."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))

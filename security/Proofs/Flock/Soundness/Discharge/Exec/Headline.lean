@@ -78,7 +78,7 @@ variable {N : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : 
 live stratified sample under A3), and let the live audit `auditLive Lx Reg live`, played by the prover `τ`, refine the
 audit with `batchedSession` played by `σ`, up to the live event `bad` (`hRef`). If `σ`'s committed values have at least
 `K` incorrect proof blocks, then verity-verify-proof accepts with probability at most
-`miss(K) + ε_ks + δ_link + Pr[bad]`, the headline's bound at `δ_tree = 0` plus the refinement's event. `pp`, `hConst`,
+`miss(K) + ε_ks + ε_bind + Pr[bad]`, the headline's bound at `δ_tree = 0` plus the refinement's event. `pp`, `hConst`,
 `hZero`, `lay`, `rs` and `hHm` are open as in `Prog.flock_headline`; `hRef` is the refinement. For `hm96Rows` statements
 `hRef` needs the salted session in place of `batchedSession` (the module docstring, `flock_headline_exec_L`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_exec

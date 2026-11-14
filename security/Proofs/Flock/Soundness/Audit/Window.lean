@@ -13,7 +13,7 @@ call, and `SamplingDesign.stratified` samples a uniform `k_s`-subset of every st
 Two modelling lines sit outside the statements:
 * M1: each call is sampled on its own coins, the window's key derived under a **distinct context** for every call. Two calls
   that share a context sample the same subsets, and the window's sample is then not this product distribution.
-* M2: the window's audit is one `Analysis` over the window's session, with the window's `ε_ks` and `δ_link`. How those
+* M2: the window's audit is one `Analysis` over the window's session, with the window's `ε_ks` and `ε_bind`. How those
   compose from the calls' is not stated here.
 
 `audit_executionPhase_of_le` takes any sampling design whose escapes are at most the product distribution's, such as an executable sample proved against
@@ -34,9 +34,9 @@ Two weightings of the same sample: `w`, the work (each tile's W_ref on the tile 
   call's work is in one stratum (`hone`). `covers_of_floor`, **y's floors**: sizes that sample at
   least `min(n_s, f_s)`, with `K_y · v_s · n_s ≤ f_s · N`, cover `v` at `K_y`.
 * `audit_executionPhase`, `extraction_audit_executionPhase`: the audit accepts while the unsound work is at least `T` or the unsound
-  weight (`unsoundWork` under `v`) at least `T_y` with probability at most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks + δ_link`. The larger,
+  weight (`unsoundWork` under `v`) at least `T_y` with probability at most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks + ε_bind`. The larger,
   not the sum: both bound the missProb of the one incorrect set the prover committed before the sample (`audit_profile`).
-  `audit_executionPhase_of_record`: at `K = K_y = 27,713`, a 0.1% share of either with at most `2^-40 + ε_ks + δ_link`, and
+  `audit_executionPhase_of_record`: at `K = K_y = 27,713`, a 0.1% share of either with at most `2^-40 + ε_ks + ε_bind`, and
   `audit_executionPhase_split_of_record` for the per-call split with y's floors, the sampling design `PlanDraw` runs.
 
 **`hone` is needed, and not only by this route.** When a call's share `⌈K · W_c / W⌉` is capped at its units `N_c`, a
@@ -296,16 +296,16 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ} {hk : ∀ s, k s
   {cl : Fin n → Finset (Fin n)} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
 
 /-- **The window audit** (oracle layer): the audit accepts while the unsound work is at least `T` or the unsound weight at
-least `T_y` with probability at most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks + δ_link`. -/
-theorem audit_executionPhase (A : Analysis ((SamplingDesign.stratified σ k hk).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
+least `T_y` with probability at most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks + ε_bind`. -/
+theorem audit_executionPhase (A : Analysis ((SamplingDesign.stratified σ k hk).closure cl) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) {w v : Fin m → ℕ} {K Ky : ℕ}
     (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K) (hN : 0 < SamplingDesign.totalWork σ v) (hcy : SamplingDesign.Covers σ k v Ky)
     (T Ty : ℕ) (σ' : Strategy (audit ((SamplingDesign.stratified σ k hk).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         Ty ≤ SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
         (audit ((SamplingDesign.stratified σ k hk).closure cl) Reg session) σ' ≤
       max ((((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K)
-          ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + δlink := by
+          ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.unsoundWork σ w cl B ∨ Ty ≤ SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
   exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_executionPhase σ k hk (fun _ => le_rfl) cl hW hc hN hcy hB
@@ -313,24 +313,24 @@ theorem audit_executionPhase (A : Analysis ((SamplingDesign.stratified σ k hk).
 /-- **The window audit for any sampling design below the product distribution** (oracle layer): `audit_executionPhase` for a sampling design `L` whose escapes are
 at most the stratified sampling design's, sampled with closures, such as an executable sample proved against it. -/
 theorem audit_executionPhase_of_le {L : SamplingDesign n} (hL : ∀ B, L.missProb B ≤ (SamplingDesign.stratified σ k hk).missProb B)
-    (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K)
+    (A : Analysis (L.closure cl) Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K)
     (hN : 0 < SamplingDesign.totalWork σ v) (hcy : SamplingDesign.Covers σ k v Ky) (T Ty : ℕ)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         Ty ≤ SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
         (audit (L.closure cl) Reg session) σ' ≤
       max ((((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K)
-          ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + δlink := by
+          ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.unsoundWork σ w cl B ∨ Ty ≤ SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
   exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_executionPhase σ k hk hL cl hW hc hN hcy hB
 
 /-- **The window audit** (compiled layer, randomized extractor): at most
-`max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks(σ) + δ_link(σ)`. -/
+`max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_executionPhase (A : ExtractionAnalysis ((SamplingDesign.stratified σ k hk).closure cl) Reg session)
-    {εks δlink : (R : Reg) → Cont ((SamplingDesign.stratified σ k hk).closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
+    {εks εbind : (R : Reg) → Cont ((SamplingDesign.stratified σ k hk).closure cl) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) {w v : Fin m → ℕ} {K Ky : ℕ}
     (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K) (hN : 0 < SamplingDesign.totalWork σ v) (hcy : SamplingDesign.Covers σ k v Ky)
     (T Ty : ℕ) (σ' : Strategy (audit ((SamplingDesign.stratified σ k hk).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
@@ -338,7 +338,7 @@ theorem extraction_audit_executionPhase (A : ExtractionAnalysis ((SamplingDesign
         (audit ((SamplingDesign.stratified σ k hk).closure cl) Reg session) σ' ≤
       max ((((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K)
           ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) +
-        εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+        εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect X) ∨
     Ty ≤ SamplingDesign.unsoundWork σ v cl (A.incorrect X)) σ').trans ?_
   gcongr
@@ -348,14 +348,14 @@ theorem extraction_audit_executionPhase (A : ExtractionAnalysis ((SamplingDesign
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The window audit at the sizing of record**: with `K = K_y = 27,713`, the audit accepts while the unsound work is at
-least 0.1% of the window's, or the unsound weight at least 0.1% of `N`, with probability at most `2^-40 + ε_ks + δ_link`. -/
-theorem audit_executionPhase_of_record (A : Analysis ((SamplingDesign.stratified σ k hk).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) {w v : Fin m → ℕ}
+least 0.1% of the window's, or the unsound weight at least 0.1% of `N`, with probability at most `2^-40 + ε_ks + ε_bind`. -/
+theorem audit_executionPhase_of_record (A : Analysis ((SamplingDesign.stratified σ k hk).closure cl) Reg session) {εks εbind : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) {w v : Fin m → ℕ}
     (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w 27713) (hN : 0 < SamplingDesign.totalWork σ v)
     (hcy : SamplingDesign.Covers σ k v 27713) (σ' : Strategy (audit ((SamplingDesign.stratified σ k hk).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         SamplingDesign.totalWork σ v ≤ 1000 * SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
-        (audit ((SamplingDesign.stratified σ k hk).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
+        (audit ((SamplingDesign.stratified σ k hk).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl B ∨
     SamplingDesign.totalWork σ v ≤ 1000 * SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
@@ -369,7 +369,7 @@ theorem audit_executionPhase_of_record (A : Analysis ((SamplingDesign.stratified
 its own work sampling design at its share of `K = 27,713`, each stratum's floor covering `v` at `K_y = 27,713`, with closures. -/
 theorem audit_executionPhase_split_of_record {C : ℕ} {call : Fin m → Fin C} {w v f : Fin m → ℕ}
     (A : Analysis ((SamplingDesign.stratified σ (SamplingDesign.executionPhaseK σ call w f 27713) (SamplingDesign.executionPhaseK_le σ call w f 27713)).closure cl)
-      Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)
+      Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind)
     (hW : 0 < SamplingDesign.totalWork σ w)
     (hone : ∀ s, 0 < w s → SamplingDesign.callWork σ call w (call s) = w s * (SamplingDesign.stratum σ s).card)
     (hN : 0 < SamplingDesign.totalWork σ v) (hfy : ∀ s, 27713 * v s * (SamplingDesign.stratum σ s).card ≤ f s * SamplingDesign.totalWork σ v)
@@ -378,7 +378,7 @@ theorem audit_executionPhase_split_of_record {C : ℕ} {call : Fin m → Fin C} 
     prob (fun o => o.1 = true ∧ (SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         SamplingDesign.totalWork σ v ≤ 1000 * SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
         (audit ((SamplingDesign.stratified σ (SamplingDesign.executionPhaseK σ call w f 27713)
-          (SamplingDesign.executionPhaseK_le σ call w f 27713)).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink :=
+          (SamplingDesign.executionPhaseK_le σ call w f 27713)).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + εbind :=
   audit_executionPhase_of_record A hks hlink hW (SamplingDesign.covers_executionPhase σ call w f 27713 hW hone) hN
     (SamplingDesign.covers_of_floor σ _ f v 27713 (SamplingDesign.executionPhaseK_le σ call w f 27713)
       (fun _ => min_le_min le_rfl (le_max_left _ _)) hfy) σ'
@@ -387,40 +387,40 @@ theorem audit_executionPhase_split_of_record {C : ℕ} {call : Fin m → Fin C} 
 escapes are at most the stratified sampling design's plus `η`, sampled with closures, such as a keyed sample under a pseudorandomness
 assumption. The bound gains `η`; at `η = 0` it is `audit_executionPhase_of_le`. -/
 theorem audit_executionPhase_of_le_slack {L : SamplingDesign n} {η : ℝ≥0∞} (hL : ∀ B, L.missProb B ≤ (SamplingDesign.stratified σ k hk).missProb B + η)
-    (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K)
+    (A : Analysis (L.closure cl) Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K)
     (hN : 0 < SamplingDesign.totalWork σ v) (hcy : SamplingDesign.Covers σ k v Ky) (T Ty : ℕ)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         Ty ≤ SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
         (audit (L.closure cl) Reg session) σ' ≤
       max ((((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K)
-          ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + η + εks + δlink := by
+          ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + η + εks + εbind := by
   refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.unsoundWork σ w cl B ∨ Ty ≤ SamplingDesign.unsoundWork σ v cl B) σ').trans ?_
   gcongr
   exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_executionPhase_slack σ k hk hL cl hW hc hN hcy hB
 
 /-- At `η = 0`, `audit_executionPhase_of_le_slack` is `audit_executionPhase_of_le`. -/
 example {L : SamplingDesign n} (hL : ∀ B, L.missProb B ≤ (SamplingDesign.stratified σ k hk).missProb B)
-    (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K)
+    (A : Analysis (L.closure cl) Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) {w v : Fin m → ℕ} {K Ky : ℕ} (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K)
     (hN : 0 < SamplingDesign.totalWork σ v) (hcy : SamplingDesign.Covers σ k v Ky) (T Ty : ℕ)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         Ty ≤ SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
         (audit (L.closure cl) Reg session) σ' ≤
       max ((((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K)
-          ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + δlink := by
+          ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + εks + εbind := by
   simpa only [add_zero] using
     audit_executionPhase_of_le_slack (η := 0) (fun B => by rw [add_zero]; exact hL B) A hks hlink hW hc hN hcy T Ty σ'
 
 /-- **The window audit for a sampling design within `η` of the product distribution** (compiled layer, randomized extractor):
 `extraction_audit_executionPhase` for a sampling design `L` whose escapes are at most the stratified sampling design's plus `η`, sampled with closures. At
-most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + η + ε_ks(σ) + δ_link(σ)`. -/
+most `max(((W − T)/W)^K, ((N − T_y)/N)^(K_y)) + η + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_executionPhase_of_le_slack {L : SamplingDesign n} {η : ℝ≥0∞}
     (hL : ∀ B, L.missProb B ≤ (SamplingDesign.stratified σ k hk).missProb B + η) (A : ExtractionAnalysis (L.closure cl) Reg session)
-    {εks δlink : (R : Reg) → Cont (L.closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) {w v : Fin m → ℕ} {K Ky : ℕ}
+    {εks εbind : (R : Reg) → Cont (L.closure cl) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) {w v : Fin m → ℕ} {K Ky : ℕ}
     (hW : 0 < SamplingDesign.totalWork σ w) (hc : SamplingDesign.Covers σ k w K) (hN : 0 < SamplingDesign.totalWork σ v) (hcy : SamplingDesign.Covers σ k v Ky)
     (T Ty : ℕ) (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
@@ -428,7 +428,7 @@ theorem extraction_audit_executionPhase_of_le_slack {L : SamplingDesign n} {η :
         (audit (L.closure cl) Reg session) σ' ≤
       max ((((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K)
           ((((SamplingDesign.totalWork σ v - Ty : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ v : ℝ≥0∞)) ^ Ky) + η +
-        εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+        εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') := by
   refine (extraction_audit_le A hks hlink (fun X _ => T ≤ SamplingDesign.unsoundWork σ w cl (A.incorrect X) ∨
     Ty ≤ SamplingDesign.unsoundWork σ v cl (A.incorrect X)) σ').trans ?_
   gcongr
@@ -438,21 +438,21 @@ theorem extraction_audit_executionPhase_of_le_slack {L : SamplingDesign n} {η :
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The per-call split with y's floors, for a sampling design within `η` of it, at the sizing of record** (compiled layer): at most
-`2^-40 + η + ε_ks(σ) + δ_link(σ)`. -/
+`2^-40 + η + ε_ks(σ) + ε_bind(σ)`. -/
 theorem extraction_audit_executionPhase_split_of_record_of_le_slack {C : ℕ} {call : Fin m → Fin C} {w v f : Fin m → ℕ}
     {L : SamplingDesign n} {η : ℝ≥0∞}
     (hL : ∀ B, L.missProb B ≤
       (SamplingDesign.stratified σ (SamplingDesign.executionPhaseK σ call w f 27713) (SamplingDesign.executionPhaseK_le σ call w f 27713)).missProb B + η)
     (A : ExtractionAnalysis (L.closure cl) Reg session)
-    {εks δlink : (R : Reg) → Cont (L.closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hW : 0 < SamplingDesign.totalWork σ w)
+    {εks εbind : (R : Reg) → Cont (L.closure cl) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound εbind) (hW : 0 < SamplingDesign.totalWork σ w)
     (hone : ∀ s, 0 < w s → SamplingDesign.callWork σ call w (call s) = w s * (SamplingDesign.stratum σ s).card)
     (hN : 0 < SamplingDesign.totalWork σ v) (hfy : ∀ s, 27713 * v s * (SamplingDesign.stratum σ s).card ≤ f s * SamplingDesign.totalWork σ v)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         SamplingDesign.totalWork σ v ≤ 1000 * SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
         (audit (L.closure cl) Reg session) σ' ≤
-      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
+      ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks (reg σ') (cont σ') + εbind (reg σ') (cont σ') := by
   have hc := SamplingDesign.covers_executionPhase σ call w f 27713 hW hone
   have hcy := SamplingDesign.covers_of_floor σ _ f v 27713 (SamplingDesign.executionPhaseK_le σ call w f 27713)
     (fun _ => min_le_min le_rfl (le_max_left _ _)) hfy
@@ -471,19 +471,19 @@ theorem extraction_audit_executionPhase_split_of_record_of_le_slack {C : ℕ} {c
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **The per-call split with y's floors, for a sampling design within `η` of it, at the sizing of record**: at most
-`2^-40 + η + ε_ks + δ_link`. -/
+`2^-40 + η + ε_ks + ε_bind`. -/
 theorem audit_executionPhase_split_of_record_of_le_slack {C : ℕ} {call : Fin m → Fin C} {w v f : Fin m → ℕ} {L : SamplingDesign n}
     {η : ℝ≥0∞}
     (hL : ∀ B, L.missProb B ≤
       (SamplingDesign.stratified σ (SamplingDesign.executionPhaseK σ call w f 27713) (SamplingDesign.executionPhaseK_le σ call w f 27713)).missProb B + η)
-    (A : Analysis (L.closure cl) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) (hW : 0 < SamplingDesign.totalWork σ w)
+    (A : Analysis (L.closure cl) Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) (hW : 0 < SamplingDesign.totalWork σ w)
     (hone : ∀ s, 0 < w s → SamplingDesign.callWork σ call w (call s) = w s * (SamplingDesign.stratum σ s).card)
     (hN : 0 < SamplingDesign.totalWork σ v) (hfy : ∀ s, 27713 * v s * (SamplingDesign.stratum σ s).card ≤ f s * SamplingDesign.totalWork σ v)
     (σ' : Strategy (audit (L.closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ (SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl (A.incorrect (A.committedOf σ')) ∨
         SamplingDesign.totalWork σ v ≤ 1000 * SamplingDesign.unsoundWork σ v cl (A.incorrect (A.committedOf σ'))))
-        (audit (L.closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + δlink := by
+        (audit (L.closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + η + εks + εbind := by
   have hc := SamplingDesign.covers_executionPhase σ call w f 27713 hW hone
   have hcy := SamplingDesign.covers_of_floor σ _ f v 27713 (SamplingDesign.executionPhaseK_le σ call w f 27713)
     (fun _ => min_le_min le_rfl (le_max_left _ _)) hfy

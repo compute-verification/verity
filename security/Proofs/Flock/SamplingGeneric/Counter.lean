@@ -174,11 +174,11 @@ def L₀ (n oc : ℕ) : Compiled Unit A₀ where
 
 /-! ## It meets the contract -/
 
-theorem unitClass₀ : unitClass s₀.prog [0] = some 16 := by
+theorem sizeClass₀ : sizeClass s₀.prog [0] = some 16 := by
   obtain ⟨t, ht⟩ : ∃ t, sizeClasses = 16 :: t := by
     rw [sizeClasses, List.range_succ_eq_map, List.map_cons]
     exact ⟨_, rfl⟩
-  rw [unitClass, ht]
+  rw [sizeClass, ht]
   rfl
 
 theorem inScope₀ : InScope P₀ s₀ := by
@@ -198,7 +198,7 @@ theorem inScope₀ : InScope P₀ s₀ := by
     simp [hu]
   · simp [Partition.blocks, P₀] at hu
     subst hu
-    exact ⟨16, unitClass₀, by decide⟩
+    exact ⟨16, sizeClass₀, by decide⟩
   · simp [s₀, P₀] at hp
     subst hp
     exact trivial

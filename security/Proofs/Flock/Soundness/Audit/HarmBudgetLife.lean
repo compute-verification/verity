@@ -191,10 +191,10 @@ theorem sampled_term {next : Game Bool} {N : ℕ} {rest : Strategy next → Play
       (pass_contPlay hpass), prob_map]
     exact le_antisymm (prob_mono (fun _ ho => ⟨ho, fun h' => hd h'.symm⟩) _ _) (prob_mono (fun _ ho => ho.1) _ _)
 
-theorem sampled_roundPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+theorem sampled_roundPlay (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
-    (hN : εks + δlink ≤ err N) (t : Strategy ((audit L Reg session).bind (afterAudit next))) :
+    (hN : εks + εbind ≤ err N) (t : Strategy ((audit L Reg session).bind (afterAudit next))) :
     (roundPlay A rest t).Drawn err := by
   refine ⟨?_, fun ω => ?_⟩
   · refine le_trans (le_of_eq ?_)
@@ -227,10 +227,10 @@ theorem samplingDesigns_goPlay (A : Analysis L Reg session) {S : SamplingDesign 
   | true, t => samplingDesigns_roundPlay A hL hrest t
   | false, _ => trivial
 
-theorem sampled_goPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+theorem sampled_goPlay (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
-    (hN : εks + δlink ≤ err N) :
+    (hN : εks + εbind ≤ err N) :
     ∀ (go : Bool) (t : Strategy (cond go ((audit L Reg session).bind (afterAudit next)) (.ret true))),
       (goPlay A rest go t).Drawn err
   | true, t => sampled_roundPlay A hks hlink hpass hrest hN t
@@ -258,10 +258,10 @@ theorem samplingDesigns_stagePlay (A : Analysis L Reg session) {S : SamplingDesi
     (stagePlay A rest s).SamplingDesigns S :=
   samplingDesigns_goPlay A hL hrest s.1 s.2
 
-theorem sampled_stagePlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+theorem sampled_stagePlay (A : Analysis L Reg session) {εks εbind : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+    (hlink : A.BindSound εbind) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
-    (hN : εks + δlink ≤ err N) (s : Strategy (stage L Reg session next)) : (stagePlay A rest s).Drawn err :=
+    (hN : εks + εbind ≤ err N) (s : Strategy (stage L Reg session next)) : (stagePlay A rest s).Drawn err :=
   sampled_goPlay A hks hlink hpass hrest hN s.1 s.2
 
 theorem pass_stagePlay (A : Analysis L Reg session) {next : Game Bool} {N : ℕ} (rest : Strategy next → Play n N)
@@ -300,9 +300,9 @@ theorem pass_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) :
       simp [pass_stop]
   | N + 1, s => pass_stagePlay (A N) (lifePlay A N) s
 
-theorem sampled_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
-    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (δlink m)) :
-    ∀ (N : ℕ) (s : Strategy (life L Reg session N)), (lifePlay A N s).Drawn fun m => εks m + δlink m
+theorem sampled_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks εbind : ℕ → ℝ≥0∞}
+    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (εbind m)) :
+    ∀ (N : ℕ) (s : Strategy (life L Reg session N)), (lifePlay A N s).Drawn fun m => εks m + εbind m
   | 0, _ => trivial
   | N + 1, s => sampled_stagePlay (A N) (hks N) (hlink N) (pass_lifePlay A N) (sampled_lifePlay A hks hlink N) le_rfl s
 
@@ -316,13 +316,13 @@ theorem life_accept (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) (h : 
 /-- **The cumulative harm budget over a lifetime of one-stage audits.** For sampling designs meeting the design
 condition with weights `π`, harms `h` with `λ h ≤ π` and `λ ≥ 0`, and every prover strategy, the
 lifetime accepts with total harm `Σ_t h(incorrect(X_t))` at least `H` with probability at most
-`e^{−λH} + Σ_{m<N} (ε_ks,m + δ_link,m)`. -/
-theorem life_harm_budget (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
-    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (δlink m))
+`e^{−λH} + Σ_{m<N} (ε_ks,m + ε_bind,m)`. -/
+theorem life_harm_budget (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks εbind : ℕ → ℝ≥0∞}
+    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (εbind m))
     {π h : Fin n → ℝ} (hL : ∀ m, (L m).Design π) {lam : ℝ} (hlam0 : 0 ≤ lam) (hlam : ∀ u, lam * h u ≤ π u)
     (H : ℝ) (N : ℕ) (s : Strategy (life L Reg session N)) :
     (lifePlay A N s).prEv h (fun acc x => acc = true ∧ H ≤ x) 0 ≤
-      ENNReal.ofReal (Real.exp (-(lam * H))) + ∑ m ∈ range N, (εks m + δlink m) :=
+      ENNReal.ofReal (Real.exp (-(lam * H))) + ∑ m ∈ range N, (εks m + εbind m) :=
   harm_budget hlam0 hlam H (lifePlay A N s) (samplingDesigns_lifePlay (S := fun L' => L'.Design π) A hL N s)
     (sampled_lifePlay A hks hlink N s)
 

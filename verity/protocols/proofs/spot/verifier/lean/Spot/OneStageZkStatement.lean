@@ -60,8 +60,8 @@ def deployedKey (key : Challenger.ChallengerKey) : Bool :=
 its own constant, so `units_per_vu ≥ 1` is all a proof block's gate needs. -/
 def NO_ROW_WHY : String := "the circuit's units_per_vu is 0: a template instance of no unit, a proof block of no gate"
 
-/-- The widest public size class of a proof block's outputs, in bits (`Claims.Sampling.unitClassMax`). -/
-def UNIT_CLASS_MAX : Nat := 262144
+/-- The widest public size class of a proof block's outputs, in bits (`Claims.Sampling.sizeClassMax`). -/
+def SIZE_CLASS_MAX : Nat := 262144
 
 /-- The refusal of a template instance that returns more bits than the widest size class holds. -/
 def WIDE_WHY : String :=
@@ -72,10 +72,10 @@ def WIDE_WHY : String :=
 def returnedBits (c : Flock.Circuit) : Nat := 16 * ((List.range c.upv).map fun u => (c.leavesOut.getD u #[]).size).sum
 
 /-- **The unit template's refusals** on the parsed circuit: a template instance of no unit (`NO_ROW_WHY`), and one
-returning more than `UNIT_CLASS_MAX` bits (`WIDE_WHY`). -/
+returning more than `SIZE_CLASS_MAX` bits (`WIDE_WHY`). -/
 def templateOk (c : Flock.Circuit) : V Unit := do
   if c.upv = 0 then throw NO_ROW_WHY
-  if returnedBits c > UNIT_CLASS_MAX then throw WIDE_WHY
+  if returnedBits c > SIZE_CLASS_MAX then throw WIDE_WHY
 
 /-- The verifier's own inputs to `verity-verify-proof verify --zk`: the program's descriptor (as JSON and as the bytes
 `--program` reads), the partition object, the circuit and public files' committed SHA-512s and the registered file. -/

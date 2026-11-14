@@ -55,7 +55,7 @@ open scoped ENNReal
 open Classical in
 /-- **The rows' extraction bound** (`rowsLinkLe`): in `EndToEndRegisteredRows`' setting, accepting while some sampled proof block is
 wrong on the registration, or, with the registration on the registrant's leaves at every owned read, carries at an
-owned registered read a bit other than the registrant's row's, has probability at most `ε_ks + δ_link + δ_rows`. -/
+owned registered read a bit other than the registrant's row's, has probability at most `ε_ks + ε_bind + δ_rows`. -/
 def RowsLinkLe : Prop :=
   ∀ (n : ℕ) (Reg : Type) (own : Array Flock.Registered.Port)
     (I : Inputs) (ht : I.tags.typed = false)

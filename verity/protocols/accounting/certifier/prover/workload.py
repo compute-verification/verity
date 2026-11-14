@@ -8,9 +8,9 @@ workload -> prover     CommittedRows, ReportedAdvice
 ~~~
 
 The forms the workload and the network certifier agree on are declared here for the workload: the link frame's header
-(`FRAME_HEADER`) and the canonical id request (`id_request`). The verifier keeps its own (`link_frame.HEADER`,
-`id_form.id_request`) and reads nothing of this module; `test_network_certifier_id_request_writers.py` holds the two
-equal.
+(`FRAME_HEADER`), the canonical id request (`id_request`), and a response's id events (`id_event`) and its last bytes
+(`TRAILER`). The verifier keeps its own (`link_frame.HEADER`, `id_form.id_request`, `io_tie.id_event`, `io_tie.TRAILER`)
+and reads nothing of this module; `test_network_certifier_id_request_writers.py` holds each pair equal.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from verity.channel import Body, Schema
 from verity.protocol import Channel, Role
 
-__all__ = ["CHANNELS", "FRAME_HEADER", "MESSAGES", "PARTIES", "id_request"]
+__all__ = ["CHANNELS", "FRAME_HEADER", "MESSAGES", "PARTIES", "TRAILER", "id_event", "id_request"]
 
 WORKLOAD = "workload"
 PROVER = "prover"
@@ -46,6 +46,13 @@ _DIGITS = 10
 _HEAD = (b"POST /v1/completions HTTP/1.1\r\nhost: server\r\ncontent-type: application/json\r\n"
          b"content-length:")
 _NAME_BYTES = 64
+_EVENT_END = b"\n\n"
+_ID_EVENT_HEAD = (b'data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,'
+                  b'"token_id":')
+_ID_EVENT_TAIL = b',"finish_reason":null}]}' + _EVENT_END
+_ID_EVENT_BYTES = len(_ID_EVENT_HEAD) + _DIGITS + len(_ID_EVENT_TAIL)
+#: a response's last bytes, after its id events (the verifier's `io_tie.TRAILER`)
+TRAILER = b"data: [DONE]" + _EVENT_END
 
 
 def _u32(x: int, what: str) -> bytes:
@@ -93,3 +100,15 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
         at += gap + len(p)
     raw = b"".join(parts)
     return _HEAD + b"%*d" % (_DIGITS, len(raw)) + b"\r\n\r\n" + raw
+
+
+def id_event(token_id: int, size: int = _ID_EVENT_BYTES) -> bytes:
+    """The canonical event of one token id in `size` bytes: its head, the id right-aligned in 10 decimal characters,
+    then its tail with spaces (JSON whitespace) ahead of its blank line to fill `size`. The verifier's `io_tie.id_event`
+    writes the same bytes and refuses the same arguments (`test_network_certifier_id_request_writers.py`)."""
+    if type(token_id) is not int or not 0 <= token_id < 1 << 32:
+        raise ValueError(f"a token id is a u32, not {token_id!r}")
+    if type(size) is not int or size < _ID_EVENT_BYTES:
+        raise ValueError(f"an id event is at least {_ID_EVENT_BYTES} bytes, not {size!r}")
+    tail = _ID_EVENT_TAIL[:-len(_EVENT_END)] + b" " * (size - _ID_EVENT_BYTES) + _EVENT_END
+    return _ID_EVENT_HEAD + b"%10d" % token_id + tail

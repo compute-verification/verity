@@ -158,10 +158,6 @@ BENCHMARKS_IMPORTERS = {
                                                               "(`benchmarks/tc_probe`)",
     "adapters/vllm/tests/protocols/pouw_h1_circuits.py": "compute-accounting: H1's prover and the auditor's lowering "
                                                         "(`benchmarks/pouw/h1_prove`, `hidden_zk`)",
-    # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
-    "verity/protocols/compose/device/live_challenger/auditor.py":
-        "proofs: the relay's load (`verity/protocols/accounting/certifier/device/load_relay.py`), "
-        "imported since before the move; goes when the session's code moves under `verity/`",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
@@ -673,14 +669,21 @@ def _sys_path(node: ast.AST) -> bool:
 
 def _path_loads(nodes: Iterable[ast.AST], reaches: Callable[[ast.AST], bool], loaders: Set[str]) -> list[tuple[int, str]]:
     """``(line, code)`` for each of ``nodes`` that puts a path ``reaches`` accepts on ``sys.path`` or loads a module from
-    it, directly or through one of ``loaders``, the functions that hand a parameter to such a load."""
+    it, directly or through one of ``loaders``, the functions that hand a parameter to such a load.  A loader is matched by
+    name, so a function of that name on a standard-library module the nodes import as itself (``import subprocess``,
+    ``subprocess.run``) is not one; on a local module named like one (``from x import platform``) it still is.
+    ``PATH_LOADERS`` and ``sys.path`` are standard-library and always count."""
+    nodes = list(nodes)
+    std = {a.name.split(".")[0] for n in nodes if isinstance(n, ast.Import) for a in n.names if not a.asname}
+    std = (std & sys.stdlib_module_names) - {a.asname or a.name for n in nodes if isinstance(n, ast.ImportFrom) for a in n.names}
     out = []
     for n in nodes:
         if isinstance(n, ast.Call):
             f = n.func
             name = f.attr if isinstance(f, ast.Attribute) else getattr(f, "id", None)
             on_path = name in {"insert", "append", "extend"} and isinstance(f, ast.Attribute) and _sys_path(f.value)
-            hit = on_path or name in PATH_LOADERS or name in loaders
+            stdlib = isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id in std
+            hit = on_path or name in PATH_LOADERS or (name in loaders and not stdlib)
             args = [*n.args, *(k.value for k in n.keywords)]
         elif isinstance(n, (ast.Assign, ast.AugAssign)):
             targets = n.targets if isinstance(n, ast.Assign) else [n.target]
@@ -700,8 +703,9 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
-    files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
-    is defined, that hands a parameter to such a load (``remote.session_module``).  Nothing is executed (AST only), and
+    files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``) in a file that imports the module
+    binding them, and through any function, wherever it is defined, that hands a parameter to such a load
+    (``remote.session_module``).  Nothing is executed (AST only), and
     only files a text search can't rule out are parsed."""
     alt = "|".join(map(re.escape, sorted(packages)))
     named = [re.compile(rf"""(?:import|from)\s+(?:{alt})\b|(?:{"|".join(IMPORT_CALLS)})\(\s*["'](?:{alt})\b"""),
@@ -710,7 +714,10 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     loads = ("sys.path", *PATH_LOADERS)
     ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
-    constants: set[str] = set()
+    #: Each upper-case module constant bound to a path into benchmarks/, with the modules (by last name) that bind it.
+    owners: dict[str, set[str]] = {}
+    #: The constants a file may read as attributes: those of the modules it imports.
+    visible: dict[str, set[str]] = {}
 
     def parse(rel: str) -> ast.AST:
         try:
@@ -718,8 +725,21 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
         except SyntaxError:
             return ast.Module(body=[], type_ignores=[])
 
-    def into(e: ast.AST, names: Set[str] = frozenset()) -> bool:
-        return _into_benchmarks(e, names, constants)
+    @functools.cache
+    def imported(rel: str) -> frozenset[str]:
+        """The last name of each module ``rel`` imports, and each name it imports from one."""
+        out: set[str] = set()
+        for n in nodes[rel]:
+            if isinstance(n, ast.Import):
+                out |= {a.name.rsplit(".", 1)[-1] for a in n.names}
+            elif isinstance(n, ast.ImportFrom):
+                out |= {(n.module or "").rsplit(".", 1)[-1], *(a.name for a in n.names)}
+        return frozenset(out)
+
+    def into(e: ast.AST, names: Set[str], rel: str) -> bool:
+        if rel not in visible:
+            visible[rel] = {c for c, mods in owners.items() if mods & imported(rel)}
+        return _into_benchmarks(e, names, visible[rel])
 
     by_name = {rel for rel, text in ours.items() if any(p in text for p in packages) and any(r.search(text) for r in named)}
     new = sorted(by_name | {rel for rel, text in ours.items() if "benchmarks" in text and quoted.search(text)})
@@ -730,18 +750,22 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
             trees[rel] = parse(rel)
             nodes[rel] = list(ast.walk(trees[rel]))
             assigned[rel] = _assigned(nodes[rel])
-        bound = {rel: frozenset(_bound_from(assigned[rel], set(), into)) for rel in trees}
-        grown = {t.id for rel, tree in trees.items() for s in tree.body if isinstance(s, (ast.Assign, ast.AnnAssign))
+        bound = {rel: frozenset(_bound_from(assigned[rel], set(), lambda e, n, r=rel: into(e, n, r))) for rel in trees}
+        grown = {(t.id, Path(rel).parent.name if rel.endswith("/__init__.py") else Path(rel).stem)
+                 for rel, tree in trees.items() for s in tree.body if isinstance(s, (ast.Assign, ast.AnnAssign))
                  for t in (s.targets if isinstance(s, ast.Assign) else [s.target])
-                 if isinstance(t, ast.Name) and t.id.isupper() and t.id in bound[rel]} - constants
+                 if isinstance(t, ast.Name) and t.id.isupper() and t.id in bound[rel]}
+        grown = {(c, mod) for c, mod in grown if mod not in owners.get(c, ())}
         if not grown:
             break
-        constants |= grown
-        attr = re.compile(r"\.(?:" + "|".join(sorted(grown)) + r")\b")
+        for c, mod in grown:
+            owners.setdefault(c, set()).add(mod)
+        visible.clear()
+        attr = re.compile(r"\.(?:" + "|".join(sorted({c for c, _ in grown})) + r")\b")
         new = [rel for rel, text in ours.items() if rel not in trees and attr.search(text)]
     handed = {n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", None)
               for rel in trees for n in nodes[rel]
-              if isinstance(n, ast.Call) and any(into(a, bound[rel]) for a in [*n.args, *(k.value for k in n.keywords)])}
+              if isinstance(n, ast.Call) and any(into(a, bound[rel], rel) for a in [*n.args, *(k.value for k in n.keywords)])}
     handed -= {None, *PATH_LOADERS, *dir(builtins)}
     defines = re.compile(r"^([ \t]*)(?:async[ \t]+)?def (?:" + "|".join(map(re.escape, sorted(handed))) + r")\(", re.M)
 
@@ -764,7 +788,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     for rel in trees:
         hits = [(line, name) for name, line, _ in (_imports(ROOT / rel, ROOT, (), nodes[rel]) if rel in by_name else ())
                 if name.split(".")[0] in packages]
-        hits += _path_loads(nodes[rel], lambda e, n=bound[rel]: into(e, n), loaders)
+        hits += _path_loads(nodes[rel], lambda e, n=bound[rel], r=rel: into(e, n, r), loaders)
         if hits:
             found[rel] = [f"{line}: {what}" for line, what in sorted(hits)]
     return found
@@ -796,8 +820,11 @@ def test_nothing_outside_benchmarks_imports_it() -> None:
 
 def test_a_benchmarks_import_is_found() -> None:
     """The check above isn't vacuous: imports by name, a path put on ``sys.path`` through a name, a parameter's default
-    from another file's constant, and a call to another file's loader (whose load follows a nested function) are each
-    found; a path into another directory, a mere mention of ``benchmarks/``, and ``benchmarks/``'s own files are not."""
+    from another file's constant, a call to another file's loader (whose load follows a nested function), that constant
+    read in a file importing its module (also as ``import a.b as X``) and ``runpy.run_path`` are each found; a path into
+    another directory, a mere mention of ``benchmarks/``, ``benchmarks/``'s own files, that constant read in a file that
+    doesn't import its module, and a standard-library function named like a loader (``subprocess.run``) are not.  A loader
+    called on a local module named like a standard-library one (``from x import tool as platform``) is found."""
     texts = {
         "x/names.py": ("import verity_bench.vllm\nfrom benchmarks.tc_probe import tool\nimport importlib\n"
                        "importlib.import_module('datacenter.graph')\nTOOL = 'benchmarks.commitments.tool:COMMIT_COST'\n"),
@@ -811,6 +838,13 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/clean.py": ("import sys\nsys.path.insert(0, 'tools/check')\nimport suites\n"
                        "NOTE = 'the numbers come from benchmarks/ppl'\nimport verity_vllm\n"),
         "benchmarks/y/run.py": "import verity_bench\nimport sys\nsys.path.insert(0, '../benchmarks/z')\n",
+        "x/tool.py": "import runpy\ndef run(directory):\n    return runpy.run_path(directory / 'main.py')\n",
+        "x/shell.py": ("import subprocess\nfrom x import config, tool\nsubprocess.run(['make'], cwd=config.SESSION)\n"
+                       "tool.run(config.SESSION)\n"),
+        "x/runs.py": "import runpy\nrunpy.run_path('benchmarks/ppl/main.py')\n",
+        "x/aliased.py": "import sys\nimport x.config as C\nsys.path.insert(0, str(C.SESSION))\n",
+        "x/other.py": "import sys\nfrom y import settings\nsys.path.insert(0, str(settings.SESSION))\n",
+        "x/local.py": "from x import config, tool as platform\nplatform.run(config.SESSION)\n",
     }
     found = _benchmarks_importers(texts, {"benchmarks", "verity_bench", "datacenter"})
     assert found == {
@@ -818,6 +852,10 @@ def test_a_benchmarks_import_is_found() -> None:
         "x/syspath.py": ["4: sys.path.insert(0, str(PPL))", "5: sys.path[:0] = ['../../benchmarks/census']"],
         "x/loader.py": ["6: importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')"],
         "x/caller.py": ["2: loader.load('paged', config.SESSION.parent / 'vllm_encoded')"],
+        "x/shell.py": ["4: tool.run(config.SESSION)"],
+        "x/runs.py": ["2: runpy.run_path('benchmarks/ppl/main.py')"],
+        "x/aliased.py": ["3: sys.path.insert(0, str(C.SESSION))"],
+        "x/local.py": ["2: platform.run(config.SESSION)"],
     }, found
 
 

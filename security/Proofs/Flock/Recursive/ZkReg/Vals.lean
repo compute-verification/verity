@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Game
 `zk_session_regValsR`: in `verity-verify-proof verify --zk --registered F` sessions of `J` hidden-output tables, at the committed
 values the simulation `simZHJ` decodes (`XplurZC` at the rows `rsZHJS`, whose value binding is `vbHJ`), no sampled proof block
 reads a registered read whose session leaf is the registrant's and whose committed value is not the registrant's, except
-with probability `ε_ks + δ_link + δ_reg` (`RegValsSound`'s event, at `layShHJ`'s registered reads `rd`). The registrant's
+with probability `ε_ks + ε_bind + δ_reg` (`RegValsSound`'s event, at `layShHJ`'s registered reads `rd`). The registrant's
 opening of each commit string is its row and salt (`regOpenZ`), whose `hm96X` leaf at its encoding is `rd.leaf`; `δ_reg = regTermZC` is
 `cr/sha-512` for the finders that collide an extracted opening with the registrant's (`RegCRZC`, a hypothesis as `hCR`
 is).
@@ -62,7 +62,7 @@ def regOpenZ {I : Inputs} (ht : I.tags.typed = false) (dj : Finset (Fin n) → L
   fun p => (p, rd.wv p, rd.ws p)
 
 /-- **The committed values of a `--zk --registered` session are the registered values at its registered reads**, except
-with probability `ε_ks + δ_link + δ_reg`: for every registered-reads record `rd` of `layShHJ`, with `cr/sha-512` at
+with probability `ε_ks + ε_bind + δ_reg`: for every registered-reads record `rd` of `layShHJ`, with `cr/sha-512` at
 budgets `qF, qS` for the knowledge finders of `τ`'s simulation (`hCR`) and at budget `qW` for its registered-value finders
 (`hW`), an accepted session whose sample has a unit reading a wire `g` at a registered read, whose session leaf there is
 the registrant's, and whose committed bit on `g` is not the registrant's value's, has probability at most
