@@ -3028,6 +3028,15 @@
    "type_hash": "18e0948e93d4aeb7c724cb5e480d3ee21588058eecdfa3567bfd45c38abb31b9",
    "unfolded_hash": "93865bc6e7e1ef213588c366e4da2db87035635ddd0ec59e767ecef643cc119b"
   },
+  "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives": {
+   "owner": "@memory-accounting"
+  },
+  "PousCheck.Properties.InProofs.SecurityProofs.setupGives": {
+   "owner": "@memory-accounting"
+  },
   "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
    "owner": "@memory-accounting",
    "signature": ["MemoryChallenger.Properties.SecurityProofs.verdictAccepts : MemoryChallenger.Properties.VerdictAccepts"],
@@ -13278,6 +13287,18 @@
    },
    "Properties.Challenger.Drawn.familyOneCommitmentRead": {
     "function": "Spot.Challenger.coinsReason",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives": {
+    "function": "RemoteAudit.checkWindow",
+    "outcome": "accept"
+   },
+   "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives": {
+    "function": "MemoryChallenger.verdict",
+    "outcome": "accept"
+   },
+   "PousCheck.Properties.InProofs.SecurityProofs.setupGives": {
+    "function": "PousCheck.SetupProtocol.protocol.check",
     "outcome": "accept"
    }
   },
