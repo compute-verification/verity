@@ -26,6 +26,7 @@ from verity.definitions.registry.sparse_mla_split import (
 from verity.device import load_card, number
 
 from verity_vllm.engine.profiles.devices import CARD
+from verity_vllm.engine.profiles.engine_classes import CLASS_G
 from verity_vllm.observe.events import TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
@@ -63,7 +64,7 @@ FA3_OP = "fwd"
 NORM_SRC_SHA = "2dcf56892eb2b61c0f0249965013fc1f63968c00e473b3df35cb186d42c650de"
 Q_SRC_SHA = "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043"
 INDEX_SHARE_SRC_SHA = "ad40bdb415664d3b65e3e4163863158096f2ea52f2e2a3e01ff8be63aeb98f63"
-RECORD_SMS = int(number(load_card(CARD["NVIDIA H200"])["sm"]["count"]))
+RECORD_SMS = int(number(load_card(CARD[CLASS_G["device_name"]])["sm"]["count"]))
 
 
 def _module(node: TreeNode) -> str:
