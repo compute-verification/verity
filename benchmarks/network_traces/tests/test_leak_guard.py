@@ -430,14 +430,43 @@ def test_a_ports_reads_written_compactly_are_no_piece_of_a_records_counts(tmp_pa
     assert rc == 3 and sorted(d["path"] for d in report["found"]) == ["out/copy.json", "out/scan/honest/spaced.json"]
 
 
+def test_a_list_of_consecutive_integers_is_no_piece_of_the_certifiers_usage_record(tmp_path):
+    """The certifier's run record, a witness file written indented, holds its processes' CPUs. Written as a list of
+    integers they are the same bytes as any indented list of consecutive integers at their depth, so a verifier
+    outcome's proved units were a find though nothing of the witness is in them. The usage record holds them as one
+    string of ranges (`active_replay._usage`), and under the declared data as shipped the outcome is no find and nothing
+    is excused. The CPUs written as a list are a find again: the guard is as it was."""
+    import active_replay as AR
+
+    record = _gate(tmp_path / "G" / "g1") / "witness" / "warden.json"
+    usage = AR._usage()
+    assert isinstance(usage["cpus"], str) and AR._cpu_list(usage["cpus"]) == os.sched_getaffinity(0)
+    ranged = {k: {**usage, "cpus": AR.cpu_ranges(range(32))} for k in ("usage", "publisher_usage")}
+    record.write_text(json.dumps(ranged, indent=1))
+    run = tmp_path / "run"
+    outcome = {"audit": {"proved_units": list(range(32)), "verdict": "accept"}}
+    _put(run, {"out/tie/verifier/w000-outcome.json": json.dumps(outcome, indent=1).encode()})
+    rc, report, _ = _guard(tmp_path, run, "--dry")
+    assert rc == 0 and report["found"] == [] and report["excused"] == []
+    listed = {k: {**v, "cpus": list(range(32))} for k, v in ranged.items()}
+    record.write_text(json.dumps(listed, indent=1))
+    rc, report, _ = _guard(tmp_path, run, "--dry")
+    assert rc == 3 and [d["path"] for d in report["found"]] == ["out/tie/verifier/w000-outcome.json"]
+    assert report["excused"] == []
+
+
 def test_the_declared_data_is_well_formed():
-    """leak_guard.json, the guard's declared names and allowlist, loads, and its names are the gates' witness files that
-    no record file of the chain is named after."""
+    """leak_guard.json, the guard's declared names and allowlist, loads, its names are the gates' witness files that
+    no record file of the chain is named after, and none of its entries excuses a piece by a key path."""
     names, allow = LG.load_declared(LG.DECLARED)
     assert {"cells.salts", "certified.jsonl", "requests.records", "responses.records"} <= names
     assert not names & {"end.json", "request.json", "deployment.json", "cells.jsonl", "certificates.jsonl", "serve.log",
                         "check.json", "resources.jsonl"}
     assert all(e["witness"] in names for e in allow)
+    keyed = sorted({e["witness"] for e in allow if "keys" in e})
+    assert not keyed, (f"leak_guard.json excuses pieces of {keyed} by key path. The record's guard has no such entry: "
+                       "write the witness's value in a form no other file repeats (as active_replay.cpu_ranges writes "
+                       "the certifier's CPUs), or keep it out of the witness")
 
 
 def _chain(tmp: Path, gates: str, *, py: str = sys.executable, **kw) -> subprocess.Popen:
