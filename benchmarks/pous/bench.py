@@ -31,13 +31,11 @@ Implementations (`IMPLS`), each adding one class:
   - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
     record (`FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
-* `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): the verifier's reference pinned by the spec's vectors, the prover's GPU library
-  (decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
-  at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): the spec's P2 is
-  not a `verity.protocols.accounting.pous.verifier` registered scheme, whose P2 is the MVP's `p2-16448/v4` (the spec's
-  counter-mode SHA-512 keys, its 24-byte salt and leaves) and `p2-16448/v2` (ChaCha8 keys).
-* `p2-v3-gpu`: the same kernels and steps, under the registered P2's framing (`p2-16448/v4`: its commitment, salt, key prefix and leaves,
-  `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
+* `p2-v3-gpu`: P2's GPU library (P2's prover, `verity/protocols/accounting/pous/prover/p2/p2_store`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two
+  roots, its kernels gated by the spec's pinned vectors, the verifier's reference in
+  `verity/protocols/accounting/pous/verifier/p2_v1/`) and the same harness steps as `band-gpu` at k = 105, so the two
+  compare side by side (`side_by_side.py`), under the registered P2's framing (`p2-16448/v4`: its commitment, salt, key
+  prefix and leaves, `p2_v1/harness.py`'s `V3`), so the device serves its blocks, and its audits go through `protocol.TimedAudit` with its
   certificate (`verity/protocols/accounting/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the certificate does not cover,
   and `pous-timed-audit`'s verdict decides them (`--pous-timed-audit`, else built once a run).
 * `p2-v3-mc-gpu`: `p2-v3-gpu` audited by the memory challenger (`memory_challenger/live.py`, `p2_v1/harness.py`'s `MC`) at
@@ -370,13 +368,14 @@ class BandGpu:
         return body
 
 
-# ---------------------------------------------------------------------------------------------------------- p2-v1-gpu
+# ---------------------------------------------------------------------------------------------------------- p2-v3-gpu
 
-class P2V1Gpu:
-    """P2's GPU kernels (`p2_v1/`) through P2's arm of the POUS-only harness (`p2_v1/harness.py`)."""
+class P2V3Gpu:
+    """P2's GPU kernels (`p2_v1/`) through P2's arm of the POUS-only harness (`p2_v1/harness.py`), under the registered P2's
+    framing (`schemes.p2.P2`, `p2-16448/v4`), audited by `protocol.TimedAudit` (`p2_v1/harness.py`'s `V3`). Its gate is the
+    spec's vectors: the reference's keys are the registered scheme's expander, given the spec's prefix."""
 
-    name = "p2-v1-gpu"
-    own_scheme = "p2/v4"
+    name = "p2-v3-gpu"
     experimental = "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted"
 
     def conformance_gate(self) -> dict[str, Any]:
@@ -384,20 +383,6 @@ class P2V1Gpu:
         from verity.protocols.accounting.pous.verifier.p2_v1 import reference
 
         return reference.conformance()
-
-    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path, **kw: Any) -> dict[str, Any]:
-        sys.path.insert(0, str(HERE))
-        from p2_v1 import harness
-
-        return harness.run(a, ws, out, w_segment=_w_segment, **kw)
-
-
-class P2V3Gpu(P2V1Gpu):
-    """The same kernels under the registered P2's framing (`schemes.p2.P2`, `p2-16448/v4`), audited by `protocol.TimedAudit`
-    (`p2_v1/harness.py`'s `V3`). Its gate is the spec's vectors too: the reference's keys are the registered scheme's
-    expander, given the spec's prefix, so the two framings differ only in their prefix."""
-
-    name = "p2-v3-gpu"
 
     @property
     def own_scheme(self) -> str:
@@ -424,7 +409,7 @@ class P2V3McGpu(P2V3Gpu):
         return harness.run(a, ws, out, w_segment=_w_segment, framing=harness.MC, **kw)
 
 
-IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2V3McGpu)}
+IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V3Gpu, P2V3McGpu)}
 
 
 def main(argv: list[str] | None = None, **kw: Any) -> int:
@@ -437,35 +422,35 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--hardware", required=True, help="a census hardware id (benchmarks/census/hardware.json), e.g. l40s-48gb/bf16")
     ap.add_argument("--out", required=True)
     ap.add_argument("--audits", type=int, default=20,
-                    help="timed audits per round; 0 (band-gpu, p2-v1-gpu): an untimed placement, which runs the gates, encode, "
+                    help="timed audits per round; 0 (band-gpu, p2-v3-gpu): an untimed placement, which runs the gates, encode, "
                          "the loop and the step floor but no limit, audit or control, and is labelled timed: false")
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the memory challenger's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
-    ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu: only the first N segments (0: all)")
+    ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v3-gpu: only the first N segments (0: all)")
     ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous")
     ap.add_argument("--impl-commit", help="the implementation's source commit, recorded")
-    ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu, band-gpu, p2-v1-gpu: the pous_native JIT build directory")
+    ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu, band-gpu, p2-v3-gpu: the pous_native JIT build directory")
     ap.add_argument("--python", default=sys.executable, help="vllm-gpu: the interpreter with torch")
     ap.add_argument("--kernels", default="", help="band-gpu: kernel settings over harness.KERNELS, as JSON (harness.SWITCHES)")
-    ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu, p2-v1-gpu: the synthetic loop's token counts T")
-    ap.add_argument("--reps", type=int, default=20, help="band-gpu, p2-v1-gpu: timed repetitions after one warm-up; every rep is recorded")
+    ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu, p2-v3-gpu: the synthetic loop's token counts T")
+    ap.add_argument("--reps", type=int, default=20, help="band-gpu, p2-v3-gpu: timed repetitions after one warm-up; every rep is recorded")
     ap.add_argument("--reference-segments", type=int, default=2, help="band-gpu: segments of C checked against verity.protocols.accounting.pous.verifier")
-    ap.add_argument("--pings", type=int, default=5000, help="band-gpu, p2-v1-gpu: round-trip calibration pings before and after the audits")
-    ap.add_argument("--k", type=int, default=0, help="band-gpu, p2-v1-gpu: challenges per audit (0: the certificate's)")
+    ap.add_argument("--pings", type=int, default=5000, help="band-gpu, p2-v3-gpu: round-trip calibration pings before and after the audits")
+    ap.add_argument("--k", type=int, default=0, help="band-gpu, p2-v3-gpu: challenges per audit (0: the certificate's)")
     ap.add_argument("--allowance", default="p99.9", choices=["p50", "p99.9", "max"],
-                    help="band-gpu, p2-v1-gpu: the calibration quantile added to the 0.5 ms deadline")
-    ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v1-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
+                    help="band-gpu, p2-v3-gpu: the calibration quantile added to the 0.5 ms deadline")
+    ap.add_argument("--deadline-ns", type=int, default=0, help="band-gpu, p2-v3-gpu: the audit's Δ (0: the protocol's 0.5 ms)")
     ap.add_argument("--clock", default="wall", choices=["wall", "logical"],
-                    help="band-gpu, p2-v1-gpu: time answers on the memory challenger's clock (wall) or by the responder's reported time (logical)")
-    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the memory challenger process's core")
-    ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v1-gpu: the responder thread's core")
-    ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v1-gpu: T of the POUS forwards run during the audit (0: none)")
+                    help="band-gpu, p2-v3-gpu: time answers on the memory challenger's clock (wall) or by the responder's reported time (logical)")
+    ap.add_argument("--verifier-cpu", type=int, default=None, help="band-gpu, p2-v3-gpu: the memory challenger process's core")
+    ap.add_argument("--responder-cpu", type=int, default=None, help="band-gpu, p2-v3-gpu: the responder thread's core")
+    ap.add_argument("--load-tokens", type=int, default=1, help="band-gpu, p2-v3-gpu: T of the POUS forwards run during the audit (0: none)")
     ap.add_argument("--step-reps", type=int, default=200, help="band-gpu: single-row Π₂ calls timed per kernel variant")
-    ap.add_argument("--nvme-dir", default="", help="band-gpu, p2-v1-gpu: also time one block's read of C from a file here (O_DIRECT)")
-    ap.add_argument("--nvme-samples", type=int, default=2000, help="band-gpu, p2-v1-gpu: block reads timed from --nvme-dir")
-    ap.add_argument("--p2-lib", default=str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/Makefile").parent / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
+    ap.add_argument("--nvme-dir", default="", help="band-gpu, p2-v3-gpu: also time one block's read of C from a file here (O_DIRECT)")
+    ap.add_argument("--nvme-samples", type=int, default=2000, help="band-gpu, p2-v3-gpu: block reads timed from --nvme-dir")
+    ap.add_argument("--p2-lib", default=str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/Makefile").parent / "bin"), help="p2-v3-gpu: the directory of libp2v1.so")
     ap.add_argument("--p2-encode-blocks", type=int, default=2048,
-                    help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
+                    help="p2-v3-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
     ap.add_argument("--p2-c-cache", default="",
                     help="the P2 arms, with all of C encoded: keep C = Enc(W) in this directory and reuse it when the setup "
                          "matches (a timed run of a large W then skips the encode an untimed run measured)")
@@ -482,7 +467,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
                     help="band-gpu: the band's in-degree d (0: the registered scheme's, 12); d >= 5, where the certificate "
                          "holds with its cliff at d")
     ap.add_argument("--gates-only", action="store_true",
-                    help="band-gpu, p2-v1-gpu: build the kernels, run the kernel gates, and stop: nothing is timed or published")
+                    help="band-gpu, p2-v3-gpu: build the kernels, run the kernel gates, and stop: nothing is timed or published")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -490,7 +475,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     t = time.perf_counter()
     from verity.protocols.accounting.pous.verifier import schemes as _schemes
 
-    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v1-gpu", "p2-v3-gpu", "p2-v3-mc-gpu")):
+    if a.audits < 0 or (a.audits == 0 and a.impl not in ("band-gpu", "p2-v3-gpu", "p2-v3-mc-gpu")):
         raise SystemExit(f"--audits {a.audits}: only band-gpu and the P2 arms run untimed (--audits 0)")
     if a.band_d:
         if a.impl != "band-gpu":

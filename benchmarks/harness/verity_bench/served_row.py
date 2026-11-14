@@ -6,7 +6,7 @@ outcome and its codes, the layout the serve committed. The audit's verdict is th
 top-level ``accepted``, which is the one-stage record of the sessions alone. This module decides nothing about the
 run; it reads from the tree who decided each of those and what proves it, and prints (`account`, `render`):
 
-* **The verdict line**, in the verifier's own words (`verdict_line`): how many of the sampled proofs the Lean
+* **The verdict line**, in the verifier's own words (`verdict_line`): how many of SPOT the Lean
   verifier accepted, then the final accept as the stream's outcome gave it: given, refused with its codes, or
   withheld, where every check of the second stage held and the outcome is refused by one code the table names a
   reason for (`TABLE`'s ``withheld``). An accept the verifier withheld or refused is never printed as given, and
@@ -182,7 +182,7 @@ def outcome(shown: Mapping, kinds: Mapping, theorem: Mapping) -> dict:
 
 
 def verdict_line(kinds: Sequence[Mapping], final: Mapping) -> str:
-    """The verdict in the verifier's own words: the sampled proofs the Lean verifier accepted, then the final accept
+    """The verdict in the verifier's own words: SPOT the Lean verifier accepted, then the final accept
     as the outcome gave it. No accept the verifier withheld or refused is said to be given."""
 
     proofs = next((k for k in kinds if k["kind"] == PROOFS), None)

@@ -17,7 +17,7 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `python -m verity.protocols.accounting.pous.device.challenger_party --device DIR [--listen HOST:PORT]` | The timed rounds' memory challenger as a process of its own, for the challenger host. It reads one JSON line on stdin. A salt request `{"salt": {"audit", "commitment"}}` it answers with `{"source": HEX}`, logged in its salt log. A run's request `{"binding", "block_bytes", "blocks", "k", "limit_ns", "node"}` it answers by printing `{"listening": PORT}`, serving one prover and printing its report `{"host", "public_key", "session", "session_id", "warmups"}`. A refusal prints `{"refused": REASON}` and exits 1. Its key, session log and salt log are in `DIR`, and it keeps each run it completes in `DIR/setups/`. `challenger_party.PROTOCOL` is the same two parties as a `ProtocolDef` of the deployment layer (`verity.runtime`). |
+| `python -m verity.protocols.accounting.pous.device.challenger_party --device DIR [--listen HOST:PORT]` | The timed rounds' memory challenger as a process of its own, for the challenger host. It reads one JSON line on stdin. A salt request `{"salt": {"audit", "commitment"}}` it answers with `{"source": HEX}`, logged in its salt log. A run's request `{"binding", "block_bytes", "blocks", "k", "limit_ns", "node"}` it answers by printing `{"listening": PORT}`, serving one prover and printing its report `{"host", "public_key", "session", "session_id", "warmups"}`. A refusal prints `{"refused": REASON}` and exits 1. Its key, session log and salt log are in `DIR`, and it keeps each run it completes in `DIR/setups/`. `challenger_party.PROTOCOL` is the same two parties as a `ProtocolDef` (`verity.protocol`), which the deployment layer (`verity.runtime`) runs. |
 | `python verity/protocols/accounting/pous/device/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [OPTIONS]` | The verifier process of the harness's timed audit: a client of a responder that runs `protocol.TimedAudit`'s audits against it (PoUS's `protocol.py`) and writes each audit's record and verdicts to `AUDIT.json`. With `--strict` it refuses a `k` or a limit the certificate doesn't cover. Every P2 v4 document is judged by the Lean, `pous-timed-audit` (at `--lean-exe PATH`, else `pous_check`'s), whose verdict is the record's: where it can't run, every audit is undecided and no profile is issued. A scheme no Lean judges (the band's) is measured, its verdict `unjudged`, with no profile. It exits 0 when the Lean accepted every audit and 1 otherwise. `--calibrate-only` measures the round trip and writes the limit instead. |
 | The Lean package `lean/` (`core_memory_challenger`) | The verdicts on what the device signed, as executables, Lean modules and two Python callers. `lean/README.md` states its interface. |
 
@@ -27,8 +27,9 @@ From Python there are four modules, each imported by its path.
 `records_digest`, `message`), the check of a signed run (`verdict`, `Verdict`), its two logs (`SessionLog`, `SaltLog`), its
 signature schemes (`Signer`, `Verify`, `LmsSigner`, `SCHEMES`, `LMS`, `TEST_PREFIX`) and a block's digest
 (`block_digest`), with the formats' names and constants. `challenger_session` is a run of timed rounds between a node and
-the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`,
-`side_of`), the node's calls (`salt`, `session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
+the challenger's host: the two sides and their frames, the request and its ids (`request_of`, `session_id`, `placement`),
+the side it is handed (`Side`, `command`), the loop that steps its parties (`run`), the node's calls (`salt`,
+`session`, `answer`) and the setups the host keeps (`setup_of`, `SETUPS`).
 `challenger_party` is the challenger's side of that run: `serve`, `give_salt`, `designate`, `keep`, `report`, `Refusal`,
 `PROTOCOL` and `SOURCE_BYTES`, the byte length of a salt's source. `timed_audit` is the timed audit's client and its
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `accepted`,
@@ -84,7 +85,9 @@ The proofs of the properties are in `security/Proofs/Properties/Pous/` (`MemoryC
 - `challenger_session.py` and `challenger_party.py`: a run of timed rounds, from the node's side and as the challenger's
   party on its own host.
 - `timed_audit.py`: the timed audit's client, its record and the two verdicts on it.
+- `wipe_challenger.py`: the streamed wipe's memory challenger as a party of the party runtime (`verity/runtime`), over
+  `verity/protocols/accounting/pous/verifier/wipe_parties.py`'s messages; the prover's party is
+  `verity/protocols/accounting/pous/prover/wipe_prover.py`.
 - `verity/protocols/accounting/pous/verifier/streamed_wipe.py`: the streamed-label wipe's device (`Challenger`) and `verdict`;
-  `wipe_party.py` beside it, the wipe as a party of its own on the challenger's host, and `wipe_parties.py`, the wipe's
-  parties on the party runtime (`verity/runtime`).
+  `wipe_party.py` beside it, the wipe as a party of its own on the challenger's host.
 - `lean/tests/`: the difftests of both verdicts and of the record formats against the Python.

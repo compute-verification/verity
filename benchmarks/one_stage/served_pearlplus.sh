@@ -77,7 +77,7 @@
 #      coin (`pearlplus_coin`), its load, the replay's node and the rounds dropped, the give-up's document (which
 #      `served_verdicts.py publish` holds on the node, with its counts in this log's lines), Pearl+'s verdict's credit,
 #      its shares (with the unretained serve's beside them) and why it credits nothing (served_verdicts.PEARLPLUS_WHY: its
-#      passes are not the window sampled proofs audited, so WINDOW names nothing here).
+#      passes are not the window SPOT audited, so WINDOW names nothing here).
 # With PEARLPLUS_TIE set (served_verdicts.sh's PEARLPLUS_TIE: the window itself served under serve-openai's Pearl+ arm,
 # `serve_pearl`, one Pearl+ epoch a Commit window in SERVE_DIR/pearl/w<k>/), the piece serves nothing of its own: step 1
 # takes the window serve's cubin (PEARLC_CUBIN) where it is set; step 2 takes window WINDOW's own epoch, passes/ a

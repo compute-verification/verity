@@ -108,10 +108,6 @@ theorem streamed_wipe_meets_family : Pous.Guarantees.StreamedWipeMeetsFamily := 
 theorem streamed_wipe_meets_96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := fun q E κ prf P hq =>
   streamed_wipe_meets_family 1610612736 (by norm_num) q E κ prf P (by omega)
 
-/-- **`StreamedWipeMeets141GB`**: the family at `141·10^9` bytes. -/
-theorem streamed_wipe_meets_141GB : Pous.Guarantees.StreamedWipeMeets141GB := fun q E κ prf P hq =>
-  streamed_wipe_meets_family 2203125000 (by norm_num) q E κ prf P (by omega)
-
 /-- **`StreamedWipeMeetsH200`**: `StreamedWipeMeetsReads` at `r = 33`, `k = 2906`, an H200's 141 GiB (`151,397,597,184`
 bytes) filled whole and `R = 0`. -/
 theorem streamed_wipe_meets_H200 : Pous.Guarantees.StreamedWipeMeetsH200 := by

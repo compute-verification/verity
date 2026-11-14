@@ -409,7 +409,7 @@ def test_spot_alone_at_the_commit_adds_no_hooks():
 
 def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still_parses(capsys):
     """vllm-v1 (SHA-256, 32-byte roots) is registered so a recorded run's target parses and digests as it did; a Commit
-    refuses it by name, and refuses a committer whose scheme isn't the one sampled proofs is declared with."""
+    refuses it by name, and refuses a committer whose scheme isn't the one SPOT is declared with."""
     assert config.DEFAULT_ROW_PROTOCOLS == ("sampled-proofs:rows-sha512",)
     with pytest.raises(PO.Refused, match=r"sampled-proofs:vllm-v1: vllm-v1 \(SHA-256, 32-byte roots\) is kept only to read "
                                          r"recorded runs: .* declare sampled-proofs:rows-sha512"):
@@ -653,8 +653,7 @@ def _commit(*enabled):
 
 def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     """`verity.protocols.accounting.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
-    that scheme is admitted beside sampled proofs, and every other one keeps its refusal, word for word.  Without sampled
-    proofs nothing changes."""
+    that scheme is admitted beside SPOT, and every other one keeps its refusal, word for word.  Without SPOT nothing changes."""
     from verity.protocols.accounting.pouw.prover import circuit
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
@@ -679,7 +678,7 @@ PEARL_SETTINGS = {"device": "cuda", "kernel": "/k", "cubin": "/c"}
 
 
 def _cut_window(cut=None, **more):
-    """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside sampled proofs, ``cut`` the
+    """serve-openai's Commit window under Pearl+ (`serve_pearl.context`): Pearl-C beside SPOT, ``cut`` the
     sampled-proofs setting naming the executor whose sites the window's circuit is cut at."""
     own = {**({} if cut is None else {PO.CUT: cut}), **more}
     return PO.Context(stage="commit", enabled=config.parse_protocols(f"{PEARL},sampled-proofs:rows-sha512"),
@@ -687,7 +686,7 @@ def _cut_window(cut=None, **more):
 
 
 def test_beside_spot_pearl_c_is_admitted_only_in_a_window_cut_at_its_sites():
-    """Pearl-C has no circuit (its y is noise-dependent), so sampled proofs takes it only where the window's circuit is cut at
+    """Pearl-C has no circuit (its y is noise-dependent), so SPOT takes it only where the window's circuit is cut at
     its linears and reads the tables its calls commit (`window_class.PearlTables`), which the sampled-proofs setting
     ``cut`` names. Without it, or naming another entry, or under ncp-v2 (which has a circuit and commits no tables), the
     composition refuses by name; a row's Commit refuses any cut, since its request Programs are never cut."""
