@@ -719,8 +719,9 @@ def main(argv=None) -> int:
                                      "record")
     run = p.add_mutually_exclusive_group(required=True)
     run.add_argument("--run", type=Path, help="the honest run's directory")
-    run.add_argument("--warden-run", type=Path, help="an active network certifier's run (network_certifier_serve.py's, or the gate's "
-                     "warden-rehearse's): its own certified records, no certifier rehearsal (network_certifier_chain)")
+    run.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+                     help="an active network certifier's run (network_certifier_serve.py's, or the gate's warden-rehearse's): "
+                          "its own certified records, no certifier rehearsal (network_certifier_chain)")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
     p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")
     p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")

@@ -1169,13 +1169,14 @@ def main(argv=None) -> int:
     v = sub.add_parser("certs", help="the client's kept certificates and clock certificates, verified")
     which = v.add_mutually_exclusive_group(required=True)
     which.add_argument("--run", type=Path, help="the certifier rehearsal's honest directory")
-    which.add_argument("--warden-run", type=Path, help="the network certifier path: an active network certifier's run (network_certifier_chain)")
+    which.add_argument("--warden-run", dest="network_certifier_run", type=Path,
+                       help="the network certifier path: an active network certifier's run (network_certifier_chain)")
     v.add_argument("--client", type=Path, help="the client's kept files (default --run)")
     v.add_argument("--deployed", action="store_true", help="refuse a key that isn't LMS at lms.DEPLOYED")
     v.add_argument("--out", required=True, type=Path)
     e = sub.add_parser("endpoint",
                        help="the network certifier path: the endpoint's own advice bound to the network certifier's certified I/O")
-    e.add_argument("--warden-run", required=True, type=Path)
+    e.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path)
     e.add_argument("--endpoint", required=True, type=Path, help="the endpoint's records (network-e2e chain.ENDPOINT)")
     e.add_argument("--eos", required=True,
                    help="the model's EOS token ids, comma-separated (a network certifier run records none)")
@@ -1186,7 +1187,7 @@ def main(argv=None) -> int:
     r.add_argument("--tie", help="the network certifier path: n2_tie_zk.py prove --class warden's summary")
     r.add_argument("--n2", nargs="*", help="N2's summary, or one per run of a period's members (merged_n2); without "
                                            "it, the scan's part alone (SCAN_ONLY)")
-    r.add_argument("--warden-run")
+    r.add_argument("--warden-run", dest="network_certifier_run")
     r.add_argument("--audit", nargs="*", help="the served proof blocks' compute audit windows (registration.json and "
                                               "circuit.json each), whose sample and free inputs d1's K counts")
     r.add_argument("--pins", help="the verifier's own pins, a JSON {param: root} of the roots it fixed before the run: "
@@ -1199,7 +1200,8 @@ def main(argv=None) -> int:
     r.add_argument("--server", help="the node the block ran on (the block record's server)")
     r.add_argument("--out", required=True, type=Path)
     k = sub.add_parser("leak", help="K per monitoring period on the network certifier run, for the scan's class and sample")
-    k.add_argument("--warden-run", required=True, type=Path, help="the fetched network certifier gate run (its end.json)")
+    k.add_argument("--warden-run", dest="network_certifier_run", required=True, type=Path,
+                   help="the fetched network certifier gate run (its end.json)")
     k.add_argument("--scan", help="the scan's summary on that run (its sample); default every proof block sampled")
     k.add_argument("--out", required=True, type=Path)
     a = ap.parse_args(argv)
