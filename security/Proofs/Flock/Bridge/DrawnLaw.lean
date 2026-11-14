@@ -296,6 +296,33 @@ theorem designAt_cases (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.
   | ok law => exact Or.inl ⟨h, rfl⟩
   | error _ => exact Or.inr rfl
 
+/-- **Under a law object of kind `subset`, `drawnLaw` is a subset sampling design**: `deriveLaw` expands none
+(`deriveLaw_none`), so it is the one `flockLaw` parses from the object itself, which is neither stratified nor work, and
+`coveredDesign` refuses a Bernoulli one. -/
+theorem drawnLaw_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {law : Flock.Draw.Law}
+    (hs : SecurityProofs.kindOf lj = "subset") (h : drawnLaw desc q lj tb n = .ok law) : ∃ k, law = .subset k := by
+  have hnb := notBernoulli_sampledDesign h
+  obtain ⟨p, derived, parsed, -, hd, hpar, rfl⟩ := drawnLaw_ok h
+  rw [SecurityProofs.deriveLaw_none p q lj tb (by rw [hs]; decide) (by rw [hs]; decide)] at hd
+  obtain rfl : derived = none := (Except.ok.inj hd).symm
+  rcases SecurityProofs.flockLaw_cases _ n parsed hpar with ⟨k, rfl, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
+  · exact ⟨k, rfl⟩
+  · exact (hnb a b rfl).elim
+  all_goals
+    rw [show SecurityProofs.lawObj lj none = lj from rfl, hs] at hk
+    exact absurd hk (by decide)
+
+/-- **Under a law object of kind `subset`, `designAt` is the subset sampling design of its own `lawK`**
+(`drawnLaw_subset`, and `subset 0` where `drawnLaw` refuses). -/
+theorem designAt_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} (n : ℕ)
+    (hs : SecurityProofs.kindOf lj = "subset") : designAt desc q lj tb n = .subset (lawK (designAt desc q lj tb n)) := by
+  unfold designAt
+  cases h : drawnLaw desc q lj tb n with
+  | ok law =>
+    obtain ⟨k, rfl⟩ := drawnLaw_subset hs h
+    rfl
+  | error _ => rfl
+
 /-- **Every sample the one-stage verifier samples is under `designAt`**: where `drawnFrom` samples, at a verifier whose program
 the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes, its sample is `drawUnits` under
 `designAt desc v.query v.law v.workTable n`. -/

@@ -18,11 +18,12 @@ tables the circuit file registers (`pinnedTables`), so files naming the same cir
 acceptance (`Accepted.ports`) at the tables the blobs sent hold, which extend the session's on those blobs (`FilesOn`),
 and the check reads the circuit only, which more tables don't change (`Refine.portRoots_back`): `opensReady_of_accepted`.
 
-What is left is `SessionRegistered`: the deployment's session at `θ`, where it runs one, is one v2 sets up on the
-registered files, wherever some accepted play on the registered tables names them. `Instance.session` is a field of the
-deployment, and a session (`Live`) carries facts no accepted play proves (the circuit's `Built`, the rate bound), so
-this is the deployment's to supply, not a consequence of the instance's construction. `sessionAt_of_registered` gives
-`SessionAt` from it.
+`SessionRegistered` asks that the deployment's session at `θ`, where it runs one, be one v2 sets up on the registered
+files, wherever some accepted play on the registered tables names them. The session is `liveOf`'s on the registered
+files (`Instance.sessionOf`), one v2 sets up on them but for the coin commitment's families (`LiveSpec`), so what is left
+is `FamiliesPinned`: at an accepted play, the family v2's parameters name is one the base's coin commitment holds
+(`sessionRegistered`), of the device's `MAX_COINS` coins (`Instance.coins`). `sessionAt_of_registered` gives
+`SessionAt` from `SessionRegistered`.
 -/
 
 @[expose] public section
@@ -105,6 +106,21 @@ def SessionRegistered (k : Verity.Registration.Composite) : Prop :=
       Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o ∧ TablesSent o.sent) →
     SetsUp I.base θ (I.base.registered θ) A
 
+/-- **The coin commitment's families hold the family v2's parameters name**, wherever the sampled verdict accepts a
+play: the auditor's pinned designated sessions (`AuditorPins`), which the verifier checks, give it, each device role's
+sessions pinned with its keys. -/
+def FamiliesPinned (k : Verity.Registration.Composite) : Prop :=
+  ∀ θ p, ParamsAt θ p → (∃ F c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o) →
+    ∃ key label m, p.base.challenger = some (key, label) ∧ (label, m) ∈ I.base.families θ
+
+/-- **The deployment's session at the registered files** from `FamiliesPinned`: the session is `liveOf`'s there
+(`Instance.sessionOf`), one v2 sets up on them but for the coin commitment's families (`liveOf_spec`), which hold the
+family v2's parameters name at the accepted play (`FamiliesPinned`), of `MAX_COINS` coins (`Instance.coins`). -/
+theorem sessionRegistered {k : Verity.Registration.Composite} (h : I.FamiliesPinned k) : I.SessionRegistered k := by
+  intro θ A hA _ ⟨F, c, o, _, _, hreach, hv, _⟩
+  rw [I.sessionOf] at hA
+  exact (liveOf_spec hA).setsUp (fun p hp => h θ p hp ⟨F, c, o, hreach, hv⟩) (I.coins θ)
+
 /-- **`SessionAt` from the deployment's session at the registered files**: the session the deployment sets up on the
 registered files (`SessionRegistered`) it sets up on an accepted play's committed files, which name the same circuit
 and public files (`read_files`, `setsUp_files`), and that play's acceptance passes its ports check
@@ -117,8 +133,16 @@ theorem sessionAt_of_registered (k : Verity.Registration.Composite) (h : I.Sessi
 end Instance
 
 open scoped ENNReal in
-/-- At no session v2's session at the registered files holds of every session, there being none. -/
-theorem Instance.Honest.sessionRegistered_none (δ : ℝ≥0∞) (k : Verity.Registration.Composite) :
-    (Instance.Honest.inst δ fun _ => none).SessionRegistered k := fun _ _ h => by simp [Instance.Honest.inst] at h
+/-- **The honest instance's coin commitment holds the family v2's parameters name** (`Instance.Honest.families`): the
+parameters name a challenger (`Binding.dispatch_deployed`), whose family is `labelAt θ` (`labelAt_eq`). -/
+theorem Instance.Honest.familiesPinned (δ : ℝ≥0∞) (b : SessionBound) (k : Verity.Registration.Composite) :
+    (Instance.Honest.inst δ b).FamiliesPinned k := by
+  intro θ p hp _
+  obtain ⟨_, _, _, _, hj⟩ := id hp
+  obtain ⟨key, label, hch, -⟩ := Binding.dispatch_deployed hj
+  refine ⟨key, label, _root_.Spot.Challenger.MAX_COINS, hch, ?_⟩
+  show (label, _) ∈ [(labelAt θ, _)]
+  rw [labelAt_eq hp hch]
+  exact List.mem_singleton_self _
 
 end Verity.Sampled

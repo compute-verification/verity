@@ -122,6 +122,7 @@
   "Proofs.Properties.Verity.Sampled.Record.KS",
   "Proofs.Properties.Verity.Sampled.Record.Reg",
   "Proofs.Properties.Verity.Sampled.OpensAt",
+  "Proofs.Properties.Verity.Sampled.LiveOf",
   "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Challenger.Window",
   "Proofs.Properties.Challenger.CanonLine",
@@ -203,6 +204,7 @@
   }
  },
  "escapes": {
+  "FlockSoundness.Refine.retWalkAux": "partial def of ret_walk_aux (Proofs.Flock.Soundness.Refine.Walk, under `compile_time`): elaborator code that walks a computation to its returns and proves each join point's body as an auxiliary theorem; no statement reads it, and the kernel checks every proof it adds",
   "Fwd.closeSide": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.constTainted": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.ctorVal?": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
@@ -259,8 +261,8 @@
    "digest": "49cb6e0e891bd68f8179e5b3431afccbd9ddf46587024651f7e1141c7f6e3ac2"
   },
   "Proofs.Flock.Soundness.Refine.Walk": {
-   "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
-   "digest": "68161b2e468dd0509c8ee6c345e27b5930837246b884fc4999cb26da93f04881"
+   "why": "walk_step, ret_walk and ret_walk_aux, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness; ret_walk_aux, Sampled/ParamsProgram.lean's, proves each join point's body as an auxiliary theorem), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
+   "digest": "565d984658efeb176958c1831b3d683bda4e0d5ed0b4c65b59c38d7b85971b8d"
   }
  },
  "layers": {
