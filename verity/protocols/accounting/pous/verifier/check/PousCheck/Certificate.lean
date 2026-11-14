@@ -5,7 +5,7 @@ public import PousCheck.Wire
 /-!
 # What an accepted timed audit establishes: the certificate gate and the StorageProfile
 
-`verity/core/protocols/pous/protocol.py` (`CapacityBound`, `TimedAudit`, `StorageProfile`) at the scheme
+`verity/protocols/accounting/pous/verifier/protocol.py` (`CapacityBound`, `TimedAudit`, `StorageProfile`) at the scheme
 `schemes/p2.py` names (`P2`, `p2-<w>/v4`). P2 has one certificate, at its registered point `(w, c0, blocks per segment) =
 (16448, 21065, 2^16)`: `Pous.SecurityProofs.P2SlackFamilyUncond`'s `λ = 128` row, `k = 105` challenges each answered
 within no sequential root (`rounds = 0` calls of `ROOT_CALL_NS`), about `W` of 8 segments.

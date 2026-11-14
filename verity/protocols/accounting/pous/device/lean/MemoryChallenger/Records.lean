@@ -7,7 +7,7 @@ public import Flock.FV3
 /-!
 # The memory challenger's records and coins
 
-`verity/core/protocols/pous/memory_challenger.py`'s formats, whose module docstring is the spec: the coin tree
+`verity/protocols/accounting/pous/device/memory_challenger.py`'s formats, whose module docstring is the spec: the coin tree
 (`coinDigest`, `coinLeaf`, `CoinTree.make`, `CoinTree.draw`, `CoinTree.opening`, `verifyCoin`), the session commitment
 and its header, the round record (`Round.value`), the records root, the signed message, and `blockDigest`. A Python
 exception is an `Except.error` here, and where the Python's caller reads an exception as "no" (`verify_coin`), so does the

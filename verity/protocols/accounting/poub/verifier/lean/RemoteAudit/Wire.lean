@@ -3,7 +3,7 @@ module
 public import RemoteAudit.Window
 
 /-!
-# The openings frame: `verity/core/protocols/remote_bandwidth/wire.py`'s `decode_openings`
+# The openings frame: `verity/protocols/accounting/poub/verifier/wire.py`'s `decode_openings`
 
 The bytes a prover sends a window's openings in, decoded strictly: `none` for a body that ends early, runs past its
 openings, or has a bound flag above 1. Every opening carries no tile.

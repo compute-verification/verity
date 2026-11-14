@@ -7,13 +7,13 @@ public import PousCheck.Merkle
 /-!
 # A PoUS run, composed
 
-`verity/core/protocols/pous/run.py`'s `check`: what setup published and what the memory challenger signed, joined. A run
-is the setup's public outputs (`SetupProtocol.Public`, `root` the root of `C*`'s leaves under `salt`), the memory
-challenger's table of `C*` (every block's `sha512/row/v2` digest in block order, `blockDigest`: the harness's
-`DIGESTS.bin`) and its record of one signed session (`ChallengePhaseRecord`). `check` judges it with two inputs of the
-verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's record
-(whoever writes the record could otherwise list its own key), and the id the auditor designated for the audit's session.
-It accepts the run at P2's deployed point (`DEPLOYED`) under S1's LMS (`SCHEMES`) when, in order:
+`verity/protocols/accounting/pous/verifier/run.py`'s `check`: what setup published and what the memory challenger
+signed, joined. A run is the setup's public outputs (`SetupProtocol.Public`, `root` the root of `C*`'s leaves under
+`salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest in block order, `blockDigest`: the
+harness's `DIGESTS.bin`) and its record of one signed session (`ChallengePhaseRecord`). `check` judges it with two
+inputs of the verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's
+record (whoever writes the record could otherwise list its own key), and the id the auditor designated for the audit's
+session. It accepts the run at P2's deployed point (`DEPLOYED`) under S1's LMS (`SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
 2. the table holds one 64-byte digest a block, and its leaves under that salt (`rowLeaf`, `verifier.row_leaf`) have the
