@@ -362,28 +362,77 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
   return (MemoryChallenger.StreamedWipe.Findings.mk reasons, MemoryChallenger.acceptIf reasons.isEmpty)
 
-private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
-    (c : StreamedWipe.Commitment) :
+/-! Each case of the scheme and the signature is a declaration of its own: `rfl` unfolds the whole verdict in each of
+its sixteen branches, and the fifty-six together exceed one declaration's heartbeats. -/
+
+private theorem wverdict_none (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) (hl : schemes.lookup s.scheme = none) :
     StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
   unfold StreamedWipe.verdict wtail wpre
-  cases schemes.lookup s.scheme with
+  cases h : schemes.lookup s.scheme with
+  | some _ => simp [hl] at h
   | none =>
     by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
     by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
       simp only [h1, h2, h3, ite_true, ite_false, Bool.false_eq_true] <;> rfl
+
+private theorem wverdict_error (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) {p : Lms.Params} (hl : schemes.lookup s.scheme = some p) {e : String}
+    (hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .error e) :
+    StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
+  unfold StreamedWipe.verdict wtail wpre
+  cases h : schemes.lookup s.scheme with
+  | none => simp [hl] at h
+  | some p' =>
+    obtain rfl : p = p' := Option.some.inj (hl.symm.trans h)
+    by_cases h0 : (!trusted.contains s.publicKey) = true <;>
+      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
+      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
+      simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false] <;>
+      rfl
+
+private theorem wverdict_false (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) {p : Lms.Params} (hl : schemes.lookup s.scheme = some p)
+    (hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok false) :
+    StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
+  unfold StreamedWipe.verdict wtail wpre
+  cases h : schemes.lookup s.scheme with
+  | none => simp [hl] at h
+  | some p' =>
+    obtain rfl : p = p' := Option.some.inj (hl.symm.trans h)
+    by_cases h0 : (!trusted.contains s.publicKey) = true <;>
+      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
+      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
+      simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false, Bool.not_true] <;>
+      rfl
+
+private theorem wverdict_true (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) {p : Lms.Params} (hl : schemes.lookup s.scheme = some p)
+    (hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok true) :
+    StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
+  unfold StreamedWipe.verdict wtail wpre
+  cases h : schemes.lookup s.scheme with
+  | none => simp [hl] at h
+  | some p' =>
+    obtain rfl : p = p' := Option.some.inj (hl.symm.trans h)
+    by_cases h0 : (!trusted.contains s.publicKey) = true <;>
+      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
+      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
+      simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false, Bool.not_true] <;>
+      rfl
+
+private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
+    (c : StreamedWipe.Commitment) :
+    StreamedWipe.verdict schemes trusted s c = wtail s c (wpre schemes trusted s c) := by
+  cases hl : schemes.lookup s.scheme with
+  | none => exact wverdict_none schemes trusted s c hl
   | some p =>
     cases hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) with
-    | error e =>
-      by_cases h0 : (!trusted.contains s.publicKey) = true <;>
-      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
-      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
-        simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false] <;> rfl
+    | error e => exact wverdict_error schemes trusted s c hl hm
     | ok b =>
-      by_cases h0 : (!trusted.contains s.publicKey) = true <;> cases b <;>
-      by_cases h1 : (!(s.commitment == c)) = true <;> by_cases h2 : (!c.params.covered) = true <;>
-      by_cases h3 : (s.ended != StreamedWipe.COMPLETE || s.batches.size != c.params.batches) = true <;>
-        simp only [hm, h0, h1, h2, h3, ite_true, ite_false, Bool.false_eq_true, Bool.not_false, Bool.not_true] <;>
-        rfl
+      cases b
+      · exact wverdict_false schemes trusted s c hl hm
+      · exact wverdict_true schemes trusted s c hl hm
 
 /-- Batch `b` passes every check of the loop. -/
 private def WGood (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : Nat) : Prop :=
