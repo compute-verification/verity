@@ -1003,12 +1003,13 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         import os as _os
 
         cands = glob.glob(_os.path.join(_os.path.dirname(torch.__file__), "lib", "libcudart*.so*"))
+        tried: list[str] = []                    # each place that gave no runtime, with what it raised: the error's text when none loads
         try:
             import nvidia.cuda_runtime  # type: ignore
 
             cands += glob.glob(_os.path.join(_os.path.dirname(nvidia.cuda_runtime.__file__), "lib", "libcudart.so*"))
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            tried.append(f"nvidia.cuda_runtime ({type(e).__name__}: {e})")
         cands += ["libcudart.so", "libcudart.so.12", "libcudart.so.13"]
         for c in cands:
             try:
@@ -1018,9 +1019,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 rt.cudaMemsetAsync.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t, ctypes.c_void_p]
                 rt.cudaMemsetAsync.restype = ctypes.c_int
                 return rt, c
-            except Exception:  # noqa: BLE001
-                continue
-        raise RuntimeError("libcudart not found")
+            except Exception as e:  # noqa: BLE001
+                tried.append(f"{c} ({type(e).__name__}: {e})")
+        raise RuntimeError("libcudart not found; tried " + ", ".join(tried))
 
     def _side_stream(self):
         if self._side is None:

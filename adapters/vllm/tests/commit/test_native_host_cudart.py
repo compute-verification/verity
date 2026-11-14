@@ -1,6 +1,7 @@
 """`NativeHostCommitter._load_cudart` finds the CUDA runtime of the fast copy: the libraries beside torch, then the ones the
 `nvidia.cuda_runtime` package ships, then three sonames, in that order.  The first that loads and has `cudaMemcpyAsync` and
-`cudaMemsetAsync` is the one, returned with the place it came from; a place that gives none is passed over.
+`cudaMemsetAsync` is the one, returned with the place it came from; a place that gives none is passed over.  When no place
+gives one, the error names every place it asked and what each raised.
 
 No runtime is loaded here: `ctypes.CDLL`, `glob.glob` and the package are stand-ins, so the test reads the same on a host with a
 card and on one without."""
@@ -93,8 +94,28 @@ def test_a_library_without_both_functions_is_not_the_runtime(monkeypatch, has):
     assert NH.NativeHostCommitter._load_cudart() == (rt, "libcudart.so.13") and asked == [TORCHS, *SONAMES]
 
 
-def test_no_runtime_anywhere_is_an_error(monkeypatch):
-    asked = places(monkeypatch, beside_torch=[TORCHS], shipped=[SHIPPED])
-    with pytest.raises(RuntimeError, match="^libcudart not found"):
+def no_library(name: str) -> str:
+    return f"{name} (OSError: {name}: cannot open shared object file: No such file or directory)"
+
+
+def test_no_runtime_anywhere_is_an_error_that_names_each_place_and_what_it_raised(monkeypatch):
+    asked = places(monkeypatch, beside_torch=[TORCHS], shipped=[SHIPPED], loads={SHIPPED: runtime("cudaMemcpyAsync")})
+    with pytest.raises(RuntimeError) as e:
         NH.NativeHostCommitter._load_cudart()
     assert asked == [TORCHS, SHIPPED, *SONAMES]
+    assert str(e.value) == "libcudart not found; tried " + ", ".join([
+        no_library(TORCHS), f"{SHIPPED} (AttributeError: 'types.SimpleNamespace' object has no attribute 'cudaMemsetAsync')",
+        *map(no_library, SONAMES)])
+
+
+@pytest.mark.parametrize("package_raises, said", [(None, None), (TypeError("no file"), "TypeError: no file")], ids=["no-package", "no-file"])
+def test_the_error_names_the_package_first_when_it_gave_no_place(monkeypatch, package_raises, said):
+    asked = places(monkeypatch, package_raises=package_raises)
+    if said is None:
+        with pytest.raises(ImportError) as absent:
+            import nvidia.cuda_runtime  # noqa: F401
+        said = f"{type(absent.value).__name__}: {absent.value}"
+    with pytest.raises(RuntimeError) as e:
+        NH.NativeHostCommitter._load_cudart()
+    assert asked == SONAMES
+    assert str(e.value) == "libcudart not found; tried " + ", ".join([f"nvidia.cuda_runtime ({said})", *map(no_library, SONAMES)])

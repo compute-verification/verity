@@ -3,8 +3,6 @@
   "entries": [
     {"file": "verity_vllm/check/verdict.py", "kind": "silent-except", "symbol": "execution_of_record", "detail": "except ValueError: es[k] = v"},
     {"file": "verity_vllm/commit/committer/optional_torch.py", "kind": "silent-except", "symbol": "<module>", "detail": "except ImportError: torch = None"},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: continue"},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: pass"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._pin_thread", "detail": "except OSError: pass"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "silent-except", "symbol": "_cgroup_memory", "detail": "except OSError: return None"},
     {"file": "verity_vllm/check/replay/fork.py", "kind": "silent-except", "symbol": "oom_kills", "detail": "except (OSError, StopIteration, ValueError, IndexError): return None"},
