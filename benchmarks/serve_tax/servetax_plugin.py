@@ -7,6 +7,11 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 - ``ids``: `ServedIds`, each request's prompt ids and the ids it was served, a line a request when it finishes, written
   by a thread of its own to ``ids.PID.jsonl``: what a replay of a pass is given and compared with where the client that
   sent it keeps neither (vLLM's own);
+- ``to_length``: each request decoded to its ``max_tokens`` (`to_length`), as vLLM decodes one sent with
+  ``ignore_eos``, for requests that come through the network certifier, whose id request has no such field;
+- ``idle_reset``: `IdleReset`, the prefix cache emptied for a request that arrives after the scheduler has held none
+  for `IDLE_RESET_S`, each reset a line of ``prefix_resets.PID.jsonl``: a load's passes each start from an empty
+  cache on a server whose reset route the client can't reach (the certified tick's server answers its allow-list);
 - ``release_order``: `ReleaseGate`, the requests added to the scheduler in the certifier's release order
   (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
   numbers them, standing in for the certifier's headers);
@@ -52,6 +57,10 @@ from typing import Any
 ENV = "VERITY_SERVETAX"
 #: how long the engine core waits on its input queue at a time while the release gate holds requests and nothing runs
 POLL_S = 0.01
+#: how long a scheduler holds no request before `IdleReset` empties the prefix cache for the next. A client's passes
+#: are further apart than this (`serve_tax.IDLE_S`); a scheduler that sits empty this long inside a pass is emptied
+#: there too, which the record of the resets shows
+IDLE_RESET_S = 5.0
 #: the model runners whose ``execute_model`` the KV edge follows: V1's and Model Runner V2's, whichever the engine builds
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
 
@@ -66,6 +75,44 @@ def config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
     if not isinstance(cfg, dict) or not cfg.get("out"):
         raise ValueError(f"{ENV}: a JSON object with out and the changes to make, not {raw[:80]!r}")
     return cfg
+
+
+def to_length(request: Any) -> None:
+    """Hold a request to its ``max_tokens``, as vLLM holds one sent with ``ignore_eos``: its sampling parameters say
+    so, name no end-of-sequence id, and keep no stop id. vLLM's scheduler stops a request at the parameters'
+    end-of-sequence id, at one of their stop ids, or at its length; for a request sent without ``ignore_eos`` its
+    front end sets the first to the tokenizer's and adds the generation config's to the second. The canonical id
+    request has no ``ignore_eos`` and no stop ids of its own, so with both cleared a request that came as one stops
+    where the same request sent to vLLM itself with ``ignore_eos`` stops, at its length. A request without sampling
+    parameters (pooling) is left as it is."""
+    params = getattr(request, "sampling_params", None)
+    if params is not None:
+        params.ignore_eos = True
+        params._eos_token_id = None
+        params.stop_token_ids = []
+
+
+class IdleReset:
+    """The prefix cache emptied between a client's passes, from inside the engine: `arrive`, before each request is
+    added, resets it (the scheduler's ``reset_prefix_cache``) where the scheduler holds no request and has held none
+    for ``idle_s`` seconds, or ever; `step`, after each step's output, notes that it held one. A reset is the dev
+    server's ``POST /reset_prefix_cache`` between loads; ``sink`` takes each one's record: when, the seconds idle
+    before it, and whether the scheduler said every block was free."""
+
+    def __init__(self, sched: Any, sink: Callable[[dict], None], idle_s: float = IDLE_RESET_S,
+                 clock: Callable[[], float] = time.monotonic, now: Callable[[], float] = time.time) -> None:
+        self.sched, self.sink, self.idle_s, self.clock, self.now = sched, sink, idle_s, clock, now
+        self.busy_at: float | None = None
+
+    def arrive(self) -> None:
+        t = self.clock()
+        idle = None if self.busy_at is None else t - self.busy_at
+        if not self.sched.has_requests() and (idle is None or idle >= self.idle_s):
+            self.sink({"t": self.now(), "idle_s": idle and round(idle, 3), "reset": bool(self.sched.reset_prefix_cache())})
+        self.busy_at = t
+
+    def step(self) -> None:
+        self.busy_at = self.clock()
 
 
 class ReleaseGate:
@@ -628,9 +675,9 @@ def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[
 
 
 def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
-    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the served ids, the tokens'
-    commit and the boundary commitment, then the release gate (outside them, so that they see a request when the gate
-    adds it)."""
+    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the served ids, each request's
+    hold to its length and the idle reset, the tokens' commit and the boundary commitment, then the release gate
+    (outside them, so that they see a request when the gate adds it)."""
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 
@@ -668,6 +715,33 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         hooks.wrap(sched, "update_from_output", keep_sampled)
         hooks.wrap(sched, "finish_requests", drop_aborted)
         done.append(ids)
+    if cfg.get("to_length"):
+        def held(orig):
+            def wrapped(request, *a, **kw):
+                to_length(request)
+                return orig(request, *a, **kw)
+            return wrapped
+
+        hooks.wrap(sched, "add_request", held)
+    if cfg.get("idle_reset"):
+        idle = IdleReset(sched, _lines(out / f"prefix_resets.{pid}.jsonl"))
+
+        def fresh(orig):
+            def wrapped(request, *a, **kw):
+                idle.arrive()
+                return orig(request, *a, **kw)
+            return wrapped
+
+        def stepped(orig):
+            def wrapped(*a, **kw):
+                outs = orig(*a, **kw)
+                idle.step()
+                return outs
+            return wrapped
+
+        hooks.wrap(sched, "add_request", fresh)
+        hooks.wrap(sched, "update_from_output", stepped)
+        done.append(idle)
     if cfg.get("tokens"):
         tc = TokenCommit(float(cfg.get("window_s", 600)), _lines(out / f"tokens.{pid}.jsonl"))
 

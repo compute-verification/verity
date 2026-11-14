@@ -5,10 +5,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test_lean.py holds the Lean card tables, which verity.hardware.lean writes, and the B200's data sheet to the card
-# files, and reads the stores, resources and formats of Isa.lean. test_package.py imports the record, the registration
-# log and the Site, a suite of its own, in an interpreter of its own: they import the wire. test_policy.py holds the DGX
-# H200's card to the inference-only policy's data, which states the same line rate. test_sheet_lean.py holds the
-# H200's figures as a value (Sheet.lean's sheetCard) to its card file.
+# files, and reads the stores, resources and formats of Isa.lean. test_package.py imports the wire, where the record
+# entry is, and the Site, in an interpreter of its own. test_policy.py holds the DGX H200's card to the inference-only
+# policy's data, which states the same line rate. test_sheet_lean.py holds the H200's figures as a value (Sheet.lean's
+# sheetCard) to its card file.
 inputs = ["verity/__init__.py", "verity/errors.py", "security/Definitions/Core/Accel/Isa.lean",
           "security/Definitions/Core/Accel/H200.lean", "security/Definitions/Core/Accel/Sm120.lean",
           "security/Definitions/Accounting/Sheets/B200.lean", "security/Proofs/Core/Accel/Sheet.lean",
