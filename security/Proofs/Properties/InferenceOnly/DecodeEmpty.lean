@@ -1,6 +1,7 @@
 module
 
 public import Circuits.Program
+import Batteries.Tactic.OpenPrivate
 import Proofs.Flock.SessionLoop.Concrete.Fwd
 import Std.Data.HashMap.Lemmas
 import Std.Data.HashSet.Lemmas
@@ -67,6 +68,7 @@ The kernel runs most of `decode` on a closed text, and the walk's rules are the 
 namespace Flock.Program.Closed
 
 open Lean (Json JsonNumber)
+open private DecState from Circuits.Program
 
 /-- The characters of `programEmpty`. -/
 @[expose] public def emptyChars : List Char :=
