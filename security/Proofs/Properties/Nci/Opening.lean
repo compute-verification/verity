@@ -46,8 +46,8 @@ open Accounting.ReadUnit
 
 /-- **A pinned reader's unit returns its table's row** (`NciCheck.Guarantees.PinnedReadBinds`). -/
 theorem PinnedReadBinds : NciCheck.Guarantees.PinnedReadBinds := by
-  intro F c j tr P rs r name p pin k dfn ro tags bytes tables ct hB n consts u q val Yc table kb Rb db
-    _ _ _ _ _ _ _ hgates htie hcorrect hconsts hkb hkey hRb hroot hdb hdomain hverdict htable
+  intro F c j tr _ P rs r name p pin k dfn ro tags bytes tables ct hB n consts u q val Yc table kb Rb db
+    _ _ _ _ _ _ hgates htie hcorrect hconsts hkb hkey hRb hroot hdb hdomain hverdict htable
   have hk : bits ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) q.tok = kb :=
     holds_eq hkey htie.key ((length_bits _ _).trans hkb.symm)
   have hR : bits Yc q.root = Rb := holds_eq hroot htie.root ((length_bits _ _).trans hRb.symm)

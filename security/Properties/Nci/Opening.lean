@@ -119,13 +119,14 @@ verdict row a 1; and let `table` be committed under that root and domain id. The
 evaluation is `table`'s row at the key `kb`, or the fill row where the key is at or past the table's count
 (`Hash.EmbeddingRead.h`), or SHA-512 collides on what the unit's check and `table`'s opening at the key hashed. -/
 def PinnedReadBinds : Prop :=
-  ∀ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (rs : Array TRange) (r : Row) (name p pin : String) (k : ℕ)
+  ∀ (F : Form) (c : F.Case) (j tr : Json), F.read j tr = .ok c →
+  ∀ (P : Prog) (rs : Array TRange) (r : Row) (name p pin : String) (k : ℕ)
     (dfn : Defn) (ro : Roles) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
     (ct : Flock.Circuit) (hB : FlockSoundness.Built (Flock.Desc.tmpl ct).unroll.unit) (n : ℕ)
     (consts : Fin (Flock.Bridge.circuitOf (.tmpl ct) hB n).N → Option Bool) (u : Fin n)
     (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n)) (val : ℕ → ℕ → Bool)
     (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening) (kb Rb db : List Bool),
-    F.read j tr = .ok c → Flock.Program.decode (F.inst c).program.toUTF8 = .ok P →
+    Flock.Program.decode (F.inst c).program.toUTF8 = .ok P →
     Flock.TemplateQuery.evaluate (Flock.TemplateQuery.Desc.ofProg P)
       ((F.wiring c).templates.map (·.1)).toArray = .ok rs →
     F.held c r = some (.opened name p pin) → P.index[r.tid]? = some k → P.defs[k]? = some dfn →
