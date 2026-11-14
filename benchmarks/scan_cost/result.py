@@ -60,7 +60,7 @@ DOC, SCHEMA, BASELINE_SCHEMA = "scan_cost.json", "scan-cost/v1", "scan-cost/base
 PUBLIC, BASELINE = HERE / "public.json", HERE / "baseline.json"
 #: what two results share to compare
 IDENTITY = ("class", "sample", "ticks", "tick_ms", "source", "cores", "verifier_cores")
-#: the metrics' ids (benchmarks/metrics.toml), the names their measurements are written under
+#: the metrics' ids (benchmarks/scan_cost/metrics.toml), the names their measurements are written under
 PROVING, VERIFIER = "network-accounting/scan-proving-cost", "network-accounting/scan-verifier-cost"
 #: a session's stages, in order, and the Lean verifier's
 STAGES = ("to_register_s", "register_to_reps_s", "level0_s", "reps_s", "tail_s")

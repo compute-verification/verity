@@ -445,8 +445,8 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     assert (out / "result.json").read_bytes() == written
 
 
-def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_free_absent(store, tmp_path, capsys,
-                                                                                         monkeypatch, stamped):
+def test_the_shared_result_is_the_metric_by_its_id_verified_and_error_with_capacity_and_free_absent(
+        store, tmp_path, capsys, monkeypatch, stamped):
     """The record holds no registration of the run's hardware and no span the verifier holds its passes to, so
     capacity and free are written with no value, each with why, and no reading is named."""
     out = tmp_path / "out"
@@ -456,8 +456,8 @@ def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_fr
     result = json.loads((out / "result.json").read_text())
     assert (result["schema"], result["run_id"]) == ("research/result/v0.1", BENCH)
     got = {m["name"]: m for m in result["measurements"]}
-    assert C.METRIC == "compute-accounting/compute-credited-share"
     assert list(got) == [C.METRIC, "verified", "capacity", "free", "error"]
+    assert C.METRIC == "compute-accounting/verified-compute-share"
     assert (got[C.METRIC]["value"], got[C.METRIC]["unit"], got[C.METRIC]["target"], got[C.METRIC]["verdict"]) == (
         0.75, C.UNIT, 0.97, "below target")
     assert (got["verified"]["value"], got["verified"]["unit"]) == (CREDITED, "MAC")
@@ -477,7 +477,7 @@ def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_fr
 def h200_site(devices: int):
     """A registered site of one host with `devices` H200s, each naming the sheet its card file gives."""
     from verity import device as S
-    sheet = S.Sheet.of_file(C.cards.load("h200-sxm-141gb"))
+    sheet = S.Sheet.of_file(S.load_card("h200-sxm-141gb"))
     locs = [S.Loc("site", "site"), S.Loc("host", "host", "site")]
     locs += [S.Loc(f"gpu{i}", "device", "host", sheet=sheet.digest()) for i in range(devices)]
     return S.Site((sheet,), tuple(locs))

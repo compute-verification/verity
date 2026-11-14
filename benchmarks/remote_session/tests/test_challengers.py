@@ -506,6 +506,28 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
         al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger])
 
 
+
+def test_an_unbound_sessions_line_credits_nothing_and_exits_0_with_no_model_to_bind_the_store_to(host, tmp_path,
+                                                                                               monkeypatch, capsys):
+    """A gate run under `BIND=0` (`gate.sh`): its period signs no model (`period-open` without `--model`) and its
+    verifier bound the store to none. `auditor_line.py` prints a line that credits the session nothing, its *bound*
+    check failing with the reason that no model is there to bind the store to, and exits 0, so the fire run that ran
+    it ends as a run that ran."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, _ = gate_run(host, out, "honest", True)
+    assert sessions[0]["accepted"]
+    (out / "verifier.json").write_text(json.dumps({"registration": reg, "sessions": sessions}))
+    monkeypatch.setattr(al, "verifier_tree", lambda commit, repo: (commit, "ab" * 20))
+    rc = al.main([str(out), "--host-bytes", str(1 << 30), "--pin", host.pin, "--period", "p-1", "--ledger",
+                  str(host.host.ledger), "--commit", VERIFIER, "--line-by", "python"])
+    printed, err = capsys.readouterr()
+    doc = json.loads(printed)
+    why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
+    assert rc == 0 and f"auditor_line: bound: no: {why}" in err
+    assert doc["bound"]["reason"] == why and doc["sessions"][0]["credit"]["bound"]["reason"] == why
+    assert doc["credit"]["credited_sessions"] == [] and doc["credit"]["summary"].startswith("the line credits zero")
+
 def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest

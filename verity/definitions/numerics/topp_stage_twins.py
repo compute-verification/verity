@@ -248,15 +248,79 @@ def stage_rows(V: int, logits, top_p: int, seed: int, pos: int, temp: int, split
     units = [u for u in T.plan(V) if u.key[0] == "select"]
     for u in units[:-1]:
         hi = u.lanes[1]
-        words = [y[bi[hi - 1]], bi[hi - 1], hi]
-        for S in K.SPLIT_COUNTS:
-            geo = T.Geo(V, S)
-            sl, off = hi // geo.L, hi % geo.L
-            c = counts[S][hi - 1]
-            words += [off % K.MASK_BLOCK, c] if S == 1 else [off, off % K.MASK_BLOCK, off % geo.P, sl, c]
+        words = [y[bi[hi - 1]], bi[hi - 1], hi] + carry_words(V, hi, [counts[S][hi - 1] for S in K.SPLIT_COUNTS])
         outs[u.key] = [np.array(words, np.uint64)]
     outs[units[-1].key] = [np.array([bi[-1]], np.uint64)]
     return int(bi[-1]), outs
 
 
-__all__ = ["ArrayEngine", "FAST", "keep_bits", "stage_rows", "vals"]
+def carry_words(V: int, hi: int, counts) -> list[int]:
+    """A select or mask chunk's position words of the lane ``hi`` it hands on to, each split count's with its tie count (``counts``
+    in `K.SPLIT_COUNTS` order, each below V); `stage_rows` writes them so."""
+    words = []
+    for S, c in zip(K.SPLIT_COUNTS, counts):
+        if not 0 <= int(c) < V:
+            return []
+        geo = T.Geo(V, S)
+        off = hi % geo.L
+        words += [off % K.MASK_BLOCK, int(c)] if S == 1 else [off, off % K.MASK_BLOCK, off % geo.P, hi // geo.L, int(c)]
+    return words
+
+
+def mask_chunk(logits, temp, splits, *rest, V: int, N: int, FIRST: bool, LAST: bool) -> np.ndarray:
+    """`TopPMaskChunk_v1{V,N,FIRST,LAST}` on one instance: `topp_stages.mask_lanes` in :class:`ArrayEngine`, its lanes, then
+    its carry unless LAST.  It declines a carry that is no lane's (`carry_words`): the engine keeps a count or position to its
+    CW bits, where the Definition's gates add in 32, and the two agree where the positions are a lane's."""
+    from verity.definitions.numerics.kernel_registry import Declined
+
+    E = ArrayEngine()
+    lg = np.asarray(logits, np.uint64).reshape(-1) & np.uint64(0xFFFF)
+    x = T.temp_scale(E, E.free(N, 32, (lg << np.uint64(16))[None]), E.free(1, 32, [[int(temp)]]))
+    n = len(K.SPLIT_COUNTS)
+    sws = [E.free(T.scw(s), 32, np.asarray(rest[i], np.uint64).reshape(1, -1)) for i, s in enumerate(K.SPLIT_COUNTS)]
+    cw = None
+    if not FIRST:
+        words = [int(w) for w in np.asarray(rest[n], np.uint64).reshape(-1)]
+        hi = words[5] * T.Geo(V, 2).L + words[2]
+        if not (hi % N == 0 and hi <= V - N and words == carry_words(V, hi, words[1::5])):
+            raise Declined("a carry that is no lane's")
+        cw = E.free(T.MASK_CARRY, 32, [words])
+    masked, _, out_pos, _ = T.mask_lanes(E, V, N, x, E.free(1, 32, [[int(splits)]]), sws, cw, False)
+    return np.concatenate([vals(masked)] + ([] if LAST else [vals(v) for v in T._position_words(out_pos)]))
+
+
+def _f32_word(v: float) -> int:
+    return int(np.float32(v).view(np.uint32))
+
+
+def mask_chunk_inputs(rng, S: int, *, V: int, N: int, FIRST: bool, LAST: bool) -> list:
+    """One instance of `TopPMaskChunk_v1{V,N,FIRST,LAST}`'s inputs on a real row: a chunk of a random row of V (its first
+    chunk, its last, or one between), the twin's row scalars of every split count, ``splits`` = S, and the carry the chunk
+    before it hands on, at a top-p that keeps part of the row."""
+    lo = 0 if FIRST else (V - N if LAST else N * int(rng.integers(1, max(2, V // N - 1))))
+    x = (rng.normal(0, 2, V) * (rng.random(V) < 0.9)).astype(np.float32)
+    x[rng.integers(V, size=3)] = np.float32(rng.normal(6, 1))
+    lg = (x.view(np.uint32) >> 16).astype(np.uint64)
+    temp, top_p = _f32_word(rng.uniform(0.5, 1.5)), _f32_word(rng.uniform(0.2, 0.95))
+    _, outs = stage_rows(V, lg, top_p, 1, 1, temp, S)
+    ops = [lg[lo:lo + N], temp, S] + [outs[T.scalars_unit(V, s)][0] for s in K.SPLIT_COUNTS]
+    return ops + ([] if FIRST else [outs[("select", lo // N - 1)][0][3:]])
+
+
+def _sample_mask_chunk(rng, n: int, params, **statics) -> list[np.ndarray]:
+    """`mask_chunk_inputs` at split counts chosen at random from `K.SPLIT_COUNTS`."""
+    rows = [mask_chunk_inputs(rng, int(rng.choice(K.SPLIT_COUNTS)), **statics) for _ in range(n)]
+    return [np.asarray([r[j] for r in rows], np.uint64) for j in range(len(params))]
+
+
+def register_kernels() -> None:
+    """Register `mask_chunk` as `TopPMaskChunk_v1`'s numpy kernel, which circuit-check compares with the Definition on random
+    vectors and on `_sample_mask_chunk`'s."""
+    from verity.definitions.numerics import kernel_registry as KR
+
+    KR.register(T.TopPMaskChunk, mask_chunk, kernel="numpy", domain="every input whose carry is a chunk's lane's",
+                sample=_sample_mask_chunk)
+
+
+__all__ = ["ArrayEngine", "FAST", "carry_words", "keep_bits", "mask_chunk", "mask_chunk_inputs", "register_kernels",
+           "stage_rows", "vals"]

@@ -19,14 +19,20 @@ verity bench memory --loopback                both processes on this machine, on
 - **The node run** is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session (`PLAN=honest`, `PACED`
   one word, by default seven credited stretches of a second, each pass under a live coin of its own): the developer's
   node serves `ROLE` (default `LLAMA32_1B_BF16`, Llama 3.2 1B as upstream holds it, since the store's layout covers
-  BF16 weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host bound to
-  that role's pinned checkpoint, and the coins come from the challenger host under period `PERIOD`, a name its ledger
-  hasn't used. `UNPACED=WINDOWS:WINDOW_MS:SAMPLES` asks for a session of one coin a window in place of `PACED`'s
+  BF16 weights) with each engine's weights arena the store, the verifier runs on the auditor's verifier host, and the
+  coins come from the challenger host under period `PERIOD`, a name its ledger hasn't used. `BIND` (default `0`) is
+  whether the verifier binds the store to the role's pinned checkpoint, and whether the period signs the role
+  (`period-open --model`). With `0` the verifier holds no checkpoint, the period signs no model, and the store is the
+  developer's choice, which the text and the JSON's `bound` say; the auditor's line of record then credits nothing,
+  its `bound` check failing. The default is 0 because whether a memory figure may rest on a store bound to a
+  checkpoint is not yet decided, so no run of the bench binds one unless asked. `BIND=1` binds it.
+  `UNPACED=WINDOWS:WINDOW_MS:SAMPLES` asks for a session of one coin a window in place of `PACED`'s
   (`7:60000:33273` is seven windows of a minute with 33,273 openings each); the verifier's ledger holds its γ as it
   does a paced session's, and the auditor's line of record has no time-held line for it, which only a paced session
   gets. `gate_run.sh`'s variables pass through: `COMMIT` (the commit the verifier host is pinned at, on `main`'s
   first-parent line, whose tree must pin `ROLE`), `ARENA_GIB` and `UTIL` (the arena on each card and vLLM's share of
-  it), `HOST_GIB` (whole GiB of the node's host memory the store holds beside the arenas, default none),
+  it), `HOST_GIB` (whole GiB of the node's host memory the store holds beside the arenas, default none), `LEAF_CTAS`
+  (the node's passes by the leaf pass on that many reading CTAs, default today's pass),
   `PACE_PASS_MS` (the pass the verifier host counts a stretch's groups at), `LEASE_BY`, and `FETCH=1`, which stages
   the role's checkpoint on the node before checking it. The session's form is `PACED` or `UNPACED` alone: the command
   sets `gate_run.sh`'s `SESSIONS`, `WINDOWS`, `WINDOW_MS` and `SAMPLES` from `UNPACED`. The command waits for the fire
@@ -35,7 +41,8 @@ verity bench memory --loopback                both processes on this machine, on
 - **`--from RUN`** reads the verifier's record of a run in the store: a gate run's fire run, or a run of
   `remote_session/run.sh` that held the verifier. A run that holds several sessions needs `--session K`. A withdrawn
   run is refused before any of it is fetched. The text says what the number rests on: whether the verifier ran on the
-  auditor's verifier host, the store's size beside the node's GPU memory and the checkpoint it was bound to, that a
+  auditor's verifier host, the store's size beside the node's GPU memory and the checkpoint it was bound to (or that
+  the verifier held none, so the store is the developer's choice), that a
   share of 1 or more certifies nothing, and, of a run `--loopback` left, that it was a loopback.
 - **`--loopback`** runs `remote_session/run.sh` with `ROLE=both`, the prover the driver's CPU reference over a test
   store of 64 blocks. No node is audited, so it certifies nothing, and both its text and its JSON say so. It builds the

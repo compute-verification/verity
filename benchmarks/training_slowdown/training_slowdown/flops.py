@@ -81,6 +81,7 @@ import math
 import os
 import resource
 import time
+import weakref
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -292,6 +293,11 @@ def read_positions(t: torch.Tensor) -> np.ndarray:
     return np.unique(pos)
 
 
+def _grid(t: torch.Tensor) -> np.ndarray:
+    """The storage position of each element of a 2-D tensor `t`, as rows by columns (no data read)."""
+    return t.storage_offset() + np.arange(t.shape[0])[:, None] * t.stride(0) + np.arange(t.shape[1]) * t.stride(1)
+
+
 def _written(func, args, kwargs) -> list[torch.Tensor]:
     out = []
     for i, a in enumerate(func._schema.arguments):
@@ -439,6 +445,8 @@ class Step:
     gpu_s: float = 0.0
     device_macs: dict = field(default_factory=dict)
     exited: int = 0  # elements of token data read out of torch (`guard_exits`)
+    repeats: int | None = None  # its positions that repeat another's words by the batch's tokens (`Counter._repeats`)
+    batch_rows: int | None = None  # the rows of its batches `repeats` is counted over
 
 
 #: torch.Tensor's methods that hand its values to Python or another library past the dispatcher (`__array__` calls
@@ -468,6 +476,33 @@ def guard_exits() -> None:
 def structure_id(struct: dict) -> str:
     """The name a record's `structures` holds a step's structure (its updated nodes and its log) under."""
     return hashlib.sha256(json.dumps(struct, sort_keys=True).encode()).hexdigest()[:16]
+
+
+def repeats(rows: np.ndarray) -> int:
+    """The positions of `rows` (token ids, a row each, of one length) past each row's first whose key is a first
+    position's key or an earlier position's: a position's key is its row's tokens up to it, its own included, and
+    inside a row's leading run of one token that one token. A causal model whose words read positions only through
+    attention's weights computes one word at two positions of one key: two rows that share a prefix, at every place
+    of it; and a leading run of one token, along the run, since attention over equal keys returns their one value.
+
+    Counted on the rows sorted, with no hash: their distinct prefixes are the first row's length plus, for each next
+    row, its length less the prefix it shares with the row before; less the distinct first tokens; less, for each
+    first token, the longest leading run among its rows less one. What is left are the positions kept."""
+    rows = np.asarray(rows)
+    n, length = rows.shape
+    if not n or not length:
+        return 0
+    s = rows[np.lexsort(rows.T[::-1])]
+    same = s[1:] == s[:-1]
+    shared = np.where(same.all(1), length, same.argmin(1))
+    distinct = length + int((length - shared).sum())
+    first = s[:, 0]
+    off = s != first[:, None]
+    run = np.where(off.any(1), off.argmax(1), length)
+    tokens, which = np.unique(first, return_inverse=True)
+    longest = np.zeros(len(tokens), dtype=np.int64)
+    np.maximum.at(longest, which, run)
+    return n * (length - 1) - (distinct - len(tokens) - int((longest - 1).sum()))
 
 
 def leaked(step: dict) -> bool:
@@ -591,6 +626,10 @@ class Counter(TorchDispatchMode):
         self.tags = WeakTensorKeyDictionary()
         self.token_seen: dict = {}
         self.sources: set[int] = set()  # the token sources `_token_source` made (not the data stream's batches)
+        self.stream: dict[int, weakref.ref] = {}  # each of the data stream's batches by its source
+        self.read: dict[int, tuple[torch.Tensor, int]] = {}  # the data stream's batches the step reads, each with
+        # its version at its first read, held to the step's end (`_repeats`)
+        self.lengths: set = set()  # each token read's prefix length (`_prefix`)
         self.node_rows: dict[int, int] = {}
         self.used: set[tuple[str, int]] = set()
         for t in list(self.batches.keys()):
@@ -615,6 +654,7 @@ class Counter(TorchDispatchMode):
                         self.unseen_writes.append((self.cur.index, self.theta_ptr[ptr]))
                         self.epoch[ptr] = self.epoch.get(ptr, 0) + 1
         self._resolve(self.cur)
+        self.cur.repeats, self.cur.batch_rows = self._repeats() or (None, None)
         self.steps.append(self.cur)
         self.cur = Step(self.done)
         self._reset_tags()
@@ -694,6 +734,7 @@ class Counter(TorchDispatchMode):
     def _tag_batch(self, t: torch.Tensor) -> None:
         self.n_batches += 1
         self.tags[t] = Tag(tok=True, src=frozenset((self.n_batches,)))
+        self.stream[self.n_batches] = weakref.ref(t)
 
     def _token_source(self, idx: torch.Tensor, tag: Tag) -> Tag:
         """Count `idx`'s elements as this step's tokens, once each: a source's tokens are the union of the positions
@@ -709,6 +750,7 @@ class Counter(TorchDispatchMode):
                 if key not in self.token_seen:
                     self.token_seen[key] = idx.numel()
                     self.cur.tokens += idx.numel()
+                self.lengths.add(None)
                 return tag
             self.n_batches += 1
             self.sources.add(self.n_batches)
@@ -716,11 +758,49 @@ class Counter(TorchDispatchMode):
             self.tags[idx] = tag
         by_base = self.token_seen.setdefault(tag.src, WeakTensorKeyDictionary())
         base = idx if idx._base is None else idx._base
-        seen = by_base.get(base)
-        now = read_positions(idx) if seen is None else np.union1d(seen, read_positions(idx))
+        seen, read = by_base.get(base), read_positions(idx)
+        now = read if seen is None else np.union1d(seen, read)
         self.cur.tokens += len(now) - (0 if seen is None else len(seen))
         by_base[base] = now
+        self.lengths.add(self._prefix(tag.src, base, read))
         return tag
+
+    def _prefix(self, src: frozenset, base: torch.Tensor, read: np.ndarray) -> int | None:
+        """The length L of the prefix a read of a source (`src`, at the storage positions `read` of `base`) covers in
+        each row it touches, from the row's first position: None unless it is a read of a 2-D batch of the data
+        stream (`batch`) through the batch's own storage that covers [0, L) in every row it touches. A batch it reads
+        is held to the step's end with its version at its first read (`_repeats`)."""
+        ref = self.stream.get(next(iter(src))) if len(src) == 1 else None
+        b = None if ref is None else ref()
+        if b is None or b.dim() != 2 or base is not (b if b._base is None else b._base):
+            return None
+        mask = np.isin(_grid(b), read)
+        width = mask.sum(1)
+        touched = np.flatnonzero(width)
+        if int(mask.sum()) != len(read) or not len(touched):
+            return None
+        n = int(width[touched[0]])
+        if (width[touched] != n).any() or not mask[touched, :n].all():
+            return None
+        self.read.setdefault(next(iter(src)), (b, b._version))
+        return n
+
+    def _repeats(self) -> tuple[int, int] | None:
+        """The step's positions that repeat another's words by the batch's tokens (`repeats`) and the rows of its
+        batches they are counted over, the batches it reads together: None unless every token read of the step
+        covers [0, L) of each row it touches, with one L over the step (`_prefix`), so its `tokens` are those rows
+        times L, and none of its batches was written after its first read, since the count reads their tokens at the
+        step's end. Its batches' tokens are read off their device once a batch, outside the count."""
+        if len(self.lengths) != 1 or None in self.lengths or any(b._version != v for b, v in self.read.values()):
+            return None
+        (n,) = self.lengths
+        parts = [(b, np.flatnonzero(np.isin(_grid(b), self.token_seen[frozenset((src,))][
+            b if b._base is None else b._base]).any(1))) for src, (b, _) in self.read.items()]
+        if sum(len(t) for _, t in parts) * n != self.cur.tokens:
+            return None
+        with self.pause(), torch.utils._python_dispatch._disable_current_modes():
+            rows = np.concatenate([b[torch.as_tensor(t, device=b.device), :n].cpu().numpy() for b, t in parts])
+        return repeats(rows), len(rows)
 
     # -- provenance
 
@@ -887,10 +967,12 @@ class Counter(TorchDispatchMode):
         """A fused attention kernel, counted as the ops the math kernel computes attention by, each on its own operands'
         provenance: they are the ops a step's trace holds (`capture` traces under the math kernel), so a job's record
         is one record under either kernel in its ops, their shapes and their MACs. Each row names the dtype of the
-        kernel's operands, the one a fused kernel computes in; the math kernel casts half-width operands to float32
-        first, and its rows, and a trace's nodes, name that. With q [*b, L, E], k [.., S, E], v [.., S, Ev] and n the
-        product of q's batch dims (k and v counted at q's heads, as grouped-query attention repeats them):
-
+        kernel's operands (`dtype_of` of the stand-ins `_shaped` makes in the query's), the one a fused kernel
+        computes in; the math kernel casts half-width operands to float32 first, and its rows, and a trace's nodes,
+        name that. A trace counts a call's ops at the dtype the call computes in all the same
+        (`capture.structure._counted_dtype`), so its gates there are this count's. With q [*b, L, E], k [.., S, E],
+        v [.., S, Ev] and n the product of q's batch dims (k and v counted at q's heads, as grouped-query attention
+        repeats them):
         - forward: the scalings of q and of kᵀ (`mul`, each by the root of the scale); the scores (`bmm`, [n, L, E] by
           [n, E, S]); a mask added to them, where that combines token data with an updated weight (`add`, as any
           such op counts); dropout's scaling of its keep mask and of the weights by it (`div_` and `mul`, at
@@ -898,6 +980,9 @@ class Counter(TorchDispatchMode):
         - backward, for the gradients the step asks for: v's product ([n, S, L] by [n, L, Ev]); the weights' ([n, L, Ev]
           by [n, Ev, S]) where q, k or the mask asks, and with it dropout's scaling; and for each of q and k its
           product ([n, L, S] by [n, S, E]; [n, E, L] by [n, L, S]) and its scaling.
+
+        The card's fused backward computes the scores again, a seventh product: this count, and the library's table with
+        it, holds six of the kernel's seven products, and a circuit of the kernel as it runs holds seven.
 
         What the step asks for is the kernel's own word where it takes one (`grad_input_mask`), else which of q, k and v
         require a gradient. A kernel that takes no such word computes all three gradients whatever `autograd.grad` was
@@ -1014,7 +1099,9 @@ class Counter(TorchDispatchMode):
         """The run's count: totals, per-step records with their structures deduplicated, timings and flags. A
         structure's `log`, the step's op log, holds one row [phase, kind, op, shapes, count, MACs, dtype] per counted
         op by its operands' shapes and the dtype it computed in, its result's (`dtype_of`), which its gates are priced
-        in (`gates.of_log`)."""
+        in (`gates.of_log`). A step's `repeats` are its positions that repeat another's words by the batch's tokens,
+        counted over `batch_rows` rows of its batches, its `tokens` those rows times their length (`_repeats`; both
+        None where the step's reads don't give them, and on the setup and the tail)."""
         structures, steps = {}, []
         tail = self.cur if self.cur is not self.setup else Step(self.done)
         for s in [self.setup, *self.steps, tail]:
@@ -1026,7 +1113,8 @@ class Counter(TorchDispatchMode):
             steps.append({"step": s.index, "tokens": s.tokens, "macs": s.macs, "matmul_macs": s.matmul_macs,
                           "elementwise_macs": s.elementwise_macs, "approx_macs": s.approx_macs, "by": s.by,
                           "struct": sid, "weights": s.weights, "shapes": s.shapes, "cpu_s": s.cpu_s, "wall_s": s.wall_s,
-                          "gpu_s": s.gpu_s, "device_macs": s.device_macs, "exited": s.exited})
+                          "gpu_s": s.gpu_s, "device_macs": s.device_macs, "exited": s.exited, "repeats": s.repeats,
+                          "batch_rows": s.batch_rows})
         ru = resource.getrusage(resource.RUSAGE_CHILDREN)
         totals = {
             "macs": sum(s["macs"] for s in steps),

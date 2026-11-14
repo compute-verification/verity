@@ -55,7 +55,7 @@ pairwise distinct (`PortRoots.dupId`) and roots that fix their domains (`PortRoo
 
 The restriction is the deployed check's own: a misshaped value's leaf is the leaf of an opening `commitDep` passes only
 by a SHA-512 collision (`leaf_misshaped_dep`, `encPortH_ne_misshaped`), and so is a leaf under a salt of another length
-once the path has a level, `2 ≤ nl` units (`leaf_salt`).
+(`leaf_salt`): `commitDep` refuses data shorter than the salt (`pathOf`).
 
 At the session's binding (`vbOf`), `transports_shaped` reads a registered opening of a wire with a row through
 `opens_commitDep`; `transportsLiveCS` is `Bridge.TransportsLiveC`'s conclusion at canonical openings, `RowsOk` circuit
@@ -88,7 +88,12 @@ theorem saltOf_dataOf (hy : y.length = saltLen) (i : ℕ) (x : Bool) : saltOf �
 
 theorem pathOf_dataOf (hy : y.length = saltLen) (hs : ∀ z ∈ s, z.size = 64) (i : ℕ) (x : Bool) :
     pathOf s.length ⟨i, x, dataOf y s b⟩ = SamplingDeploy.pathMsg s := by
-  simp only [pathOf, dataOf, List.append_assoc]
+  have hl : saltLen ≤ (dataOf y s b).length := by
+    simp only [dataOf, List.length_append, hy]
+    omega
+  show (if saltLen ≤ (dataOf y s b).length then ((dataOf y s b).drop saltLen).take (64 * s.length) else [0]) = _
+  rw [ite_eq_left hl]
+  simp only [dataOf, List.append_assoc]
   rw [List.drop_left' hy]
   exact List.take_left' (by rw [SamplingDeploy.pathMsg_length s hs])
 
@@ -103,10 +108,11 @@ theorem bitsOf_dataOf (hy : y.length = saltLen) (hs : ∀ z ∈ s, z.size = 64) 
 
 end Data
 
-/-- The length of a deployed opening's salt: `saltLen` bytes once its path has a level, since the path follows it. -/
-theorem saltOf_length {d : ℕ} {o : Opening Bool} (h : (pathOf d o).length = 64 * d) (hd : 1 ≤ d) :
+/-- The length of a deployed opening's salt: `saltLen` bytes wherever its path is whole levels, since data shorter
+than the salt has no such path (`saltLen_le_of_pathOf`). -/
+theorem saltOf_length {d k : ℕ} {o : Opening Bool} (h : (pathOf d o).length = 64 * k) :
     (saltOf o).length = saltLen := by
-  simp only [pathOf, List.length_take, List.length_drop] at h
+  have hl := saltLen_le_of_pathOf h
   simp only [saltOf, List.length_take]
   omega
 
@@ -341,19 +347,18 @@ theorem pathOf_length_of_opens (C : Verity.Boolean.Circuit) (rows : Fin C.N → 
   rw [size_bytes] at h2
   exact h2
 
-/-- **The deployed check refuses a salt of another length**: once the path has a level (`2 ≤ nl` units), the leaf of
-a game opening `(r, y)` whose salt isn't `saltLen` bytes is the leaf of an opening the deployed check passes only by a
-SHA-512 collision. -/
+/-- **The deployed check refuses a salt of another length**: the leaf of a game opening `(r, y)` whose salt isn't
+`saltLen` bytes is the leaf of an opening the deployed check passes only by a SHA-512 collision. -/
 theorem leaf_salt (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (o : Opening Bool)
     (h : (commitDep C rows c pub nl roots).Opens sha512Msg roots o = true)
-    (hd : 1 ≤ Flock.log2ceil nl) {r y : Msg} (hy : y.length ≠ saltLen)
+    {r y : Msg} (hy : y.length ≠ saltLen)
     (hl : H512 (hm96Input r y) =
       H512 (hm96Input (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o))) :
     Collides (hm96Pair r y (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl)) o) (saltOf o)) := by
   refine hm96Pair_spec_salt _ _ _ _ (fun e => hy ?_) hl
   rw [e]
-  exact saltOf_length (pathOf_length_of_opens C rows c pub nl roots o h) hd
+  exact saltOf_length (pathOf_length_of_opens C rows c pub nl roots o h)
 
 /-- **The deployed check refuses a misshaped value**: at a position whose row has its port's bits, `16 w` of them, a
 game opening of a value that isn't `RowShaped` of the row's width has the leaf of a deployed opening's row only by a
