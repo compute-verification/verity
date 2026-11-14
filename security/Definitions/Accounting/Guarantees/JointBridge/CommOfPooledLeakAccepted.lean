@@ -57,7 +57,7 @@ set_option linter.unusedVariables false
 /-- **The network certifier's per-period guarantee, pooled** (conditional on its two inputs at each execution phase).
 On a run that realizes the network certifier's monitoring period of `m` sampled audits at the claim `c.K`
 (`RealizesCommOfPooledLeakAccepted`: the network audit's own coins are the `m` verification phases' coins, the deployed
-network certifier runs its code on its host, `trusted-host`, the realization's `trusted`, and the claim is the
+network certifier runs its code on its host, `trusted-device`, the realization's `trusted`, and the claim is the
 period's good event at the bound `Fmax` on its incorrect proof blocks), given
 
 * `hesc`, the miss probability given the earlier phases' coins, at the realization's `acc` and `W` and at every

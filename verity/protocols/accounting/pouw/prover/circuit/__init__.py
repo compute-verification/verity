@@ -1,4 +1,4 @@
-"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.circuits` Program, verified by sampled proofs.
+"""`ncp-v2`: NCP-INT's noised GEMM as a `verity.circuits` Program, verified by SPOT.
 
 * `words`: PoUW's word primitives (every output at most 32 bits but `pc8`'s exact squares, which stay inside a row unit).
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
@@ -41,20 +41,14 @@
 * `live`: a round's served rows under rule A (`PouwLiveSlots`), one unit a round: ok iff exactly its slots [0, m) name
   requests of the gate-signed request table, none more often than it can take in round s (its prompt at its prefill, one
   row a decode), for the public m that dense credit counts.
-* `lead`: the lead's sampled proof block (`verity/pouw/v2`, `PouwLeadTile`): one 16 × 8 MMA tile of a call over a block of at
-  most 32 k32 steps, its committed words against the call's data and the certifier's coin feed at the layout of
-  `security/Definitions/Pouw/Lead/Layout.lean`, and on the call's last block the served fold, which reads A_i · B_j back
-  exactly within 2^22 and serves verity_int8's epilogue on it. Its execution phase: the registration record, the instance
-  positions and domains, where a unit's words and A rows are committed, and the verifier's refusals of the certifier's
-  record (`PouwCheck/Opening.lean` is its Lean reader).
 * `window_statement`: an execution phase's statement on its committed entry rows (`PouwWindowStatement`,
   `window.window_problem` in gates), one unit an execution phase: ok iff the P rows are entry rows of the layout, the
   calls, one filler, then empty entries, whose ranges tile [0, N) at the public registered level, every call's -h3 root
   the pass's public one and the calls' pass tiles in order.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
-is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
-and the sample layout; None for any other scheme, which stays refused beside sampled proofs.  The verifier builds these
+is here, the Programs SPOT traces for one PoUW linear and its weight, their partition queries, the served outputs
+and the sample layout; None for any other scheme, which stays refused beside SPOT.  The verifier builds these
 Programs itself, from (scheme, m, k, n) and its own anchors, and never takes a prover's descriptor: `Traced.check_descriptor`
 compares an offered one's digest with its own.
 """
@@ -190,7 +184,7 @@ class Traced:
 
 
 def traced_as(scheme: str, m: int, k: int, n: int) -> Traced | None:
-    """The circuit sampled proofs traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
+    """The circuit SPOT traces for one PoUW linear of shape m × k → n under ``scheme``, or None when the scheme has
     no circuit here. Raises `protocol.DomainError` for a shape outside the circuit (16 | m, 16 | n, 64 | k). P is the
     scheme's, never the caller's."""
     if scheme not in SCHEMES:

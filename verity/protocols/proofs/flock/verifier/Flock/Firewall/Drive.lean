@@ -36,7 +36,7 @@ def maskSlot (st : Stmt) : V Frame.MaskSlot := do
 
 /-- **A rep's frame start** at the statement `st`: its pads layout at the `--zk` schedule's `k0`, and the mask slot. -/
 def start (st : Stmt) : V (Zk.PadLayout × Frame.MaskSlot) := do
-  let (sch, _) ← Zk.schedule st.m
+  let (sch, _) ← Zk.schedule st.wideLeaf st.m
   return (Zk.PadLayout.new st.m st.c.kLog sch.k0, ← maskSlot st)
 
 /-- The link points in the `Commit`'s coins `c`: a point each `mPts` words. -/

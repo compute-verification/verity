@@ -43,25 +43,27 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-- **A cap on level 0's codeword length**: every schedule `Zk.schedule` returns has level 0's `logLen` at most `L`. -/
 def ZkLogLenCap (L : ℕ) : Prop :=
-  ∀ m (s : Flock.Schedule) (t : ℕ), Zk.schedule m = .ok (s, t) → (lvOf (schedOf s) 0).logLen ≤ L
+  ∀ wideLeaf m (s : Flock.Schedule) (t : ℕ), Zk.schedule wideLeaf m = .ok (s, t) → (lvOf (schedOf s) 0).logLen ≤ L
 
 /-- Level 0's codeword length of `Zk.schedule m`'s schedule (0 where it refuses `m`). -/
-def zkLogLen₀ (m : ℕ) : ℕ :=
-  match Zk.schedule m with
+def zkLogLen₀ (wideLeaf : Bool) (m : ℕ) : ℕ :=
+  match Zk.schedule wideLeaf m with
   | .ok (s, _) => (lvOf (schedOf s) 0).logLen
   | .error _ => 0
 
 /-- At every `m` `Zk.schedule` accepts (25 to 35), level 0's `logLen` is at most 23, by the kernel's `decide`. -/
-theorem zkLogLen₀_le : ∀ m, 25 ≤ m → m ≤ 35 → zkLogLen₀ m ≤ 23 := by
-  intro m h1 h2; interval_cases m <;> decide +kernel
+theorem zkLogLen₀_le : ∀ m, 25 ≤ m → m ≤ 35 → zkLogLen₀ wideLeaf m ≤ 23 := by
+  intro m h1 h2; cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- **The existing cap**: `Zk.schedule`'s m range (25 to 35) caps level 0's `logLen` at 23. -/
 theorem zkLogLenCap_23 : ZkLogLenCap 23 := by
-  intro m s t h
+  intro wideLeaf m s t h
   obtain ⟨h1, h2, -⟩ := schedule_spec h
-  have hle := zkLogLen₀_le m h1 h2
+  have hle := zkLogLen₀_le (wideLeaf := wideLeaf) m h1 h2
   unfold zkLogLen₀ at hle
   rw [h] at hle
   exact hle
@@ -75,8 +77,8 @@ theorem logLen_tableAtZK_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) 
     (lvOf (tableAtZK dj y₀ S).sch 0).logLen ≤ L := by
   unfold tableAtZK
   split_ifs with h
-  · exact hL _ _ _ (Classical.choice h).hz
-  · exact hL _ _ _ y₀.hz
+  · exact hL _ _ _ _ (Classical.choice h).hz
+  · exact hL _ _ _ _ y₀.hz
 
 /-- The one-table plan's table at every index is `tableAtZK`. -/
 theorem planZAt_get (S : Finset (Fin n)) (R : Reg) (i : Fin (planZAt (Reg := Reg) dj y₀ S R).length) :

@@ -59,7 +59,7 @@ def nonceOf (hex : String) : Except String ByteArray :=
   if CoinTree.isHex (2 * NONCE_BYTES) hex then unhex hex
   else .error s!"a nonce `{hex}` that is not {2 * NONCE_BYTES} lowercase hex digits"
 
-/-- The verifier's own draw-law inputs, as `flock-verify verify` reads them: `--work K` with `--work-table F`
+/-- The verifier's own draw-law inputs, as `verity-verify-proof verify` reads them: `--work K` with `--work-table F`
 (`Draw.workTableOfJson`), `--stratified K` and `--closure F` (`Draw.closureMapOfJson`), each optional. A stratified or work
 sample sets up only on them (`Stmt.setupTables`, U2), so they are the session's statement's as much as its files are. -/
 def lawOf (args : List String) :
@@ -83,7 +83,7 @@ def lawOf (args : List String) :
       | none, some _ => throw "--work-table needs --work"
     pure (work, ← nat "--stratified", ← closure)
 
-/-- A firewalled statement's `Hello` inputs, read once: `flock-verify verify --zk`'s statement of its files
+/-- A firewalled statement's `Hello` inputs, read once: `verity-verify-proof verify --zk`'s statement of its files
 (`Witness.Inputs`) and the sampling design's inputs (`lawOf`). -/
 structure Setup where
   I : Witness.Inputs
@@ -160,7 +160,7 @@ def Setup.specAt (S : Setup) (specs : Specs) (draw : Option Json) : IO (V Sessio
 
 /-- `flock-firewall hello [--statement ID] --circuit F --public F [--tables DIR] [--session-tables J] [--partition F]
 [--program F] [--stratified K] [--work K --work-table F] [--closure F]`: each session's `Hello`, served on stdin and stdout,
-at `flock-verify verify --zk`'s statement of those files (`Setup`).
+at `verity-verify-proof verify --zk`'s statement of those files (`Setup`).
 `draw LEN` followed by the `LEN` bytes of the session's sample (`drawOf`) is answered `ok N` followed by the `N` bytes of
 the session's `Hello` (`json`), at a nonce of 32 bytes this command samples from the operating system; `draw LEN NONCE`
 takes the nonce's 64 hex digits instead, for a simulator's rewinds, which restart a session after its `Hello`. Each

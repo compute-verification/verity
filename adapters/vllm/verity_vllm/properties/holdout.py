@@ -80,11 +80,8 @@ def assemble(holdouts_dir: Path) -> dict[str, Any]:
     for d in sorted(p for p in holdouts_dir.iterdir() if p.is_dir()):
         g = d / "gates.json"
         ent: dict[str, Any] = {"name": d.name, "run_dir": str(d), "workload": None, "gates": {}}
-        wl = next(iter(d.glob("*.json")), None)
         if (d / "workload.json").exists():
             ent["workload"] = str(d / "workload.json")
-        elif wl is not None:
-            ent["workload"] = None
         if not g.exists():
             ent["status"] = "missing gates.json"
         else:

@@ -102,6 +102,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import traceback
 import types
 from collections import Counter, deque
 from contextlib import contextmanager, nullcontext
@@ -1170,19 +1171,9 @@ def _no_suite() -> dict:
 def _by_id(nodes: dict[str, dict], objs: dict[str, Any]) -> None:
     """Mark ``"i"`` on each node whose id `targets.definition` makes into the very object reached (`defs.bind` shares a
     specialization per binding record), so a process that builds no body makes it the same from its id (`make`)."""
-    real = TG.suite
-    TG.suite = _no_suite
-    try:
-        for fid, info in nodes.items():
-            if info["k"] == "R" or TG._RECORD.search(fid):
-                continue
-            try:
-                if TG.definition(fid) is objs[fid]:
-                    info["i"] = 1
-            except Exception:  # noqa: BLE001  (an id that doesn't make its object is made along its record's path)
-                continue
-    finally:
-        TG.suite = real
+    for fid, info in nodes.items():
+        if info["k"] != "R" and not TG._RECORD.search(fid) and _from_id(fid) is objs[fid]:
+            info["i"] = 1
 
 
 def _from_id(fid: str) -> Any | None:
@@ -1280,6 +1271,7 @@ def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None =
             got = {"error": f"{type(ex).__name__}: {str(ex)[:200]}", "start": start}
         _put(out, got)
     except BaseException:  # noqa: BLE001
+        traceback.print_exc()
         code = 1
     finally:
         os._exit(code)

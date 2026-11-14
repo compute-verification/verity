@@ -368,22 +368,22 @@ theorem scoped_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some
 
 /-- **What the registered wiring's check decides** (`wiringOk`), clause by clause. -/
 theorem wiringOk_iff : wiringOk h = true ↔
-    namesOnce h = true ∧ writersFirst h = true ∧ sourcesNamed h = true ∧ wiresMove h = true ∧
-      wiresAlike h = true ∧ returnedWhole h = true ∧ writtenUnwired h = true ∧ writtenRead h = true ∧
-      refReadsOwn h = true ∧ h.interiorNames.values = [] := by
+    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMoveRows h = true ∧
+      wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
+      h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true := by
   unfold wiringOk
   simp only [Bool.and_eq_true, List.isEmpty_iff]
   constructor
-  · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩
-    exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩
-  · rintro ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10⟩
-    exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩
+  · rintro ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩
+    exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩
+  · rintro ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11⟩
+    exact ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩, h9⟩, h10⟩, h11⟩
 
 /-- **Where the design evaluates, the registered wiring passes each clause of its check.** -/
 theorem wiring_of_two {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
-    namesOnce h = true ∧ writersFirst h = true ∧ sourcesNamed h = true ∧ wiresMove h = true ∧
-      wiresAlike h = true ∧ returnedWhole h = true ∧ writtenUnwired h = true ∧ writtenRead h = true ∧
-      refReadsOwn h = true ∧ h.interiorNames.values = [] :=
+    namesOnce h = true ∧ writersFirst h = true ∧ sourceRowsNamed h = true ∧ wiresMoveRows h = true ∧
+      wiresAlike h = true ∧ writtenRowsUnwired h = true ∧ writtenRowsRead h = true ∧ refReadsOwn h = true ∧
+      h.interiorNames.values = [] ∧ portsOnce h = true ∧ outsOk h = true :=
   (wiringOk_iff h).1 (scoped_wiring_of_two h hd).2
 
 /-- **Where the design evaluates, the templates' names are distinct.** -/

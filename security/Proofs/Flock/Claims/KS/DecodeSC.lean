@@ -47,7 +47,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 # The deployed plain decoder, with no opening off the table
 
 `PlainLiveAccAt` asks the decoder to be right for the live verdict accepting with no level-0 opening off the table `C`
-unless it self-clashes. At `wrP`, at one table, that holds on the outcomes whose transcript flock-verify accepts, whose
+unless it self-clashes. At `wrP`, at one table, that holds on the outcomes whose transcript verity-verify-proof accepts, whose
 root is the live strategies' and on which the deployed plain reader looks up no column off `C` (`TxNoOff`):
 
 * `wrP1_oneOf`: `wrP1` at a one-table session's outcome read as one table's is `wrP` at the session's outcome.
@@ -92,7 +92,7 @@ def TxNoOff (I : Exec.Inputs) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Tran
 
 open DecodeZL Integrate in
 /-- **The deployed plain decoders are right at `wrP` for accepting with no opening off `C` without a self-clash**, at
-one table: `decodesTable_wrP` on the outcomes whose transcript flock-verify accepts, whose root is `rootB₀`'s and on
+one table: `decodesTable_wrP` on the outcomes whose transcript verity-verify-proof accepts, whose root is `rootB₀`'s and on
 which the deployed plain reader looks up no column off `C` (`TxNoOff`), with the verdict that the table accepts and does
 not open a level-0 position off `C` against `rootB₀`'s cap unless it self-clashes. -/
 theorem decodesTable_wrP_sc {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)

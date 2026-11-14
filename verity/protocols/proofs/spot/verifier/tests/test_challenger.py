@@ -113,7 +113,7 @@ def test_the_record_asks_for_each_coin_only_after_recording_its_root():
 
 def test_the_record_logs_each_release_after_the_root_it_follows():
     """`LiveRecord.log` is the release order on the record's clock: root i's receipt, then coin i's release.  That the
-    challenger released coin i only after receiving root i is trusted (`trusted-host`), not checked: the log
+    challenger released coin i only after receiving root i is trusted (`trusted-device`), not checked: the log
     records the order, and `order_reason` reads only the roots the openings name."""
     ticks = iter(range(100))
     ch = C.LiveChallenger("verity/test/coins/v1", 3, [("other", 1), (LABEL, 3)], entropy("t"))
@@ -363,7 +363,7 @@ def test_the_key_and_record_forms_round_trip_and_refuse_what_they_dont_read(tmp_
         C.record_message(b"\x00" * 15, HOST, ch.commitment)
 
 
-# A recursive run's interactive-run record (`RunRecord`), which `flock-verify rec-compose --rec-run` reads: the staging
+# A recursive run's interactive-run record (`RunRecord`), which `verity-verify-proof rec-compose --rec-run` reads: the staging
 # first, every session opened for the run's parts, the close last.  Its reading is the Lean's (`Flock.RecCompose.checkRun`,
 # whose #guards are `Flock/Test/RecCompose.lean`), held to this writer by `verity/protocols/proofs/flock/prover/tests/test_lean_rec_compose.py`.
 ROWS = "ab" * 64

@@ -1,4 +1,11 @@
-/-
+module
+
+public import Flock.Firewall.Salts
+public import Flock.Firewall
+public import Flock.WitnessZk
+public import Std.Async.TCP
+
+/-!
 # The ZK server's value service (live PROTOCOL.md §10.2): `core-firewall values`, `flock-firewall values`
 
 The serving stack commits every value whose `b ‖ c` or root goes public through this service, which holds the ZK server's
@@ -34,12 +41,6 @@ salts and keys live only in the process (a registered interior session's key is 
 started again opens a new epoch, in which no earlier session registers, and answers no earlier interior session's salts.
 Only the ZK server, under its own OS user, starts the service (`zk-server-own-user`).
 -/
-module
-
-public import Flock.Firewall.Salts
-public import Flock.Firewall
-public import Flock.WitnessZk
-public import Std.Async.TCP
 
 @[expose] public section
 

@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.Refine.OkLe
 /-!
 # The setup reads the lookup tables only by name
 
-flock-verify reads a lookup table only by `find?` at a name its circuit lists (`HmRow.parse` at each of META's lookups,
+verity-verify-proof reads a lookup table only by `find?` at a name its circuit lists (`HmRow.parse` at each of META's lookups,
 `Typed.hold` at each table a type reads), and refuses the circuit where the table is missing. So more tables change
 nothing: where `T'` finds by name whatever `T` finds (`TablesExtend T T'`), every circuit parsed with `T` is parsed with
 `T'` (`parse_okLe`, `hmOutParse_okLe`, `parseCommit_okLe`), and where the circuit file parses with `T`, a one-table
@@ -23,7 +23,7 @@ open Flock
 
 /-! ## More tables change nothing -/
 
-/-- **`T'` extends `T`** as flock-verify reads lookup tables: by name, `T'` finds whatever `T` finds. -/
+/-- **`T'` extends `T`** as verity-verify-proof reads lookup tables: by name, `T'` finds whatever `T` finds. -/
 def TablesExtend (T T' : List (String × ByteArray)) : Prop :=
   ∀ n x, T.find? (·.1 == n) = some x → T'.find? (·.1 == n) = some x
 

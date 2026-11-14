@@ -117,7 +117,7 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
   have hk6 : 6 ≤ (Masked.stAt x j).c.kLog := (Masked.zkTab x j).wf.1.hk6
   have hkm : (Masked.stAt x j).c.kLog ≤ (Masked.stAt x j).m := (Masked.zkTab x j).wf.1.hk
   have hfk : (Masked.stAt x j).circuitFold.kLog = (Masked.stAt x j).c.kLog := rfl
-  have hzq : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hzq : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [Masked.stsOf_half]
     exact (Masked.zkTab x j).hz

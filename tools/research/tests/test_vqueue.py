@@ -898,7 +898,7 @@ def test_left_out_names_why_each_ready_pr_the_ticks_builds_leave_out_by_a_cause_
     failed = Outcome((1,), heads(1), FAIL, (1, 2, 3, 4), MAIN)
     assert decide(snap(ready=prs(1, 2, 3), history=[failed])) == [Build((1, 2), MAIN, 2)]
     assert left_out(snap(ready=prs(1, 2, 3), history=[failed])) == [
-        Leave(3, "h3", "batch full", "behind the PRs ranked before it: a batch holds at most 2 (a suspect's cap)")]
+        Leave(3, "h3", "batch full", "behind the PRs ranked before it: a batch holds at most 2 (a suspect's limit)")]
 
 
 def test_left_out_names_the_lean_prs_and_the_lean_inputs_a_staged_batch_keeps_out_and_why_no_lean_batch_opens():
@@ -915,7 +915,7 @@ def test_left_out_names_the_lean_prs_and_the_lean_inputs_a_staged_batch_keeps_ou
               "beside it takes one until it is on main's chain")]
     capped = snap(ready=[lean(1), lean(2), pr(4)], records=True, depth=2)
     assert decide(capped) == [Build((1,), MAIN, 2, records=True), Build((4,), MAIN, 2)]
-    assert left_out(capped) == [Leave(2, "h2", "Lean cap", "behind the Lean PRs ranked before it: a Lean batch holds at most 1 (--lean)")]
+    assert left_out(capped) == [Leave(2, "h2", "Lean limit", "behind the Lean PRs ranked before it: a Lean batch holds at most 1 (--lean)")]
     first = snap(ready=[pr(0), touching, lean(2)], records=True, batch=1)
     assert decide(first) == [Build((0,), MAIN, 2)]
     assert left_out(first) == [

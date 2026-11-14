@@ -36,9 +36,17 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
+
 from verity_vllm.program.prune import COLUMNS, dead_free_versions
 
-from .common import Unexpressible, _Launch, in_launch, kind, launch_batch, request_passes
+from .common import (
+    Unexpressible,
+    _Launch,
+    in_launch,
+    kind,
+    launch_batch,
+    request_passes,
+)
 from .step_needs import Need, StepNeeds
 
 __all__ = ["TemplateCounts"]
@@ -82,7 +90,8 @@ class TemplateCounts(StepNeeds):
         return self._memo[key]
 
     def _named(self, role: str, f) -> Need:
-        if (v := dead_free_versions().get(getattr(f, "base_id", None))) is not None:
+        versions: Any = dead_free_versions()   # as given: a Definition that has no base id is looked up under None
+        if (v := versions.get(getattr(f, "base_id", None))) is not None:
             f = bind(v, **f.bindings)
         self._fns.setdefault(tid := descriptor_id(f), f)
         return Need(role, tid)
@@ -127,8 +136,8 @@ class TemplateCounts(StepNeeds):
         bound = max([every] + [P.block[i] for P, ls in zip(passes, long) for i in ls])
         bound_last = max([every] + [P.block[i] for P, ls, X in zip(passes, long, last) for i in ls if i in X])
         first = int(self.C["FIRST_DENSE"])
-        body = Counter((L in net.indexers, L >= first) for L in range(NL - 1))
-        rep = {c: min(L for L in range(NL) if (L in net.indexers, L >= first) == c) for c in body}
+        body = Counter((L in net.indexers, first <= L) for L in range(NL - 1))
+        rep = {c: min(L for L in range(NL) if (L in net.indexers, first <= L) == c) for c in body}
         out: Counter[str] = Counter()
         pads: set[tuple[int, int, int]] = set()
 
@@ -160,6 +169,7 @@ class TemplateCounts(StepNeeds):
     def _pass(self, launch: _Launch, m: int, p: int, sampled: bool) -> _Pass:
         from verity.definitions.registry import tp_allreduce as AR
         from verity.definitions.registry.sparse_mla_split import launch_num_splits
+
         from verity_vllm.program.frontend.rules.vllm_dsa import long_row_blocks
         M, TOPK, e = launch.tokens(m), self.index_topk, launch.entry(m)
         prefills = launch.prefills((e, p), self.threshold)
@@ -168,14 +178,14 @@ class TemplateCounts(StepNeeds):
         mqa = launch.keys([] if own else keys, without=dense)
         kept = [min(n, TOPK) for n in mqa]
         splits = {} if own else dict(zip(kept, launch_num_splits(kept, int(self.tp.num_sms), TOPK, 0)))
-        fused = bool(self.net.settings["flashinfer"]) and M <= AR.fused_max_tokens(self.H, self.W)
+        fused = bool(self.net.settings["flashinfer"]) and AR.fused_max_tokens(self.H, self.W) >= M
         block = {i: N for N, rows in long_row_blocks(keys, TOPK) for i in rows}
         return _Pass(m, p, launch.tokens(1, sampled=True) if sampled else None, M, fused, keys, dense, own, mqa, splits, block, e)
 
     def _layer(self, L: int, P: _Pass, X: Sequence[int], bound: int, pads: set, final: bool = False) -> list[tuple[Need, int]]:
         """Layer L's calls in pass P that the Program keeps: the attention of its live query rows X (every row below the last
         layer), its index-K slots below position `bound`, then the norms and the MLP or MoE block."""
-        ffn = (lambda n: self._moe(P.M, n, L)) if L >= int(self.C["FIRST_DENSE"]) else (lambda n: self._mlp(P.M, n, L))
+        ffn = (lambda n: self._moe(P.M, n, L)) if int(self.C["FIRST_DENSE"]) <= L else (lambda n: self._mlp(P.M, n, L))
         out = self._attention(L, P, X, bound, pads)
         if not final:
             return out + self._reduce_norm(P.M, P.m) + ffn(P.m) + self._reduce_norm(P.M, P.m)
@@ -186,7 +196,12 @@ class TemplateCounts(StepNeeds):
         return out + [(ar, live), (norm, P.m * live)] + [(nd, c * live) for nd, c in ffn(P.m)] + [(ar, live), (norm, live)]
 
     def _attention(self, L: int, P: _Pass, X: Sequence[int], bound: int, pads: set) -> list[tuple[Need, int]]:
-        from verity_vllm.program.frontend.rules.vllm_dsa import FA3_SPARSE_GEOMETRY, PAD_SCORE, long_row_keys, pad_words
+        from verity_vllm.program.frontend.rules.vllm_dsa import (
+            FA3_SPARSE_GEOMETRY,
+            PAD_SCORE,
+            long_row_keys,
+            pad_words,
+        )
         C, TOPK, x, block = self.C, self.index_topk, len(X), P.block
         QL, KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("Q_LORA", "KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
         IH, ID = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"])
@@ -209,7 +224,7 @@ class TemplateCounts(StepNeeds):
                 out += [(self.kind("dsa_mqa_logits", N=Nb, H=IH, D=ID), 1), (self.kind("dsa_topk_mask_counted", N=N, TOPK=TOPK), 1),
                         (self.kind("dsa_topk_index" if self.table_reads else "dsa_butterfly_settings", N=N, TOPK=TOPK), 1)]
                 pads.add((32, n, 1))
-                if N > Nb:
+                if Nb < N:
                     pads.add((32, PAD_SCORE, pad_words(TOPK)))
         if P.own:
             return out + self._dense(L, P, X) + [(fp8("o_w"), x)]
@@ -221,7 +236,7 @@ class TemplateCounts(StepNeeds):
                 N = long_row_keys(Nb, TOPK)
                 if self.table_reads:
                     out.append((self.kind("dsa_history_reads", V=Nb, TOPK=TOPK, H=KVL + R), 1))
-                elif N > Nb:
+                elif Nb < N:
                     out.append((self.kind("dsa_butterfly_rows_pad", T=Nb, N=N, TOPK=TOPK, W=KVL + R), 1))
                     pads.add((16, 0, pad_words(TOPK, KVL + R)))
                 else:
@@ -239,17 +254,19 @@ class TemplateCounts(StepNeeds):
         out = [(self._fp8_linear(plan.rows, (L, "kv_b_w")), P.m * live), *[(plan.heads[i], NH) for i in X]]
         if plan.merge is not None:
             out.append((plan.merge, len(X)))
+            consts: Any = plan.empty   # a merge with no context has them; as given, any other plan is None's TypeError
             out += ([(plan.context, NH * len(X)), (self._fp8_linear(plan.held, (L, "kv_b_w")), P.p * live)] if P.p else
-                    [(e, live) for e in plan.empty])
+                    [(e, live) for e in consts])
         return out
 
     def _select(self, policy: Mapping[str, Any] | None, V: int, pos: int) -> list[tuple[Need, int]]:
         """A sample's select (`common.select_token`): greedy TokenSelect, or the seeded top-p select and its per-row consts."""
-        if (policy or {}).get("kind", "greedy") != "stochastic":
+        stated: Mapping[str, Any] = policy or {}
+        if stated.get("kind", "greedy") != "stochastic":
             return [(self.kind("token_select", V=V), 1)]
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
-        S = policy["splits"]
+        S = stated["splits"]
         fn = (self.kind("token_select_stochastic", V=V, CONSTRUCTION=self.tp.effective_sampler_construction()) if S == "derived"
               else self.kind("token_select_stochastic_split", V=V, S=int(S)))
-        words = [(32, f32_bits(policy.get("top_p", 1.0))), (64, int(pos) & 0xFFFFFFFFFFFFFFFF), (32, f32_bits(policy["temperature"]))]
+        words = [(32, f32_bits(stated.get("top_p", 1.0))), (64, int(pos) & 0xFFFFFFFFFFFFFFFF), (32, f32_bits(stated["temperature"]))]
         return [(fn, 1), *[(self.kind("const", W=w, BITS=b), 1) for w, b in words + ([] if S == "derived" else [(32, int(S))])]]

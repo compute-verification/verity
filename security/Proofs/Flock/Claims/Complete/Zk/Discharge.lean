@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Claims.Complete.Shape
 public import Proofs.Flock.Claims.Complete.Zk.Skeleton
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -60,6 +62,8 @@ open Flock FlockDeploy
 
 namespace FlockComplete
 
+variable {wideLeaf : Bool}
+
 /-- **The masked scope at the case's setup**: one table, of `25 ≤ m ≤ 35`, and the session spec is its own. -/
 theorem CaseZk.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation} (c : CaseZk H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧ 25 ≤ st.m ∧ st.m ≤ 35 := by
@@ -103,14 +107,16 @@ theorem CaseZk.table {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → 
     omega
 
 /-- `Zk.schedule` has a schedule at every `m` from 25 to 35. -/
-theorem zkSchedule_ok {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ v, Zk.schedule m = .ok v := by
-  obtain ⟨q, hq⟩ : ∃ q, Zk.queries0 m = .ok q := by
-    unfold Zk.queries0
-    interval_cases m <;> exact ⟨_, rfl⟩
-  obtain ⟨sch, hs⟩ := Option.isSome_iff_exists.1 (fast100_isSome (by omega) h2)
-  unfold Zk.schedule
-  simp only [hq, hs]
-  exact ⟨_, rfl⟩
+theorem zkSchedule_ok {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) : ∃ v, Zk.schedule wideLeaf m = .ok v := by
+  have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
+      | .ok _ => true
+      | .error _ => false) = true := by
+    decide +kernel
+  have hk := key wideLeaf ⟨m - 25, by omega⟩
+  simp only [show m - 25 + 25 = m by omega] at hk
+  cases hs : Zk.schedule wideLeaf m with
+  | ok v => exact ⟨v, rfl⟩
+  | error e => simp [hs] at hk
 
 /-- **One statement per table** (§3): the goal `TablesZk`. -/
 theorem tablesZk_goal (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation) : TablesZk H rel := by

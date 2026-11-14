@@ -1107,7 +1107,7 @@ def test_the_drawn_set_from_a_fixed_coin_is_cores():
         assert CR.law(ss, k) is None
         want = CC.work_units(bytes.fromhex(coin), root, reg, {"receipts": receipts}, ss)
         got, why = PHC.drawn_of(record, {"root": root}, k, desc)
-        assert why is None and got == want == CR.drawn(coin, root, reg, {"receipts": receipts}, layout, k)[0]
+        assert why is None and got == want == CR.drawn_twin(coin, root, reg, {"receipts": receipts}, layout, k)[0]
         assert len(got) == len(set(got)) and all(0 <= u < 12 for u in got)
     assert set(PHC.drawn_of(record, {"root": root}, 12, desc)[0]) >= {4, 5, 10, 11}
     assert PHC.drawn_of(record, {"root": root}, 13, desc)[1][0] == "budget"

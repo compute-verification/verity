@@ -6,9 +6,11 @@ The NTT's shared-memory chunks (ntt_f128.cuh) run on ntt_tile.cuh's kernel, up t
 Run from the flock checkout after `git apply` of flock-link-b684b12.patch and flock-gpu-link-b684b12.patch and after
 copying verity/protocols/proofs/flock/prover/live to crates/flock-live. It applies the CUDA half of cuda_live_patch.py (the live hook in
 challenger.hpp, pow_grind.cuh and prove_ffi.cu; its gpu_roundtrip.rs half needs flock-128's harness and is skipped),
-copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, has the device arena take small blocks from its top,
+copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, names prove_ffi.cu's anonymous namespace, has the
+device arena take small blocks from its top,
 moves zerocheck round 1's GF(2^8) products from its shared-memory log tables onto clmad on sm_90
-(zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and CUDA (default /usr/local/cuda-13.3).
+(zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and CUDA (default /usr/local/cuda-13.3), without
+upstream's -lineinfo (`--lineinfo` keeps it).
 """
 import os
 import pathlib
@@ -33,6 +35,15 @@ s = pf.read_text()
 if '#include "prove_chunk.cuh"' not in s:
     s = s.rstrip("\n") + '\n\n#include "prove_chunk.cuh"\n'
     print("prove_ffi.cu includes prove_chunk.cuh")
+# cudafe++ names an anonymous namespace _GLOBAL__N__<hash>_..., and the hash differs with the directory the source sits in;
+# a module id file passed with -Xcudafe doesn't fix it (nvcc passes its own after it), so the cubin's symbols would differ by
+# where the tree sits.
+# A named namespace, with a using-directive standing in for the anonymous one's, leaves lookup unchanged.
+if "namespace {\n" in s:
+    assert s.count("\nnamespace {\n") == 1 and s.count("\n} // namespace\n") == 1, "prove_ffi.cu's anonymous namespace changed"
+    s = s.replace("\nnamespace {\n", "\nnamespace flock_ffi {\n")
+    s = s.replace("\n} // namespace\n", "\n} // namespace flock_ffi\nusing namespace flock_ffi;\n")
+    print("prove_ffi.cu: its anonymous namespace named flock_ffi")
 # the device arena takes blocks under 64 MiB from the top of the highest free block that holds them and larger ones first fit
 # from the bottom, so the small buffers one phase leaves live don't split the space the next phase's large ones need
 first_fit = """        for (auto block = free_.begin(); block != free_.end(); block++) {
@@ -275,6 +286,12 @@ b = pathlib.Path("crates/flock-cuda-ffi/build.rs")
 s = b.read_text()
 s = s.replace("arch=compute_120,code=sm_120", f"arch=compute_{sm},code=sm_{sm}")
 s = s.replace('"/usr/local/cuda/lib64"', f'"{cuda}/lib64"').replace('"/usr/local/cuda/lib64/stubs"', f'"{cuda}/lib64/stubs"')
+# -lineinfo writes a line table naming each source file's path into the cubin, so the device code would differ by where
+# the tree sits. --lineinfo keeps it, for a listing with source lines (nvdisasm -g, compute-sanitizer, Nsight Compute).
+lineinfo = "--lineinfo" in sys.argv[1:]
+if not lineinfo:
+    assert s.count('"-O3", "-std=c++17", "-lineinfo"') == 1, "build.rs's nvcc flags changed upstream"
+    s = s.replace('"-O3", "-std=c++17", "-lineinfo"', '"-O3", "-std=c++17"')
 b.write_text(s)
-print(f"build.rs: sm_{sm}, {cuda}")
+print(f"build.rs: sm_{sm}, {cuda}, {'with' if lineinfo else 'no'} -lineinfo")
 sys.exit(0)

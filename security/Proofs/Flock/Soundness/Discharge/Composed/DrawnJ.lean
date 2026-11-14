@@ -3,9 +3,9 @@ module
 public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
 /-!
-# The sampled proof blocks of one `--zk` session of `J` tables, at flock-verify's acceptance
+# The sampled proof blocks of one `--zk` session of `J` tables, at verity-verify-proof's acceptance
 
-`zk_session_soundJ_custody_reg` is the count curve: it bounds flock-verify's acceptance with "at least `K₀` units wrong",
+`zk_session_soundJ_custody_reg` is the count curve: it bounds verity-verify-proof's acceptance with "at least `K₀` units wrong",
 an event the prover's strategy fixes before the sample, because `zk_headline_exec_tables` carries only such events. This
 file carries an event of the sample too, and bounds the sampled proof blocks' correctness:
 
@@ -13,7 +13,7 @@ file carries an event of the sample too, and bounds the sampled proof blocks' co
   outcomes carry the sample, and the refinement is one inequality at each of the sampling design's samples, where `E` is fixed;
 * `ZkLink.zk_flock_drawnC_reg`: `Audit.extraction_audit_drawn` at `analysisZCReg`, so in the compiled batched audit
   `Pr[accepts ∧ some drawn unit is in wrongRegZ] ≤ ε_ks + δ_link`;
-* `zk_session_soundJ_custody_drawn_reg`: the same at flock-verify's acceptance, at the challenger's live-coin part's custody, with
+* `zk_session_soundJ_custody_drawn_reg`: the same at verity-verify-proof's acceptance, at the challenger's live-coin part's custody, with
   `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
 -/
 
@@ -41,7 +41,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : Law n}
 
-/-- **The refinement at `--zk` for sessions of `J` tables, with an event of the sample**: flock-verify `--zk` accepts the
+/-- **The refinement at `--zk` for sessions of `J` tables, with an event of the sample**: verity-verify-proof `--zk` accepts the
 live audit at a sample in `E` no likelier than the compiled batched audit, played by `simZJ … τ`, accepts at a sample in
 `E`. -/
 theorem execRefinesZK_tables_drawn (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
@@ -133,7 +133,7 @@ open scoped ENNReal
 variable {n : ℕ} {Reg : Type}
 
 /-- **The sampled proof blocks of one `--zk` sampled session of `J` tables, against the public file, at the challenger's live-coin part's
-custody.** For any live prover `τ`, flock-verify `--zk` accepts with some sampled proof block in `wrongRegZ` with probability at
+custody.** For any live prover `τ`, verity-verify-proof `--zk` accepts with some sampled proof block in `wrongRegZ` with probability at
 most `ε_ks + δ_link`: `zk_session_soundJ_custody_reg`'s terms without the miss term, so without A3. -/
 theorem zk_session_soundJ_custody_drawn_reg
     (I : Inputs) (ht : I.tags.typed = false)

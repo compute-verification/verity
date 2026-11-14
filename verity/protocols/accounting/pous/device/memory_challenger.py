@@ -403,7 +403,7 @@ class SessionLog:
 
     One session an id rests on the host keeping this file as written: it is never restored from a snapshot, a backup or
     another older copy, and the memory challenger is never restarted onto host-held state older than the sessions it
-    has run.  A file can see neither.  The claim that the host does neither is `trusted-host`
+    has run.  A file can see neither.  The claim that the host does neither is `trusted-device`
     (`verity.claims`): its host never restores an earlier copy of the state the device keeps there."""
 
     def __init__(self, path: str | os.PathLike) -> None:
@@ -450,7 +450,7 @@ class SaltLog:
     lock, reads it again, refuses an audit already in it and appends the entry, fsynced, before it returns, so an audit
     has one salt and a retry never resamples one. On the deployed party an audit's session id is derived from its binding,
     commitment and salt (`challenger_session.session_id`), so the `SessionLog` refuses its second session. It rests
-    on `trusted-host` as the session log does: its host never restores an earlier copy of it."""
+    on `trusted-device` as the session log does: its host never restores an earlier copy of it."""
 
     def __init__(self, path: str | os.PathLike) -> None:
         self.path = Path(path)

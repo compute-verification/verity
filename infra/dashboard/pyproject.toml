@@ -1,0 +1,16 @@
+# The dashboard's goal as a number (`run.py`). Not a package: the suite checks the count on made-up dashboard data, so
+# nothing is read from the site (`uv run tools/verity/check/suites.py infra/dashboard`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# the runner writes through the harness kit's writer, whose settings.py is built on verity_config's registry
+inputs = [
+    "tools/config/verity_config",
+    "verity/__init__.py",
+    "tools/config/verity_config/verity_settings.py",
+    "benchmarks/harness/verity_bench/__init__.py",
+    "benchmarks/harness/verity_bench/kit.py",
+    "benchmarks/harness/verity_bench/settings.py",
+]

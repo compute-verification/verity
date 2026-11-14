@@ -34,11 +34,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.kernels import ROW_COMMIT, SHA512
 from verity.commitments import row_table as RT
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
-from verity.circuits.kernels import ROW_COMMIT, SHA512
 from verity.protocols.accounting.pouw import prover
 
 from . import row_tables as RTB
@@ -132,7 +132,7 @@ def device_lib(arch: str) -> ctypes.CDLL:
         raise RuntimeError("no nvcc on the path")
     dll = _build(tool, DEVICE_SOURCES, (*NVCC_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}"), "librow_table_cuda.so")
     dll.rt_midstates.argtypes = [_vp, _vp, _vp]
-    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(Args)] + [_vp] * 5
+    dll.rt_step.argtypes = [_vp, _vp, _vp, ctypes.c_uint64, ctypes.c_uint32, _vp, _vp, ctypes.POINTER(Args), *[_vp] * 5]
     dll.rt_midstates.restype = dll.rt_step.restype = ctypes.c_int
     return dll
 

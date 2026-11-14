@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.Bytes
+public import Flock.JsonParse
+
+/-!
 The session record's canonical text, the text `Json.compress` prints of what it parses to, which every
 writer emits (`verity/ml/flock/live/src/record_text.rs`, `verity_flock.record_text`) and S0 holds a record to. So the
 record's text is a function of what the verifier reads of it.
@@ -9,10 +14,6 @@ with `"`, `\`, newline and carriage return escaped and every other character bel
 an array's elements and an object's fields (in its tree's order, sorted by key) between commas. `Flock.Test.RecordText`
 holds it to `Json.compress` on the writers' shared vectors.
 -/
-module
-
-public import Flock.Bytes
-public import Flock.JsonParse
 
 @[expose] public section
 

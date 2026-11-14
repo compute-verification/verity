@@ -59,7 +59,7 @@ def _answers(rng: random.Random, case: dict, asks: list[dict], name: str, steps:
             f = rng.choice(fs)
             match name:
                 case "error":
-                    ans = {"error": rng.choice(["flock-verify ended on a signal", "no such file: public.bin"])}
+                    ans = {"error": rng.choice(["verity-verify-proof ended on a signal", "no such file: public.bin"])}
                 case "refused":
                     ans = {"refused": [rng.choice(["proof", "circuit", "registration"]),
                                        "the statement's public file is not its circuit's"]}

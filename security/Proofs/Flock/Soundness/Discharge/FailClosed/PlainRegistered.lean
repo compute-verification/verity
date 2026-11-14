@@ -24,7 +24,7 @@ public import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
 /-!
 # The hidden-output headlines without `--zk`, over what `verify --registered F` accepts
 
-`flock-verify verify --registered F` without `--zk` (`VerifiesR`: the verdict `PlainReg.AcceptsR` models and the statement
+`verity-verify-proof verify --registered F` without `--zk` (`VerifiesR`: the verdict `PlainReg.AcceptsR` models and the statement
 check with the verifier's registered reads, `ScopeR`) accepts, at hidden outputs and `hm96-sha512/v1` leaves, a statement
 whose population's public file carries shared rows, which `verify` without `--registered` refuses. Each headline here is
 `FailClosed.Design`'s over `VerifiesR`, at any sample design (`DrawDesign`: the stratified sample or the live subset sample),
@@ -51,7 +51,7 @@ open scoped ENNReal
 theorem ScopeR.tagsOkH {I : Inputs} (h : ScopeR I) (hh : I.tags.hiddenOutputs = true) : HiddenDec.TagsOkHL I :=
   ⟨hh, h.retainRounds, h.leaf, h.count⟩
 
-/-- **What `flock-verify verify --registered F` accepts** (no `--zk`), `own` F's ports: the setup, registered check and
+/-- **What `verity-verify-proof verify --registered F` accepts** (no `--zk`), `own` F's ports: the setup, registered check and
 verdict `PlainReg.AcceptsR` models, and the statement check with the verifier's registered reads. -/
 def VerifiesR (I : Inputs) (own : Array Flock.Registered.Port) (t : Exec.Transcript) : Prop :=
   PlainReg.AcceptsR I own t ∧ ScopeR I
@@ -76,7 +76,7 @@ open FlockSoundness.Discharge.PlainReg (rsAtHS rsAtHS_computes checked_of_accept
 open FlockSoundness.Discharge.ZkReg (OwnReadsH regPathsH)
 open FlockSoundness.Discharge.General (rsAtG rsAtG_computes)
 
-/-- **One hidden-output non-ZK sampled session that `flock-verify verify --registered F` accepts is sound, and its
+/-- **One hidden-output non-ZK sampled session that `verity-verify-proof verify --registered F` accepts is sound, and its
 registered reads are checked.** The first conjunct is `FailClosed.flock_headline_exec_hidden_design_dec`'s bound
 over `VerifiesR` at a sample design, at a public file with or without shared rows (`rsAtHS`); the second, the registered check's consequence at
 every accepted outcome (`PlainReg.checked_of_acceptsRH`). -/
@@ -160,7 +160,7 @@ theorem flock_headline_exec_hiddenR
       checked_of_acceptsRH I hs.typed own dj x₀ (hs.parseH hh) (hs.scopeH hf) hs.built (hs.loadH hh) hh hs.count o
         hv.1 rd hown⟩
 
-/-- **One hidden-output non-ZK sampled session that `flock-verify verify --registered F` accepts, where the wires feed,
+/-- **One hidden-output non-ZK sampled session that `verity-verify-proof verify --registered F` accepts, where the wires feed,
 is sound, and its registered reads are checked.** The first conjunct is `FailClosed.flock_headline_exec_hiddenG_design`'s
 bound over `VerifiesR` at a sample design (its rows `rsAtG` read no `pub.tables`); the second, the registered check's consequence at every
 accepted outcome (`PlainReg.checked_of_acceptsRHI`). -/

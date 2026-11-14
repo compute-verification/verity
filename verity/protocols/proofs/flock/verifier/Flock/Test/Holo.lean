@@ -1,12 +1,13 @@
-/-
-`RecVStar.checkHolo`: the parsed circuit's META `holo` is V*'s file's. A part's statement says `holo` exactly over a holo
-inner session, and no other statement ever does: a plain session's part with META `holo`, a holo session's part
-without it, any level with it and a `holo` that is not a boolean are refused.
--/
 module
 
 public import Flock.RecVStar
 meta import Flock.RecVStar
+
+/-!
+`RecVStar.checkHolo`: the parsed circuit's META `holo` is V*'s file's. A part's statement says `holo` exactly over a holo
+inner session, and no other statement ever does: a plain session's part with META `holo`, a holo session's part
+without it, any level with it and a `holo` that is not a boolean are refused.
+-/
 
 @[expose] public section
 

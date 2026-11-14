@@ -88,7 +88,7 @@ theorem recordsLive_wrPD1 (I : Exec.Inputs) (d : Json) {mPts : ℕ} (o : Tables.
 
 open DecodeZL Integrate in
 /-- **The deployed plain decoders are right at `wrPD` for accepting with no opening off `C` without a self-clash**, at
-one table: `decodesTable_wrP_sc` on the outcomes whose transcript flock-verify accepts at the setup at the sample `dj S`,
+one table: `decodesTable_wrP_sc` on the outcomes whose transcript verity-verify-proof accepts at the setup at the sample `dj S`,
 whose root is `rootB₀`'s and on which the deployed plain reader looks up no column off `C` there (`TxNoOffAt`). -/
 theorem decodesTable_wrPD_sc {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet) {mPts : ℕ}

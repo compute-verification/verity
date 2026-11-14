@@ -83,7 +83,7 @@ public row and the decoded `s` its step's round are `live_credit`'s hypotheses `
 at the known `m@<s>` row of the manifest's `m_s` and its `s` at the known `round@<s>` row of the round's index, so a
 statement decoded at another round proves nothing about this one. That the decoded slot and request rows are the round's
 registered `slots@<s>` and its request table (`requests@0` under round-0-only admission) is the statement's registration
-(flock-verify's complete check and the served path's roots), outside this file.
+(verity-verify-proof's complete check and the served path's roots), outside this file.
 -/
 
 @[expose] public section

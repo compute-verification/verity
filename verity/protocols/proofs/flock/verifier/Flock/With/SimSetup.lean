@@ -1,4 +1,10 @@
-/-
+module
+
+public import Flock.With.Log
+public import Flock.With.Setup
+public import Flock.With.SimWalk
+
+/-!
 The `…With` functions of `Flock.With.Setup` under a simulation (`Flock.With.Sim`): run with two oracles that `S` relates
 hash by hash, each function's two runs are related by `S`, `Stmt.setupTablesWith`'s among them (`setupTablesWith_sim`).
 The monads are lawful, and in each a `throw` ends the run (`Throws`), so that the walk meets a check's join point only at
@@ -8,11 +14,6 @@ With the oracles of `Flock.With.Log`: forgetting the log gives back setup at `h`
 the log's length is `Stmt.setupCalls h`, the number of SHA-512 calls a run with the counting oracle makes
 (`Stmt.setupLogged_size`).
 -/
-module
-
-public import Flock.With.Log
-public import Flock.With.Setup
-public import Flock.With.SimWalk
 
 @[expose] public section
 

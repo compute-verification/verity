@@ -35,7 +35,7 @@ transcript.
 * `rsZHJ_wrongRegZ`: the registered commit strings are the public file's (`keyLayoutH`'s population is `fun _ => pub`),
   so `wrongRegZ` is one set at every registration.
 * `zk_session_soundHJ_custody_drawn_reg`: `Composed.zk_session_soundJ_custody_drawn_reg` under hidden outputs, the
-  sampled proof blocks' form: `Pr[flock-verify accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3;
+  sampled proof blocks' form: `Pr[verity-verify-proof accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3;
   `zk_session_soundHJ_custody_drawn_at` is the same at the value layer of any values, with the binding errors against
   them for `δ_link`.
 -/

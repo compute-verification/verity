@@ -1,7 +1,7 @@
 """`TwoGuard.lean` on a node's warm Lean tree:
 
     research run --on NODE --pool research --as proofs --project verity --source . --cwd clone -- \\
-      python3 benchmarks/two_stage/tests/guard_node.py DIR check|diag [M2] [+ DIR check|diag [M2] ...]
+      python3 benchmarks/two_stage/tests/guard_node.py DIR check|diag|files [M2] [+ DIR check|diag|files [M2] ...]
     ... -- python3 benchmarks/two_stage/tests/guard_node.py --pytest [PYTEST ARGS]
 
 It holds the node's `build` Lean slot and its tree as `lean_changed.py --try` does (the slot, the tree's lock, the sync of

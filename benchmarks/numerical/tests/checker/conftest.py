@@ -12,7 +12,7 @@ from verity_numerical.checker import REAL
 
 ROOT = Path(__file__).resolve().parents[4]
 GOLDEN = ROOT / "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"
-K1536 = ROOT / "fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json"
+K1536 = Path(__file__).resolve().parent / "fixtures" / "typed-obligation-v0" / "stage2--qkv-proj-decode-0-k1536.json"
 
 K = 16
 

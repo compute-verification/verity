@@ -1,4 +1,4 @@
-"""Conformance of the Lean layout check (`flock-verify layout`, `Flock/Layout.lean`) with the reference,
+"""Conformance of the Lean layout check (`verity-verify-proof layout`, `Flock/Layout.lean`) with the reference,
 `verity_flock.layouts`: the same verdict, and on acceptance the same layout digests and own-region sizes.
 
     python layout_agree.py --lean BIN --out DIR [--seed S] [--n N]

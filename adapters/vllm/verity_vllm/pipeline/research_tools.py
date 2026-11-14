@@ -133,7 +133,7 @@ def row_config(row: str) -> dict[str, Any]:
     for k, v in zip(_ROW_FIELDS, parts):
         pfx = _ROW_INT_PREFIX.get(k)
         if pfx is not None:
-            if v.startswith(pfx) and v[len(pfx):].isdigit():
+            if v.startswith(pfx) and v[len(pfx):].isdecimal():
                 out[k] = int(v[len(pfx):])
             else:
                 out[k] = v

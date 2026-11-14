@@ -97,8 +97,8 @@ class _Pair:
         self.out, self.ranks = out, [_rank(0), _rank(1)]
         self.sent: list[tuple[str, dict[str, Any]]] = []
         self.asked: list[tuple[Any, dict[str, Any]]] = []
-        self._changes: dict[tuple[str, int], Callable[[dict[str, Any]], None]] = {}
-        self._lost: set[tuple[str, int]] = set()
+        self._changes: dict[tuple[Any, int], Callable[[dict[str, Any]], None]] = {}
+        self._lost: set[tuple[Any, int]] = set()
         self._stand_in = llm.collective_rpc
         llm.to_the_end = True
         monkeypatch.setattr(llm, "collective_rpc", self._rpc)
@@ -117,10 +117,10 @@ class _Pair:
                 self._changes[method, r](answer)
         return [answer for r, answer in enumerate(answers) if (method, r) not in self._lost]
 
-    def alter(self, method: str, rank: int, change: Callable[[dict[str, Any]], None]) -> None:
+    def alter(self, method: Any, rank: int, change: Callable[[dict[str, Any]], None]) -> None:
         self._changes[method, rank] = change
 
-    def lose(self, method: str, rank: int) -> None:
+    def lose(self, method: Any, rank: int) -> None:
         self._lost.add((method, rank))
 
     def run(self, *flags: str) -> int:

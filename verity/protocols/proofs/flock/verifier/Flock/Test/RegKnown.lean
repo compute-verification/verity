@@ -1,12 +1,13 @@
-/-
-`Registered.checkKnownAll` on a `--registered` file: a port named at known content (`known`: each row's u16 words and
-its salt) passes only when its root is the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2` leaves, as
-`registered.Registered.commit` roots them; ports without `known` are untouched.
--/
 module
 
 public import Flock.RegKnown
 meta import Flock.RegKnown
+
+/-!
+`Registered.checkKnownAll` on a `--registered` file: a port named at known content (`known`: each row's u16 words and
+its salt) passes only when its root is the frame-v3-sha512 root of those rows' `hm96-sha512/row/v2` leaves, as
+`registered.Registered.commit` roots them; ports without `known` are untouched.
+-/
 
 @[expose] public section
 

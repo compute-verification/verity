@@ -83,14 +83,16 @@ open Flock Transcript FlockComplete FlockDeploy JsonRT FlockComplete.Replay Floc
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-- A `--zk` schedule of a table in scope folds at most its table's variables at level 0. -/
-theorem zkSchedule_k0n {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) :
+theorem zkSchedule_k0n {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
     v.1.k0 ≤ v.1.n := by
-  have key : ∀ k : Fin 11, (match Zk.schedule (k.val + 25) with
+  have key : ∀ (w : Bool) (k : Fin 11), (match Zk.schedule w (k.val + 25) with
       | .ok v => decide (v.1.k0 ≤ v.1.n)
       | .error _ => false) = true := by
     decide +kernel
-  have := key ⟨m - 25, by omega⟩
+  have := key wideLeaf ⟨m - 25, by omega⟩
   simp only [show m - 25 + 25 = m by omega, h, decide_eq_true_eq] at this
   exact this
 
@@ -481,7 +483,7 @@ theorem repT_go (h0 : Level0.ProverRuns) (h2 : Level0.Lanes) (h3 : Level0.Verifi
   have hb : (basisVals (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e)
       (rsCoinsR resp (Setup.ofCircuit st) l.size e)) ((Setup.ofCircuit st).m - 7)).size = 2 ^ v.1.n := by
     simp [basisVals, hn]; rfl
-  obtain ⟨⟨⟨lg, zl, rec⟩, tI⟩, lI, hlig⟩ := h0 resp (Claims.hOf H) (Setup.ofCircuit st).m v
+  obtain ⟨⟨⟨lg, zl, rec⟩, tI⟩, lI, hlig⟩ := h0 (Setup.ofCircuit st).wideLeaf resp (Claims.hOf H) (Setup.ofCircuit st).m v
     (Rs.T tr (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e)) cm
     (packed tr (Setup.ofCircuit st).m)
     (basisVals (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e))
@@ -489,7 +491,7 @@ theorem repT_go (h0 : Level0.ProverRuns) (h2 : Level0.Lanes) (h3 : Level0.Verifi
     lay pads.h rep (ω.extra i) (ω.lanePad i) (ω.salt i rep) (ω.nonce i rep)
     (tPiop resp (Setup.ofCircuit st) tr l.size lay pads.h (Setup.ofCircuit st).digest (flat cm.cap) ic.root full e
       (Transcript.init #[] d)) lL (JsonRT.hOf_size h64) h25 h35 hin.schedule hrho
-  have hLF := h2 resp (Claims.hOf H) _ v _ cm _ _ lay pads.h rep (ω.extra i) (ω.lanePad i) (ω.salt i rep)
+  have hLF := h2 _ resp (Claims.hOf H) _ v _ cm _ _ lay pads.h rep (ω.extra i) (ω.lanePad i) (ω.salt i rep)
     (ω.nonce i rep) _ tI lL lI lg zl rec h25 h35 hin.schedule htb hb hlig
   have hx : ∀ c ∈ claimsR resp (Setup.ofCircuit st) tr l.size e, c.x.size = st.m - 6 :=
     claims_xsize' st hkm (by omega) tr (Zc.coinsAt resp l.size) (lcCoinsR resp (Setup.ofCircuit st) l.size) pts e
@@ -510,7 +512,7 @@ theorem repT_go (h0 : Level0.ProverRuns) (h2 : Level0.Lanes) (h3 : Level0.Verifi
     rw [hlL, hpk]
     have : piopSends (Setup.ofCircuit st) e = 3 + (st.m - 6) + 3 + (st.c.kLog - 6) + (2 + e.size + 1) := rfl
     omega
-  obtain ⟨hLgV, htIk⟩ := h3 resp (Claims.hOf H) (Setup.ofCircuit st).m v
+  obtain ⟨hLgV, htIk⟩ := h3 (Setup.ofCircuit st).wideLeaf resp (Claims.hOf H) (Setup.ofCircuit st).m v
     (Rs.T tr (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e)) cm
     (packed tr (Setup.ofCircuit st).m)
     (basisVals (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e))

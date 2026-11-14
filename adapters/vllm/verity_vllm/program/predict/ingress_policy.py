@@ -47,7 +47,7 @@ def ingress_body(i: int, q: WA.RequestAdvice, body: bytes, served: str | None, v
 def request_of(i: int, q: WA.RequestAdvice, body: Any, vocab: int) -> tuple[tuple[int, ...], dict]:
     """Request `i`'s certified prompt and sampling parameters, held to its advice record: the prompt is `prompt_len` token ids of
     the vocabulary, and its `max_tokens` bounds `output_len`, reached exactly when it finished on length (an abort is before it:
-    at its cap vLLM has finished it on length, and the abort finds nothing to free)."""
+    at its max_tokens vLLM has finished it on length, and the abort finds nothing to free)."""
     if not isinstance(body, Mapping) or any(type(k) is not str for k in body):
         raise Unexpressible(f"request {i} ({q.id!r}): no certified request body carries its id")
     prompt = body.get("prompt")
@@ -59,7 +59,7 @@ def request_of(i: int, q: WA.RequestAdvice, body: Any, vocab: int) -> tuple[tupl
     params = {k: v for k, v in body.items() if k not in _TRANSPORT}
     m = params.get("max_tokens")
     if type(m) is not int or m < 1:
-        raise Unexpressible(f"request {i}: max_tokens {m!r} (v0 needs the cap in the body, a positive integer)")
+        raise Unexpressible(f"request {i}: max_tokens {m!r} (v0 needs max_tokens in the body, a positive integer)")
     if q.output_len > m or (q.finish == "length" and q.output_len != m) or (q.finish == "abort" and q.output_len == m):
         raise Unexpressible(f"request {i}: {q.output_len} kept outputs, finished on {q.finish}, against its max_tokens {m}")
     if why := SR.body_refusal(params):

@@ -71,7 +71,7 @@ theorem asReg_congr {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) (
   · rw [h1 g hg hf, h g hg]
   · rw [h1 g hg hf, ← h g hg]
 
-/-- **The secrets of a monitoring period, counted over the windows' accepted sequences.** Under `trusted-host`, on
+/-- **The secrets of a monitoring period, counted over the windows' accepted sequences.** Under `trusted-device`, on
 schedules in `Ss` that the network certifier's record format holds, the secrets a decoder recovers from the cells the
 client receives, whose every window's observations lie in that window's set `A i (runsBefore o i)` at the run's
 observations `o`, number at most `#Ss · ∏_c (cap c + 1) · ∏_i c i`, where each set `A i l`, which reads only the

@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.RecBudget
+meta import Flock.RecBudget
+
+/-!
 `RecBudget` under F1's inner shape: a registration of `MAX_PORTS` ports of trees `MAX_DEPTH` deep, and a table of
 `MAX_INSTANCES` instances, pass, as does a level's registration (`rec-acc` of 2048 rows, its tops, its `2 q` openings'
 coefficients); one port more, one leaf past `2^MAX_DEPTH`, or one instance more is refused, each by its own message.
@@ -11,10 +16,6 @@ four at each node, RecSparse two at each of its ports' two rows, and the link ta
 inner statement's public file of `MAX_INNER_ROWS` instances, or of shared-row tables of `MAX_INNER_ROWS` rows, passes
 `innerRows`, and one instance or row more is refused.
 -/
-module
-
-public import Flock.RecBudget
-meta import Flock.RecBudget
 
 @[expose] public section
 

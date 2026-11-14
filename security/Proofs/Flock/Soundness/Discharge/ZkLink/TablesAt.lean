@@ -31,10 +31,10 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
-# The `--zk` table at each sample, from flock-verify's setup (statements)
+# The `--zk` table at each sample, from verity-verify-proof's setup (statements)
 
 `tablesAt` is the plain headline's table at sample `S`: `stmtOf` of the statement setupH sets up at the challenger's
-live-coin part's sample `dj S`, wherever flock-verify accepts. Here is its `--zk` counterpart, `tablesAtZK`, a `TabZK` built from
+live-coin part's sample `dj S`, wherever verity-verify-proof accepts. Here is its `--zk` counterpart, `tablesAtZK`, a `TabZK` built from
 what `verify --zk` sets up at the sample (`zkInputs I`):
 
 * the statement `stmtOf st` at setupH's statement `st` and its regions, link layout at `PT_LOCAL`;
@@ -48,7 +48,7 @@ needs of it; at a sample with none the table is a reference setup's statement wi
 witness satisfies (as `tableAt`'s `refusedC`).
 
 * `RecordsLiveZK`, `DrawOkZK`: DecodeZL's `RecordsLive` and `DrawOk` at `--zk` (`AcceptsZK`, `zkInputs I`).
-* `TablesAtZKLive`: wherever flock-verify accepts what `wr` writes, the sample's `--zk` table is the executable's: its
+* `TablesAtZKLive`: wherever verity-verify-proof accepts what `wr` writes, the sample's `--zk` table is the executable's: its
   statement is `stmtOf` of setupH's, its dimensions and inner code are `Zk.verify`'s, and its extra claims at the
   record's link points are the executable's (`ExtraRealizes`, as `ofCircuit_extra`).
 * `tablesAtZK_live`: its proof, with `0 < g` from setupH (`setupH_g_pos`, D9), the schedule's shape and padding from
@@ -187,7 +187,7 @@ structure DrawSetupZK (S : Finset (Fin n)) (d : Lean.Json) where
   x : DrawSetup (zkInputs I) mPts S d
   sch : Flock.Schedule
   tPad : ℕ
-  hz : Zk.schedule x.st.m = .ok (sch, tPad)
+  hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)
   hshape : 2 ≤ (schedOf sch).levels.length ∧ ((schedOf sch).levels.headD default).lanes = (schedOf sch).k0 ∧
     (schedOf sch).m - 7 = (schedOf sch).k0 + ((schedOf sch).levels.headD default).logCols ∧
     levelsChained (schedOf sch).levels (schedOf sch).ext = true
@@ -288,7 +288,7 @@ theorem drawSetup_of_setupH_g (ht : I.tags.typed = false) {st : Flock.Stmt}
 /-- A `DrawSetup` at `zkInputs I` whose statement passes `Zk.shapeOk`, with `Zk.schedule`'s schedule at its `m`, is a
 `DrawSetupZK`. -/
 theorem drawSetupZK_of (ht : I.tags.typed = false) (x : Integrate.DrawSetup (ZkExec.zkInputs I) mPts S d)
-    (hzk : Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule x.st.m = .ok (sch, tPad)) :
+    (hzk : Zk.shapeOk x.st = .ok ()) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule x.st.wideLeaf x.st.m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZK I mPts S d, y.x = x ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨hshape, hmsch, hpad⟩ := schedule_zk hz
   obtain ⟨-, hm35, -⟩ := schedule_spec hz
@@ -334,7 +334,7 @@ noncomputable abbrev tablesAtZK : Finset (Fin n) → Reg → TabZK 𝔽 mPts := 
 /-! ## The live session's record -/
 
 /-- **`wr` is the challenger's record of the live `--zk` session** (DecodeZL's `RecordsLive` at `--zk`): whenever
-flock-verify accepts what `wr` writes for the outcome `o` at sample `S`, the record carries the sample `dj S`, the proof
+verity-verify-proof accepts what `wr` writes for the outcome `o` at sample `S`, the record carries the sample `dj S`, the proof
 files are `o`'s, and the record decodes to a session whose table's `root_B`, link points and rep streams' rounds are
 `o`'s. -/
 def RecordsLiveZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
@@ -357,7 +357,7 @@ def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : 
 
 /-! ## The statement -/
 
-/-- **Wherever flock-verify accepts, the `--zk` table is the executable's.** On public-output one-table inputs whose
+/-- **Wherever verity-verify-proof accepts, the `--zk` table is the executable's.** On public-output one-table inputs whose
 `--statement` tags are untyped, with `wr` the challenger's record (`RecordsLiveZK`): whenever the sample `S` is `DrawOkZK`
 (pointwise: link points depend on `|S|`, so no `mPts` holds at every sample) and `verify --zk` accepts what `wr` writes
 for `o` at it, setupH's statement `st` at `dj S` under the `--zk` tags is
@@ -373,7 +373,7 @@ def TablesAtZKLive : Prop :=
     ∀ S R o, DrawOkZK I dj mPts S → AcceptsZK I (wr S R o) →
       ∃ (st : Stmt) (sch : Flock.Schedule) (tPad : ℕ), StmtWF st ∧ RegionsWF st ∧
         Stmt.setupH (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (some (dj S)) I.partition I.program =
-          .ok st ∧ Zk.schedule st.m = .ok (sch, tPad) ∧
+          .ok st ∧ Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) ∧
         ∃ y : DrawSetupZK I mPts S (dj S), y.x.st = st ∧ y.sch = sch ∧ y.tPad = tPad ∧
           tablesAtZK (Reg := Reg) dj y₀ S R = y.table ∧
           ∀ points : Array (Array F128), points.size = 2 → (∀ p ∈ points.toList, p.size = mPts) →
@@ -386,7 +386,7 @@ theorem tablesAtZK_live : TablesAtZKLive (n := n) (mPts := mPts) (Reg := Reg) :=
   rw [(hrec S R o hacc).1] at hst
   obtain ⟨-, sess, schs, -, -, -, -, -, hall⟩ := ZkExec.zk_verify_ok _ _ _ _ hv
   obtain ⟨hs, c, hz, -⟩ := hall 0 (by simp)
-  have hz' : Zk.schedule st.m = .ok (schs[0].1, schs[0].2) := hz
+  have hz' : Zk.schedule st.wideLeaf st.m = .ok (schs[0].1, schs[0].2) := hz
   generalize schs[0].1 = sch at hz'
   generalize schs[0].2 = tPad at hz'
   obtain ⟨-, -, sch₀, hf⟩ := schedule_spec hz'

@@ -17,7 +17,8 @@ check fails.
     cd Security/Proofs && lake env lean --run Flock/Claims/ZkColsSession.lean SESSION_DIR M K_LOG CLAIMS TABLE...
 
 `SESSION_DIR` holds `session.json` and each table's `<TABLE>.rep<r>.bin`; `M`, `K_LOG` and `CLAIMS` (`2 +` points
-times regions) are each table's setup, under the `hm96-sha512/v1` leaf scheme. On `test_lean_zk.py`'s `--zk` RoPE d64
+times regions) are each table's setup, under the `hm96-sha512/v1` leaf scheme, at today's statement version
+(`ZkRun.wideLeaf` at its default). On `test_lean_zk.py`'s `--zk` RoPE d64
 sessions (the `zk-sessions` fixture `fixtures/artifacts.json` declares, at
 `verity/ml/flock/tests/fixtures/zk-sessions`; k_log 22, 8 claims): `sessions/drawn/*` at m 25
 with table `circuit`, `sessions/j2/*` at m 25 with tables `circuit-00 circuit-01`, `sessions/m26/*` at m 26 with table

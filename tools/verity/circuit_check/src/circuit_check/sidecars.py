@@ -33,6 +33,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import os
 import re
 import sys
 from functools import cache
@@ -386,11 +387,10 @@ def named(fid: str) -> Any | None:
 
 
 def _top_level_names(path: str) -> set[str]:
-    """The names a module's top level binds other than by import."""
-    try:
-        tree = ast.parse(Path(path).read_text())
-    except (OSError, SyntaxError, ValueError):
+    """The names a module's top level binds other than by import (none for a source since deleted)."""
+    if not os.path.isfile(path):
         return set()
+    tree = ast.parse(Path(path).read_text())
     out: set[str] = set()
 
     def targets(t: ast.AST) -> None:

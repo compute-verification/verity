@@ -27,8 +27,8 @@ open Classical in
 /-- **Flock's one-stage audit, end to end.** The prover registers `R` (its roots); the challenger's coins sample a
 uniform `kd`-subset of the `n` proof blocks (`Flock.Draw.drawWith`, `Law.execOS` on the byte source `src`); one `--zk`
 session of `J = nTab I` tables proves the sampled proof blocks, `kd / J` in each; and the verifier,
-`flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
-$$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
+`verity-verify-proof verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
+$$\Pr[\text{verity-verify-proof accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
 * a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at
   registration (`XplurZC`: the plurality of what the expected-time extractor recovers behind each commit string) its
@@ -51,15 +51,15 @@ $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong
 Its named assumptions, each a hypothesis:
 * A3 (`uniform/io-getrandombytes`, `Assumptions.UniformRandomBytes`): the verifier's bytes are uniform;
 * `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`, with A6 `uniform/flock-coin-server` for its coins): the record
-  `flock-verify` reads is the one the challenger's live-coin part wrote for the live session, and its sample file the one
-  `flock-verify draw` printed for the verifier's own sample;
+  `verity-verify-proof` reads is the one the challenger's live-coin part wrote for the live session, and its sample file the one
+  `verity-verify-proof draw` printed for the verifier's own sample;
 * `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for the knowledge finders of each table of the
   prover's session, at budgets `qF` (rewinding) and `qS` (self-clash);
 * `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through `LinkCRZC`) for the prover's link finders.
 
 The rest are the verify command's tags (`TagsOkZJ`), an untyped statement whose outputs are public, the count curve's
 numeric conditions, and a reference setup `y₀`: table 0's, at the session's link points, at some sample `d₀`, which the
-session's plan puts in place of a table that a sample doesn't set up. Every sample flock-verify accepts gives one
+session's plan puts in place of a table that a sample doesn't set up. Every sample verity-verify-proof accepts gives one
 (`Flock.SecurityProofs.EndToEnd_refSetup`), at any number of tables. -/
 def EndToEnd : Prop :=
   ∀ (n : ℕ) (Reg : Type)

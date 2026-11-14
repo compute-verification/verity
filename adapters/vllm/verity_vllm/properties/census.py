@@ -631,5 +631,6 @@ def main(args: Options) -> int:
 
 
 def _engine_args(items: list[str]) -> dict:
-    from verity_vllm.engine import vllm_adapter as va  # torch import only on the GPU half
+    # torch import only on the GPU half
+    from verity_vllm.engine import vllm_adapter as va
     return va.parse_engine_args(items)

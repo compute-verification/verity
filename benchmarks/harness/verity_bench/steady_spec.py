@@ -228,6 +228,10 @@ def load_spec(source: str | Path, *, root: Path = SOURCE_ROOT) -> SteadySpec:
         if not re.fullmatch(r"\d+(\.\d+)*", getattr(spec, name)):
             raise ConfigError(f"{path}: `{name}` {getattr(spec, name)!r} isn't a version (digits and dots), as the node "
                               "gives it: the node side refuses a node whose version is another")
+    if not re.fullmatch(r"\d+\.\d+\.\d+", spec.cuda_toolkit):
+        raise ConfigError(f"{path}: `cuda_toolkit` {spec.cuda_toolkit!r} isn't the `V` version the node's nvcc gives "
+                          "(`release 13.3, V13.3.73` gives 13.3.73), which the node side reads and compares: a release "
+                          "alone matches no node")
     setup = PurePosixPath(spec.setup)
     if setup.is_absolute() or ".." in setup.parts or not (root / setup).is_file():
         raise ConfigError(f"{path}: `setup` {spec.setup!r} is no script of the source tree")

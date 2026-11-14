@@ -20,7 +20,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
+/-- **At verity-verify-proof's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
 reps' deployed ones**, at every level `ℓ ≥ 1`: `accepts_opensLDJK` at `leafPlain`, `accepts_opens₀LDUJK` past level 0,
 each rep's caps its proof's recursive caps and its level-`ℓ` openings its `plainLevelColsOf` entries;
 `accepts_opensLDLfJK` at `leafPlain`. -/

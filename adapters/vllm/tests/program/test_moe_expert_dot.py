@@ -12,10 +12,10 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch
 from verity.circuits.kernels.tc import f2fp_bf16_batch, group_sum_total_batch
 from verity.circuits.ops.prims import AmpereBF16TcDot16, HopperBF16WgmmaDot16
+from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
 from verity.definitions.registry import b1
 from verity.definitions.registry import moe as M
 from verity.definitions.registry import prims as P
-from verity.circuits.silicon.models import HOPPER_BF16_M16N8K16
 
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.target_profile import TargetProfile

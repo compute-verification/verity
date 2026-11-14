@@ -31,7 +31,7 @@ binding an entry needs that the file lacks ``unbound``.
 A party that is an entry there, a function of the configuration, the state and
 whether every party is on one machine, runs first, each in a process of its own, one after another in the table's
 order, its output in ``STATE/logs/<party>.log``; one that fails stops the run. Then the table's live parties here
-(sampled proofs', the core parties) run together in one live run of the deployment layer (the table's ``live``): in
+(SPOT's, the core parties) run together in one live run of the deployment layer (the table's ``live``): in
 this process when all of them are here, else meeting the rest over TCP at the configuration's ``address`` and
 ``listen``. Each prints a ``PARTY`` line as it finishes, with its exit code or the name it was refused by.
 

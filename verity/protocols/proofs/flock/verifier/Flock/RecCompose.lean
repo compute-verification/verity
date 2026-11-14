@@ -1,6 +1,6 @@
 /-
-`flock-verify rec-compose`: a recursive statement's verdict from its V* parts' verdicts. Each part is one
-`flock-verify verify --zk` process at one V* statement (`--rec-part J`), with one session. The compiled verifier the
+`verity-verify-proof rec-compose`: a recursive statement's verdict from its V* parts' verdicts. Each part is one
+`verity-verify-proof verify --zk` process at one V* statement (`--rec-part J`), with one session. The compiled verifier the
 recursion's guarantee reads (`RecDeploy.V`, `Proofs.Flock.Claims.Recursion.Deploy`) runs part `s` at the statement
 `RecDeploy.partRaw … s p`: of what `verify` reads, only the part's Flock statement (its circuit, partition, program and
 registered reads, with its staged public file), its index and the verifier's own bindings of it vary by part, and every

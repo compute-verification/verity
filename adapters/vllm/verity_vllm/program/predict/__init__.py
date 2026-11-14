@@ -15,9 +15,11 @@ prefix-cache hit's sources as it reads them), `ingress_policy` (a request's cert
 traces it holds its compiled digests to), `tp_steps` (a node's advice compiled at every rank and composed into one TP workload)
 and `template_counts` (each template's instances in a `dsa` request Program, counted without building it),
 `window_circuit` (a served window as its class's one Circuit) with `window_class` (the class it is of, and H1's tables as it
-reads them), `window_builder` (its proof blocks), `window_rows` (its units given their output rows from a served window's
-values), `scan_state` (the network certifier's scan state as a class's Programs read it), `inference_blocks` (its
-partition into inference blocks, a private table) and `window_weights` (its registered weights), `block_counts`
+reads them), `window_lowering` (a slot's class Program lowered node by node into its units), `window_builder` (its proof
+blocks), `window_cut` (it cut at its linears, given Pearl+'s tables), `window_rows` (its units given their output rows from
+a served window's values), `scan_state` (the network certifier's scan state as a class's Programs read it),
+`inference_blocks` (its partition into inference blocks, a private table) and `window_weights` (its registered weights)
+with `weights_tie` (`verity-vllm weights-tie`: the checkpoint tie of the committer's registration of them), `block_counts`
 (`verity-vllm block-counts`: a day's inference blocks counted from its windows' circuit records and judged against the day's
 declared numbers), `node_registration` (θ of a node's Program, registered from its TP Commit of record),
 and `step_needs` (what `dsa` calls for one served engine step at its launch, each refusal counted in its place).

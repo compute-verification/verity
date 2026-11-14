@@ -21,6 +21,7 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import dataclasses
 import importlib
 import math
+import re
 
 import pytest
 from verity.definitions.numerics import marlin_moe_rows as MR
@@ -80,7 +81,7 @@ FILL = "aten::fill_.Scalar(Tensor(a!) self, Scalar value) -> Tensor(a!)"
 MM = "aten::mm.dtype(Tensor self, Tensor mat2, ScalarType out_dtype) -> Tensor"
 DYN_MM = ("vllm::dynamic_flashinfer_deepgemm_blockscale_gemm(Tensor input, Tensor weight, Tensor weight_scale, int group_size, "
           "bool use_deep_gemm_e8m0) -> Tensor")
-CLAMP = "_C::silu_and_mul_with_clamp(Tensor($0! -> ) result, Tensor input, float limit, float alpha=1.0, float beta=0.0) -> ()"
+CLAMP = "_C::silu_and_mul_with_clamp(Tensor($0! -> ) result, Tensor input, float limit, float alpha=1., float beta=0.) -> ()"
 HASH_ROUTER = ("_moe_C::topk_softplus_sqrt(Tensor($0! -> ) topk_weights, Tensor($1! -> ) topk_indices, Tensor($2! -> ) token_expert_indices, "
                "Tensor gating_output, bool renormalize, float routed_scaling_factor, Tensor? bias, Tensor? input_ids, Tensor? tid2eid, "
                "Tensor? is_padding, Tensor? bias_vl=None, int image_sentinel_lo=0) -> ()")
@@ -235,6 +236,28 @@ def without(evs: list, op: str, nth: int = 0) -> list:
     return [e for e in evs if getattr(e, "id", None) != gone]
 
 
+def written(evs: list, op: str, nth: int, out: ViewDesc, **changed) -> list:
+    """`edited`, the call returning `out` as well."""
+    call = evs[_calls(evs, op)[nth]].id
+    return [dataclasses.replace(e, outs=out) if isinstance(e, DispatchExit) and e.id == call else e for e in edited(evs, op, nth, **changed)]
+
+
+def swapped(evs: list, k: int, a: int) -> list:
+    """`evs` with the dispatcher calls at `k` and `a`, each an enter and the exit after it, in each other's place and under each other's
+    id: the one logged first is then the later of the two."""
+    out = list(evs)
+    out[k], out[a] = dataclasses.replace(evs[k], id=evs[a].id), dataclasses.replace(evs[a], id=evs[k].id)
+    out[k + 1], out[a + 1] = dataclasses.replace(evs[k + 1], id=evs[a].id), dataclasses.replace(evs[a + 1], id=evs[k].id)
+    return out
+
+
+def inside(evs: list, *more) -> list:
+    """`evs` with the events `more` ahead of the scope's own exit."""
+    scope = evs[0].id
+    k = next(k for k, e in enumerate(evs) if isinstance(e, DispatchExit) and e.id == scope)
+    return [*evs[:k], *more, *evs[k:]]
+
+
 def start_of(M: int, requests: int = 1) -> StepStart:
     """A step of M token rows, `requests` requests' in turn, whose input ids are the view the hash router reads."""
     rows = [(f"r{p % requests}", p // requests) for p in range(M)]
@@ -342,7 +365,8 @@ def test_the_marlin_scope_folds_the_gate_the_shared_expert_the_router_and_the_ro
     blk, par = (o.view for o in blocks.outputs)
     assert all(v.alloc < 0 for v in (rank, begin, blk, par)) and len({v.alloc for v in (rank, begin, blk, par)}) == 4
     assert ranks.operands[0].view.alloc == IDS and [type(o) for o in ranks.operands[1:]] == [Pieces, Pieces]
-    assert [(p.width, p.bits) for p in ranks.operands[1].rows[0]] == [(32, p) for p in range(P)]
+    # the pair indices are the Build's cached i32 constants, one instance a value for the whole resolution
+    assert ranks.operands[1].rows[0] == ranks.operands[2].rows[0] == tuple(Const(32, p, "i32", shared=True) for p in range(P))
     assert [o.view for o in blocks.operands] == [ranks.operands[0].view, rank, begin] and (blk.shape, par.shape) == ((P,), (1,))
     # w13 gathers its token's hidden row; the clamped SiLU reads its output; w2 multiplies the router's weight in
     assert [type(o) for o in up.operands] == [Gather, PerRow, PerRow, Shared, WeightField, WeightField]
@@ -362,12 +386,65 @@ def test_the_marlin_scope_folds_the_gate_the_shared_expert_the_router_and_the_ro
     assert [o.view.alloc for o in res[1].operands] == [SHARED_OUT, ROUTED_OUT]
 
 
+def test_the_mxfp4_type_id_is_the_packing_of_float4_e2m1f():
+    """`ScalarType.id` (vLLM's `scalar_type.py`) packs, from the low bit, the exponent (8 bits), the mantissa (8), signed (1), the bias
+    (32), finite values only (1) and the NaN representation (8).  `float4_e2m1f` is exponent 2, mantissa 1, signed, no bias, finite
+    values only, and no NaN representation (0)."""
+    packed, at = 0, 0
+    for value, bits in ((2, 8), (1, 8), (1, 1), (0, 32), (1, 1), (0, 8)):
+        packed |= value << at
+        at += bits
+    assert at <= 64 and packed == MXFP4_TYPE_ID
+
+
+@pytest.mark.parametrize("schema", [EMPTY, FILL, MM, DYN_MM, CLAMP, HASH_ROUTER, ALIGN, MARLIN, SUM, ADD], ids=lambda s: s.split("(")[0])
+def test_each_schema_is_written_as_torch_prints_it(schema):
+    """The observer records `str(func._schema)`, so a schema here is the string torch prints, in which a default of 1.0 is `1.`.  torch
+    prints a `Tensor!` as `Tensor($n! -> )` and does not parse that back, so each is parsed as the `Tensor!` vLLM declares.  `SCOPE` is
+    not held: torch's parser does not read its `PyObject`."""
+    torch = pytest.importorskip("torch")
+    assert str(torch._C.parse_schema(re.sub(r"\(\$\d+! -> \)", "!", schema))) == schema
+
+
+def _specs(group) -> list[str]:
+    return [p.spec.id for p in group.parts if isinstance(p, Compute)]
+
+
 def test_the_hash_router_takes_a_padding_mask_the_step_filled_false():
     buffer, mask = view(PADDING, (64,), "bool"), view(PADDING, (FEW,), "bool")
     res, _ = _resolve(scope_events(FEW, HASHED, padding=mask), HASHED, before=_fill(buffer, False))
     assert isinstance(res[1], Group), _reasons(res)
     plain, _ = _resolve(scope_events(FEW, HASHED), HASHED)
-    assert [p.spec.id for p in res[1].parts if isinstance(p, Compute)] == [p.spec.id for p in plain[0].parts if isinstance(p, Compute)]
+    assert _specs(res[1]) == _specs(plain[0])
+
+
+def test_the_hash_router_reads_only_the_fills_over_the_masks_rows():
+    """Later fills of the mask's allocation that end where its rows begin, begin where they end, or hold no element are not fills of
+    the mask: the fill that covers its rows decides."""
+    lo = 8
+    mask = view(PADDING, (FEW,), "bool", offset=lo)
+    fills = [(view(PADDING, (64,), "bool"), False), (view(PADDING, (lo,), "bool"), True), (view(PADDING, (4,), "bool", offset=lo + FEW), True),
+             (view(PADDING, (0,), "bool", offset=lo + 1), True)]
+    before: list = []
+    for k, (v, value) in enumerate(fills):
+        enter, leave = _fill(v, value)
+        before += [dataclasses.replace(enter, id=900 + k), dataclasses.replace(leave, id=900 + k)]
+    res, _ = _resolve(scope_events(FEW, HASHED, padding=mask), HASHED, before=tuple(before))
+    assert isinstance(res[len(fills)], Group), _reasons(res)
+    plain, _ = _resolve(scope_events(FEW, HASHED), HASHED)
+    assert _specs(res[len(fills)]) == _specs(plain[0])
+
+
+def test_the_hash_router_folds_a_call_recorded_without_its_two_defaulted_arguments():
+    """`topk_softplus_sqrt`'s last two parameters have defaults (`bias_vl=None`, `image_sentinel_lo=0`): a call recorded with the ten
+    arguments ahead of them is the text-token route as well."""
+    evs = scope_events(FEW, HASHED)
+    k = _calls(evs, "topk_softplus_sqrt")[0]
+    assert schema_param_names(evs[k].schema)[10:] == ["bias_vl", "image_sentinel_lo"]
+    res, _ = _resolve([*evs[:k], dataclasses.replace(evs[k], args=evs[k].args[:10]), *evs[k + 1:]], HASHED)
+    assert isinstance(res[0], Group), _reasons(res)
+    plain, _ = _resolve(evs, HASHED)
+    assert _specs(res[0]) == _specs(plain[0])
 
 
 @pytest.mark.parametrize("mask,fills,needle", [
@@ -419,7 +496,17 @@ BY_ARGUMENT = [
     (SCORED, "_dsv4_topk_kernel", 0, {"bias_vl_ptr": view(18, (E,), "float32")}, "is not the (M,) launch at the profile's routed_scaling_factor"),
     (SCORED, "_dsv4_topk_kernel", 0, {"gating_output_ptr": view(SCORES, (FEW, E), "float32", strides=(1, FEW))},
      "gating_output and correction_bias are not packed f32 [M,E] and the [E] bias weight"),
+    (SCORED, "_dsv4_topk_kernel", 0, {"gating_output_ptr": view(SCORES, (FEW + 1, E), "float32")},
+     "gating_output and correction_bias are not packed f32 [M,E] and the [E] bias weight"),
+    (SCORED, "_dsv4_topk_kernel", 0, {"gating_output_ptr": view(SCORES, (FEW, E), "float64")},
+     "gating_output and correction_bias are not packed f32 [M,E] and the [E] bias weight"),
     (SCORED, "_dsv4_topk_kernel", 0, {"correction_bias_ptr": view(99, (E,), "float32")},
+     "gating_output and correction_bias are not packed f32 [M,E] and the [E] bias weight"),
+    (SCORED, "_dsv4_topk_kernel", 0, {"correction_bias_ptr": view(17, (E + 1,), "float32")},
+     "gating_output and correction_bias are not packed f32 [M,E] and the [E] bias weight"),
+    (SCORED, "_dsv4_topk_kernel", 0, {"correction_bias_ptr": view(17, (E,), "bfloat16")},
+     "gating_output and correction_bias are not packed f32 [M,E] and the [E] bias weight"),
+    (SCORED, "_dsv4_topk_kernel", 0, {"correction_bias_ptr": view(17, (E,), "float32", strides=(2,))},
      "gating_output and correction_bias are not packed f32 [M,E] and the [E] bias weight"),
     (SCORED, "_dsv4_topk_kernel", 0, {"topk_weights_ptr": view(WEIGHTS, (FEW, TOPK), "bfloat16")},
      "topk_weights_ptr is not a packed float32 [M,TOPK] view"),
@@ -442,6 +529,14 @@ BY_ARGUMENT = [
      "the w13 moe_wna16_marlin_gemm launch is not fused_marlin_moe's W4A16"),
     (HASHED, "moe_wna16_marlin_gemm", 1, {"top_k": TOPK}, "the w2 moe_wna16_marlin_gemm launch is not fused_marlin_moe's W4A16"),
     (HASHED, "moe_wna16_marlin_gemm", 1, {"b_bias_or_none": view(308, (E, H))}, "the w2 moe_wna16_marlin_gemm launch is not fused_marlin_moe's W4A16"),
+    (HASHED, "moe_wna16_marlin_gemm", 0, {"global_scale": view(308, (1,), "float32")},
+     "the w13 moe_wna16_marlin_gemm launch is not fused_marlin_moe's W4A16"),
+    (HASHED, "moe_wna16_marlin_gemm", 0, {"b_zeros_or_none": view(308, (E, H // 32, 2 * INTER), "int32")},
+     "the w13 moe_wna16_marlin_gemm launch is not fused_marlin_moe's W4A16"),
+    (HASHED, "moe_wna16_marlin_gemm", 1, {"g_idx_or_none": view(308, (INTER,), "int32")},
+     "the w2 moe_wna16_marlin_gemm launch is not fused_marlin_moe's W4A16"),
+    (HASHED, "moe_wna16_marlin_gemm", 1, {"perm_or_none": view(308, (INTER,), "int32")},
+     "the w2 moe_wna16_marlin_gemm launch is not fused_marlin_moe's W4A16"),
     (HASHED, "moe_wna16_marlin_gemm", 0, {"expert_ids": view(309, (1,), "int32")}, "the w13 launch does not read moe_align_block_size's schedule"),
     (HASHED, "moe_wna16_marlin_gemm", 0, {"a": view(HIDDEN + 1, (FEW, H))}, "the w13 launch does not read its input and the router's weights"),
     (HASHED, "moe_wna16_marlin_gemm", 0, {"topk_weights": view(WEIGHTS + 1, (FEW, TOPK), "float32")},
@@ -462,8 +557,13 @@ BY_ARGUMENT = [
     (HASHED, "moe_sum", 0, {"output": None}, "moe_sum is not the modelled (input, output) kernel"),
     (HASHED, "moe_sum", 0, {"input": view(CACHE13, (FEW * TOPK, H))}, "moe_sum input is not the contiguous bf16 [M,TOPK,H] w2 output"),
     (HASHED, "moe_sum", 0, {"input": view(CACHE13 + 1, (FEW, TOPK, H))}, "moe_sum input is not the contiguous bf16 [M,TOPK,H] w2 output"),
+    (HASHED, "moe_sum", 0, {"input": view(CACHE13, (FEW, TOPK, H), "float32")}, "moe_sum input is not the contiguous bf16 [M,TOPK,H] w2 output"),
+    (HASHED, "moe_sum", 0, {"input": view(CACHE13, (FEW, TOPK, H), strides=(2 * TOPK * H, H, 1))},
+     "moe_sum input is not the contiguous bf16 [M,TOPK,H] w2 output"),
     (HASHED, "moe_sum", 0, {"output": view(ROUTED_OUT + 1, (FEW, H))}, "moe_sum does not write the op's second output"),
     (HASHED, "moe_sum", 0, {"output": view(ROUTED_OUT, (FEW, H), "float32")}, "moe_sum does not write the op's second output"),
+    (HASHED, "moe_sum", 0, {"output": view(ROUTED_OUT, (FEW + 1, H))}, "moe_sum does not write the op's second output"),
+    (HASHED, "moe_sum", 0, {"output": view(ROUTED_OUT, (FEW, H), strides=(1, FEW))}, "moe_sum does not write the op's second output"),
 ]
 
 
@@ -472,6 +572,14 @@ def test_the_marlin_scope_refuses_a_call_that_is_not_the_modelled_one(layer, op,
     res, _ = _resolve(edited(scope_events(FEW, layer), op, nth, **changed), layer)
     bad = _reasons(res)
     assert bad and needle in bad[0], bad
+
+
+@pytest.mark.parametrize("c", [view(CACHE13, (FEW * TOPK + 1, 2 * INTER)), view(CACHE13, (FEW * TOPK, 2 * INTER), "float32"),
+                               view(CACHE13, (FEW * TOPK, 2 * INTER), strides=(1, FEW * TOPK))])
+def test_the_marlin_scope_refuses_a_launch_whose_output_has_another_shape_dtype_or_layout(c):
+    """The launch returns the C it is given: each of the shape, the dtype and the strides, alone, makes it another output."""
+    res, _ = _resolve(written(scope_events(FEW, HASHED), "moe_wna16_marlin_gemm", 0, c, c_or_none=c), HASHED)
+    assert _reasons(res) == ["the w13 launch does not write a row-major bf16 [P, N] C"]
 
 
 def test_the_scored_router_is_held_to_its_pins_and_its_grid():
@@ -490,12 +598,20 @@ def test_the_marlin_scope_refuses_a_scope_of_another_shape_order_layer_or_launch
     # a kernel short, and a kernel out of `_forward_impl`'s order
     res, _ = _resolve(without(evs, "moe_wna16_marlin_gemm", 1), HASHED)
     assert "does not have the MXFP4 Marlin shared-expert shape" in _reasons(res)[0]
-    k, a = _calls(evs, "moe_align_block_size")[0], _calls(evs, "topk_softplus_sqrt")[0]
-    swapped = list(evs)
-    swapped[k], swapped[a] = dataclasses.replace(evs[k], id=evs[a].id), dataclasses.replace(evs[a], id=evs[k].id)
-    swapped[k + 1], swapped[a + 1] = dataclasses.replace(evs[k + 1], id=evs[a].id), dataclasses.replace(evs[a + 1], id=evs[k].id)
-    res, _ = _resolve(swapped, HASHED)
+    res, _ = _resolve(swapped(evs, _calls(evs, "moe_align_block_size")[0], _calls(evs, "topk_softplus_sqrt")[0]), HASHED)
     assert "scope runs out of order" in _reasons(res)[0]
+    # a second gate mm
+    many = scope_events(MANY, HASHED)
+    k = _calls(many, "mm")[0]
+    again = [dataclasses.replace(e, id=5000) for e in many[k:k + 2]]
+    res, _ = _resolve(inside(many, *again), HASHED)
+    assert "does not have the MXFP4 Marlin shared-expert shape" in _reasons(res)[0]
+    # a launch of another kernel is no second router: the scope has its shape, and the launch is what it does not explain
+    for layer in (HASHED, SCORED):
+        scope = scope_events(FEW, layer)
+        other = TritonLaunch(5000, scope[0].id, 0, "forward", "vllm.model_executor.other_kernel", "0" * 64, {}, {}, [FEW], 4, 3, 7)
+        res, _ = _resolve(inside(scope, other), layer)
+        assert _reasons(res) == ["unexplained child vllm.model_executor.other_kernel inside moe_forward_shared"]
     # each router at the other kind's layer
     res, _ = _resolve(scope_events(FEW, HASHED, module=f"model.layers.{SCORED}.ffn.experts"), HASHED)
     assert f"layer {SCORED}'s router is not its kind" in _reasons(res)[0]
@@ -529,8 +645,14 @@ def test_the_marlin_scope_refuses_a_gate_the_record_does_not_attest_or_the_build
     assert "moe_forward_shared has no gate mm, and the record does not attest the cuteDSL ll_bf16_gemm tier" in _reasons(res)[0]
     res, _ = _resolve(evs, HASHED, target=dataclasses.replace(H200, batch_invariant=True))
     assert "no registered bf16 x bf16 -> f32 gate Definition for the cutedsl tier" in _reasons(res)[0]
-    res, _ = _resolve(edited(scope_events(MANY, HASHED), "mm", 0, mat2=view(99, (H, E), strides=(1, H))), HASHED)
-    assert "the gate weight is not a bf16 [E,H] weight Root" in _reasons(res)[0]
+    # the gate's refusals name the router whose scores it writes
+    for layer, router in ((HASHED, "topk_softplus_sqrt"), (SCORED, "_dsv4_topk_kernel")):
+        res, _ = _resolve(edited(scope_events(MANY, layer), "mm", 0, mat2=view(99, (H, E), strides=(1, H))), layer)
+        assert _reasons(res) == [f"the gate weight is not a bf16 [E,H] weight Root (<gate>.weight beside the {router} weight)"]
+    # the cuteDSL gate's output is made ahead of the shared expert's first GEMM, not of its second
+    res, _ = _resolve(swapped(evs, _calls(evs, "empty")[0], _calls(evs, "dynamic_flashinfer_deepgemm_blockscale_gemm")[0]), HASHED)
+    late = "the scores topk_softplus_sqrt reads are not one in-scope aten.empty ahead of the shared expert (the cuteDSL gate's output)"
+    assert _reasons(res) == [late]
 
 
 @pytest.mark.parametrize("layer,role,reason", [

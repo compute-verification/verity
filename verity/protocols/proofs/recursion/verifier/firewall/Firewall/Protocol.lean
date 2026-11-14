@@ -1,4 +1,11 @@
-/-
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Protocol
+public import Firewall.Release
+public import Flock.Firewall.Contract
+
+/-!
 # The ZK server's release as a core protocol (`verity/firewall-release/v0`)
 
 One outer session's release decision, through `Core.Protocol`:
@@ -20,12 +27,6 @@ The record events the session appends (its `slot`, a dead holder's stop, a refus
 `Outcome` carries a verdict and a reason, and nothing of the ZK server's state after it. `Firewall.Loop` records them on
 the ZK server's state directory.
 -/
-module
-
-public import CoreProtocol.Cli
-public import CoreProtocol.Protocol
-public import Firewall.Release
-public import Flock.Firewall.Contract
 
 @[expose] public section
 

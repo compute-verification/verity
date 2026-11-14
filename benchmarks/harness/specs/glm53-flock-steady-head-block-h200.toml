@@ -12,9 +12,11 @@ card = "h200"
 cores = 10
 sessions = 120
 ahead = 2
-# The node's own, as its nvidia-smi and its nvcc give them: the node side refuses a node whose driver or toolkit is another.
+# Pins, read once by hand on `vy-spot-glm53`: its nvidia-smi's driver, and the `V` version of the nvcc the setup puts first
+# (`/usr/local/cuda-13.3`). The node side reads both again on the node it runs on and refuses a node whose driver or
+# toolkit is another, so any H200 node at these two versions times these points; one at others needs its own spec.
 driver = "595.91.07"
-cuda_toolkit = "13.3"
+cuda_toolkit = "13.3.73"
 setup = "benchmarks/harness/setup/flock_prover.sh"
 
 [env]

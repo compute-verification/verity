@@ -119,7 +119,7 @@ theorem setupAt_tableJ {I : Exec.Inputs} {d : Lean.Json} {spec : SessionSpec} {s
 padding constant, pads and inner code. -/
 theorem table_eq_zkTab {n mPts : ℕ} {I' : Exec.Inputs} {S : Finset (Fin n)} {d : Lean.Json}
     (ht : I'.tags.typed = false) (y : DrawSetupZJ I' mPts S d) {st : Stmt} (hst : y.x.st = st)
-    (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.m = .ok (sch, tPad))
+    (L : Layout st) {sch : Flock.Schedule} {tPad : ℕ} (hz : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad))
     (hk : st.c.kLog ≤ 27) (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL mPts) :
     y.table = zkTab L hz hk hlay := by
   obtain ⟨x, sch', tPad', hz', _, _, _, _, _, _⟩ := y
@@ -137,7 +137,7 @@ theorem setupZJ_of_setupAt {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false)
     {n mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : DrawOkZKJ I dj mPts S)
     (j : Fin (nTab I)) (hj : j.val < sts.size) {sch : Flock.Schedule} {tPad : ℕ}
-    (hz : Zk.schedule sts[j.val].m = .ok (sch, tPad)) :
+    (hz : Zk.schedule sts[j.val].wideLeaf sts[j.val].m = .ok (sch, tPad)) :
     ∃ y : DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j),
       y.x.st = sts[j.val] ∧ y.sch = sch ∧ y.tPad = tPad := by
   obtain ⟨-, hstJ⟩ := setupAt_tableJ hh hs
@@ -158,7 +158,7 @@ theorem tableZJ_eq_zkTabs {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) 
     (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : DrawOkZKJ I dj mPts S)
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts)
     (j : Fin (nTab I)) (hj : j.val < sts.size) :
@@ -175,7 +175,7 @@ theorem planZJ_eq_tabsJ {I : Exec.Inputs} (hh : I.tags.hiddenOutputs = false) (h
     (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀) {S : Finset (Fin n)} {spec : SessionSpec} {sts : Array Stmt}
     (hs : setupAt (ZkExec.zkInputs I) (some (dj S)) = .ok (spec, sts)) (hok : DrawOkZKJ I dj mPts S)
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL mPts) (R : Reg) :
     planZJ (Reg := Reg) dj y₀ S R = tabsJ sts.size (zkTabs h0 L hz hk hlay) := by
@@ -204,7 +204,7 @@ at table `j`'s statement and its `--zk` schedule, on proof files `2j` and `2j + 
 noncomputable def opnD {mPts : ℕ} (sts : Array Stmt) (ts : List (TabZK 𝔽 mPts)) (proofs : Array ByteArray)
     (j : Fin ts.length) : OpensZ 𝔽 Refine.Dig (List UInt8) :=
   match sts[j.val]? with
-  | some st => match Zk.schedule st.m with
+  | some st => match Zk.schedule st.wideLeaf st.m with
     | .ok (sch, _) => ZkExec.opnZ (Flock.Setup.ofCircuit st) sch (Composed.nXZJ (ts.get j))
         #[proofs[2 * j.val]!, proofs[2 * j.val + 1]!]
     | .error _ => default

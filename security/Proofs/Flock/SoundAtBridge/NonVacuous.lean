@@ -37,9 +37,9 @@ import Mathlib.Topology.Sheaves.Init
 # `SoundAtBridge`'s layer premises hold together, and its event is Flock's
 
 `soundAtBridge_nonvacuous` is the bridge's witness, as `ZkReg/NonVacuousHJ.lean` is `zk_session_soundHJR`'s: at any
-family of Flock sessions, the layer `rowsLayer` that reads them (accepted where flock-verify accepts, opened at the
+family of Flock sessions, the layer `rowsLayer` that reads them (accepted where verity-verify-proof accepts, opened at the
 value layer, its relation that every sampled proof block is right) meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and
-`RelOfRows` together; a proof of it is unsound exactly where its session's outcome is `RowsSession.BadU` (flock-verify
+`RelOfRows` together; a proof of it is unsound exactly where its session's outcome is `RowsSession.BadU` (verity-verify-proof
 accepts and a sampled proof block is wrong or its rows are off at its own reads), so `SoundAtBridge`'s conclusion there is
 Flock's event and no weaker one; and a finite bound on every session's `n · bound` meets the `δ` hypothesis at its
 real value.

@@ -41,6 +41,7 @@ from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm import settings
+from verity_vllm.log import init_logger
 from verity_vllm.records.schema_ids import (
     CENSUS_RANK_SCHEMA,
     ENGINE_PROFILE_SCHEMA,
@@ -49,6 +50,8 @@ from verity_vllm.records.schema_ids import (
 )
 
 __all__ = ["EXTENSION"]
+
+logger = init_logger(__name__)
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -95,7 +98,8 @@ def _moe_collective_modules() -> list[Any]:
     for name in MOE_COLLECTIVE_MODULES:
         try:
             m = importlib.import_module(name)
-        except Exception:  # noqa: BLE001 -- older/newer vLLM without this module
+        except Exception as e:  # noqa: BLE001 -- older/newer vLLM without this module
+            logger.info("tp collective recorder: %s does not import here (%r): its all-reduce is not wrapped", name, e)
             continue
         if hasattr(m, "tensor_model_parallel_all_reduce"):
             mods.append(m)
@@ -119,6 +123,11 @@ def _listed_for(per_rank: dict | None, rank: int) -> list:
     for this rank; empty for an option the driver left out and for one that lists nothing for this rank."""
     listed = (per_rank or {}).get(str(rank))
     return list(listed if listed else [])
+
+
+def _stated_for(per_rank: dict, rank: int) -> Any:
+    """What a per-rank negative of the driver (`{<rank>: ...}`) states for this rank, which the table names as text or as a number."""
+    return per_rank[str(rank)] if str(rank) in per_rank else per_rank[rank]
 
 
 def _per_request(stated: Any, n_req: int) -> dict[str, int]:
@@ -626,13 +635,13 @@ class TP2CaptureWorkerExtension:
 
             relabel = None
             if isinstance(tp_relabel, dict) and str(rank) in {str(k) for k in tp_relabel}:
-                relabel = int(tp_relabel.get(str(rank), tp_relabel.get(rank)))       # NEGATIVE: this rank tags its partials as another rank's
+                relabel = int(_stated_for(tp_relabel, rank))       # NEGATIVE: this rank tags its partials as another rank's
             omit_site = None
             if isinstance(tp_partials_omit_site, dict) and str(rank) in {str(k) for k in tp_partials_omit_site}:
-                omit_site = str(tp_partials_omit_site.get(str(rank), tp_partials_omit_site.get(rank)))   # NEGATIVE: ONE site's partial dropped
+                omit_site = str(_stated_for(tp_partials_omit_site, rank))   # NEGATIVE: ONE site's partial dropped
             flip_site = None
             if isinstance(tp_partials_flip_site, dict) and str(rank) in {str(k) for k in tp_partials_flip_site}:
-                flip_site = str(tp_partials_flip_site.get(str(rank), tp_partials_flip_site.get(rank)))   # NEGATIVE: the collective's input is not the committed partial
+                flip_site = str(_stated_for(tp_partials_flip_site, rank))   # NEGATIVE: the collective's input is not the committed partial
             tps = TPPartialSource(com, model, rank=rank, world=int(facts["tp"]["world_size"]), relabel_rank=relabel, omit_site=omit_site, flip_site=flip_site)
             com.attach_source(tps)
             res["tp_partial_source"] = {"sites": tps.sites, "extra_step_bytes": tps.extra_step_bytes(envelope, model), "relabel_rank": relabel, "omit_site": omit_site,
@@ -769,7 +778,7 @@ class TP2CaptureWorkerExtension:
             # cannot see it -- the per-(request, engine step) attribution against the Match record (sampled ids) must FAIL naming this rank.
             # `[ra, rb, lo, hi]` = the swap applies ONLY on engine steps lo..hi (decode-only: prefill rows untouched, each swapped
             # row one token) -- the discriminating case: coverage cannot see it, the per-(step, request) attribution must.
-            swap_rule = parse_swap_spec(list(tp_swap_requests.get(str(rank), tp_swap_requests.get(rank))))
+            swap_rule = parse_swap_spec(list(_stated_for(tp_swap_requests, rank)))
             if swap_rule is not None:
                 ka = [k for k, v in rid_map.items() if v == swap_rule["a"]]
                 kb = [k for k, v in rid_map.items() if v == swap_rule["b"]]

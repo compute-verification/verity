@@ -31,7 +31,7 @@ clock64 for the whole kernel and for its tensor phases) are diagnostics. Timings
 
 `run.sh --arms fp32-beside` asks a second question of the same card: whether a pipe beats its ceiling when both are
 busy, which falsifies a clock reading of an FP32 add's price (`price.fp32.sm`, the card's `clock.default`, and
-`price.fp32.tensor` in the card file; PRF-612's clock falsifier, under the unit CMP-438 rules: each operation charged in seconds at its own pipe's
+`price.fp32.tensor` in the card file; that price's clock falsifier, under the rule that each operation is charged in seconds at its own pipe's
 data-sheet ceiling). Its arms are duty.cu's A (the e4m3 wgmma alone, R_t), B (a loop of 64 FADDs and 3 loop instructions alone,
 on two warps a scheduler), C (both in one kernel, the adds in the wgmma's shadow on warps of their own, at add:MAC
 ratios 1/128, 1/32 and 1/8) and D (the two alone in alternating phases of 1, 10 and 100 ms), on zero, constant and

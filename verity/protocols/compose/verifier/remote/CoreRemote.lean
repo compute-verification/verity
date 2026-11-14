@@ -254,7 +254,7 @@ private def outputsOf (record : String) : Json := Json.mkObj [
   (PouwCheck.Credit.commitIds 0, Json.mkObj [("record", record), ("value", "pouw/h1/ids@0")]),
   (PouwCheck.Credit.commitRows 0 64, Json.mkObj [("record", record), ("value", "pouw/h1/a/64@0")])]
 
-/-- The verifier's own registered file (`flock-verify --registered`'s): `R`'s tables under the Commit's names, which no
+/-- The verifier's own registered file (`verity-verify-proof --registered`'s): `R`'s tables under the Commit's names, which no
 proof block of the audited circuit reads. -/
 private def readsFile : Json := Json.mkObj [("format", Flock.Registered.FORMAT), ("ports", Json.mkObj (reused.toList.map
   fun x => ((x.getObjValD "value").getStr?.toOption.getD "", Json.mkObj [("domain", x.getObjValD "domain"),
@@ -300,9 +300,12 @@ private def sampledOn (log : Array Json) (outputs : Option Json) (rec : Json) : 
   { id := VStar.Recursive.Sampled.protocol.id, params := textOf (sampledParams log outputs),
     commitment := (textOf rec).toUTF8, evidence := (textOf (sampledEvidence rec)).toUTF8 }
 
+/-- The period's parameters: period `p`, naming no session. -/
+private def periodParams : String := r#"{"key":null,"main":[],"name":"p","sessions":[]}"#
+
 /-- A period of one window per record of `recs`, each naming it as its Commit record, under an empty ledger. -/
 private def monitoringPeriodNaming (recs : List Json) : Case :=
-  { id := PouwCheck.Period.protocolId, params := r#"{"key":null,"main":[],"name":"p"}"#, commitment := "[]".toUTF8,
+  { id := PouwCheck.Period.protocolId, params := periodParams, commitment := "[]".toUTF8,
     evidence := (textOf (Json.mkObj [("pins", Json.arr #[]), ("windows", Json.arr (recs.map fun r =>
       Json.mkObj [("commit", Flock.hexOf (textOf r).toUTF8)]).toArray)])).toUTF8 }
 
@@ -327,7 +330,7 @@ private def policy (log : Array Json) : Answer := answerOf NciCheck.Protocol.pro
 private def sampled (log : Array Json) (outputs : Option Json) : Answer :=
   answerOf (noBlobs VStar.Recursive.Sampled.protocol) (sampledOn log outputs recR)
 
-/-- The verdicts `flock-verify verify --zk` writes for `e`'s sessions (`OneStageZk.verdictJson`'s names), each of record
+/-- The verdicts `verity-verify-proof verify --zk` writes for `e`'s sessions (`OneStageZk.verdictJson`'s names), each of record
 and accepting, reporting the roots it opened `rec`'s registered values against. -/
 private def grantedOf (rec : Json) (e : Spot.OneStageZk.Evidence) : Array (String × Json) :=
   let reads := match rec.getObjValD "registered" with
@@ -419,14 +422,14 @@ private def credited : Core.Protocol where
   Params := PouwCheck.Period.Params
   Commitment := PouwCheck.Period.Commitment
   Evidence := PouwCheck.Period.Evidence
-  Public := PouwCheck.Credit.PeriodCredit
+  Public := PouwCheck.Period.Published
   Profile := PouwCheck.Period.Profile
   params := PouwCheck.Period.paramsOf
   commitment := PouwCheck.Period.commitmentOf
   evidence := PouwCheck.Period.evidenceOf
   digest := PouwCheck.Period.Commitment.digest
-  check p _ _ := .accept ⟨[[0]], [0], 1, PouwCheck.Credit.DELTA, [none]⟩ ⟨p.name, 1⟩
-  publicJson := PouwCheck.Credit.PeriodCredit.toJson
+  check p _ _ := .accept ⟨⟨[[0]], [0], 1, PouwCheck.Credit.DELTA, [none]⟩, p.key, [], 0, 1⟩ ⟨p.name, 1⟩
+  publicJson := PouwCheck.Period.Published.toJson
   profileJson := PouwCheck.Period.profileJson
 
 /-- Remote's composition (`tiedSame` over its records and its tie) with the period's credit and sampled proofs' coins and

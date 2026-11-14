@@ -40,7 +40,7 @@ path = "../../../policy/inference_only/verifier/nci/lean"
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
 [[require]]
 name = "core_vstar_recursive"
-path = "../../../proofs/recursion/verifier/recursive"
+path = "../../../proofs/spot_flock/verifier/lean"
 
 # Work in the composite of record: Pearl+'s run verdict as a core protocol (`PouwCheck.PearlPlus.Protocol`).
 [[require]]

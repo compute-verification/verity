@@ -19,7 +19,7 @@ from verity_flock import rec_live as RL
 from verity_flock import rec_residuals as RR
 
 HERE = Path(__file__).resolve().parent
-BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify"
+BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof"
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
 

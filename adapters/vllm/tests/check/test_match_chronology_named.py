@@ -3,7 +3,12 @@ chronology what the other does not, on the toy of `test_global_match.py` under b
 of a request's declaration, or one event of the log as it is persisted (the fold stays that of the events as served), and holds
 what G6 names: the programmed steps, the idle rule for an early admission, rows that are not contiguous, a logits row without its
 sample or twice in a step, a sampled token that is not the next input row's or its link's, and a row after an EOS stop's last one
-that is fed onward."""
+that is fed onward.
+
+Two things the toy does not serve are held beside it.  What the sampler geometry names is G6's: the toy is greedy and its
+geometry names nothing, so the check is stood in by one that adds a problem to its own answer.  And a prefill in chunks, by hand
+on the two functions that read a request's output events: a chunk's sample before the prompt's last row is an event, is not
+served, and is fed to no row."""
 from __future__ import annotations
 
 import dataclasses
@@ -11,8 +16,10 @@ import dataclasses
 import pytest
 
 from tests.check import test_global_match as tgm
+from verity_vllm.check.match import chronology
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as gmf
+from verity_vllm.check.match.match_run import NamedCheck
 
 memory = tgm.memory                                      # the toy's fixture, under its own name
 
@@ -138,3 +145,52 @@ def test_a_row_after_an_eos_stop_whose_sample_a_later_row_of_the_request_is_fed_
             assert g6["problems"][0] == ("r1: the lag row at engine step 2 (after the EOS at 1) sampled 77 which is fed to the request's row at "
                                          "position 4 in engine step 3: not a placeholder row")
             assert r1["eos_verified"] is False and "eos_lag_rows_accepted" not in r1
+
+
+@IMPLS
+@pytest.mark.parametrize("named", [[], ["engine step 1: a top-p TokenSelect carries no readable split count S"]], ids=["nothing", "a-problem"])
+def test_what_the_sampler_geometry_names_is_g6s_and_it_reads_the_scheduled_live_requests(impl, memory, tmp_path, toy, monkeypatch, named):
+    """The geometry is handed the record's sampler batches and the live requests G6 scheduled from the declared arrivals and the
+    served lengths, by engine step; its evidence is G6's and the document's, and each problem it names fails G6."""
+    geometry = chronology.sampler_geometry_check
+    handed: dict[str, object] = {}
+
+    def adds_named(gp, fold, engine_step_of, steps, sampler_batch, scheduled):
+        geo = geometry(gp, fold, engine_step_of, steps, sampler_batch, scheduled)
+        handed.update(sampler_batch=sampler_batch, live=scheduled["live"], unestablished=scheduled["unestablished"],
+                      steps=sorted(steps), selects_by_step=sorted(engine_step_of[i] for i, r in enumerate(fold.inst) if "TokenSelect" in r["spec"]))
+        return {"info": geo["info"], "problems": [*geo["problems"], *named]}
+    monkeypatch.setattr(chronology, "sampler_geometry_check", adds_named)
+    gp, oracle = toy([tgm.R0, tgm.R1], tmp_path)
+    res, g6 = _g6(impl, gp, oracle)
+    assert g6["problems"] == named and res["verdict"] == ("FAIL" if named else "PASS")
+    assert handed == {"sampler_batch": {0: 2, 1: 2, 2: 1}, "live": {0: 2, 1: 2, 2: 1}, "unestablished": {}, "steps": [0, 1, 2],
+                      "selects_by_step": [0, 0, 1, 1, 2]}
+    assert g6["sampler_geometry"] == res["sampler_geometry"] and g6["sampler_geometry"]["note"] == "no top-p TokenSelect in the fold: nothing to check"
+    assert g6["sampler_geometry"]["transitions"] == res["scheduled_live"]["transitions"]
+
+
+CHUNKED = {   # r0's prompt of four rows in two chunks of two, then one row a step; a logits row a step, the chunk's last row's too
+    0: {"rows": [("r0", 0), ("r0", 1)], "input_token_ids": [5, 7], "logits_rows": [("r0", 1)]},
+    1: {"rows": [("r0", 2), ("r0", 3)], "input_token_ids": [2, 6], "logits_rows": [("r0", 3)]},
+    2: {"rows": [("r0", 4)], "input_token_ids": [9], "logits_rows": [("r0", 4)]},
+    3: {"rows": [("r0", 5)], "input_token_ids": [3], "logits_rows": [("r0", 5)]},
+}
+SAMPLES = {0: [77], 1: [9], 2: [3], 3: [1]}                # step 0's sample is the first chunk's: no row holds it
+
+
+@pytest.mark.parametrize(("prompt_len", "problems", "entry"), [
+    (4, [], {"output_events": 3, "output_event_steps": [1, 2, 3], "output_event_steps_last": 3, "events_fed_forward": 2, "generated_length": 3}),
+    # the same record against a prompt of two rows: step 0's logits row is then the prompt's last, and its sample is to be step 1's first row
+    (2, ["r0: token sampled at step 0 (77) != input row token at step 1 (2)", "r0: fold T_observed 2 != output events - 1 (3)"],
+     {"output_events": 4, "output_event_steps": [0, 1, 2, 3], "output_event_steps_last": 3, "events_fed_forward": 2, "generated_length": 4}),
+], ids=["chunked-prefill", "prompt-of-the-first-chunk"])
+def test_a_chunks_sample_before_the_prompts_last_row_is_an_event_that_is_not_served_and_is_fed_to_no_row(prompt_len, problems, entry):
+    """Every logits row of the request with its sample is an output event, four here, as the fold holds four TokenSelects.  The
+    served ones are those at or after the prompt's last row, and only those are held to the next step's input row."""
+    c = NamedCheck({"checks": []}, "chronology", "by hand")
+    g, ent, present = {"request_id": "r0", "prompt_len": prompt_len}, {"token_selects": 4, "T_observed": 2}, sorted(CHUNKED)
+    events, served = chronology._output_events(c, CHUNKED, SAMPLES, g, ent, present)
+    assert events == [(0, 77, 1), (1, 9, 3), (2, 3, 4), (3, 1, 5)] and served == [(s, t) for s, t, _ in events][4 - entry["output_events"]:]
+    chronology._fed_forward(c, CHUNKED, {"links": []}, g, ent, present, events, served)
+    assert c.problems == problems and ent == {"token_selects": 4, "T_observed": 2, **entry}

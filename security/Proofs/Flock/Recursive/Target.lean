@@ -127,7 +127,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 /-- **V*'s target relation.** Flock's compiled table under the leaf scheme `Lf`, on the hidden statement
 `M.toStatement regs` at the schedule `sch`, after its level-0 cap `cap₀` and the link points `pts` (`tableCL_eq`), played
-with the inner messages `ms` and the inner coins `cs` (read through `ι`), ends accepted. This is the run flock-verify
+with the inner messages `ms` and the inner coins `cs` (read through `ι`), ends accepted. This is the run verity-verify-proof
 refines each table it accepts to (`accepts_tables_hm96_of_leaf`). -/
 def InnerAccepts (ι : W → F) (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (sch : Schedule) (regs : List (Region cls.kLog (cls.m - cls.kLog)))

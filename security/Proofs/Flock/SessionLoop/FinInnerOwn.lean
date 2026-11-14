@@ -84,9 +84,9 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
   obtain ⟨_, _, _, -, htr⟩ := hRT _ tr hi hr
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have hst' : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hjs
-  have hsch' : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
-  have hz : _root_.Flock.Zk.schedule (Masked.stAt x j).m = .ok (tr.sch, tr.tPad) := by
-    have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
+  have hsch' : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
+  have hz : _root_.Flock.Zk.schedule (Masked.stAt x j).wideLeaf (Masked.stAt x j).m = .ok (tr.sch, tr.tPad) := by
+    have e : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok (tr.sch, tr.tPad) := hsch
     rwa [hk2, hst'] at e
   obtain ⟨hn6, hq6⟩ := FlockComplete.JsonRT.zkSchedule_small hm25 hm35 hz
   have hn6' : tr.sch.n + 1 ≤ 65536 := hn6
@@ -365,8 +365,10 @@ theorem finInner_returns_own (vs : finS.SwVals) (hreal : real = realOf src) (x :
     · unfold padCoin
       rw [getElem?_neg Q.coins (nSched spec (Masked.stsOf x) (2 * j.val + r.val) + 2) (by omega)]
       decide
-  have hzT : _root_.Flock.Zk.schedule tr.st.m = .ok (tr.sch, tr.tPad) := by
-    rw [e7]
+  have e9 : tr.st.wideLeaf = (Masked.stAt x j).wideLeaf :=
+    congrArg (fun s : _root_.Flock.Setup => s.wideLeaf) htst
+  have hzT : _root_.Flock.Zk.schedule tr.st.wideLeaf tr.st.m = .ok (tr.sch, tr.tPad) := by
+    rw [e7, e9]
     exact hz
   exact finInner_ok_at (by rw [e7]; exact hm25) (by rw [e7]; exact hm35) (by rw [e6, e7]; exact hwf.hk)
     (e8.trans e6.symm) hms hfoldT hfT hzT hxb hpre hcl (by omega) hρQ hvalQ h0 h1 h2 h3 hβQ

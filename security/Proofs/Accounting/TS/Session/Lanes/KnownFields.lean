@@ -128,7 +128,7 @@ theorem ok_of_known (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c
   rfl
 
 /-- **Lane `l`'s known fields hold at the opened rows**: where its known rows hold at `knownOf P salts (some l)`
-(`KnownHeld`), under flock-verify's complete check, in a circuit that names each port once, at unit 0 whose served roots
+(`KnownHeld`), under verity-verify-proof's complete check, in a circuit that names each port once, at unit 0 whose served roots
 are registered, with its `admit`, `pub` and `o0` ports each a known value's one row (`KnownPort`) and every bit of them
 read (`RowBitRead`), the view's admit bits, salt, position, roots and index are `P`'s and `l`, and `ok = 1`. -/
 theorem laneKnownHolds (T : Tile) (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')

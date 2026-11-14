@@ -42,7 +42,7 @@ reads row 0 as ``claim0`` and row 1 as ``claim1``, so the two statements open on
 ``rec-aux-L<level>`` (R's levels ``rec-rows-stacked-L<level>`` and ``rec-aux-stacked-L<level>``, after their tops) under its
 own salts, what it sends before the outer coins, and the statement's ``row`` and ``aux`` ports read row ``i`` of each in
 instance ``i``. The verifier checks every opened row against those roots, which is how another statement can read the same
-rows, and its reads file names every port of the statement, as `flock-verify` requires of each (``Registered.checkComplete``).
+rows, and its reads file names every port of the statement, as `verity-verify-proof` requires of each (``Registered.checkComplete``).
 
 `stage` writes one level's ``circuit.txt``, the prover's ``inst.bin``, the verifier's ``pub.bin``, ``program.json``,
 ``partition.json`` and the reads file ``registered.json``; `verity_flock.rec_vstage` stages every level

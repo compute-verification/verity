@@ -112,7 +112,7 @@ trace's commitment binds (`CommitmentScheme.Binds`), over a monitoring period of
 registered values `ρ i`), each window's two checks together pinning its checked inputs (`CheckedUnique`); with an
 operator `op` fixed before the period and the covert sender's secrets, window `i`'s reading only the windows before
 `i`, closed by then (`runsBefore`); with the network certifier's openings `tops s` at each statement, and a network
-certifier that runs its code by `trusted-host`, its one run giving the cells the client receives and the observations
+certifier that runs its code by `trusted-device`, its one run giving the cells the client receives and the observations
 of the monitoring period's windows (its record of those cells, in the format `f`), which reads back under a registered
 parameter (`RecordFormat.ReadsBy`); and a covert sender in the server over the registered parameters `Θ`, whose secrets
 a decoder recovers from the client's view of the server side (`MonitoringPeriodChannelReg`):

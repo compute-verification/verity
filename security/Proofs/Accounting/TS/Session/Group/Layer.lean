@@ -43,7 +43,7 @@ along `K`, and one combine, `G = L n + 1` sessions (`Ix L n`: `some (l, c)` lane
 The 32 × 32 leaf's option-A group (`Accounting.TS.Lanes.leafLayer`) is `L = 32`, `n = 1`, indexed by `Option (Fin 32)`.
 
 * `SessionChecks`: what the leaf verifier asks of each of the group's sessions, `leafLayer`'s acceptance at one
-  statement: flock-verify `--zk --registered` accepts it, with its known-content check (`Registered.checkKnownAll`), its
+  statement: verity-verify-proof `--zk --registered` accepts it, with its known-content check (`Registered.checkKnownAll`), its
   complete check (`Registered.checkComplete`) and its known-read check (`KnownRead.check`, at the known content and the
   ports read in full), and `pouw-leaf-own`'s checks of its registered file (`PouwWindow.Lanes.checkOwn`), of its sample
   (`PouwWindow.Lanes.checkFull`, every unit of a non-empty population) and of its reads (`checkOneRead`).
@@ -74,7 +74,7 @@ abbrev Ix (L n : ℕ) : Type := Option (Fin L × Fin n)
 theorem card_ix (L n : ℕ) : Fintype.card (Ix L n) = L * n + 1 := by
   simp [Ix, Fintype.card_option, Fintype.card_prod, Fintype.card_fin]
 
-/-- **What the leaf verifier asks of one of a group's sessions**: flock-verify `--zk --registered` accepts its outcome
+/-- **What the leaf verifier asks of one of a group's sessions**: verity-verify-proof `--zk --registered` accepts its outcome
 `o`, its known-content check at `known`, its complete check and its known-read check at `known` and the ports `full`
 it reads in full included, and `pouw-leaf-own`'s checks of its registered file (the ports `want`), of its sample (every
 unit of a non-empty population) and of its reads (one read at each port) pass. -/

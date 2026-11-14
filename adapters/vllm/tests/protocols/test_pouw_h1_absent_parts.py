@@ -1,18 +1,19 @@
 """What H1's readers make of a part their input leaves out: a rank's release whose committer states no errors, a pull
 from a rank that shipped no acquisitions, a window whose details state no tie to the Commit, a call with no tables,
 commitments that name no session, a manifest row with no tables, a window's record with no commitment, a slot of a
-round the round log does not hold, and an engine that holds no executor in its own process; and of a round the log
-names by no number."""
+round the round log does not hold, an engine that holds no executor in its own process, and a window that holds no
+Program digest; and of a round the log names by no number."""
 from __future__ import annotations
 
 from types import SimpleNamespace
 from typing import Any
 
+import numpy as np
 import pytest
 from verity.protocols.proofs.spot.device.challenger import OPENING_FORM, LiveCommitment
 
 from tests.protocols.test_pouw_h1_served import _unit
-from verity_vllm.protocols.pouw.h1 import CHALLENGER, H1Run
+from verity_vllm.protocols.pouw.h1 import CHALLENGER, H1Run, registered
 from verity_vllm.protocols.pouw.h1.challenger import drawn_of
 from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME, UNTIED
 from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension, executor_of
@@ -188,6 +189,15 @@ def test_commitments_that_name_no_session_give_a_window_with_no_key_of_its_own_n
     commits = {"weights_root": "00" * 64, "requests_root": "00" * 64, **session}
     with pytest.raises(ValueError, match="the window has no key: neither one given nor a window-open root"):
         Served.key(SimpleNamespace(window=None), commits)
+
+
+def test_a_window_that_holds_no_program_digest_commits_a_tree_whose_domain_names_no_program():
+    """`Served._tree` hands `registered.commit` the Program digest as the window holds it: None until `Served.declare`,
+    which the tree's domain then names as its program, as it names any digest."""
+    words, key = np.array([[0, 1, 2, 3], [4, 5, 6, 7]], np.uint16), bytes(range(32))
+    tree = Served()._tree(SimpleNamespace(_key=key), "t/x", words, 0, ROOT)
+    assert tree.program is None and tree.root == registered.commit(None, "t/x", words, key, 0, window=ROOT).root
+    assert tree.root != registered.commit("p", "t/x", words, key, 0, window=ROOT).root
 
 
 @pytest.mark.parametrize("row", [{}, {"tables": None}, {"tables": {}}, {"tables": 0}, {"tables": {"z": ROOT}}],

@@ -126,7 +126,7 @@ fetch_manifests() {  # fetch_manifests ART...: (on node 2) every manifest node 2
 }
 
 n2_question() {  # n2_question ROW: node 2's question for a Commit of ROW (the Attempt's second `question` label, load_item's)
-  printf "Does %s's Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit, as node 1's Commits of its Build do?" "$1"
+  printf "Does %s's Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled proof block, as node 1's Commits of its Build do?" "$1"
 }
 
 place() {  # place KIND KEY GPUS MAX_MIN QUESTION [CPUS [MEM_GB [SUBMITTER]]]: the queue's placement on node 2 as one placed.jsonl
@@ -305,7 +305,7 @@ n2 = d["n2"]
 env.update(SRC=n2["src"], TREE=d["tree"], KEY=n2["key"], COMMIT_KEY=n2["commit_key"], BUILD_ART=n2.get("build_art") or "",
            COMMIT_ART=n2.get("commit_art") or "", REPLAY_DEFERRED="0" if n2.get("proof") else "1", PROOF="1" if n2.get("proof") else "",
            QUESTION=d.get("question") or "",
-           N2_QUESTION=f"Does {env.get('ROW')}'s Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled unit,"
+           N2_QUESTION=f"Does {env.get('ROW')}'s Commit validate on vy-nebius-2's RTX PRO 6000, its replay equal on every sampled proof block,"
                        " as node 1's Commits of its Build do?")
 print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in env.items()))
 EOF

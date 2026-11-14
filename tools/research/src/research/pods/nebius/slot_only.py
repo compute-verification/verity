@@ -145,7 +145,7 @@ def auditor_allows(command: object, marker: Path = AUDITOR) -> bool:
 
 def auditor_refusal(marker: Path = AUDITOR) -> str:
     allowed = " or ".join(f"`{shlex.join(c)}`" for c in auditor_commands(marker)) or "nothing (its list is empty or unreadable)"
-    return (f"this machine is an auditor host ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
+    return (f"this machine is an auditor device ({marker}): it runs only its own service, so a `research run` here is {allowed}; "
             f"take other work to another machine")
 
 
@@ -249,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.renice is not None:
             rec = renice(o, a.renice, dry_run=a.dry_run)
         elif a.auditor:
-            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor host's {a.marker}")
+            rec = stop(o, dry_run=a.dry_run, why=f"not a command of the auditor device's {a.marker}")
         else:
             rec = stop(o, dry_run=a.dry_run)
         if not rec.get("sigterm" if a.renice is None else "reniced"):

@@ -472,7 +472,7 @@ def test_the_set_time_card_is_an_input_marked_simulated_and_the_documents_figure
     carries, with the clause the figure rests on as its source. The document's figure at D_j = 1 carries that mark
     beside its label, whatever the command asks, and the term of record carries none: it rests on no card."""
     assert LB.MARKS == ("measured", "modeled", "assumed", "simulated") and LB.SIMULATED == "simulated"
-    clause = ("`trusted-host`, set-time card clause: the network certifier's card releases each bucket at the tick its "
+    clause = ("`trusted-device`, set-time card clause: the network certifier's card releases each bucket at the tick its "
               "record names, whatever the host and the server send it. It holds only of a calibrated hardware card; no "
               "such card is deployed, and the software pacer that stands in for it does not meet it.")
     assert LB.SET_TIME_CLAUSE == clause and LB.SET_TIME == "with a simulated set-time card"

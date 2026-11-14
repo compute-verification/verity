@@ -60,7 +60,7 @@ USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P]
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
 #: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the executable `lake build` writes there
 VERIFIER = "verity/protocols/proofs/flock/verifier"
-VERIFY_PROOF = "flock-verify"
+VERIFY_PROOF = "verity-verify-proof"
 
 
 def _run(argv: list[str]) -> int:

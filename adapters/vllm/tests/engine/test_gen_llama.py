@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 from verity.definitions.registry import b1
 
+from verity_vllm.config import workload_file
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
@@ -218,7 +219,7 @@ def test_qwen05_plain_table_is_self_consistent():
 def test_workload_file(case):
     from verity_vllm.pipeline.report import workload_summary
     mod = MODULES[case]
-    path = REPO / "workloads" / WORKLOADS[case]
+    path = workload_file(REPO / "workloads" / WORKLOADS[case])
     doc = json.loads(path.read_text())
     assert doc["schema"] == "verity-vllm/workload/v2" and doc["case"] == case
     assert doc["model"] == mod.REPO_ID and doc["engine"]["revision"] == mod.REVISION

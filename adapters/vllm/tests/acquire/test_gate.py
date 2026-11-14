@@ -21,10 +21,10 @@ from verity_vllm.commit.committer.native_host import NativeHostCommitter, SkipRe
 from verity_vllm.correspondence.reader_for_acquire import (
     RUNNER_PATH,
     AcquireCorrespondence,
-    runtime_tree_of,
 )
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records.runtime_tree import runtime_tree_of
 
 PD = "1" * 64
 

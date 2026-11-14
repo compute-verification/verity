@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.Firewall
+public import Spot.Registered
+
+/-!
 Supplied values (`one_stage/registered.py`'s `supplied_root`): a registered value the verifier fills itself, from what it
 holds before the sample, so the prover never chooses it.
 
@@ -22,10 +27,6 @@ holds before the sample, so the prover never chooses it.
   format) with row `i` salted by `salt`: 192 bytes of SHA-512 in counter mode over `verity/one-stage/supplied-salt/v1`,
   the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them.
 -/
-module
-
-public import Flock.Firewall
-public import Spot.Registered
 
 @[expose] public section
 set_option backward.privateInPublic true

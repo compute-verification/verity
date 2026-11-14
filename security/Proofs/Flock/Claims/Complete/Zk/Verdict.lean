@@ -58,6 +58,8 @@ open Flock FlockDeploy Transcript
 
 namespace FlockComplete
 
+variable {wideLeaf : Bool}
+
 /-! ## A masked rep -/
 
 /-- The ring switch's claims at a masked rep: the replay's two claims, each valued by its check on the switched vector
@@ -108,13 +110,13 @@ theorem zk_verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Set
 /-! ## The masked verdict -/
 
 /-- A table's `--zk` schedule and `t_pad`, `default` where it has none. -/
-def schedZkOf (m : ℕ) : Schedule × ℕ :=
-  match Zk.schedule m with
+def schedZkOf (wideLeaf : Bool) (m : ℕ) : Schedule × ℕ :=
+  match Zk.schedule wideLeaf m with
   | .ok v => v
   | .error _ => default
 
 /-- Each table's `--zk` schedule and `t_pad`. -/
-def zkSchedsOf (tabs : Array Setup) : Array (Schedule × ℕ) := tabs.map fun st => schedZkOf st.m
+def zkSchedsOf (tabs : Array Setup) : Array (Schedule × ℕ) := tabs.map fun st => schedZkOf st.wideLeaf st.m
 
 /-- **The masked verdict accepts** when each of its checks passes. -/
 theorem zk_verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
@@ -123,7 +125,7 @@ theorem zk_verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tab
     (hCT : spec.coinTree.isNone = false)
     (hD : Record.decodeWith (Flock.Hashes.ofSha512 h : Flock.Hashes V) spec record = Except.ok sess)
     (hU : ∀ q ∈ (tabs.zip sess.publics).toList, q.1.publics q.2 = .ok ())
-    (hF : ∀ st ∈ tabs.toList, ∃ v, Zk.schedule st.m = .ok v)
+    (hF : ∀ st ∈ tabs.toList, ∃ v, Zk.schedule st.wideLeaf st.m = .ok v)
     (hN : (proofs.size != spec.repStreams.size) = false)
     (hL : (sess.proofSha.size != spec.repStreams.size ||
       !spec.repStreams.all fun a => sess.proofSha.any fun x => x.1 == a.2.2) = false)
@@ -155,8 +157,8 @@ theorem zk_verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tab
     simp only [dgWith_ofSha512, ok_bind, hG a ha, Bool.false_eq_true, ite_false]
     rfl
   simp only [hT, hCT, Bool.false_eq_true, ite_false, hD, ok_bind, hpub, hN, hL, h17]
-  rw [array_mapM_ok _ (fun st => schedZkOf st.m) tabs ?_]
-  · rw [show Array.map (fun st => schedZkOf st.m) tabs = zkSchedsOf tabs from rfl, ok_bind]
+  rw [array_mapM_ok _ (fun st => schedZkOf st.wideLeaf st.m) tabs ?_]
+  · rw [show Array.map (fun st => schedZkOf st.wideLeaf st.m) tabs = zkSchedsOf tabs from rfl, ok_bind]
     rw [Std.Legacy.Range.forIn_eq_forIn_range', forIn_ok _ _ ?_]
     · rfl
     intro i hi

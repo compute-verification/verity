@@ -81,8 +81,10 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-- `queries0` accepts `m` only from 25 to 35. -/
-theorem queries0_range {m q : ℕ} (h : Flock.Zk.queries0 m = .ok q) : 25 ≤ m ∧ m ≤ 35 := by
+theorem queries0_range {m q : ℕ} (h : Flock.Zk.queries0 wideLeaf m = .ok q) : 25 ≤ m ∧ m ≤ 35 := by
   unfold Flock.Zk.queries0 at h
   refine ⟨?_, ?_⟩ <;> by_contra hc
   · simp [show m ≤ 24 by omega, throw, throwThe, MonadExceptOf.throw] at h
@@ -90,24 +92,24 @@ theorem queries0_range {m q : ℕ} (h : Flock.Zk.queries0 m = .ok q) : 25 ≤ m 
       show ¬ m ≤ 31 by omega, show ¬ m ≤ 35 by omega, throw, throwThe, MonadExceptOf.throw] at h
 
 /-- Whether `Zk.schedule` accepts `m`. -/
-def scheduleOkB (m : ℕ) : Bool :=
-  match Flock.Zk.schedule m with
+def scheduleOkB (wideLeaf : Bool) (m : ℕ) : Bool :=
+  match Flock.Zk.schedule wideLeaf m with
   | .ok _ => true
   | .error _ => false
 
 set_option maxRecDepth 100000 in
-theorem scheduleOkB_all : ∀ m, 25 ≤ m → m ≤ 35 → scheduleOkB m = true := by
+theorem scheduleOkB_all : ∀ m, 25 ≤ m → m ≤ 35 → scheduleOkB wideLeaf m = true := by
   intro m h1 h2
-  interval_cases m <;> decide +kernel
+  cases wideLeaf <;> interval_cases m <;> decide +kernel
 
 /-- **A statement the `--zk` shape check passes has a `--zk` schedule**: `queries0` puts `m` in `[25, 35]`, where
 `Zk.schedule` accepts. -/
 theorem schedule_ok_of_shapeOk {st : Flock.Stmt} (h : Flock.Zk.shapeOk st = .ok ()) :
-    ∃ p, Flock.Zk.schedule st.m = .ok p := by
+    ∃ p, Flock.Zk.schedule st.wideLeaf st.m = .ok p := by
   unfold Flock.Zk.shapeOk at h
   obtain ⟨_, hq, -⟩ := except_bind_ok h
   obtain ⟨h1, h2⟩ := queries0_range hq
-  have hb := scheduleOkB_all st.m h1 h2
+  have hb := scheduleOkB_all (wideLeaf := st.wideLeaf) st.m h1 h2
   unfold scheduleOkB at hb
   split at hb
   · exact ⟨_, by assumption⟩
@@ -123,7 +125,7 @@ structure ZkTab (st : Flock.Stmt) where
   regs : ∃ z, RegionsHold (stmtOf st wf.1 (regionsOf st)) z
   sch : Flock.Schedule
   tPad : ℕ
-  hz : Flock.Zk.schedule st.m = .ok (sch, tPad)
+  hz : Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)
 
 namespace ZkTab
 

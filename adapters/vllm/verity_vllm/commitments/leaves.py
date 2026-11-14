@@ -115,7 +115,7 @@ def parse_shape_text(text: str) -> tuple[int, ...]:
         return ()
     dims = []
     for piece in inner.split(","):
-        if not piece.isdigit() or (len(piece) > 1 and piece[0] == "0"):
+        if not piece.isdecimal() or (len(piece) > 1 and piece[0] == "0"):
             raise InvalidArtifact(f"malformed shape text {text!r}")
         dims.append(int(piece))
     return tuple(dims)

@@ -6,26 +6,24 @@ public import Proofs.Flock.Bridge.ScopeGate
 public import Proofs.Flock.Bridge.V5.Accepted
 
 /-!
-# Sampled proofs' acceptance is in the events V3 and V5 bound
+# Sampled proofs' acceptance is in the event V5 bounds
 
-`SampledKSLiveV3` bounds an event of the live audit, that `verify --zk` accepts the files and the transcript
-(`Flock.Bridge.LiveAcceptsScoped`) and the run passes the registration's population (`Flock.Bridge.RunPopOk`), and
-`SampledKSLiveV5` another (`Flock.Bridge.LiveAcceptsKSP`). The verifier is one-stage v2
-(`Spot.OneStageZk.checkBlobs`), which runs `verify --zk`'s checks on the session's files itself. Where it
-accepts, every outcome whose transcript is the session's record and proof files is in both events:
+`SampledKSLiveV5` bounds an event of the live audit, that `verify --zk` accepts the files and the transcript
+(`Flock.Bridge.LiveAcceptsKSP`). The verifier is one-stage v2 (`Spot.OneStageZk.checkBlobs`), which runs
+`verify --zk`'s checks on the session's files itself. Where it accepts, every outcome whose transcript is the session's
+record and proof files is in that event:
 
 * **v2's verdict, whole** (`verdictOf_event`, `step_event`, `run_event`): a session's verdict accepts only where
   `Zk.verify` accepts, the files' ports and roots pass (`Flock.PortRoots.checkOf`), the files' form and the record's
   sample pass (`Flock.KsScope.checkOf`), and the population check passes.
 * **v2's circuit is the one the events read** (`circuitOf_parse`, `statement_zkTags`): V5's event reads
   `ProvedScope.circuitOf`'s circuit, as v2's checks do, and at a statement with hidden outputs that is not templated,
-  as v2's is, that circuit is `HmOut.parse`'s, which V3's (`PortRoots.check`, `KsScope.check`) reads.
+  as v2's is, that circuit is `HmOut.parse`'s, which `PortRoots.check` and `KsScope.check` read.
 * **What acceptance gives** (`Accepted`, `checkBlobsAt_event`, `checkBlobs_event`): at the session's inputs and
-  transcript, `AcceptsZK`, `PortRoots.check`, `KsScope.check` at the record's sample, the program's proof blocks under
-  the verifier's query the record's population `n` in order (`popHeld`), and every public file the session's file
-  loads to of `n` proof blocks (`publicHeld`, `population_held`).
-* **The events** (`Accepted.liveAcceptsScoped`, `Accepted.liveAcceptsKSP`, `Accepted.runPopOk`, `Accepted.v3`): at
-  any registration and sample, and at V3's population, the public file's.
+  transcript, `AcceptsZK`, the ports and roots check and the form check at the record's sample, the program's proof
+  blocks under the verifier's query the record's population `n` in order (`popHeld`), and every public file the
+  session's file loads to of `n` proof blocks (`publicHeld`, `population_held`).
+* **The event** (`Accepted.liveAcceptsKSP`): at any registration and sample.
 
 It is a statement about outcomes, not probabilities: that v2's acceptance in the period's game is no likelier than an
 event of the live audit is the coupling (`CouplingTarget`), stated for V5's transcript event (`LiveAcceptsZKP`).
@@ -192,7 +190,7 @@ theorem statement_zkTags {t : Flock.Tags} (h : Flock.Tags.find? _root_.Spot.OneS
 
 /-! ## What acceptance gives -/
 
-/-- **What V3's and V5's events read of one session**, at its inputs `I` and transcript `t`, the verifier `v` and the
+/-- **What v2's acceptance gives of one session**, at its inputs `I` and transcript `t`, the verifier `v` and the
 population `n`: `verify --zk` accepts the transcript (`AcceptsZK`) at a statement with hidden outputs that is not
 templated; the files' ports and roots (`PortRoots.checkOf`) and their form at the record's sample (`KsScope.checkOf`)
 pass on the circuit `verify` reads (`ProvedScope.circuitOf`); the program's proof blocks under the verifier's query are
@@ -263,50 +261,10 @@ theorem checkBlobs_event {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.On
 
 variable {I : Exec.Inputs} {t : Exec.Transcript} {v : _root_.Spot.Registration.Verifier} {n : ℕ}
 
-/-- **`Accepted`'s ports and roots pass on `HmOut.parse`'s circuit** (`PortRoots.check`), the one `verify` reads at
-its flat statement. -/
-theorem Accepted.portsCheck (h : Accepted I t v n) :
-    Flock.PortRoots.check (ZkExec.zkTags I) I.circuitFile I.publicFile I.tables = .ok () := by
-  show Flock.PortRoots.checkOf (Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables) (ZkExec.zkTags I)
-    I.publicFile = .ok ()
-  rw [← circuitOf_parse h.flat.1 h.flat.2]
-  exact h.ports
-
-/-- **`Accepted`'s form passes on `HmOut.parse`'s circuit** (`KsScope.check`), the one `verify` reads at its flat
-statement. -/
-theorem Accepted.formCheck (h : Accepted I t v n) :
-    Flock.KsScope.check (ZkExec.zkTags I) I.circuitFile I.publicFile I.tables I.count
-      (Exec.recordDraw t.record) = .ok () := by
-  show Flock.KsScope.checkOf (Flock.HmOut.parse (ZkExec.zkTags I) I.circuitFile I.tables) (ZkExec.zkTags I)
-    I.publicFile I.count (Exec.recordDraw t.record) = .ok ()
-  rw [← circuitOf_parse h.flat.1 h.flat.2]
-  exact h.form
-
-/-- **`Accepted` is in V3's acceptance event** at every outcome whose transcript is the session's. -/
-theorem Accepted.liveAcceptsScoped (h : Accepted I t v n) {m : ℕ} {Reg : Type} (R : Reg) (S : Finset (Fin m)) :
-    Flock.Bridge.LiveAcceptsScoped I (R, S, t) :=
-  ⟨⟨h.accepts, h.portsCheck⟩, h.formCheck⟩
-
 /-- **`Accepted` is in V5's acceptance event without public inputs** at every outcome whose transcript is the
 session's. -/
 theorem Accepted.liveAcceptsKSP (h : Accepted I t v n) {m : ℕ} {Reg : Type} (R : Reg) (S : Finset (Fin m)) :
     Flock.Bridge.LiveAcceptsKSP I none (R, S, t) :=
   ⟨h.accepts, h.ports, _, _, h.form⟩
-
-/-- **`Accepted` passes the run's population check** at a descriptor that parses to the verifier's program. -/
-theorem Accepted.runPopOk (h : Accepted I t v n) {desc : Claims.Msg}
-    (hd : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program) : Flock.Bridge.RunPopOk desc v.query n :=
-  ⟨v.program, hd, h.pop⟩
-
-/-- **`Accepted` is in the event `SampledKSLiveV3` bounds**, at its population, the public file's (`pub.n = m`, at the
-public file `pub` the session's file loads to under V3's circuit), and at a descriptor that parses to the verifier's
-program. -/
-theorem Accepted.v3 (h : Accepted I t v n) {D : Flock.Desc} {pub : Flock.Public}
-    (hpub : Flock.HmOut.loadPublic (ZkExec.zkTags I) D.unroll I.publicFile = .ok pub) {m : ℕ} (hm : pub.n = m)
-    {desc : Claims.Msg} (hd : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program) {Reg : Type}
-    (R : Reg) (S : Finset (Fin m)) :
-    Flock.Bridge.LiveAcceptsScoped I (R, S, t) ∧ Flock.Bridge.RunPopOk desc v.query m := by
-  obtain rfl : n = m := (h.loads hpub).symm.trans hm
-  exact ⟨h.liveAcceptsScoped R S, h.runPopOk hd⟩
 
 end Verity.Sampled

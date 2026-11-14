@@ -16,7 +16,7 @@ from ..schemes.ncp import assemble, checked_route_u
 from . import ncp2
 from . import words as W
 from .ncp2 import D, Shape
-from .words import M32, i32_to_f32_rn, sx
+from .words import M32, i32_to_f32_rn
 
 M64 = (1 << 64) - 1
 
@@ -158,10 +158,6 @@ def weight_outputs(call: Call, kind: str = "shift24") -> tuple[list[list[int]], 
 def product(call: Call) -> list[list[int]]:
     """A·Bᵀ over the integers, as int32 encodings (Z's value, `checkedU_final`)."""
     return [[sum(x * y for x, y in zip(ar, br)) & M32 for br in call.b] for ar in call.a]
-
-
-def signed(v: int) -> int:
-    return sx(v, 32)
 
 
 __all__ = ["Call", "Result", "dequant", "e1_row", "evaluate", "f1_col", "key", "node", "product", "root", "row_digest",

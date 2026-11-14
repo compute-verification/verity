@@ -322,7 +322,7 @@ def test_a_missing_credential_is_a_gap_in_the_digest_and_never_an_anomaly(tmp_pa
     W.one_pass(ctx(cfg, state, T0 + 4 * 3600), out=open(os.devnull, "w"))
     (digest, thread), = posts.sent
     assert thread is None and digest.startswith("*Cloud health and spend, 2026-10-18T16:00Z*") and "Nothing open." in digest
-    gaps = [ln for ln in digest.split("*Unmonitored* (")[1].splitlines()[1:] if ln.startswith("• needs ")]
+    gaps = [ln for ln in digest.split("*Unwatched* (")[1].splitlines()[1:] if ln.startswith("• needs ")]
     assert len(gaps) == len(set(gaps))
     for need in ("needs R2_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, R2_ENDPOINT: R2 bucket `store`",
                  "needs STORE_INDEXER_DATABASE_URL", f"needs {tmp_path}/gh_read_token.sh: the GitHub API rate limit",

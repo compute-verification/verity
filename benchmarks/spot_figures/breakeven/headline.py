@@ -3,25 +3,27 @@ reaches 10% of its compute, and a row's sampling plan, from one entry point at a
 
     python -m benchmarks.spot_figures.breakeven.headline rows --out DIR [--rows ROW ...] [--scopes SCOPE ...]
         [--betas BETA ...] [--workers N]      # DIR/rows.jsonl, one row a (row, scope, beta), and DIR/figure.json
-        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]] [--partition NAME]
+        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]] [--partition NAME | --whole]
     python -m benchmarks.spot_figures.breakeven.headline read ROWS.jsonl ...
     python -m benchmarks.spot_figures.breakeven.headline plan --row ROW --scope SCOPE --beta BETA --out DIR
         [--types MIX.json]                    # DIR/mix.json: the row's plan, block by block
-        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]] [--partition NAME]
+        [--steady ROWS.json [--steady-map MAP.json] | --prices [TABLE.json]] [--partition NAME | --whole]
     python -m benchmarks.spot_figures.breakeven.headline plan --row "(ii) honest" --scope "world year" \
         --beta 0.05544106123672309 --prices --out DIR    # row (ii) at its plan's budget, at today's table
 
 from the repository's root. A row (`ROWS`) is the proof server's line at its last step
 (`sweep.served_line()["P5+poolwin600"]`) with its case's levers at their measured values, over the 128k workload with
 every sparse-MLA head's blocks (`volume`: the `workload` card's sparse-MLA blocks counted over the serve plan's
-requests, `mla128`), its verification phase a datacenter's window. The head is the card's whole key blocks and end
-block, the forms that verify; `--partition UNITS` cuts each head's key block into its scores unit and its values
-units instead (`UNITS`, a `partition` card beside the line's own cut, modeled), and a row so cut names the cut and its
-label (`cut`). `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
-as measured and the row's scale. `evaluate` charges it: the carried pool's pages recommitted at each edge
-(a copy stratum and the kv arm's hash tax), a request cut at the edge recomputed, its prefix hits reproved, B128's
-wait at paced egress, the pool's AND gates when only replays read it, and a replay block served at most trace128's
-longest output.
+requests, `mla128`), its verification phase a datacenter's window, its design held to the plan its name adds (`PLANS`:
+the planner's own, or a margin on the strata, at the planner's κ or a held one). The head is cut as it is served
+(`UNITS`, a `partition` card beside the line's own cut): each head's key block its scores unit and its values units of 64
+columns, reading the block's key rows from their writers' committed rows, one writer a column block for all the
+heads; a row names the cut and its label (`cut`). `--whole` prices the head as the card's whole key blocks and end
+block instead, for comparison, and `--partition NAME` cuts the line by another `partition` card. `price` prices its
+strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier as measured and the row's scale.
+`evaluate` charges it: the carried pool's pages recommitted at each edge (a copy stratum and the kv arm's hash tax), a
+request cut at the edge recomputed, its prefix hits reproved, B128's wait at paced egress, the pool's AND gates when
+only replays read it, and a replay block served at most trace128's longest output.
 `assemble` refuses a row whose request count isn't its own plan's, and takes its split from its own design.
 
 `--steady ROWS.json` prices each block of the row's line that a steady-state row of the file measures at that row
@@ -119,16 +121,19 @@ MEASURED = {"prover": PROVER_MEASURED, "tmpl": "measured", "dense_k": 2, "verify
             "replay": 5258.0, "live": False, "commit_write": False, "registration": "datacenter"}
 #: the served tokens' line, unfused
 TOKENS = {"line": "tokens", "fuse": False, "fused": ""}
-#: the `partition` card that cuts each head's key block into its scores unit and its values units of 64 columns,
-#: beside the line's own cut: modeled, and no unit has staged with a verdict, so a row takes it only when named
-#: (`--partition`); the rows price the head as the `workload` card's whole blocks, whose 64-key block and end block
-#: are at the k_log of the forms that verify
+#: the `partition` card that cuts each head's key block as it is served: its scores unit and its values units of 64
+#: columns, which read the block's key rows from their writers' committed rows (one writer a column block for all the
+#: heads, `SparseMlaHeadKeysWire_v1`), so one row holds every unit's keys. Every row's line is cut by it (`ROWS`);
+#: `--whole` prices the head as the `workload` card's whole key blocks and end block instead, for comparison
 UNITS = "head-scores-values"
+#: the cut every row's line takes (`ROWS`), and the name a row is priced on the `workload` card's own cut by
+CUT, WHOLE = {"partition": UNITS}, ""
 #: the types whose seconds a warm served block replaces in (iii) (assumed, x0.25, no timing behind it): the sparse-MLA
-#: row's units under either cut (a head block whole, or its scores and values units; a head's end; a split's column
-#: ends; the combine; a whole row) and the families beside them. It reaches only blocks at the planner's price: a
-#: table's row or a steady-state row is already a warm measurement
-WARM_FAMILIES = ("SparseMlaHeadBlock_v1{", "SparseMlaHeadScores_v1{", "SparseMlaHeadValues_v1{", "SparseMlaHeadEnd_v1{",
+#: row's units under either cut (a head block whole, or its scores and values units and their key rows' writers; a
+#: head's end; a split's column ends; the combine; a whole row) and the families beside them. It reaches only blocks
+#: at the planner's price: a table's row or a steady-state row is already a warm measurement
+WARM_FAMILIES = ("SparseMlaHeadBlock_v1{", "SparseMlaHeadScoresCols_v1{", "SparseMlaHeadValues_v1{",
+                 "SparseMlaHeadKeysWire_v1{", "SparseMlaHeadEnd_v1{",
                  "SparseMlaSplitEndCols_v1{", "SparseMlaSplitEnd_v1{", "Fp8GroupQuantUe8m0_v1{",
                  "SparseMlaCombine_v1{", "BatchedGemm_v1{", "CublasSplitKGemmF32Out_v1{", "CublasSplitKGemm_v1{",
                  "DsaRMSNorm_v1{", "RmsNormMnnvl_v1{", "AllReduceResidualMnnvl_v1{", "AllReduceMnnvl_v1{",
@@ -139,10 +144,20 @@ def warm(f: float) -> dict:
     return {p: f for p in WARM_FAMILIES}
 
 
-#: each row's case fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
-ROWS = {"(i) honest": {"case": TOKENS | MEASURED, "scale": {}},
-        "(ii) honest": {"case": MEASURED, "scale": {}},
-        "(iii) honest": {"case": MEASURED, "scale": warm(0.25)}}
+#: each case's fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
+CASES = {"(i) honest": {"case": TOKENS | MEASURED | CUT, "scale": {}},
+         "(ii) honest": {"case": MEASURED | CUT, "scale": {}},
+         "(iii) honest": {"case": MEASURED | CUT, "scale": warm(0.25)}}
+#: the margin a margin plan samples every stratum by but the one that costs the most proving
+MARGIN = 0.125
+#: the plans a case's design may be held to, by what each adds to the case's name: the keywords its design passes the
+#: planner beside the line's (`optimize.two_stage_design`). None is the planner's own: each template a stratum, at its
+#: κ. With a margin, `MARGIN`, it samples (1 + MARGIN) k_t of every stratum but the one that costs the most proving, at
+#: the planner's κ or held to the κ named, which holds down the proof blocks a sampled replay block proves
+PLANS = {"": {}, ", margin 1/8": {"margin": MARGIN},
+         **{f", margin 1/8, kappa 2^{e}": {"margin": MARGIN, "kappas": (2.0 ** e,)} for e in range(-4, -9, -1)}}
+#: a row: a case under a plan
+ROWS = {name + more: case | {"plan": plan} for name, case in CASES.items() for more, plan in PLANS.items()}
 
 RMS8 = "RMSNormFusedCudaVector8_v1{N=6144,"
 #: the Lean verifier as measured, core-seconds a one-block statement and a block: RMSNorm v8's measured statement times
@@ -160,12 +175,12 @@ GPU_GIB = 2163991326720 / 2**30 / 8
 #: each type's prover and verifier pair in host memory, GiB: quant at 291 GiB a K6144 pair, other K's in proportion
 #: (assumed); the sparse-MLA head block's as a prover and verifier of a row's 64 keys took at load, a floor (assumed:
 #: the head block's own pair is unmeasured, and at 64 keys it has that statement's MACs and k_log); its scores unit's
-#: the same, at most its k_log, and its values unit's an eighth of it, at three k_log below it or more (assumed: neither
-#: unit's pair is measured)
+#: the same, at most its k_log, and its values unit's and its key rows' writer's an eighth of it, at three k_log below
+#: it or more (assumed: no unit's pair is measured)
 HEAD_PAIR_GIB = 64.4 + 72.1
 PAIR_GIB = {**{f"Fp8GroupQuantUe8m0_v1{{K={k},": 291.0 * k / 6144 for k in (6144, 2048, 1536, 256)},
-            "SparseMlaHeadBlock_v1": HEAD_PAIR_GIB, "SparseMlaHeadScores_v1": HEAD_PAIR_GIB,
-            "SparseMlaHeadValues_v1": HEAD_PAIR_GIB / 8}
+            "SparseMlaHeadBlock_v1": HEAD_PAIR_GIB, "SparseMlaHeadScoresCols_v1": HEAD_PAIR_GIB,
+            "SparseMlaHeadValues_v1": HEAD_PAIR_GIB / 8, "SparseMlaHeadKeysWire_v1": HEAD_PAIR_GIB / 8}
 
 
 def host_provers(pair: float, budget: float = GPU_GIB) -> int:
@@ -616,6 +631,7 @@ def installed(P: SimpleNamespace, spec: dict):
         return m
 
     def designed(cells, replay_blocks, delta, **kw):
+        kw |= spec["plan"]
         row = design(cells, replay_blocks, delta, **kw)
         trace.designs.append({"cells": list(cells), "row": row, "kw": kw})
         return row
@@ -638,13 +654,16 @@ def installed(P: SimpleNamespace, spec: dict):
 def spec_of(row: str, scope: str, beta: float, n_heads: int | None = None, steady: dict | None = None,
             prices: dict | None = None, partition: str | None = None) -> dict:
     """A job: `ROWS[row]` at `scope` and the pinned `beta`, over every sparse-MLA head, its line cut by the `partition`
-    card `partition` where one is named (the `workload` card's own cut otherwise), its blocks priced at the steady-state
-    rows of `steady` (`steady()`) where it holds one, or at `verity bench prove`'s table (`prices()`). A row of either
-    for a block the cut leaves out (`replaced`) is listed unread: it measured the census's cut, not this line's."""
+    card `partition` where one is named, by the `workload` card's own cut where it is empty (`WHOLE`), and else by the
+    row's own (`CUT`), its blocks priced at the steady-state rows of `steady` (`steady()`) where it holds one, or at
+    `verity bench prove`'s table (`prices()`). A row of either for a block the cut leaves out (`replaced`) is listed
+    unread: it measured another cut, not this line's."""
     if steady and prices:
         raise ValueError("a row is priced at steady-state rows or at a table, not both")
     r = ROWS[row]
     case = r["case"] | ({} if partition is None else {"partition": partition})
+    if not case.get("partition"):
+        case = {k: v for k, v in case.items() if k != "partition"}
     gone = replaced(case.get("partition", ""))
     if steady:
         steady = {"rows": {b: x for b, x in steady["rows"].items() if b not in gone},
@@ -652,8 +671,8 @@ def spec_of(row: str, scope: str, beta: float, n_heads: int | None = None, stead
     if prices:
         prices = prices | {"cells": {b: x for b, x in prices["cells"].items() if b not in gone},
                            "unread": sorted([*prices.get("unread", ()), *(b for b in prices["cells"] if b in gone)])}
-    return {"row": row, "scope": scope, "beta": beta, "case": case, "scale": r["scale"], "steady": steady,
-            "prices": prices, "volume": volume(n_heads, case.get("partition", "")),
+    return {"row": row, "scope": scope, "beta": beta, "case": case, "scale": r["scale"], "plan": r["plan"],
+            "steady": steady, "prices": prices, "volume": volume(n_heads, case.get("partition", "")),
             "heads": heads() if n_heads is None else n_heads, "S": SERVED_BITS,
             "share": SHARE, "step": STEP, "set": CHARGES, "S_case": SERVED_CASE, "mix": MIX, "rule": RULE,
             "run_s": RUN_S}
@@ -716,6 +735,7 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
                                       "limit": pt["limit"]},
                "served_bits": L[1]["served_bits"].value, "requests": s.requests, "flop_request": s.flop_request,
                "gpu_seconds": gs, "case": spec["case"], "scale": spec["scale"], "volume": spec["volume"],
+               "plan": spec["plan"], "kappa": p["kappa"], "k_sum": sum(p["k"].values()),
                "census_scope": {k: getattr(sweep.SCOPES[scope], k) for k in ("requests", "flop_request")}}
         row["verification_phase"]["binding"] = binding_bound(P, d["row"], pt["registration_sample"], pt["sessions"],
                                                              gs / phase)
@@ -889,8 +909,9 @@ def table_share(split: dict) -> float | None:
 def unscaled(case: dict) -> str | None:
     """The row of `ROWS` with `case` (its cut aside) and no scale: the row a scaled row of that case differs from by
     its scale alone."""
-    cut = {k: case[k] for k in ("partition",) if k in case}
-    return next((n for n, r in ROWS.items() if not r["scale"] and r["case"] | cut == case), None)
+    def uncut(c: dict) -> dict:
+        return {k: v for k, v in c.items() if k != "partition"}
+    return next((n for n, r in ROWS.items() if not r["scale"] and uncut(r["case"]) == uncut(case)), None)
 
 
 def by_scale(scale: dict) -> str:
@@ -1113,10 +1134,13 @@ def main(argv=None) -> int:
                          help="price at `verity bench prove --json`'s table: the file, or with no file the evidence "
                               "store's table read now (kept as DIR/prices.json); a block of the line whose row is its "
                               "own or its family's steady-state row is priced at it")
-        cmd.add_argument("--partition", metavar="NAME",
-                         help=f"the partition card that cuts every row's line beside its own cut (`{UNITS}`: each "
-                              "head's key block as its scores and values units, modeled); default none, the workload "
-                              "card's whole head blocks")
+        cut = cmd.add_mutually_exclusive_group()
+        cut.add_argument("--partition", metavar="NAME",
+                         help=f"the partition card that cuts every row's line beside its own cut; default `{UNITS}`, "
+                              "each head's key block as it is served: its scores and values units and their key rows' "
+                              "writers")
+        cut.add_argument("--whole", dest="partition", action="store_const", const=WHOLE,
+                         help="price each head as the workload card's whole key blocks and end block, for comparison")
     a = ap.parse_args(argv)
     if a.cmd != "read" and a.steady_map and not a.steady:
         ap.error("--steady-map maps the rows of --steady")

@@ -1,4 +1,9 @@
-/-
+module
+
+public import Identity.Domains.Pouw
+public import Identity.Domains.Shared
+
+/-!
 One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
 records, schemes and protocols by. `verity/ml/commitments/domains.py` mirrors it, entry for entry
 (`tests/test_domains.py`).
@@ -13,10 +18,6 @@ The table is `Identity.Domains.Pouw`'s entries (PoUW's, and Pearl's labels), the
 more than one protocol reads), then this module's. PoUW's Lean imports `Identity.Domains.Pouw`, which imports the shared
 ones, and never the other protocols' separators.
 -/
-module
-
-public import Identity.Domains.Pouw
-public import Identity.Domains.Shared
 
 @[expose] public section
 

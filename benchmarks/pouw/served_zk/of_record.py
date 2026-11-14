@@ -1,18 +1,18 @@
 """Lean is the served window's verifier (`verity.protocols.accounting.pouw.verifier.verifier`). Each of PoUW's checks on the
 challenger's path runs its Lean and its Python reference on one input:
 
-* ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered`);
+* ``registered``: PoUW's rule over the registration (`pouw-check-difftest registered`, `core_check.registered_twin`);
 * ``registration``: one-stage's R1-R8 against the challenger's own copies (`sampled-proofs-difftest registration`,
   `registration.check`), with the fan-out and tied values its verdict publishes (`registration_answer`); a PoUW window
   registers no values;
 * ``public``: the service's public-items rule over the Stream's Spec (`sampled-proofs-difftest check_public`,
   `service.check_public`);
-* ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch`);
+* ``pass``: the pass's epoch under the challenger's coins (`pouw-check-difftest pass`, `core_check.pass_epoch_twin`);
 * ``draw``: the sampled proof blocks are the sampling coin's, under the challenger key the window's parameters pin when it is
-  certified (`pouw-check-difftest draw`, `core_check.draw`);
-* ``opening``: a sampled proof block's opening (`pouw-check-difftest opening`, `core_check.opening`), with ``prelude``,
+  certified (`pouw-check-difftest draw`, `core_check.draw_twin`);
+* ``opening``: a sampled proof block's opening (`pouw-check-difftest opening`, `core_check.opening_twin`), with ``prelude``,
   `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
-* ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case`).
+* ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case_twin` its Python).
 
 Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
 two agree when their outputs are the same canonical JSON (an `answer`'s reason included), or when both refuse the input.
@@ -128,24 +128,24 @@ def _params_commitment(x: dict) -> tuple[dict, dict]:
 
 
 def py_registered(x: dict) -> dict:
-    return {"reason": CC.registered(*_params_commitment(x))}
+    return {"reason": CC.registered_twin(*_params_commitment(x))}
 
 
 def py_opening(x: dict) -> str | None:
     p, c = _params_commitment(x)
     salt = None if x.get("salt") is None else bytes.fromhex(x["salt"])
-    return CC.opening(p, c, x["units"], x["unit"], bytes.fromhex(x["pub"]), x["opening"], salt)
+    return CC.opening_twin(p, c, x["units"], x["unit"], bytes.fromhex(x["pub"]), x["opening"], salt)
 
 
 def py_pass(x: dict) -> dict:
     raw = None if x["raw"] is None else bytes.fromhex(x["raw"])
     certified = (None if x.get(k) is None else bytes.fromhex(x[k]) for k in ("reveal", "committed", "stream", "prover"))
-    how, refused = CC.pass_epoch(x["coins"], raw, x["context"], x["recorded"], *certified)
+    how, refused = CC.pass_epoch_twin(x["coins"], raw, x["context"], x["recorded"], *certified)
     return {"how": how} if refused is None else {"refused": list(refused)}
 
 
 def py_draw(x: dict) -> dict | None:
-    refused = CC.draw(x["coins"], x["recorded"], x["opening"], x["stream"], x["registration"], x["receipt"], x["k"],
+    refused = CC.draw_twin(x["coins"], x["recorded"], x["opening"], x["stream"], x["registration"], x["receipt"], x["k"],
                       x["population"], x["units"], x.get("key"))
     return None if refused is None else {"refused": list(refused)}
 
@@ -227,7 +227,7 @@ class Record:
 
     def answer(self, case: dict) -> dict:
         """PoUW's outcome (`Core.Answer`) of a `serve` case, the whole outcome compared, reason included."""
-        py = CC.case(copy.deepcopy(case))
+        py = CC.case_twin(copy.deepcopy(case))
         if not self.lean:
             self._note("answer", py, None, None)
             return py

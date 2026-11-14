@@ -63,11 +63,13 @@ def _run_unless(reuse: bool, out: Path, cmd: list[str], log: Path, timeout: int 
 
 
 def _load(p: Path) -> dict | None:
-    """The JSON document at ``p``; None when the file is missing or does not parse (one nested past the parser's depth does not)."""
+    """The JSON document at ``p``; None when the file is missing, does not parse (one nested past the parser's depth does not) or
+    is not a mapping, which every stage's document is."""
     try:
-        return json.loads(p.read_text())
+        doc = json.loads(p.read_text())
     except (OSError, ValueError, RecursionError):
         return None
+    return doc if isinstance(doc, dict) else None
 
 
 def _block(doc: dict, name: str) -> dict:
@@ -410,6 +412,7 @@ def main(a: Options) -> int:
         if a.tp2_match:
             tm = _load(Path(a.tp2_match))
             prov = (tm or {}).get("provenance")
+            prov = prov if isinstance(prov, dict) else None       # the check reads a provenance record's fields by name: no mapping, no record
             # the consumed record, by digest: tp2_fold_match.json names WHICH tp2_match.json its provenance check read
             try:
                 res["tp2_match"] = {"path": str(a.tp2_match), "sha256": hashlib.sha256(Path(a.tp2_match).read_bytes()).hexdigest(),

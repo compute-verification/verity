@@ -37,7 +37,7 @@ class RegisteredInputs:
         """The field `name`, allocated at its first read; every read of one name is the same `width`-bit word.  `distinct`: a value
         of its own (a scalar of a generic kind) -- the field `name`, `name_1`, ... that holds these bits, in first-read order."""
         if distinct:
-            same = [f for f in self.fields if f["name"] == name or f["name"].startswith(name + "_") and f["name"][len(name) + 1:].isdigit()]
+            same = [f for f in self.fields if f["name"] == name or f["name"].startswith(name + "_") and f["name"][len(name) + 1:].isdecimal()]
             f = next((f for f in same if (f["width"], f["bits"]) == (width, bits)), None)
             name = f["name"] if f is not None else name if not same else f"{name}_{len(same)}"
         f = next((f for f in self.fields if f["name"] == name), None)

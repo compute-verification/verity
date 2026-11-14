@@ -26,7 +26,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 
 `zk_session_soundH_custody`: `zk_session_soundH` with its two premises about the record, `hRec` (`RecordsLiveZK`) and
 `hDraw` (`DrawOkZKH` at each of `Law.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
-(`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points flock-verify sets up at each of the sampling design's samples
+(`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points verity-verify-proof sets up at each of the sampling design's samples
 (`drawOkZKH_of_exec`), as `Composed.zk_session_sound_custody` is `zk_session_sound`'s. It rests on five: `cr/sha-512`
 (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and `live-verifier` (`hCust`).
 -/

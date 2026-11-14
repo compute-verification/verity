@@ -1,13 +1,16 @@
 """A capture map that leaves out a field it may leave out (`verity_vllm.commit.capture_map`): the pinned checkpoint, a tap's
-`commit`, the row counts.  Each reader takes the field absent, null and empty alike, as the map naming none."""
+`commit`, the row counts.  Each reader takes the field absent, null and empty alike, as the map naming none.  The one field
+`load` asks of every map is its id."""
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import pytest
 
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.records import schema_ids
 
 ABSENT = object()
 PROFILE = "0123456789ab"
@@ -39,6 +42,20 @@ def tiny(*taps: dict[str, Any], **more: Any) -> dict[str, Any]:
 
 def value_id(tid: str) -> str:
     return f"p={PROFILE}/r=r0/t=0/ph=decode/l=sampler/op=sampler.{tid}/port=0"
+
+
+@pytest.mark.parametrize("schema", [ABSENT, None, "", "verity-vllm/capture-map/v1", "verity-vllm/capture-map/v0 "])
+def test_load_takes_a_map_under_the_id_written_once_and_refuses_any_other(tmp_path, schema):
+    """The map's id is written once, in `records.schema_ids`: `load` here and a reader elsewhere cannot hold two.  A map with
+    no id, a null one or another one is refused, with the file, what it carries and the id asked for."""
+    assert CM.SCHEMA is schema_ids.CAPTURE_MAP_SCHEMA
+    path = tmp_path / "map.json"
+    path.write_text(json.dumps(tiny()))
+    assert CM.load(path) == tiny() and CM.load(str(path)) == tiny()
+    path.write_text(json.dumps(given(**(tiny() | {"schema": schema}))))
+    carried = None if schema is ABSENT else schema
+    with pytest.raises(CM.MapError, match=re.escape(f"{path}: schema {carried!r}, expected verity-vllm/capture-map/v0")):
+        CM.load(path)
 
 
 @pytest.mark.parametrize("pins", UNPINNED)

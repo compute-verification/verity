@@ -41,7 +41,7 @@ The session's game, prover, value layer and events are those `EndToEndRegistered
 * `Xv`: the plurality value layer the rows extraction finds at the registration (`XplurZC`);
 * `WrongAt u`: sampled proof block `u` is wrong on the registration (`wrongRegZ`);
 * `RowsAt o u`: unit `u`'s rows are right at `Xv` (`RowsRightZC`) at its own owned registered reads;
-* `BadU o`: flock-verify accepts and some sampled proof block is wrong or its rows are off;
+* `BadU o`: verity-verify-proof accepts and some sampled proof block is wrong or its rows are off;
 * `CR`: `EndToEndRegisteredRows`' named assumptions at every unit's opening; `bound`: its bound.
 -/
 
@@ -165,7 +165,7 @@ def RowsAt (o : s.Out) (u : Fin s.n) : Prop :=
     (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧
       (s.rdU u).isRead p) (s.wo u) s.k s.Rw u
 
-/-- **The per-unit event**: flock-verify accepts, and some sampled proof block is wrong, or its rows are off at its own
+/-- **The per-unit event**: verity-verify-proof accepts, and some sampled proof block is wrong, or its rows are off at its own
 registered reads. -/
 def BadU (o : s.Out) : Prop := LiveAcceptsZKR s.I s.own o ∧ ∃ u ∈ o.2.1, s.WrongAt u ∨ ¬ s.RowsAt o u
 

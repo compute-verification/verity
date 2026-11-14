@@ -26,7 +26,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 `Composed/CustodyJ.lean` under hidden outputs. `zk_session_soundHJ` takes `RecordsLiveZKJ` (`hRec`) and `DrawOkZKHJ` at
 every sample of the live subset sampling design (`hDraw`); the record and its sample file are custody, and the rest of `DrawOkZKHJ` is
-flock-verify's own arithmetic:
+verity-verify-proof's own arithmetic:
 
 * `drawOkZKHJ_of_sizeG`: from `DrawFileZK` under any sampling design, at a sample whose file decodes only to `kd` units, with `nTab I`
   dividing `kd`, `DrawOkZKHJ` holds at `mPtsOf g (kd / nTab I)` link points, at any `g` every table's session has;

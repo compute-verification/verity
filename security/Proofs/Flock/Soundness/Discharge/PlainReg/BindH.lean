@@ -40,7 +40,7 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
 
 include hU hpub in
 /-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan, with or without shared rows: at a sample
-flock-verify sets up by `tableH_bcSiteS`; at a refused sample no message satisfies the table (`tableAtH_unsat`). -/
+verity-verify-proof sets up by `tableH_bcSiteS`; at a refused sample no message satisfies the table (`tableAtH_unsat`). -/
 theorem sitesAtH_bcSiteS :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planAtH dj x₀) (tabAtH dj x₀) S R u), Binding.Sat (planAtH dj x₀) (tabAtH dj x₀) S R u M →

@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+/-!
 `ProvedScope.check`'s table cap: a `--zk` session of more than `zkTableCap` tables is refused, with the text the live
 build's mirror (`proved_scope.rs`, `statement_why`) gives; one of `zkTableCap` tables passes the statement's rules, and
 without `--zk` the rule is still at most one table. Under `--plain-tables` (`ProvedScope.checkP`) a plain session of
@@ -8,10 +13,6 @@ outputs and plain SHA-512 leaves is refused at any count, and the verifier's own
 subset sampling design alone (`ProvedScope.lawWhy` at `plainTables`), where without the flag a plain session at public outputs samples
 by the stratified sampling design alone.
 -/
-module
-
-public import Flock.ProvedScope
-meta import Flock.ProvedScope
 
 @[expose] public section
 

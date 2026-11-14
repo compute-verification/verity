@@ -31,9 +31,9 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
   per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
 * `head_units` (A″): the same on the model's `partition` card `head-scores-values` (a sparse-attention head's key
-  block proved as its scores unit and its values units on column blocks), labelled with the card's `label`; lines
-  only for a model with that card.  Each unit commits its own row of the block's keys and no unit writes that row, so
-  nothing holds two units' keys equal: its lines are a cost model's, not a bound, and every label says so.
+  block proved as its scores unit and its values units on column blocks, which read the block's key rows from their
+  writers' committed rows, one writer a column block for all the heads), labelled with the card's `label`; lines
+  only for a model with that card.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
   lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits
   (`audit_exfiltration_delivered`); infiltration is its write form (the K incorrect blocks the plan detects, each the
@@ -233,8 +233,8 @@ CONFIGURATIONS = {
                                          "two-stage, by template", ("exfiltration", "infiltration"),
                                          partition="per-expert", serve="tokens", form="patterns",
                                          registration="machine")),
-    **_spans("head_units", Configuration("(A″) Tokens only, a head's key block as its scores and values units (modeled, "
-                                         "key rows not held equal)", TOKENS, REQUEST, "two-stage, by template",
+    **_spans("head_units", Configuration("(A″) Tokens only, a head's key block as its scores and values units and its "
+                                         "key rows' writers", TOKENS, REQUEST, "two-stage, by template",
                                          ("exfiltration", "infiltration"), partition="head-scores-values",
                                          serve="tokens", form="patterns", registration="machine")),
     "every_block": Configuration("(C) Every proof-block boundary", "every proof block's outputs", "a proof block",

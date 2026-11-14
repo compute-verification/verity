@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.Firewall.Contract
+
+/-!
 # The ZK server's named assumption (D8 (a), zero knowledge only)
 
 The contract derives what the schedule fixes, and checks every commitment, pad and coin itself. What the ZK server fixes by
@@ -12,9 +16,6 @@ is what the release log reports. `FirewallComputes spec t` names that
 assumption: each such value is `spec`'s for its name. It bears on zero knowledge only: the verifier checks every outer
 proof whatever the ZK server computed, so no soundness statement reads it.
 -/
-module
-
-public import Flock.Firewall.Contract
 
 @[expose] public section
 

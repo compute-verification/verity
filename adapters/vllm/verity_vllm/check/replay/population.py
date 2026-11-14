@@ -11,7 +11,6 @@ from typing import Any
 
 from verity.definitions.numerics.rows import EVALUATORS
 
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.delegate import DELEGATES
 from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
 from verity_vllm.check.replay.index import (
@@ -23,10 +22,11 @@ from verity_vllm.check.replay.index import (
     node_runs,
     plane_copies,
 )
-from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
+from verity_vllm.check.replay.opening import CommittedStore, bound_identity
 from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records import replay_codes as RC
+from verity_vllm.records.replay_codes import NOT_YET, why_class
 from verity_vllm.records.schema_ids import MOE_PLANE_ALIAS_CHECK_SCHEMA
 
 __all__ = ["phase_anchor", "population", "split_not_executed"]
@@ -106,7 +106,7 @@ def moe_plane_alias_check(store: CommittedStore) -> dict[str, Any]:
             continue
         rng = None
         for e in es:                                                            # the bound request-local range (every invocation under the key)
-            r = (e.get("identity") or {}).get("element_range") or [0, None]
+            r = bound_identity(e).get("element_range") or [0, None]
             if r[1] is not None:
                 rng = (int(r[0]), int(r[1])) if rng is None else (min(rng[0], int(r[0])), max(rng[1], int(r[1])))
         if rng is not None:
@@ -303,7 +303,8 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
         # sampled deterministically (the cell holds one row group); only a mid-phase single-identity fault is sampled with probability
         # n / (steps in the phase) -- targets (`--replay-target`) pin those for the negatives of record
         life = _lifetime(arrive + st, ring_slots)
-        sspec = _stratum_spec(fam, r["spec"], d["statics"])
+        statics = d.get("statics")                                               # a description that states none has no static
+        sspec = _stratum_spec(fam, r["spec"], statics if statics else {})
         vus.append({"i": int(r["i"]), "spec": r["spec"], "family": fam, "request_id": rid, "step": st, "phase": _phase(st, last), "rank": int(rank),
                     "op_path": d["op_path"], "lifetime": life, "stratum": f"{sspec}|{rid}|rank{int(rank)}|{_phase(st, last)}|{d['op_path']}|{life}"})
     return vus, not_ev, not_ev_fam
@@ -376,9 +377,10 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
         if lag in (0, 1):
             blk = rule(served_l, cap=cap, A=lag, eos=[int(e) for e in (eos_ids or ())])
             by_rule = {k: blk.get(k) for k in ("executed_prefix_len", "eos_step", "lag_steps", "first_eos_index", "served_past_first_eos", "cap_exhausted", "eos_stop", "problems")}
-            for pr in blk["problems"]:
+            problems = blk.get("problems")                                       # a rule that states none found none
+            for pr in (problems if problems else []):
                 faults.append(f"Continuation_v1 rule: {pr}")
-            if not blk["problems"] and len(served_l) == a_r:
+            if not problems and len(served_l) == a_r:
                 n_rule = int(blk["executed_prefix_len"])
                 if n_rule != n_exec:
                     faults.append(f"the arithmetic min(a_r + LAG, cap) = {n_exec} disagrees with the recurrence |{{t : r_t = 1}}| = {n_rule} (R3: the rule is the mechanism, "

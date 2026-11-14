@@ -54,8 +54,8 @@ def node(tmp_path):
 def test_current_peak_and_limit(node):
     proc, cg, run = node
     (r,) = S.reading(run, proc, cg)
-    assert (r["cgroup"], r["current_bytes"], r["peak_bytes"], r["cap_bytes"], r["cap_at"]) == (SCOPE, 100 * GIB, 120 * GIB, 400 * GIB, SCOPE)
-    assert r["memory_max"] == str(400 * GIB) and not r["near_cap"] and r["growth"] is None
+    assert (r["cgroup"], r["current_bytes"], r["peak_bytes"], r["limit_bytes"], r["limit_at"]) == (SCOPE, 100 * GIB, 120 * GIB, 400 * GIB, SCOPE)
+    assert r["memory_max"] == str(400 * GIB) and not r["near_limit"] and r["growth"] is None
     assert S.render(r) == f"{SCOPE}  current 100.0 GiB  peak 120.0 GiB  limit 400.0 GiB (25% used)  growth -"
 
 
@@ -63,7 +63,7 @@ def test_max_means_no_limit(node):
     proc, cg, run = node
     _cg(cg, SCOPE, current=900 * GIB, max_="max")
     (r,) = S.reading(run, proc, cg)
-    assert r["memory_max"] == "max" and r["cap_bytes"] is None and not r["near_cap"]
+    assert r["memory_max"] == "max" and r["limit_bytes"] is None and not r["near_limit"]
     assert "limit none (memory.max is max)" in S.render(r) and "NEAR LIMIT" not in S.render(r)
 
 
@@ -72,8 +72,8 @@ def test_limit_set_by_an_ancestor_slice(node):
     _cg(cg, SCOPE, max_="max")
     _cg(cg, "/system.slice", max_=str(110 * GIB))
     (r,) = S.reading(run, proc, cg)
-    assert (r["cap_bytes"], r["cap_at"]) == (110 * GIB, "/system.slice")
-    assert "limit 110.0 GiB (at /system.slice, 91% used)" in S.render(r) and r["near_cap"]
+    assert (r["limit_bytes"], r["limit_at"]) == (110 * GIB, "/system.slice")
+    assert "limit 110.0 GiB (at /system.slice, 91% used)" in S.render(r) and r["near_limit"]
 
 
 @pytest.mark.parametrize("gib,near", [(359, False), (360, True), (399, True)])
@@ -81,7 +81,7 @@ def test_near_limit_marker_within_ten_percent(node, gib, near):
     proc, cg, run = node
     _cg(cg, SCOPE, current=gib * GIB)
     (r,) = S.reading(run, proc, cg)
-    assert r["near_cap"] is near
+    assert r["near_limit"] is near
     assert S.render(r).endswith("  NEAR LIMIT") is near
 
 
@@ -136,7 +136,7 @@ def test_status_prints_a_local_active_runs_memory(node, monkeypatch, capsys):
     assert f"mem  {SCOPE}  current 380.0 GiB  peak 120.0 GiB  limit 400.0 GiB (95% used)  growth -  NEAR LIMIT" in out
     assert main(["status", "--runs-dir", str(run.parent), "--json"]) == 0
     (row,) = json.loads(capsys.readouterr().out)["runs"]
-    assert row["scope_memory"][0]["near_cap"] is True
+    assert row["scope_memory"][0]["near_limit"] is True
 
 
 def test_status_reads_a_remote_runs_memory_with_the_script_it_sends(node, tmp_path, monkeypatch, capsys):

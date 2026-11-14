@@ -13,7 +13,7 @@ The tables are not weights: `window_weights.weight_nonces` numbers every name it
 plain weights' nonces and their roots stop being the registration's. `split` keeps the window's tables
 (``/b<b>/vocab``, ``/b<b>/table``) and the absorption weights' entry (``/bnk``) apart from its plain weights; they go to
 the tables' registration (`expert_tables`, its nonces from `expert_tables.TABLES_NONCE`), the rest to `window_weights`.
-No lowering declares a ``/bnk`` name yet.
+A batched GEMM's ``w`` reads its ``/bnk`` entry by a registered read (`node_window_sparse.entry`), so none of its rows is free.
 
 `SHARD_VOCAB`, `shard_vocab`, `shard_param` and `unit_templates` belong in `serving_templates` and live here until it holds
 them. Refused by name (`Unexpressible`): a shard of no registered vocabulary, one past its vocabulary, an H that isn't whole
@@ -90,7 +90,7 @@ def table_words(columns: np.ndarray, start: int, V: int) -> np.ndarray:
 def split(params: Iterable[str]) -> tuple[list[str], list[str]]:
     """The weight parameters among ``params`` apart from the tables, sorted: ``(plain, tables)``, the tables an embedding
     shard's padded ones (``/b<b>/vocab``), the expert blocks' (``/b<b>/table``) and the absorption weights' entry
-    (``/bnk``, which no lowering declares yet). Only ``plain`` goes to `window_weights`."""
+    (``/bnk``, `node_window_sparse.entry`'s). Only ``plain`` goes to `window_weights`."""
     ws = sorted(p for p in params if p.startswith(f"{WEIGHTS}/"))
     kept = [bool(_TABLE.match(p) or _ENTRY.match(p)) for p in ws]
     return [p for p, k in zip(ws, kept) if not k], [p for p, k in zip(ws, kept) if k]

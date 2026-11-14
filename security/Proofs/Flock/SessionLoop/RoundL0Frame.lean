@@ -82,7 +82,7 @@ namespace Loop
 `k₀ + 3` (`Count.repPlan_rho`). -/
 theorem loopNr_l0r {x : Msg} {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hsx : FlockDeploy.setupOf true x = some (s, spec, sts)) {q : ℕ} (hq : q < spec.repStreams.size)
-    {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.m = .ok (sch, tp))
+    {sch : _root_.Flock.Schedule} {tp : ℕ} (hz : _root_.Flock.Zk.schedule sts[q / 2]!.wideLeaf sts[q / 2]!.m = .ok (sch, tp))
     (hm : 14 ≤ sts[q / 2]!.m) (hk : 6 ≤ sts[q / 2]!.c.kLog) {i : ℕ} (h1 : 1 ≤ i) (hi : i ≤ sch.k0 + 3) :
     loopNr x (FlockComplete.repStartZk spec sts q + FlockComplete.piopRoundsZk spec sts[q / 2]! + i) = l0Nc i := by
   rcases Nat.lt_or_ge i (sch.k0 + 3) with h3 | h3
@@ -259,7 +259,7 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hrh : (2 * j.val + r.val) % 2 = r.val := by omega
   have hst : (Masked.stsOf x)[(2 * j.val + r.val) / 2]! = Masked.stAt x j := Masked.stsOf_half x j r
   have hstj : (Masked.stsOf x)[j.val]! = Masked.stAt x j := getElem!_pos (Masked.stsOf x) j.val hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j.val + r.val) / 2]!.m =
       .ok ((Masked.zkTab x j).sch, (Masked.zkTab x j).tPad) := by
     rw [hst]
     exact (Masked.zkTab x j).hz
@@ -473,8 +473,9 @@ theorem l0_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
     exact Claims.ZKServer.ofDraws_order _ _ _
-  have htp' : _root_.Flock.Zk.schedule tb.st.m = .ok (tb.sch, tp) := by
-    rw [htm, ← hst]
+  have htw : tb.st.wideLeaf = (Masked.stAt x j).wideLeaf := by rw [hts']; rfl
+  have htp' : _root_.Flock.Zk.schedule tb.st.wideLeaf tb.st.m = .ok (tb.sch, tp) := by
+    rw [htm, htw, ← hst]
     exact htp
   have hlay : lay = _root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0 := by
     rw [hlayE, hts', hsch]

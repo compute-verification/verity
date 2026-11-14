@@ -340,7 +340,7 @@ def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch,
             pass
 
     monkeypatch.setattr(SR, "Lean", Lean)
-    run(monkeypatch, tmp_path, "--lean", "flock-verify", tmpl_unit=tmp_path / "unit.placed")
+    run(monkeypatch, tmp_path, "--lean", "verity-verify-proof", tmpl_unit=tmp_path / "unit.placed")
     assert got == [SR.FC.TMPL_STATEMENT]
 
 

@@ -294,7 +294,7 @@ def test_the_drift_an_auditor_reads_for_a_provider_virtual_machine() -> None:
     in that host; and the reading beside it is 31.2 ppm."""
     drift = load_card("nebius-vm-monotonic-raw")["drift"]
     assert S.number(drift["max"]) == Fraction(1, 2000) and drift["max"]["mark"] == "premise"
-    assert "ClockRateWithin(host, 5e-4)" in drift["max"]["source"] and "trusted-host" in drift["max"]["source"]
+    assert "ClockRateWithin(host, 5e-4)" in drift["max"]["source"] and "trusted-device" in drift["max"]["source"]
     assert S.number(drift["read"]) == Fraction(312, 10 ** 7)
 
 
@@ -317,7 +317,7 @@ def test_every_premise_is_listed() -> None:
 
 def test_the_quoted_numbers() -> None:
     """The clocks, host peaks, bandwidths and measured reads already quoted outside this package, pinned so that a
-    change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card
+    change to one is deliberate: among them PoUB's verifier's `timing.py` HOST_ figures, which the RTX node's host card
     states beside the disks' read that PoUB's verifier rounds up, and its GPU's measured read, which the RTX PRO 6000's
     card states."""
     server, h200, b200 = load_card("rtx-pro-6000-server"), load_card("h200-sxm-141gb"), load_card("b200-sxm-180gb")

@@ -15,11 +15,11 @@ and over only the templates `serving_templates.unit_templates` lists for its row
   reading x whole and its weight row, and the all-gather's WORLD shards, rank 0's gathered from the LM head's slices and
   the other ranks' free.
 
-Refused by name (`Unexpressible`) beyond the frame's refusals: a ``Gemm`` family row other than `Gemm_v2`. Not lowered, so
-their rows stay free (each a line of the lane's reads): the vocabulary shard's embedding (`EmbeddingShard_v1`), whose
-``SLICES`` unit reads a strided column of the table, which a weights read of contiguous rows doesn't take; the token
-select (`TokenSelect_v4`), whose one unit's 309,760-byte logits row passes a proof block; and the stop check
-(`StopCheck_v1`), whose 32-bit and 1-bit ports no serving template holds.
+Refused by name (`Unexpressible`) beyond the frame's refusals: a ``Gemm`` family row other than `Gemm_v2`. Not lowered
+here, so their rows stay free unless their module's lowering is beside these: the vocabulary shard's embedding
+(`EmbeddingShard_v1`, `node_window_embed`), whose ``SLICES`` unit reads a strided column of the table, which a weights
+read of contiguous rows doesn't take; the token select (`TokenSelect_v4`), whose one unit's 309,760-byte logits row
+passes a proof block, and the stop check (`StopCheck_v1`), both `node_window_select`'s.
 """
 from __future__ import annotations
 

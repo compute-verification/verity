@@ -1,6 +1,7 @@
 """The e2e's panel rows (research store ``internal/pouw/panel/add-a-row.md``), from the window's ``e2e.json`` and the verify
-job's ``prefill-verify.json``, ``decode-verify.json`` and ``control-verify.json`` (and ``control-leaves-verify.json`` where the
-window retained it), as ``panel.py append`` commands.
+job's verdicts on its prefill, decode and control passes (and control-leaves where the window retained it), as
+``panel.py append`` commands.  A pass's verdict is the Lean's (`verdicts`: ``<pass>-lean-check.json``, `served_passes.py
+lean`'s), its transcript and verifier commit those of the Python twin's document it was held to (``<pass>-verify.json``).
 
   python benchmarks/pouw/pearl_c_vllm/panel_rows.py E2E_JSON VERIFY_DIR [--panel PANEL_PY] [--append]
 
@@ -55,7 +56,7 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[f
             if not summary["verify_pass"].get(p, {}).get("same_commitment_as_timed")]
     bad += [f"{p}: not accepted" for p in ("prefill", "decode") if not verdicts[p].get("accepted")]
     bad += [f"{c}: the negative control was not rejected" for c in verdicts if c.startswith("control")
-            and verdicts[c].get("accepted", True)]
+            and verdicts[c].get("accepted") is not False]
     bad += [f"{p}: its eager replay did not repeat the commitment" for p in ("prefill", "decode")
             if summary["verify_pass"].get(p, {}).get("same_commitment_eager") is False]
     if not run or any(run not in verdicts[p].get("transcript", "") for p in verdicts):
@@ -97,6 +98,22 @@ def rows(e2e: dict, verdicts: dict[str, dict], panel: str, kernel_ratio: tuple[f
     return out
 
 
+def verdicts(verify_dir: Path) -> dict[str, dict]:
+    """Each pass's verdict as `verify.sh` acted on it: ``accepted`` True or False where the Lean gave a verdict the twin
+    agrees with (``<pass>-lean-check.json``'s ``answer``) and None where it gave none, ``line`` the Lean step's line, and
+    the pass's ``transcript`` and ``verifier_commit`` as the twin's document (``<pass>-verify.json``) names them."""
+    out = {}
+    for x in ("prefill", "decode", "control", "control-leaves"):
+        if x == "control-leaves" and not (verify_dir / f"{x}-lean-check.json").exists():
+            continue
+        check = json.loads((verify_dir / f"{x}-lean-check.json").read_text())
+        twin = json.loads((verify_dir / f"{x}-verify.json").read_text())
+        answer = check.get("answer")
+        out[x] = {"accepted": None if answer is None else answer["verdict"] == "accept", "line": check["line"],
+                  "transcript": "; ".join(twin.get("passes") or []), "verifier_commit": twin["verifier_commit"]}
+    return out
+
+
 def headline_over_graphed(eager: list[str], s: dict, res: dict, reps: str, desc: str) -> list[str]:
     """Decode's headline row: the eager row's command over the graphed baseline instead, its slowdown, hash-free ratio and
     base clocks the ``fp8-graphs`` reps'."""
@@ -123,9 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     a = p.parse_args(argv)
     if (a.kernel_ratio is None) != (a.kernel_ratio_run is None):
         raise SystemExit("--kernel-ratio and --kernel-ratio-run go together")
-    verdicts = {x: json.loads((a.verify_dir / f"{x}-verify.json").read_text()) for x in ("prefill", "decode", "control", "control-leaves")
-                if x != "control-leaves" or (a.verify_dir / f"{x}-verify.json").exists()}
-    first, *rest = rows(json.loads(a.e2e.read_text()), verdicts, a.panel,
+    first, *rest = rows(json.loads(a.e2e.read_text()), verdicts(a.verify_dir), a.panel,
                         (a.kernel_ratio, a.kernel_ratio_run) if a.kernel_ratio is not None else None)
     if not a.append:
         print(shlex.join(first))

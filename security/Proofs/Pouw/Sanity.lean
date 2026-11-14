@@ -16,7 +16,7 @@ import Proofs.Pouw.Witness
 # Sanity: degenerate instances and side conditions
 
 Each degenerate instance named in the task has a lemma here saying what happens there, and which side condition of
-the pinned statements excludes it or makes it harmless.
+the guarantees excludes it or makes it harmless.
 
 | Instance | Lemma |
 |---|---|
@@ -291,7 +291,7 @@ theorem tt_false_of_gap0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
   linarith
 
 /-- **`g ≥ 1`**: every budget is beaten by one correct unit of positive work, so `G_g` cannot hold with `δ < 1`
-against the honest reference (the pinned statements assume `g < 1` or `g₀ < 1`). -/
+against the honest reference (the guarantees assume `g < 1` or `g₀ < 1`). -/
 theorem wins_of_gap_ge_one (P : Protocol Q R S) (U : Workload) {g T : ℝ} (hg : 1 ≤ g) (hT : 0 ≤ T)
     (τ : Transcript) (H : Q → R) (s : S) (hpos : 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)) :
     Wins P U g T τ H s :=

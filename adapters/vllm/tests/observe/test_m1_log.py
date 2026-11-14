@@ -207,7 +207,6 @@ def test_every_view_alloc_has_a_preceding_storage_alloc(log_events):
     known: set[int] = set()
     for ev in log_events:
         if isinstance(ev, StorageAlloc):
-            assert ev.alloc not in known or True     # re-allocation after a free gets a NEW id; ids never repeat
             known.add(ev.alloc)
             continue
         refs: list[ViewDesc] = []

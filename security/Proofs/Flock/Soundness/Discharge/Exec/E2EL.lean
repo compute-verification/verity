@@ -26,7 +26,7 @@ the `_hm96` forms state (`Binding/E2E.lean`).
 
 **What the statement carries today.**
 * "Accept" is `execAccept`, any event on the audit's outcome that implies the Lean protocol's acceptance (`hExec`). So
-  as pinned, these are theorems about the protocol as Lean defines it. The executable's verdict, `flock-verify` on the
+  as pinned, these are theorems about the protocol as Lean defines it. The executable's verdict, `verity-verify-proof` on the
   run's transcript, is not an event on that outcome. It enters when `hExec` is discharged, and that changes the
   statement's shape.
 * "Rows derived by the verifier" is not in the generic statement: `unitRows` appears only in `dp`. In the `Prog` forms the

@@ -197,8 +197,9 @@ re-picked at K − L:
 ## An execution phase's runs
 
 Before any coin of the period is flipped, the replica registers (see "Registration") and binds the weight root. The certifier
-signs its registration receipt of both, and the challenger flips the period's weight-side coins from it. Then the
-replica's execution phases follow in one sequence, each through two runs.
+signs its registration receipt of both. No coin is derived from that receipt: every stream of a call, d_B, U and the
+permutations among them, is seeded per call after the block's operand roots (see "Coins"). Then the replica's execution
+phases follow in one sequence, each through two runs.
 
 **Block b's dither run.**
 - **Commit phase.** It starts at block b − 1's value-root receipt (at the registration receipt for the first block). The
@@ -248,10 +249,10 @@ T_{S−1} it passes exactly when O is right, at any S. A constant O is therefore
 - At A = B = 0, O = d_A d_Bᵀ is Bin(K, 1/4) in each output cell, and its mode passes with probability 0.1145 at K = 64, 0.0470
   at K = 384 and 0.0144 at K = 4,096. The block earns no credit (see "What is credited"), so this guess bounds its
   check of O, and the credit's η needn't price it (see "The outcome").
-- Where registration pins B, the prover knows c = B + d_B (d_B is a weight-side coin), so O's variance an output cell at A = 0
-  is Σ_ℓ c_{jℓ}²/4 and the guess passes at about 1/√(2π Σ_ℓ c_{jℓ}²/4). On `LLAMA31_8B_INT8` the least such row
-  (gate-up, layer 18: one entry at ±126, rms 2.58 elsewhere) gives 4.83e-3, and 0.34–1.33% of each linear's rows give
-  more than 1e-3.
+- Where registration pins B, the prover knows c = B + d_B (d_B comes with the call's seeds, before it computes O), so
+  O's variance an output cell at A = 0 is Σ_ℓ c_{jℓ}²/4 and the guess passes at about 1/√(2π Σ_ℓ c_{jℓ}²/4). On
+  `LLAMA31_8B_INT8` the least such row (gate-up, layer 18: one entry at ±126, rms 2.58 elsewhere) gives 4.83e-3, and
+  0.34–1.33% of each linear's rows give more than 1e-3.
 
 **S = 1.** Where L ≥ K, an output cell commits O alone, and its one proof block checks O alone. With O right, the T_S it derives
 passes whatever U, V and π are, so the noise does nothing there: the call is un-noised, and earns no credit (see "What
@@ -339,7 +340,7 @@ Inside a selected block, its proof block p is sampled with probability W_p/W_b.
 
 It needs a sampling-design object beside `draw.parse_design`'s and the Lean verifier's `Flock.Draw`. Its miss probability bound
 is `WorkSound`'s sampling term, a moment bound at rate ηq/W_reg a unit of cost, rather than `work_escape_le`. The
-integrity profile has no field for a cost-weighted moment bound; that field is sampled proofs', which produce the
+integrity profile has no field for a cost-weighted moment bound; that field is SPOT's, which produces the
 profile.
 
 ### Registration
@@ -368,10 +369,10 @@ the receipt, under tags distinct from PoUW's noise-seed tags), where:
 - c's opening is checked by the certifiers against the root they hold privately. The prover gets no Merkle path and no
   root before its last root, and receives the paths and the root at close (the withheld mode): opening sample j to it
   early would hand it the root before later blocks' roots;
-- kind is `weights` (the weight-side coins), `seeds` (a block's dither and noise seeds) or `check` (its check coin);
+- kind is `seeds` (a block's dither and noise seeds, each call's from c, the receipt and the call's index: `seeds` in
+  `prover/dither.py`) or `check` (its check coin);
 - ctx = {period, replica, execution phase index, receipt}, where receipt is the digest of the certifier's signed receipt
-  of what the coin follows: the registration for `weights`, the block's operand roots for `seeds`, and its value roots
-  for `check`.
+  of what the coin follows: the block's operand roots for `seeds`, and its value roots for `check`.
 
 So a derived coin never has to open against the root; its c does. No c serves two samples, no context repeats, and no
 coin can be computed before the receipt it reads. Derived from roots alone, a
@@ -403,15 +404,17 @@ least 1/N_max unpredictable bits a credited MAC. That is 0.97 to 2.38 GB/s a GPU
 - Each replica's seeds are its own: no stream is broadcast across replicas.
 - Dither takes no Fiat–Shamir exception: its seeds are live coins, not main's per-matmul noise seeds.
 
-**Weight-side coins** (d_B, U and the permutations) are sampled per replica from the registration receipt, after the
-weight root is bound, and never shared between replicas. They are reused across the period's calls as part of the registered instance (P14, P17).
+**Every stream is seeded per call.** d_A, d_B, U, V and the permutations of a served call come from the challenger's
+coin opened after the block's operand roots, the digest of the operand-root receipt and the call's index (`seeds` in
+`prover/dither.py`, "What is committed"). None is sampled from the registration receipt or reused across calls, and none
+is shared between replicas.
 
 ### The boundary
 
 The network certifier watches the replica's boundary, signs its receipts and arrival times, and counts k_infil and
 k_exfil. Dither needs these of the challenger and the certifier:
 
-- **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
+- **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-device`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
   the certifier counts. Its statement is `Pouw.Assumptions.CoinsConfidential`'s docstring
   (`security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
@@ -563,8 +566,9 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
     `Timed`, and the phase's oracle calls logged before root b;
   - the budget registration: `reg` adapted, fixed before each round's coins, with k padded to a fixed maximum by empty
     rounds;
-  - RP20 (the answers' oracle calls under one budget), the joint outsourcing premise over the period's programs, and
-    `SAKMatmul`'s reuse form over the challenger's sample for the weight-side coins (P17's κ_re). The coin stream's exact
+  - RP20 (the answers' oracle calls under one budget) and the joint outsourcing premise over the period's programs.
+    `SAKMatmul`'s reuse form (P17's κ_re) has nothing to bound: no coin is reused across calls, since every stream is
+    seeded per call (see "Seeds"). The coin stream's exact
     exclusion and the multi-node boundary are stated in `CertifierSeesImports` (RP5, RP9);
   - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words, η
     is priced at the free guess of "The outcome", a segment word's, since an output cell's last block earns no credit,

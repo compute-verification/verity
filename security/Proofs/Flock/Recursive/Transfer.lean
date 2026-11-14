@@ -40,7 +40,7 @@ reference, which no finder at a budget computes, so `stage_bind` bounds that pro
   value binding's openings, the trial for `c` as a finder of the openings of `c` it reads, and
   `candTermZC ≤ slack + Σ_c κ_c·Pr[the trial for c opens c's digest to a value other than wv c]`;
 * `zk_flock_candTransferC`: `zk_flock_candValsC` in that form, `htr`'s shape at one history;
-* `zk_session_candValsR`: `zk_flock_candValsC` for `flock-verify verify --zk --registered F` sessions of `J`
+* `zk_session_candValsR`: `zk_flock_candValsC` for `verity-verify-proof verify --zk --registered F` sessions of `J`
   hidden-output tables, at the committed values their simulation decodes (`XplurZC` at `simZHJ … τ`, the value binding
   `vbHJ`), as `zk_session_regValsR` is `zk_flock_regValsC_cr` there; `candTermZC_le` puts its bound in `htr`'s shape.
 -/

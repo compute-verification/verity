@@ -28,7 +28,7 @@ time, then the unrolled input-row checks they stand for (`Net.ofRows`' input row
 must agree. `flock-tmpl checks-at TMPL [--mode MODE]`: the layout's checks (`Tmpl.layApart` over the Definitions,
 `Tmpl.identOk`, `Tmpl.outsAt`) and all of `Tmpl.unrollOk`, `Tmpl.unrollAt`'s success, at `layoutM`'s layouts (default
 `iv/hybrid/4`), timed one at a time.
-`flock-tmpl stmt CIRCUIT [--rows]`: a templated statement's circuit read as `flock-verify verify --zk` reads it, its
+`flock-tmpl stmt CIRCUIT [--rows]`: a templated statement's circuit read as `verity-verify-proof verify --zk` reads it, its
 SHA-512 known from the archive's check (`HmOut.parseCommitWith` with the pin known, `circuitOfKnowing`), whole and then a
 stage at a time (META off its own line, `HmOut.metaOf`; its template section's lines, `HmOut.tmplOf`, and that a part at a
 time: the section's end, its copy, UTF-8 check and line split; the template's rows read as `tokens` reads them and as

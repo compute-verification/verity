@@ -81,7 +81,7 @@ def test_fa2_tap_thread_leaf(tmp_path: Path) -> None:
 
     tap = PKG / "acquire" / "fa2_tap_src" / "verity_tap.h"
     nvcc = os.path.join(CUDA_HOME or "/usr/local/cuda", "bin", "nvcc")
-    arch = "sm_%d%d" % torch.cuda.get_device_capability(0)
+    arch = "sm_{}{}".format(*torch.cuda.get_device_capability(0))
     incs = [FA2_CSRC / "flash_attn" / "src", FA2_CSRC / "flash_attn", FA2_CSRC / "common", FA2_CSRC / "cutlass" / "include", *include_paths()]
     libs: dict[int, ctypes.CDLL] = {}
     for tv in V["thread_leaf"]:

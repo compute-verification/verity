@@ -24,7 +24,7 @@ accepted produced record alone:
 * `fileOf?`: statement `k`'s file (`leaf_lanes.registered_file` at `leaf_lanes.reads`): those ports, each port
   `readFull` names (A, B and partials rows, by layout value) marked `read_in_full`, then the known ports.
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
-  as flock-verify parses it (`Flock.Registered.ofJson`) has one read at each port (`checkOneRead`) and holds `want?`'s
+  as verity-verify-proof parses it (`Flock.Registered.ofJson`) has one read at each port (`checkOneRead`) and holds `want?`'s
   ports (`checkOwn`). `leafOwnCmd` runs it on files with each value its own table (`selfPlace`), then holds each of the
   statement's session records to the full sample (`checkFull`); `PouwCheck.LeafOwn` runs it at an execution phase unit's placement,
   from the execution phase's descriptor and round log.
@@ -107,7 +107,7 @@ def portJson (p : Flock.Registered.Port) (full : Bool) : Json :=
 /-- **Statement `k`'s `--registered` file** (`leaf_lanes.registered_file` at `leaf_lanes.reads`): its data ports at the
 verifier's roots and the unit's placement (`want?`), each port `readFull` names (a read of a `fullValue`, by its
 layout value, whatever table it is placed in) marked `read_in_full`, then the known ports `known`: every port of the
-statement's circuit, as flock-verify's `Registered.checkComplete` holds it to. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
+statement's circuit, as verity-verify-proof's `Registered.checkComplete` holds it to. A known port that is also a read is an error. It is a `Flock.Registered.FORMAT_V0` file, as
 `leaf_lanes.registered_file` writes it (`registered.READS`): every port reads from unit 0 (`readsFrom := 0`). -/
 def fileOf? (rs : List (String × Flock.Registered.Port)) (place : String → String × Nat) (T : Tile) (k : Option Nat)
     (known : List (String × Json)) : Except String Json := do
@@ -119,7 +119,7 @@ def fileOf? (rs : List (String × Flock.Registered.Port)) (place : String → St
     ("ports", Json.mkObj (ps.map (fun p => (p.name, portJson p (full.contains p.name))) ++ known))]
 
 /-- **The leaf verifier's check of statement `k`'s file `file`** against the accepted registration and produced record:
-the tile's statement exists (`lane?`, `combine?`), and the file, parsed as flock-verify parses it, has one read at each
+the tile's statement exists (`lane?`, `combine?`), and the file, parsed as verity-verify-proof parses it, has one read at each
 port (`checkOneRead`) and holds the statement's data ports at the records' roots and the unit's placement `place`
 (`checkOwn`). -/
 def leafOwn? (registration produced file : Json) (place : String → String × Nat) (T : Tile) (k : Option Nat)

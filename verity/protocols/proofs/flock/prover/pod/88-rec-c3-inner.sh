@@ -9,7 +9,7 @@
 # verifier's record; the verifier's fold points (rec_vstage points) and InnerFold.lean --hide unit on the tree (an executable,
 # cached by its sources): each rep's public comb and Lean's full fold; rec_session --check-fold (comb + the session's h is the
 # full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from the session's
-# rows, each holding); and Lean's reading of the session (flock-verify rec-transcript: every stream of the verifier's record,
+# rows, each holding); and Lean's reading of the session (verity-verify-proof rec-transcript: every stream of the verifier's record,
 # held to the schedule and to the prover's record, R's top to its registration with STACKED), which test_lean_rec_inner_streams
 # runs on the fixture. Lean's plain verify takes a coin tree of the session's own streams (--coins tree), not one with the
 # relay's sparse and stacked streams added, so the prover's session is not verified on its own here (pod 85's INNER_LEAN likewise), nor are the controls on its sample and challenges. The challenger's live-coin part

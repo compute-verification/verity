@@ -1,5 +1,5 @@
 """The streamed wipe's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the
-challenger host, `trusted-host`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
+challenger host, `trusted-device`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
 
 The challenger listens and the prover connects. The challenger streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
 labels` and ends it with `D`, which the prover acknowledges with `A` once it holds the fill, so that no read's time
@@ -47,11 +47,11 @@ from . import streamed_wipe as sw
 
 MODULE = "verity.protocols.accounting.pous.verifier.wipe_party"
 logger = logging.getLogger(__name__)
-PREMISE = "trusted-host"
+PREMISE = "trusted-device"
 AUDITOR_KEYS = {"vy-auditor-2": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
                                 "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
-"""Each auditor host's wipe party's public key, by its SHA-512 in 128 lowercase hex digits: the one key under which
-`placement` says `trusted-host` holds for a challenger on that host. A run's own pin (`--trusted-sha512`) decides only
+"""Each auditor device's wipe party's public key, by its SHA-512 in 128 lowercase hex digits: the one key under which
+`placement` says `trusted-device` holds for a challenger on that host. A run's own pin (`--trusted-sha512`) decides only
 which session the verifier accepts, never this."""
 REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
@@ -206,7 +206,7 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
 def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None,
               store: Mapping[str, Any] | None = None, simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
+    """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory challenger ran on a
     machine the developer doesn't control. It holds (`holds: …`) only when `key_sha512`, the SHA-512 of the key the
     session was signed under, is `AUDITOR_KEYS`' pin for `host`; under any other key, a run's own pin included, it reads
     `REHEARSAL`, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
@@ -229,7 +229,7 @@ def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | N
 
 
 def holds(where: Mapping[str, Any]) -> bool:
-    """Whether a placement's `trusted-host` holds: the session signed under the challenger host's pinned key."""
+    """Whether a placement's `trusted-device` holds: the session signed under the challenger host's pinned key."""
     return where[PREMISE].startswith("holds: ")
 
 

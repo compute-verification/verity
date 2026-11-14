@@ -3,9 +3,10 @@
 
 [[metric]]
 id = "top/tree-not-yet-lines"
-title = "Paths main holds outside the layout of record: the lines of tests/tree.toml's not-yet list"
+title = "Files left to reorganize"
 owner = "top"
 unit = "lines"
+axis = "Paths on main still outside the new repository layout."
 better = "lower"
 command = "research run --on auto --cwd source -- uv run python benchmarks/tree/not_yet.py"
 every = "1d"
@@ -13,9 +14,10 @@ goal = "top/repo-cleaned-up"
 
 [[metric]]
 id = "top/architecture-not-built-rows"
-title = "What the architecture requires that main doesn't do yet: the rows of ARCHITECTURE.md's table of code that has to be written"
+title = "Architecture left to build"
 owner = "top"
 unit = "rows"
+axis = "Things the architecture requires that main doesn't do yet, one row each of its table of code to write."
 better = "lower"
 command = "research run --on auto --cwd source -- uv run python benchmarks/tree/not_built.py"
 every = "1d"

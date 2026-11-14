@@ -173,7 +173,7 @@ theorem dupName?_none {ps : List Port} (h : dupName? ps = none) :
 
 /-- **The verifier's registered reads**: a `FORMAT` (or `FORMAT_V0`) file's ports (`portsOf`), each name naming one port
 (`ofJson_names`). A verdict reports a port by its name (`finding`) and every check of a statement's reads finds a port by
-its name, so a second port of a name would be one neither reads. `flock-verify` refuses a file whose text names a key
+its name, so a second port of a name would be one neither reads. `verity-verify-proof` refuses a file whose text names a key
 twice (`JsonKeys.dupKey`) and `JsonParse.parse` keeps one of the two, so no file it reads gets here with one; this
 refusal holds for any `Json` the verifier is given. -/
 def ofJson (j : Json) : V (Array Port) := do
@@ -363,7 +363,7 @@ theorem checkProgram_ok {b : ByteArray} {registered : Bool} (h : checkProgram (s
 /-- Every port of the circuit, each input port and each output row, is a port of `own`. -/
 def complete (c : Circuit) (own : Array Port) : Bool := c.ports.all fun p => own.any (·.name == p.name)
 
-/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10; `flock-verify` runs it on every
+/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10; `verity-verify-proof` runs it on every
 statement whenever `--registered F` is given): every port of the circuit is a port of the verifier's own registered
 reads (`checkComplete_ok`), so no output's cone reads a row the statement commits afresh and its public file states (a
 lane's index, say), and `check` opens each of them at its registered root. It reads the circuit's ports, not its gates:

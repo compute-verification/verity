@@ -17,8 +17,9 @@ one table of `A.kd` units (`RefOk`, `numsOk_of_refOk`):
 * **one table, hidden** (`shape_sess`): the statement is `verity/flock-circuit`, whose outputs are hidden, at one table,
   so its setup is `Stmt.setupHidden`'s one table, whose circuit, regions and `m` read the circuit file, the tables and
   the unit count `n` alone (`Verity.Recursive.Numbers.setupHidden_shape`);
-* **the numbers read the table** (`nums_one`): the rounds and `N₀` of a one-table session are its table's, so two sample
-  files whose tables have one `n` give one set of numbers (`nums_congr`), the reference sample file's (`d₀`) among them.
+* **the numbers read the table** (`nums_one`): the rounds and `N₀` of a one-table session are its table's, and they
+  read its statement's version too (`Stmt.wideLeaf`), which is the session's tags'. So two sample files whose tables
+  have one `n` give one set of numbers (`nums_congr`), the reference sample file's (`d₀`) among them.
 
 And what `RefOk`'s unit count reads at a sample v2 accepts: a sample file's units are its `units` field's
 (`unitsAt_size`), a sample by a sampling design `LawOn` holds samples `A.kd` units (`drawn_length`), and a session's sample that
@@ -182,7 +183,8 @@ theorem hidden_sess {d : Msg} {s : Ins}
   · exact hI'
 
 /-- **The session's statement at any sample file sets up one hidden table**: its circuit, regions and `m` read the
-session's tags, circuit file and tables and its unit count `n`, which is its public file's, the sample's. -/
+session's tags, circuit file and tables and its unit count `n`, which is its public file's, the sample's, and its tags
+are the session's. -/
 theorem shape_sess {d : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (hins : ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s)
     (hsu : s.setup = .ok (spec, sts)) :
@@ -191,7 +193,8 @@ theorem shape_sess {d : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Array F
       Flock.HmIn.parse t.c = .ok pi ∧ Flock.HmIn.regions t.c pi t.pub = .ok B ∧
       t.regions.size = t.c.ports.size + B.size ∧
       t.m = t.c.kLog + max 3 (Flock.log2ceil (max ((t.n + t.c.g - 1) / t.c.g) 1)) ∧
-      (∀ dj, s.read.draw = some dj → Flock.HmIn.drawn t.c pi pop dj = .ok t.pub) ∧ t.n = t.pub.n := by
+      (∀ dj, s.read.draw = some dj → Flock.HmIn.drawn t.c pi pop dj = .ok t.pub) ∧ t.n = t.pub.n ∧
+      t.tags = s.read.tags := by
   have hread := FlockDeploy.Ins.setup_read hsu
   unfold Flock.Readable.Read.setup at hread
   rcases Verity.Recursive.Numbers.setupTables_hidden (hidden_sess hins) hread with ⟨t, ht, hspec, hsts⟩ | ⟨hc1, -⟩
@@ -201,7 +204,8 @@ theorem shape_sess {d : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Array F
     omega
   obtain ⟨pi, pop, R, B, hpar, hpi, -, -, hsome, hn, hm, -, hR, hB, hreg⟩ :=
     Verity.Recursive.Numbers.setupHidden_shape ht
-  refine ⟨t, pi, pop, B, hspec, hsts, hpar, hpi, hB, ?_, hm, hsome, hn⟩
+  refine ⟨t, pi, pop, B, hspec, hsts, hpar, hpi, hB, ?_, hm, hsome, hn,
+    FlockSoundness.Discharge.Hidden.setupHidden_tagsP ht⟩
   rw [hreg, Array.size_append, (FlockSoundness.Discharge.Hidden.regions_get hR).1]
 
 /-- **A one-table session's numbers are its table's.** -/
@@ -218,7 +222,7 @@ theorem nums_one {x : Msg} {s : Ins} {t : Flock.Stmt} (h : FlockDeploy.setupOf t
   simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
 
 /-- **The session's numbers read only its table's unit count**: at two sample files whose sessions set up one table each,
-of one unit count, the numbers agree. -/
+of one unit count, the numbers agree. The two tables are of one version, the session's tags'. -/
 theorem nums_congr {d d' : Msg} {s s' : Ins} {t t' : Flock.Stmt}
     (hins : ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s)
     (hset : FlockDeploy.setupOf true (sessStmt A o d) = some (s, t.spec, #[t]))
@@ -226,13 +230,14 @@ theorem nums_congr {d d' : Msg} {s s' : Ins} {t t' : Flock.Stmt}
     (hset' : FlockDeploy.setupOf true (sessStmt A o d') = some (s', t'.spec, #[t'])) (hn : t.n = t'.n) :
     Nums (sessStmt A o d) = Nums (sessStmt A o d') := by
   rw [nums_one hset, nums_one hset']
-  obtain ⟨u, pi, _pop, B, -, hst, hpar, hpi, hB, hreg, hm, -, -⟩ := shape_sess hins (FlockDeploy.setupOf_some hset).2
-  obtain ⟨u', pi', _pop', B', -, hst', hpar', hpi', hB', hreg', hm', -, -⟩ :=
+  obtain ⟨u, pi, _pop, B, -, hst, hpar, hpi, hB, hreg, hm, -, -, htg⟩ :=
+    shape_sess hins (FlockDeploy.setupOf_some hset).2
+  obtain ⟨u', pi', _pop', B', -, hst', hpar', hpi', hB', hreg', hm', -, -, htg'⟩ :=
     shape_sess hins' (FlockDeploy.setupOf_some hset').2
   have htu : t = u := Array.singleton_inj.1 hst
   have htu' : t' = u' := Array.singleton_inj.1 hst'
-  rw [← htu] at hpar hpi hB hreg hm
-  rw [← htu'] at hpar' hpi' hB' hreg' hm'
+  rw [← htu] at hpar hpi hB hreg hm htg
+  rw [← htu'] at hpar' hpi' hB' hreg' hm' htg'
   have eT : s.read.tags = s'.read.tags := by
     rw [Verity.Recursive.Numbers.read_tags_of hins rfl, Verity.Recursive.Numbers.read_tags_of hins' rfl,
       stmtTags_sess hins, stmtTags_sess hins']
@@ -249,7 +254,8 @@ theorem nums_congr {d d' : Msg} {s s' : Ins} {t t' : Flock.Stmt}
   have em : t.m = t'.m := by rw [hm, hm', ec, hn]
   have ek : t.c.kLog = t'.c.kLog := by rw [ec]
   have er : t.regions.size = t'.regions.size := by rw [hreg, hreg', ec, eB]
-  simp only [FlockDeploy.repRounds, FlockDeploy.tableLen, Flock.Stmt.spec, em, ek, er]
+  have ew : t.wideLeaf = t'.wideLeaf := congrArg Flock.Tags.wideLeaf (htg.trans (eT.trans htg'.symm))
+  simp only [FlockDeploy.repRounds, FlockDeploy.tableLen, Flock.Stmt.spec, em, ek, er, ew]
 
 /-- **A sample file whose session sets up one table of `A.kd` units has the statement's numbers**: the reference sample
 file's session does too (`d₀`), and the numbers read only the unit count (`nums_congr`). -/
