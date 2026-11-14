@@ -148,7 +148,7 @@ def _vllm(path: str):
 
 
 def test_both_arms_take_the_committers_engine_from_the_llms_public_names():
-    from verity_bench.vllm.runner import _DirectLLM
+    from verity_bench.vllm.engine import _DirectLLM
 
     vllm, runner = _vllm("/hf/snapshots/4e20de3624")
     pinned = SimpleNamespace(vllm=vllm, model=runner.model, pin=SimpleNamespace(model="meta-llama/Llama-3.2-1B", revision="4e20de3"))

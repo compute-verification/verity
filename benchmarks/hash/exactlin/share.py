@@ -1,6 +1,6 @@
 """The share of a served step that PoUW doesn't credit, from an nsys capture: Llama-3.1-8B int8-exact served by one of
-sbench's engines (`exact-fused`, the credited path, `exactlin`'s kernels the `verity_int8` ops' CUDA bodies; or `exact`,
-their torch bodies), driven step by step (`LLMEngine.add_request`, `step`) through four scenarios:
+sbench's engines (`exact-fused` or `exact`, one engine under two names: the credited path, `engine.int8_fused`'s
+kernels the `verity_int8` ops' CUDA bodies), driven step by step (`LLMEngine.add_request`, `step`) through four scenarios:
 
     decode-short   B32 greedy decode on sbench's prompts (cycled): after their prefill and WARM steps, STEPS steps
     decode-2k      the same with each prompt padded at its front to PAD tokens
@@ -180,7 +180,7 @@ def base(name: str) -> str:
 def assign(names: list[str], graph: list[bool]) -> tuple[list[str], dict]:
     """Each kernel's bucket, the kernels in GPU order; and the run lengths the positional rules saw.
 
-    An int8 GEMM's quantizer is exactlin_quant_rows (exactlin.row_quant copies x first only when stride(1) != 1), or the
+    An int8 GEMM's quantizer is exactlin_quant_rows (int8_fused.row_quant copies x first only when stride(1) != 1), or the
     QUANT_BODY torch kernels before torch._int_mm's padding (a Cat, and the Fill of its zeros, before the GEMM); a torch run
     right after an attention kernel is attention's (FlashAttention's split-KV decode copies q in and its output out).
     lm_head is the GEMM the sampler follows; any other GEMM is an int8 one (cuBLASLt's nvjet names carry no dtype)."""

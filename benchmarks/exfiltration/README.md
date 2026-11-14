@@ -313,8 +313,8 @@ null for a scope no run of record holds) and its `phases`, and an amount that ha
 
 ## Under a research run
 
-`run.py`'s `METRICS` are the rows of `benchmarks/metrics.toml` this benchmark is held to. Under a research run
-(`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json` through the harness kit, each over the
+`run.py`'s `METRICS` are the rows of `benchmarks/exfiltration/metrics.toml` this benchmark is held to. Under a research
+run (`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json` through the harness kit, each over the
 world's year at the share, in GB a world year at 10% of compute:
 
 - `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` (today the compute audit's

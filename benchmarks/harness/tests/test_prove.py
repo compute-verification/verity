@@ -124,7 +124,9 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     gemm = by[GEMM64].cost
     assert (gemm.source, gemm.seconds, gemm.record, gemm.staged) == (P.STEADY, 1.0, "r20260102-000000-0002", "gemm64")
     assert gemm.verifier_seconds == 0.5 and gemm.at_steady_rate is None and gemm.provers == 1
-    assert gemm.note == "`gemm64` (`Gemm_v1{K=64,N=1,DOT=Dot_v1}`), 1 prover, full statements (out/rate/rate.json)"
+    assert gemm.note == ("`gemm64` (`Gemm_v1{K=64,N=1,DOT=Dot_v1}`), 1 prover, full statements (out/rate/rate.json); "
+                         "another size, statements 4/8 full (r20260103-000000-0003)")
+    assert gemm.sizes == ((8, 8.0, "r20260102-000000-0002"), (4, 6.0, "r20260103-000000-0003"))
     assert gemm.definition == P.definition_id(GEMM64) and by[GEMM32].cost.definition is None
 
     # the card measures the K=64 GEMM alone: K=32 is another type, so it and the cut's block are modeled from k_log, at
@@ -152,6 +154,42 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     assert all(c.at_steady_rate is None for c in alone.values())
     # with no card either, nothing is priced
     assert {r.cost.source for r in P.Flock().table(census).rows} == {P.MISSING}
+
+
+def test_a_types_rows_at_other_statement_sizes_are_its_sizes_and_move_no_figure():
+    """A type's measured rows at its prover count and cores that timed statements of another size are carried beside
+    the row that prices it, one a size, the most blocks first: the pricing row's run's where it timed that size, else
+    the newest. A row at other cores or provers, one refused, and one staged in another Definition are no size of it.
+    The sizes move no figure, and a type timed at one size has none."""
+
+    census = P.Census.of(CENSUS)
+    gemm, norm = P.definition_id(GEMM64), P.definition_id(NORM)
+    run, newer, newest = "r20260102-000000-0002", "r20260103-000000-0003", "r20260104-000000-0004"
+    sizes = (
+        steady("gemm64", gemm, run, 8, 8.0),                                    # prices the type
+        steady("gemm64", gemm, run, 2, 3.0),                                    # a quarter, the pricing row's run
+        steady("gemm64", gemm, newest, 2, 2.5),                                 # a newer quarter
+        steady("gemm64", gemm, newer, 4, 6.0),                                  # a half, another run
+        steady("gemm64", gemm, newest, 1, 1.0, cores=24),                       # other cores
+        steady("gemm64", gemm, newest, 1, 1.0, provers=2),                      # another prover count
+        steady("gemm64", gemm, newest, 1, None, refused="timed out"),
+        steady("gemm64", gemm, newest, 1, 1.0, form="Gemm_v2{K=64,N=1,DOT=Dot_v2}"),
+        steady("norm", norm, run, 8, 24.0, k_log=22),
+    )
+    table = P.Flock(sizes, SESSIONS, "art:card").table(census)
+    by = {r.block: r.cost for r in table.rows}
+    assert by[GEMM64].sizes == ((8, 8.0, run), (4, 6.0, newer), (2, 3.0, run))
+    assert by[GEMM64].note.endswith(f"full statements (out/rate/rate.json); another size, statements 4/8 full ({newer}); "
+                                    f"another size, statements 2/8 full ({run})")
+    assert by[NORM].sizes == () and "another size" not in by[NORM].note
+    one = P.Flock((sizes[0], sizes[-1]), SESSIONS, "art:card").table(census)
+    assert [replace(r, cost=replace(r.cost, sizes=(), note="")) for r in table.rows] == [
+        replace(r, cost=replace(r.cost, note="")) for r in one.rows]
+    rows = {r["block"]: r for r in P.report(table, 1.0)["rows"]}
+    assert rows[GEMM64]["sizes"] == [{"blocks": 8, "statement_seconds": 8.0, "record": run},
+                                     {"blocks": 4, "statement_seconds": 6.0, "record": newer},
+                                     {"blocks": 2, "statement_seconds": 3.0, "record": run}]
+    assert rows[NORM]["sizes"] is None and rows[GEMM32]["sizes"] is None
 
 
 def test_a_steady_row_prices_its_definition_and_ks_other_statics_and_is_not_measured_for_them():

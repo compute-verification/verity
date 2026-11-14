@@ -24,7 +24,7 @@ clock64 for the whole kernel and for its tensor phases) are diagnostics. Timings
 - `run.sh`: one card. It builds outside the lease, then under one gpu-lease sets the power limit and, for each clock,
   locks it, warms the card and runs every arm, class, fill, burst and duty; at exit it resets the clock and the power
   limit. Last it runs `summarize.py`, and exits nonzero unless the card passes. Its header lists the knobs.
-- `summarize.py`: the verdict, PASS, UNDECIDED or REFUTED against the card's rate (`verity.hardware.cards.rate`), exiting 0
+- `summarize.py`: the verdict, PASS, UNDECIDED or REFUTED against the card's rate (`verity.device.rate`), exiting 0
   only on PASS; then the maximum by clock, arm and class against both readings, each clock's and arm's duty x class
   table, and the fills and bursts compared, over one or more runs' `out/` directories. `tests/` holds its verdict to
   the card on made-up points.
@@ -38,4 +38,4 @@ PYTHONPATH=. python3 benchmarks/tensor_duty/summarize.py ~/.research/runs/RUN/ou
 ~~~
 
 The card's `clock.tensor` source cites the run of record by its `art:` id. Nothing imports this directory:
-`summarize.py` is a command, and it reads the card through `verity.hardware.cards`, never a copy of its numbers.
+`summarize.py` is a command, and it reads the card through `verity.device`, never a copy of its numbers.

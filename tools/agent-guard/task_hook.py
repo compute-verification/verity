@@ -27,8 +27,9 @@ from pathlib import Path
 
 from settings import record_event
 
-REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY",
-                               Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"))
+#: the Slack registry of the checkout this file is in; `hook.sh` names origin/main's copy in its place
+OWN_REGISTRY = Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"
+REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY", OWN_REGISTRY))
 LOG = Path(os.environ.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
 LOOKUPS = {"explore", "cursor-guide", "ci-investigator", "videoReview"}
 AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
@@ -43,10 +44,10 @@ LINEAR_WRITES = frozenset({
     "create_attachment_from_upload", "prepare_attachment_upload", "prepare_file_upload"})
 
 
-def holders() -> dict[str, str]:
-    """Agent id -> the handle it holds."""
+def holders(text: str | None = None) -> dict[str, str]:
+    """Agent id -> the handle it holds, by the registry whose text this is (REGISTRY's when none is given)."""
     try:
-        reg = json.loads(REGISTRY.read_text())
+        reg = json.loads(REGISTRY.read_text() if text is None else text)
     except (OSError, ValueError):
         return {}
     return {a: h.get("handle", "?") for h in reg.get("handles") or [] for a in AGENT_ID.findall(str(h.get("holder", "")))}

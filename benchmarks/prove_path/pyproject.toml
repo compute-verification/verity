@@ -10,6 +10,7 @@ untraced = [
     "tests/test_kept_scan.py",
     "tests/test_prove_path.py",
     "tests/test_records_audit.py",
+    "tests/test_run_keep.py",
     "tests/test_run_request_values.py",
 ]
 # `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `benchmarks/one_stage`:

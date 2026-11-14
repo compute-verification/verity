@@ -17,7 +17,9 @@ served token, the prover GPU-seconds a block and where that figure is from (`SOU
   included: the table lists it as unread (`Table.unread`). A row may be staged for its census type in another
   Definition than the type's own (`Steady.form`): the type's row names the Definition its statements are of, as the
   type's Boolean version where the tree registers it as that (`Flock.boolean`) and as another Definition where it
-  doesn't;
+  doesn't. A type's rows at the same prover count and cores that timed statements of other sizes are carried beside
+  the one that prices it (`Cost.sizes`, a row a size), so a reader can split a statement's fixed seconds from its
+  seconds a block; they move no figure of the table;
 - `family`: no row of its own, but a steady-state row of its Definition and K at other statics, chosen as above, at
   2^Δk its seconds a block (Δk between the two k_logs), the dearest such where there are several, named with the
   Definition its statements are of as a type's own row is. It is priced, not measured: the steady-state share and the
@@ -187,7 +189,9 @@ class Cost:
     measured at, the Lean verifier's seconds and the proof's bytes with where each is from (`lean_source` and
     `proof_bytes_source`, a key of `LEAN_SOURCES`; None with no figure), and the Definition the
     statements a steady-state figure was measured on are of, by its id (`definition`: the type's own row's, or that of
-    the family's row it is scaled from; None from any other source)."""
+    the family's row it is scaled from; None from any other source). `sizes` is each statement size the type's own
+    steady-state rows timed at its prover count and cores, as (blocks, a statement's GPU-seconds, the run or art that
+    holds it), the size that prices it first; empty where they timed one size or none."""
 
     source: str
     seconds: float | None = None
@@ -204,6 +208,7 @@ class Cost:
     lean_source: str | None = None
     definition: str | None = None
     proof_bytes_source: str | None = None
+    sizes: tuple[tuple[int, float, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -435,6 +440,19 @@ def _newest(s: Steady) -> tuple[str, int]:
     return s.run, s.blocks
 
 
+def _sizes(s: Steady, rows: Sequence[Steady]) -> list[Steady]:
+    """The rows of `rows` beside `s`, the row that prices its type, that timed statements of another size at its cores
+    in its Definition, one a size, the most blocks first: `s`'s run's where it timed that size, else the newest."""
+
+    by: dict[int, Steady] = {}
+    for x in rows:
+        if x.blocks != s.blocks and x.cores == s.cores and x.proved == s.proved:
+            old = by.get(x.blocks)
+            if old is None or ((x.run == s.run), x.run) > ((old.run == s.run), old.run):
+                by[x.blocks] = x
+    return [by[n] for n in sorted(by, reverse=True)]
+
+
 _FN = re.compile(r'\{"fn":"([^"]*)"\}')
 _F64 = re.compile(r'\{"f64":"([^"]*)"\}')
 _BOOL = re.compile(r"\b(true|false)\b")
@@ -495,7 +513,9 @@ class Flock:
     """Flock's prover with every block proved, each type priced at `provers` provers on a host that gives a card
     `cores` CPU cores. A type takes its steady-state measurement from the rows at that prover count alone, and among
     them from those timed at `cores` cores: the fullest statement any of them measured, the newest such run's (a row
-    an art holds is its run's). A type those rows measured only at more cores takes the rows at the fewest cores
+    an art holds is its run's). Its rows at those cores that timed another statement size are its `sizes`, each size
+    the row of the pricing row's run where that run timed it, else the newest, and its note names them. A type those
+    rows measured only at more cores takes the rows at the fewest cores
     above, by the same order, and its note says which; a row timed at fewer cores prices nothing, since the host's
     share is the least a prover holds. Else it takes `card`'s single-session measurement: its own block's, or its
     Definition and K's at 2^Δk the seconds and 2^-Δk the statement, Δk between the two k_logs as the census holds
@@ -532,6 +552,7 @@ class Flock:
 
         unread = []
         names: dict[str, set[str]] = {}
+        sized: dict[str, list[Steady]] = {}
         for definition, type_ in self.aliases:
             if definition in held:
                 names.setdefault(definition, set()).add(type_)
@@ -547,6 +568,8 @@ class Flock:
             if s.measured and s.cores < self.cores:
                 under.setdefault(s.definition, set()).add(s.cores)
                 continue
+            if s.measured:
+                sized.setdefault(s.definition, []).append(s)
             best, order = (measured, _preferred) if s.measured else (tried, _newest)
             if (old := best.get(s.definition)) is None or order(s) > order(old):
                 best[s.definition] = s
@@ -567,10 +590,13 @@ class Flock:
             spelled = definition_id(b.name)
             if s := measured.get(spelled):
                 where = s.held if s.art is None else f"{s.held}, measured in {s.run}"
+                others = _sizes(s, sized[spelled])
+                also = "".join(f"; another size, {o.fill} ({o.record})" for o in others)
                 cost = Cost(STEADY, s.gpu_seconds / s.blocks, s.record,
-                            f"`{s.type}` ({form(s)}), {s.at}, {s.fill} ({where}){_above(s, self.cores)}", s.type,
+                            f"`{s.type}` ({form(s)}), {s.at}, {s.fill} ({where}){also}{_above(s, self.cores)}", s.type,
                             verifier_seconds=None if s.verifier_seconds is None else s.verifier_seconds / s.blocks,
-                            provers=s.provers, cores=s.cores, blocks=s.blocks, definition=s.proved)
+                            provers=s.provers, cores=s.cores, blocks=s.blocks, definition=s.proved,
+                            sizes=tuple((x.blocks, x.gpu_seconds, x.record) for x in [s, *others]) if others else ())
             else:
                 kin = families.get(_family(spelled), [])
                 cost = _kin(b, kin, self.cores, form) if kin else single(b)
@@ -727,7 +753,8 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
     where no statement was measured, and `lean_verify` names each measured statement, the most proving time first,
     with its block type's share of the proving time. A row's `definition` is the Definition the statements its figure was measured on are of, by its id,
     where the figure is from a steady-state row, the type's own or its family's; its note says which form of the
-    type that Definition is."""
+    type that Definition is. A row's `sizes` is each statement size its own steady-state rows timed (`Cost.sizes`: its
+    blocks, a statement's GPU-seconds and what holds it, the pricing size first), None where they timed one."""
 
     total = table.gpu_seconds_per_token()
     blocks = sum(r.per_token for r in table.rows)
@@ -742,6 +769,7 @@ def report(table: Table, serving_seconds: float) -> dict[str, Any]:
              "verifier_seconds": r.cost.verifier_seconds, "proof_bytes": r.cost.proof_bytes,
              "lean_verifier_seconds": r.cost.lean_seconds, "lean_source": r.cost.lean_source,
              "proof_bytes_source": r.cost.proof_bytes_source,
+             "sizes": [{"blocks": n, "statement_seconds": g, "record": rec} for n, g, rec in r.cost.sizes] or None,
              "time_share": None if r.cost.seconds is None else share(r.per_token * r.cost.seconds, total)}
             for r in table.rows]
     sources = []

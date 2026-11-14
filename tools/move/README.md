@@ -125,8 +125,9 @@ It finds each move `origin/main` (`--main`; fetch it first) has and the branch l
 script and map on the branch, its own additions included, and merges the moved `main` last. It changes no branch: the
 result is pushed to the new branch, never over one. It reports `clean`, or where it stopped: a conflict of the branch's
 own, files of the branch with no row (`no-row`, below), a script that failed (`script-failed`, with the last lines of its
-output: an `__init__.py` with content the move would delete names each file and the fix), or pins or Lean locks to
-regenerate. Its
+output: an `__init__.py` with content the move would delete names each file and the fix), pins to regenerate, or Lean
+locks that took the moved `main`'s side whole (`locks-stale`), into which the owner re-adds the branch's own entries by
+hand, leaving the records to the candidate's records run. Its
 first step merges each move's base into the branch, so
 a branch behind `main` merges `main` up to the window's base before the window: otherwise `restack.py` stops at that
 merge's conflicts, which are the branch's own. Before a branch crosses a move, `restack.py` checks that the move's commit
@@ -161,7 +162,14 @@ skipped and named (`skipped`): the later move's base merge brings it in, as a me
 for its map's old names in what the branch adds. A crossing that skipped a move reports `clean-skipped`, never `clean`,
 pushes nothing and exits 1, and prints the command that crosses the same moves named (`--move-commit` for each, `--onto`),
 which skips none: running it is the owner saying the skip is right. The last move, one no later move's base contains, and
-one named with `--move-commit` are never skipped: the branch is refused (`based-after`), and its owner merges `main`
-instead.
+one named with `--move-commit` are never skipped: the branch is refused (`based-after`). A plain `git merge main` on it is
+clean and wrong: the move's script never runs on the branch's own lines, so the files it adds stay at their old paths. A
+line stacked on another pull request's old head is refused so once that head has crossed the move and landed. The
+refusal gives the command that carries the branch against the move's own commit, which it shares no late commit with:
+
+    python3 tools/move/restack.py BRANCH --main MOVE    # or each --move-commit up to MOVE, where the moves were named
+
+Its owner then merges today's `main` into that result, a merge inside the new layout, and checks that the merge's tree
+holds the branch's own files at the new paths.
 
     uv run tools/verity/check/suites.py tools/move     # the tests (remotely: AGENTS.md "Tests")

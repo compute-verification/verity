@@ -17,7 +17,9 @@ active_replay.LiveServer`, and `warden_serve.py serve --watermark` beside it). T
 ``x-verity-release-bucket: A``, the release's bucket counted from 0 at the run's origin, and the watermark: one
 ``POST /verity/watermark`` a run, naming it, whose chunked body has the line ``t n`` (`watermark_line`) once bucket t has
 closed, the releases of buckets up to t being exactly those numbered below n, followed on that line by each release of
-bucket t that its server connection lost on the way; its end ends the run.
+bucket t that its server connection lost on the way; its end ends the run. A frontend takes one such stream a run, and
+none that carries ``x-verity-release``, which the network certifier puts on every request it releases and never on its
+own stream (`open_watermark`): any other POST to that route is answered 400, and feeds the gate nothing.
 
 What a request without the header gets: it is forwarded at once (``unordered``), as the served plan's probes are. A
 malformed or repeated ordinal is refused (`ValueError`, the server's 400). A released request that never reaches the
@@ -348,7 +350,9 @@ class TickGate:
     one it held is dropped, never added to the scheduler, and so is one that comes later (`add`). ``next`` steps over N
     as soon as it reaches it, with no hold, so the releases after N are admitted in order at their buckets. An open gate
     orders nothing, lost or not: it has added what it held, and adds a lost release's request at once like any other.
-    The frontend still owns a dropped request's answer and its abort: the gate only keeps it from the scheduler."""
+    The frontend still owns a dropped request's answer and its abort: the gate only keeps it from the scheduler, and
+    keeps its id (``dropped_ids``) until that abort comes, which it takes out of ``finish_requests``' ids, so the
+    scheduler is never handed the id of a request it never saw."""
 
     def __init__(self, tick: Tick, *, hold_s: float, clock: Callable[[], float] = time.monotonic,
                  pull: Callable[[], Iterable[Mapping[str, Any]]] | None = None,
@@ -357,6 +361,7 @@ class TickGate:
         self.run: str | None = None
         self.runs: list[str] = []
         self.keys: dict[str, tuple[str, int]] = {}      # a release's key -> (run, N)
+        self.dropped_ids: set[str] = set()              # the requests the gate dropped, until their aborts come
         self.opened: str | None = None
         self.counts = {"admitted": 0, "unordered": 0, "stale": 0, "late": 0, "skipped": 0, "lost": 0, "dropped": 0,
                        "aborted": 0, "past_end": 0, "bucket_mismatch": 0, "watermark_errors": 0}
@@ -433,6 +438,7 @@ class TickGate:
         held = self.held.pop(n, None)
         if held is not None:
             self.held_ids.pop(held[0].request_id, None)
+            self.dropped_ids.add(held[0].request_id)
             self.counts["dropped"] += 1
         self._event("lost", n=n, dropped=held is not None)
 
@@ -456,7 +462,10 @@ class TickGate:
                 self._event(why, key=key, n=None if k is None else k[1])
             if why == "late":
                 self.skipped.discard(k[1])
-            return None if why == "dropped" else add(request)
+            if why == "dropped":
+                self.dropped_ids.add(request.request_id)
+                return None
+            return add(request)
         n = k[1]
         self.held[n] = (request, add)
         self.held_ids[request.request_id] = n
@@ -472,13 +481,17 @@ class TickGate:
         add(request)
 
     def finished(self, ids: str | Iterable[str] | None) -> Iterable[str] | None:
-        """``finish_requests``' ids less the held requests among them, which are dropped (their N won't come); for every
-        request (None), the held ones are added first."""
+        """``finish_requests``' ids less the gate's own among them, which the scheduler never saw: the held requests,
+        which are dropped (their N won't come), and the ones it dropped for a lost release, whose ids it forgets here.
+        For every request (None), the held ones are added first."""
         if ids is None:
             self.open("every request finished")
             return None
         rest = []
         for rid in (ids,) if isinstance(ids, str) else ids:
+            if rid in self.dropped_ids:
+                self.dropped_ids.discard(rid)
+                continue
             n = self.held_ids.pop(rid, None)
             if n is None:
                 rest.append(rid)
@@ -674,18 +687,35 @@ class Watermark:
         return why is None
 
 
+def open_watermark(headers: Mapping[str, str], runs: set[str], emit: Callable[[dict[str, Any]], Any]) -> Watermark:
+    """The watermark stream a ``POST /verity/watermark`` of these lower-cased headers opens for the run they name, into
+    ``emit``; ``runs`` holds the runs whose stream this frontend has had, and gets this one. `ValueError` (the frontend's
+    400), with nothing emitted, for the two POSTs that aren't the network certifier's stream. One that carries
+    ``x-verity-release`` is a client's request: the network certifier puts that header on every request it releases
+    and never on its own stream. And a run's second: the network certifier sends one a run, so a second, whether
+    the first is still open or has ended, would be read beside it or after it, and its lost releases acted on."""
+    if RELEASE_HEADER in headers:
+        raise ValueError(f"{WATERMARK_PATH}: a POST that carries {RELEASE_HEADER} is a client's request, not the network "
+                         f"certifier's watermark")
+    run = headers.get(RUN_HEADER, "").strip()
+    if run in runs:
+        raise ValueError(f"{WATERMARK_PATH}: run {run!r} has had its watermark stream, and a run has one")
+    runs.add(run)
+    return Watermark(run, emit)
+
+
 class TickAdmit:
     """serve-openai's frontend under ``--admit tick``: `key` reads a request's release headers (`ValueError` on a malformed
     or repeated N, the server's 400), `submit` hands the engine loop's gate the release (through ``take``, the loop's
     queue) just before the request itself (``forward``), `passed` says a numbered request won't be submitted, and the
-    server's watermark route feeds `watermark` streams. A release a watermark line names lost is the gate's to drop and
-    this frontend's to answer, since the engine never finishes a request its scheduler never saw: a request of it that
-    is in the engine is answered with that error and aborted, and one that comes later is refused (`key`). A watermark
-    that breaks forgets its run's lost releases: the gate is open then, and adds every request at once. The frontend
-    sees no other opening of the gate (a watermark that stalls past the hold, the engine loop's drain), so after one a
-    line still has it abort or refuse the requests of the releases it names lost, which the open gate adds at once like
-    any other: no admission order rests on which, since an open gate orders nothing. All of it runs on the HTTP server's
-    event loop."""
+    server's watermark route feeds `watermark` streams, one a run and none of a client's (`open_watermark`). A release
+    a watermark line names lost is the gate's to drop and this frontend's to answer, since the engine never finishes a
+    request its scheduler never saw: a request of it that is in the engine is answered with that error and aborted, and
+    one that comes later is refused (`key`). A watermark that breaks forgets its run's lost releases: the gate is open
+    then, and adds every request at once. The frontend sees no other opening of the gate (a watermark that stalls past
+    the hold, the engine loop's drain), so after one a line still has it abort or refuse the requests of the releases it
+    names lost, which the open gate adds at once like any other: no admission order rests on which, since an open gate
+    orders nothing. All of it runs on the HTTP server's event loop."""
 
     LOST = RELEASE_HEADER + ": {n} of run {run!r} was lost on the way to the server, as the watermark says"
 
@@ -696,6 +726,7 @@ class TickAdmit:
         self.buckets: dict[tuple[str, int], int | None] = {}
         self.submitted: dict[tuple[str, int], Any] = {}     # (run, N) -> its admission, until its answer ends
         self.lost: dict[str, set[int]] = {}                 # run -> the N its watermark named lost
+        self.streams: set[str] = set()                      # the runs whose watermark stream has come
         self.counts = {"numbered": 0, "unordered": 0, "passed": 0, "lost": 0, "watermarks": 0}
 
     def key(self, headers: Mapping[str, str]) -> tuple[str, int] | None:
@@ -731,9 +762,15 @@ class TickAdmit:
         self.counts["passed"] += 1
         self.take({"run": key[0], "n": key[1], "passed": True})
 
-    def watermark(self, run: str) -> Watermark:
+    def watermark(self, headers: Mapping[str, str]) -> Watermark:
+        """The stream a watermark POST of these lower-cased headers opens (`open_watermark`); `ValueError`, the server's
+        400, for a client's and for a run's second. A client's is the request of the release it carries, which won't
+        be submitted: its release is read and passed as a refused completion's is, so the gate doesn't wait for it."""
+        if RELEASE_HEADER in headers:
+            self.passed(self.key(headers))
+        w = open_watermark(headers, self.streams, self._record)
         self.counts["watermarks"] += 1
-        return Watermark(run, self._record)
+        return w
 
     def _record(self, rec: dict[str, Any]) -> None:
         """One watermark record, to the gate: before it, a line's lost releases are marked, and after it the requests of

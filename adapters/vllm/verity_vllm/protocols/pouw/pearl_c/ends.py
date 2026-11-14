@@ -339,7 +339,8 @@ class PassEnds(_RunState):
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
                 "coins": self.coins.to_json(), "salt_opening": self.opening.to_json(), "salt": self.salt.hex(),
                 **session_head(self.commits), "cubin_sha256": self.kernel.cubin_sha256,
-                "kernel_source_sha256": self.kernel.source_sha256, "schedule": copy.deepcopy(self.details["schedule"]),
+                "kernel_source_sha256": self.kernel.source_sha256, "kernel_files": dict(self.kernel.files),
+                "schedule": copy.deepcopy(self.details["schedule"]),
                 "records_root": None, "commitment": {"root": root.hex(), "count": count}, "hm96_salt_key": self.salt_key.hex(),
                 "leaves": last[0], "tree_t": last[1]}
         splits = {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}
