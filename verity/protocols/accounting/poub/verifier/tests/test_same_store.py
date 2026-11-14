@@ -14,6 +14,7 @@ from types import ModuleType
 
 import pytest
 
+from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.prover import period_prover as PP
 from verity.protocols.accounting.poub.verifier import p2, p2_case, p2_party
 from verity.protocols.accounting.poub.verifier import period as P
@@ -69,7 +70,7 @@ def _entropy(label: bytes):
     return take
 
 
-def _committed() -> p2.Store:
+def _committed() -> p2_prover.Store:
     """The committed 9-block `C*` (`fixtures/p2-store.json`), registered for P2 on its PoUS setup."""
     doc = json.loads((FIXTURES / "p2-store.json").read_text())
     data = (FIXTURES / "p2-c-star.bin").read_bytes()
@@ -79,7 +80,7 @@ def _committed() -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(SOURCE, b"n0", commitment, vk), blocks)
+    return p2_prover.Store(p2.register(SOURCE, b"n0", commitment, vk), blocks)
 
 
 def _root(pous_case: dict) -> bytes:

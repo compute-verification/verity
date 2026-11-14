@@ -12,11 +12,12 @@ import pytest
 from remote_bandwidth_fakes import Entropy
 from test_appends import N, Run, pages, salts, store
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts
 from verity.protocols.accounting.poub.verifier.receipts import Plan
 
 
-def carrier(st: audit.Store, seed: bytes) -> bytes:
+def carrier(st: audit_prover.Store, seed: bytes) -> bytes:
     """A KV page's payload: the registered blocks' sketches under the pass seed `seed`, zero-padded to a block."""
     sketch = receipts.SketchReceipter(seed).sketch
     body = b"".join(sketch(st.blocks[j]) for j in range(N))
@@ -35,14 +36,14 @@ def relayed(page: bytes, seed: bytes) -> tuple[bytes, ...]:
     return tuple(out)
 
 
-def relay(r: Run, page_seed: bytes, plan: Plan) -> audit.Pass:
+def relay(r: Run, page_seed: bytes, plan: Plan) -> audit_prover.Pass:
     """Pass 1 over the registered blocks and the page at N, its registered receipts relayed from the page and the
     page's own receipt honest, all under `page_seed`."""
     page = codec.decode(r.store.blocks[N], N, r.store.registration.key, r.store.appends[0].digests[0], r.coins[N])
     ys = relayed(page, page_seed) + (receipts.SketchReceipter(page_seed)(N, r.store.blocks[N]),)
     leaf = Entropy(b"pass 1 salts")
     leaf_salts = tuple(leaf(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
-    return audit.Pass(0, 1, page_seed, plan, ys, leaf_salts, receipts.tree(page_seed, plan, ys, leaf_salts))
+    return audit_prover.Pass(0, 1, page_seed, plan, ys, leaf_salts, receipts.tree(page_seed, plan, ys, leaf_salts))
 
 
 def test_a_page_appended_after_a_pass_s_seed_relays_none_of_its_receipts() -> None:

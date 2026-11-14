@@ -9,17 +9,18 @@ import json
 import pytest
 from test_appends import NODE, P512, SOURCE, N, Run, payload, salts
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit
 
 
-def registered_in(registry: audit.Registry, nonce: bytes = bytes(32), node: bytes = NODE) -> audit.Store:
+def registered_in(registry: audit.Registry, nonce: bytes = bytes(32), node: bytes = NODE) -> audit_prover.Store:
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(node, payloads, ys).commitment.root
-    return audit.Store(registry.register(SOURCE, node, N, root, P512, nonce=nonce), payloads, ys)
+    return audit_prover.Store(registry.register(SOURCE, node, N, root, P512, nonce=nonce), payloads, ys)
 
 
-def accepted(store: audit.Store, registry: audit.Registry) -> Run:
+def accepted(store: audit_prover.Store, registry: audit.Registry) -> Run:
     r = Run(store, windows=1, registry=registry)
     assert r.run() is None
     r.boundary()
@@ -27,7 +28,7 @@ def accepted(store: audit.Store, registry: audit.Registry) -> Run:
     return r
 
 
-def rejected(store: audit.Store, registry: audit.Registry) -> Run:
+def rejected(store: audit_prover.Store, registry: audit.Registry) -> Run:
     """A session whose second pass names the first's step: rejected with `step`."""
     r = Run(store, windows=1, registry=registry)
     assert r.run() is None
@@ -35,7 +36,7 @@ def rejected(store: audit.Store, registry: audit.Registry) -> Run:
     return r
 
 
-def unended(store: audit.Store, registry: audit.Registry) -> Run:
+def unended(store: audit_prover.Store, registry: audit.Registry) -> Run:
     r = Run(store, windows=1, registry=registry)
     assert r.run() is None
     return r

@@ -53,11 +53,7 @@ from verity.commitments.randomness import frame
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.params import SALT_BITS
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.accounting.pous.verifier.verifier import (
-    MerkleTree,
-    VerifierKey,
-    leaf_hash,
-)
+from verity.protocols.accounting.pous.verifier.verifier import VerifierKey
 
 from . import audit, receipts
 from .codec import P2_LAYOUT, P2Codec
@@ -182,23 +178,6 @@ class Sketcher(receipts.SketchReceipter):
         return receipts.sign_bits(self.seed, self.rows, UNIT_BYTES)
 
 
-class Store:
-    """The prover's C* under a P2 registration: its N blocks and PoUS's vk tree over them, whose root must be the
-    registration's."""
-
-    def __init__(self, registration: Registration, blocks: Sequence[bytes]) -> None:
-        params = registration.params
-        if len(blocks) != params.blocks or any(type(b) is not bytes or len(b) != BLOCK_BYTES for b in blocks):
-            raise ValueError(f"the registration's C* is {params.blocks} blocks of {BLOCK_BYTES} bytes")
-        self.registration, self.blocks = registration, tuple(blocks)
-        self.tree = MerkleTree([leaf_hash(params, registration.salt, j, b) for j, b in enumerate(self.blocks)])
-        if self.tree.root != registration.root:
-            raise ValueError("these blocks are not the registered C*: their vk root is not the registration's")
-
-    def unit(self, g: int) -> bytes:
-        return b"".join(self.blocks[UNIT_BLOCKS * g:UNIT_BLOCKS * (g + 1)])
-
-
 @dataclass(frozen=True, slots=True)
 class Opening:
     """Receipt (i, p) of a window opened, position p of pass i, unit g = plan_i[p]: its four blocks, each block's path
@@ -251,5 +230,5 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     return None
 
 
-__all__ = ["BLOCK_BYTES", "Opening", "Registration", "Sketcher", "Store", "UNIT_BLOCKS", "UNIT_BYTES",
+__all__ = ["BLOCK_BYTES", "Opening", "Registration", "Sketcher", "UNIT_BLOCKS", "UNIT_BYTES",
            "codec_of", "register"]

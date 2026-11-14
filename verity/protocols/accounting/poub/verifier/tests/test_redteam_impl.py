@@ -73,8 +73,8 @@ def test_rb2_the_record_names_its_codec(store) -> None:
     assert led.rebuild == pytest.approx(stated * BLOCK / (65_344 * CAPACITY))
 
 
-def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, bytes], reads: list[int],
-               entropy) -> tuple[audit.Pass, audit.Pass]:
+def joint_pass(store: audit_prover.Store, window: int, i: int, seeds: tuple[bytes, bytes], reads: list[int],
+               entropy) -> tuple[audit_prover.Pass, audit_prover.Pass]:
     """Pass i of two sessions' chains at once: each block is read once and serves a receipt of each."""
     plan = receipts.Plan.whole(N)
     rs = [receipts.receipter(store.registration.receipt, sd) for sd in seeds]
@@ -87,7 +87,7 @@ def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, byte
     out = []
     for k in (0, 1):
         salts = tuple(entropy(receipts.SALT_BYTES) for _ in range(receipts.leaves(N)))
-        out.append(audit.Pass(window, i, seeds[k], plan, tuple(ys[k]), salts,
+        out.append(audit_prover.Pass(window, i, seeds[k], plan, tuple(ys[k]), salts,
                               receipts.tree(seeds[k], plan, ys[k], salts)))
     return out[0], out[1]
 

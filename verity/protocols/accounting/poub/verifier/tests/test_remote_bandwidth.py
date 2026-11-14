@@ -47,17 +47,17 @@ def payload(j: int) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def store() -> audit.Store:
+def store() -> audit_prover.Store:
     """The store under the fallback codec, p1024 masked at k = 2: about 4 s to encode where the default's k = 3 takes 6.
     Nothing here depends on k; the vectors' session runs at the default."""
     payloads = [payload(j) for j in range(N)]
     salts = [Entropy(b"payload salts")(receipts.SALT_BYTES * N)[receipts.SALT_BYTES * j:receipts.SALT_BYTES * (j + 1)]
              for j in range(N)]
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
+    return audit_prover.Store(audit.register(SOURCE, NODE, N, root, codec.FALLBACK, nonce=bytes(32)), payloads, salts)
 
 
-def registered(store: audit.Store, receipt: str, bind: bool, rows: int | None = None) -> audit.Store:
+def registered(store: audit_prover.Store, receipt: str, bind: bool, rows: int | None = None) -> audit_prover.Store:
     """`store` registered under `receipt`, `bind` and `rows` with the same nonce: none is in the codec seed's context,
     so its blocks are `store`'s, and only the registration and its digest differ."""
     reg = audit.register(SOURCE, NODE, N, store.registration.payload_root, codec.FALLBACK, receipt, bind=bind,
@@ -69,7 +69,7 @@ def registered(store: audit.Store, receipt: str, bind: bool, rows: int | None = 
 
 
 @pytest.fixture(scope="module")
-def stores(store) -> dict[tuple[str, bool], audit.Store]:
+def stores(store) -> dict[tuple[str, bool], audit_prover.Store]:
     """`store` under each receipt kind, with its receipts of the block alone and binding z: four registrations, four
     digests, one set of blocks."""
     out = {(kind, bind): registered(store, kind, bind) for kind in receipts.KINDS for bind in (False, True)}
@@ -78,19 +78,19 @@ def stores(store) -> dict[tuple[str, bool], audit.Store]:
 
 
 @pytest.fixture(scope="module")
-def sketch_store(stores) -> audit.Store:
+def sketch_store(stores) -> audit_prover.Store:
     """The default registration's store, named by its kind for the tests that are about it."""
     return stores[receipts.SKETCH_SHA512, False]
 
 
 @pytest.fixture(scope="module")
-def block_store(stores) -> audit.Store:
+def block_store(stores) -> audit_prover.Store:
     """block-sha512, the kind kept for comparison."""
     return stores[receipts.BLOCK_SHA512, False]
 
 
 @pytest.fixture(scope="module")
-def rows64_store(store) -> audit.Store:
+def rows64_store(store) -> audit_prover.Store:
     """sketch-sha512 at 64 rows, of the block alone."""
     return registered(store, receipts.SKETCH_SHA512, False, 64)
 
@@ -105,7 +105,7 @@ def no_rebuild(r: audit.Record) -> audit.Rebuild:
     return audit.Rebuild(r.codec, 0.0)
 
 
-def params_of(st: audit.Store, **kw) -> Params:
+def params_of(st: audit_prover.Store, **kw) -> Params:
     """`params` under `st`'s receipt kind, `bind` and rows."""
     return params(receipt=st.registration.receipt, bind=st.registration.bind, rows=st.registration.rows, **kw)
 
@@ -695,7 +695,7 @@ def committed_with(receipter):
         r, tiles = receipter(seed, prover), prover.tiles
         ys = tuple(r(j, prover.store.blocks[j], None if tiles is None else tiles.output(seed, j)) for j in plan)
         salts = tuple(prover.entropy(receipts.SALT_BYTES) for _ in range(receipts.leaves(plan.length)))
-        return audit.Pass(t, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
+        return audit_prover.Pass(t, i, seed, plan, ys, salts, receipts.tree(seed, plan, ys, salts))
     return run
 
 

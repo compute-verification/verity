@@ -47,7 +47,7 @@ def one_decode(block: bytes, j: int, k: codec.Key, d: bytes) -> bytes:
                     .to_bytes(s, "little") for w in range(f.block_words))
 
 
-def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tuple[audit.Verdict, list, list]:
+def window(store: audit_prover.Store, prover_store: audit_prover.Store, passes: int = 2) -> tuple[audit.Verdict, list, list]:
     """One window of `passes` whole-store passes, every receipt sampled: the verifier's verdict on `prover_store`'s
     openings, the samples and the passes."""
     reg = store.registration
@@ -83,7 +83,7 @@ def test_under_the_seeds_key_a_block_written_after_the_seed_takes_the_encoding_i
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
     reg = audit.Registration(NODE, 2, root, SEED, codec.DEFAULT, receipts.DEFAULT, False, receipts.LAYOUT,
                              receipts.SKETCH_ROWS)
-    store = audit.Store(reg, payloads, salts)
+    store = audit_prover.Store(reg, payloads, salts)
     assert store.blocks[KV] == PICKED
 
     cheater = copy.copy(store)

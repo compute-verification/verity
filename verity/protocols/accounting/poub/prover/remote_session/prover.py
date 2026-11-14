@@ -3,7 +3,7 @@ every root as its pass ends, and opens what the verifier samples.
 
 A backend holds the store and makes the passes: `device.GpuBackend` on the GPUs (the store sharded across them, each pass
 every shard's sketch-sha512 receipts and the one tree over the whole store), or `CpuBackend`, the driver's own
-reference (`audit.Store`, `receipts`), which the suite runs over a loopback. Either queues a pass (`launch`, chained
+reference (`audit_prover.Store`, `receipts`), which the suite runs over a loopback. Either queues a pass (`launch`, chained
 from an earlier pass's ticket) before the one ahead of it is awaited (`wait`), so the device never idles between
 passes. A boundary message (the next window's coin, or the close) is taken at the first root that reaches the host
 after it: that root is sent as its window's last if its pass started (the root before it reached the host) before the
@@ -54,14 +54,14 @@ step is the session's own, before each pass, and a block lands in its slot when 
 
 With a serving trace, the appends a pass's step made go out after the root before it and before the pass is computed,
 each its own message (its tree's root and size, `AuditRun.append`; a pass's are sent together) answered with its
-coin, under which the backend encodes its blocks (`audit.Store.encode`); then the root's message carries the blocks
+coin, under which the backend encodes its blocks (`audit_prover.Store.encode`); then the root's message carries the blocks
 released since the last root sent, as runs, with those among them the trace withdrew (`withdrawn`, freed before their
 encode landed, so never written: `AuditRun.release(released, withdrawn)`), and the pass's plan as a change from the
 last one sent (`AuditRun.receive(..., change=...)`).  The hello says whether the backend defers an appended block's
 residency to its encode (`deferred`, a backend's attribute, False if it has none), which the verifier refuses under a
 lifetime of one window, and whether any session of the plan appends (`appends`, false for a plan of `BANDWIDTH` modes
 only, whose sessions then reserve no append coins).  A pass's seed binds every append sent before its root (`audit.chained`), so a backend that appends
-takes the chain over its appends when the pass is launched (`audit.Store.head`).  A pass whose appends went out is
+takes the chain over its appends when the pass is launched (`audit_prover.Store.head`).  A pass whose appends went out is
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
 
@@ -106,6 +106,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[6]))
 
+from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E402
 from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
@@ -350,7 +351,7 @@ class ServingTrace:
         self.ahead: Ahead | None = None
         self.live = set(range(N))
         self.held: dict[int, tuple[int, bytes]] = {}
-        self.appends: list[audit.Append] = []
+        self.appends: list[audit_prover.Append] = []
         self.released: list[int] = []
         self.withdrawn: list[int] = []
         self.appended: list[int] = []
@@ -488,7 +489,7 @@ class CpuBackend:
         return audit.payload_tree(node, self.payloads, self.salts).commitment.root
 
     def encode(self, registration: audit.Registration) -> dict:
-        self.store = audit.Store(registration, self.payloads, self.salts)
+        self.store = audit_prover.Store(registration, self.payloads, self.salts)
         self.plan = rb.Plan.whole(self.blocks)
         self._slots()
         return {"encode_bytes_per_s": 1.0}
@@ -504,7 +505,7 @@ class CpuBackend:
         self.store.pending.clear()
         self._slots()
 
-    def append(self, payloads, salts) -> audit.Append:
+    def append(self, payloads, salts) -> audit_prover.Append:
         return self.store.append(payloads, salts)
 
     def place(self, first: int, slots, step: int) -> None:

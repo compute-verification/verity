@@ -37,7 +37,7 @@ class Entropy:
 
 
 @pytest.fixture(scope="module")
-def store() -> p2.Store:
+def store() -> p2_prover.Store:
     doc = json.loads((FIXTURES / "p2-store.json").read_text())
     data = (FIXTURES / "p2-c-star.bin").read_bytes()
     blocks = [data[p2.BLOCK_BYTES * j:p2.BLOCK_BYTES * (j + 1)] for j in range(len(data) // p2.BLOCK_BYTES)]
@@ -46,7 +46,7 @@ def store() -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(SOURCE, NODE, commitment, vk), blocks)
+    return p2_prover.Store(p2.register(SOURCE, NODE, commitment, vk), blocks)
 
 
 def test_the_registration_and_openings_round_trip_their_json(store) -> None:

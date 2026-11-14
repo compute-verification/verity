@@ -43,6 +43,7 @@ from p2_store import store as S
 
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import expand_prefix
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.prover import p2_prover
 from verity.protocols.accounting.poub.verifier import audit, coins, p2, receipts
 
@@ -193,11 +194,11 @@ class Served:
     outcome: str | None = None
 
 
-Open = Callable[[audit.Pass, int], p2.Opening]
+Open = Callable[[audit_prover.Pass, int], p2.Opening]
 Step = Callable[[Engine, int, p2.Sketcher], tuple[int, dict[int, bytes]]]
 
 
-def serve(engine: Engine, store: p2.Store, *, prompt: int, windows: int, per_window: int, step_ns: int = 1000,
+def serve(engine: Engine, store: p2_prover.Store, *, prompt: int, windows: int, per_window: int, step_ns: int = 1000,
           samples: int | None = None, entropy: Callable[[int], bytes] | None = None, step: Step | None = None,
           open_: Callable[[p2_prover.Prover], Open] | None = None) -> Served:
     """Serve `windows · per_window` steps from `prompt` under one audit session over `store` (the prover's `C*`, the
@@ -320,7 +321,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         ap.error("--steps is a whole number of windows of --per-window steps")
     store, doc, c_star = toy()
     reg = registration(store, doc, c_star)
-    served = serve(Engine(store, c_star, bytes.fromhex(doc["salt"])), p2.Store(reg, blocks_of(store, c_star)),
+    served = serve(Engine(store, c_star, bytes.fromhex(doc["salt"])), p2_prover.Store(reg, blocks_of(store, c_star)),
                    prompt=a.prompt, windows=a.steps // a.per_window, per_window=a.per_window)
     print(json.dumps({"tokens": served.tokens, "passes": served.passes, "outcome": served.outcome,
                       "verdicts": [{"window": v.window, "accepted": v.accepted, "failure": v.failure,

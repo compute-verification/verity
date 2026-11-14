@@ -63,7 +63,7 @@ class Entropy:
 
 
 @pytest.fixture(scope="module")
-def store() -> p2.Store:
+def store() -> p2_prover.Store:
     doc = json.loads((FIXTURES / "p2-store.json").read_text())
     data = (FIXTURES / "p2-c-star.bin").read_bytes()
     blocks = [data[p2.BLOCK_BYTES * j:p2.BLOCK_BYTES * (j + 1)] for j in range(len(data) // p2.BLOCK_BYTES)]
@@ -72,7 +72,7 @@ def store() -> p2.Store:
     commitment, salt, n = bytes.fromhex(doc["commitment"]), bytes.fromhex(doc["salt"]), params.blocks_per_segment
     vk = setup.verifier_key_from_encoding(params, None, commitment, salt,
                                           [blocks[n * s:n * (s + 1)] for s in range(params.segments)])
-    return p2.Store(p2.register(SOURCE, NODE, commitment, vk), blocks)
+    return p2_prover.Store(p2.register(SOURCE, NODE, commitment, vk), blocks)
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +85,7 @@ class Prover:
     verifier's clock; `skip` names a unit whose reads it skips, its receipt from zeros, `garble` sends openings whose
     leaf salts are a byte short, and `whole` reads every unit whatever the plan."""
 
-    def __init__(self, store: p2.Store, clock: Clock, *, skip: int | None = None, garble: bool = False,
+    def __init__(self, store: p2_prover.Store, clock: Clock, *, skip: int | None = None, garble: bool = False,
                  whole: bool = False) -> None:
         self.store, self.clock, self.skip, self.garble, self.whole = store, clock, skip, garble, whole
         self.passes: dict[tuple[int, int], object] = {}
@@ -136,7 +136,7 @@ class Lying:
         return self.read()
 
 
-def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Plan | None = None,
+def run(exe: Path, store: p2_prover.Store, prover_of, request: dict, plan: receipts.Plan | None = None,
         lean_of=lambda lean: lean, auditor: dict = TOY) -> tuple[dict, dict]:
     """One session over a socket pair: the verifier's side in a thread, its Lean (`lean_of` of it) holding the
     registration file with `plan` and the auditor's session parameters `auditor`, the prover's here; both answers."""
@@ -161,7 +161,7 @@ def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Pla
     return out, got["answer"]
 
 
-def request(store: p2.Store, auditor: dict = TOY, **kw) -> dict:
+def request(store: p2_prover.Store, auditor: dict = TOY, **kw) -> dict:
     return p2_party.request_of(store.registration.node, **{**auditor, **kw})
 
 

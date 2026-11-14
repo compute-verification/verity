@@ -496,14 +496,14 @@ class World:
 
 
 @functools.cache
-def _encoded(c: codec.Codec, blocks: int) -> audit.Store:
+def _encoded(c: codec.Codec, blocks: int) -> audit_prover.Store:
     payloads = [payload(b"weights %d" % j) for j in range(blocks)]
     ys = salts(b"payload salts", blocks)
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, blocks, root, c, nonce=bytes(32)), payloads, ys)
+    return audit_prover.Store(audit.register(SOURCE, NODE, blocks, root, c, nonce=bytes(32)), payloads, ys)
 
 
-def store(world: World) -> audit.Store:
+def store(world: World) -> audit_prover.Store:
     """A fresh store of the world's registration with no appends yet. The codec seed is sampled without the receipt kind
     (`audit.register`), so worlds of one codec and size share their encoded blocks."""
     base = _encoded(world.codec, world.blocks)
@@ -529,7 +529,7 @@ class Run:
 
     def __init__(self, world: World | None = None, *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
                  lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
-                 not_before_ns: int = 0, cheat: Callable[[audit.Store], audit.Store] | None = None,
+                 not_before_ns: int = 0, cheat: Callable[[audit_prover.Store], audit_prover.Store] | None = None,
                  pace: audit.Pace | None = None, groups_per_coin: int = 1) -> None:
         self.store = store(World() if world is None else world)
         reg = self.store.registration
@@ -547,7 +547,7 @@ class Run:
         self.challenges: dict[int, coins.LiveOpening] = {}
         self.t, self.i, self.previous, self.plan, self.step = 0, 0, reg.digest, Plan.whole(reg.blocks), -1
         self.head: bytes | None = None
-        self.passes: dict[tuple[int, int], audit.Pass] = {}
+        self.passes: dict[tuple[int, int], audit_prover.Pass] = {}
         self.draws: dict[int, tuple] = {}
 
     def _call(self, event: dict, fn: Callable[[], Any]) -> Any:
@@ -590,7 +590,7 @@ class Run:
                 self.store.encode(first, coin)
         return out
 
-    def append(self, count: int, label: bytes = b"kv page") -> audit.Append:
+    def append(self, count: int, label: bytes = b"kv page") -> audit_prover.Append:
         a = self.store.append(pages(self.store.extent, count, label),
                               salts(b"page salts %d" % self.store.extent, count))
         self.commit(a.root, a.count)
@@ -683,8 +683,8 @@ class Dropped:
         return bytes(codec.BLOCK_BYTES) if self.dropped(j) else self.blocks[j]
 
 
-def dropping(dropped: Callable[[int], bool]) -> Callable[[audit.Store], audit.Store]:
-    def cheat(honest: audit.Store) -> audit.Store:
+def dropping(dropped: Callable[[int], bool]) -> Callable[[audit_prover.Store], audit_prover.Store]:
+    def cheat(honest: audit_prover.Store) -> audit_prover.Store:
         out = copy.copy(honest)
         out.blocks = Dropped(honest.blocks, dropped)
         return out

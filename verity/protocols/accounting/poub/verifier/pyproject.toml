@@ -29,7 +29,7 @@ inputs = ["verity/protocols/proofs/spot/device/coins.py", "verity/protocols/proo
           "verity/protocols/accounting/poub/prover/__init__.py", "verity/protocols/accounting/poub/prover/session_prover.py",
           # the honest provers and the period's prover side, which the tests run against the verifier's
           "verity/protocols/accounting/poub/prover/audit_prover.py", "verity/protocols/accounting/poub/prover/p2_prover.py",
-          "verity/protocols/accounting/poub/prover/period_prover.py",
+          "verity/protocols/accounting/poub/prover/period_prover.py", "verity/protocols/accounting/poub/prover/opening_prover.py",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
           # test_gate_ranges.py recompute from codec.encode_word, the f32 evaluators and property/v1's rules, and
           # Exp2Lut127's table, which test_gate_ranges.py holds to vLLM's (fixtures/exp2_lut127.json)

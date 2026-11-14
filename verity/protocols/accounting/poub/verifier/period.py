@@ -7,7 +7,7 @@ order; `verity/protocols/accounting/poub/prover/period_prover.py`'s `run` plays 
 
 1. the prover packs `store` into blocks (`payloads`), commits to them under fresh salts (`audit.payload_tree`), and the
    verifier samples the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
-   (`audit.Store`);
+   (`audit_prover.Store`);
 2. the verifier opens a session (`audit.AuditRun`) on coins its challenger commits to before the first one, sampled from
    `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store
    (`audit_prover.Prover`) under each window's challenge, sent as its value and the root it was opened after

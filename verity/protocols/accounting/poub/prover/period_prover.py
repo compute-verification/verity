@@ -23,17 +23,17 @@ class Local:
     """The prover in the verifier's process: `store` packed into blocks (`period.payloads`), committed under salts from
     `entropy`, and read through `cheat` (the honest store when None)."""
 
-    def __init__(self, node: str, store: bytes, *, cheat: Callable[[audit.Store], audit.Store] | None = None,
+    def __init__(self, node: str, store: bytes, *, cheat: Callable[[audit_prover.Store], audit_prover.Store] | None = None,
                  entropy: Callable[[int], bytes] = os.urandom) -> None:
         self.name, self.blocks, self.cheat, self.entropy = node.encode(), P.payloads(store), cheat, entropy
         self.salts = [entropy(receipts.SALT_BYTES) for _ in self.blocks]
-        self.made: dict[tuple[int, int], audit.Pass] = {}
+        self.made: dict[tuple[int, int], audit_prover.Pass] = {}
 
     def register(self) -> tuple[int, bytes]:
         return len(self.blocks), audit.payload_tree(self.name, self.blocks, self.salts).commitment.root
 
     def hold(self, registration: audit.Registration) -> None:
-        honest = audit.Store(registration, self.blocks, self.salts)
+        honest = audit_prover.Store(registration, self.blocks, self.salts)
         self.prover = audit_prover.Prover(self.cheat(honest) if self.cheat else honest, None, entropy=self.entropy)
 
     def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
@@ -50,7 +50,7 @@ class Local:
 
 def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
         window_ns: int = 100_000_000, deadline_ns: int = 500_000_000, codec_: codec.Codec = codec.DEFAULT,
-        cheat: Callable[[audit.Store], audit.Store] | None = None, verify: int | None = None,
+        cheat: Callable[[audit_prover.Store], audit_prover.Store] | None = None, verify: int | None = None,
         clock: Callable[[], int] = time.monotonic_ns,
         sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
         entropy: Callable[[int], bytes] = os.urandom) -> P.Run:

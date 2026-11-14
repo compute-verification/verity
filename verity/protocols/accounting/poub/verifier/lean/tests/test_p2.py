@@ -209,7 +209,7 @@ GEOMETRIES = ((4, 1), (2, 3), (3, 3), (5, 3), (17, 4))
 
 
 @functools.cache
-def drawn_store(k: int, rows: int) -> p2.Store:
+def drawn_store(k: int, rows: int) -> p2_prover.Store:
     """A store of sampled proof blocks (P2's check never decodes, so they needn't be codewords) under geometry `k`, with
     every byte's extremes among them."""
     bps, segments = GEOMETRIES[k]
@@ -219,7 +219,7 @@ def drawn_store(k: int, rows: int) -> p2.Store:
     codec, salt = P2Codec(bps, segments), expand(b"salt %d" % k, 24)
     root = MerkleTree([leaf_hash(p2.pous_params(codec), salt, j, b) for j, b in enumerate(blocks)]).root
     reg = p2.Registration(b"node %d" % k, codec, expand(b"commitment %d" % k, 64), salt, root, rows)
-    return p2.Store(reg, blocks)
+    return p2_prover.Store(reg, blocks)
 
 
 def canonical_runs(order: list[int]) -> list[list[int]]:
@@ -425,7 +425,7 @@ def p2_bad_openings(os: list[dict], pick: int) -> bytes:
     return lines[n % len(lines)]()
 
 
-def p2_events(store: p2.Store, plan: Plan, params, committed: list[bytes], not_before: int, edit: int = 0,
+def p2_events(store: p2_prover.Store, plan: Plan, params, committed: list[bytes], not_before: int, edit: int = 0,
               at: tuple[int, int] = (0, 0), pick: int = 0) -> list[dict]:
     """A session's events as `p2_party.session` drives it, the prover's lines an honest prover's over `store`
     (`p2_prover.Prover`), each step `P2_STEP_NS`, but for deviation `edit` at pass `at` = (t, i), its variant from `pick`:
@@ -617,7 +617,7 @@ def test_p2_session(server) -> None:
 # --- the committed C* ---------------------------------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
-def committed() -> p2.Store:
+def committed() -> p2_prover.Store:
     """The committed C* (PoUS's setup's prover bytes, `tests/test_p2.py`'s), registered under its vk root."""
     meta = json.loads((FIXTURES / "p2-store.json").read_text())
     data = (FIXTURES / "p2-c-star.bin").read_bytes()
@@ -625,7 +625,7 @@ def committed() -> p2.Store:
     m = meta["params"]
     reg = p2.Registration(b"p2-node-under-test", P2Codec(m["blocks_per_segment"], m["segments"]),
                           bytes.fromhex(meta["commitment"]), bytes.fromhex(meta["salt"]), bytes.fromhex(meta["root"]))
-    return p2.Store(reg, [data[p2.BLOCK_BYTES * j:p2.BLOCK_BYTES * (j + 1)] for j in range(len(data) // p2.BLOCK_BYTES)])
+    return p2_prover.Store(reg, [data[p2.BLOCK_BYTES * j:p2.BLOCK_BYTES * (j + 1)] for j in range(len(data) // p2.BLOCK_BYTES)])
 
 
 def test_the_committed_store_s_registration_digest_is_the_leans(server, committed) -> None:

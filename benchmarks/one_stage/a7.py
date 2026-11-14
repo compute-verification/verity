@@ -57,7 +57,7 @@ the cap the committed pass row and the public lifetime cap give), one instance o
   second statement (`check3_audit`: every unit sampled, --zk, Lean). The verifier sees the units' roots, its own public
   rows (the codec seed, the block, the coin, the pass's prefix and signs, the roots with their domains, ranks and depths)
   and each unit's verdict, and holds the one other row, the plan row, to the canonical plan row by ``b || c``. The
-  negatives' sessions decide check 3 by the unit's reference (`opening.reference`).
+  negatives' sessions decide check 3 by the unit's reference (`opening_prover.reference`).
 """
 from __future__ import annotations
 
@@ -81,6 +81,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.protocols.accounting.poub.prover import audit_prover  # noqa: E402
+from verity.protocols.accounting.poub.prover import opening_prover  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, codec, coins, memory_map as MM, opening as C3, receipts  # noqa: E402
 from verity.protocols.accounting.poub.verifier import schedule as SC  # noqa: E402
 from verity.protocols.accounting.poub.verifier.receipts import Plan  # noqa: E402
@@ -315,7 +316,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     the later plans and its free naming that index), ``drop`` (the last step that writes: its append never sent, and its
     blocks in no later plan and no release). Each window samples ``c3.samples`` receipts, and check 3 decides them
     (``c3``, `check3_inputs`) in place of their openings: by its unit's reference on the prover's witness
-    (`opening.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
+    (`opening_prover.reference`), or, ``defer``, not yet: the caller proves them (`check3_audit`) and decides each window.
     Returns the session, the prover's store and passes, its record and the verifier's v0 view: each pass's plan and step,
     its (window, step) in order, each appended index's write step and each block's release step."""
     steps = req.steps
@@ -323,7 +324,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
     payloads = [store.payload.get(j, 0).to_bytes(RQ.BLOCK_BITS // 8, "little") for j in range(NR)]
     ys = [Entropy(b"a7 payload salts %d" % j)(receipts.SALT_BYTES) for j in range(NR)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    rs = audit.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
+    rs = audit_prover.Store(audit.register(SOURCE, NODE, NR, root, P512, nonce=bytes(32)), payloads, ys)
     p = audit.Params(blocks=NR, deadline_ns=10**6, windows=WINDOWS, samples=c3.samples, delta=1e-6, window_ns=10, codec=P512,
                      lifetime=LIFE, schedule_cap=SCHEDULE_CAP)
     clock = Clock()
@@ -431,7 +432,7 @@ def remote_session(req, layout, store, plans: dict[int, list[int]], salts: dict[
                 break
     by_check3 = None
     if out is None and not defer:
-        verdicts = C3.reference(s, rs, passes, c3)
+        verdicts = opening_prover.reference(s, rs, passes, c3)
         out = by_check3 = next((v for v in verdicts if not v.accepted), None)
     accepted = out is None and len(verdicts) == WINDOWS and all(v.accepted for v in verdicts)
     return SimpleNamespace(session=s, store=rs, passes=passes, verdicts=verdicts, refused=out, by_check3=by_check3,
@@ -652,7 +653,7 @@ def statement_checks(m: dict, rec: dict, want: dict) -> dict:
 # --- check 3 ----------------------------------------------------------------------------------------------------------------
 
 def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
-    """The remote session's check 3 by proofs: each sample's opening unit (`opening.witness`), one member a receipt-leaf
+    """The remote session's check 3 by proofs: each sample's opening unit (`opening_prover.witness`), one member a receipt-leaf
     size, its plan row under the canonical plan's salt of the sample's step and every other row under a fresh salt,
     registered, every unit sampled by the verifier's Lean and each member proved --zk and held by Lean `verify --zk
     --partition --program`. The verifier opens each sampled proof block's public rows to its own copy (`opening.public`) and its
@@ -663,7 +664,7 @@ def check3_audit(a, out: Path, rs, c3, port: int) -> dict:
     draws = [d for t in range(len(sess.windows)) for d in sess.drawn(t)]
     seed = st_.registration.codec_seed
     Ss = [C3.statics(c3.codec, d.leaf_size, c3.P, c3.DR, c3.DP, c3.DV) for d in draws]
-    wits = [C3.witness(d, rs.passes[d.window, d.index], st_, c3.plan_rows[d.step], S, c3.values) for d, S in zip(draws, Ss)]
+    wits = [opening_prover.witness(d, rs.passes[d.window, d.index], st_, c3.plan_rows[d.step], S, c3.values) for d, S in zip(draws, Ss)]
     prover = [C3.check(d, w, seed, S, c3.values, c3.plan_salts[d.step], c3.plan_bcs[d.step]) for d, w, S in zip(draws, wits, Ss)]
     if any(prover):
         raise SystemExit(f"the honest prover's check-3 units are refused by their reference: {prover}")
@@ -1268,7 +1269,7 @@ def negatives(a, out, rec, receipt, result, members, canons, sd, layout, store, 
     commitments and its session agree with the altered witness), so only the unit can refuse it: its ok row commits 0.
     The appends negatives are a session the remote audit accepts whose appends aren't the map units' writes: the
     record's chain or a pass's head isn't the units' (`mapped`), and the ledger refuses the link. Their sessions' check 3
-    is decided by its unit's reference (`opening.reference`), the run's own (``rs0``) by proofs. The stale negatives
+    is decided by its unit's reference (`opening_prover.reference`), the run's own (``rs0``) by proofs. The stale negatives
     are map units whose lifetime cap isn't the record's (`mapped`, and the opening of their public rows) and a re-key the
     unit holds to the cap its committed pass row gives (`rekey_negatives`)."""
     neg: dict[str, dict] = {}

@@ -15,6 +15,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.runtime.stream import Side
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.prover import period_prover as PP
 from verity.protocols.accounting.poub.verifier import audit, codec, verifier_party
 from verity.protocols.accounting.poub.verifier import period as P
@@ -34,7 +35,7 @@ class _Dropped:
         return bytes(codec.BLOCK_BYTES) if j % 2 else self.blocks[j]
 
 
-def dropping(honest: audit.Store) -> audit.Store:
+def dropping(honest: audit_prover.Store) -> audit_prover.Store:
     out = copy.copy(honest)
     out.blocks = _Dropped(honest.blocks)
     return out

@@ -55,9 +55,9 @@ def vk(fixture):
 
 
 @pytest.fixture(scope="module")
-def store(fixture, vk) -> p2.Store:
+def store(fixture, vk) -> p2_prover.Store:
     reg = p2.register(SOURCE, NODE, bytes.fromhex(fixture["commitment"]), vk)
-    return p2.Store(reg, fixture["blocks"])
+    return p2_prover.Store(reg, fixture["blocks"])
 
 
 def params(reg: p2.Registration, **kw) -> audit.Params:
@@ -66,7 +66,7 @@ def params(reg: p2.Registration, **kw) -> audit.Params:
     return audit.Params(**{**base, **kw})
 
 
-def drive(store: p2.Store, p: audit.Params, run=None):
+def drive(store: p2_prover.Store, p: audit.Params, run=None):
     clock = Clock()
     reg = store.registration
     s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins")), not_before_ns=0,
@@ -128,7 +128,7 @@ def test_the_registration_is_pous_setups(fixture, vk, store) -> None:
         p2.register(b"another secret", NODE, reg.commitment, vk)
     assert other != reg.salt
     with pytest.raises(ValueError, match="not the registered C"):
-        p2.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])
+        p2_prover.Store(reg, fixture["blocks"][1:] + fixture["blocks"][:1])
     with pytest.raises(ValueError, match="at least one unit"):
         p2.Registration(NODE, codec.P2Codec(3, 1), reg.commitment, reg.salt, reg.root)
 

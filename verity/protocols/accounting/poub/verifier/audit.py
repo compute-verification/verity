@@ -3,8 +3,8 @@ many reads of a node's registered blocks the node made in each window, from rece
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an
    hm96-sha512/row/v2 leaf) and sends the root.  Only then does the verifier sample the codec seed from its own secret
-   and a fresh nonce (`register`), and the prover encodes every block under it (`Store`) with the codec the registration
-   names (`codec.DEFAULT`, p1024 masked at k = 3, unless another is named).  The registration also names the receipt
+   and a fresh nonce (`register`), and the prover encodes every block under it (`audit_prover.Store`) with the codec the
+   registration names (`codec.DEFAULT`, p1024 masked at k = 3, unless another is named).  The registration also names the receipt
    kind (`receipts.KINDS`: sketch-sha512 by default, or block-sha512 for comparison), whether its receipts bind
    PoUW's tile outputs (`bind`, off by default: PoUW's opt-in join), the block layout its kernels' sketch vectors
    follow (`receipts.LAYOUTS`: store-order/v0, a vector one registered block's bytes; `receipts.plan_of` checks a
@@ -37,7 +37,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    join the store mid-session: their payloads committed (`append_tree`, `AuditRun.append`) before any pass whose plan
    holds them, and so bound into its seed, at fresh store indices from N up, each encoded under its bound key and its
    append's coin `c_a`, which the verifier releases and sends in reply to the append (`codec.encode(..., bound=True,
-   coin=c_a)`, `Store.encode`), so no choice the prover made before committing them depends on their encodings;
+   coin=c_a)`, `audit_prover.Store.encode`), so no choice the prover made before committing them depends on their encodings;
    every coin is flipped once, and an append no root follows, or one sent again, rejects the session (`coin`);
    a block released (`AuditRun.release`) is in no later plan, and one the release names withdrawn (released before its
    encode landed, so never written) was in no earlier plan either; and an appended block is in no plan of a window L
@@ -406,10 +406,9 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec
     after the payload root has arrived.  Sampled before it, the prover would register `decode(0)` and hold a store of
     zeros; sampled after, each encoded block costs k square roots a word to produce, whatever the payload.  Every block
     registered here is under the seed's key; a block written after the seed takes its bound key under its append's
-    coin (`codec.binding`, PROTOCOL.md §3) and joins the store by an append (`Store.append`, `AuditRun.append`).  None
-    of the
-    receipt kind, `bind`, the block layout and the sketch rows (`receipts.sketch_rows`: the kind's default if None) is
-    in the codec seed's context, since the store depends on none of them; the digest binds all four.  Each call samples
+    coin (`codec.binding`, PROTOCOL.md §3) and joins the store by an append (`audit_prover.Store.append`,
+    `AuditRun.append`).  None of the receipt kind, `bind`, the block layout and the sketch rows (`receipts.sketch_rows`:
+    the kind's default if None) is in the codec seed's context, since the store depends on none of them; the digest binds all four.  Each call samples
     afresh: the verifier registers through its `Registry`, which allows a node one live registration."""
     receipts.store_blocks(blocks)
     if type(codec) is not Codec:
@@ -470,129 +469,6 @@ class NoiseTiles:
 
     def recompute(self, seed: bytes, j: int, evidence: bytes) -> bytes | None:
         return self.output(seed, j) if evidence == b"" else None
-
-
-@dataclass(frozen=True, slots=True)
-class Append:
-    """Blocks written after the codec seed, the prover's: store indices `first` … `first + count − 1`, their payloads'
-    digests `d_j` (kept beside the blocks), their salts, and their payload tree (`append_tree`), whose root the
-    verifier receives before any pass whose plan holds one."""
-
-    first: int
-    digests: tuple[bytes, ...]
-    salts: tuple[bytes, ...]
-    tree: MerkleTree
-
-    @property
-    def count(self) -> int:
-        return len(self.digests)
-
-    @property
-    def root(self) -> bytes:
-        return self.tree.commitment.root
-
-
-class Store:
-    """The prover's encoded store `E` under a registration, with its payload tree and the payloads' salts, and the
-    blocks appended after the codec seed (`append`) at the next fresh store indices, each encoded under its bound key
-    and its append's coin once the verifier has sent it (`encode`; None until then, its payload `pending`).  A
-    released block is kept, since a window's samples may still open it from a pass before its release.  Each block's
-    payload (`payload`) is the witness check 3's unit takes (`opening.witness`)."""
-
-    def __init__(self, registration: Registration, payloads: Sequence[bytes], salts: Sequence[bytes]) -> None:
-        if len(payloads) != registration.blocks:
-            raise ValueError(f"the registration is of {registration.blocks} blocks")
-        self.registration = registration
-        self.payloads, self.salts = tuple(payloads), tuple(salts)
-        self.payload_tree = payload_tree(registration.node, self.payloads, self.salts)
-        if self.payload_tree.commitment.root != registration.payload_root:
-            raise ValueError("these payloads are not the registered ones")
-        k = registration.key
-        self.blocks: list[bytes | None] = [codec.encode(m, j, k) for j, m in enumerate(self.payloads)]
-        self.appends: list[Append] = []
-        self.pending: dict[int, tuple[bytes, ...]] = {}
-        self.coin_of: dict[int, bytes] = {}
-
-    @property
-    def extent(self) -> int:
-        """The store's next fresh index: N, and every block appended since."""
-        return self.registration.blocks + sum(a.count for a in self.appends)
-
-    @property
-    def head(self) -> bytes | None:
-        """The chain over the store's appends (`append_head`), None without one: what the seed of a pass binds once
-        the verifier has every one of them (`chained`)."""
-        out = None
-        for a in self.appends:
-            out = append_head(out, a.first, a.count, a.root)
-        return out
-
-    def append(self, payloads: Sequence[bytes], salts: Sequence[bytes]) -> Append:
-        """Payload blocks written after the codec seed, at the next fresh store indices, committed in one `append_tree`
-        by their digests, kept beside them; their encodings wait on the append's coin (`encode`)."""
-        reg, first = self.registration, self.extent
-        if first + len(payloads) > reg.codec.max_blocks:
-            raise ValueError(f"a store under {reg.codec.name} is at most {reg.codec.max_blocks} blocks")
-        digests = tuple(codec.digest(m) for m in payloads)
-        a = Append(first, digests, tuple(salts), append_tree(reg.digest, first, digests, salts))
-        self.blocks.extend([None] * a.count)
-        self.pending[first] = tuple(payloads)
-        self.appends.append(a)
-        return a
-
-    def encode(self, first: int, coin: bytes) -> None:
-        """The blocks of the append from `first`, encoded under their bound keys and its coin `c_a`, the verifier's
-        reply to its root (`codec.encode(..., bound=True, coin=c_a)`): once, for an append awaiting its coin."""
-        payloads = self.pending.get(first)
-        if payloads is None:
-            raise ValueError(f"no append from block {first} awaits its coin")
-        k = self.registration.key
-        encoded = [codec.encode(m, first + u, k, bound=True, coin=coin) for u, m in enumerate(payloads)]
-        del self.pending[first]
-        self.coin_of[first] = coin
-        self.blocks[first:first + len(encoded)] = encoded
-
-    def _append_of(self, j: int) -> Append:
-        return self.appends[bisect.bisect_right([x.first for x in self.appends], j) - 1]
-
-    def committed(self, j: int) -> tuple[bytes, tuple[bytes, ...], bytes]:
-        """Block j's payload salt, its path to the payload root or its append's, and its digest `d_j` (empty under
-        the seed's key)."""
-        if j < self.registration.blocks:
-            return self.salts[j], self.payload_tree.open(j).path, b""
-        a = self._append_of(j)
-        return a.salts[j - a.first], a.tree.open(j).path, a.digests[j - a.first]
-
-    def payload(self, j: int) -> bytes:
-        """Block j's payload: registered, or appended, its append's while it awaits its coin and then its block decoded
-        under its digest and that coin, so the store keeps no second copy of what it appends."""
-        if j < self.registration.blocks:
-            return self.payloads[j]
-        a = self._append_of(j)
-        if a.first in self.pending:
-            return self.pending[a.first][j - a.first]
-        m = codec.decode(self.blocks[j], j, self.registration.key, a.digests[j - a.first], self.coin_of[a.first])
-        if m is None:
-            raise ValueError(f"block {j} decodes to no payload of its digest under its append's coin")
-        return m
-
-
-@dataclass(frozen=True, slots=True)
-class Pass:
-    """One pass of the prover's: its window, its index in the window, its seed, its plan, the receipts of the plan's
-    blocks in plan order, its leaves' salts, and their tree."""
-
-    window: int
-    index: int
-    seed: bytes
-    plan: Plan
-    receipts: tuple[bytes, ...]
-    salts: tuple[bytes, ...]
-    tree: MerkleTree
-
-    @property
-    def root(self) -> bytes:
-        return self.tree.commitment.root
 
 
 @dataclass(frozen=True, slots=True)
@@ -1071,7 +947,7 @@ class AuditRun:
         the lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
         more after it may hold them.  The seed of every pass whose root comes after this binds it (`chained`).  The
         reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.SessionCoins.append`),
-        under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
+        under which the prover encodes the blocks (`audit_prover.Store.encode`) and an opening decodes them.  Its rejection, `append`,
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
         sent before (a retry never resamples), the last window's roots are final, so no root can follow it, or the session's
         append coins are all released (or it reserved none: `coins.families`).  Over a P2 store, always `append`: the
@@ -1976,9 +1852,9 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
                       steering=schedule.cap if credit else None)
 
 
-__all__ = ["Append", "AuditRun", "Closed", "DELTA", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
-           "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "Pass", "REGISTRY_SCHEMA", "Rebuild", "Record",
+__all__ = ["AuditRun", "Closed", "DELTA", "LEDGER_SOURCES", "NODE_BYTES", "NoiseTiles", "Opening",
+           "PAYLOAD_SCHEMA", "PROTOCOL_ID", "Pace", "Params", "REGISTRY_SCHEMA", "Rebuild", "Record",
            "Registration", "Registry", "RegistryError", "SLACK_LOG2", "STEP_LIMIT", "Scheduled", "SessionError",
-           "Store", "Tiles", "UNENDED", "Verdict", "WINDOW_NS", "append_domain", "append_head", "append_tree",
+           "Tiles", "UNENDED", "Verdict", "WINDOW_NS", "append_domain", "append_head", "append_tree",
            "chained", "floors", "ledger", "lifetime_windows", "linked_bits", "payload_domain", "payload_tree", "pooled",
            "register"]
