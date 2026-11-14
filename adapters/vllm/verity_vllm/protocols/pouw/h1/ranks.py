@@ -35,11 +35,11 @@ from __future__ import annotations
 
 import importlib
 import os
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import numpy as np
-
 from verity.protocols.pouw.verifier import verifier
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
@@ -48,6 +48,7 @@ from verity.protocols.spot.device.challenger import LiveRecord
 
 from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import commit as CT
 from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -124,7 +125,7 @@ class RankTap(CT.CommitTap):
         if module != op and port in ("0", "1"):
             self.out.append((f"{CT.site(self.names.get(module, module))}/{port}", int(step), np.array(CT._host(t))))
 
-    def drain(self) -> list[tuple[str, int, np.ndarray]]:
+    def drain(self) -> list[tuple[str, int, np.ndarray | None]]:
         out, self.out = self.out, []
         return out
 
@@ -157,6 +158,15 @@ class RankExtension:
     """The ``worker_extension_cls`` of a multiprocess engine serving H1: each worker's methods, called from the holder with
     ``collective_rpc``; importing it registers the int8 parts in the worker (`engine.int8_ranks`)."""
 
+    #: the installed rank's state (`h1rank_install`: its ``run``, its ``hooks``, the calls ``sent`` so far and, with the
+    #: Commit, its ``commit``); None before the install and after the release
+    _h1rank: dict[str, Any] | None = None
+
+    def _h1rank_state(self) -> dict[str, Any]:
+        if self._h1rank is None:
+            raise RuntimeError("this rank holds no H1 window: h1rank_install has not run on it, or h1rank_release has")
+        return self._h1rank
+
     def _h1rank_layers(self) -> tuple[Any, list[Any]]:
         from verity_vllm.protocols import pouw
         model = self.model_runner.get_model()  # type: ignore[attr-defined]
@@ -169,7 +179,6 @@ class RankExtension:
     def h1rank_layout(self) -> dict[str, Any]:
         """This worker's (pp, tp) rank, its linears' shard shapes and module names (local ordinals) in module order, and its
         runner's decode_query_len."""
-        from verity_vllm.protocols import pouw
         model, layers = self._h1rank_layers()
         pp, tp = self._h1rank_rank()
         return {"pp": pp, "tp": tp, "shapes": [[int(d) for d in m.weight.shape] for m in layers],
@@ -182,19 +191,19 @@ class RankExtension:
         holder's `Served`); returns its weights' roots by global index (`pouw_h1_hooks.weight_roots`, as `pouw.commit_weights`)."""
         _, layers = self._h1rank_layers()
         lo = int(los[self._h1rank_rank()])
-        run = RankRun(entry, modules, [tuple(s) for s in shapes], rows, steps, lo, lo + len(layers), key, ship=ship)
+        run = RankRun(entry, modules, [(int(n), int(k)) for n, k in shapes], rows, steps, lo, lo + len(layers), key, ship=ship)
         hooks = Hooks(tag=f"{entry}/rank{lo}")
         wire_rank(run, hooks, layers, rows)
         self._h1rank = {"run": run, "hooks": hooks, "sent": 0}
         return {"lo": lo, "roots": {w: r.hex() for w, r in PHK.weight_roots(layers, lo).items()}}
 
     def h1rank_open(self, salt: bytes) -> None:
-        self._h1rank["run"]._salt = bytes(salt)
+        self._h1rank_state()["run"]._salt = bytes(salt)
 
     def h1rank_rows(self) -> dict[str, Any]:
         """The rank's calls since the last pull, its refusals so far, whether each step's calls came in its first step's
         order and, with the Commit, what it acquired since (`RankTap.drain`)."""
-        st = self._h1rank
+        st = self._h1rank_state()
         run: RankRun = st["run"]
         out = run.rows_since(st["sent"])
         st["sent"] = len(run.calls)
@@ -216,8 +225,9 @@ class RankExtension:
                 com, tap = commit
                 try:
                     rc = com.finalize()
+                    errors = rc.extra.get("errors")    # None from a committer whose finalize states none
                     out = {"lo": st["run"].lo, **CT.committed(com, rc, ("expected_tensors", "committed_tensors", "errors_n")),
-                           "errors": [str(e)[:300] for e in (rc.extra.get("errors") or [])][:8]}
+                           "errors": [str(e)[:300] for e in errors][:8] if errors else []}
                 finally:
                     com.close()
                     tap.untap()
@@ -272,7 +282,8 @@ class Holder:
             rows += o["rows"]
         tap = None if self.run.served is None else self.run.served.tap
         if tap is not None:
-            got = [o.get("acquired") or [] for o in outs]
+            # a rank with no Commit answers with no "acquired" (`h1rank_rows`): nothing of it, and it keeps its place
+            got = [a if (a := o.get("acquired")) else [] for o in outs]
             if len(steps := {int(x[1]) for a in got for x in a}) > 1:
                 tap.refused.append(f"one pull held engine steps {sorted(steps)}: the window's tap keeps one step a site")
             for i, a in enumerate(got):
@@ -367,14 +378,16 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     tp = len({o["tp"] for o in layout})
     if commit is not None and len({o["pp"] for o in layout}) > 1:
         raise ValueError(f"{entry}: the Commit across pipeline stages: a later stage acquires no input ids")
-    los, shapes, modules = {}, [], {}
+    los: dict[tuple[int, int], int] = {}
+    shapes: list[tuple[int, int]] = []
+    modules: dict[int, str] = {}
     for o in layout:
         lo = los[(o["pp"], o["tp"])] = len(shapes)
         modules |= {lo + int(w): name + (f"@tp{o['tp']}" if tp > 1 else "") for w, name in o["names"].items()}
-        shapes += [tuple(s) for s in o["shapes"]]
+        shapes += [(int(n), int(k)) for n, k in o["shapes"]]
     modules = {w: f"linear {w}" for w in range(len(shapes))} | modules
     key = key if key is not None else os.urandom(32)
-    roots = {}
+    roots: dict[int, bytes] = {}
     for o in executor.collective_rpc("h1rank_install", kwargs={"entry": entry, "los": los, "shapes": shapes,
                                                                "modules": modules, "rows": rows, "steps": steps, "key": key,
                                                                "ship": served is not None}):

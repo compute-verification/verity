@@ -16,8 +16,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from verity_vllm.program.frontend.rules.vllm_iface import iface  # registers the stand-in ops
-
+from verity_vllm.program.frontend.rules.vllm_iface import (
+    iface,  # registers the stand-in ops
+)
 
 # ---------------------------------------------------------------------------------------------------------
 # S1: plain f32 modules
@@ -143,15 +144,15 @@ class DecoderLayer(nn.Module):
 
     def __init__(self, C: dict, layer_idx: int, dtype=torch.bfloat16) -> None:
         super().__init__()
-        H, NH, KVH, D, I = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
+        H, NH, KVH, D, INTER = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
         self.NH, self.KVH, self.D = NH, KVH, D
         self.qkv_proj = LinearNoTP(H, (NH + 2 * KVH) * D, bias=C.get("BIAS", True), dtype=dtype)
         self.o_proj = LinearNoTP(NH * D, H, bias=False, dtype=dtype)
         self.rotary_emb = get_rope(D, C["MAX_POS"], C["ROPE_THETA"], dtype=dtype)
         self.attn = Attention(f"model.layers.{layer_idx}.self_attn.attn")
-        self.gate_up_proj = LinearNoTP(H, 2 * I, bias=False, dtype=dtype)
+        self.gate_up_proj = LinearNoTP(H, 2 * INTER, bias=False, dtype=dtype)
         self.act_fn = SiluAndMul()
-        self.down_proj = LinearNoTP(I, H, bias=False, dtype=dtype)
+        self.down_proj = LinearNoTP(INTER, H, bias=False, dtype=dtype)
         self.input_layernorm = RMSNorm(H, C["EPS"], dtype=dtype)
         self.post_attention_layernorm = RMSNorm(H, C["EPS"], dtype=dtype)
 
@@ -200,6 +201,7 @@ class Model(nn.Module):
         for layer in self.layers:
             hidden_states, residual = layer(positions, hidden_states, residual, pad)
         if last_only:
+            assert residual is not None
             hidden_states, residual = hidden_states[-1:], residual[-1:]
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states
@@ -346,6 +348,7 @@ class HFRMSNorm(nn.Module):
 class HFRotaryEmbedding(nn.Module):
     """transformers `LlamaRotaryEmbedding` (default rope type) at the op interface: `inv_freq` non-persistent buffer,
     `forward(x, position_ids) -> (cos, sin)` as `[B, T, D]` tables in x's dtype (`cat(freqs, freqs)`, `attention_scaling`)."""
+    inv_freq: torch.Tensor
 
     def __init__(self, D: int, base: float = 10000.0, attention_scaling: float = 1.0) -> None:
         super().__init__()
@@ -384,16 +387,16 @@ class HFDecoderLayer(nn.Module):
 
     def __init__(self, C: dict, dtype=torch.bfloat16, rope: bool = False) -> None:
         super().__init__()
-        H, NH, KVH, D, I = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
+        H, NH, KVH, D, INTER = C["H"], C["NH"], C["KVH"], C["D"], C["I"]
         self.NH, self.KVH, self.D = NH, KVH, D
         self.rotary_emb = HFRotaryEmbedding(D, C.get("ROPE_THETA", 10000.0)) if rope else None
         self.q_proj = nn.Linear(H, NH * D, bias=C.get("BIAS", True), dtype=dtype)
         self.k_proj = nn.Linear(H, KVH * D, bias=C.get("BIAS", True), dtype=dtype)
         self.v_proj = nn.Linear(H, KVH * D, bias=C.get("BIAS", True), dtype=dtype)
         self.o_proj = nn.Linear(NH * D, H, bias=False, dtype=dtype)
-        self.gate_proj = nn.Linear(H, I, bias=False, dtype=dtype)
-        self.up_proj = nn.Linear(H, I, bias=False, dtype=dtype)
-        self.down_proj = nn.Linear(I, H, bias=False, dtype=dtype)
+        self.gate_proj = nn.Linear(H, INTER, bias=False, dtype=dtype)
+        self.up_proj = nn.Linear(H, INTER, bias=False, dtype=dtype)
+        self.down_proj = nn.Linear(INTER, H, bias=False, dtype=dtype)
         self.input_layernorm = HFRMSNorm(H, C["EPS"], dtype)
         self.post_attention_layernorm = HFRMSNorm(H, C["EPS"], dtype)
 
@@ -406,6 +409,7 @@ class HFDecoderLayer(nn.Module):
             k = self.k_proj(h).view(1, T, self.KVH, self.D).transpose(1, 2)
             v = self.v_proj(h).view(1, T, self.KVH, self.D).transpose(1, 2)
             if position_embeddings is None:  # layer-local rotary (a single-layer example); HF computes it once at model level
+                assert self.rotary_emb is not None
                 position_ids = torch.arange(T).unsqueeze(0)
                 position_embeddings = self.rotary_emb(h, position_ids)
             cos, sin = position_embeddings
@@ -430,11 +434,11 @@ class NegMoE(nn.Module):
     """Mixtral-style sparse MoE block: router -> softmax -> top-k -> the chosen experts' weights gathered by the routing INDEX.
     The expert selection is data-dependent (boundary 2: a fixed computation never derives from routing); refused."""
 
-    def __init__(self, H: int = 16, I: int = 32, E: int = 4, k: int = 2) -> None:
+    def __init__(self, H: int = 16, INTER: int = 32, E: int = 4, k: int = 2) -> None:
         super().__init__()
         self.gate = nn.Linear(H, E, bias=False)
-        self.w1 = nn.Parameter(torch.randn(E, I, H))
-        self.w2 = nn.Parameter(torch.randn(E, H, I))
+        self.w1 = nn.Parameter(torch.randn(E, INTER, H))
+        self.w2 = nn.Parameter(torch.randn(E, H, INTER))
         self.k = k
 
     def forward(self, x):  # [T, H]
@@ -514,11 +518,11 @@ class Conv1D(nn.Module):
 class GPT2MLPBlock(nn.Module):
     """`x + mlp(ln_2(x))` of a GPT-2 block (the attention half is a decomposed pattern: see HF negatives)."""
 
-    def __init__(self, H: int, I: int, eps: float = 1e-5) -> None:
+    def __init__(self, H: int, INTER: int, eps: float = 1e-5) -> None:
         super().__init__()
         self.ln_2 = nn.LayerNorm(H, eps=eps)
-        self.c_fc = Conv1D(I, H)
-        self.c_proj = Conv1D(H, I)
+        self.c_fc = Conv1D(INTER, H)
+        self.c_proj = Conv1D(H, INTER)
 
     def forward(self, x):
         h = self.ln_2(x)
@@ -554,11 +558,11 @@ class GPT2Attention(nn.Module):
 
 
 class GPT2Block(nn.Module):
-    def __init__(self, H: int, NH: int, I: int, eps: float = 1e-5) -> None:
+    def __init__(self, H: int, NH: int, INTER: int, eps: float = 1e-5) -> None:
         super().__init__()
         self.ln_1 = nn.LayerNorm(H, eps=eps)
         self.attn = GPT2Attention(H, NH)
-        self.mlp = GPT2MLPBlock(H, I, eps)  # ln_2 + mlp + residual
+        self.mlp = GPT2MLPBlock(H, INTER, eps)  # ln_2 + mlp + residual
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
@@ -568,11 +572,11 @@ class GPT2Block(nn.Module):
 class GPT2TinyLM(nn.Module):
     """wte + wpe[arange(T)] -> NL blocks -> ln_f -> tied lm_head (logits [T, V]); int64 token ids as HF gives them."""
 
-    def __init__(self, V: int = 32, H: int = 16, NH: int = 2, I: int = 32, NL: int = 2, MAXPOS: int = 8, eps: float = 1e-5) -> None:
+    def __init__(self, V: int = 32, H: int = 16, NH: int = 2, INTER: int = 32, NL: int = 2, MAXPOS: int = 8, eps: float = 1e-5) -> None:
         super().__init__()
         self.wte = nn.Embedding(V, H)
         self.wpe = nn.Embedding(MAXPOS, H)
-        self.h = nn.ModuleList([GPT2Block(H, NH, I, eps) for _ in range(NL)])
+        self.h = nn.ModuleList([GPT2Block(H, NH, INTER, eps) for _ in range(NL)])
         self.ln_f = nn.LayerNorm(H, eps=eps)
         self.lm_head = nn.Linear(H, V, bias=False)
         self.lm_head.weight = self.wte.weight

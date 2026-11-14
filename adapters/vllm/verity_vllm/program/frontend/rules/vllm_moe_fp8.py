@@ -28,16 +28,32 @@ from __future__ import annotations
 import math
 
 import torch
-
 from verity.circuits.refs import Coll
-from verity_vllm.program.frontend.derive import Alloc
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
-from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile
-from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
-from verity_vllm.program.frontend.rules.vllm_iface import targets_for
-from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, MOE_GEMM_PINS, FusedMoeKernelRule, _flat_pairs, _not_owned
 from verity.definitions.registry.fp8 import weight_blocks
+from verity.definitions.registry.prims import F32, I32
+
+from verity_vllm.program.frontend import targets as T
+from verity_vllm.program.frontend.derive import Alloc
+from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleInfo
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    known,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
+from verity_vllm.program.frontend.rules.vllm_moe import (
+    INDEXED_READ,
+    MOE_GEMM_PINS,
+    FusedMoeKernelRule,
+    _flat_pairs,
+    _not_owned,
+)
 
 FP8_E4M3 = torch.float8_e4m3fn
 
@@ -61,7 +77,6 @@ def _tile_pins(meta, sc, profile) -> str | None:
         if (warps, stages) != (MOE_GEMM_PINS["num_warps"], MOE_GEMM_PINS["num_stages"]):
             return f"numerics_unregistered: num_warps/num_stages {warps}/{stages} are not {MOE_GEMM_PINS['num_warps']}/{MOE_GEMM_PINS['num_stages']}"
         return None
-    from verity_vllm.program.frontend import targets as T
     return T.moe_fp8_tuned_tile_refusal(profile, sc.get("BLOCK_SIZE_M"), sc.get("BLOCK_SIZE_N"), sc.get("BLOCK_SIZE_K"), warps, sc.get("SWAP_AB"))
 
 
@@ -88,7 +103,6 @@ def _fp8_launch_pins(node, meta, sc, profile) -> str | None:
 def moe_expert_fp8_role(routed: bool, bm: int, bn: int, warps: int, swap: bool) -> tuple[str, dict]:
     """(vocabulary role, its DOT) of a block-FP8 launch's per-pair Definition on the active target: the `_dot` roles' block-FP8 forms
     (`vocab._moe_expert_dot` with `G`); raises `frontend.targets.UnregisteredTarget` for a target without a registered e4m3 step."""
-    from verity_vllm.program.frontend import targets as T
     dot = T.moe_expert_fp8_launch_dot(active_target_profile(), bm, bn, warps, swap)
     return ("moe_expert_gemm_w_dot" if routed else "moe_expert_gemm_dot"), {"DOT": dot}
 
@@ -98,15 +112,15 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
     `c` is rebound."""
     info = RuleInfo("FusedMoeKernelFp8[vllm-moe]", 1, "in-place-binding",
                     applies_to="verity_cba::triton_launch of fused_moe.fused_moe_kernel with use_fp8_w8a8 and block_shape [G, G] (kernel name + source + constexprs pinned)",
-                    preconditions=("block-FP8 path: SPLIT_K 1, HAS_BIAS False, USE_TD False, use_fp8_w8a8 True, no int8, per_channel_quant False, "
-                                   "group_n == group_k == G, compute_type bf16; the target registers an e4m3 step (cc 9.0, cc 12.0)",
-                                   "a is e4m3 [rows, K] row-major with rows*top_k == num_valid_tokens; b is e4m3 [E, N, K] contiguous; c a bf16 "
-                                   "allocation/value of num_valid_tokens rows of N",
-                                   "a_scale is an f32 value [rows, K/G] (strides K/G, 1); b_scale an f32 weight [E, cdiv(N, G), K/G] (strides cdiv(N, G)*K/G, "
-                                   "K/G, 1); K % G == 0 and G % BLOCK_SIZE_K == 0",
-                                   "batch invariant: BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB False (vLLM's default); otherwise "
+                    preconditions=(("block-FP8 path: SPLIT_K 1, HAS_BIAS False, USE_TD False, use_fp8_w8a8 True, no int8, per_channel_quant False, "
+                                   "group_n == group_k == G, compute_type bf16; the target registers an e4m3 step (cc 9.0, cc 12.0)"),
+                                   ("a is e4m3 [rows, K] row-major with rows*top_k == num_valid_tokens; b is e4m3 [E, N, K] contiguous; c a bf16 "
+                                   "allocation/value of num_valid_tokens rows of N"),
+                                   ("a_scale is an f32 value [rows, K/G] (strides K/G, 1); b_scale an f32 weight [E, cdiv(N, G), K/G] (strides cdiv(N, G)*K/G, "
+                                   "K/G, 1); K % G == 0 and G % BLOCK_SIZE_K == 0"),
+                                   ("batch invariant: BLOCK 64/64/32, GROUP_SIZE_M 8, 4 warps, 3 stages, SWAP_AB False (vLLM's default); otherwise "
                                    "cc 9.0 with SWAP_AB = enable_swap_ab(BLOCK_SIZE_M, BLOCK_SIZE_N), and the tile's MMAv2/QGMMA step registered "
-                                   "(vLLM's tuned config; the shared tile-lowering rule)",
+                                   "(vLLM's tuned config; the shared tile-lowering rule)"),
                                    "schedule and routed weights as FusedMoeKernel[vllm-moe]"),
                     evidence_domain="structural; numerics: MoeExpertFp8Gemm_v1 / MoeExpertFp8GemmW_v1 over MoeExpertFp8BlockGemm(W)_v3{DOT} "
                                     "(registry.fp8_moe DOT_CONF: exact-model-tested at cc 12.0's step; at cc 9.0's, the _v1 forms, model-untested)")
@@ -121,7 +135,6 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         profile = active_target_profile()
         if (r := _fp8_launch_pins(node, meta, sc, profile)):
             return r
-        from verity_vllm.program.frontend import targets as T
         geom = meta.get("geometry") or {}
         try:
             T.moe_expert_fp8_launch_dot(profile, sc.get("BLOCK_SIZE_M"), sc.get("BLOCK_SIZE_N"),
@@ -175,13 +188,12 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         mrw, top_k, nv, G, KB, SWAP = sc["MUL_ROUTED_WEIGHT"], sc["top_k"], sc["num_valid_tokens"], sc["group_k"], sc["BLOCK_SIZE_K"], sc["SWAP_AB"]
         BM, BN = sc["BLOCK_SIZE_M"], sc["BLOCK_SIZE_N"]
         WARPS = (meta.get("geometry") or {}).get("num_warps", sc.get("num_warps"))
-        E, N, K = shape(ctx, b)
+        E, N, K = known(shape(ctx, b))
         a_rows, _ = rows_of(ctx.coll(a))
         s_rows, _ = rows_of(ctx.coll(a_s))
         bc, bsc = ctx.coll(b), ctx.coll(b_s)
         naive = sc.get("naive_block_assignment") is True
         ids_node = launch_tensor(node, meta, "expert_ids_ptr") if naive else ctx.val(launch_tensor(node, meta, "sorted_token_ids_ptr")).ids_node
-        from verity.definitions.registry.prims import F32, I32
         ids = _flat_pairs(ctx.coll(ids_node), nv, I32)
         ws = _flat_pairs(ctx.coll(launch_tensor(node, meta, "topk_weights_ptr")), nv, F32) if mrw else None
         role, dot = moe_expert_fp8_role(mrw, BM, BN, WARPS, SWAP)
@@ -190,9 +202,9 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         outs = []
         for p in range(nv):
             t = p // top_k
-            args = (a_rows[t], s_rows[t], ids[p]) + ((ws[p],) if mrw else ()) + (bc, bsc)
+            args = (a_rows[t], s_rows[t], ids[p]) + ((ws[p],) if ws is not None else ()) + (bc, bsc)
             outs.append(ctx.call(fn, *args, node=node, rule=self, name=f"{hint}[{p}]"))
-        ctx.rebind(c, from_rows(outs, tuple(shape(ctx, c)[:-1])), self, what="c")
+        ctx.rebind(c, from_rows(outs, tuple(known(shape(ctx, c))[:-1])), self, what="c")
         ctx.bind_weight_role(b, self, "moe.expert_weight", E=E, K=K, N=N)
         ctx.bind_weight_role(b_s, self, "moe.expert_weight_scale", E=E, K=K, N=N, G=G)
         wl, sl = ctx.weight_of(b), ctx.weight_of(b_s)
@@ -234,17 +246,17 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
             return "input is not a value collection"
         if not dtype_is(ctx, x, torch.bfloat16):
             return f"numerics_unregistered: input dtype {ctx.dtype_of(x)} (the Definition reads bf16 [gate || up])"
-        xs = shape(ctx, x)
+        xs = known(shape(ctx, x))
         if len(xs) != 2 or xs[1] % 2:
             return f"input {xs} is not [rows, 2I]"
-        rows, I = xs[0], xs[1] // 2
-        if not isinstance(G, int) or isinstance(G, bool) or G <= 0 or G & (G - 1) or I % G:
-            return f"numerics_unregistered: group_size {G!r} is not a power of two dividing I={I}"
+        rows, INTER = xs[0], xs[1] // 2
+        if not isinstance(G, int) or isinstance(G, bool) or G <= 0 or G & (G - 1) or INTER % G:
+            return f"numerics_unregistered: group_size {G!r} is not a power of two dividing I={INTER}"
         if a.get("scale_ub") is not None:
             return "numerics_unregistered: scale_ub is set (the scale clamp is a different numeric)"
         if a.get("is_scale_transposed", False) is not False:
             return f"numerics_unregistered: is_scale_transposed={a.get('is_scale_transposed')!r} (the Definition writes [rows, I/G] row-major)"
-        for nm, dt, want in (("out", FP8_E4M3, (rows, I)), ("scales", torch.float32, (rows, I // G))):
+        for nm, dt, want in (("out", FP8_E4M3, (rows, INTER)), ("scales", torch.float32, (rows, INTER // G))):
             t = a[nm]
             if not isinstance(ctx.val(t), Alloc):
                 return f"{nm} is not an unwritten allocation ({type(ctx.val(t)).__name__})"
@@ -257,12 +269,12 @@ class SiluAndMulPerBlockQuantRule(InPlaceRule):
     def emit(self, node, ctx):
         a = self._args(node)
         rows, lead = rows_of(ctx.coll(a["input"]))
-        I, G = rows[0].type.n // 2, int(a["group_size"])
-        fn = ctx.kind("silu_mul_fp8_block_quant", node, I=I, G=G)
+        INTER, G = rows[0].type.n // 2, int(a["group_size"])
+        fn = ctx.kind("silu_mul_fp8_block_quant", node, I=INTER, G=G)
         outs = [ctx.call(fn, r, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
         ctx.rebind(a["out"], from_rows([o[0] for o in outs], lead), self, what="out")
         ctx.rebind(a["scales"], from_rows([o[1] for o in outs], lead), self, what="scales")
-        ctx.record(self, node, {"I": I, "G": G, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
+        ctx.record(self, node, {"I": INTER, "G": G, "rows": len(rows)}, emitted=f"{fn.id} x{len(rows)}")
 
 
 VLLM_MOE_FP8_RULES = [FusedMoeKernelFp8Rule(), SiluAndMulPerBlockQuantRule()]

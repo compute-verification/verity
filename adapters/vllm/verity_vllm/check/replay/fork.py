@@ -25,6 +25,8 @@ import threading
 from collections.abc import Iterator
 from multiprocessing.pool import Pool
 
+__all__ = ["die_with_parent", "fork_pool"]
+
 PR_SET_PDEATHSIG = 1
 
 
@@ -69,6 +71,8 @@ class WorkerDied(RuntimeError):
 
 
 def oom_kills() -> int | None:
+    """The cgroup's count of OOM kills (the first `oom_kill` line of its `memory.events`); None where none is read: the file is
+    absent (no cgroup v2 memory controller), cannot be read or holds no such line, or the line's count is no integer."""
     try:
         with open(CGROUP_MEMORY_EVENTS) as f:
             return next(int(ln.split()[1]) for ln in f if ln.split()[:1] == ["oom_kill"])

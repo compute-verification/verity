@@ -4,6 +4,7 @@ early or other-execution phase coin is refused, for the salt and for the sample;
 
 from __future__ import annotations
 
+import ast
 import dataclasses
 import json
 import os
@@ -182,7 +183,6 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     """No PoUW or proof-system module reads `os.urandom`, `os.getrandom`, `secrets` or `random.SystemRandom` but those
     `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier's `coins` on
     the served path."""
-    import ast
     verity = Path(EC.__file__).resolve().parents[3]
     found = set()
     for d in ("protocols/pouw/verifier", "protocols/spot", "protocols/pouw/prover"):

@@ -10,6 +10,8 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, required
 
+__all__ = ["LogitsCapture"]
+
 SCHEMA = "verity-vllm/logits-capture/v1"
 SPAN = ("file", "sha256", "rows", "tokens", "steps", "program")
 
