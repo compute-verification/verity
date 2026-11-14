@@ -177,7 +177,6 @@
     {"file": "security/Definitions/Pous/Guarantees/P2.lean", "count": 3},
     {"file": "security/Definitions/Pous/Model/Continuous.lean", "count": 2},
     {"file": "security/Definitions/Pous/Model/Graded.lean", "count": 1},
-    {"file": "security/Definitions/Pous/Model/PubEncoder.lean", "count": 1},
     {"file": "security/Definitions/Pous/Model/Scheme.lean", "count": 1},
     {"file": "security/Definitions/Pous/P2/Clip.lean", "count": 2},
     {"file": "security/Definitions/Pouw.lean", "count": 7},
