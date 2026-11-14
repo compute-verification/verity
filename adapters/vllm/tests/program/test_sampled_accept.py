@@ -74,7 +74,7 @@ def test_sampled_accept_equals_its_reference_on_random_rows():
     for case in range(2):
         logits = _rows(rng, 4, v, 0.03, 2.5)
         draft = [int(np.argmax(logits[i])) if rng.random() < 0.7 else int(rng.integers(v)) for i in range(3)]
-        seed, pos, temp = int(rng.integers(1 << 62)), [int(p) for p in 40 + case + np.arange(4)], int(F(0.8).view(np.uint32))
+        seed, pos, temp = int(rng.integers(1 << 62)), [40 + case + p for p in range(4)], int(F(0.8).view(np.uint32))
         assert _whole(logits, draft, seed, pos, temp) == _outputs(A.sampled_accept(logits, draft, seed, pos, temp, TILE))
 
 
@@ -334,7 +334,7 @@ def test_the_plan_reads_every_lane_once_and_writes_each_unit_before_its_readers(
     assert dict(A.cut(bind(A.SampledAccept, K=k, V=v, TILE=A.STATS_TILE))) == dict(Counter(u.defn for u in plan))
     assert max(IF.check_proof_block(d) for d in {u.defn for u in plan}) <= IF.K_MAX
     seen: dict = {}
-    read = {kind: np.zeros((k + 1, v), np.int64) for kind in ("head", "sum", "resample")}
+    read: dict[str, np.ndarray] = {kind: np.zeros((k + 1, v), np.int64) for kind in ("head", "sum", "resample")}
     for u in plan:
         params = [name for name, _ in u.defn.signature()[0]]
         assert sorted(params) == sorted([name for name, _ in u.reads] + [name for name, _, _ in u.wires]), u.key

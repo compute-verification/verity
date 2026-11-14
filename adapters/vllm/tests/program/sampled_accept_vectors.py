@@ -74,7 +74,8 @@ def _logit_for(logprob: int, V: int, tile: int, a: int, b: int) -> int:
     assert x0 >> 31, "the search walks negative logits"
     for d in sorted(range(-256, 257), key=abs):
         x = x0 + d
-        m, s = np.full(tiles, -np.inf, F), np.zeros(tiles, F)
+        m: np.ndarray = np.full(tiles, -np.inf, F)
+        s: np.ndarray = np.zeros(tiles, F)
         m[a // tile], s[a // tile] = 0.0, one
         m[b // tile], s[b // tile] = _f(x), one
         if _w(_f(x) - _f(A.row_lse(m, s)[0])) == logprob:
@@ -87,7 +88,7 @@ def vectors(K: int, V: int, tile: int = A.STATS_TILE) -> list[dict]:
     out: list[dict] = []
 
     def base(seed: int, first_pos: int):
-        logits = np.full((K + 1, V), -np.inf, F)
+        logits: np.ndarray = np.full((K + 1, V), -np.inf, F)
         draft = []
         for i in range(K):
             row = lanes(V, tile, 4, i)
@@ -176,7 +177,7 @@ def random_rows(K: int, V: int, count: int, seed: int, tile: int = A.STATS_TILE,
         rng = np.random.default_rng((seed, c))
         keep = int(rng.choice(NUCLEI)) or V
         spread = float(rng.choice(SPREADS))
-        logits = np.full((K + 1, V), -np.inf, F)
+        logits: np.ndarray = np.full((K + 1, V), -np.inf, F)
         draft = []
         for i in range(K + 1):
             idx = rng.choice(V, min(keep, V), replace=False)
@@ -185,7 +186,7 @@ def random_rows(K: int, V: int, count: int, seed: int, tile: int = A.STATS_TILE,
                 kind = rng.random()
                 draft.append(int(idx[np.argmax(logits[i, idx])]) if kind < 0.6 else int(rng.choice(idx)) if kind < 0.9
                              else int(rng.integers(V)))
-        s, pos = int(rng.integers(1 << 62)), [int(p) for p in 1000 + 10 * c + np.arange(K + 1)]
+        s, pos = int(rng.integers(1 << 62)), [1000 + 10 * c + p for p in range(K + 1)]
         out.append({"name": f"random-{seed}-{c}", "logits": logits, "draft": draft, "seed": s, "pos": pos, "temp": TEMP,
                     "ref": A.sampled_accept(logits, draft, s, pos, TEMP, tile)})
     return out
