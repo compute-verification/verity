@@ -1,4 +1,4 @@
-"""difftest adapter for `act/SiluMul@v2`: production = vLLM `torch.ops._C.silu_and_mul(out, x)` on one bf16 row [gate | up].
+"""difftest adapter for `act/SiluMul@v2`: the served side = vLLM `torch.ops._C.silu_and_mul(out, x)` on one bf16 row [gate | up].
 
     verity-vllm properties-admission produce --adapter verity_vllm.program.quarantine.act.silu_mul_difftest --n 60 --seed 7 --out DIR
     verity-vllm properties-admission check   --adapter verity_vllm.program.quarantine.act.silu_mul_difftest --dir DIR --out quarantine.json

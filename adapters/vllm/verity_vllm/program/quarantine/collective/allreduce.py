@@ -1,6 +1,6 @@
 """`AllReduceSumBf16{N, R}` — the body of one NCCL sum all-reduce over R ranks' bf16 vectors of length N (quarantine).
 
-Production op (vLLM d9105ea80, `tensor_parallel_size=2`, batch-invariant profile, `disable_custom_all_reduce=True`):
+Served op (vLLM d9105ea80, `tensor_parallel_size=2`, batch-invariant profile, `disable_custom_all_reduce=True`):
 `torch.ops.vllm.all_reduce(tensor, group_name="tp:0")` → `GroupCoordinator.all_reduce` → `PyNcclCommunicator.all_reduce(in, out=None,
 op=ReduceOp.SUM, stream=None)` → `ncclAllReduce(send, recv, count, ncclBfloat16, ncclSum, comm, current_stream)`; the device kernel the
 census sees is `ncclDevKernel_AllReduce_Sum_bf16_TREE_LL(ncclDevKernelArgsStorage<4096ul>)` (grid 1, block 640), NCCL 2.29.7
@@ -31,7 +31,7 @@ What is NOT known (and why this stays in quarantine):
     rounds ONCE at the end (`custom_all_reduce.cuh::packed_reduce`): a different function for R > 2 (equal for R = 2).  It was disabled
     in every capture so far and is not modelled here.
 
-Conformance: quarantine — `difftest` pending (the production body needs a 2-GPU producer: two processes and an NCCL communicator; the
+Conformance: quarantine — `difftest` pending (the served body needs a 2-GPU producer: two processes and an NCCL communicator; the
 protected `difftest.produce` is single-process, so the adapter `allreduce_difftest.py` spawns the second rank itself; untested on GPU in
 this window).  Nothing is claimed exact beyond the R = 2 statement above.
 """
