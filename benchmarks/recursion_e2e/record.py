@@ -21,6 +21,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path += [str(HERE.parent / "harness"), str(HERE.parents[1] / "tools" / "config")]
 
+import rec_profile as RP  # noqa: E402
 import rec_table as RT  # noqa: E402
 import run as R  # noqa: E402
 from verity_bench import kit, settings  # noqa: E402
@@ -38,7 +39,8 @@ RESULT = "recursion_e2e.json"
 def record(doc: dict | None, kept: str | None, rc: int) -> None:
     """Write `METRICS` into this research run's result: each the headline's figure it names, measured when the run was
     whole (every step one recursive run needs ran) and partial when it wasn't, with no value and why where the run has
-    none (or job.sh, exiting `rc`, wrote no result `doc`); the run's parameters in the fingerprint; and the validation,
+    none (or job.sh, exiting `rc`, wrote no result `doc`); the run's seconds have none while a step of `RP.E2E_STEPS` is
+    missing, since the sum would be only the steps that ran; the run's parameters in the fingerprint; and the validation,
     passed only for an accepted recursive run (the headline's ``ok``), its detail the table's verdict and its evidence
     the result, at `kept` in the run's directory (None when job.sh wrote it elsewhere)."""
     w = kit.writer(settings.RESEARCH_RUN_DIR)
@@ -48,11 +50,16 @@ def record(doc: dict | None, kept: str | None, rc: int) -> None:
     evidence = [kept] if doc is not None and kept else []
     for f in evidence:
         w.measurement_file(f)
-    figures = {"pipeline_sum_s": h.get("pipeline_sum_s"), "Lean step_s": (h.get("pipeline") or {}).get("Lean step_s")}
+    ran = (doc or {}).get("steps") or {}
+    missing = [x for x in RP.E2E_STEPS if not ran.get(x)]
+    figures = {"pipeline_sum_s": None if missing else h.get("pipeline_sum_s"),
+               "Lean step_s": (h.get("pipeline") or {}).get("Lean step_s")}
     for name, figure in METRICS.items():
         value = figures[figure]
         why = (f"job.sh wrote no result (exit {rc})" if doc is None else
-               f"the run has no {figure}: its steps were {', '.join(sorted(doc.get('steps') or {})) or 'none'}")
+               f"the run is missing {', '.join(missing)}: its {figure} would sum only the steps that ran"
+               if figure == "pipeline_sum_s" and missing else
+               f"the run has no {figure}: its steps were {', '.join(sorted(ran)) or 'none'}")
         w.measurement(name, value, "s", why=None if value is not None else why,
                       mark="measured" if h.get("complete") else "partial", extra={"shape": shape, "modes": p.get("modes")})
     if doc is None:
