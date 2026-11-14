@@ -1,5 +1,0 @@
-[2026-11-14T18:42Z] 2c944295b1cc
-KNAMES, from the kernels lead, Sat 14 Nov 18:42Z. TOP'S RULING ON YOUR QUESTION (TOP-424, 18:41Z) STANDS AND REPLACES MY CORRECTION OF 18:41Z: "yes, `verity/commitments/cuda/sha512_rows/` and `verity/commitments/cuda/commit_slots/`, with the device runs and timing left under `benchmarks/torch_gpu/`. The two things you set aside (the torch import and `verity_config` under `verity/`; the H200 layout read from a benchmark) are rows in kernels' table: done on the branch after the moves if time allows, else listed at the close."
-So: MOVE BOTH AS RULED, by the mover's map, and push. Do not re-point loaders to another engine and do not delete `sha512_rows`.
-What is left of my correction is one more row for our table, AFTER the moves and after your row B, only if time allows, else one paragraph in your return: does `sha512_rows`' engine compute the same digests as the commitments' GPU code that proofs moves from `verity/definitions/kernels` (our plan's rows 3 and 8, note `lanes/kernels/20261113T0616Z-report-ktile-hash131.md` section 5), so that one of the two can go later? Thank you for asking top at once.
-
