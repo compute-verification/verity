@@ -80,7 +80,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
   the sampled verdict accepts with probability at most the published `δ`.
 * **The deployed digests and reading** (`programDigestOf`, `publicDigestOf`, `readOf`): the digests v2's parameters
   name (`paramsOf`), and the files they name, the lookup tables the circuit file registers (`pinnedTables`: each
-  pinned table its META looks up, at the file the deployment registers at the table's pinned digest, `Pinned`) and
+  pinned table its META looks up, at the file the deployment registers at the table's pinned digest, `PinnedTables`) and
   `verify --zk`'s tags.
   They give `DigestsAt` at every parameters (`digestsAt_of`), and at a session whose inputs are v2's the reading is the
   session's (`readOf_eq`).
@@ -717,18 +717,18 @@ theorem tableFile_hash {sha : String} {F : Array ByteArray} {a : ByteArray} (h :
 /-- **The pinned tables' registered files**: the file the deployment registers at a pinned digest `sha`
 (`Flock.MUFU_TABLES`), where it registers one, each of that digest. It is the deployment's data, as the files a
 registration names by digest are: no definition here picks a file from its digest. -/
-structure Pinned where
+structure PinnedTables where
   file : String → Option ByteArray
   hash : ∀ sha b, file sha = some b → Flock.hexOf (Flock.Sha512.hash b) = sha
 
 /-- **No pinned table registered**: the registered files of a deployment that registers none. -/
-def Pinned.empty : Pinned where
+def PinnedTables.empty : PinnedTables where
   file _ := none
   hash _ _ h := by cases h
 
 /-- **The lookup tables a circuit file registers**: each pinned table its META looks up
-(`Spot.OneStageZk.lookupsOf`, none where it refuses), at its registered file (`Pinned.file`). -/
-noncomputable def pinnedTables (T : Pinned) (circuitFile : ByteArray) : List (String × ByteArray) :=
+(`Spot.OneStageZk.lookupsOf`, none where it refuses), at its registered file (`PinnedTables.file`). -/
+def pinnedTables (T : PinnedTables) (circuitFile : ByteArray) : List (String × ByteArray) :=
   let names := match _root_.Spot.OneStageZk.lookupsOf circuitFile with
     | .ok ns => ns
     | .error _ => []
@@ -737,15 +737,15 @@ noncomputable def pinnedTables (T : Pinned) (circuitFile : ByteArray) : List (St
 
 /-- **v2's tables on the blobs sent are the registered ones**: each pinned table the blobs sent hold, at the first blob
 whose SHA-512's hex is its digest (`tableFile`, as `Spot.OneStageZk.tablesOf` finds it), is its registered
-file (`Pinned.file`). -/
-def TablesSent (T : Pinned) (s : Verity.Sent) : Prop :=
+file (`PinnedTables.file`). -/
+def TablesSent (T : PinnedTables) (s : Verity.Sent) : Prop :=
   ∀ t ∈ Flock.MUFU_TABLES, ∀ a b, tableFile t.sha512 s.blobs = some a → T.file t.sha512 = some b → a = b
 
 /-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the registered lookup tables**: under
 v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
 vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads, of the committed files, the lookup tables
 their circuit file registers (`pinnedTables`). -/
-structure DigestsAt (V : Vocab d α) (T : Pinned) (θ : ByteArray) : Prop where
+structure DigestsAt (V : Vocab d α) (T : PinnedTables) (θ : ByteArray) : Prop where
   circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
     V.programDigest θ = some fun i => dg.data.getD i.val 0
   publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
@@ -790,7 +790,7 @@ def zkTagsOf (tags : Flock.Tags) (circuitFile : ByteArray) : Flock.Tags :=
 parameters name (`programDigestOf`, `publicDigestOf`), the lookup tables the circuit file registers (`pinnedTables`),
 and `verify --zk`'s tags at the statement's tags and the circuit file (`zkTagsOf`). Where the statement has no tags v2
 refuses, and the tags read are a default. -/
-noncomputable def readOf (T : Pinned) (θ : ByteArray) (F : Array ByteArray) : Verity.FileRead :=
+noncomputable def readOf (T : PinnedTables) (θ : ByteArray) (F : Array ByteArray) : Verity.FileRead :=
   ⟨zkTagsOf ((Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT).getD default)
       (Verity.namedFile (programDigestOf θ) F),
     Verity.namedFile (programDigestOf θ) F, pinnedTables T (Verity.namedFile (programDigestOf θ) F),
@@ -799,7 +799,7 @@ noncomputable def readOf (T : Pinned) (θ : ByteArray) (F : Array ByteArray) : V
 /-- **The deployed digests and reading give `DigestsAt`**: at every parameters, a vocabulary whose digests are the
 ones v2's parameters name (`programDigestOf`, `publicDigestOf`) and whose reading of the committed files is v2's
 (`readOf`) reads the files at those digests and the lookup tables the circuit file registers. -/
-theorem digestsAt_of (V : Vocab d α) (T : Pinned) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
+theorem digestsAt_of (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) (hr : ∀ θ F, V.read θ F = readOf T θ F) (θ : ByteArray) :
     DigestsAt V T θ where
   circuit p hθ dg hdg := by
@@ -813,7 +813,7 @@ theorem digestsAt_of (V : Vocab d α) (T : Pinned) (hc : ∀ θ, V.programDigest
 /-- **The deployed reading is the session's** (`SetsUp.read`) at a session whose inputs are the ones v2 hands
 `flock-verify` on `θ` and `F`: the statement's tags, one table, the committed circuit and public files, and the lookup
 tables the circuit file registers. -/
-theorem readOf_eq (V : Vocab d α) (T : Pinned) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
+theorem readOf_eq (V : Vocab d α) (T : PinnedTables) (hc : ∀ θ, V.programDigest θ = programDigestOf θ)
     (hp : ∀ θ, V.publicDigest θ = publicDigestOf θ) {θ : ByteArray} {F : Array ByteArray} {A : Live}
     (htags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags) (hcount : A.I.count = 1)
     (hcirc : A.I.circuitFile = V.circuitFile θ F) (hpub : A.I.publicFile = V.publicFile θ F)
