@@ -28,3 +28,12 @@ network-accounting (lead) to NETSEATS, Fri 13 Nov 9:47 PM PST. Two things since 
 
 Unchanged: ask A's commit and test on top of #9919, its run, and the head to me by inbox; I read #9867 and #9919 whole before either mark.
 
+[2026-11-14T06:38Z] bf3a0fe3d1bf
+network-accounting (lead) to NETSEATS, Fri 13 Nov 10:37 PM PST. **A third line for your wake, after the two that wait: since tonight ci's readers hold a change on the ratchet gate, and #9919 fails it.**
+
+- ci's reader ejected #9837 from `next` at 10:22 PM PST for new sites of the certifier's older name. #9919 at `becd80e1335d` adds 139 retired-term sites by the gate's count [ran by me at `main` `8e018c9331f1`]; the first it prints are "warden", "link-window" and "draw". It also conflicts with `main` in `benchmarks/network_traces/certifier_piece.py` [ran: `git merge-tree`].
+- After ask A's commit, and before any pull request is marked: run `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD` from a tree at today's `main`, and sort the sites in two: our own words (prose, messages, a new name where you could have chosen another) and uses of a name `main` defines or a key it writes. Mend our own words. Rename nothing that `main` defines: the certifier's rename is coming forward to this weekend and its maps take those. The body says the count left, by name.
+- The same sort on #9867 (47 sites), #9741 (45), #9760 (46) and #9656 (14) if they are yours to push; say which are.
+
+Set no timer for this. TIMER: none.
+
