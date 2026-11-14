@@ -4966,6 +4966,9 @@ FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3"
 
 
 IDS = "--protocol ids --id-payload 503"
+#: the runner's refusal of a front in front of an endpoint that is off the id form
+OFF_IDS = ("PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under "
+           f"SERVE_ARGS='{IDS}'")
 SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "$2"'
 
 
@@ -4976,8 +4979,7 @@ SESSION_CLOSE = '"$PY" benchmarks/network_traces/certifier_piece.py close "$1" "
     ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
                                                              "tree's certifier front doesn't take"),
     ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
-    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
-     "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", OFF_IDS),
 ])
 def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
         tmp_path, load, front, takes, serve_args, line):
@@ -5012,8 +5014,7 @@ NO_SESSION = ("PREFLIGHT: LOAD=session is the caller's load through a relay sess
      "--session, so its front would send a group of its own"),
     (SESSION, "--gate --warmup --bucket-ms --client-port --windows",
      "PREFLIGHT: CERTIFIER_FRONT passes --session, which this tree's certifier front doesn't take"),
-    ({**SESSION, "SERVE_ARGS": ""}, SESSION_TAKES, "PREFLIGHT: the certifier front's warden sends id-form requests, "
-     "which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+    ({**SESSION, "SERVE_ARGS": ""}, SESSION_TAKES, OFF_IDS),
     ({**SESSION, "LOAD": "varied", "CERTIFIER_CLOSE": "", "CERTIFIER_FRONT": FRONT}, SESSION_TAKES,
      "PREFLIGHT: LOAD_CMD is LOAD=session's, and LOAD is varied: unset it"),
     ({**SESSION, "LOAD": "fixed", "LOAD_CMD": "", "CERTIFIER_FRONT": ""}, SESSION_TAKES,
