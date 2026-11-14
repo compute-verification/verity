@@ -9,8 +9,8 @@ launch contexts a workload's shapes are built under (`verity_vllm.pipeline.launc
 (`verity_vllm.pipeline.report.summarize_md`), the gate whose detail each of its counts reads (`build_card`) and its reading of a
 log's first record (`log_header`), the line `verdict from-record` prints (`verity_vllm.pipeline.verdict_record.main`), the config
 record of a row that ran nothing and the circuit database's index (`verity_vllm.pipeline.config_record`: `record`, `load_index`),
-the timeline report's window and its command, which report a file's last attempt, its reading of a file, its categories and
-its writer (`verity_vllm.pipeline.timeline`: `report`, `main`, `read`, `report_md`, `Timeline`), the
+the timeline report's window and its command, which report a file's last attempt, its reading of a file, its categories, its
+writer and the writer's span (`verity_vllm.pipeline.timeline`: `report`, `main`, `read`, `report_md`, `Timeline`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
 a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs`: `main`, and `build_outputs` for a link, a failed
 replay and a stage it does not know) and the one that writes the rows' digests
@@ -425,6 +425,26 @@ def test_a_timeline_writer_with_no_path_is_off_and_one_that_cannot_append_gives_
     path.unlink()
     path.mkdir()
     assert on.event("build") is None
+
+
+def test_a_timeline_span_ends_with_what_its_block_set_and_raises_again_what_its_block_raises(tmp_path):
+    """A span's start carries the fields it is given, and its end carries `ok` and what the block set on the dict it was handed.
+    A block that raises, an exit among them, ends `ok=False` with what it had set, and what it raised comes out as it is: a
+    span swallows nothing, so the lines under one stop where they would stop outside it."""
+    path = tmp_path / "timeline.jsonl"
+    tl = TL.Timeline(path, proc="commit")
+    with tl.span("validate.fold", pair=1) as extra:
+        extra["n"] = 3
+    stop = SystemExit("no fold")
+    with pytest.raises(SystemExit) as raised, tl.span("work.pair1") as extra:
+        extra["arm"] = "control"
+        raise stop
+    assert raised.value is stop
+    events = [json.loads(line) for line in path.read_text().splitlines()]
+    assert [(e["stage"], e["ev"], e.get("pair"), e.get("ok"), e.get("n"), e.get("arm")) for e in events] == [
+        ("validate.fold", "start", 1, None, None, None), ("validate.fold", "end", None, True, 3, None),
+        ("work.pair1", "start", None, None, None, None), ("work.pair1", "end", None, False, None, "control")]
+    assert ["s" in e for e in events] == [False, True, False, True]
 
 
 def test_the_experiment_index_counts_the_captured_values_and_their_steps(tmp_path):
