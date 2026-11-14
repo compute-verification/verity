@@ -284,8 +284,8 @@ def make_patterns(C: dict[str, Any]) -> list:
     ]
 
 
-# the census allowlist is PROTECTED (verity_vllm/properties/kernel_allowlist.py); profiles only reference it
-from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST  # noqa: E402
+# the census allowlist is PROTECTED (verity_vllm/observe/fold/profiles/kernel_allowlist.py); profiles only reference it
+from verity_vllm.observe.fold.profiles.kernel_allowlist import KERNEL_ALLOWLIST  # noqa: E402
 
 
 def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_note: str = "") -> Profile:

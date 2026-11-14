@@ -35,7 +35,7 @@ def OwnReadsH (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Ex
     (readAt : (Fin n × Fin c.ports.size) ⊕ Gate → ℕ) : Prop :=
   ∀ p, isRead p → ∃ u q d D dp idx, p = .inl (u, q) ∧ port p ∈ own ∧
     (List.range c.ports.size).find? (fun j => c.ports[j]!.name == (port p).name) = some q.val ∧
-    recordDraw t.record = some d ∧ Draw.UnitDraw.ofJson d = .ok D ∧ HmOut.drawn c pub d = .ok dp ∧
+    recordDraw t.record = some d ∧ Draw.UnitSample.ofJson d = .ok D ∧ HmOut.drawn c pub d = .ok dp ∧
     Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     (port p).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some (readAt p))
 
@@ -45,7 +45,7 @@ def regPathsH (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) : (Fin n × Fin c.ports.size) ⊕ Gate → ByteArray
   | .inl (u, q) => Option.getD (do
       let d ← recordDraw t.record
-      let D ← (Draw.UnitDraw.ofJson d).toOption
+      let D ← (Draw.UnitSample.ofJson d).toOption
       let dp ← (HmOut.drawn c pub d).toOption
       let tb ← dp.tables
       let (_, paths) ← (Registered.entry dp (port (.inl (u, q)))).toOption

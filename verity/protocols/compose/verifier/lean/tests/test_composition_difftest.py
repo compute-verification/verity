@@ -88,7 +88,7 @@ def _sha(b: bytes) -> str:
 @functools.cache
 def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    and its evidence: its sample at its challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin
     tree) is one proof block (a subset of one, the least a subset sampling design samples), its proved unit, and it names no session,
     and its params name the circuit and public files `BLOBS` hold. Made once each: a challenger's signed session is slow
     to make."""
@@ -96,7 +96,7 @@ def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     part = {"program": s.sha512, "query": s.query}
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
     proved = OS.DR.proved(d)
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
                 "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
@@ -704,11 +704,11 @@ def reusing(made: list[dict]):
 
 def reusing_audit(m: dict) -> dict:
     """Sampled proofs' one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its sample at its
-    challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) is R's one proof block, its
+    challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin tree) is R's one proof block, its
     proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
     file names R's tables, which no proof block of R's program reads."""
     s, rec = m["setup"], m["record"]
-    ch, d, coins = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
     proved = OS.DR.proved(d)
     reads = {"format": "verity/registered-reads/v1", "ports": {
         e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
@@ -819,7 +819,7 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
 @functools.cache
 def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    and its evidence: its sample at its challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin
     tree) drew no unit (a subset of none), so it has no session and no proved unit, and `BLOBS` hold its circuit and
     public files. Its log is empty, or with `after` (a record's canonical JSON) that one record, which its record is
     chained right after. Made once each: a challenger's signed session is slow to make."""
@@ -828,7 +828,7 @@ def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
     log = [json.loads(after)] if after else []
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, previous=OS.R.digest(log[-1]) if log else None, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
     evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"public": _sha(PUBLIC), "sessions": []},
                 "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None,
                 "session_roots": None, "sessions": [], "statement": {}}

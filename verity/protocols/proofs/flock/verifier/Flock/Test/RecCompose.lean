@@ -111,7 +111,7 @@ def tampered : List Shared :=
     { sh with innerCoins := some (hex 'f') }, { sh with innerSession := some (hex 'f') },
     { sh with transcript := some (hex 'f') }, { sh with registration := none },
     { sh with innerStatement := some "unbatched" }, { sh with innerTables := some [("range8", hex 'f')] },
-    { sh with innerDraw := some (hex 'f') },
+    { sh with innerSample := some (hex 'f') },
     { sh with links := table }, { sh with innerProgram := some (hex 'f') }]
 
 #guard tampered.all fun s => s != sh

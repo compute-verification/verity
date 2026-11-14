@@ -32,7 +32,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hcS : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupHP I own mPts S₀ (dj S₀))
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupHP I own mPts S₀ (dj S₀))
   (hU : Built c.unit) {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi)
   {pop : Public} (hpub : HmIn.loadPublic I.tags c pi I.publicFile = .ok pop) {Reg : Type}
 
@@ -41,7 +41,7 @@ include hU hpi hpub in
 `Stmt.setupHidden … own`, each sampled proof block's site is `BcSiteHP`: the sample `dj S` decodes to `D`, its proved units are in
 its population, its public file loads (`HmIn.loadPublic`) to `pop`, and the unit's block and template instance index
 its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2_stmt`). -/
-theorem tableHP_bcSite {S : Finset (Fin n)} (x : DrawSetupHP I own mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+theorem tableHP_bcSite {S : Finset (Fin n)} (x : SampleSetupHP I own mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteHP (x.table.acc ht hcS (rowsFit_of_stmt ht hcS hscope)) pop (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : HmOut.unrolled x.st.c = c := x.table.unrolled_eq ht hcS
   have hC : Hidden.Committed I.tags I.circuitFile I.tables x.st.c := x.table.committed
@@ -71,7 +71,7 @@ theorem sitesAtHP_bcSite :
   intro S R u h M hM
   show BcSiteHP ((tableAtHP dj x₀ S).acc ht hcS (rowsFit_of_stmt ht hcS hscope)) pop ((tableAtHP dj x₀ S).o u h)
     ((tableAtHP dj x₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupHP I own mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupHP I own mPts S (dj S))
   · have e : tableAtHP dj x₀ S = (Classical.choice hS).table := by
       unfold tableAtHP
       rw [dite_eq_left_of_eq_true (eq_true hS)]

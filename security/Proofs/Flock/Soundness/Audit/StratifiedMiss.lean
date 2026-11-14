@@ -4,12 +4,12 @@ public import Proofs.Flock.Soundness.Audit.Stratified
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 
 /-!
-# The stratified law's count curve
+# The stratified samplingDesign's count curve
 
-`miss K` is the largest escape of a set of at least `K` wrong units (`Law.miss`). Under the stratified law a set's escape
+`miss K` is the largest escape of a set of at least `K` wrong units (`SamplingDesign.miss`). Under the stratified samplingDesign a set's escape
 depends only on its count `c_s` in each stratum (`stratified_escape`). Stratum `s`'s escape falls by the factor
 `r_s(c) = (n_s − c − k_s)/(n_s − c)` when its `(c + 1)`-th unit is wrong, and that factor falls as `c` grows. So the
 likeliest set to escape fills the strata greedily, taking the largest factors first, as
@@ -18,7 +18,7 @@ likeliest set to escape fills the strata greedily, taking the largest factors fi
 * `stratified_miss_eq_greedy`: a count vector `a` that some `τ ∈ (0, 1]` separates attains `miss (∑ a)`, which is then
   `∏ s C(n_s − a_s, k_s)/C(n_s, k_s)`. Every factor `a` takes must be at least `τ`, and every factor it leaves at most
   `τ`. A greedy fill has such a `τ`, the smallest factor it took, so `audit_exfiltration`'s `hk : miss (K + 1) < δ`
-  holds for a stratified law once the greedy fill at `K + 1` escapes with less than `δ`.
+  holds for a stratified samplingDesign once the greedy fill at `K + 1` escapes with less than `δ`.
 * `stratum_exchange`, the step: within one stratum, `C(n_s − c, k_s) · τ^a ≤ C(n_s − a, k_s) · τ^c` for every
   `c ≤ n_s`.
 -/
@@ -30,7 +30,7 @@ namespace FlockSoundness.Audit
 open Finset
 open scoped ENNReal
 
-namespace Law
+namespace SamplingDesign
 
 variable {n m : ℕ}
 
@@ -136,7 +136,7 @@ theorem stratum_exchange {N k a c : ℕ} {τ : ℝ≥0∞} (ha : a ≤ N) (hc : 
       _ ≤ E (c + d) * τ ^ c := by gcongr; exact down d le_rfl
 
 /-- **The stratified count curve.** A count vector `a` that some `τ ∈ (0, 1]` separates, every factor it takes at least
-`τ` and every factor it leaves at most `τ`, attains the stratified law's `miss` at `∑ a`: no set of at least `∑ a` wrong
+`τ` and every factor it leaves at most `τ`, attains the stratified samplingDesign's `miss` at `∑ a`: no set of at least `∑ a` wrong
 units escapes more often than the sets with counts `a`, which escape with `∏ s C(n_s − a_s, k_s)/C(n_s, k_s)`. A greedy
 fill, taking the largest factor left one unit at a time, has such a `τ`. -/
 theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
@@ -204,6 +204,6 @@ theorem stratified_miss_eq_greedy (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk
     rw [stratified_escape]
     exact Finset.prod_congr rfl fun s _ => by rw [hfil, hTc]; rfl
 
-end Law
+end SamplingDesign
 
 end FlockSoundness.Audit

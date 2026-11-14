@@ -27,7 +27,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   transcript's returns must agree. A kind the table lowers through its Boolean version (``boolean``: MoeSum_v1 as
   MoeSum_v3's 64-column members, TokenSelect_v1 as TokenSelect_v2's argmax leaves) evaluates that version bit-sliced on the
   same operands (`boolean_units`), holds its returns to the snapshot as words, and stages its unit's bits.
-* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
+* **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one docket before the
   sample; the verifier's Lean stratified sample over its own program and partition; each member serves its share
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
   a6's negatives. A tampered copy of one kind's member (bit 0 of every instance's first output word flipped before it is
@@ -919,7 +919,7 @@ def main() -> int:
                            "k_log": m["st"]["meta"].get("k_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
                            "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
 
-    # one registration, before the sample
+    # one docket, before the sample
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]
@@ -950,7 +950,7 @@ def main() -> int:
 
     # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
     # challenger's coins; each member serves its share
-    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+    p = a0.challenger_sample(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
                                     "--stratified", str(k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
@@ -966,7 +966,7 @@ def main() -> int:
         with slot("session"):
             t = time.time()
             record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", session_port(a.port, j), sdir,
-                                      draw_file=sdir / "draw.json", zk=True)
+                                      sample_file=sdir / "draw.json", zk=True)
             session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
@@ -974,7 +974,7 @@ def main() -> int:
         session_roots.update({f"{m['name']}/{port}": r for port, r in ((live or {}).get("roots") or {}).items()})
         proved += a0.proved_units(m["header"], live or {})
         instances += (live or {}).get("instances", 0)
-        lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
+        lean_u = a0.lean_sample_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
                                              "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
         verdicts[f"m0-verifier/{m['name']}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,

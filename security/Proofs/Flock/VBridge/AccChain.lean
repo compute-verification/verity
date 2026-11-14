@@ -322,7 +322,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open FlockVBridge.Compiled (Accepted layers AccChains)
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
 
 /-- **G item 4: the running sums chain into E's `hacc`.** At every accepted outer proof, with `acc` the rows of the
 registration's `rec-acc` and `ops` each rep's openings, both read off V*'s layers: if every `rec-open` unit of the

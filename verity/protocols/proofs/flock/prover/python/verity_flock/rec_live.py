@@ -142,7 +142,7 @@ NONCE_BYTES = 8
 CAP_NODE_BYTES = hm96.SHA512.digest_bytes
 
 REQ_HELLO, REQ_LINK, REQ_OPEN, REQ_ROUND, REQ_PROOF, REQ_FINISH, REQ_COMMIT, REQ_PRIME, REQ_PING, REQ_REGISTER = range(1, 11)
-RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_DRAW = range(1, 7)
+RESP_OK, RESP_COINS, RESP_REFUSED, RESP_VERDICT, RESP_WORDS, RESP_SAMPLE = range(1, 7)
 
 #: u16 words per block of a message row: one SHA-512 block, 8 field elements
 ROW_WORDS = 64
@@ -288,7 +288,7 @@ def decode_resp(b: bytes) -> tuple:
     if t == RESP_COINS:
         n = c.u32()
         return t, [c.u64() | (c.u64() << 64) for _ in range(n)]
-    if t in (RESP_REFUSED, RESP_VERDICT, RESP_DRAW):
+    if t in (RESP_REFUSED, RESP_VERDICT, RESP_SAMPLE):
         return t, c.str()
     raise ValueError(f"unknown response tag {t}")
 
@@ -558,9 +558,9 @@ def full_draw(program, query: dict) -> dict:
     return {**law, "population": n, "units": list(range(n))}
 
 
-#: `RecSetup.noInnerDraw`: the verifier's refusal, last in a session's verdict, of a session over an inner session whose
+#: `RecSetup.noInnerSample`: the verifier's refusal, last in a session's verdict, of a session over an inner session whose
 #: record holds no sample
-NO_INNER_DRAW = ("refused: the inner session's record (--rec-inner-session) holds no draw (unit_draw): the recursion's inner "
+NO_INNER_SAMPLE = ("refused: the inner session's record (--rec-inner-session) holds no draw (unit_draw): the recursion's inner "
                  "session is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's "
                  "proof covers")
 
@@ -572,15 +572,15 @@ def _not_json(c: str):
 def inner_draw(record: str):
     """The inner session's sample: its record's ``unit_draw`` (`Proxy.session_record`) as the verifier reads it
     (`RecCoins.recordDraw`: absent or null, or a record that is not a JSON object, is none). The verifier refuses every
-    session over an inner session without one (`RecSetup.innerDrawn`, last in its verdict), so V*'s statements over it
-    would all be refused: ValueError (`NO_INNER_DRAW`)."""
+    session over an inner session without one (`RecSetup.innerSampled`, last in its verdict), so V*'s statements over it
+    would all be refused: ValueError (`NO_INNER_SAMPLE`)."""
     try:
         j = json.loads(record, parse_constant=_not_json)
     except ValueError:
         j = None
     d = j.get("unit_draw") if isinstance(j, dict) else None
     if d is None:
-        raise ValueError(NO_INNER_DRAW)
+        raise ValueError(NO_INNER_SAMPLE)
     return d
 
 
@@ -1245,7 +1245,7 @@ class Proxy:
         if self.verdict is not None:
             raise ValueError("session finished")
         if t == REQ_REGISTER:
-            return resp_str(RESP_DRAW, "null" if self.draw is None else canonical(self.draw))
+            return resp_str(RESP_SAMPLE, "null" if self.draw is None else canonical(self.draw))
         if t == REQ_HELLO:
             if self.hello is not None:
                 raise ValueError("a second Hello")

@@ -47,7 +47,8 @@ open Claims
 
 /-- **The premises `SpotKSTwo` takes hold of the session's held copies**, wherever a play is accepted and the
 accepted plays' held copies are the ones `heldOf` builds. -/
-theorem premises_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+theorem premises_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) (hWf : SpotFlock.RefReadsWf A.h)
     (hwc : SpotFlock.AddressRow.wiresChecked A.h = true) : SpotFlock.Honest.Premises A.h := by
@@ -59,7 +60,8 @@ theorem premises_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) 
 
 /-- **The two-stage scope at the connected program is inhabited at the session's held copies**, by every statement
 that decodes, wherever a play is accepted and the accepted plays' held copies are the ones `heldOf` builds. -/
-theorem inScope_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+theorem inScope_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) {x : Msg} {st : SpotFlock.Roots} (hx : SpotFlock.decode x = some st) :
     SpotFlock.Honest.InScope A.h := by
@@ -86,7 +88,7 @@ theorem acceptsPlay_of_playAccepts {A : Live₂} {C : CaseOf} {S : SessionReadin
 /-- **The two-stage guarantees are not vacuous where the form accepts one play** (`SpotFlock.Honest.HonestExists`,
 at the session's held copies): they meet the premises (`premises_of_formAccepts`), their verifier accepts the play
 (`acceptsPlay_of_playAccepts`), and the play's statement is in scope (`SpotFlock.Honest.inScope_of_play`). -/
-theorem honest_of_formAccepts {A : Live₂} {C : CaseOf} {S : SessionReading}
+theorem honest_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] {S : SessionReading}
     {P' : Verity.Exchange → ℕ → Claims.Prover Unit} (hof : HeldOfAt A C) (hplay : PlayAccepts A C S P')
     {o : Verity.Exchange} {i : Spot.Run.Input} {it : Spot.Run.Interior} {x m₁ : Msg} (hA : FormAccepts C o)
     (hi : inputOn C o = some i) (hit : i.interior = some it) (hx : recordMsg i.record = some x)
@@ -100,7 +102,7 @@ theorem honest_of_formAccepts {A : Live₂} {C : CaseOf} {S : SessionReading}
 /-- **The session's knowledge soundness, from one accepted play** (`Live₂.KS`, the hypothesis the leg takes): the
 session's held copies meet the two premises `Flock.Guarantees.SpotKSTwo` takes (`premises_of_formAccepts`), which give
 it at the connected program (`Live₂.ks_of_connected`). -/
-theorem ks_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+theorem ks_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C) {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) (hWf : SpotFlock.RefReadsWf A.h)
     (hwc : SpotFlock.AddressRow.wiresChecked A.h = true) : A.KS := by
@@ -118,7 +120,8 @@ theorem scope_of_accept {A : Live₂} (H : Msg → Msg) {Ω : Type} {P : Claims.
 are the ones `heldOf` builds: the accepted run's second stage drew over the replay block's cells
 (`RunsAs.accepted_steps`), so there is a cell (`secondProblem`), the cells are the held copies' (`cells_heldOf`), and
 they are one per template where the design evaluates (`SpotFlock.Honest.template_of_cells`). -/
-theorem template_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+theorem template_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) : 0 < A.h.ms.length := by
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -133,7 +136,8 @@ theorem template_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) 
 
 /-- **The first stage samples slots that name themselves at the session's held copies**, wherever a play is accepted
 and the accepted plays' held copies are the ones `heldOf` builds (`SpotFlock.Honest.sampleSlots_of_heldOf`). -/
-theorem sampleSlots_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+theorem sampleSlots_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) : SpotFlock.AddressRow.SampleSlots A.h := by
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -144,7 +148,8 @@ theorem sampleSlots_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A 
 
 /-- **The statement of a play the session's verifier accepts has a proof block**, wherever the form accepts a play
 and the accepted plays' held copies are the ones `heldOf` builds (`SpotFlock.Honest.units_pos_of_play`). -/
-theorem units_pos_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+theorem units_pos_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin ((SpotFlock.V A.h).k x) → FlockDeploy.Coin}
@@ -157,7 +162,8 @@ theorem units_pos_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C)
 coins, wherever the form accepts a play and the accepted plays' held copies are the ones `heldOf` builds
 (`SpotFlock.Honest.checked_ne_nil_of_template`). So `SpotFlock.AddressesConnected`, which speaks of the checked
 proof blocks, is not vacuous at the session's accepted plays. -/
-theorem checked_ne_nil_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
+theorem checked_ne_nil_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
     (hit : i.interior = some it) (H : Msg → Msg) {Ω : Type} {P : Claims.Prover Ω} {x : Msg} {ω : Ω}
     {r : Fin ((SpotFlock.V A.h).k x) → FlockDeploy.Coin}

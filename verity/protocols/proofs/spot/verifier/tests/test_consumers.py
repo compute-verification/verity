@@ -156,13 +156,13 @@ def test_stratified_miss_is_the_lean_certified_greedy_fill():
 
 def test_the_lean_vectors_were_generated_from_this_tree():
     """The vectors record the sha256 of the exporter and of the soundness package's files they read (`lean/generate.sh`):
-    `audit_exfiltration` (`Audit/Influence.lean`), the uniform sampling design and `subset_miss` (`Audit/Law.lean`), the stratified
+    `audit_exfiltration` (`Audit/Influence.lean`), the uniform sampling design and `subset_miss` (`Audit/SamplingDesign.lean`), the stratified
     sampling design and `stratified_miss_eq_greedy` (`Audit/Stratified.lean`, `Audit/StratifiedMiss.lean`), and the toolchain and
     Mathlib pins.  A change to any of them fails here until the vectors are regenerated."""
     recorded = json.loads(LEAN_VECTORS.read_text())["inputs"]
     soundness = "security/Proofs/"
     assert set(recorded) == {"verity/protocols/proofs/spot/verifier/tests/lean/ExfiltrationVectors.lean",
-                             *(soundness + f for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/Law.lean",
+                             *(soundness + f for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/SamplingDesign.lean",
                                                        "Flock/Soundness/Audit/Stratified.lean",
                                                        "Flock/Soundness/Audit/StratifiedMiss.lean",
                                                        "lake-manifest.json", "lean-toolchain"))}

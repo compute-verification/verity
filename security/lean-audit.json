@@ -2085,13 +2085,13 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "FlockSoundness.Discharge.PlainHJ.DrawOkPHJ": {
+  "FlockSoundness.Discharge.PlainHJ.SampleOkPHJ": {
    "owner": "@proofs",
    "digest": "9fd719efc97c24115c29e23a5bf7aa6239eaf033662a6aa337249c15c784f69e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "FlockSoundness.Discharge.PlainJ.DrawOkPJ": {
+  "FlockSoundness.Discharge.PlainJ.SampleOkPJ": {
    "owner": "@proofs",
    "digest": "f14a0430f001afa18284c35cc1c18f58e1ddbf66d6b6802ef6da8d863b033ad7",
    "issue": "LEAN-186",
@@ -3189,27 +3189,27 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Sampled.Instance.RegisteredFiles": {
+  "Verity.Sampled.Instance.FamiliesPinned": {
    "owner": "@soundness",
-   "digest": "6e3f3469b8d5d3150411147b749836083db3fa2982bc9ca5e3ef7421df2b957e",
+   "digest": "a458004855d46bcec4dc39b3655ab987c6fa70d2edc08e1cc3c1fcec8541d602",
    "issue": "PRF-579",
-   "due": "2026-11-20"
+   "due": "2026-11-17"
   },
-  "Verity.Sampled.Instance.SessionRegistered": {
-   "owner": "@soundness",
-   "digest": "3b1413ac284ced301f7340233cdaa993a041033fc9a9246fb2a948b6c6e3f42a",
-   "issue": "PRF-579",
-   "due": "2026-11-20"
-  },
-  "Verity.Sampled.Instance.SessionsReady": {
-   "owner": "@soundness",
-   "digest": "b3c68dd91b99363dd6daa4b0f4778d150f32fe80fb2820969ce9c4ebdee6a386",
-   "issue": "PRF-579",
-   "due": "2026-11-20"
+  "Verity.Vocab.BandwidthAuditSound": {
+   "owner": "@memory-accounting",
+   "digest": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
   },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
    "digest": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Verity.Vocab.NetworkCertifierSound": {
+   "owner": "@network-accounting",
+   "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3219,9 +3219,21 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Vocab.PousSound": {
+   "owner": "@memory-accounting",
+   "digest": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Verity.Vocab.PouwSound": {
    "owner": "@compute-accounting",
    "digest": "11518fbb13cc95c1ccc10d6ab73a3ab8f341a919046c499e18f757de475d1670",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Verity.Vocab.WipeSound": {
+   "owner": "@memory-accounting",
+   "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3378,7 +3390,7 @@
   "Proofs.Flock.Claims",
   "Proofs.Flock.VBridge",
   "Proofs.Flock.EndToEnd",
-  "Proofs.Flock.EndToEndDrawn",
+  "Proofs.Flock.EndToEndSampled",
   "Proofs.Flock.EndToEndHidden",
   "Proofs.Flock.EndToEndRegistered",
   "Proofs.Flock.Bridge",
@@ -4452,10 +4464,6 @@
    "honest": ["Flock.SecurityProofs.EndToEndRegistered_honest"],
    "nontrivial": "Flock.SecurityProofs.EndToEndRegistered_nontrivial"
   },
-  "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
-   "honest": ["Flock.SecurityProofs.EndToEndRegisteredDrawn_honest"],
-   "nontrivial": "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial"
-  },
   "Claims.SamplingGeneric.compilerKSAtTwo": {
    "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest", "Claims.SamplingGeneric.compilerBits_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSAtTwo_nontrivial"
@@ -4688,6 +4696,14 @@
   },
   "Flock.SecurityProofs.SpotOneWaitTwo": {
    "nontrivial": "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial"
+  },
+  "Flock.SecurityProofs.EndToEndRegisteredSampled": {
+   "honest": ["Flock.SecurityProofs.EndToEndRegisteredDrawn_honest"],
+   "nontrivial": "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial"
+  },
+  "Verity.Sampled.onsite_soundness_deployedReady": {
+   "honest": ["Verity.Sampled.onsite_soundness_deployedReady_honest"],
+   "nontrivial": "Verity.Sampled.onsite_soundness_deployedReady_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5155,17 +5171,9 @@
    "type_hash": "98d68470d723d245aac78106ff238e8d7903feea054a6748e7afe2e5e24e1aff",
    "unfolded_hash": "378c714d12db23518e36be56c14b0ed3c3758b897bae41bd24f9ae96ce2d9014"
   },
-  "Flock.SecurityProofs.EndToEndDrawn": {
-   "type_hash": "abddb3f765cc28e5b09bc85098badb0538e46f30a07e1d1dc9f363fade5177a8",
-   "unfolded_hash": "f47318b65b10c793ad79723077b20e443a326e68037bf9a06110c1af5451e6db"
-  },
   "Flock.SecurityProofs.EndToEndHidden": {
    "type_hash": "6b9c3b10bfa35dd2189691fbf511f15129f63e2b505e3022dfdb9f74ca38b658",
    "unfolded_hash": "d96d80ab768c52e4bd3b118db1dcb643a38586ea539d875977a7ce347521522d"
-  },
-  "Flock.SecurityProofs.EndToEndHiddenDrawn": {
-   "type_hash": "5f1b7fa323d6a69dafb2427a17688fdbebd4d133e7d93ca5bc5d0472055d0cd1",
-   "unfolded_hash": "6aa1a6cfd367f7a27144adb3d3be05dbb5d15e42c667e51b788b9d41814efd74"
   },
   "Flock.SecurityProofs.EndToEndHiddenDrawnFlat": {
    "type_hash": "ba87129775fef4d68b47c92ab874798d1b66b3e984ba35fc46b2025f1a7248e7",
@@ -5175,9 +5183,9 @@
    "type_hash": "375eda7a4fb2d0787fec565a444edfa7fcedaf9ab88e07a18892411cb562199b",
    "unfolded_hash": "565e0170b7dbf520cbbf1216f95676f27e48fc5b7f72a79f08463626d4c0d735"
   },
-  "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
-   "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
-   "unfolded_hash": "a3fe7c62dc4e966d886c03335e0646b0a82c45ebbff2aecb1fa0f72e16ee88a1"
+  "Flock.SecurityProofs.EndToEndHiddenSampled": {
+   "type_hash": "5f1b7fa323d6a69dafb2427a17688fdbebd4d133e7d93ca5bc5d0472055d0cd1",
+   "unfolded_hash": "6aa1a6cfd367f7a27144adb3d3be05dbb5d15e42c667e51b788b9d41814efd74"
   },
   "Flock.SecurityProofs.EndToEndRegisteredFlat": {
    "type_hash": "74ac90d3b329af83ebb584e436936ef773a7538c4ccd6a3f49a9a9067b0f81b4",
@@ -5185,6 +5193,14 @@
   },
   "Flock.SecurityProofs.EndToEndRegisteredRows": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9",
   "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce",
+  "Flock.SecurityProofs.EndToEndRegisteredSampledFlat": {
+   "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
+   "unfolded_hash": "a3fe7c62dc4e966d886c03335e0646b0a82c45ebbff2aecb1fa0f72e16ee88a1"
+  },
+  "Flock.SecurityProofs.EndToEndSampled": {
+   "type_hash": "abddb3f765cc28e5b09bc85098badb0538e46f30a07e1d1dc9f363fade5177a8",
+   "unfolded_hash": "f47318b65b10c793ad79723077b20e443a326e68037bf9a06110c1af5451e6db"
+  },
   "Flock.SecurityProofs.IntegrityBlock": {
    "type_hash": "bc19323ffca15deed7d9c8fa88a5522bedeedf1483773412e274d835920cec34",
    "unfolded_hash": "ec8e695ecee78a800873265963583da491fe4335b31cfbcccb98efa72a2c8362"
@@ -5982,7 +5998,6 @@
    "Proofs.Flock.VBridge": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.EndToEnd": "C-Flock is excepted until its spec is extracted",
-   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until its spec is extracted",
    "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until its spec is extracted",
@@ -6003,7 +6018,8 @@
    "Proofs.Flock.SpotFlock": "SPOT[Flock]'s two-stage guarantees (`Flock.Guarantees.SpotKSTwo`, `SpotExfilTwo`) state KS and its exfiltration bound at SPOT[Flock]'s code record at the connected program (`SpotFlock.codeConnected`, `Held`, `twoConnected`, `rsConnected`, `iroots`, `wireMap`, `returned`), at a built session frame and its addresses there (`BuiltWired`, `AddressesConnected`), still in Proofs; C-Flock is excepted until its spec is extracted into Definitions/, which removes this entry",
    "Proofs.Flock.ZkAny": "the session loop's any-values guarantee states its release at the unswitched prover, the deferred release and the held relay (`RefSession.unP`, `RefSession.UnCausal`, the rounds of `LeanRelease.TrustsStop`), still in Proofs; C-Flock is excepted until its spec is extracted",
    "Proofs.Accounting.ReadUnit.Guarantees": "the expert-row read's binding states its ports at C-Flock's unit (`Flock.Bridge.circuitOf`, `copyGate`), still in Proofs; C-Flock is excepted until its spec is extracted",
-   "Proofs.Properties.Verity.Sampled": "the deployed remote theorem (Verity.Sampled.remote_soundness_deployedReady) states remote soundness at the deployed vocabulary (`Instance`, `Live`, `constructionsAt`), which C-Flock's V5 bridge, decoders and Discharge type and which is still in Proofs; excepted until that vocabulary is extracted into Definitions/ (PRF-557), which removes this entry"
+   "Proofs.Properties.Verity.Sampled": "the deployed remote theorem (Verity.Sampled.remote_soundness_deployedReady) and the onsite one (Verity.Sampled.onsite_soundness_deployedReady) state soundness at the deployed vocabulary (`Instance`, `Live`, `constructionsAt`), which C-Flock's V5 bridge, decoders and Discharge type and which is still in Proofs; excepted until that vocabulary is extracted into Definitions/ (PRF-557), which removes this entry",
+   "Proofs.Flock.EndToEndSampled": "C-Flock is excepted until its spec is extracted"
   }
  },
  "four_names": [
@@ -17000,6 +17016,58 @@
    },
    "type_hash": "5dce48d50f5d44e873cafe044f8c7c4d19868f47d4f9e0bcd82c8da9e92e8470"
   },
+  "FlockSoundness.Audit.audit_executionPhase_split_of_record": {
+   "owner": "@proofs",
+   "signature": [
+    "FlockSoundness.Audit.audit_executionPhase_split_of_record {n m : Nat} {σ : Fin n → Fin m} {cl : Fin n → Finset (Fin n)}",
+    "  {Reg : Type} {session : Finset (Fin n) → Reg → Verity.Game Bool} {C : Nat} {call : Fin m → Fin C}",
+    "  {w v f : Fin m → Nat}",
+    "  (A :",
+    "    FlockSoundness.Audit.Analysis",
+    "      ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.executionPhaseK σ call w f 27713) ⋯).closure cl)",
+    "      Reg session)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)",
+    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
+    "  (hone :",
+    "    ∀ (s : Fin m),",
+    "      instLTNat.lt 0 (w s) →",
+    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
+    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
+    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
+    "  (hfy :",
+    "    ∀ (s : Fin m),",
+    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
+    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
+    "  (σ' :",
+    "    (FlockSoundness.Audit.audit",
+    "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.executionPhaseK σ call w f 27713) ⋯).closure",
+    "          cl)",
+    "        Reg session).Strategy) :",
+    "  ENNReal.instLE.le",
+    "    (Verity.Game.prob",
+    "      (fun o =>",
+    "        And (Eq o.fst Bool.true)",
+    "          (Or",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))))",
+    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
+    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ v cl (A.wrong (A.committedOf σ')))))))",
+    "      (FlockSoundness.Audit.audit",
+    "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.executionPhaseK σ call w f 27713) ⋯).closure",
+    "          cl)",
+    "        Reg session)",
+    "      σ')",
+    "    (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) εks) δlink)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f6b340b10b34acbc14534834589b7499617ce19e7c4652bca93448e2f40abb2b"
+  },
   "FlockSoundness.Audit.audit_profile": {
    "owner": "@proofs",
    "signature": [
@@ -17020,56 +17088,6 @@
     "reads": []
    },
    "type_hash": "4814a27e5c54996ff912db20d9f833f62003ca6046b4e4b85e1e660db37e1735"
-  },
-  "FlockSoundness.Audit.audit_window_split_of_record": {
-   "owner": "@proofs",
-   "signature": [
-    "FlockSoundness.Audit.audit_window_split_of_record {n m : Nat} {σ : Fin n → Fin m} {cl : Fin n → Finset (Fin n)}",
-    "  {Reg : Type} {session : Finset (Fin n) → Reg → Verity.Game Bool} {C : Nat} {call : Fin m → Fin C}",
-    "  {w v f : Fin m → Nat}",
-    "  (A :",
-    "    FlockSoundness.Audit.Analysis",
-    "      ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
-    "      session)",
-    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)",
-    "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
-    "  (hone :",
-    "    ∀ (s : Fin m),",
-    "      instLTNat.lt 0 (w s) →",
-    "        Eq (FlockSoundness.Audit.Law.callWork σ call w (call s))",
-    "          (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card))",
-    "  (hN : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v))",
-    "  (hfy :",
-    "    ∀ (s : Fin m),",
-    "      instLENat.le (instHMul.hMul (instHMul.hMul 27713 (v s)) (FlockSoundness.Audit.Law.stratum σ s).card)",
-    "        (instHMul.hMul (f s) (FlockSoundness.Audit.Law.totalWork σ v)))",
-    "  (σ' :",
-    "    (FlockSoundness.Audit.audit",
-    "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
-    "        session).Strategy) :",
-    "  ENNReal.instLE.le",
-    "    (Verity.Game.prob",
-    "      (fun o =>",
-    "        And (Eq o.fst Bool.true)",
-    "          (Or",
-    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ w)",
-    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))))",
-    "            (instLENat.le (FlockSoundness.Audit.Law.totalWork σ v)",
-    "              (instHMul.hMul 1000 (FlockSoundness.Audit.Law.unsoundWork σ v cl (A.wrong (A.committedOf σ')))))))",
-    "      (FlockSoundness.Audit.audit",
-    "        ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
-    "        session)",
-    "      σ')",
-    "    (instHAdd.hAdd (instHAdd.hAdd (ENNReal.instInv.inv (instHPow.hPow 2 40)) εks) δlink)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "73b48a52c85dff5069fc2f52551899db7c325d0b7836c049e984851ff669b153"
   },
   "FlockSoundness.Audit.audit_work_floor": {
    "owner": "@proofs",
@@ -23464,30 +23482,36 @@
    },
    "type_hash": "919b736c4f268f4e62f60470e03dc36df20b42a164798dbf71c33334c1a0d8df"
   },
-  "Verity.Sampled.remote_soundness_deployedReady": {
+  "Verity.Sampled.onsite_soundness_deployedReady": {
    "owner": "@soundness",
    "signature": [
-    "Verity.Sampled.remote_soundness_deployedReady {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]",
+    "Verity.Sampled.onsite_soundness_deployedReady {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]",
     "  (I : Verity.Sampled.Instance d α) (K₀ : Verity.Sampled.Constructions I.base)",
     "  (reg : (A : Verity.Sampled.Live) → Option Claims.Msg → A.Reg)",
     "  (record : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)",
-    "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hready : I.SessionsReady)",
-    "  (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered Verity.Registration.Composite.remote)",
-    "  (hW : I.base.PouwSound Verity.Registration.Composite.remote)",
-    "  (hI : I.base.InferenceOnlySound Verity.Registration.Composite.remote) :",
-    "  (I.vocab (I.constructionsAt K₀ Verity.Registration.Composite.remote reg record recordDigest)).SoundnessAt",
-    "    Verity.Registration.Composite.remote"
+    "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)",
+    "  (hSr : I.SessionRegistered Verity.Registration.Composite.onsite)",
+    "  (hW : I.base.PouwSound Verity.Registration.Composite.onsite)",
+    "  (hI : I.base.InferenceOnlySound Verity.Registration.Composite.onsite)",
+    "  (hP : I.base.PousSound Verity.Registration.Composite.onsite)",
+    "  (hB : I.base.BandwidthAuditSound Verity.Registration.Composite.onsite)",
+    "  (hN : I.base.NetworkCertifierSound Verity.Registration.Composite.onsite)",
+    "  (hX : I.base.WipeSound Verity.Registration.Composite.onsite) :",
+    "  (I.vocab (I.constructionsAt K₀ Verity.Registration.Composite.onsite reg record recordDigest)).SoundnessAt",
+    "    Verity.Registration.Composite.onsite"
    ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
     "open": [
-     "Verity.Sampled.Instance.RegisteredFiles",
      "Verity.Sampled.Instance.SessionRegistered",
-     "Verity.Sampled.Instance.SessionsReady",
+     "Verity.Vocab.BandwidthAuditSound",
      "Verity.Vocab.InferenceOnlySound",
-     "Verity.Vocab.PouwSound"
+     "Verity.Vocab.NetworkCertifierSound",
+     "Verity.Vocab.PousSound",
+     "Verity.Vocab.PouwSound",
+     "Verity.Vocab.WipeSound"
     ],
     "reads": [
      "FlockSoundness.Assumptions.HmRowComputes",
@@ -23507,23 +23531,33 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "0449cb7de9e91d247bf28244faa3c3b70bb5be79f942509a0f8bb9f410abb08a",
-   "unfolded_hash": "3cfa3d5f294a2b9a5ba8163eecb207954516772919dc4068a5b52b8037438ca1"
+   "type_hash": "c2ac0605baab62715f5b4e6ae0bc681ec9c10b064731802a262a3f21762b4a0d",
+   "unfolded_hash": "fa03f3652b482539bc6772d46f9587692694c4467e0cccb00819d56974e0dedf"
   },
-  "Verity.Sampled.remote_soundness_deployedReady_honest": {
+  "Verity.Sampled.onsite_soundness_deployedReady_honest": {
    "owner": "@soundness",
    "signature": [
-    "Verity.Sampled.remote_soundness_deployedReady_honest :",
-    "  And (Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionsReady",
-    "    (And (Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).RegisteredFiles",
+    "Verity.Sampled.onsite_soundness_deployedReady_honest :",
+    "  And",
+    "    ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionRegistered",
+    "      Verity.Registration.Composite.onsite)",
+    "    (And",
+    "      ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
+    "        Verity.Registration.Composite.onsite)",
     "      (And",
-    "        ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionRegistered",
-    "          Verity.Registration.Composite.remote)",
+    "        ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
+    "          Verity.Registration.Composite.onsite)",
     "        (And",
-    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
-    "            Verity.Registration.Composite.remote)",
-    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
-    "            Verity.Registration.Composite.remote))))"
+    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PousSound",
+    "            Verity.Registration.Composite.onsite)",
+    "          (And",
+    "            ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.BandwidthAuditSound",
+    "              Verity.Registration.Composite.onsite)",
+    "            (And",
+    "              ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.NetworkCertifierSound",
+    "                Verity.Registration.Composite.onsite)",
+    "              ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.WipeSound",
+    "                Verity.Registration.Composite.onsite))))))"
    ],
    "assumptions": [],
    "premises": {
@@ -23545,7 +23579,110 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "bfdc1903af3dd5335e391ff6fe13582e88be0dd4af5196fa861140cf04097804"
+   "type_hash": "e162a9c47a9c44cc9dbf29db7b5fc76a3bb18ed32965b7782168eea79196c4e8"
+  },
+  "Verity.Sampled.onsite_soundness_deployedReady_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.Sampled.onsite_soundness_deployedReady_nontrivial :",
+    "  Not (Verity.Idle.exact.SoundnessFor Verity.Registration.Composite.onsite fun x => True)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
+  },
+  "Verity.Sampled.remote_soundness_deployedReady": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.Sampled.remote_soundness_deployedReady {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]",
+    "  (I : Verity.Sampled.Instance d α) (K₀ : Verity.Sampled.Constructions I.base)",
+    "  (reg : (A : Verity.Sampled.Live) → Option Claims.Msg → A.Reg)",
+    "  (record : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)",
+    "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)",
+    "  (hFP : I.FamiliesPinned Verity.Registration.Composite.remote)",
+    "  (hW : I.base.PouwSound Verity.Registration.Composite.remote)",
+    "  (hI : I.base.InferenceOnlySound Verity.Registration.Composite.remote) :",
+    "  (I.vocab (I.constructionsAt K₀ Verity.Registration.Composite.remote reg record recordDigest)).SoundnessAt",
+    "    Verity.Registration.Composite.remote"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Verity.Sampled.Instance.FamiliesPinned", "Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound"],
+    "reads": [
+     "FlockSoundness.Assumptions.HmRowComputes",
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes",
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "bb7ab73fe0fe52927efd21e8e9e9397b61421786162bf27fab2f655c78d04390",
+   "unfolded_hash": "0c7406ae14b6df8092dfb69b6d2971c4203d81e3487c3f3b759fcbfe162e835f"
+  },
+  "Verity.Sampled.remote_soundness_deployedReady_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.Sampled.remote_soundness_deployedReady_honest :",
+    "  And",
+    "    ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top Verity.Sampled.Instance.Honest.bound).FamiliesPinned",
+    "      Verity.Registration.Composite.remote)",
+    "    (And",
+    "      ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top Verity.Sampled.Instance.Honest.bound).base.PouwSound",
+    "        Verity.Registration.Composite.remote)",
+    "      ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top",
+    "              Verity.Sampled.Instance.Honest.bound).base.InferenceOnlySound",
+    "        Verity.Registration.Composite.remote))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "FlockSoundness.Assumptions.UniformRandomBytes",
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "0aa624a1bc051758438c86b00745ade671745f3d4f639634d8d61fb19cd3a4bc"
   },
   "Verity.Sampled.remote_soundness_deployedReady_nontrivial": {
    "owner": "@soundness",
@@ -25517,16 +25654,12 @@
   },
   "frozen": {
    "Flock.SecurityProofs.EndToEnd": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.EndToEndDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHidden": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.EndToEndHiddenDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge (OuterViewZK) as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
-   "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (no-function): As a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512, and every table's setup avoids the mask slot (FailClosed.DrawSetupZHJ.avoidsMask).",
+   "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (no-function): As a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512, and every table's setup avoids the mask slot (FailClosed.SampleSetupZHJ.avoidsMask).",
    "FlockSoundness.Audit.Partition.audit_exfiltration": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Audit.audit_profile": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
-   "FlockSoundness.Audit.audit_window_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Audit.audit_work_floor": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Audit.audit_work_whole_stratum": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash): Scope now follows from acceptance, but it still takes the table finders' bounds as hypotheses, listed (TableCRZAt under --zk; TableCRAt, and LinkCRAt for the link, without it), and bounds the --zk link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes) and live-verifier custody, both listed: RecordCustodyExec (RecordCustodyExecH at hidden outputs) without --zk, RecordCustodyZKLaw (RecordCustodyZKHLaw, and RecordCustodyZKJLaw, RecordCustodyZKHJLaw at J tables) under --zk.",
@@ -25811,7 +25944,6 @@
    "Flock.SecurityProofs.EndToEndHiddenFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndHiddenDrawnFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredRowsFlat": "frozen (hash,world-unlisted,scope): It takes the table, link and rows finders' collision bounds (TableCRZ, LinkCRZC, RowsCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.TS.CheckedSessionSound": "frozen (no-function,world-unlisted): SessionSoundAt realized at the checked layer (checkedLayer, PouwH1TileZy_v1 with its ok port registered) over every window of fully checked C-Flock sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR), the window's law (WindowLaw) and RowsSession.ServedRegistered as hypotheses, which are not on the premises list, and proves SessionSoundAt's AcceptedLive, ServedChecksHold and ServedRootsLinked (at 0) of the layer.",
    "Accounting.SecurityProofs.TS.HeldSessionSound": "frozen (no-function,world-unlisted): CheckedSessionSound at the held layer (heldLayer: flock-verify --zk --registered with its known-content check, Registered.checkKnownAll), whose relation concludes Accounting.Served.Held of the declared circuit at every drawn unit, not a Lean function; it takes CheckedSessionSound's hypotheses, the registered file's known ok rows each the word 1, and Accounting.Assumptions.TS.OkRealizes (the key program's ok wires carry the declared unit's checks) as hypotheses, which are not on the premises list, and proves the ok rows from the verifier's refusal (FlockC3.RegLevels.knownColl_spec).",
@@ -25970,7 +26102,7 @@
    "Pouw.SecurityProofs.Dither.WorkMoment": "frozen (verdict): as WorkSound, before its Markov step: the per-replica moment over a quantified service verdict, which FleetSound pools.",
    "Pouw.SecurityProofs.OnsiteFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifierSeesImports, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads.",
    "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v and link cost t' + v per run for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
-   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the law the verifier draws under from the registration (lawOf: drawnLaw, deriveLaw over Partition.strata, else flockLaw, and subset 0 where it names none), never a Bernoulli law (the verifier refuses one, OneStage.coveredLaw, notBernoulli_lawOf), which PopMatches puts on its layout's strata (LawOn, lawOn_drawsUnder), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the law the verifier draws under from the registration (lawOf: sampledLaw, deriveLaw over Partition.strata, else flockLaw, and subset 0 where it names none), never a Bernoulli law (the verifier refuses one, OneStage.coveredLaw, notBernoulli_lawOf), which PopMatches puts on its layout's strata (LawOn, lawOn_samplesUnder), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session's files, pinned by SHA-512, parse to a descriptor in scopeOkH whose public input ports parse and whose public file loads over them, and that no two of its ports' published domains are one, PortRoots.dupId, each conjunct as a recorded run evaluated it with the verifier's compiled functions on the two files: three ports, each published domain 64 bytes, no two equal, and dupId true once one port's domain is set to another's; what was evaluated is the files' form, and today's flock-verify verify --zk refuses that session as stored, at setup, since its registered reads name only the port cs and the verifier wants every port), every hypothesis that statement takes of the files holds there (RowsOk, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupId, the draw sizes' divisibility), and its tags are in TagsOkZHJ, the case in which it gives its bound; it reads SampledKSLiveV5Honest (security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary registered circuit (Verity.RegisteredCircuit) with a training class's counted operations, a partition (Verity.Partition) whose units S are the serving blocks and a (c, k)-partition of inference blocks refining it (Verity.Partition.IsCK, Verity.Partition.Refines), and takes the serving blocks' sizes, the per-block caps, the operations' bodies and their overlap, and the uncertified caps as named premises about it (security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed through Verity.SecurityProofs.ServingBlockSum and Verity.SecurityProofs.InferenceCap, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary declaration, its counted operations and partitions under named premises about them, not a function's acceptance; it keeps only the inference cap, the remote case.",
@@ -26079,7 +26211,7 @@
    "Flock.SecurityProofs.UnrelLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released, b its failure budget (Flock.StopCount.UnrelWithin), at every order of the record's ops (Flock.StopCount.opsRun: ZkServer.Record's openSession, finish, stop, release, slot and admit, and the Loop's wait) and every stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), the Lean record's ops with no acceptance of a Lean function to take, so the lock records its text. The deployed opener is Python's ZkServer, so for the deployment it rests on the ZK server's difftests.",
    "Flock.SecurityProofs.UnreleasedLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released (Flock.StopCount.UnreleasedWithin: of any sessions, distinct, each opened on the stream if opened at all), b its failure budget, at every run (Flock.StopCount.run, the model RecStopsOfRun is about), message counts and stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved; InferenceOnlySound's clause is proved of the sent case (Verity.Vocab.inferenceOnlySound); the committed-files link is two missing checks (the case's wires are the committed record's wires, the case's unit is the committed Gamma's unit), so it stays a hypothesis",
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
    "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs with every read sent through the code's own wiring map, SpotFlock.wireMap, returning SpotFlock.returned): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code at the connected program (SpotFlock.connected_bconfX_le_at, connected_offRegX_le_cls_at, connected_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says) and from one fact of that frame, an address at the connected program for each gate a needed unit opens (SpotFlock.AddressesConnected), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
    "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
@@ -26093,7 +26225,13 @@
    "Pouw.SecurityProofs.PearlC.SampledDevRev1K": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1 at every device record and W1 setting it ranges over, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
-   "Flock.SecurityProofs.SpotOneWaitTwo": "frozen (obligation,no-function): oneWaitTwoXAt_of_event at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs with every read sent through the code's own wiring map, SpotFlock.wireMap, returning SpotFlock.returned): the committed form at the boundary trace that an extraction of one wait a session fixes (CompiledTwo.OneWaitTwoXAt: the event, the threshold form and the headline) at the error SpotFlock.εoneWaitAt = 3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256, the two costs at one wait a session, at the most SHA-512 calls a run of the prover makes and the sample's three expected counts, at a statement in scope (CompiledTwo.Scope) and where SHA-512 meets the linear expected-time bound (Claims.ExpectedCR) at the one-wait compiled verifier's B_conf,X and at its two by-class finders at every number of tries they stop at, the scope and the three bounds hypotheses of its own statement, so that its record names them; with the code's facts proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says) and from one fact of that frame, an address at the connected program for each gate a needed unit opens (SpotFlock.AddressesConnected), an open premise; it reads SpotOneWaitTwo (security/Proofs/Flock/SpotFlock/OneWaitTwo.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec."
+   "Flock.SecurityProofs.SpotOneWaitTwo": "frozen (obligation,no-function): oneWaitTwoXAt_of_event at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs with every read sent through the code's own wiring map, SpotFlock.wireMap, returning SpotFlock.returned): the committed form at the boundary trace that an extraction of one wait a session fixes (CompiledTwo.OneWaitTwoXAt: the event, the threshold form and the headline) at the error SpotFlock.εoneWaitAt = 3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256, the two costs at one wait a session, at the most SHA-512 calls a run of the prover makes and the sample's three expected counts, at a statement in scope (CompiledTwo.Scope) and where SHA-512 meets the linear expected-time bound (Claims.ExpectedCR) at the one-wait compiled verifier's B_conf,X and at its two by-class finders at every number of tries they stop at, the scope and the three bounds hypotheses of its own statement, so that its record names them; with the code's facts proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says) and from one fact of that frame, an address at the connected program for each gate a needed unit opens (SpotFlock.AddressesConnected), an open premise; it reads SpotOneWaitTwo (security/Proofs/Flock/SpotFlock/OneWaitTwo.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "FlockSoundness.Audit.audit_executionPhase_split_of_record": "frozen (obligation,no-function): It takes KnowledgeSound and BindSound (security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
+   "Flock.SecurityProofs.EndToEndSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.EndToEndHiddenSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.EndToEndRegisteredSampled": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Flock.SecurityProofs.EndToEndRegisteredSampledFlat": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
+   "Verity.Sampled.onsite_soundness_deployedReady": "frozen (premise): Verity.soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles at onsite), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets, at the deployment's constructions in spotSound_deployedReady); it takes as an open premise the deployment's input SessionRegistered, owed of the compiled check (its openings and registered files are proved at every instance: Instance.opensAt, Instance.registeredFiles), and the base's six other targets at onsite (Verity.Vocab.PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound), until each is proved: the network certifier's stands while its period check reads the answers its evidence states and verifies no proof behind one, and the wipe's while no statement ties the wipe's egress to the network certifier's count"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -26913,25 +27051,7 @@
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.Composed.planZJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.Composed.planZJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Flock.SecurityProofs.EndToEndDrawn": {
-    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.HmRow.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) c I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (FlockSoundness.Discharge.Layout.scopeOk c) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.Composed.planZJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.Composed.planZJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Flock.SecurityProofs.EndToEndHidden": {
-    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.EndToEndHiddenDrawn": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -26958,27 +27078,20 @@
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Flock.SecurityProofs.EndToEndHiddenSampled": {
+    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Flock.SecurityProofs.EndToEndRegistered": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
-    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
-    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.HmOut.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) c I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (FlockSoundness.Discharge.Layout.scopeOkH c) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -26989,6 +27102,31 @@
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH c) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.SecurityProofs.EndToEndRegisteredSampled": {
+    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredSampled reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.SecurityProofs.EndToEndRegisteredSampledFlat": {
+    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmOut.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) c I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (FlockSoundness.Discharge.Layout.scopeOkH c) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.SecurityProofs.EndToEndSampled": {
+    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.HmRow.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) c I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (FlockSoundness.Discharge.Layout.scopeOk c) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.Composed.planZJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.Composed.planZJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.IntegrityBlock": {
     "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -27013,7 +27151,7 @@
     "∀ (t : Nat), instLTNat.lt t T → Real.instLE.le (instHDiv.hDiv (Real.log (instHDiv.hDiv 1 δ)) q) (W t).K₀.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.PublicAudit": {
-    "∀ (R : Reg) (ω : (Flock.Guarantees.drawLaw draw).Ω) (t : List (Prod Cm (Flock.Guarantees.innerAt T CT st).Coin)) (R₂ : Reg₂) (j : Fin (Flock.Guarantees.outerStatementsAt st)) (S₀ : Finset (Fin (Vs j).nv)) (d₀ : Lean.Json) (y₀ : FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) (S' : Finset (Fin (Vs j).nv)) (R' : Reg') (i : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ (zr R ω t R₂ j).dj y₀ S' R').length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ (zr R ω t R₂ j).dj y₀ S' R') i k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (R : Reg) (ω : (Flock.Guarantees.sampleLaw draw).Ω) (t : List (Prod Cm (Flock.Guarantees.innerAt T CT st).Coin)) (R₂ : Reg₂) (j : Fin (Flock.Guarantees.outerStatementsAt st)) (S₀ : Finset (Fin (Vs j).nv)) (d₀ : Lean.Json) (y₀ : FlockSoundness.Discharge.ZkHidden.SampleSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ (zr R ω t R₂ j).I 0) (Vs j).mPts S₀ d₀) (S' : Finset (Fin (Vs j).nv)) (R' : Reg') (i : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ (zr R ω t R₂ j).dj y₀ S' R').length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ (zr R ω t R₂ j).dj y₀ S' R') i k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.RanRegisteredRun": {
     "com.Opens rt p op₀": "com.Opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27049,11 +27187,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateM1 k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV2": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27062,11 +27200,11 @@
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Bridge.PortRoots.rootsColl D.unroll pub n) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV3": {
     "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27082,10 +27220,10 @@
     "Eq (Flock.HmIn.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll pi I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.designAt desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.PortRoots.dupId D.unroll pub) Bool.false": "an equation, the grandfathered premise `Flock.Registered.dupName D.unroll = none` restated as `Flock.PortRoots.dupId D.unroll pub = false` so the Bridge's domOf is the published frame-v3 domain, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -27108,7 +27246,7 @@
     "∀ (B : Finset (Fin n)), instLENat.le (K B).card (B.sum fun u => hb u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "ENNReal.instPartialOrder.lt (Verity.Law.miss L (instHAdd.hAdd k 1)) δ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "FlockSoundness.Audit.audit_window_split_of_record": {
+   "FlockSoundness.Audit.audit_executionPhase_split_of_record": {
     "instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Fin m), instLTNat.lt 0 (w s) → Eq (FlockSoundness.Audit.Law.callWork σ call w (call s)) (instHMul.hMul (w s) (FlockSoundness.Audit.Law.stratum σ s).card)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ v)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -27232,9 +27370,9 @@
     "∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets d P δ) F → instLENat.le (NetTiming.faultyBits C P F) β": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
-    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le n (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "instLENat.le n (instHMul.hMul m (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (I.wireRun z n)) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase": {
     "instLENat.le (instHMul.hMul (instHAdd.hAdd e₀ m) (instHMul.hMul g T)) (instHMul.hMul E (instHMul.hMul g T))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -28364,7 +28502,7 @@
    }
   },
   "CoreProtocol.Profile": {
-   "digest": "27371a89f29dc28daecd5f9fb88c412249902cc73354da68f1c3b2b4b08680bc",
+   "digest": "dd14fbc25db3d8fcb5be0f3317bf0cd88b55a5774a23edf8468d73000c3c86d5",
    "definitions": {
     "Core.Integrity": "0727c826facf67aa78ecef833adbd25166324156b8e2d0db0d05dfa5438a3368",
     "Core.Integrity.covered": "a5d4700669f875b25a94758663ff6f6f58d01700b24d752cc197e3a0b55c4e49",
@@ -28402,7 +28540,7 @@
     "Core.WorkStratum": "dae104fd83ddd63ad379c61c0396c714e88d8a13be3c1ccc29385ddb21c33abf",
     "Core.WorkStratum.casesOn": "d5c54316f9c27fce194a3f7ef09c2c594f122f4e8c7b8913703567c24a684830",
     "Core.WorkStratum.floor": "9e7fe8c23fcebf4823677e5ba2bd8af77efc6869da767ac1b56e97a6ad242c3a",
-    "Core.WorkStratum.problem": "45fa4f907718df77e4a732e8cf0cf5b93c7730862a2b5d6da48b4970b6ab9758",
+    "Core.WorkStratum.problem": "ff2fa80023915a61a74922d327a2b6eaaf52be79b5b951a32195264dcdb0b907",
     "Core.WorkStratum.rec": "b0683fb7b383825b607d505823872bb699ba326c2a6f1efd539023db76ccac6f",
     "Core.WorkStratum.toStratum": "b1505ce6ed995248f0c91e69d23d22e50fb501cb39e41c39131beed53c056cdb",
     "Core.WorkStratum.total": "5827837cce2bc97d49fc3a5c957ea093d714423aebec06876fca4eb2ab0e4aff",
@@ -51405,12 +51543,12 @@
    }
   },
   "Proofs.Flock.Soundness.Audit.Window": {
-   "digest": "693fb3da4a6b304c9eb272312580a2e0d762203f6a6cd280504b088a2c81c2ab",
+   "digest": "a3dce255ea2a4d64b3c3185366bab7de727df126c374aeefff7016c754e9fd06",
    "definitions": {
     "FlockSoundness.Audit.Law.callK": "8671f5eb3a6edd693d25456e4a7d6001a12f2187bc6a091ba1ee0ca80e91e8b8",
     "FlockSoundness.Audit.Law.callUnits": "b34a2a8fe8e026de957966b5ebe14dedf05c25d8a07f55bc4739b5e9e332487f",
     "FlockSoundness.Audit.Law.callWork": "63fe3beb07ce66471bc7dfd36a4e0408cfbbf3d18ac3dfc803bfef807b1ecd59",
-    "FlockSoundness.Audit.Law.windowK": "5367cefae30ea4a48794607c1d01941738879d891a99e2911104e937f3406d8c"
+    "FlockSoundness.Audit.Law.executionPhaseK": "99a74f83483723ef21eb8aa2e037660505f1c78b0381ab9ce14d1e4ba263e31e"
    }
   },
   "Proofs.Flock.Soundness.Audit.Work": {
@@ -55268,18 +55406,20 @@
    }
   },
   "Proofs.Properties.Verity.Sampled.Instance": {
-   "digest": "49f462c2f13d3421637d9f4b27e105b606308538cbaaeb5422bd6bfe1aebf6d0",
+   "digest": "e64450be4e74c87bdc029911789f47110412f7819de415788af154b1965f5d18",
    "definitions": {
     "Verity.Sampled.CostsRead": "88a00c16759b1918ca0772bac9a5dd223325c51cafa2be1559ec84b092959008",
     "Verity.Sampled.Instance": "8ad3e70b432e3c7a9c9b16a61885110698618538bacf0a0b42ae94bd46af6d17",
     "Verity.Sampled.Instance.Honest.base": "c2de755deb3afd6ca29e7c8ee347a7eecc4e3150c172f1f77a8c029e082e9c73",
     "Verity.Sampled.Instance.Honest.blocks": "815aa59235b3b6517d3253eeed56204736111f5c367c8079aab40013b5eec2b4",
-    "Verity.Sampled.Instance.Honest.cost": "098b7644484f25f81d1e8cdd4cfa0acad03a1578b0120da124a8c2fd35a266d4",
+    "Verity.Sampled.Instance.Honest.bound": "c4b750e0eb3d66da75537358920744f2faf615fe8d810f1990575c1adb969c3f",
+    "Verity.Sampled.Instance.Honest.cost": "97575b232525ded611288f62dda35d56777bc823c5bafbb910ac34e0cb15663b",
     "Verity.Sampled.Instance.Honest.deployment": "4a68bcb66adf1d945e3b0d9b0317a1eda26d0f1dc6992a4f1e0ec4630f925462",
-    "Verity.Sampled.Instance.Honest.dev": "625571b86f01f8f1208a40e1bd2b343b5bec68468bc582dae39584898e692e01",
+    "Verity.Sampled.Instance.Honest.dev": "0f1ac4bc3e88d4a00d3e4656d686761b536a75ab2df387012e4866f68d0f62c2",
+    "Verity.Sampled.Instance.Honest.families": "70903dd79e01ec258bb32db0f030887e138aefbb27a0192bb8ea5b0320911b2e",
     "Verity.Sampled.Instance.Honest.inst": "7e1340b275a5b2622e7befa826d223e79a1af6a508e879f8ae4fd9f38c5c24af",
     "Verity.Sampled.Instance.Honest.ofRun": "f403a01597a12225609cd04af343fc807a2e696d41892ba5089b0ec1ab2110ba",
-    "Verity.Sampled.Instance.Honest.signer": "a04ab1d9dc2055c3061f8c567df337efbbf8d803f9c26cda6d41b4bbac5ca126",
+    "Verity.Sampled.Instance.Honest.signer": "12745b470ef065087e8b06aad4ddda2d90c627d9b48dae0a7248a1a862bddd51",
     "Verity.Sampled.Instance.Honest.wipe": "7dc691bf89333c91c5272e46a628bad4d31109081127fd6e563d9c0de9f87135",
     "Verity.Sampled.Instance.RegisteredFiles": "6e3f3469b8d5d3150411147b749836083db3fa2982bc9ca5e3ef7421df2b957e",
     "Verity.Sampled.Instance.base": "ac974dab0d7c9ca5b25d61ed06d43e50c059f3e274540ed0b781004eeb67dcc3",
@@ -55304,10 +55444,22 @@
     "Verity.Sampled.Instance.recordSpec": "ad13b5974231be64cd1531ffc85fa71d3b2bf416f49a020d1a20e6aeb558b872",
     "Verity.Sampled.Instance.sampledBound": "148bdd0335b724d94d8b1e564c213caa692801120fffcd3c5410d67fdfca3dae",
     "Verity.Sampled.Instance.session": "a588a45fc6d159b8d8e182dfe56e04cb0332ca1aa2e0037628e1daebf54549c0",
-    "Verity.Sampled.Instance.sessions": "4e6f9fbc3deb0816eccf0f99075b025d368bca16d6a5c054de734555a9a430a0",
+    "Verity.Sampled.Instance.sessions": "35bec13a27294d196b751ce704cbea1374757629593a300acac7cdbdb4638942",
     "Verity.Sampled.Instance.stage": "f7753732a89563ecbceb47050d9d28407190abe7b659653df989b72098aece81",
     "Verity.Sampled.Instance.strictSpecs": "9f1bf541ff4e5b3d5d1abc0d41697b9f0f5d8dae176490bba02020eeaf719aeb",
-    "Verity.Sampled.Instance.vocab": "b991f8afd147c32b8c1ee011cbfd6ae824f8d2df340998d71f0ffbff8c1c9bdc"
+    "Verity.Sampled.Instance.vocab": "b991f8afd147c32b8c1ee011cbfd6ae824f8d2df340998d71f0ffbff8c1c9bdc",
+    "Verity.Sampled.Live.OpensReady": "be5f1d8688ddfa7f76edcef80fe7abc7f1487a7c3c62c2eb1b82099e64f39e34",
+    "Verity.Sampled.LiveSpec": "ae3cec87557f6ce85d696f2620424b3767314873249fb23161a5d1bcb4211949",
+    "Verity.Sampled.SessionBound": "e655accd8b6b868ca5d8c5ca59fda0984217b8753ed2b06ca4f7b6d4a1387ceb",
+    "Verity.Sampled.SessionBound.M": "693027e699bb180a222474baa86a66d0d7bf68dbbea4e4783514c81d3208a9b4",
+    "Verity.Sampled.SessionBound.Rw": "90a304ebadddab5ed95c2e6a72bd4ef108b2aac5602a50c2dbccf904755914c0",
+    "Verity.Sampled.SessionBound.h": "9d05bb326fa26572d9c3961bf71e25941f0180d2a979e213202366710c9f1776",
+    "Verity.Sampled.SessionBound.k": "52856e02a369bda5f5759be4ffe44d2d12c6752652580a8bd5c59caa1b2de403",
+    "Verity.Sampled.SessionBound.v": "c540dc801b91eb9e605b73f6bdcbc99680f6b8aeb9586b1fe7c1cbac53c19b7a",
+    "Verity.Sampled.SessionBound.w": "3bb2ef0b1c5d41293db16985a50e111ba7c439f8b6336ca3f5aecf9995c76bef",
+    "Verity.Sampled.SessionBound.ρ": "5703d8486559a965fa0e0640e1e3f02f910e3130a2ca087fd8786755fd457af0",
+    "Verity.Sampled.liveOf": "ddc2b58fa96c100393cb82135e346f04c975c181d4c06af28302a7ba064f5b44",
+    "Verity.Sampled.registeredFrom": "f8830b4d074031b2a7d386ad8b4fa2537a3845abb46339e61bcec859b679886f"
    }
   },
   "Proofs.Properties.Verity.Sampled.Layout": {
@@ -55379,13 +55531,6 @@
     "Verity.Sampled.sessionRecord": "11c10bc9a12793eeb8687e1205b8055cdb3d02891df38be82bbc482630d11147"
    }
   },
-  "Proofs.Properties.Verity.Sampled.OpensAt": {
-   "digest": "1d9370cb407a1f67faa210e313365def99c098c08dff7820de469ed8e69591f7",
-   "definitions": {
-    "Verity.Sampled.Instance.SessionsReady": "b3c68dd91b99363dd6daa4b0f4778d150f32fe80fb2820969ce9c4ebdee6a386",
-    "Verity.Sampled.Live.OpensReady": "be5f1d8688ddfa7f76edcef80fe7abc7f1487a7c3c62c2eb1b82099e64f39e34"
-   }
-  },
   "Proofs.Properties.Verity.Sampled.Place": {
    "digest": "f27f430496e65b493fd9ca030519b9cc97f1be4cbd81831b02cefc8049858301",
    "definitions": {
@@ -55438,9 +55583,9 @@
    }
   },
   "Proofs.Properties.Verity.Sampled.SessionAt": {
-   "digest": "7f754d42a3a3cbb9a42042288a8e7e5fd86d6e4cfe0dd0d990509725105555d7",
+   "digest": "e779c22743a1b9466019a47971d32e0190bec88503d7cd91a71e75aec173f0f7",
    "definitions": {
-    "Verity.Sampled.Instance.SessionRegistered": "3b1413ac284ced301f7340233cdaa993a041033fc9a9246fb2a948b6c6e3f42a"
+    "Verity.Sampled.Instance.FamiliesPinned": "a458004855d46bcec4dc39b3655ab987c6fa70d2edc08e1cc3c1fcec8541d602"
    }
   },
   "Proofs.Properties.Verity.Sampled.Walk": {
@@ -55692,7 +55837,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "512f3a64fbe9d5457cd6649f8d14f729cca2a11a2399b66864f44d1836b9387f",
+   "digest": "b97397b0e640dcf544f981be4348977b769f043cfd618c4c20f5e690bebcc8f4",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -55783,10 +55928,13 @@
     "Verity.TreeSample": "79fa9c5673525eabcdd4c63f045415fa5d2fac82689029540788fd77f64e3d71",
     "Verity.TreeSpecOk": "666190d9707826c4245f369aa14ce49eaef4fc1789e996351240e99eddde8012",
     "Verity.Vocab": "8ae4f9616eeaa93077fc7a5ec2d3b3d665d394c095b5b1382b2f980477d2c414",
+    "Verity.Vocab.BandwidthAuditSound": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
     "Verity.Vocab.FinderCR": "edaced35a3cbb1f7a3749d5c50cb3ad2a2e14f7ef6d00c633e9cbb3520429084",
     "Verity.Vocab.Holds": "d19cc2ea900bbe7c9e9ae6a100eb15a462a061a6602ded49f068da022b12ea11",
     "Verity.Vocab.InferenceOnlySound": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
+    "Verity.Vocab.NetworkCertifierSound": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
     "Verity.Vocab.Opens": "8526d6657e426bccd1da2e1e786bd16e6905af5c408317889e73208f36602add",
+    "Verity.Vocab.PousSound": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69",
     "Verity.Vocab.PouwSound": "11518fbb13cc95c1ccc10d6ab73a3ab8f341a919046c499e18f757de475d1670",
     "Verity.Vocab.Registered": "42e334619ebedd0e57f2d5b946fb9ccea7e5cf4e058a0655bb0da2595204c6b0",
     "Verity.Vocab.Seed": "87cb71e0dbf5275e616de94b6b18e60e7b8952f5ee45113524f62bb7854a548a",
@@ -55796,6 +55944,7 @@
     "Verity.Vocab.Target": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd",
     "Verity.Vocab.Unforgeable": "829ba2c9edcb766d0b28e4e8c71be2ddf0a521e01f0d3db5590f46042d2731f2",
     "Verity.Vocab.Verdict": "f92a5af0f0cede11a4233bb6da19cb08c8025c0efc96a23b5bea5e2918282b7d",
+    "Verity.Vocab.WipeSound": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937",
     "Verity.Vocab.boundary": "ede9686d000272302edfa59afc882be6cb035df3405fb2556f74cd41a8736431",
     "Verity.Vocab.callsAdd": "c3e8585bb7b914dcf7586f19146d8ce381e663b69f85f9bc13f55b64d8178d6c",
     "Verity.Vocab.callsMul": "626d7b3ea455cda365e793440bc647beb9738b751f8838aac23a229b96f0a26e",
@@ -56715,7 +56864,7 @@
    }
   },
   "Spot.ChallengerSession": {
-   "digest": "7975b3d99311c6a4a7c58e1b5ae6ab6c6aefc9a07ae163dbb33b360e42d0cd99",
+   "digest": "37e7e9e7ab8ccc8b5863f67a65550dc0b14feb68e69fe22e89e03f3a87fc8bf9",
    "definitions": {
     "Spot.Challenger.Audited": "67907e70e13df8e0a71d4816b64126a9e02156a2a7f4c1774e923ffbcb2780de",
     "Spot.Challenger.Audited.circuit": "a73b3aad92abf4ba22c25228c2c6b5e86d2861b68fec367d0b459573c172b2c4",
@@ -56727,8 +56876,9 @@
     "Spot.Challenger.Audited.recordLeaf": "4fb23bbaa7c23a44c0b11886116d9e8810204bc3464f3e27e06493d3626100f3",
     "Spot.Challenger.Audited.refusedHellos": "20f0945aa4208178d9e1e5d250acf0cb511dd7c273cb85b37f40d982590477e7",
     "Spot.Challenger.Audited.session": "93767b21aab806676b870651d843a90a55c1c4b0f5f2df983abda085da629033",
+    "Spot.Challenger.CHALLENGE_PHASE_FORM": "d1268277aeafbbb974a502971d48e293c7358ff6d7bc2ea46eacc2a6b83e4fab",
     "Spot.Challenger.CLOSE_FILE": "fadc9ba9e35218af1e0f6667a72de9b061e31718bf22da9001f1d110e8dfb388",
-    "Spot.Challenger.CLOSE_FORM": "ccd462d7e73e698ea2e41534a4bd4ac4ea103920eb080220369a8d80479d4f9d",
+    "Spot.Challenger.CLOSE_FORM": "1a2bf334e17095d5e166e55a5c1b3d6768a2a41c8e34fa8a0b6c519ea59c4a2d",
     "Spot.Challenger.CLOSE_ROLE": "f6d4e2cd13a3c7667f8f086d76905c1107e030395ca5484b5e4abbdd3f5d7ad8",
     "Spot.Challenger.ChallengerClose": "fb78752d934123ae1e7c74e864bd4ce6cddfab1251e4a9ca02bf296747b4c1cb",
     "Spot.Challenger.ChallengerClose.chain": "0e0facfb789d0f4bf759db400547845652b15c2b31419a5d51f94c908f7a2eb6",
@@ -56761,11 +56911,11 @@
     "Spot.Challenger.LedgerEntry.text": "9aae972af729f04f943642dfde0f03673ee93dfb1aefafe5cb97af2ef7b7d103",
     "Spot.Challenger.MAIN_FORM": "669871bfa92bc7d29c6e51d6cacb1ba9b7de7daba7e5907bf7d7cb69cc916bbe",
     "Spot.Challenger.MAX_CAP": "87e760415eafc4614078d8102b2641d8fe7ec955843c1982ca4b6562b355a5df",
+    "Spot.Challenger.MAX_CHALLENGE_PHASE_ID": "bbf5bb7cc6d7388036f49b214753fa64873b0cb1af073ab02c8d234d704e20fc",
     "Spot.Challenger.MAX_LEDGER_LINE": "c2f9e56ba524e5b70225cd8d4e11ea0af3c841a2ed2850be2a0a8965878037e6",
     "Spot.Challenger.MAX_LOG_LINE": "0108696237df272e9eb4892813a3f67a43899e875a8febbc809c55c49494a0a3",
     "Spot.Challenger.MAX_LOG_LINES": "c54db0c2bc9ef2e3821ba144853fab4feddb5b352ed550dbd7c4898899265c2d",
     "Spot.Challenger.MAX_MINUTES": "5e149430ce56cbded7ed79cb7ff5fd85d1c73c3ab7448edf099834dce4828ffb",
-    "Spot.Challenger.MAX_SESSION_ID": "270c602d143d4abe89df9f8b88e7c41ebb9432464391bc0414210ff6cedc8c89",
     "Spot.Challenger.MAX_TREE_LINES": "185b46461690cd2f43d966d9f02eca5b2979c0a94ae9ff2a293dbecabfc8e22c",
     "Spot.Challenger.MonitoringPeriod": "f798e136eb0fc56245acdcc5fd0674a0ca2cb49d256de03d1e6882f03d65d1eb",
     "Spot.Challenger.MonitoringPeriod.cap": "cbc30aa90e9841952a38b28268ae8acdda6c152e296db4c3e6c740f0c1764110",
@@ -56782,15 +56932,14 @@
     "Spot.Challenger.PINS_FORM": "44e7b3943a1ccd4bc91767de1df72e5662da9f14c4dbfaa1b7e9d81497dccdd9",
     "Spot.Challenger.RECORD_FILE": "d3bf257d0794bc215126831407febe3188283735bff362dd185769d41e3b735c",
     "Spot.Challenger.RESERVED": "e567916873339eb2563aef78daf00322326f23016b2e0aa8034dc413c9f2b75b",
+    "Spot.Challenger.RUN_FORM": "82492004ec49998ce6d4d3b620b65706f91208efcb2111e3cda7343e0f3dc0fe",
     "Spot.Challenger.Reserve": "6914f46ca08972dd7b58136857940fa36d349234eedf35372e1c55a0674f49d7",
     "Spot.Challenger.Reserve.entry": "ef9f9de438e22bd738652221f459127f77bd6a046d598400de41bbc18c5b2cbe",
     "Spot.Challenger.Reserve.period": "84f98d0b49e29f8e0b119b446d94a9cc421ee9bad39088a8a8562467594459b5",
     "Spot.Challenger.Reserve.session": "34bf7b29136ff48041c7ebf346248a3be6ead2b2e52a9a26b9109f6b80b7481d",
     "Spot.Challenger.Roots": "9dbc5c9e1d2e56491d759432cd69c78885beb8d7e139c99443b4bb083f5ba709",
     "Spot.Challenger.SEALED_FILES": "6c74f43da2c17c6705afda2e0f77d91a42409ad74c9d1163dbb6b1db95237bb9",
-    "Spot.Challenger.SESSION_FORM": "74fa6cb14b8e8635aa240a7efa9e6dbcba8b9a5c442f801be9f126f541c16abd",
     "Spot.Challenger.TREE_EVENT": "1f1ab52dd34825e61439beb71b2fbf3e81d6f8d30247c658cb4471492f77e96c",
-    "Spot.Challenger.WINDOW_FORM": "abd973a27b4dfbc8dc013fe6a27f2dd15c742c7e1d4f0de65c7750dfed55c19a",
     "Spot.Challenger.Win": "c9c9af174c2ed79fe5ec5ce02ec43fdf0e93a0047959ff0fd65455d01c85d455",
     "Spot.Challenger.Win.ended": "abfb2a2086f4c717ea9c96f73eb6aa6064a2a18f9048d1da93e10f8d382b7877",
     "Spot.Challenger.Win.leaf": "970d3ddae2c569a36fbd74fabb74795d92380740919b88f0a4f968ecc402a627",
@@ -56798,8 +56947,8 @@
     "Spot.Challenger.Win.root": "addbbb4bfd24443201b29060198f2e1765a9ec47a710d514f14fd173b0f2da28",
     "Spot.Challenger.ZERO": "485851f6467b12f818f58c0905c5c43e6d826f93a1de28d925a827df6b163520",
     "Spot.Challenger.auditedChallengePhase": "ac4fe8585ce40943430f47a9a6c860db8b225eede392293563276a8dc8b6f6f5",
-    "Spot.Challenger.auditedOpen": "bd50bb1cceeee11640f9da3fa14e2fcc04c97307389954a8c2abf26f5b84f666",
-    "Spot.Challenger.challengePhaseNamed": "e336391255434cf900f1d9836d4e01d1f14776b15008df55e86c788a20756a63",
+    "Spot.Challenger.auditedOpen": "62d0296e8238322c3c4a731b444db3588f7bdaa15235ad384fa4fa4719ce15e2",
+    "Spot.Challenger.challengePhaseNamed": "7d38a7451bfe8401f93cc50c5d2080c56152c3a0501d30600d3bbc4e211c687f",
     "Spot.Challenger.challengePhaseOf": "fd02b4cf7c63a9889d826ec7227e2741c40f29448137bb604e659f9af76963e5",
     "Spot.Challenger.checked": "76dffab1db23eba9017d9d0727f22dc10991eb813d292c4b19331db47cacbda5",
     "Spot.Challenger.circuitReason": "4f82835da0c27d15b5754ed206ab67f2969cce5f3dd45efa4df2a3f06f39b73e",
@@ -56815,7 +56964,7 @@
     "Spot.Challenger.instInhabitedWin": "5593ebe3962d28afa39aea62016a41eabe7256039587c74867475614a5102bfb",
     "Spot.Challenger.instInhabitedWin.default": "cf115455d56db64c89d867ab37a4a08b61120a5c879e243ea0ce1501b54f4ea2",
     "Spot.Challenger.isCap": "2d90e69f6440dbb97cc83b311119bfe95b530298922b09786f80b31845c16e6b",
-    "Spot.Challenger.isChallengePhaseId": "d0b097c427815fac69450a06c176b23cb4bdc669493198c770b39344e4db9e6f",
+    "Spot.Challenger.isChallengePhaseId": "ef24324ed0bc772f8fc96ca110d1e0c804db54008aca85aca0958a7e08babb4b",
     "Spot.Challenger.isCircuit": "9369c9f74a6c09ffd0def438d49f86f3cb067e4324cfdec1efc96b4e3974a7e4",
     "Spot.Challenger.isReservedChallengePhase": "17e1c48208a0d2dc1c39c812a9f2d6aadfed9691d015b9d73c66c088e6c6179c",
     "Spot.Challenger.isRun": "55e56df3490874006f573125e4f80677fb81a7ac869e9730ae3dfe0536da1084",
@@ -56860,7 +57009,7 @@
    }
   },
   "Spot.ChallengerTrees": {
-   "digest": "e0da42286b8446b508cd151fefc9fa3f9d9f19734097beb589a90736066e5a9f",
+   "digest": "4877dde7b698302b9c700af04a9098e86046f28ea896d27405804dd21c3ec0cf",
    "definitions": {
     "Spot.Challenger.CLOSING_ROUND": "d5b52ed5bbc911171fcde44965fc16d98f0e7745a9c511556b7187fea8a147f4",
     "Spot.Challenger.EXTRA_OPENING": "cd951e71f0cc22850ce69d91662de65f1c56936351b021115fff7c346dec9c71",
@@ -56912,7 +57061,7 @@
     "Spot.Challenger.sessionsTreeReason": "f319a9a42207e67aae111ca28870607ca334507a4cc66f4deb0a5ae15b9758d8",
     "Spot.Challenger.trustedTreesOf": "69d53917ce8d13034917312e90c37052c027c09aa148648b8ae2106b50dac970",
     "_private.Spot.ChallengerTrees.0.Spot.Challenger.isHexN": "f64395dae2b481481fb338d4f8730ddd551baf681a0dcfa566c41739153688ac",
-    "_private.Spot.ChallengerTrees.0.Spot.Challenger.isStream": "4173134f039b1afdc50502fed6068247db4344d6e99eab9e80f1584aed226a5d",
+    "_private.Spot.ChallengerTrees.0.Spot.Challenger.isStream": "309cd9c208507fa8b7d8e9821458813e988cea258fb66dcca1b3b228d442a179",
     "_private.Spot.ChallengerTrees.0.Spot.Challenger.strOf": "6c2dd601d7dcb3185d6862f2b82b3af5eeb7c3bb18898c1406d237da45453011"
    }
   },
@@ -57072,7 +57221,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "165d9c3bac5547fa37a4e32af73e259b3c1c397c74208650830a890e7d6dfa27",
+   "digest": "529eb2d5cecdbcafa9b621dd3d4ef9d95aade846b5748bef4531e626fd17041b",
    "definitions": {
     "Spot.OneStage.CERTIFIED_KEYS": "cc810f37104e3a01d4fcab1fce134737d2b7eaadde17439a09739aea9311e1e9",
     "Spot.OneStage.CERTIFIED_REFUSED": "6cb4793ad6550fdba552a3bc8e2f987b307b478a12d504d43e591530a619e303",
@@ -57091,7 +57240,7 @@
     "Spot.OneStage.Evidence.statement": "74b356c3f76171f9868dfa576a844a538f3f08c4410ac30345904616d6f97698",
     "Spot.OneStage.Evidence.verdicts": "81db97c8dd0262866fef18d1ee034915508f7e88883ed12ac90f627fc981eb32",
     "Spot.OneStage.PARAM_KEYS": "67fa7abb3b14fe0b31c7e59f31acd29a0329e4469f074e74c76ae7e8529b0793",
-    "Spot.OneStage.Params": "c7e59a1216107d2421365fa4fae992643407964b83359a62a6311a4d48b14313",
+    "Spot.OneStage.Params": "b95560f804862565274a5b4ae974e9642b0d4c4d478f030a2d66559149cd7ec8",
     "Spot.OneStage.Params.challenger": "598ee235786a0a3a9fa87465206478af0fe014791b74ae86ab3dd2f899a7095c",
     "Spot.OneStage.Params.delta": "d550f45ad0ba012c2bc8c7a0467b8c402089f9c49e78b913427cf382710b2de8",
     "Spot.OneStage.Params.verifier": "680df793464a25574c508c8be9441d42dc65883c3c4b93ed60db17fac4535c69",
@@ -57130,7 +57279,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "c815dc24b6733d7844a472806e8e9edd1fd2e6180034b8d2f4b84dc0f57e145c",
+   "digest": "a08e0a86a6bf4ea65297635e17bd35117f1dcde29aff37bb8eb4e0c63e58e95e",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
@@ -57160,6 +57309,7 @@
     "Spot.OneStageZk.Member.slice": "2a3c790d5a655d8876ca9a414792460781acb34bfcecb4e73922cac83cb1cbdb",
     "Spot.OneStageZk.Member.statement": "4392042dfb712c3a9a74235891962cb58c51e65d4b664c2dd49c1e79718a6f3a",
     "Spot.OneStageZk.Member.units": "dd005d06e519bda7d52b15749294ce030cd25dafbc83f4b5787d56fb77384d8d",
+    "Spot.OneStageZk.NOT_ONE_MEMBER": "fa3a42b41a04b1ffbd9718efe633a88ba4e9c19afdc7450e46207d67ee8fd5a5",
     "Spot.OneStageZk.NO_CHALLENGER": "e162a96e930d08f9754dac695c52dafc52cfd3daf4b4792302f54b06244b1df8",
     "Spot.OneStageZk.NO_ROW_WHY": "bdb3c1dcd200ed424ffe254184c9b7cfd1e66da41f66c6808dfba2643fd103e6",
     "Spot.OneStageZk.NO_TABLES": "89a604bf3f3fab6ba56c515638fc1c6011ccaeb7feeab9bfa86e992a1c058ad0",
@@ -57223,6 +57373,7 @@
     "Spot.OneStageZk.classTwo": "cb9cce8f01cfbc699e1c82e8f47c64e05009271f397de991ce0e0290ac1a3268",
     "Spot.OneStageZk.coinKeyOf": "75d567137e40c17596f9dfb67bf48fe264148fefb140d156a9813bd3ce77c27e",
     "Spot.OneStageZk.coinsOf": "88cf42ea035ecf852e33f3506fa92ac5e737865c6a3767290bba9686cd56f656",
+    "Spot.OneStageZk.commonMember": "e3b2acefb98b4d0e61f722e8142f4207da0697c0aebec93daa90af76918ecf05",
     "Spot.OneStageZk.deployedKey": "202c89dd7909f7870179e8b48ec9f5ee421a7d536afd94c9ad007da6788b3615",
     "Spot.OneStageZk.drawFitsWhy": "0601f5e7ed692426e12be62da22f53b5e8581916dc0151a6b461f8f473048817",
     "Spot.OneStageZk.evidenceBytes": "ee22e17150755c25c7db5daa18c38317350755b1577ac10bdf8eb52f89edca2a",
@@ -57255,8 +57406,9 @@
     "Spot.OneStageZk.proofsOf": "d3d287adf010a8bdafb5ce8c84499ba5131815bfc3668e27387360071c33eaf9",
     "Spot.OneStageZk.provedHeld": "f4a6fef08d959aabe27fa2769e3b8dac75f7fa4b8f0c66b835c33f38fb36df9a",
     "Spot.OneStageZk.provedUnits": "03307c2d6b665cda9871cd823a6c4f28a122ca6e10e6085528c12986c789a939",
-    "Spot.OneStageZk.publicHeld": "bd875a81f27bc151c3cabcb637e12d9b90790cb4c209b897969ff3e394d3e06b",
-    "Spot.OneStageZk.push": "e3aed49debeea6d9d2dedb73a8d0a1a7234e21214946ccf61f557bd3d24ab34f",
+    "Spot.OneStageZk.publicHeld": "54737c753b0d30d8f1fd0aa31daa18127a4fc01a464649ad775a3f234cc58a78",
+    "Spot.OneStageZk.publicPorts": "79739e797603d619c85ffad05ca3765d9d9dbf3d46aea8d26606b12761da7026",
+    "Spot.OneStageZk.push": "4a5d257d303daf1313a70fa2ca7e4f3d481cbcd3f12fd9c5d6c38550cca75dba",
     "Spot.OneStageZk.readsOf": "c9bb76d08b011e4961a1df2aa8c7c4d53771e0967c6fbf9add4a30b102294b95",
     "Spot.OneStageZk.readsRegistered": "4aaef956c03d73417875972b6a59378569bd404b5653c71508966b837e1a3bfa",
     "Spot.OneStageZk.recChecks": "7a336f48ad224a2be2e84bf6f9a03e1d5aeadf919bf05578aff7bfbf909f4453",
@@ -57375,7 +57527,7 @@
    }
   },
   "Spot.Record": {
-   "digest": "e505b6487c5a5820049de70e073c240bb6b44204ecf0dcc8695cc349ac6f682b",
+   "digest": "7f80d5bf56c2cd48a0d64c39e5dd644e2c841c99dab2355c63744fca63aba291",
    "definitions": {
     "Spot.Record.LEVEL": "543751b14b271912e0fe9a6f2605542d4a14d342e5c2194177433aed58d48227",
     "Spot.Record.allRan": "0bf32581414fd8f94a209b656c4c2c35fd2208a80af73d07a40b44b8d24b8d10",
@@ -57383,7 +57535,8 @@
     "Spot.Record.certifiedCheck": "a115ebd7643f1f3f4542a998d247f5d5995cf9a55211b52859260464ba2ad301",
     "Spot.Record.checks": "b42822058c307232f68e6a3813318013a1b12903ff6d670d422b0d90014c0282",
     "Spot.Record.lessOwnReads": "ea085bdf365ba55b29e27544378953f1fda747915dbcfb96e2ab00659935cd51",
-    "Spot.Record.matchesPublic": "5de1bd56b8d6a840f9a559c86835a74cb4da804de8d82f1b7a6ca7f5be3fa505",
+    "Spot.Record.matchesPublic": "1643e079f9ea7c3fd55f2c247b0cb138b0c8f7594e0888b87781c29728a67b30",
+    "Spot.Record.matchesPublicBy": "3aca7a4ccaa709691501538f4a95e94deaf29c0e89705ac737115ab0bd5a23e5",
     "Spot.Record.ownRegistered": "c03c7e82007dc6ab74231e65106159ac61cb6b9298b162f53c8660713912aade",
     "Spot.Record.profileDraw": "f7a6fc1ab1e8055e2a1e933f3d5c50187688bda0439a73c28b0ba75412dcdf22",
     "Spot.Record.registeredRoots": "ca7ef2ef9ae75a22514ae05bdde77d50484dd042185e0ed93cbca6a993002e3e",
@@ -57710,13 +57863,13 @@
    }
   },
   "Spot.Supplied": {
-   "digest": "52bd7c261b349c5c7af393e8efb7d99a0926d5d663acd955a389f73380425a41",
+   "digest": "ae04306e96cbdb0a82a3dc8fec0cb381cc66408c6401e68b686f70ea47f71390",
    "definitions": {
+    "Spot.Supplied.RUN_SALT": "5c14501c4a700c03fd71848bc075f501397ff96dcfe33d3b9c97eba8f4926af3",
     "Spot.Supplied.Rows": "9ea3fe879313cec826c93ccd8e9bd6d38ab7dd085e00750198a87e2dc948eda6",
     "Spot.Supplied.SALT_BYTES": "0b23db9afdbca052397549d242aaa63a19c8cd47e30d75a8e9dfa18f9c1e85d9",
     "Spot.Supplied.SOURCES": "a2e5ca27fbc20849e3e89afec40911a29739b38626244c35f077694724fceee2",
     "Spot.Supplied.SUPPLIED_SALT": "bbb62d6b80fffa6eea2c9472cf38d43be8fd10aff097afa691e7c9c21df219c0",
-    "Spot.Supplied.WINDOW_SALT": "c0f44ae3371afd1e08529bfec5bb1e935b7cee76a1328fb14f4d9977228188ff",
     "Spot.Supplied.bytesLeaves": "71efef66b63a4b091d71ccbc79ace3ea049227807225d4f6c9940b2bbedf0e1f",
     "Spot.Supplied.digestLeaves": "258572b194e7c6dfebb87e355e6c32bf8f78f1e452932ffe52e6aecc14c02303",
     "Spot.Supplied.digests": "7331260433eb1558a3b697f2037e80db4de700b2c54aa007d7fae773508a4d85",
@@ -57726,7 +57879,7 @@
     "Spot.Supplied.rowDigest": "83d5494bb0ca0d0573fe5c153db6d3ef36502aef4c71d03d28977e65ac220877",
     "Spot.Supplied.rowWords": "9d962d1b6c04a5a547526c6752cf2932d50b37ecaffabc7600454b877d85084b",
     "Spot.Supplied.rows": "b8b54fc191535b7113e5f68aeff040e33c7e08194768eb07cc8e8e3587834c13",
-    "Spot.Supplied.runSalt": "cd6bded051f8639f2239104b045700cbd73fc4a6f277a812f4e9cc44b8248b0c",
+    "Spot.Supplied.runSalt": "0042022376fa8aa96a8cd5c445e1bf5c1f7b50bdd6c2a9cd7a8fb6ca32d2e782",
     "Spot.Supplied.salt": "e8347bcafefbb00cd680acb08929c63c64d9e5076cf854b4f2bb21abbbde51cf",
     "Spot.Supplied.sourceBytes": "5456e12810dd4bdb9ca1c3789f073b458b8e229aaf5e59d5b5ee0e61170fd352",
     "Spot.Supplied.sources": "f09f4e2282a1d3185bcfb0265b0c1a87e208ae299644d829a09d828d17df4db8",

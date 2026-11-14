@@ -76,7 +76,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 /-- **The recursive audit is sound.** V*'s sessions are of the circuits `(Vs j).c`, with hidden outputs and `(Vs j).J`
-tables, under their laws `(Vs j).law`, each the full sample (`--draw subset:<units>`) on the operating system's bytes (A3,
+tables, under their sampling designs `(Vs j).samplingDesign`, each the full sample (`--draw subset:<units>`) on the operating system's bytes (A3,
 `uniform/io-getrandombytes`); at each history `(R, ω, t)` and registration `R₂` of the outer proof, session `j` is
 `zs R ω t R₂ j`, whose fields carry `verity-verify-proof verify --zk --registered`'s setup, the `live-verifier` record custody
 (`ZkOuter.hRec`) and the registrant's record of the registered reads (`ZkOuter.rd`: the hidden circuit's rows, `R₂`'s
@@ -123,9 +123,9 @@ records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deploym
 **Retired from the lock**: its break is possibilistic, so the lock lists no theorem of it; the recursion's
 guarantee is the knowledge form at the deployed reader, `Flock.Guarantees.RecursiveKS` (`Proofs.Flock.Recursive.KSStatement`). -/
 def RecursiveSound : Prop :=
-  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-    -- V*'s laws: A3
-    (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+  ∀ {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    -- V*'s sampling designs: A3
+    (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).samplingDesign.Lb (Vs j).samplingDesign.src)
     -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -148,15 +148,15 @@ def RecursiveSound : Prop :=
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
-/-- **`RecursiveSound` with no A3**: `RecursiveSound` without its A3 premise, at the same bound. V*'s laws are the full
+/-- **`RecursiveSound` with no A3**: `RecursiveSound` without its A3 premise, at the same bound. V*'s sampling designs are the full
 sample (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def RecursiveSoundNoA3 : Prop :=
-  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+  ∀ {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     -- V*'s sessions at each history and registration `R₂`
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -179,7 +179,7 @@ def RecursiveSoundNoA3 : Prop :=
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (x o.1 o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
@@ -465,7 +465,7 @@ def RanRegisteredRun : Prop :=
         prob (fun b => acc b ∧ (Q b ∨ prog b ≠ p)) G σ ≤ B
 
 /-- **The recursive audit ran the registered private circuit**, in fork form. On `RecursiveSound`'s hypotheses (the same prover
-`σ`, V*'s laws and sessions, the bridge `Flock.Assumptions.VBridge` and `ε_in`), let the registration commit the
+`σ`, V*'s sampling designs and sessions, the bridge `Flock.Assumptions.VBridge` and `ε_in`), let the registration commit the
 private circuit `p`, row `p i` at each position `i`, at the root `rt`; `com i` is the commitment at position `i`, binding
 (`PrivateCircuit.Commit.Binding`: two openings of `rt` at `i` to two different rows give the extractor's pair `com.ext`,
 two different strings SHA-512 maps to one digest), and the developer's opening of row `i` is `op₀ i`. V*'s sessions
@@ -498,8 +498,8 @@ statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form
 states no bits. -/
 def RecursiveRanRegistered : Prop :=
-  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-    (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).law.Lb (Vs j).law.src)
+  ∀ {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    (_hA3 : ∀ j, FlockSoundness.Assumptions.UniformRandomBytes (Vs j).samplingDesign.Lb (Vs j).samplingDesign.src)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
@@ -530,15 +530,15 @@ def RecursiveRanRegistered : Prop :=
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 
 /-- **`RecursiveRanRegistered` with no A3**: `RecursiveRanRegistered` without its A3 premise, at the same bound. V*'s
-laws are the full sample (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
+sampling designs are the full sample (`--draw subset:<units>`), which samples every unit at every value of the operating system's bytes
 (`execOS_subset_full_mem`), so no session's miss reads those bytes. -/
 def RecursiveRanRegisteredNoA3 : Prop :=
-  ∀ {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+  ∀ {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N : ℕ)
     {k Rw M : ℕ} (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) {ρ : ℝ} (_hρ : ρ < 1)
@@ -569,7 +569,7 @@ def RecursiveRanRegisteredNoA3 : Prop :=
       prob (fun o => AcceptsV (zs o.1 o.2.1 o.2.2.1) o.2.2.2 ∧ ¬ I.holds (stmt p o.2.1))
           (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N) σ ≤
         expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
-            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+            (fun R₂ j τ => (zs σ.1 ω t R₂ j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           (I.r : ℝ≥0∞) * expAt σ (fun ω t s => sumV (zs σ.1 ω t) dg N
             (fun R₂ j τ => (zs σ.1 ω t R₂ j).slackCR dg N k Rw M ρ τ) s) + εin
 

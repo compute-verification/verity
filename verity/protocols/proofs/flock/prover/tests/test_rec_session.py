@@ -518,7 +518,7 @@ def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_pat
     its root reaches the challenger only at ``stacked/rep0``'s binding round. So R's top is registered with the statement
     at staging (`rec_live.register_top`, `inner_registered.bind`): one more registered value, ``stacked``, of the circuit
     registration, the ``verity/registration/v2`` record one-stage ``registration.record`` writes over the partition object
-    META names (one-stage's ``stratified`` law, the statement's scheme, no roots, window ``stand-in``), beside the other
+    META names (one-stage's ``stratified`` sampling design, the statement's scheme, no roots, window ``stand-in``), beside the other
     values registered at staging (a description's): 128 rows of 64 words, one a node, each under its own salt, which only
     the prover's file holds. META's ``registration`` is the record's digest, so the circuit's SHA-512 (both files' headers)
     and the statement digest bind it, and the same circuit and salts give the same record. The ZK server refuses a
@@ -811,7 +811,7 @@ def _opening(d: Path, relay, rng) -> SimpleNamespace:
     proof = V.load(d, RL.STACKED)[2][0]
     res = A.residuals(sr.sh, A.decode(sr.sh, proof), rounds, [], pts, claims=[m["claim"] for _, m in sr.reps])[0]
     return SimpleNamespace(public=public, private=private, vf=vf, sr=sr, residuals=[i for i, x in enumerate(res) if x],
-                           vstar=V.check(public, private, {0: proof}, RL.STACKED))
+                           vstar=V.check_twin(public, private, {0: proof}, RL.STACKED))
 
 
 def test_the_relay_commits_r_and_opens_it_at_the_sparse_claims_in_the_same_session(stacked_session, tmp_path):

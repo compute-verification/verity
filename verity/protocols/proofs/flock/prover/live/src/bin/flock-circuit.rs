@@ -548,7 +548,7 @@ fn stmt_cache_seen(side: Side) -> Value {
 
 fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
     if count <= 1 {
-        let (st, inst) = match draw { Some(d) => side_drawn(side, st, inst, d)?, None => (st.clone(), inst.clone()) };
+        let (st, inst) = match draw { Some(d) => side_sampled(side, st, inst, d)?, None => (st.clone(), inst.clone()) };
         if draw.is_some() && is_zk(&st) {
             zk_shape_ok(&st)?;
         }
@@ -815,10 +815,10 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
 
 /// The sampled proof blocks' statement over a registered population (both sides derive it from the population file and the sample).
 fn drawn(st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
-    side_drawn(Side::Fresh, st, inst, draw)
+    side_sampled(Side::Fresh, st, inst, draw)
 }
 
-fn side_drawn(side: Side, st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
+fn side_sampled(side: Side, st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
     let di = inst.drawn(&st.c, draw)?;
     check_public(&st.c, &di)?;
     let ds = side_stmt(side, st, di.n, st.identity.clone())?;
@@ -1010,23 +1010,23 @@ fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) 
         None => s,
     };
     if let Some(draw) = &sv.given {
-        let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
+        let mut s = with_sample(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
         s.cfg.draw_law = None;
-        s.cfg.draw_given = Some(draw.clone());
+        s.cfg.sample_given = Some(draw.clone());
         return s;
     }
     match &sv.law {
-        Some(l) => with_draw(s, st, inst, l.clone(), count),
+        Some(l) => with_sample(s, st, inst, l.clone(), count),
         None => s,
     }
 }
 
 /// A server that samples `law` over the registered population at `Register` and serves the sampled proof blocks' statement, in `count`
 /// tables.
-fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_live::unit_draw::Law, count: usize) -> Server {
+fn with_sample(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_live::unit_draw::Law, count: usize) -> Server {
     s.cfg.draw_law = Some((law, inst.n as u64));
     let (st, inst) = (st.clone(), inst.clone());
-    s.with_draw(Box::new(move |draw: &Value| {
+    s.with_sample(Box::new(move |draw: &Value| {
         let tabs = side_tables(Side::Verifier, &st, &inst, Some(draw), count)?;
         Ok((config_of(&tabs), Box::new(CircuitVerifier::new(tabs)) as Box<dyn StatementVerifier>))
     }))
@@ -3779,7 +3779,7 @@ struct Plan {
     /// the cheating path: send rep 1 even when its level-0 root is not rep 0's (the verifier's R1 refuses it)
     skip_level0_check: bool,
     /// prove the registered population's statement whatever units the verifier sampled
-    ignore_draw: bool,
+    ignore_sample: bool,
     fast: bool,
     /// send each rep's proof with one byte of its first opened hm96 salt flipped
     salt_flip: bool,
@@ -4099,11 +4099,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     // registration done: the verifier samples the units (or none), and the statement is the sampled proof blocks', in the session's tables
     let reg = call(&t, Req::Register);
     let draw = match &reg {
-        Ok(Resp::Draw(d)) if !plan.ignore_draw => d.clone(),
+        Ok(Resp::Draw(d)) if !plan.ignore_sample => d.clone(),
         _ => "null".to_string(),
     };
     let tabs = match reg {
-        Ok(Resp::Draw(d)) if d == "null" || plan.ignore_draw => match &plan.split {
+        Ok(Resp::Draw(d)) if d == "null" || plan.ignore_sample => match &plan.split {
             Some(s) if s.names() == names => Ok(s.clone()),
             _ => session_tables(st, inst, None, names.len()),
         },
@@ -5469,7 +5469,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             return tables_randomness_case(&tabs);
         }
         if name == "tables_unsplittable_draw_refused" {
-            // both sides refuse, before Hello, a sample two tables cannot split: a Bernoulli law's (its count is random), and an
+            // both sides refuse, before Hello, a sample two tables cannot split: a Bernoulli sampling design's (its count is random), and an
             // odd count, subset or stratified; the server also refuses them at configuration (`server_tables`)
             let n = inst.n as u64;
             let units = |k: u64| (0..k).collect::<Vec<_>>();
@@ -5587,9 +5587,9 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "unit_draw_from_file" {
         // the verifier's own sample (units 0 and the last), served at Register: the session proves exactly those units
         let draw = json!({"law": "subset", "population": inst.n, "k": 2.min(inst.n), "units": if inst.n > 1 { json!([0, inst.n - 1]) } else { json!([0]) }});
-        let mut srv = with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, 1);
+        let mut srv = with_sample(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, 1);
         srv.cfg.draw_law = None;
-        srv.cfg.draw_given = Some(draw.clone());
+        srv.cfg.sample_given = Some(draw.clone());
         let s = Arc::new(Mutex::new(srv));
         let (v, _) = session(st, inst, shared(InProc(s.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
         let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
@@ -5599,8 +5599,8 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "unit_draw_session" || name == "unit_draw_ignored_refused" {
         // the verifier samples one unit of the registered population after Register; the prover proves the sampled statement
         // (or, ignoring the sample, the population's, whose Σ is not the verifier's)
-        let s = Arc::new(Mutex::new(with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 1 }, 1)));
-        let plan = Plan { gpu, ignore_draw: name.ends_with("refused"), ..Plan::default() };
+        let s = Arc::new(Mutex::new(with_sample(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 1 }, 1)));
+        let plan = Plan { gpu, ignore_sample: name.ends_with("refused"), ..Plan::default() };
         let (v, proofs) = session(st, inst, shared(InProc(s.clone())), &plan, ProverSeed::from_os());
         let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let acc = verified(&v);
@@ -6698,7 +6698,7 @@ fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
 /// control) shares none either. Under an injected seed (the test harness's) the control repeats every word: the per-rep
 /// indexing alone would give the second table every word of the first, which would reveal the difference of their masked values.
 fn tables_randomness_case(tabs: &Tables) -> Value {
-    let os = tables_draws(tabs, ProverSeed::from_os());
+    let os = tables_samples(tabs, ProverSeed::from_os());
     let pass = |d: &Value, control: bool| {
         let n = |k: &str| d[k].as_u64().unwrap_or(u64::MAX);
         let (a, b) = (&d["words"][0], &d["words"][1]);
@@ -6707,7 +6707,7 @@ fn tables_randomness_case(tabs: &Tables) -> Value {
                else { n("control_words_equal") == 0 && n("control_salt_words_shared") == 0 }
     };
     #[cfg(feature = "seed-injection")]
-    let injected = tables_draws(tabs, ProverSeed::injected([3; 32]));
+    let injected = tables_samples(tabs, ProverSeed::injected([3; 32]));
     #[cfg(not(feature = "seed-injection"))]
     let injected = json!({"skipped": "built without the test harness's seed-injection feature"});
     let injected_ok = injected.get("skipped").is_some() || pass(&injected, true);
@@ -6718,7 +6718,7 @@ fn tables_randomness_case(tabs: &Tables) -> Value {
 
 /// [`tables_randomness_case`]'s samples under `seed`: the words the two tables share, and those the second table sampled at the first's
 /// addresses (the control) shares with the first.
-fn tables_draws(tabs: &Tables, seed: ProverSeed) -> Value {
+fn tables_samples(tabs: &Tables, seed: ProverSeed) -> Value {
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
     // (the prover's stream words, the leaf salts)
     let draws = |tb: &Table, at: u64| -> (Vec<[u8; 16]>, Vec<[u8; 16]>) {

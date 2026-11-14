@@ -46,7 +46,7 @@ At the inner proof's rounds the frame fixes every frame and value it computes fr
 `final_c'` and `τ`'s commitment it carries: `innerOwn_inv`, the converse of `innerOwn_ownRound`.
 
 * `ownRound_encs`: the ZK server's own round `k` is frames (`ownFrames`), then its squeeze (`ownSq`).
-* `innerOwn_zero`: at zero pads (`ZeroCfg`, the placeholder's, `zeroCfg_ofDraws`) the own round reads no coin.
+* `innerOwn_zero`: at zero pads (`ZeroCfg`, the placeholder's, `zeroCfg_ofSamples`) the own round reads no coin.
 * `roundFree_sq`, `roundFree_inner_some`: a round the frame takes ends in its squeeze (`SqOk`), and inside the inner
   proof keeps its count, so there it is the ZK server's own round's frames (`roundFree_own_frames`).
 * `roundFree_own_ok`: the placeholder's own round at zero pads passes where the deployed frame took a round of its
@@ -249,8 +249,8 @@ structure ZeroCfg (c : Cfg) : Prop where
   rowH : AllZero c.rowH
   rowMu : AllZero c.rowMu
 
-theorem zeroCfg_ofDraws (l : _root_.Flock.Zk.PadLayout) (N : ℕ) (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) :
-    ZeroCfg (Cfg.ofDraws l (Draws.ofBytes l (Loop.zeros N)) m) := by
+theorem zeroCfg_ofSamples (l : _root_.Flock.Zk.PadLayout) (N : ℕ) (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) :
+    ZeroCfg (Cfg.ofSamples l (Draws.ofBytes l (Loop.zeros N)) m) := by
   have h0 := words_zeros N 0 l.len
   have h1 := h0.set! l.hab (v := (words (Loop.zeros N) 0 l.len)[l.fa]! * (words (Loop.zeros N) 0 l.len)[l.fb]!)
     (by rw [h0.get! l.fb, f128_mul_zero])
@@ -1268,17 +1268,17 @@ theorem schedSoFar_pop_eq {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {do
     rw [Array.size_append] at hle
     rw [Array.eq_empty_of_size_eq_zero (show u.size = 0 by omega), Array.append_empty]
 
-theorem ofDraws_rowH_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
+theorem ofSamples_rowH_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
     (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) :
-    (Cfg.ofDraws l (Draws.ofBytes l b) m).rowH.size = l.len + _root_.Flock.Zk.K_PAD := by
+    (Cfg.ofSamples l (Draws.ofBytes l b) m).rowH.size = l.len + _root_.Flock.Zk.K_PAD := by
   show ((Draws.ofBytes l b).h ++ (Draws.ofBytes l b).padH).size = _
   rw [Array.size_append, ofBytes_h_size]
   show l.len + (words b (32 * l.len) _root_.Flock.Zk.K_PAD).size = _
   rw [words_size]
 
-theorem ofDraws_rowMu_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
+theorem ofSamples_rowMu_size (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
     (m : Option _root_.Flock.ZkServer.Frame.MaskSlot) :
-    (Cfg.ofDraws l (Draws.ofBytes l b) m).rowMu.size = l.len + _root_.Flock.Zk.K_PAD := by
+    (Cfg.ofSamples l (Draws.ofBytes l b) m).rowMu.size = l.len + _root_.Flock.Zk.K_PAD := by
   show (words b (16 * l.len) l.len ++ words b (32 * l.len + 16 * _root_.Flock.Zk.K_PAD) _root_.Flock.Zk.K_PAD).size = _
   rw [Array.size_append, words_size, words_size]
 
@@ -1445,14 +1445,14 @@ theorem ofLoop_cfg_place (T : ZKMal.CoinLayer.TableData)
     rw [hso]
     rfl
   subst hc'
-  refine ⟨?_, ?_, ?_, zeroCfg_ofDraws lay _ _⟩
-  · unfold cfg drawsAt
+  refine ⟨?_, ?_, ?_, zeroCfg_ofSamples lay _ _⟩
+  · unfold cfg samplesAt
     rw [hrk, e1, e2]
     exact cfgAlike_ofBytes lay _ _ (some mask)
-  · unfold cfg drawsAt
-    rw [hrk, e1, ofDraws_rowH_size, ofDraws_rowH_size]
-  · unfold cfg drawsAt
-    rw [hrk, e1, ofDraws_rowMu_size, ofDraws_rowMu_size]
+  · unfold cfg samplesAt
+    rw [hrk, e1, ofSamples_rowH_size, ofSamples_rowH_size]
+  · unfold cfg samplesAt
+    rw [hrk, e1, ofSamples_rowMu_size, ofSamples_rowMu_size]
 
 open Loop in
 /-- **`ProgChecks` past the rep's schedule, at the loop's own frames**: as `ofLoop_progChecks_step`, where the rep's

@@ -28,7 +28,7 @@ committed, in place of the Match capture's stand-ins, with every value where the
   `a9.capture_words` read these in place of the capture, so `a11.py`'s and `a9.py`'s own loops pick, evaluate and stage
   the same kinds and units into ``OUT/saved-a11`` and ``OUT/saved-a9``. Every operand and return is compared word by word
   with the capture's (``OUT/compare.json``).
-* **Audit.** ``audit`` is `a11.py` with the registration window naming the committed values. Run it with ``--load-values``
+* **Audit.** ``audit`` is `a11.py` with the docket window naming the committed values. Run it with ``--load-values``
   on each saved directory, as a10.sh does.
 """
 from __future__ import annotations

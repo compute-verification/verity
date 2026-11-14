@@ -355,7 +355,7 @@ is the switched session's message. The release is the frame's own round (`releas
 round `e` (`innerAt_slot`), and the switched session's message there `innerCutBody` at the rep's switched source
 (`swMsgAt_innerAt`, the coins below it showing no refusal: `innerAt_unrefused`). Round 0: the worker's `final_c'` plus
 the pad at `final_c` is `vs`'s value there (`hF`), the source's masked `final_c` less that pad
-(`swSrcE_masked_vsWord`). Round 1: the configuration's pads are the tape's (`cfg_tapeOfDraws`, `RepSrc.pads`), at the
+(`swSrcE_masked_vsWord`). Round 1: the configuration's pads are the tape's (`cfg_tapeOfSamples`, `RepSrc.pads`), at the
 rep's layout (`lay_ofLoopLink`), and `ε` the opened coin at the rep's inner round 0 (`coinAt_inner`), so the round is
 the pair's openings (`swSrcE_inner`, `innerTripleE`). Round 2: the worker's `τ` commitment is `vs`'s (`hT`), the
 switched source's. Round 3: `Y` at the tape's pads and `β`, the opened coin at the rep's `β` round, the switched
@@ -449,7 +449,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
   rw [hsch] at hrel hvr
   have hcfg : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).cfg x (ν, t) ((m₀, ρ₀) :: ops) =
       (withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops) := by
-    unfold cfg drawsAt
+    unfold cfg samplesAt
     rfl
   have hrep : (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) =
       2 * jf.val + rf.val := by
@@ -460,11 +460,11 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (withFiles (withLink (withInner Masked.dataE L₁ real fin) src) src) real x (ν, t) (m₀, ρ₀) ops ha rfl hxs hq1 hloc
   rw [show k / 2 = jf.val by omega] at hst
   have hlay := lay_ofLoopLink (L₀ := withInner Masked.dataE L₁ real fin) src real jf rf hst
-  have hd := draws_ofLoopLink (L₀ := withInner Masked.dataE L₁ real fin) src real
+  have hd := samples_ofLoopLink (L₀ := withInner Masked.dataE L₁ real fin) src real
   have hz := hS.size (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) hd ν t jf rf hlay
   have hpads := hS.pads (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) hd ν t jf rf hlay
     (Masked.UE.tapeZk t)
-  obtain ⟨hH, hRH, hRM⟩ := cfg_tapeOfDraws (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) x (ν, t)
+  obtain ⟨hH, hRH, hRM⟩ := cfg_tapeOfSamples (ofLoopLink (withInner Masked.dataE L₁ real fin) src real) x (ν, t)
     ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t) Loop.frepOf jf.val rf.val hrep hz
   rw [hlay, ← hpads, hcfg] at hH hRH hRM
   have hLay : ((withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay = Masked.layE x jf := by

@@ -48,7 +48,7 @@ a GPU: every job runs on a CPU machine, and `cell` and `placement` reach a cell'
 | `search` | `checker.search` | the search for an accepted wrong output, per gadget and for a group step | the table on stdout; `--json FILE` |
 | `search_v2` | `checker.v2.search` | the same search over the v2 gadgets | the table on stdout; `--json FILE` |
 
-The tests are the suite `tests/` (`uv run tools/verity/check/suites.py`).
+The tests are the suite `tests/` (`uv run tools/check/suites.py`).
 
 The canonical tables, their drill-downs and views are evidence, not code: the evidence store keeps their final render
 (`tables`, `drilldown` and `views`, each as `.md` and `.json`, with the docs site's last entities JSON and the last

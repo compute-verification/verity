@@ -4,7 +4,7 @@ digest, and R1–R8 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
-     "population": <units the query derives>, "law": <the law, expanded>, "scheme": "<leaf and tree scheme>",
+     "population": <units the query derives>, "law": <the sampling design, expanded>, "scheme": "<leaf and tree scheme>",
      "roots": [{"port", "root", "leaves", "domain"}, ...], "leaf_layer": "<SHA-512 of the verifier's public file>" | null,
      "anchors": [], "window": {"kind": "served" | "stand-in", ...provenance}, "previous": null | "<digest>"}
 
@@ -189,8 +189,8 @@ def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
 structure Verifier where
   program : Program
   query : Json
-  /-- the agreed law: a rule, which `Draw.derive` expands -/
-  law : Json
+  /-- the agreed sampling design: a rule, which `Draw.derive` expands -/
+  samplingDesign : Json
   workTable : Option Json
   scheme : String
   /-- each port its layout derives, with its `{"leaves", "domain"}`, and, for a port whose rows are the leaves of another
@@ -540,7 +540,7 @@ it ends, or some member's fewest and most sampled proof blocks under it, over th
 or its fewest is none, a sample that ends missing it (`LinkPoints.refused`). -/
 def linkRefused (v : Verifier) : Bool :=
   !v.members.isEmpty &&
-    match LinkPoints.lawOf v.program v.query v.law v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
+    match LinkPoints.samplingDesignOf v.program v.query v.samplingDesign v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
     | .ok rs => !rs.isEmpty
     | .error _ => true
 
@@ -590,9 +590,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.law v.workTable with
+  match Draw.derive v.program v.query v.samplingDesign v.workTable with
   | .error _ => c := addCode c "R1-law"
-  | .ok mine => if !Draw.sameLaw (get "law") mine then c := addCode c "R1-law"
+  | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
   if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
   -- R2
@@ -658,9 +658,9 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.law v.workTable with
+  match Draw.derive v.program v.query v.samplingDesign v.workTable with
   | .error _ => c := addCode c "R1-law"
-  | .ok mine => if !Draw.sameLaw (get "law") mine then c := addCode c "R1-law"
+  | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
   if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
   -- R2

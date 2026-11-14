@@ -423,7 +423,9 @@ def test_an_unregistered_served_fp8_checkpoint_is_served_and_its_commitment_clai
 
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: None))
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: roots)
+    monkeypatch.setattr(pouw, "pearl_c_weight_roots", PPD.weight_roots)
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
+    monkeypatch.setattr(pouw, "PearlCDeviceRun", Run)
     model, coins = Model(_rng().standard_normal((128, 1024), np.float32)), _coins()
     settings = {"pouw": {"coins": coins, "device": "cuda", "kernel": "k"}}
     with PO.install(model, _serve(f"pouw:{scheme}", settings=settings)) as comp:

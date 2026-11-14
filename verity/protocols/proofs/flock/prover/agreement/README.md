@@ -47,13 +47,13 @@ the verifier follows upstream because the paper is silent are listed below.
 | sessions of several tables | `Stmt.setupTables`, `Draw.tablesWhy` |
 | `--zk` sessions: the mask slot, and Δ and regions kept off it | `Flock.Zk` (`shapeOk`, `maskFree`, `SLOT_LOG_MIN`) |
 | plain leaves, a recursive session's inner statement | `Tags.withPlainLeaves`, `Registered.checkDescription` |
-| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`, `programBound`) |
+| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `sampleLaw`, `programHeld`, `programBound`) |
 | the ZK server's contract, frames, coins, `Hello` and session loop | `Flock.ZkServer` and `Flock/ZkServer/` |
 
 `verify` fails closed: after every check passes, `Flock.ProvedScope` refuses each statement form, sampling design or setting
 the soundness theorem doesn't cover, with `refused: <why>: a statement form the soundness proof does not cover`, so a
 session that fails a check keeps that check's reason. Under `--rec-inner` that includes a V* session over an inner session
-whose record holds no sample (`Flock.RecSetup.innerDrawn`), one at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`:
+whose record holds no sample (`Flock.RecSetup.innerSampled`), one at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`:
 `RecursiveKS` covers the dense form only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`), and a
 recursive session without `--zk` (`Flock.RecSetup.zkOnly`).
 

@@ -16,17 +16,17 @@ The cases are a week of one lane under the deployed key, written as the auditor'
 reserved with a family for each commitment (`ONE`), opened on a commit the host's pins log records and main's
 first-parent line holds, its challenger's session signed, logged and closed between its open and its end, which seals
 it; in its log sometimes the `WINDOW` family's coin after the window's own root, then the sample's coins after its
-registration's digest in the sample's family; its case the registration's record, its public file's digest and
+docket's digest in the sample's family; its case the docket's record, its public file's digest and
 one-stage v2's evidence. Then one change each (`NAMES`): a case the stand-in leaves undecided or rejects, a session
-whose log shows no registration, a session whose log shows two (`SEVERAL_SHOWN`: two ranks' or two stages', a family
+whose log shows no docket, a session whose log shows two (`SEVERAL_SHOWN`: two ranks' or two stages', a family
 each, and one family's two, which the client refuses to write and the challenger takes), the window's own root or the
-one registration in another family than its own (`ELSEWHERE_SHOWN`, which step 5 passes and one-stage v2 itself
-refuses), no case or two for the one registration, a case of another
-registration, a public file that shares rows or is in no blob, evidence that names its own ledger or verdicts, an open
+one docket in another family than its own (`ELSEWHERE_SHOWN`, which step 5 passes and one-stage v2 itself
+refuses), no case or two for the one docket, a case of another
+docket, a public file that shares rows or is in no blob, evidence that names its own ledger or verdicts, an open
 on a commit the pins log does not record or main's first-parent line does not hold, a session not withheld, a release
 log other than the sealed one, two windows' sessions swapped, an end that seals nothing, the ledger's half's own
-refusals, windows whose period commits another circuit than the parameters' registration, and a session of the lane
-without the sample's family in no period, in a period that commits no circuit or in one of this registration; then
+refusals, windows whose period commits another circuit than the parameters' docket, and a session of the lane
+without the sample's family in no period, in a period that commits no circuit or in one of this docket; then
 parameters and evidence of another form, which are refused before the check.
 """
 
@@ -93,17 +93,17 @@ NO_SESSIONS = "proofs: the evidence names 0 sessions: the drawn units are proved
 #: the family of the coin after a window's own root and a second commitment's own family, as the one-stage drivers
 #: lay a session out: a family for each commitment
 WINDOW, SECOND = "window", f"{LABEL}/1"
-#: a window's session's layout for one registration, and for two
+#: a window's session's layout for one docket, and for two
 ONE = [[WINDOW, 1], [LABEL, 17]]
 TWO = [*ONE, [SECOND, 17]]
-#: the cases whose session's log shows two registrations: the sample's family's two, which the client refuses to
+#: the cases whose session's log shows two dockets: the sample's family's two, which the client refuses to
 #: write and the challenger takes; two ranks', a family each, in either order; and two stages', a family each, the
 #: second's after the first's sample
 SEVERAL_SHOWN = ("two-members", "two-ranks", "two-stages")
 #: the cases whose session reserves the second commitment's family
 TWO_FAMILIES = ("two-ranks", "two-stages", "other-family")
 #: the cases step 5 passes and one-stage v2 itself refuses: the window's own root's coin in the sample's family, ahead
-#: of the sample's, and the one registration in another family than the sample's
+#: of the sample's, and the one docket in another family than the sample's
 ELSEWHERE_SHOWN = {"root-in-family": T.FAMILY_ROOT, "other-family": f"coins are not the challenger's {LABEL} family's"}
 HEX = re.compile(r"(?:[0-9a-f]{2})*")
 DIGEST = re.compile(r"[0-9a-f]{128}")
@@ -140,7 +140,7 @@ def evidence_refusal(e: Any) -> str | None:
 
 
 def params_at(p: dict, root: str, pub: str, before: list) -> dict:
-    """`paramsAt`: one-stage v2's parameters at the window `root`, for the registration whose public file is `pub`."""
+    """`paramsAt`: one-stage v2's parameters at the window `root`, for the docket whose public file is `pub`."""
     audit = p["audit"]
     return {**{k: v for k, v in audit.items() if k not in ("log", "proofs")},
             "challenger": {"key": p["key"], "label": p["label"]}, "log": audit["log"] + before,
@@ -203,8 +203,8 @@ def registration_of(periods: dict, sid: str) -> str | None:
 
 def registered_in(p: dict, periods: dict, half: dict) -> tuple[str, str] | None:
     """`registeredIn`'s refusal, its code and text: a window whose period commits another circuit than this
-    registration's, then another session of the lane that is of no registration, then one that is this
-    registration's."""
+    docket's, then another session of the lane that is of no docket, then one that is this
+    docket's."""
     this, label = p["registration"], p["label"]
     for w in half["windows"]:
         if registration_of(periods, w["session"]) != this:
@@ -322,7 +322,7 @@ def check(j: Any, inner=stand_in) -> Any:
 
 @functools.cache
 def _record(row: int) -> dict:
-    """A registration's record of the test's program at window row `row`: one digest a row."""
+    """A docket's record of the test's program at window row `row`: one digest a row."""
     return _json(R.record(S.program, S.query, DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **S.ports[p]} for p in S.ports],
                           {"kind": "served", "row": row, "run": "r-test"}, leaf_layer=LEAF))
 
@@ -668,8 +668,8 @@ def test_the_check_agrees_and_each_case_is_answered_as_named(pieces):
 
 
 def test_three_windows_pass_and_each_audit_is_handed_the_records_before_it(pieces):
-    """A week of three windows is accepted with the stand-in: each window is published with its one registration, the
-    audit of each handed the log with the records of the registrations audited before it (the stand-in publishes the
+    """A week of three windows is accepted with the stand-in: each window is published with its one docket, the
+    audit of each handed the log with the records of the dockets audited before it (the stand-in publishes the
     log's size as its bound), and the lane's session in a period that commits another circuit is published among the
     others by that circuit and its session alone."""
     w = Week(random.Random("three"))
@@ -709,8 +709,8 @@ def test_three_windows_pass_and_each_audit_is_handed_the_records_before_it(piece
 def test_a_root_committed_and_never_sampled_refuses_the_period(pieces, listed, cap, circuit, code, why):
     """A lane that closes its period of one accepted window and then commits a root on a session reserved without the
     sample's family is refused, by that session's name, in Lean and in the reference: the session is in no period, in
-    a period that commits no circuit, or in one that commits this registration's. Only a period that commits another
-    circuit makes it another registration's."""
+    a period that commits no circuit, or in one that commits this docket's. Only a period that commits another
+    circuit makes it another docket's."""
     w = Week(random.Random("never sampled"))
     b = w.b
     b.period_open("p", LANE, 100)
@@ -725,7 +725,7 @@ def test_a_root_committed_and_never_sampled_refuses_the_period(pieces, listed, c
 
 
 def test_a_window_in_a_period_of_another_circuit_refuses_the_period(pieces):
-    """A window whose period commits another circuit than the parameters' registration is refused before any audit,
+    """A window whose period commits another circuit than the parameters' docket is refused before any audit,
     by its period's and its session's names, in Lean and in the reference."""
     w = Week(random.Random("another circuit"))
     b = w.b
@@ -771,9 +771,9 @@ def _shown(session: dict) -> dict[str, set[str]]:
 @pytest.mark.parametrize("name", ["two-ranks", "two-stages"])
 def test_a_second_commitment_in_a_family_of_its_own_refuses_the_period(pieces, name):
     """A window whose session's log shows two commitments, a family each, is refused under `members`, in Lean and in
-    the reference: two ranks' registrations, each in its rank's family, which is how the one-stage drivers lay out a
-    window of several ranks, and a two-stage audit's, the second stage's registration in its own family after the
-    first stage's sample. The sample's family shows one registration alone, the evidence holds its case, and the
+    the reference: two ranks' dockets, each in its rank's family, which is how the one-stage drivers lay out a
+    window of several ranks, and a two-stage audit's, the second stage's docket in its own family after the
+    first stage's sample. The sample's family shows one docket alone, the evidence holds its case, and the
     stand-in accepts it: a step 5 that read the sample's family alone would pass this log on that one audit, the other
     commitment read by nothing (by reading such a check, which is not run here)."""
     w, sid, j = _one_window(name, name)
@@ -786,7 +786,7 @@ def test_a_second_commitment_in_a_family_of_its_own_refuses_the_period(pieces, n
 
 
 def test_a_family_s_second_commitment_refuses_the_period(pieces):
-    """A session whose log shows two registrations in the sample's family, the second written on the challenger by
+    """A session whose log shows two dockets in the sample's family, the second written on the challenger by
     hand since the client refuses it (`ChallengerCoins.commit`, asserted where `Week.window` writes it), is refused
     under `members`, in Lean and in the reference."""
     _w, sid, j = _one_window("two-members", "two-members")
@@ -800,9 +800,9 @@ def test_a_family_s_second_commitment_refuses_the_period(pieces):
 @pytest.mark.parametrize("name", list(ELSEWHERE_SHOWN))
 def test_one_stage_v2_itself_refuses_a_root_in_another_family_than_its_own(pieces, one_stage_v2, name):
     """Step 5 reads no family's name, so it passes a window whose own root's coin is in the sample's family, ahead of
-    the sample's (written on the challenger by hand), and a window whose one registration is in another family than
+    the sample's (written on the challenger by hand), and a window whose one docket is in another family than
     the sample's: the stand-in accepts each. One-stage v2 itself refuses each when it reads the sample's coins, the
-    first for a coin of the family released after another root than the registration and the second for coins of
+    first for a coin of the family released after another root than the docket and the second for coins of
     another family than the period's, so the period rejects under `audit` with that reason, in Lean and in the
     reference."""
     w, sid, j = _one_window(name, name)

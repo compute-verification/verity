@@ -1,5 +1,6 @@
 """The front door (``run.py``): which runner a NAME starts, what it hands it, and what it says to a NAME it has none for.
-And the runners of ``commit_gpu/`` and ``harness/``: the job each starts, and the names ``harness/``'s refuses."""
+And the runners of commit_gpu (``verity/commitments/cuda/commit_gpu/``) and ``harness/``: the job each starts, and the
+names ``harness/``'s refuses."""
 from __future__ import annotations
 
 import re
@@ -11,6 +12,7 @@ from pathlib import Path
 from conftest import load
 
 R = load("run.py")
+COMMIT_GPU = R.HERE.parents[1] / "verity" / "commitments" / "cuda" / "commit_gpu"
 
 
 def test_a_directorys_runner_is_its_run_py_else_its_run_sh(tmp_path):
@@ -49,11 +51,10 @@ def test_a_name_with_no_runner_is_refused_with_the_names_that_have_one(tmp_path)
 
 
 def test_commit_gpus_runner_starts_the_job_beside_it_and_ends_as_it_does(tmp_path):
-    """``commit_gpu/run.sh`` beside a stand-in ``gpu.sh``: whatever the working directory, the job gets the arguments
+    """commit_gpu's ``run.sh`` beside a stand-in ``gpu.sh``: whatever the working directory, the job gets the arguments
     and the caller's variables, and its exit code is the runner's. The directory holds the job the runner names."""
-    assert R.runners()["commit_gpu"] == ["bash", str(R.HERE / "commit_gpu" / "run.sh")]
-    assert (R.HERE / "commit_gpu" / "gpu.sh").is_file()
-    shutil.copy(R.HERE / "commit_gpu" / "run.sh", tmp_path / "run.sh")
+    assert (COMMIT_GPU / "gpu.sh").is_file()
+    shutil.copy(COMMIT_GPU / "run.sh", tmp_path / "run.sh")
     (tmp_path / "gpu.sh").write_text('printf "%s|" "$@" "$BUILDS"; exit 7\n')
     got = subprocess.run(["bash", str(tmp_path / "run.sh"), "a b", "c"], capture_output=True, text=True, cwd="/",
                          env={"PATH": "/usr/bin:/bin", "BUILDS": "a0r0l"})
@@ -61,35 +62,27 @@ def test_commit_gpus_runner_starts_the_job_beside_it_and_ends_as_it_does(tmp_pat
 
 
 #: the harness's jobs, each with the script the runner starts for it
-HARNESS_JOBS = {"build": "../../../verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh",
-                "pin_target": "jobs/pin_target.sh",
+HARNESS_JOBS = {"build": "native/build.sh", "pin_target": "jobs/pin_target.sh",
                 **{job: f"{job}.py" for job in ("bench", "characterize", "verify", "ledger", "price_twins", "ieee_pin")}}
-
-
-def harness_dir(tmp_path: Path) -> Path:
-    return tmp_path / "benchmarks" / "pouw" / "harness"
 
 
 def _harness(tmp_path: Path, *argv: str, **env: str) -> subprocess.CompletedProcess:
     """A copy of ``harness/run.sh`` beside a stand-in for each job's script, which prints its job, its arguments and
-    ``$BUILDS`` and exits 7, started from ``/`` with only ``env`` and a ``PATH`` that holds this Python's ``python3``. The
-    copy sits at the tree's own depth, so a job outside the directory is reached by its path from the runner."""
-    d = harness_dir(tmp_path)
-    d.mkdir(parents=True, exist_ok=True)
-    shutil.copy(R.HERE / "harness" / "run.sh", d / "run.sh")
+    ``$BUILDS`` and exits 7, started from ``/`` with only ``env`` and a ``PATH`` that holds this Python's ``python3``."""
+    shutil.copy(R.HERE / "harness" / "run.sh", tmp_path / "run.sh")
     for job, file in HARNESS_JOBS.items():
-        (d / file).parent.mkdir(parents=True, exist_ok=True)
-        (d / file).write_text(f'printf "%s|" {job} "$@" "$BUILDS"; exit 7\n' if file.endswith(".sh") else
-                              f'import os, sys\nprint("{job}", *sys.argv[1:], os.environ["BUILDS"], sep="|", '
-                              'end="|")\nsys.exit(7)\n')
-    return subprocess.run(["bash", str(d / "run.sh"), *argv], capture_output=True, text=True, cwd="/",
+        (tmp_path / file).parent.mkdir(exist_ok=True)
+        (tmp_path / file).write_text(f'printf "%s|" {job} "$@" "$BUILDS"; exit 7\n' if file.endswith(".sh") else
+                                     f'import os, sys\nprint("{job}", *sys.argv[1:], os.environ["BUILDS"], sep="|", '
+                                     'end="|")\nsys.exit(7)\n')
+    return subprocess.run(["bash", str(tmp_path / "run.sh"), *argv], capture_output=True, text=True, cwd="/",
                           env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin", "BUILDS": "a0r0l", **env})
 
 
 def test_the_harnesss_runner_starts_the_job_it_is_asked_for_and_ends_as_it_does(tmp_path):
     """Whatever the working directory, each job's script gets the arguments and the caller's variables, and its exit
     code is the runner's; a Python job runs under ``$PY`` where the caller has set it. The front door takes the runner,
-    and the tree holds the script of every job."""
+    and the directory holds the script of every job."""
     assert R.runners()["harness"] == ["bash", str(R.HERE / "harness" / "run.sh")]
     assert all((R.HERE / "harness" / file).is_file() for file in HARNESS_JOBS.values())
     for job in HARNESS_JOBS:
@@ -98,7 +91,7 @@ def test_the_harnesss_runner_starts_the_job_it_is_asked_for_and_ends_as_it_does(
     (tmp_path / "py").write_text('printf "%s|" py "$@"; exit 9\n')
     (tmp_path / "py").chmod(0o755)
     got = _harness(tmp_path, "bench", "--plan", PY=str(tmp_path / "py"))
-    assert (got.returncode, got.stdout, got.stderr) == (9, f"py|{harness_dir(tmp_path)}/bench.py|--plan|", "")
+    assert (got.returncode, got.stdout, got.stderr) == (9, f"py|{tmp_path}/bench.py|--plan|", "")
     got = _harness(tmp_path, "build", PY=str(tmp_path / "py"))
     assert (got.returncode, got.stdout) == (7, "build|a0r0l|")
 

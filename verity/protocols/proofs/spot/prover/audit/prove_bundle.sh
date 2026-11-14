@@ -6,7 +6,7 @@
 # Each sampled member is proved by Flock `prove --zk` (CPU), as SPOT[Flock]'s proof server proves it, one outer proof at a
 # time, and decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and
 # the member of PB_TAMPERED (with the fixture, its tampered twin unless PB_TAMPERED= is given empty), refused by Lean.
-# ZK_SERVER=1 runs every prover behind the Lean ZK server instead (prove_bundle.py --firewall, the core protocols' path),
+# ZK_SERVER=1 runs every prover behind the Lean ZK server instead (prove_bundle.py --zk-server, the core protocols' path),
 # which must also stop the tampered member. PB_LIVE=1 requires the bundle's sample to be live, with its receipt.
 #   bash verity/protocols/proofs/spot/prover/audit/prove_bundle.sh [PB_BUNDLE=F PB_WINDOW=DIR [PB_TAMPERED=DIR]] [PB_MEMBERS=N] [PB_FLIPS=1] [PB_BINARIES=DIR] [PB_BUILD_ONLY=1]
 #   (a job run from a clone of the tree)
@@ -37,11 +37,11 @@ else
 fi
 log "prove-bundle: source $(git rev-parse HEAD), bundle $BUNDLE, window $WINDOW, builds in $W"
 if [ -n "${PB_BINARIES:-}" ] && [ "$(cat "$PB_BINARIES/stamp" 2>/dev/null)" = "$STAMP" ]; then
-  BIN=$PB_BINARIES/flock-circuit LEAN=$PB_BINARIES/verity-verify-proof FWL=$PB_BINARIES/flock-firewall
+  BIN=$PB_BINARIES/flock-circuit LEAN=$PB_BINARIES/verity-verify-proof FWL=$PB_BINARIES/flock-zk-server
   log "binaries: prebuilt in $PB_BINARIES, stamp $STAMP"
 else
   [ -n "${PB_BINARIES:-}" ] && log "binaries: $PB_BINARIES's stamp is not this source's ($STAMP), so they're built here"
-  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) > "$O/build-lean.log" 2>&1 &
+  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) > "$O/build-lean.log" 2>&1 &
   LP=$!
   mkdir -p "$O/m0-build"
   RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
@@ -49,10 +49,10 @@ else
   BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
   wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
   LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
-  FWL=${LEAN%/*}/flock-firewall
+  FWL=${LEAN%/*}/flock-zk-server
 fi
 sha256sum "$BIN" "$LEAN" "$FWL" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
-ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall "$FWL"); fi
+ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--zk-server "$FWL"); fi
 if [ "${PB_BUILD_ONLY:-0}" = 1 ]; then
   mkdir -p "$O/bin" && cp "$BIN" "$LEAN" "$FWL" "$O/bin/" && echo "$STAMP" > "$O/bin/stamp" || exit 9
   log "build only: $O/bin, stamp $STAMP"
