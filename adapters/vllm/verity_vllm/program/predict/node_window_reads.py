@@ -9,7 +9,8 @@ the window's units, as `interface.Read`s, each in 16-bit leaves of the parameter
 - **The served ids** (`served_reads`): the leaves of the Program's first return field, the tokens, as the window writes
   them (the select combine's ``o0`` a token, `node_window_select`), at their leaves of `EGRESS`. Every rank computes the
   same tokens; rank 0 alone declares them, so over the ranks' windows each leaf of the return is written once
-  (`written_once`).
+  (`written_once`). The return's row is O ids zero past the n served (`boundary_rows.egress_row`), so the combines'
+  ids are it only where n = O: a request that stops before needs a unit writing the ids zero past n.
 
 Each list is coalesced (`interface.coalesce`), so a read is a run of units, not a unit. Refused by name (`Unexpressible`):
 a window built without stand-ins, a prompt row that isn't one whole stand-in row of the prompt, and a token not one
