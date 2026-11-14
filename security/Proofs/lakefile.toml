@@ -175,7 +175,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.Sampled.Members.Widen", "Proofs.Properties.Verity.Sampled.Window",
   "Proofs.Properties.Verity.Sampled.Window.Accepts", "Proofs.Properties.Verity.Sampled.Window.Walk",
   "Proofs.Properties.Verity.Sampled.Window.Draw", "Proofs.Properties.Verity.Sampled.Window.Members",
-  "Proofs.Properties.Verity.Sampled.Window.Reach", "Proofs.Properties.Verity.Sampled.Window.Leg",
+  "Proofs.Properties.Verity.Sampled.Window.Reach", "Proofs.Properties.Verity.Sampled.Window.Subprotocol",
   "Proofs.Properties.Verity.Sampled.Window.Logged", "Proofs.Properties.Verity.Sampled.Window.Assembled",
   "Proofs.Properties.Verity.Sampled.Window.Charge", "Proofs.Properties.Verity.Sampled.Window.Order",
   "Proofs.Properties.Verity.Sampled.Window.Writes", "Proofs.Properties.Verity.Sampled.Window.Answered",

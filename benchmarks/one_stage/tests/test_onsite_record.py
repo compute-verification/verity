@@ -849,7 +849,7 @@ def test_a_discharge_counts_only_at_the_statement_its_pin_names(tmp_path, lock, 
 def test_a_discharge_that_takes_a_premise_discharges_only_once_that_premise_is_and_two_never_each_other(
         tmp_path, lock, monkeypatch):
     """The wires premise's discharge takes the deployment's scope check, a named assumption of its, by the sampled
-    leg's bridge: nothing is open while that premise is discharged, both are while it isn't, and two premises whose
+    subprotocol's bridge: nothing is open while that premise is discharged, both are while it isn't, and two premises whose
     discharges take each other stay open, each discharging nothing."""
     wired, bridge = OR.PREMISES["wires-fit"]["discharged_by"][0], TOY["sampled-leg-bridge"]
     scope = "Properties.NetworkScan.ScopeMatches"
@@ -1525,7 +1525,7 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
 
 def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path):
     """With no composite of record, nothing states the parameters the period's check read, so auditor-record doesn't
-    hold and the network certifier's accepted verdict is not established, nor is SPOT's, its leg there, which
+    hold and the network certifier's accepted verdict is not established, nor is SPOT's, its subprotocol there, which
     credits no member; onsite's composite, accepting, makes the run of record, and its rejection leaves it not."""
     out = accepted(tmp_path, onsite=False)
     rec = record(out)
@@ -1553,15 +1553,15 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
                                 "not_credited": [], "not_claimed": ["PoUW"], **ONSITE_OF_RECORD}
 
 
-@pytest.mark.parametrize("leg, row, verdict", [
+@pytest.mark.parametrize("subprotocol, row, verdict", [
     ("accept", "reject", "accept"),
     ("reject", "accept", "reject"),
     ("no case", "accept", OR.NOT_ESTABLISHED),
     (None, "accept", OR.NOT_ESTABLISHED),
     (None, None, "missing"),
 ])
-def test_sampled_proofs_verdict_is_its_leg_in_the_composite_of_record_never_the_records_audits_v1_row(
-        tmp_path, leg, row, verdict):
+def test_sampled_proofs_verdict_is_its_subprotocol_in_the_composite_of_record_never_the_records_audits_v1_row(
+        tmp_path, subprotocol, row, verdict):
     """SPOT's verdict is the outcome of remote's SPOT case in the composite of record
     (VStar.Recursive.Sampled on OneStageZk's case), whatever the window report's integrity row, the records audit's
     one-stage v1 answer, says: a v1 verdict is no verdict. Where the composite of record has no such case, or the run
@@ -1573,10 +1573,10 @@ def test_sampled_proofs_verdict_is_its_leg_in_the_composite_of_record_never_the_
     report["protocols"]["integrity"] = ({"owner": "compute-accounting", "verdict": "missing", "why": "toy"}
                                         if row is None else report["protocols"]["integrity"] | {"verdict": row})
     f.write_text(json.dumps(report))
-    if leg == "no case":
+    if subprotocol == "no case":
         with_composite(out, "remote-network", OR.ONSITE, (OR.NETWORK, OR.INFERENCE_ONLY, OR.POUW_ID))
-    elif leg is not None:
-        with_onsite(out, sampled=leg)
+    elif subprotocol is not None:
+        with_onsite(out, sampled=subprotocol)
     rec = record(out)
     v = rec["verdicts"]["sampled proofs"]
     src = "composite/remote-network/composite.json"
@@ -1587,7 +1587,7 @@ def test_sampled_proofs_verdict_is_its_leg_in_the_composite_of_record_never_the_
         "reject": {"protocol": SAMPLED_V1, "verdict": "reject", "from": f"{src} cases", "credit": CREDITED},
         OR.NOT_ESTABLISHED: {"protocol": SAMPLED_V1, "verdict": OR.NOT_ESTABLISHED, "answer": "accept",
                              "from": "record/verdicts.json protocols.integrity",
-                             "why": f"{OR.V1_UNREAD}, and {unread.get(leg)}", "credit": UNESTABLISHED},
+                             "why": f"{OR.V1_UNREAD}, and {unread.get(subprotocol)}", "credit": UNESTABLISHED},
         "missing": {"verdict": "missing", "why": unread[None], "credit": CREDITED}}[verdict]
     assert v == expect
     assert ("per_window" in rec["sampled_proofs"]) is (verdict == "accept")
@@ -2066,7 +2066,7 @@ NOT_PINNED = ("the public file the case registers isn't, by SHA-512, one --publi
 ])
 def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_only_where_each_file_is_the_one_theta_names(
         tmp_path, how, why):
-    """auditor-listing's registered-files condition, the remote theorem's on its sampled leg: for each statement of
+    """auditor-listing's registered-files condition, the remote theorem's on its sampled subprotocol: for each statement of
     remote's SPOT case, the one statement or a drawn member's, the circuit file its params θ name for it is,
     by SHA-512, one the case registers, θ the one the composite reading the case states, and its public file, the one of
     the case's files its evidence names, is one V3c's audit pinned (``--public-pin``): as
@@ -2081,7 +2081,7 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     member of θ's, θ isn't the one the composite states, the run
     gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
     case commits to a registration the composite doesn't state, auditor-listing doesn't hold: the network certifier's
-    verdict, the composite of record's and SPOT's, its leg there, are not established, each its Lean accept
+    verdict, the composite of record's and SPOT's, its subprotocol there, are not established, each its Lean accept
     beside it, with no bound and no member credited, and the run isn't of record."""
     out = accepted(tmp_path)
     circuit, public = (sha512_hex(b) for b in FILES_REGISTERED)
@@ -2377,7 +2377,7 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
 
 @pytest.mark.parametrize("coins", [None, "a local development challenger session"])
 def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
-    """The guarantee reads the records audit's answer's profile and bound only once SPOT's verdict, its leg in
+    """The guarantee reads the records audit's answer's profile and bound only once SPOT's verdict, its subprotocol in
     the composite of record, accepted: rejected there, or not established, it states no bound."""
     out = with_onsite(served_out(tmp_path, coins=coins))
     g = record(out)["sampled_proofs"]

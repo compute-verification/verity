@@ -28,7 +28,7 @@ which the form's per-member check holds: `OneStageZk.membersRun`'s `membersTrees
   samples' coins (`opensReads`).
 
 The history at each play may hold earlier runs and lines: `read_on` reads only the runs the sample names and the
-ledger. `PrintsTwo` is a premise at the history the leg's `dev` gives; at a one-play history it is the step
+ledger. `PrintsTwo` is a premise at the history the subprotocol's `dev` gives; at a one-play history it is the step
 `Device.lean`'s printing proves.
 -/
 

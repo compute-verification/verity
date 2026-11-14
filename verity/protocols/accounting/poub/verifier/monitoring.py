@@ -164,7 +164,7 @@ def ledger_error(doc: Mapping[str, Any]) -> Mapping[str, Any] | None:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m verity.protocols.accounting.poub.verifier.monitoring",
                                  description=__doc__.split("\n\n")[0])
-    ap.add_argument("answer", type=Path, help="the session's core answer, or a leg's bandwidth.json carrying it")
+    ap.add_argument("answer", type=Path, help="the session's core answer, or a subprotocol's bandwidth.json carrying it")
     ap.add_argument("--ledger", type=Path, default=None,
                     help="the session's declared outputs in its verifier's ledger (ledger.declared's JSON, or a "
                          "verifier.json session's ledger), whose error the table carries; an accepted session's table "

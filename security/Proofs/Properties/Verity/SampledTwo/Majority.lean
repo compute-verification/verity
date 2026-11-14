@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.SampledTwo.Claim
 public import Proofs.Properties.Verity.Majority
 
 /-!
-# The two-stage leg's majority: the boundary values fixed at registration
+# The two-stage subprotocol's majority: the boundary values fixed at registration
 
 `MajorityBound` asks that, where the claim fails on the vocabulary's transcript, an accepted run of the frame's prover
 whose extracted witness is in the two-stage relation be at most `bind` likely. The transcript is the majority of the
@@ -29,7 +29,7 @@ plays.
 
 The deployed device's history holds one play's signatures, so an earlier period's genuine challenger signature in the
 evidence makes the strategy's error `⊤` at the deployed theorems; nothing here reads the device, and that hole stays
-open on this leg until the key pins close it.
+open on this subprotocol until the key pins close it.
 -/
 
 @[expose] public section
@@ -237,7 +237,7 @@ theorem majorityBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) 
 
 /-- **The witness fixed at registration under `ecr/sha-512`**: `majorityBound` where the binding finder meets
 `ExpectedCR`, so that `K` is its expected SHA-512 calls over `2^256`: the binding term
-`√(min(W, 2n) · E[cost] / 2^256)` of the recursive leg (`Verity.Recursive.Dep.delta`). -/
+`√(min(W, 2n) · E[cost] / 2^256)` of the recursive subprotocol (`Verity.Recursive.Dep.delta`). -/
 theorem majorityBound_ecr (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (readX : Claims.Sampling.Wit → Verity.Circuit.Trace (V.circuitOf θ F))

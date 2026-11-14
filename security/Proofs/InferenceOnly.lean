@@ -1,35 +1,15 @@
 module
 
-public import Proofs.Slowdown.Cut
-public import Proofs.Slowdown.CutWitness
-public import Proofs.Slowdown.Untied
-public import Proofs.Slowdown.CutCharged
+public import Proofs.Slowdown
 public import Proofs.Core
 public import Proofs.InferenceOnly.Pull
 public import Proofs.InferenceOnly.Rate
-public import Proofs.Slowdown.Threads
-public import Proofs.Slowdown.Layered
-public import Proofs.Slowdown.Fit
-public import Proofs.Slowdown.FitKeep
-public import Proofs.Slowdown.FitSlotsWitness
-public import Proofs.Slowdown.WeightsSlotsWitness
-public import Proofs.Slowdown.FitRate
-public import Proofs.Slowdown.FitWitness
-public import Proofs.Slowdown.Slowdown
-public import Proofs.Slowdown.Remote
 public import Proofs.Slowdown.RemoteMonitoringPeriod
-public import Proofs.Slowdown.Capability
 public import Proofs.InferenceOnly.Verdict
 public import Proofs.InferenceOnly.DescVerdict
-public import Proofs.Slowdown.Covering
-public import Proofs.Slowdown.CoveringWitness
-public import Proofs.Slowdown.CoveringTwoCosts
-public import Proofs.Slowdown.CoveringTwoCostsWitness
 public import Proofs.InferenceOnly.Cover
 public import Proofs.InferenceOnly.PartitionCovers
 public import Proofs.InferenceOnly.CompliesCK
-public import Proofs.Slowdown.Witnesses
-public import Proofs.Slowdown.Formalism
 public import Proofs.InferenceOnly.Lemmas
 
 /-!
@@ -58,19 +38,5 @@ theorem ReadBound : Guarantees.ReadBound := by
         rw [← Finset.mul_sum]
         congr 1
         exact_mod_cast P.sum_card_gates
-
-theorem Inference : Guarantees.Inference := by
-  intro c k d B P prompt hB hS
-  obtain ⟨hcard, hreads, hprompt⟩ := hS
-  have hc : Complies c k d := by
-    refine ⟨B, P, ⟨hB, fun u => (hcard u).le, fun u => ?_⟩⟩
-    have hsub : d.unregistered (P.gates u) ⊆ prompt u := fun a ha => by
-      rw [RegisteredCircuit.unregistered, Finset.mem_sdiff] at ha
-      exact (Finset.mem_union.1 (hreads u ha.1)).resolve_left ha.2
-    have hw : d.D.width (prompt u) = (prompt u).card := by
-      simp [Circuit.width, hB.one_bit]
-    exact (Finset.card_le_card hsub).trans (hw.symm.le.trans (hprompt u))
-  refine ⟨hc, le_trans (iInf₂_le d ⟨Verity.SecurityProofs.ContainsImplements d d (Containment.refl d.D)
-    fun _ _ h => h, hc⟩) ENNReal.div_self_le_one⟩
 
 end InferenceOnly.SecurityProofs
