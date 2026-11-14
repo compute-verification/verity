@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "training/smallest-product-subcircuit"
+title = "s_×, the fewest Boolean gates in any counted product's subcircuit, least over the Boolean GEMM and every reference layer"
+owner = "training"
+unit = "Boolean gates in the smallest counted product's subcircuit"
+better = "higher"
+command = "research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run python benchmarks/circuit_properties/run.py --out \"$OUT\"'"
+every = "7d"
+goal = "training/benchmarks-on-dashboard"
