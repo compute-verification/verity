@@ -22,7 +22,7 @@ allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each still runs in a candidate's check,
-and its red holds nothing; under the loop's `--gate check`, a red that the run beside the candidate's base didn't have rings
+and its red holds nothing; under the loop's `--gate check` or `verdict`, a red that the run beside the candidate's base didn't have rings
 its owners. Under the loop's `--gate graph2`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the candidate (`research.vqueue_slim`), which waits
 for that run's preflights and `lean-agreement`, not its `ratchet-gate`. A red `ratchet-gate` (drive.toml's `warn_steps`

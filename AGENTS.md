@@ -266,7 +266,7 @@ those above it are rebuilt without them. A candidate holding a Lean, lock or spe
 commit of the lock records it regenerated, so `main` moves only to regenerated records. What drive.toml lets warn (its
 `warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing, and the owner fixes it in their
 next PR: a warn gate's failure is printed at the ready mark, a red off the gate that its base's run doesn't share is rung to
-who acts on it under the loop's `--gate check` (to no one under graph2), and a lock's bookkeeping is told to `lean` and each
+who acts on it under the loop's `--gate check` or `verdict` (to no one under graph2), and a lock's bookkeeping is told to `lean` and each
 owner a warning names. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's
 Landing.
 
