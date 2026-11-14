@@ -120,5 +120,5 @@ untraced = [
     "tests/test_vllm_public_api.py",
 ]
 inputs = [".", "AGENTS.md"]   # its lints read the docs: a listed `.md` keys its Markdown too (`suites.markdown`)
-testpaths = ["tests", "tools/research/tests", "infra/ops/tests", "benchmarks/native_peak/tests", "verity/tests", "benchmarks/numerical/tests", "verity/protocols/flock/prover/tests", "tools/verity/circuit_check/tests", "tools/verity/lean/tests", "verity/protocols", "verity/definitions/ops/tests", "benchmarks/pouw/tests"]
+testpaths = ["tests", "tools/research/tests", "infra/ops/tests", "benchmarks/native_peak/tests", "verity/tests", "benchmarks/numerical/tests", "verity/protocols/flock/prover/tests", "tools/verity/circuit_check/tests", "tools/verity/lean/tests", "verity/protocols", "verity/circuits/ops/tests", "benchmarks/pouw/tests"]
 markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`"]

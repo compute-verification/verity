@@ -32,8 +32,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from verity.definitions import cross_call
-from verity.definitions import word as word_query
+from verity.circuits import cross_call
+from verity.circuits import word as word_query
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -538,8 +538,8 @@ NORM_SCALES_HELP = ("on by default, --no-norm-scales for A/B only: the norm-scal
 WORD_CHECK_HELP = ("the partition of record's check: Q_word_v1{X,W} (\"16/32[+extras]\", the default) over the Program -- widths, recomputes, "
                    "every Call boundary committed; fails the Build naming every violation.  \"off\" skips it (A/B only)")
 QUERY_HELP = f"the query the manifest is built under: {QUERY_OF_RECORD} (the record) or Q_module_body_v1 (A/B only; pair it with --word-check off)"
-CROSS_CALL_HELP = "check that no value is computed in two Calls (verity.definitions.cross_call); fail the Build naming every recompute"
-WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity.definitions.word.gate_limits): a Definition over its limit is a too-large violation, "
+CROSS_CALL_HELP = "check that no value is computed in two Calls (verity.circuits.cross_call); fail the Build naming every recompute"
+WORD_MAX_GATES_HELP = ("--word-check's gate limits (verity.circuits.word.gate_limits): a Definition over its limit is a too-large violation, "
                        "not cut.  N for every Definition or FAMILY=N for one, comma-separated (default 24000000; about 0.5 KB of host memory "
                        "per gate cut and 20 bytes per operand it reads); the query id is the same under any")
 UNIT_RULE_CACHE_HELP = ("a directory the word check's unit rules are shared through, across processes and runs (word.use_rule_cache); "

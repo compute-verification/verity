@@ -71,8 +71,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
 from verity.definitions.circuits.targets import target as T
-from verity.definitions.silicon import models as S
-from verity.definitions.silicon.cast import f32_to_bf16_word
+from verity.circuits.silicon import models as S
+from verity.circuits.silicon.cast import f32_to_bf16_word
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -244,7 +244,7 @@ class Synthetic:
     relation: str          # the digest prefix
     target: str
     instruction: str
-    model: object          # verity.definitions.silicon.models.GroupSum
+    model: object          # verity.circuits.silicon.models.GroupSum
     operands: object       # (rng, shape) -> int64 words
     dtype: object          # the operand word dtype
     epilogue: str | None

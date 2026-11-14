@@ -60,7 +60,7 @@ from functools import reduce
 from typing import Any
 
 from verity.circuits import partition_object as PO
-from verity.definitions import word as word_query
+from verity.circuits import word as word_query
 
 from verity_vllm.correspondence.reader_for_query import (
     CallName,
