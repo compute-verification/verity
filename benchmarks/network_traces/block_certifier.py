@@ -4,7 +4,7 @@ re-decides an answer by before it writes the entry.
 
 * `check`: ``network-period check`` on a case (`NetworkCheck.Period`'s formats: its ``params``, ``commitment`` and
   ``evidence``), its answer.
-* `block_leg`: a period's accepted answer, in the clock form or the rows form, as the block record's certifier entry: K
+* `block_leg`: a period's accepted answer as the block record's certifier entry: K
   in bits, its error the answer's exact ``eps``, and the certificate at δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most
   δ (`BLOCK_DELTAS`).
 """
@@ -49,7 +49,7 @@ def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
 def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
               owner: str | None = OWNER) -> dict[str, Any]:
     """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v2``) of one period's
-    ``network-period check`` answer, in the clock form or the rows form: the answer's verdict, reason, commitment and
+    ``network-period check`` answer: the answer's verdict, reason, commitment and
     public; the quantity K, the bits a covert sender in ``server`` can move over the link in the period's ``windows``
     execution phases; the error the answer's exact ``eps``; and the certificate at each δ of
     `BLOCK_DELTAS`, K wherever ``eps`` ≤ δ, else not established. ``runs``: the run ids it comes from; ``source``:
