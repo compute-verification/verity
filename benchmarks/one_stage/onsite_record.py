@@ -160,8 +160,8 @@ period covers the monitoring period's seconds (its m execution phases), and othe
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
 cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights a deployment
-protects (``share``: `leak_bounds.WEIGHTS`, the adversary resource model's as published, a stated parameter that
-``weights`` gives with its census line and SHA-512, `WEIGHTS`) and beside it of the demo's served model's
+protects (``share``: `leak_bounds.WEIGHTS`, the one every network_traces bound's share is of, a stated parameter that
+``weights`` gives with its workload card, `WEIGHTS`) and beside it of the demo's served model's
 (``share_served``, `leak_bounds.SERVED`), its share of the egress its execution phases can carry (``share_of_capacity``, the schedule's
 capacity in ``egress``, `EGRESS`; the served egress is missing, `SERVED_EGRESS`), its δ_net's terms over the execution
 phases it counts (``delta_net``), whether eps alone is
@@ -850,8 +850,8 @@ EGRESS = ("the schedule's egress capacity an execution phase, from the case's pa
           "K's share of it (each cell's share_of_capacity) is a lower bound on K's share of the egress it carried")
 SERVED_EGRESS = ("not in this record: the egress the run served is a count of its own traffic, which no published file "
                  "states (the network certifier's chain files that count it stay on the node)")
-WEIGHTS = ("a stated parameter: one copy of the weights a deployment protects, the adversary resource model's model as "
-           "published (its census line's weights_bytes, at its weights_datatype), whatever the model the run served; "
+WEIGHTS = ("a stated parameter: one copy of the weights a deployment protects, leak_bounds.WEIGHTS, the workload card's "
+           "parameters in FP4, the copy every network_traces bound's share is of, whatever the model the run served; "
            "share_served is of the demo's served model beside it")
 FROM_BOUND = "bound: the run's K and eps over its m execution phases"
 FROM_SCHEDULE = f"{CASE} params.schedule: an execution phase's T buckets of τ"
@@ -1252,8 +1252,7 @@ def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int, 
     sources = {"per-phase": [FROM_BOUND], "run-to-period": [FROM_BOUND, FROM_SCHEDULE],
                **{k: v["sources"] for k, v in refs.items()}}
     weights = {"share": {"of": LB.WEIGHTS.label, "is": WEIGHTS, "bits": LB.WEIGHTS.bits,
-                         "source": census_line("adversary.json", "model", "total_params", "weights_bytes",
-                                               "weights_datatype")},
+                         "source": LB.WORKLOAD},
                "share_served": {"of": LB.SERVED.label, "bits": LB.SERVED.bits}}
     out: dict[str, Any] = {"phase_s": str(phase_s), "weights": weights, "run": run,
                            "egress": {"capacity_bits_per_phase": capacity, "is": EGRESS,
