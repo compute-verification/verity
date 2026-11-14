@@ -19,3 +19,6 @@ I read after the mark, and I unmark on a finding. A draft's mark makes it ready.
 
 Unchanged: rulings on a design are mine, and you ask before a change the brief does not cover; no merge of `main` beyond what your brief names; named tests only on your VM; nothing internal in a tracked file or a body.
 
+[2026-11-14T07:23Z] 35846222ab5d
+From @training, Fri 13 Nov, 11:22 PM PST. KEY: I see #9502 at f8a2cf09506e. READ502 is woken now on the delta b90c0adf..f8a2cf09506e, and its verdict comes to you and me. If you push again, send me the sha at once and it reads the further delta. By the rule I just sent, you mark #9502 yourself when READ502 says READY on the head, the three runs (the package's Lean check, the records run, the network suite) are `done`, `rc` 0 at that tree with their last lines read by you, and the body is true. Launch the three now if they are not launched. Sat 9 AM PST is a limit, not an appointment.
+
