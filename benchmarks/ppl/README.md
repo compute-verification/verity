@@ -38,7 +38,7 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
   deterministic arm runs once.
 - **The reference** is the bf16 model with PyTorch SDPA attention (`F.scaled_dot_product_attention`, causal, GQA),
   never eager: HF's eager bf16 path rounds QKᵀ to bf16 before the scale, and Qwen2.5's q and k biases make the scores
-  large, so its eager bf16 is 15% worse (WikiText-2 at 2K: 7.300 against SDPA's 6.355 and FP32's 6.354).
+  large, so its eager bf16 perplexity is much worse than SDPA's, which is close to FP32's.
   The engine's bf16 layers are HF's `LlamaDecoderLayer` / `Qwen2DecoderLayer` with SDPA op for op, with HF's RoPE
   tables (computed on the CPU), and the `hf_reference` gate checks both bit for bit on every layer. TF32 is off.
 - **Batching.** The bf16 reference and calibration streams run 4 consecutive windows per forward. Arms run one window
@@ -229,11 +229,11 @@ against bf16 and against plain int8, the earlier harnesses' measurement and meth
 and each point's runs. The floor covers what moves a deterministic arm between harnesses:
 
 - RoPE tables. The earlier harnesses built them on the GPU (`LlamaRotaryEmbedding(config, device=cuda)`), whose
-  `inv_freq` differs from the CPU's in 5 of 64 entries. HF's `from_pretrained` computes them on the CPU, as the bench
-  does. HF's own `LlamaForCausalLM` (SDPA, 4 windows per forward) is the bench's bf16 end to end on Llama C4 2K, 9.15834,
-  and with GPU-built tables it is the earlier harnesses' 9.15903.
-- Kernel shapes. A bf16 GEMM's rounding depends on its rows: the same model at 1 window per forward is 9.16174
-  (+0.04%). The bench's arms run 1 window per forward; the earlier linears harness ran 4.
+  `inv_freq` differs from the CPU's in some entries. HF's `from_pretrained` computes them on the CPU, as the bench
+  does. HF's own `LlamaForCausalLM` (SDPA, 4 windows per forward) is the bench's bf16 end to end on Llama C4 2K, and
+  with GPU-built tables it is the earlier harnesses'. The lock holds both perplexities.
+- Kernel shapes. A bf16 GEMM's rounding depends on its rows: the same model at 1 window per forward differs from its
+  perplexity at 4 by less than the floor. The bench's arms run 1 window per forward; the earlier linears harness ran 4.
 - The coins. The earlier linears harness sampled a linear's coins per batch of 4 windows, the bench per window, so seeded
   arms agree in distribution, not bit for bit.
 - The reference attention under a linears-only arm: the earlier attention harness's was eager (Llama) or FP32
