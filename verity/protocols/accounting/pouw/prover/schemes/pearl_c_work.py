@@ -1,7 +1,7 @@
 """Pearl-C's records: what the prover declares for each matmul before the samples, and the root that binds them (statement
 review item 5).  vLLM's Pearl-C prover writes them (`verity_vllm.protocols.pouw.pearl_c`).  The work sampling design
 that credits, samples and checks by them, with its clear audit, is a reference tool, not a verifier:
-``verity/protocols/accounting/pouw/clear/clear_work.py``.
+``verity/protocols/accounting/pouw/prover/clear/clear_work.py``.
 
 * **`Split`**: a weight's channel split.
   - S is a set of at most ⌊k/100⌋ input channels, computed outside the unit.
