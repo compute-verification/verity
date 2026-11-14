@@ -18,7 +18,7 @@ namespace Pouw.SecurityProofs.Lead.PStar
 
 open Finset Pouw.Lead
 
-/-- A coin lane's value from its draw `u`: `2u − 127`. -/
+/-- A coin lane's value from its sample `u`: `2u − 127`. -/
 def lane (u : Fin 128) : ℤ := 2 * (u : ℤ) - 127
 
 theorem lane_mem (u : Fin 128) : lane u ∈ coins := by
@@ -38,7 +38,7 @@ theorem exists_lane {x : ℤ} (hx : x ∈ coins) : ∃ u, lane u = x := by
   omega
 
 set_option linter.constructorNameAsVariable false in
-/-- The statement's draws of a step's lanes and tag bit are `rotLane 1 0`'s on an even row. -/
+/-- The statement's samples of a step's lanes and tag bit are `rotLane 1 0`'s on an even row. -/
 theorem pStar_fiber_card (v : ℤ) :
     (univ.filter fun x : Fin 128 × Fin 128 × Fin 128 × Fin 2 =>
         127 * lane x.1 + lane x.2.1 + lane x.2.2.1 + 1 + (x.2.2.2 : ℤ) = v).card =
@@ -76,7 +76,7 @@ theorem pStar_fiber_card (v : ℤ) :
       omega
 
 /-- **The exact `p*`**: a value of `127 s₀ + s₁ + s₂ + 1 + b` is taken by at most 130 of the
-`2 · 128³` draws, and one value by exactly 130 (`p* = 65 / 2^21`). -/
+`2 · 128³` samples, and one value by exactly 130 (`p* = 65 / 2^21`). -/
 theorem pStar_eq :
     (∀ v : ℤ, (Finset.univ.filter fun x : Fin 128 × Fin 128 × Fin 128 × Fin 2 =>
         127 * lane x.1 + lane x.2.1 + lane x.2.2.1 + 1 + (x.2.2.2 : ℤ) = v).card ≤ 130) ∧
