@@ -3,7 +3,7 @@ module
 public import Definitions.Nci.Dampener
 public import Definitions.Nci.Assumptions.Threads
 public import Definitions.Nci.Assumptions.Dampener
-public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Theta
 
 /-!
 # The compute dampener: the guarantees

@@ -71,7 +71,7 @@ records. Nothing here walks a gate.
 
 @[expose] public section
 
-namespace NciCheck.Baseline
+namespace NciCheck.Theta
 
 open Lean (Json toJson)
 open Flock.Program
@@ -86,7 +86,7 @@ def keys? : Json → Option (Array String)
   | _ => none
 
 /-- `j` as a string, `none` where it is none. A field is compared with a string through it, never with `Json`'s `==`,
-which is `partial`, so that what the check compares is what `Properties.Nci.Baseline` can state. -/
+which is `partial`, so that what the check compares is what `Properties.Nci.Theta` can state. -/
 def strOf? : Json → Option String
   | .str s => some s
   | _ => none
@@ -340,4 +340,4 @@ def checkUnrolled (j tr : Json) : Json :=
   | .ok r => r
   | .error code => refusal j code
 
-end NciCheck.Baseline
+end NciCheck.Theta

@@ -1,13 +1,13 @@
 """The provenance check's difftest data: declarations with θ, θ's provenance and the service's trusted input, for
-`NciCheck/BaselineDifftestMain.lean`.
+`NciCheck/ThetaDifftestMain.lean`.
 
-    python scripts/baseline_difftest_vectors.py <verity checkout> --out DIR [--count N]
+    python scripts/theta_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
 Writes three files under `DIR/baseline_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted"}` as
-`NciCheck.Baseline.check` reads them (`NciCheck.Baseline`'s docstring); `expanded.jsonl`, the same case expanded gate by
-gate (`nci_reference.expand_baseline`) as `NciCheck.Baseline.checkUnrolled` reads it, or `null` where the policy check
+`NciCheck.Theta.check` reads them (`NciCheck.Theta`'s docstring); `expanded.jsonl`, the same case expanded gate by
+gate (`nci_reference.expand_baseline`) as `NciCheck.Theta.checkUnrolled` reads it, or `null` where the policy check
 refuses the instance or its provenance is not one entry per θ entry; and `python.jsonl`, `nci_reference.check_baseline`'s
-results. The Lean audit runs `NciCheck/BaselineDifftestMain.lean` on the three (`runs` in `lean-audit.json`).
+results. The Lean audit runs `NciCheck/ThetaDifftestMain.lean` on the three (`runs` in `lean-audit.json`).
 
 Case `seed`'s declaration, for the first `COUNT`, is one of `difftest_vectors`' shapes with each parameter bound at
 registration with probability 0.6, divided into one IU, with `Γ` and `α` large enough that the policy check gives a
