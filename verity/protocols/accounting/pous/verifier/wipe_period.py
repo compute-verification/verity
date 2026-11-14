@@ -532,7 +532,7 @@ def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None =
         declared = {tier: declared_bytes}
         if store is not None and store.get("total_bytes", 0) > declared_bytes:
             out.append({"tier": store["tier"], "bytes": store["total_bytes"] - declared_bytes,
-                        "what": f"{store.get('device', 'the device')}'s memory outside the declared tier"})
+                        "what": "the device's memory outside the declared tier"})
     dram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
     if (rest := dram - declared.get("host-dram", 0)) > 0:
         out.append({"tier": "host-dram", "bytes": rest, "what": "the host's DRAM outside the declared tier"
@@ -564,14 +564,28 @@ def disk_gaps(store: Mapping[str, Any] | None) -> list[str]:
     return out
 
 
+def store_gaps(store: Mapping[str, Any] | None) -> list[str]:
+    """What the memory the prover kept the fill in (`wipe_store`'s `info`) leaves outside the bound, by tier and naming
+    no device: a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too),
+    and what its disks leave outside the boundary (`disk_gaps`)."""
+    return [f"tier {s['tier']}: the memory the GPU's driver reserves is undeclared: the tier is CUDA's total "
+            f"({s['cuda_total_bytes']} bytes), which leaves it out, since NVML gave none; the fill doesn't cover it and "
+            "M doesn't count it" for s in _parts(store)
+            if s.get("backend") == "cuda" and s.get("nvml_total_bytes") is None] + disk_gaps(store)
+
+
 def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and the egress its
     check took (`egress_of` of the evidence's; `None` leaves the egress out): the key custody, unless the session was
     signed under the challenger host's pinned key (`wipe_party.holds`), the egress (uncounted at `EGRESS_MAX_UNITS`;
     any other count is the evidence writer's, which no network certifier signed, and certifies no wipe), each
-    undeclared tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what
-    the prover's disks leave outside the boundary (`disk_gaps`) and each link leaving the node that no network
-    certifier counts."""
+    undeclared tier, what the prover's store leaves out (`store_gaps`) and each link leaving the node that no network
+    certifier counts. A placement that names the prover's store (`prover_store`, before the placement named no device)
+    is refused: its store's gaps aren't in it."""
+    if "prover_store" in where or "store_gaps" not in where:
+        raise ValueError("the wipe's placement names the prover's store or has no store_gaps: it is of the format "
+                         "before the placement named no device, so what the store leaves out isn't in it; run the "
+                         "leg again")
     out = [] if wipe_party.holds(where) else [f"key custody: {where[wipe_party.PREMISE]}"]
     if egress_mib is not None and egress_mib >= sw.EGRESS_MAX_UNITS:
         out.append("egress: uncounted, the check was given no network certifier's count over the session, so the bound "
@@ -581,11 +595,7 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
                    "check certifies no wipe on it until the check that composes the wipe with the network certifier")
     out += [f"tier {u['tier']}: {u['what']} ({u['bytes']} bytes) is undeclared: the fill doesn't cover it and M doesn't "
             "count it" for u in where["undeclared_tiers"]]
-    out += [f"tier {s['tier']}: the memory {s['device']}'s driver reserves is undeclared: the tier is CUDA's total "
-            f"({s['cuda_total_bytes']} bytes), which leaves it out, since NVML gave none ({s.get('nvml_error')}); the "
-            "fill doesn't cover it and M doesn't count it" for s in _parts(where.get("prover_store"))
-            if s.get("backend") == "cuda" and s.get("nvml_total_bytes") is None]
-    out += disk_gaps(where.get("prover_store"))
+    out += where["store_gaps"]
     out += [f"link {e['name']}: {e['ends'][0]} to {e['ends'][1]} ({e['via']}) is counted by no network certifier, so what "
             "leaves on it is outside E" for e in where["links"] if e["counted_by"] is None]
     return out
@@ -602,11 +612,12 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`,
     which names the program that answered and the host it ran on (`decided_by`, `period.decided_by`).
     Which host ran each party, whether `trusted-host`'s premise holds (the session's key against the pin
-    `wipe_party.AUDITOR_KEYS` holds for the challenger's host), the memory the prover kept the fill in,
-    the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
+    `wipe_party.AUDITOR_KEYS` holds for the challenger's host), what the prover's store leaves out (`store_gaps`), the
+    links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
-    (`placement`, `wipe_party.placement`); `wipe.json` adds the prover's own timings (`prover`: its store, gate, fill
-    and device read latency), the signed session's on the challenger's clock (`session`: the fill's GB/s, each read's
+    (`placement`, `wipe_party.placement`), which names no device; `wipe.json` adds the prover's own record (`prover`:
+    its store as it measured it, the device's name and ids among them, its gate, fill and device read latency),
+    the signed session's on the challenger's clock (`session`: the fill's GB/s, each read's
     round trip), the streamer's (`report.fill`), the session's window on each side's real-time clock (`window`) and
     what the bound doesn't cover (`uncertified`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
@@ -654,7 +665,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     if party.host != node and not any(e["to"] == party.host for e in c["links"]):
         conn = wipe.report["connection"]
         links.append(wipe_party.link("challenger", node, party.host, f"{conn['local']} to {conn['peer']}"))
-    where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], store=kept,
+    where = wipe_party.placement(node, party.host, wipe.report["key_sha512"], store_gaps=store_gaps(kept),
                                  simulated=c["placement"] == "simulated", links=links,
                                  undeclared=undeclared(tier, memory_bits(params) // 8, kept))
     window = {"challenger": wipe.report.get("window"),
@@ -727,7 +738,8 @@ __all__ = ["CONFIG", "COUNT_BITS", "DISK", "DRAM", "EPS", "EXPERIMENTAL", "LIMIT
            "case", "certify", "config", "digest", "disk_gaps", "disks", "dram_available", "egress_of", "foreign_bits",
            "foreign_labels", "gaps", "keeping", "leg",
            "main", "memory_bits",
-           "outcome", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve", "store_of", "summary",
+           "outcome", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve", "store_gaps", "store_of",
+           "summary",
            "timing", "uncertified", "uncounted", "undeclared", "writer_gap"]
 
 if __name__ == "__main__":
