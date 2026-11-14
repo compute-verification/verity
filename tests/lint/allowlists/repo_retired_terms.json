@@ -2642,7 +2642,6 @@
     {"file": "benchmarks/pouw/pyproject.toml", "count": 3},
     {"file": "benchmarks/pouw/served_h1/arch.sh", "count": 3},
     {"file": "benchmarks/pouw/served_h1/coins.py", "count": 100},
-    {"file": "benchmarks/pouw/served_h1/commit_legs.sh", "count": 54},
     {"file": "benchmarks/pouw/served_h1/credit.py", "count": 2},
     {"file": "benchmarks/pouw/served_h1/serve.py", "count": 24},
     {"file": "benchmarks/pouw/served_zk/job.sh", "count": 23},
@@ -4696,6 +4695,7 @@
     {"file": "security/Proofs/Pouw/Lemmas/Deadline.lean", "count": 16},
     {"file": "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean", "count": 87},
     {"file": "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Sampled.lean", "count": 6},
-    {"file": "verity/protocols/proofs/spot_flock/verifier/lean/lakefile.toml", "count": 6}
+    {"file": "verity/protocols/proofs/spot_flock/verifier/lean/lakefile.toml", "count": 6},
+    {"file": "benchmarks/pouw/served_h1/commit_variants.sh", "count": 53}
   ]
 }
