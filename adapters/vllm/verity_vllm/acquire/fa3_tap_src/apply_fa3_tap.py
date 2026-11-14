@@ -48,21 +48,21 @@ for h in ("verity_tap_params.h", "verity_tap_fa3.h"):
 # 2. softmax.h
 patch(os.path.join(hop, "softmax.h"), [
     ("    TensorT row_max, row_sum;\n",
-     "    TensorT row_max, row_sum;\n"
-     "#if defined(VERITY_TAP) && VERITY_TAP == 3\n"
-     "    TensorT tap_sum, tap_inv_sum;   // [verity fa3 tap] finalize's quad-reduced sum and inv_sum (row_sum becomes the lse)\n"
-     "#endif\n", 1),
-    ("            float inv_sum = (sum == 0.f || sum != sum) ? 0.f : 1.f / sum;\n            scores_scale(mi) = inv_sum * final_scale;\n"
-     "            // For FP8, we might have scaled the output of exp by 2**8 so we need to divide sum by that amount.\n"
-     "            if constexpr (Max_offset != 0) {\n                static constexpr float sum_scale = 1.f / float(1 << Max_offset);\n"
-     "                sum *= sum_scale;\n            }\n            row_sum(mi) = (sum == 0.f || sum != sum) ? -INFINITY : row_max(mi) * (softmax_scale_log2 * float(M_LN2)) + __logf(sum);\n"
-     "        }\n        return scores_scale;\n    };\n\n    __forceinline__ __device__ TensorT finalize_aux(",
-     "            float inv_sum = (sum == 0.f || sum != sum) ? 0.f : 1.f / sum;\n            scores_scale(mi) = inv_sum * final_scale;\n"
-     "#if defined(VERITY_TAP) && VERITY_TAP == 3\n            tap_sum(mi) = sum; tap_inv_sum(mi) = inv_sum;\n#endif\n"
-     "            // For FP8, we might have scaled the output of exp by 2**8 so we need to divide sum by that amount.\n"
-     "            if constexpr (Max_offset != 0) {\n                static constexpr float sum_scale = 1.f / float(1 << Max_offset);\n"
-     "                sum *= sum_scale;\n            }\n            row_sum(mi) = (sum == 0.f || sum != sum) ? -INFINITY : row_max(mi) * (softmax_scale_log2 * float(M_LN2)) + __logf(sum);\n"
-     "        }\n        return scores_scale;\n    };\n\n    __forceinline__ __device__ TensorT finalize_aux(", 1),
+     ("    TensorT row_max, row_sum;\n"
+      "#if defined(VERITY_TAP) && VERITY_TAP == 3\n"
+      "    TensorT tap_sum, tap_inv_sum;   // [verity fa3 tap] finalize's quad-reduced sum and inv_sum (row_sum becomes the lse)\n"
+      "#endif\n"), 1),
+    (("            float inv_sum = (sum == 0.f || sum != sum) ? 0.f : 1.f / sum;\n            scores_scale(mi) = inv_sum * final_scale;\n"
+      "            // For FP8, we might have scaled the output of exp by 2**8 so we need to divide sum by that amount.\n"
+      "            if constexpr (Max_offset != 0) {\n                static constexpr float sum_scale = 1.f / float(1 << Max_offset);\n"
+      "                sum *= sum_scale;\n            }\n            row_sum(mi) = (sum == 0.f || sum != sum) ? -INFINITY : row_max(mi) * (softmax_scale_log2 * float(M_LN2)) + __logf(sum);\n"
+      "        }\n        return scores_scale;\n    };\n\n    __forceinline__ __device__ TensorT finalize_aux("),
+     ("            float inv_sum = (sum == 0.f || sum != sum) ? 0.f : 1.f / sum;\n            scores_scale(mi) = inv_sum * final_scale;\n"
+      "#if defined(VERITY_TAP) && VERITY_TAP == 3\n            tap_sum(mi) = sum; tap_inv_sum(mi) = inv_sum;\n#endif\n"
+      "            // For FP8, we might have scaled the output of exp by 2**8 so we need to divide sum by that amount.\n"
+      "            if constexpr (Max_offset != 0) {\n                static constexpr float sum_scale = 1.f / float(1 << Max_offset);\n"
+      "                sum *= sum_scale;\n            }\n            row_sum(mi) = (sum == 0.f || sum != sum) ? -INFINITY : row_max(mi) * (softmax_scale_log2 * float(M_LN2)) + __logf(sum);\n"
+      "        }\n        return scores_scale;\n    };\n\n    __forceinline__ __device__ TensorT finalize_aux("), 1),
 ], "tap_inv_sum")
 
 # 2b. softmax.h, the MS class (compiled only with VERITY_MAT_SRC & 64): `Softmax::tap_max_scaled` and `scale_apply_exp2_ms`, the pinned
@@ -177,11 +177,11 @@ else:
 # 3b. mainloop, the MS class: VERITY_FA3_P also stores softmax.tap_max_scaled (VERITY_MAT_SRC & 64)
 patch(ml, [
     ("        if constexpr (VERITY_MAT_SRC & 8) { vmat.rowstat(softmax.row_max, sc_, softmax.row_sum, (nb), vt_step); } \\\n        vt_step++; )\n",
-     "        if constexpr (VERITY_MAT_SRC & 8) { vmat.rowstat(softmax.row_max, sc_, softmax.row_sum, (nb), vt_step); } \\\n"
-     "        VERITY_FA3_MS(nb) \\\n        vt_step++; )\n", 1),
+     ("        if constexpr (VERITY_MAT_SRC & 8) { vmat.rowstat(softmax.row_max, sc_, softmax.row_sum, (nb), vt_step); } \\\n"
+      "        VERITY_FA3_MS(nb) \\\n        vt_step++; )\n"), 1),
     ("  #define VERITY_FA3_FIN() VERITY_MAT(if constexpr (VERITY_MAT_SRC & 32) { vmat.fin(softmax.tap_sum, softmax.tap_inv_sum, softmax.row_max, softmax.row_sum); })\n",
-     "  #define VERITY_FA3_FIN() VERITY_MAT(if constexpr (VERITY_MAT_SRC & 32) { vmat.fin(softmax.tap_sum, softmax.tap_inv_sum, softmax.row_max, softmax.row_sum); })\n"
-     "  #if (VERITY_MAT_SRC & 64)\n  #define VERITY_FA3_MS(nb) vmat.ms(softmax.tap_max_scaled, (nb));\n  #else\n  #define VERITY_FA3_MS(nb)\n  #endif\n", 1),
+     ("  #define VERITY_FA3_FIN() VERITY_MAT(if constexpr (VERITY_MAT_SRC & 32) { vmat.fin(softmax.tap_sum, softmax.tap_inv_sum, softmax.row_max, softmax.row_sum); })\n"
+      "  #if (VERITY_MAT_SRC & 64)\n  #define VERITY_FA3_MS(nb) vmat.ms(softmax.tap_max_scaled, (nb));\n  #else\n  #define VERITY_FA3_MS(nb)\n  #endif\n"), 1),
 ], "VERITY_FA3_MS")
 
 # 4. launch template

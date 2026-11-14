@@ -15,7 +15,12 @@ Usage:
       [--define VERITY_TAP=3 --define VERITY_MAT_SRC=59]
 Writes <build-dir>/build_info.json and <build-dir>/resource_usage.txt.
 """
-import glob, hashlib, json, os, subprocess, time
+import glob
+import hashlib
+import json
+import os
+import subprocess
+import time
 from dataclasses import dataclass
 
 from verity_vllm import settings
@@ -82,7 +87,7 @@ def main(args: Options):
     os.makedirs(args.build_dir, exist_ok=True)
     nvcc = os.path.join(settings.raw('CUDA_HOME'), 'bin', 'nvcc')
     nvcc_ver = subprocess.run([nvcc, '--version'], capture_output=True, text=True).stdout.strip().splitlines()[-2:]
-    info = {
+    info: dict[str, object] = {
         'name': args.name, 'tree': tree, 'tree_commit': args.tree_commit,
         'sources': sources, 'source_sha256': {s: sha256(s) for s in sources},
         'header_sha256': {p: sha256(p) for p in sorted(glob.glob(os.path.join(hop, '*.h')) + glob.glob(os.path.join(hop, '*.hpp')))},
