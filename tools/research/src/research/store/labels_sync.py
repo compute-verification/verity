@@ -25,7 +25,7 @@ Per target (the r20 lesson: labels asserted on pods lived only in the pod's stor
 nothing under `labels/`, and teardown had to tar `labels/` by hand): a preserved Attempt is not preserved until its assertions are
 durable too.  `attempt_targets(doc)` is the closure an attempt's durability covers -- the attempt itself, its Derivation and every
 artifact it names -- and `push_targets()` pushes exactly those targets' assertions (called by `research data push RUN|ART`,
-`attempt publish`, and `LocalStore.push_labels`); `verify_targets()` is the labels leg of the durability gate
+`attempt publish`, and `LocalStore.push_labels`); `verify_targets()` is the labels part of the durability gate
 (`preserved.check`): every local assertion of every target must be listed on the remote with its canonical size; `compare()` is
 the local-vs-remote view behind `research data labels --remote`.  Conflicting assertions coexist on both sides (they are
 assertions, not fields); the catalog shows the latest per (key, by) and `--history` everything.
@@ -301,7 +301,7 @@ def read_through(store: LocalStore, targets: list[str], warn: Callable[[str], No
 
 
 def verify_targets(store: LocalStore, targets: list[str]) -> dict:
-    """The labels leg of the durability gate: for each target, every local assertion must be listed on the remote and HEAD back with
+    """The labels part of the durability gate: for each target, every local assertion must be listed on the remote and HEAD back with
     its canonical size.  Nothing is uploaded.  Assertions that exist only on the remote count as `remote_only` (not a failure: another
     machine asserted them).
         {"durable": bool, "targets": {t: {"local", "remote", "missing": [key...], "remote_only": n, "errors": [...]}}, "missing": n}"""

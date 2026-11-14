@@ -70,8 +70,8 @@ def rmsnorm_fused_program(N: int = 32, EPS: float = 1e-5) -> Program:
     return Program(bind(b1.RMSNormFusedCuda, N=N, EPS=EPS))
 
 
-def silu_mul_program(I: int = 8) -> Program:
-    return Program(bind(b1.SiluMul, I=I))
+def silu_mul_program(inter: int = 8) -> Program:
+    return Program(bind(b1.SiluMul, I=inter))
 
 
 def bias_add_program(N: int = 8) -> Program:

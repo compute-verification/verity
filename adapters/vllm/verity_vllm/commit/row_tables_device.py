@@ -35,10 +35,10 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import row_table as RT
+from verity.commitments.cuda import ROW_COMMIT, SHA512
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import domain_message
-from verity.commitments.cuda import ROW_COMMIT, SHA512
 from verity.protocols.accounting.pouw import prover
 
 from . import row_tables as RTB

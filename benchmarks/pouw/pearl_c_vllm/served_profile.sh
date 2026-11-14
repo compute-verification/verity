@@ -34,9 +34,9 @@ grep -q "RTX PRO 6000 Blackwell" "$OUT/identity.csv" && grep -q ", 12.0," "$OUT/
 UNPACK=$(mktemp -d); trap 'rm -rf "$UNPACK"' EXIT
 tar -xf "${SHIP_TAR:?}" -C "$UNPACK"
 SHIP=$(dirname "$(find "$UNPACK" -name MANIFEST.sha256 | head -1)")
-(cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" benchmarks/pouw/pearl_c_sm120/run.py || { echo "ship"; exit 3; }
+(cd "$SHIP" && sha256sum -c --quiet MANIFEST.sha256) && cmp -s "$SHIP/run.py" verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/run.py || { echo "ship"; exit 3; }
 PEARLC_EXPECT_UUID=$UUID SHAPES="" VARIANTS=sm120 "$PY" "$SHIP/run.py" "$SHIP/check/check.json" > "$OUT/gpu1-check.jsonl"
-ARGS=(--model "$MODEL" --kernel benchmarks/pouw/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/e2e.json"
+ARGS=(--model "$MODEL" --kernel verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120 --cubin "$SHIP/pearl_c_sm120.cubin" --out "$OUT/e2e.json"
       --reps "${REPS:-2}" ${SCHEDULE:+--schedule "$SCHEDULE"} ${SCHEME:+--scheme "$SCHEME"} ${GRAPHS:+--graphs} ${FP8_GRAPHS:+--fp8-graphs} ${WHOLE_STEP:+--whole-step}
       ${WHOLE_DEFER:+--whole-defer} ${BATCH:+--batch "$BATCH"} ${PROMPT:+--prompt "$PROMPT"} ${PREFILL:+--prefill "$PREFILL"}
       ${MEM_BASE:+--mem-base "$MEM_BASE"} ${MEM_ARM:+--mem-arm "$MEM_ARM"})
