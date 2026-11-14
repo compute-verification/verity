@@ -34003,7 +34003,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "d7a2ae1043cc0959499c77b8ed4a55ed945dd728013571334cb63cc4a00602a1",
+   "digest": "1c1577345b7a6f4816a08f028d540cde0b07b9d86f3403d83e0576f466d8546d",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Builder": "330557dcf94849eb4e17a37f661f7dcf381868026d5c68952c525352731fbdad",
@@ -34031,6 +34031,7 @@
     "Verity.Registration.theta": "7c0838a8b1b1426b2f24da6346bbe18eb4ce285ba459392fe9ab84f2c1d8cc79",
     "Verity.Site.Entry": "eede2c2d387eb4a9f99d5ebf3aaeb8a876d36db8021ef093ad4c9f788a7e15a0",
     "Verity.Site.Kind": "25686527e2604e7940fabb1c28353e7124b3967540ba78b07037d43c4b5631f6",
+    "Verity.Site.Kind.auditorHost": "44794e51da4aa9fcded39c39c661110f4412a7f8aaecadf39b9f7618eb0611f9",
     "Verity.Site.Kind.certifier": "71665d4207fc3aa3cc7ab58bb4975f605c752d0a974e289613969a5515666443",
     "Verity.Site.Kind.challenger": "6b66b12f125f4a337ca387fc897dfd46bc89f443bc1519c0c29791ec521890fa",
     "Verity.Site.Kind.device": "bca80413b69899850d65a4174b35218d6924b72d91616c32876521fa6e391534",
@@ -34038,8 +34039,8 @@
     "Verity.Site.Kind.memory": "1bfdce81da8ecbc8debddecddc1dfbda685f4536704dfb51c0e09bdcf94a3ae7",
     "Verity.Site.Kind.outside": "831eaf5e037a9ec38c07eaff5dff75fd3f92884d8a96707f4065be5ad609ae88",
     "Verity.Site.Kind.site": "da13405696114966c75713e4f0386c4c5ee83d232e51c9cd11ead140b56c610b",
-    "Verity.Site.Link": "ef6fce8a8b9d2340739697d9f5dbf92c1cbc8f64cd6b897798563d0e978c667c",
-    "Verity.Site.Loc": "02890e0712936de452acaca15682c3bdd8e8c98c87acf37cd65923e04fcd2cc1",
+    "Verity.Site.Link": "62d906747d7eb6a2368d369f4cbf199d051aac58e7f6e3a256259454a981bc4b",
+    "Verity.Site.Loc": "e52177045244a858ec3d89d1cbda926e9db6e8feebda2b453c5762b988493e3e",
     "Verity.Site.Owner": "3b54969c79f0c5bb04ee5be5d7aa4f7070f84c3270a4226ae5c8c543da1b0047",
     "Verity.Site.Owner.auditor": "3adf3b385218375bda24799f067a1c34a17e4927493cebd516530af6920651eb",
     "Verity.Site.Owner.prover": "67ff08251b819c0feecedcebd010a7005d157b55d030aaa36acea9d16cbda19f",
