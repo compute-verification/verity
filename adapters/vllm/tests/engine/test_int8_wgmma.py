@@ -160,7 +160,12 @@ def test_product_takes_the_row_and_keeps_the_values(monkeypatch):
     want = X.product(xq, sa, w, sw).view(torch.int16)
     calls = []
     real = W.scaled_mm
-    monkeypatch.setattr(W, "scaled_mm", lambda *a: calls.append(a[-1]) or real(*a))
+
+    def spy(*a):
+        calls.append(a[-1])
+        return real(*a)
+
+    monkeypatch.setattr(W, "scaled_mm", spy)
     monkeypatch.setattr(W, "WGMMA", {"sm_90": {(n, k): [(1024, "co_128x256:g8")]}})
     got = X.product(xq, sa, w, sw).view(torch.int16)
     assert calls == [("co_128x256", 8, 0)]
@@ -237,7 +242,12 @@ def test_product_zy_takes_the_row_and_keeps_the_values(monkeypatch):
     want_y, want_zy = X.product_zy(xq, sa, w, sw, rows)
     calls = []
     real = W.scaled_mm_zy
-    monkeypatch.setattr(W, "scaled_mm_zy", lambda *a: calls.append(a[-1]) or real(*a))
+
+    def spy(*a):
+        calls.append(a[-1])
+        return real(*a)
+
+    monkeypatch.setattr(W, "scaled_mm_zy", spy)
     monkeypatch.setattr(W, "WGMMA_ZY", {"sm_90": {(n, k): [(1024, "co_128x256:g8")]}})
     got_y, got_zy = X.product_zy(xq, sa, w, sw, rows)
     assert calls == [("co_128x256", 8, 0)]

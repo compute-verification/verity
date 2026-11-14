@@ -4,11 +4,11 @@ public import RemoteAudit
 public import RemoteAudit.Session
 
 /-!
-# The remote bandwidth audit's verifier: what its Lean verdicts mean (`RemoteAudit`)
+# PoUB's verifier: what its Lean verdicts mean (`RemoteAudit`)
 
-The properties of `RemoteAudit` (`verity/core/protocols/remote_bandwidth/lean/`, the verifier's definition, which
+The properties of `RemoteAudit` (`verity/protocols/accounting/poub/verifier/lean/`, the verifier's definition, which
 `audit.py` is held to by the difftest `remote-audit-difftest`), stated against its functions as they run, for every input of their types. They
-are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedSession`, and the
+are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedRun`, and the
 composed statement `Accounting.Guarantees.RegisteredCircuitRequirement` that reads it): each says what an acceptance
 establishes about the bytes the verifier holds. They take no premise. What the code cannot see (the coins' uniformity,
 the receipts' and the store's meaning as the game's oracle and words, the window's wall time) is not here: it is a
@@ -37,7 +37,7 @@ The draw (`draws`):
   derived from the openings coin, the registration and the window), each value `u` mapped to the receipt `(i, p)` whose
   index among the window's `U = Σ L_i` receipts in pass order is `u` (`receiptIndex`). So the draws are distinct
   receipts of the window, as many as the sampler's values, and the map is a bijection: what `Key.subset`'s law gives
-  the values (a uniform `k`-subset over independent uniform streams: `KeyedDraw.subsetOn_escape_le`, a proofs unit,
+  the values (a uniform `k`-subset over independent uniform streams: `KeyedSample.subsetOn_escape_le`, a proofs unit,
   under a uniform live coin, a premise) it gives the receipts.
 
 A pass's plan (`Plan.make?`, `Plan.changed`):

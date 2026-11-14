@@ -7,7 +7,7 @@ The FP8 checkpoint is `verity-vllm fp8-checkpoint`'s verity-fp8-block128/v1 (ada
 the pinned vLLM's FP8 block linear (`glm53.DEEPGEMM`).  ``lm_head`` (tied to the embedding, BF16, not a LinearBase) is not a
 linear Pearl-C computes.  Every layer has the same four.
 
-Decode's M is the batch and prefill's the step's tokens (``max_num_batched_tokens``): demos/vllm serves this model at
+Decode's M is the batch and prefill's the step's tokens (``max_num_batched_tokens``): the vLLM served run (adapters/vllm/tools/served_run) serves this model at
 a batch of 8 sequences and 2,048 batched tokens by default, beside GLM-5.3's M.
 
   python benchmarks/pouw/pearl_c_sm90/llama32_1b.py [--json]
@@ -20,7 +20,7 @@ import json
 import sys
 from dataclasses import asdict
 
-from glm53 import DEEPGEMM, FADD_READINGS, SCHEME, Linear, gamma, scheme
+from verity.protocols.proofs.spot.prover.cost.glm53 import DEEPGEMM, FADD_READINGS, SCHEME, Linear, gamma, scheme
 
 #: the checkpoint's config.json, the fields the linears read
 CONFIG = {"H": 2048, "NH": 32, "NKV": 8, "HD": 64, "I": 8192, "L": 16}

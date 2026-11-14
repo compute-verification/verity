@@ -1,4 +1,4 @@
-"""The registration log in Python: `Core.Registration` (`../../../interface/CoreProtocol/Registration.lean`), the type
+"""The registration log in Python: `Core.Registration` (`lean/RegistrationLog.lean`), the type
 every subprotocol and both composites read, entry for entry and refusal for refusal. The composition suite's difftest
 holds this module to the Lean (`../../../compose/verifier/lean/tests/test_registration_difftest.py`).
 
@@ -25,8 +25,9 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 ~~~
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
-fails (`REFUSALS`): a site entry by the Site's (`verity.device.entry_refusal`), an information entry by `previous`
-and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`; where every entry
+fails (`REFUSALS`): a site entry by the Site's (`verity.device.entry_refusal`), an information entry by `previous`,
+then `configuration-unordered` (a configuration item, which the log has no coin or run to order) and then
+`duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`; where every entry
 passes and the Site the log folds to lacks hardware the auditor's figures list (`verity.device.incomplete`), it
 raises `Refused` by `inventory` at the log's length. A component reads its view of an accepted log (`View`): the Site,
 θ's values (`View.value`), the builder and the days' declared circuits (`View.declared`), at the head, and the head
@@ -49,7 +50,7 @@ from verity.channel import canonical
 INFORMATION = "verity/registration/information/v1"
 DECLARATION = "verity/registration/declaration/v1"
 PROTOCOL = "verity/registration/log/v1"
-REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration")
+REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration", "configuration-unordered")
 
 
 class Refused(Exception):
@@ -63,8 +64,9 @@ class Refused(Exception):
 @dataclass(frozen=True)
 class Information:
     """An information entry: the items it registers, each canonical JSON with its `kind`: `theta` (`value`, `root`,
-    `leaves`, `words`, `domain`, `word_bits` when it is 32, `checkpoint_sha512` for public weights) or `builder`
-    (`digest`, `advice`, `cap`), and the head of the log it follows (`previous`, set by `chain`)."""
+    `leaves`, `words`, `domain`, `word_bits` when it is 32, `checkpoint_sha512` for public weights), `builder`
+    (`digest`, `advice`, `cap`) or `configuration` (`digest`, a run's configuration's SHA-512, which the check refuses:
+    `configuration-unordered`), and the head of the log it follows (`previous`, set by `chain`)."""
 
     items: tuple[Mapping[str, Any], ...] = ()
     previous: str = ""
@@ -173,6 +175,13 @@ def _hex64(j: Any, what: str) -> str:
 THETA_KEYS = ["domain", "kind", "leaves", "root", "value", "words"]
 """A θ item's keys, besides `word_bits` (present only as 32) and `checkpoint_sha512` (a public checkpoint's pin)."""
 BUILDER_KEYS = ["advice", "cap", "digest", "kind"]
+CONFIGURATION_KEYS = ["digest", "kind"]
+
+
+def configuration(digest: str) -> dict[str, Any]:
+    """A configuration item naming a run's configuration by its SHA-512 as hex. Unwritten: the log has no coin and no
+    run to register it before, and the check refuses every configuration item (`configuration-unordered`)."""
+    raise NotImplementedError("proofs/architecture-on-branch")
 
 
 def item_of(j: Any) -> dict[str, Any]:
@@ -194,7 +203,10 @@ def item_of(j: Any) -> dict[str, Any]:
         _exactly(j, BUILDER_KEYS, "a builder item")
         return {"advice": _str(j["advice"], "advice"), "cap": _nat(j["cap"], "cap"), "digest": _hex64(j["digest"], "digest"),
                 "kind": kind}
-    raise Malformed(f"an item: kind {kind} is not one of [theta, builder]")
+    if kind == "configuration":
+        _exactly(j, CONFIGURATION_KEYS, "a configuration item")
+        return {"digest": _hex64(j["digest"], "digest"), "kind": kind}
+    raise Malformed(f"an item: kind {kind} is not one of [theta, builder, configuration]")
 
 
 def ascii(j: Any) -> None:
@@ -259,6 +271,8 @@ class State:
             return "previous"
         if isinstance(e, Declaration):
             return "duplicate-declaration" if any(d.day == e.day for d in self.declared) else None
+        if any(i["kind"] == "configuration" for i in e.items):
+            return "configuration-unordered"
         return None if _nodup([item_key(i) for i in self.items + e.items]) else "duplicate-information"
 
     def add(self, e: Entry) -> State:

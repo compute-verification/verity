@@ -6,21 +6,15 @@ public import RemoteAudit.Difftest
 /-!
 # The verifier's process: `remote-audit-verifier`
 
-The remote audit's Lean verifier as a process the driver (`verity/core/protocols/remote_bandwidth/session/verifier.py`) runs beside its
-Python: it holds the verifier's registry (`Registry`) and every session's state (`Session.State`) and takes the events
-as they happen, one request a line on stdin, each answered by one line on stdout, `{"answer": JSON}` or
-`{"error": MESSAGE}`, in canonical JSON (`Flock.canon`). Requests (byte strings lowercase hex, an event as the
-difftest's `session` reads one, `Difftest.eventOf`):
+PoUB's Lean verifier as a process the driver
+(`verity/protocols/accounting/poub/verifier/session/verifier.py`) runs beside its Python: it holds the verifier's
+registry (`Registry`) and every session's state (`Session.State`) and takes the events as they happen, one request a
+line on stdin, each answered by one line on stdout, `{"answer": JSON}` or `{"error": MESSAGE}`, in canonical JSON
+(`Flock.canon`). Requests (byte strings lowercase hex, an event as the difftest's `session` reads one,
+`Difftest.eventOf`):
 
 * `{"op": "init", "source", "registry", "chunk"}`: the verifier's secret, the registry `registry/v0` reads back (`null`
   for none), and the draws a thread checks at once; the answer is the registry;
-* `{"op": "bind", "bytes": n, "pin", "path", "role", "engines", "arena_blocks", "workers"}` and then n bytes, the
-  pinned arena's weights blocks' digests (64 bytes a block, `store.weight_digests`'s file): the store binding of
-  `verifier.py --model role` (`Store.bind`: the pin from its file's bytes `pin`, read from `path`, and the store's
-  shape), `{"pin", "weights_blocks"}` or `{"refused": why}` (`Difftest.boundJ`), the verifier's binding from then on;
-* `{"op": "hold", "node", "blocks", "payload_root", "key", "layout"}`: a hello's store held to that binding
-  (`Store.Binding.hold`, its payload root's subtrees on `workers` threads), `{"regions", "expected_root"}` or
-  `{"refused": why, "expected_root"}` (`Difftest.heldJ`), the decision of record on the hello's `bound`;
 * `{"op": "register", "node", "blocks", "payload_root", "codec", "receipt", "bind", "rows", "layout", "nonce"}`:
   `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
   whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
@@ -60,12 +54,12 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
   the same line of groups and windows given (`Line.line`, `Difftest.lineFn`).
 
-A session over PoUS's P2 store is of record here too (`P2Session`), as `p2_party.py` runs it beside `p2.Session`, which
-can only veto: the process holds one P2 store and its sessions, each read from the bytes the verifier holds and the
-prover sends.
+A session over PoUS's P2 store is of record here too (`P2Session`), as `p2_parties.py` runs it beside `p2.Session`,
+which can only veto: the process holds one P2 store and its sessions, each read from the bytes the verifier holds and
+the prover sends.
 
 * `{"op": "p2_hold", "bytes": n, "chunk", "session"}` and then n bytes, the auditor's registration file
-  (`p2_party.registration_json`'s): the store held (`P2Session.heldOf`), the draws a thread checks, and the session
+  (`p2_parties.registration_json`'s): the store held (`P2Session.heldOf`), the draws a thread checks, and the session
   parameters every request must restate, `session` (`P2Session.Auditor.ofJson`, a toy party's) or, without one,
   `P2Session.SESSION`; `{"digest", "plan", "plan_units", "session", "units"}`;
 * `{"op": "p2_session", "bytes": n, "not_before_ns"}` and then the prover's request line: `{"session": k}`, its coins
@@ -126,8 +120,6 @@ structure Server where
   chunk : Nat := 1024
   bodies : Array ((ByteArray × Nat × Int) × Array ByteArray) := #[]
   checks : Array Check := #[]
-  binding : Option Store.Binding := none
-  workers : Nat := 1
   p2 : Option P2Session.Held := none
   p2Auditor : P2Session.Auditor := P2Session.SESSION
   p2Chunk : Nat := 64
@@ -235,19 +227,6 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
     let source ← ofV (bytesOf req "source")
     let chunk ← ofV (nat req "chunk")
     pure (Json.mkObj [("registry", registry.toJson)], { srv with source, registry, chunk })
-  | "bind" =>
-    let digests ← readBytes stdin (← ofV (nat req "bytes"))
-    if srv.binding.isSome then throwThe String "the verifier's store is bound once"
-    if digests.isEmpty || digests.size % 64 ≠ 0 then
-      throwThe String "an arena's weights are one or more blocks' digests of 64 bytes"
-    let b := Store.bind (← ofV (bytesOf req "pin")) (← ofV (J.str req "path" "request"))
-      (← ofV (J.str req "role" "request")) digests (← ofV (J.asInt (← ofV (J.get req "engines" "request")) "engines"))
-      (← ofV (J.asInt (← ofV (J.get req "arena_blocks" "request")) "arena_blocks"))
-    let workers ← ofV (nat req "workers")
-    pure (Difftest.boundJ b, { srv with binding := b.toOption, workers := max 1 workers })
-  | "hold" =>
-    let some b := srv.binding | throwThe String "no binding: a hello is held to the store `bind` bound"
-    pure (← ofV (Difftest.holdOf b req srv.workers), srv)
   | "register" =>
     let some kind := Kind.ofName? (← ofV (J.str req "receipt" "request"))
       | throwThe String "a receipt kind is sketch-sha512 or block-sha512"

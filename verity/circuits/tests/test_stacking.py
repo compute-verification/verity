@@ -746,7 +746,7 @@ def test_the_range_rules_hold_on_the_evaluator():
     ranges = [None, (0, 0), (0, 0x42FE0000), (0x3F800000, 0x7F800000), (0x7F800000, 0x7F800000), (P.S32[0], -1),
               (0x7F800001, 0x7FFFFFFF), (-5, 5), (P.S32[0], 0x42FE0000)]
 
-    def draws(r):
+    def samples(r):
         if r is None:
             return [v - (1 << 32) if v >> 31 else v for v in special] + [rng.randrange(*P.S32) for _ in range(40)]
         return [r[0], r[1]] + [s for s in (v - (1 << 32) if v >> 31 else v for v in special) if r[0] <= s <= r[1]] + [
@@ -759,8 +759,8 @@ def test_the_range_rules_hold_on_the_evaluator():
                 out = rule(a, b)
                 if out is None:
                     continue
-                for x in draws(a):
-                    for y in draws(b):
+                for x in samples(a):
+                    for y in samples(b):
                         z = prim.evaluate(x & 0xFFFFFFFF, y & 0xFFFFFFFF)
                         assert out[0] <= s32_value(z) <= out[1], (prim.id, a, b, hex(x), hex(y), hex(z), out)
 

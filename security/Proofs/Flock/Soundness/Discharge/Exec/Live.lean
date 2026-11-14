@@ -183,7 +183,7 @@ def DecodesAll : Prop :=
     (fun o => Accepts I (wr S R o)) (·.accepted = true) (opn S R) (dec S R) (one S R) (fin S R) (capOf S R)
     (repsOf (D := D) execArith (T S R))
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The simulated audit strategy**: the live prover's registration, and at each sample the simulated session
 strategy against its live session. -/
@@ -238,8 +238,8 @@ incorrect proof blocks of the committed values of the simulated prover (`simAudi
 Beyond `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`,
 `hCR`), it takes `hdec`: the decoder is right on the sessions verity-verify-proof accepts (the decoder premise). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (T : Finset (Fin n) → Reg → TabSpec mPts)
@@ -258,26 +258,26 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live
     (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
     (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap Dig)) (N : ℕ)
     (hdec : DecodesAll H512 enc512 leaf512 T I wr opn dec one fin capOf)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL (p.partition outs) H512 enc512 leaf512 (fun S R => [T S R]) tab (rs.binding hHm)
       (reg (simAudit H512 enc512 leaf512 T I wr opn dg dec one fin capOf N hdec τ))
       (cont (simAudit H512 enc512 leaf512 T I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 leaf512
-      [T ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+      [T ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simAudit H512 enc512 leaf512 T I wr opn dg dec one fin capOf N hdec τ))] j
       (batchStratL H512 enc512 leaf512 (fun S R => [T S R])
         (cont (simAudit H512 enc512 leaf512 T I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 (fun S R => [T S R]) tab (rs.binding hHm)
               (reg (simAudit H512 enc512 leaf512 T I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAudit H512 enc512 leaf512 T I wr opn dg dec one fin capOf N hdec τ)) k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict (fun S R => [T S R]) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict (fun S R => [T S R]) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAudit H512 enc512 leaf512 T I wr opn dg dec one fin capOf N hdec τ)) +
-        (p.partition outs).linkBoundE (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
+        (p.partition outs).linkBoundE (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop)
           (fun S R => [T S R]) tab (rs.binding hHm) k Rw M ρ t' := by
   have h := p.flock_headline_execL outs (fun S R => [T S R]) tab σs ks hks St hS Kd pop Lb src hA3 pp ones hConst
     zeros hZero lay rs hHm hk hRw hM hρ hr ht K I (liveOf dg mPts N wr) τ

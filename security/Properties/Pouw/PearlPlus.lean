@@ -48,8 +48,8 @@ that record the premise reads is the H200's, so the properties are stated at it 
   serves the one scheme, `pearl-c-h100-v1-h3`;
 * the prices (`Prices.h100`: an FP32 add 32, a BF16 MAC 2, `Costs.adopted`) and W1's (`W1Prices.h100`: an E4M3 or S8 MAC 1,
   a BF16 MAC 2, FP32 32, a conversion 64, INT32 64), per tensor-core clock: the H200 is the same GH100 at sm_90a, the same
-  4,096 E4M3 MACs per SM a clock and half that in BF16 (`Core.Accel.H200`), and its data sheet's FP8 and BF16 rates are the
-  H100 SXM's;
+  4,096 E4M3 MACs per SM a clock and half that in BF16 (`hardware/cards/h200-sxm-141gb.toml`), and its data sheet's
+  FP8 and BF16 rates are the H100 SXM's;
 * the steps (`hopperE4m3K32` at G = 4, the BF16 k16 peel, `PeelExact`, `Skip.unitFlags`, `SaltDead`) and W1's fragments
   (`h100Frags`: wgmma E4M3 m64nNk32 and BF16 m64nNk16, N = 64 to 256, each priced whole): the same wgmma on the same die,
   and the verifier recomputes an H200 run's sampled tiles bit for bit at `HOPPER_E4M3_K32`;
@@ -155,22 +155,30 @@ def TileAcceptMeans : Prop :=
 /-- **The inert-work bound a passed tile keeps** (`Rule.checkOpened`'s `capFailure`): on its credited rows `cr` and
 columns `cc`, the replayed inert work, 40 per flagged atom-word, 32 per later +0 promotion and fs·|cc|/n per forming
 element of a credited row (`Rule.rowElements`: salt-dead, or in an atom block every word of its row flags;
-`tileDebitDev`'s elems), is at most the inert-work share ρ = 1/400 of `creditOf(1, |K|, n)/n` per credited cell, as a
-tile and on each credited A row (four times that at a census width). `Rule.debitUnits` is n times the inert work, so the
-tile's test is 400·(n·D + fs·|cc|·E) ≤ creditOf(1, |K|, n)·|cr|·|cc|. -/
+`tileDebitDev`'s elems) and one per product of a word that no salt makes count (`Rule.wordMend`: a dead pair or a
+forced zero, from both rows' ends, `Rule.rowEnds`; rev1's `wordMend`), is at most the inert-work share ρ = 1/400 of
+`creditOf(1, |K|, n)/n` per credited cell, as a tile and on each credited A row (four times that at a census width).
+`Rule.debitUnits` is n times the chain's and the forming's inert work, so with M the mends the tile's test is
+400·(n·(D + M) + fs·|cc|·E) ≤ creditOf(1, |K|, n)·|cr|·|cc|. -/
 def TileKeepsTheCap : Prop :=
   ∀ (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops), Rule.checkOpened s r rows cols ops = none →
     let (cr, cc) := r.credited rows cols
     cr ≠ [] → cc ≠ [] →
-    ∃ (words : List (List (Array Bool × Nat))) (elems : List Nat),
+    ∃ (words : List (List (Array Bool × Nat))) (elems : List Nat)
+      (endsA endsB : List (Array Nat × Array Nat × Array Bool)),
       cr.mapM (fun i => cc.mapM fun j => Rule.wordFlags ops.a.codes[rows.idxOf i]! ops.b.codes[cols.idxOf j]!) = .ok words ∧
       (cr.zip words).mapM (fun (iw : Nat × List (Array Bool × Nat)) =>
         Rule.rowElements ops.a.alpha[rows.idxOf iw.1]! ops.a.beta[rows.idxOf iw.1]! ops.a.x[rows.idxOf iw.1]!
           (iw.2.map Prod.fst)) = .ok elems ∧
+      cr.mapM (fun i => Rule.rowEnds ops.a.alpha[rows.idxOf i]! ops.a.beta[rows.idxOf i]! ops.a.x[rows.idxOf i]!) =
+        .ok endsA ∧
+      cc.mapM (fun j => Rule.rowEnds ops.b.alpha[cols.idxOf j]! ops.b.beta[cols.idxOf j]! ops.b.x[cols.idxOf j]!) =
+        .ok endsB ∧
       let credit := creditOf 1 r.kKept r.matmul.n
-      let rowDebit := (words.zip elems).map fun (we : List (Array Bool × Nat) × Nat) =>
-        Rule.debitUnits r.matmul.n cc.length (we.1.foldl (fun t w => t + (w.1.filter id).size) 0)
-          (we.1.foldl (fun t w => t + w.2) 0) we.2
+      let rowDebit := ((words.zip elems).zip endsA).map
+        fun (we : (List (Array Bool × Nat) × Nat) × (Array Nat × Array Nat × Array Bool)) =>
+          Rule.debitUnits r.matmul.n cc.length (we.1.1.foldl (fun t w => t + (w.1.filter id).size) 0)
+            (we.1.1.foldl (fun t w => t + w.2) 0) we.1.2 + r.matmul.n * endsB.foldl (fun t eb => t + Rule.wordMend we.2 eb) 0
       rowDebit.foldl (· + ·) 0 * Rule.CAP_DEN ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
       ∀ d ∈ rowDebit, d * Rule.CAP_DEN ≤
         Rule.CAP_NUM * credit * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)

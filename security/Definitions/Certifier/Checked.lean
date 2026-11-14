@@ -58,7 +58,7 @@ property `valid` of the whole run, not of the inputs alone.
   relation it is used with accepts at. `traceRun` is the trace's run, the incorrect proof blocks' committed gates held
   at the trace's values (`heldAdv`), which `RLeakChecked` accepts at. A check that holds on one run need not hold on
   another: the two differ wherever they hold a committed gate at different values.
-* `MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodEscapes` and `MonitoringPeriodLeaksChecked`: a monitoring period's inputs, as
+* `MonitoringPeriodChannel`, `MonitoringPeriodAdaptive`, `MonitoringPeriodMissProb` and `MonitoringPeriodLeaksChecked`: a monitoring period's inputs, as
   `PooledLeakAccepted` takes them, the leak relation at `LeakAtChecked`.
 -/
 
@@ -176,8 +176,12 @@ def MonitoringPeriodAdaptive {m : ℕ} {Ω Z : Type} (n : Fin m → ℕ) (acc : 
     (∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z ω i = W z ω' i) ∧ ∀ z ω i, W z ω i ⊆ Finset.range (n i)
 
 /-- **The conditional escape**: given the earlier windows' coins, window `i`'s audit accepts with probability at most
-`(1 - q)^|W_i| + e_i`, `q` the design's per-window detection probability. -/
-def MonitoringPeriodEscapes {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
+`(1 - q)^|W_i| + e_i`, `q` the design's per-window detection probability. `q` is a hypothesis: a window that samples a
+uniform `k`-subset of its `n` proof blocks misses `|W_i|` of them with probability at most `(1 - k/n)^|W_i|`, so the
+rule `rate:NUM/DEN`, whose count is at least `NUM/DEN` of whatever `n` a window registers, gives that term at
+`q = NUM/DEN`, while under a fixed count the largest `q` that holds falls as the prover pads `n`. That a window's audit
+samples so is not stated here. -/
+def MonitoringPeriodMissProb {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (W : Z → (Fin m → Ω) → Fin m → Finset ℕ) (q : ℝ) (e : Fin m → ℝ) : Prop :=
   ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i
 

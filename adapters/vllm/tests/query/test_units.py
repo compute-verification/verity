@@ -9,8 +9,8 @@ import pytest
 from verity_vllm.query.units import (
     PartitionError,
     Policy,
+    ProofBlock,
     ValueRef,
-    VerificationUnit,
     boundary,
     boundary_values,
     partition_by,
@@ -86,11 +86,11 @@ def test_boundary_records_readers_in_body_order_once_each():
 def test_units_must_partition_the_calls():
     Pr = chain()
     with pytest.raises(PartitionError):
-        boundary_values(Pr, lambda P_: (VerificationUnit("only-first", frozenset({0})),))
+        boundary_values(Pr, lambda P_: (ProofBlock("only-first", frozenset({0})),))
     with pytest.raises(PartitionError):
-        boundary_values(Pr, lambda P_: (VerificationUnit("a", frozenset({0, 1})), VerificationUnit("b", frozenset({1}))))
+        boundary_values(Pr, lambda P_: (ProofBlock("a", frozenset({0, 1})), ProofBlock("b", frozenset({1}))))
     with pytest.raises(ValueError):
-        VerificationUnit("empty", frozenset())
+        ProofBlock("empty", frozenset())
 
 
 def test_a_program_whose_ids_clash_and_units_that_name_no_call_are_refused_by_name():

@@ -128,7 +128,7 @@ theorem keeps_h1 (context format program partition : String) (bytes : ByteArray)
 
 /-- **The window's salt is kept**: the subprotocol's check item names no coin mode, so the window is seeded, and the honest
 answer carries no salt. -/
-theorem saltKept_h1 (context : String) (r c : WindowCommitmentRecord) (units : Array Nat) :
+theorem saltKept_h1 (context : String) (r c : ExecutionPhaseCommitmentRecord) (units : Array Nat) :
     Properties.Pouw.Check.SaltKept (h1Params context) r (h1Evidence c units) := rfl
 
 /-- **The deployed check accepts H1's honest window at the subprotocol's parameters**: on the loop's honest registration and
@@ -139,13 +139,13 @@ theorem check_h1 (context format program partition : String) (bytes : ByteArray)
     protocol.check (h1Params context) (h1Reg context format program partition bytes)
         (h1Evidence (h1Reg context format program partition bytes) units) =
       .accept ⟨h1Check, Work.at 3 39, h1Fixed.sampling, [2, 2, 2, 2], none, units⟩ (h1Profile program partition) :=
-  Properties.Pouw.Check.acceptMeans_complete _ _ _ h1Fixed _ { law := .subset 24, population := 144, units }
+  Properties.Pouw.Check.acceptMeans_complete _ _ _ h1Fixed _ { samplingDesign := .subset 24, population := 144, units }
     (keeps_h1 context format program partition bytes)
     ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩ (saltKept_h1 _ _ _ _)
 
 /-- **`SampleIsCoin`'s numbers at the subprotocol's parameters**: every window the check accepts at them, registered at level 39
 (the loop's 128 real tiles), publishes the population `N = 144` and the sample size `K′ = 24`. -/
-theorem numbers_h1 (context : String) (c : WindowCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity)
+theorem numbers_h1 (context : String) (c : ExecutionPhaseCommitmentRecord) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (hc : protocol.check (h1Params context) c e = .accept pub prof) (hl : levelOf c.window.items = some 39) :
     pub.work.n = 144 ∧ pub.sampling.k = 24 := by
   obtain ⟨f, draw, hk, -, -, rfl⟩ := Properties.Pouw.Check.acceptMeans _ _ _ _ _ hc

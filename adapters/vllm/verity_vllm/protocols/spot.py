@@ -1,4 +1,4 @@
-"""Sampled proofs as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
+"""SPOT as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
 
 Its scheme, ``rows-sha512``, names what the Commit commits under: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte run
 roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's sample: up to
@@ -49,7 +49,7 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
 
 
 def requires_build(scheme: str, ctx: Context) -> bool:
-    """Sampled proofs verifies the Program emitted by the row's Build."""
+    """SPOT verifies the Program emitted by the row's Build."""
 
     return True
 
@@ -59,3 +59,6 @@ def install(scheme: str, target: Target) -> Option:
     return Option(name=entry, hooks=target.hooks(entry),
                   details={"commitment_scheme": scheme, "law": LAW,
                            "challenge": "verity.commitments.randomness.derive from an auditor key"})
+
+
+__all__ = ["DEFAULT_SCHEME", "NAME"]

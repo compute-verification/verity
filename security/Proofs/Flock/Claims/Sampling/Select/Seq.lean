@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Module.Field
@@ -27,7 +27,7 @@ uniform and unread, so the strata's samples are independent.
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.DrawExec Finset
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.SampleExec Finset
 open scoped ENNReal
 
 /-- A sampler sampling `D` at its `j`-th read of `N` bytes of `src` from `p`, its first sample: it samples nothing on the reads
@@ -95,11 +95,11 @@ theorem stopsAt_append {N : ℕ} {run : ByteArray → Option (Array ℕ)} {a b :
     · rw [hex j ha.ge]; exact hrun
     · rw [hex i (ha ▸ Nat.mul_le_mul_right _ hij.le)]; exact hnone i hi hij
 
-theorem streamOf_data {L : ℕ} (f : Fin L → Fin 256) : (Law.streamOf f).data.toList = bsOf f := by
-  simp [Law.streamOf, bsOf, Array.toList_ofFn]
+theorem streamOf_data {L : ℕ} (f : Fin L → Fin 256) : (SamplingDesign.streamOf f).data.toList = bsOf f := by
+  simp [SamplingDesign.streamOf, bsOf, Array.toList_ofFn]
 
 theorem streamOf_append {w ℓ : ℕ} (a : Fin w → Fin 256) (b : Fin ℓ → Fin 256) :
-    Law.streamOf (Fin.append a b) = Law.streamOf a ++ Law.streamOf b := by
+    SamplingDesign.streamOf (Fin.append a b) = SamplingDesign.streamOf a ++ SamplingDesign.streamOf b := by
   refine ByteArray.ext (Array.ext' ?_)
   rw [ByteArray.data_append, Array.toList_append, streamOf_data, streamOf_data, streamOf_data, bsOf_append]
 
@@ -107,25 +107,25 @@ theorem streamOf_append {w ℓ : ℕ} (a : Fin w → Fin 256) (b : Fin ℓ → F
 one of the rest has the product of their probabilities. -/
 theorem prCoin_append {w ℓ : ℕ} (E P Q : ByteArray → Prop)
     (h : ∀ a b : ByteArray, a.size = w → (E (a ++ b) ↔ P a ∧ Q b)) :
-    prCoin (fun f : Fin (w + ℓ) → Fin 256 => E (Law.streamOf f)) =
-      prCoin (fun a : Fin w → Fin 256 => P (Law.streamOf a)) * prCoin (fun b : Fin ℓ → Fin 256 => Q (Law.streamOf b)) := by
+    prCoin (fun f : Fin (w + ℓ) → Fin 256 => E (SamplingDesign.streamOf f)) =
+      prCoin (fun a : Fin w → Fin 256 => P (SamplingDesign.streamOf a)) * prCoin (fun b : Fin ℓ → Fin 256 => Q (SamplingDesign.streamOf b)) := by
   classical
   unfold prCoin
   rw [← avg_equiv (appendEquiv w ℓ), avg_prod]
   have hE : ∀ (a : Fin w → Fin 256) (b : Fin ℓ → Fin 256),
-      (if E (Law.streamOf (appendEquiv w ℓ (a, b))) then (1 : ℝ≥0∞) else 0) =
-        (if P (Law.streamOf a) then (1 : ℝ≥0∞) else 0) * (if Q (Law.streamOf b) then (1 : ℝ≥0∞) else 0) := by
+      (if E (SamplingDesign.streamOf (appendEquiv w ℓ (a, b))) then (1 : ℝ≥0∞) else 0) =
+        (if P (SamplingDesign.streamOf a) then (1 : ℝ≥0∞) else 0) * (if Q (SamplingDesign.streamOf b) then (1 : ℝ≥0∞) else 0) := by
     intro a b
     have : appendEquiv w ℓ (a, b) = Fin.append a b := rfl
     rw [this, streamOf_append, h _ _ (size_streamOf a)]
-    by_cases hP : P (Law.streamOf a) <;> by_cases hQ : Q (Law.streamOf b) <;> simp [hP, hQ]
+    by_cases hP : P (SamplingDesign.streamOf a) <;> by_cases hQ : Q (SamplingDesign.streamOf b) <;> simp [hP, hQ]
   simp only [hE]
   have hb : ∀ a : Fin w → Fin 256, (avg fun b : Fin ℓ → Fin 256 =>
-      (if P (Law.streamOf a) then (1 : ℝ≥0∞) else 0) * (if Q (Law.streamOf b) then (1 : ℝ≥0∞) else 0)) =
-      (if P (Law.streamOf a) then (1 : ℝ≥0∞) else 0) *
-        avg fun b : Fin ℓ → Fin 256 => if Q (Law.streamOf b) then (1 : ℝ≥0∞) else 0 := by
+      (if P (SamplingDesign.streamOf a) then (1 : ℝ≥0∞) else 0) * (if Q (SamplingDesign.streamOf b) then (1 : ℝ≥0∞) else 0)) =
+      (if P (SamplingDesign.streamOf a) then (1 : ℝ≥0∞) else 0) *
+        avg fun b : Fin ℓ → Fin 256 => if Q (SamplingDesign.streamOf b) then (1 : ℝ≥0∞) else 0 := by
     intro a
-    simp only [mul_comm (if P (Law.streamOf a) then (1 : ℝ≥0∞) else 0)]
+    simp only [mul_comm (if P (SamplingDesign.streamOf a) then (1 : ℝ≥0∞) else 0)]
     rw [avg_mul_const, mul_comm]
   simp only [hb]
   rw [avg_mul_const]
@@ -152,12 +152,12 @@ theorem sum_prCoin_le {C ι : Type} [Fintype C] (s : Finset ι) (p : ι → C �
 its sample meets its condition with probability at most `q`. -/
 def Stage.Bounded (s : Stage) (q : ℝ≥0∞) : Prop :=
   0 < s.need ∧ (∀ a b D, s.run a = some D → s.run (a ++ b) = some D) ∧
-    ∀ L, prCoin (fun f : Fin L → Fin 256 => ∃ D, s.run (Law.streamOf f) = some D ∧ s.miss D) ≤ q
+    ∀ L, prCoin (fun f : Fin L → Fin 256 => ∃ D, s.run (SamplingDesign.streamOf f) = some D ∧ s.miss D) ≤ q
 
 /-- **A sequential sample misses no more often than its stages' bounds multiplied**: on `L` uniform bytes, the stages sample
 in turn from the start and each sample meets its condition with probability at most the product of their bounds. -/
 theorem seqMiss_le : ∀ (ss : List (Stage × ℝ≥0∞)), (∀ p ∈ ss, p.1.Bounded p.2) →
-    ∀ L, prCoin (fun f : Fin L → Fin 256 => SeqMiss (ss.map (·.1)) (Law.streamOf f) 0) ≤ (ss.map (·.2)).prod
+    ∀ L, prCoin (fun f : Fin L → Fin 256 => SeqMiss (ss.map (·.1)) (SamplingDesign.streamOf f) 0) ≤ (ss.map (·.2)).prod
   | [], _, L => by simpa [SeqMiss] using prCoin_le_one (fun _ : Fin L → Fin 256 => True)
   | (s, q) :: ss, hb, L => by
     obtain ⟨hN, hrun, hq⟩ : s.Bounded q := hb (s, q) List.mem_cons_self
@@ -166,8 +166,8 @@ theorem seqMiss_le : ∀ (ss : List (Stage × ℝ≥0∞)), (∀ p ∈ ss, p.1.B
     set rest := (ss.map (·.2)).prod
     let X : ℕ → ByteArray → Prop := fun j a => ∃ D, StopsAt s.need s.run a 0 j D ∧ s.miss D
     let A : ℕ → ByteArray → Prop := fun j a => X j a ∧ SeqMiss (ss.map (·.1)) a (j * s.need)
-    have hE : prCoin (fun f : Fin L → Fin 256 => SeqMiss (s :: ss.map (·.1)) (Law.streamOf f) 0) ≤
-        ∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => A j (Law.streamOf f)) := by
+    have hE : prCoin (fun f : Fin L → Fin 256 => SeqMiss (s :: ss.map (·.1)) (SamplingDesign.streamOf f) 0) ≤
+        ∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => A j (SamplingDesign.streamOf f)) := by
       refine le_trans (prCoin_mono fun f hf => ?_) (prCoin_exists_le _ _)
       obtain ⟨j, D, hst, hmiss, hrest⟩ := hf
       have hjL : j ≤ L := by
@@ -175,8 +175,8 @@ theorem seqMiss_le : ∀ (ss : List (Stage × ℝ≥0∞)), (∀ p ∈ ss, p.1.B
         rw [size_streamOf] at this
         exact le_trans (Nat.le_mul_of_pos_right j hN) (by omega)
       exact ⟨j, mem_range.2 (by omega), ⟨D, hst, hmiss⟩, by simpa using hrest⟩
-    have hterm : ∀ L j, prCoin (fun f : Fin L → Fin 256 => A j (Law.streamOf f)) ≤
-        prCoin (fun f : Fin L → Fin 256 => X j (Law.streamOf f)) * rest := by
+    have hterm : ∀ L j, prCoin (fun f : Fin L → Fin 256 => A j (SamplingDesign.streamOf f)) ≤
+        prCoin (fun f : Fin L → Fin 256 => X j (SamplingDesign.streamOf f)) * rest := by
       intro L j
       by_cases hjL : j * s.need ≤ L
       · obtain ⟨ℓ, rfl⟩ := Nat.exists_eq_add_of_le hjL
@@ -193,17 +193,17 @@ theorem seqMiss_le : ∀ (ss : List (Stage × ℝ≥0∞)), (∀ p ∈ ss, p.1.B
           simp [prCoin, avg_const]
         rw [h1, mul_one]
         exact mul_le_mul_right (ih ℓ) _
-      · have h0 : ∀ f : Fin L → Fin 256, ¬ A j (Law.streamOf f) := by
+      · have h0 : ∀ f : Fin L → Fin 256, ¬ A j (SamplingDesign.streamOf f) := by
           rintro f ⟨⟨D, hst, -⟩, -⟩
           have := hst.2.1
           rw [size_streamOf] at this
           omega
-        rw [show (fun f : Fin L → Fin 256 => A j (Law.streamOf f)) = fun _ => False from
+        rw [show (fun f : Fin L → Fin 256 => A j (SamplingDesign.streamOf f)) = fun _ => False from
           funext fun f => propext ⟨h0 f, False.elim⟩, prCoin_false]
         exact zero_le
-    have hsum : ∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => X j (Law.streamOf f)) ≤ q := by
-      refine le_trans (sum_prCoin_le _ (fun j f => X j (Law.streamOf f))
-        (fun f => ∃ D, s.run (Law.streamOf f) = some D ∧ s.miss D) ?_ ?_) (hq L)
+    have hsum : ∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => X j (SamplingDesign.streamOf f)) ≤ q := by
+      refine le_trans (sum_prCoin_le _ (fun j f => X j (SamplingDesign.streamOf f))
+        (fun f => ∃ D, s.run (SamplingDesign.streamOf f) = some D ∧ s.miss D) ?_ ?_) (hq L)
       · rintro f j - j' - ⟨D, ⟨hj, -, hD, hnone⟩, -⟩ ⟨D', ⟨hj', -, hD', hnone'⟩, -⟩
         by_contra hne
         rcases Nat.lt_or_gt_of_ne hne with hlt | hlt
@@ -213,16 +213,16 @@ theorem seqMiss_le : ∀ (ss : List (Stage × ℝ≥0∞)), (∀ p ∈ ss, p.1.B
           exact absurd hD' (by simp)
       · rintro j - f ⟨D, ⟨-, hle, hD, -⟩, hmiss⟩
         refine ⟨D, ?_, hmiss⟩
-        have hsplit := ByteArray.extract_eq_extract_append_extract (a := Law.streamOf f) (i := 0)
-          (k := (Law.streamOf f).size) (j * s.need) (Nat.zero_le _) (by omega)
+        have hsplit := ByteArray.extract_eq_extract_append_extract (a := SamplingDesign.streamOf f) (i := 0)
+          (k := (SamplingDesign.streamOf f).size) (j * s.need) (Nat.zero_le _) (by omega)
         rw [ByteArray.extract_zero_size] at hsplit
         rw [hsplit]
         exact hrun _ _ _ (by simpa using hD)
-    calc prCoin (fun f : Fin L → Fin 256 => SeqMiss (s :: ss.map (·.1)) (Law.streamOf f) 0)
-        ≤ ∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => A j (Law.streamOf f)) := hE
-      _ ≤ ∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => X j (Law.streamOf f)) * rest :=
+    calc prCoin (fun f : Fin L → Fin 256 => SeqMiss (s :: ss.map (·.1)) (SamplingDesign.streamOf f) 0)
+        ≤ ∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => A j (SamplingDesign.streamOf f)) := hE
+      _ ≤ ∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => X j (SamplingDesign.streamOf f)) * rest :=
           Finset.sum_le_sum fun j _ => hterm L j
-      _ = (∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => X j (Law.streamOf f))) * rest :=
+      _ = (∑ j ∈ range (L + 1), prCoin (fun f : Fin L → Fin 256 => X j (SamplingDesign.streamOf f))) * rest :=
           (Finset.sum_mul _ _ _).symm
       _ ≤ q * rest := mul_le_mul_left hsum _
 

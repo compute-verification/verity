@@ -49,9 +49,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-import of_record as OR
 import verity_difftest as D
+from of_record_lean import Record
 
+from verity.protocols.accounting.pouw.prover.kernels.served_zk import of_record as OR
 from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.accounting.pouw.verifier import verifier as PV
@@ -283,7 +284,7 @@ class Sides:
         self.core = D.Server(D.ProtocolPort("pouw-check", CC.case_twin, inputs=None, package=LEAN).argv())
         self.opening = D.Server(D.Port("pouw-check-difftest", "opening", opening_reference, inputs=None,
                                        package=LEAN).argv())
-        self.record = OR.Record()
+        self.record = Record()
 
     def coin(self, kind: str, x: dict) -> tuple[Any, bool]:
         """Lean's outcome of a pass or sample check, and whether Python's is the same (`of_record`)."""

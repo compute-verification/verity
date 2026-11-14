@@ -47,13 +47,13 @@ the verifier follows upstream because the paper is silent are listed below.
 | sessions of several tables | `Stmt.setupTables`, `Draw.tablesWhy` |
 | `--zk` sessions: the mask slot, and Δ and regions kept off it | `Flock.Zk` (`shapeOk`, `maskFree`, `SLOT_LOG_MIN`) |
 | plain leaves, a recursive session's inner statement | `Tags.withPlainLeaves`, `Registered.checkDescription` |
-| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`, `programBound`) |
-| the ZK server's contract, frames, coins, `Hello` and session loop | `Flock.Firewall` and `Flock/Firewall/` |
+| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `sampleLaw`, `programHeld`, `programBound`) |
+| the ZK server's contract, frames, coins, `Hello` and session loop | `Flock.ZkServer` and `Flock/ZkServer/` |
 
 `verify` fails closed: after every check passes, `Flock.ProvedScope` refuses each statement form, sampling design or setting
 the soundness theorem doesn't cover, with `refused: <why>: a statement form the soundness proof does not cover`, so a
 session that fails a check keeps that check's reason. Under `--rec-inner` that includes a V* session over an inner session
-whose record holds no sample (`Flock.RecSetup.innerDrawn`), one at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`:
+whose record holds no sample (`Flock.RecSetup.innerSampled`), one at a holo or sparse inner shape (`Flock.RecSetup.denseOnly`:
 `RecursiveKS` covers the dense form only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`), and a
 recursive session without `--zk` (`Flock.RecSetup.zkOnly`).
 
@@ -73,7 +73,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 - The guarantee statements: `security/Definitions/Flock/Guarantees/` (`ClaimsStated`, `SamplingClaimsStated`,
   `RecursionClaimsStated`, and the record sizing in `Audit.lean`); the proved ones are the `Flock.SecurityProofs.*`
   entries of `security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
-  `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityHorizon`, each stated in a `Statement.lean` (or
+  `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityPooled`, each stated in a `Statement.lean` (or
   `KSStatement.lean`, `PublicAudit.lean`) of its area under `security/Proofs/Flock/`.
 - The named assumptions, the lock's `assumptions`: `security/Definitions/Assumptions/Flock.lean` (`SHA512CRStrict`,
   `SHA512CRExpected`, `UniformRandomBytes`, `UniformRandomBytesTest`). The other assumptions, the lock's `open` and
@@ -146,10 +146,13 @@ after what it wrote for the members before.
 
 A member's check is `verify` (`verifyMember_eq`), and nothing crosses from one member to the next
 but the kept program's digest and readings, which a member receives only where its own `--program` holds the kept
-bytes: another program is read anew. It exits 0 iff every member's status is 0, and 2 before any member without a
-program it can read. A caller takes as refused every session of a member with no `MEMBER` line, and every session of
-an answered member with no `VERDICT` line of its own. The process opens no connection and writes no file, so it may be
-started before a member's session exists and kept while later sessions run
+bytes (another program is read anew), and the SHA-512 and the parse of the circuit file of the member before it, which
+a member receives only where its own circuit file, statement and lookup tables are the same, compared in full
+(another is hashed and parsed anew). One circuit file is kept at a time, so members with one circuit file are verified
+fastest handed in one after another; the order changes no byte. It exits 0 iff every member's status is 0, and 2
+before any member without a program it can read. A caller takes as refused every session of a member with no `MEMBER`
+line, and every session of an answered member with no `VERDICT` line of its own. The process opens no
+connection and writes no file, so it may be started before a member's session exists and kept while later sessions run
 (`verity/protocols/proofs/flock/prover/tests/test_lean_verify_members.py`).
 
 A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT` names its part
@@ -178,7 +181,7 @@ the first Hello, a second staging or one of other inputs, and a record that isn'
 parts). The record is the auditor's: it is read from the challenger's host (`trusted-device`), never from the prover's
 bundle. `verity_flock.rec_compose` is its Python mirror (`verity/protocols/proofs/flock/prover/tests/test_lean_rec_compose.py`). The pod's Lean step
 (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files and composes V*'s parts over the run's
-record: on loopback the pod is the challenger's host, and under `MODES=firewall` (one session per staged statement) its
+record: on loopback the pod is the challenger's host, and under `MODES=zk_server` (one session per staged statement) its
 oprove step keeps the record (`v-sess/rec-run.jsonl`, one event a line): it stages the rows file and the shared set of
 the files every part is given (`rec_compose.shared_of_args`, not read from any part's `VERDICT`) before any session, each
 V* part's `serve --rec-run` logs its Hellos, and it closes the record after the last session; `lean_verdicts.run_record`
@@ -205,7 +208,7 @@ The other subcommands of `verity verify proof` run one part on its own: `field-t
 sample); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check` and `template-query` (the
 partition and program checks); `net-check`, `region-words`, `typed-expand`, `typed-rows`, `circuit-type` and `layout`
 (statement setup); `archive-put` (the object store); `evaluate`; and `rec-inner`, `rec-statements`, `rec-transcript` and
-`rec-record` (the recursion). The other executables are `flock-firewall` (`contract`, `frame`, `tap`, `coins`, `hello`,
+`rec-record` (the recursion). The other executables are `flock-zk-server` (`contract`, `frame`, `tap`, `coins`, `hello`,
 `session`, `finish`: the ZK server), `flock-rows`, `flock-witness`, `flock-rec-opening` and
 `flock-rec-sparse`.
 
@@ -265,7 +268,7 @@ sampling design or missing sample alone as accepted, and every set so compares a
 | D19 | a V* cap session that doesn't read its level's tops at the verifier's shared rows |
 | D20 | a record not in its canonical text |
 | D21 | a nonzero proof-of-work nonce |
-| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `NciCheck`'s mistyped descriptors |
+| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `InferenceOnlyCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `InferenceOnlyCheck`'s mistyped descriptors |
 
 Where the paper is silent, the verifier follows upstream:
 
@@ -301,7 +304,7 @@ Each holds one Lean part to its Python or Rust counterpart, or generates inputs 
 | `record_text.py` | the record's canonical text against Lean's |
 | `zk_mutants.py` | `--zk` session mutants |
 | `template_query_agree.py`, `qword_agree.py`, `qword_program_agree.py`, `qcall_agree.py`, `cut_check_agree.py`, `unit_cut_agree.py`, `layout_agree.py`, `circuit_type_agree.py` | each Lean part against its Python counterpart in `verity` |
-| `firewall_agree.py`, `firewall_controls.sh`, `firewall_finish_agree.py`, `firewall_finish_agree.sh` | the ZK server's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |
+| `zk_server_agree.py`, `zk_server_controls.sh`, `zk_server_finish_agree.py`, `zk_server_finish_agree.sh` | the ZK server's contract and session loop against the inner phase's proxy, and each tamper control held to a visible refusal |
 | `tool.py` | the agreement job's store declaration: `ci-pod.sh` with its settings, the shipped bundle as its input |
 
 `vectors.json` lists the honest sessions, the record-level negatives, the forgeries and the replayable and live sets; the

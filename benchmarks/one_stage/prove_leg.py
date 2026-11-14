@@ -20,12 +20,12 @@ it.
   file's tables, refs and registered reads to `UnitStager.stage` for units that read registered values.
 * **The program.** The caller's (a window's, whose partition the statements bind), else the population program of the
   members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
-* **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
+* **The docket** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier (R1-R7) and against each statement's header before the sample.
 * **The sample** (``coins``): ``"lean"``, the verifier's Lean (`verity-verify-proof draw --stratified K`) on a development
-  challenger's coins opened after the registration (`a0.challenger_draw`);
+  challenger's coins opened after the docket (`a0.challenger_sample`);
   a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
-  callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
+  callable that takes the docket and returns that mapping (a `service.Stream`'s register and select).
 * **Proving.** Each sampled member's units are one `--zk` session on SPOT's proof server (`verity_flock.proof_server`):
   one long-lived streaming prover a device and one queued verifier a block type, ``FC_VERIFY_AHEAD`` 2, every member's
   session submitted before any is collected. The run's server (`proof_server`, the CLI's ``--gpus``) serves every leg
@@ -45,7 +45,7 @@ Negatives (`negatives`), each refused at the proof layer:
     tampered-unit     a unit whose committed output word is wrong, proved with the prover's self-check skipped: the
                       ZK server's Lean recheck stops it; unserved, Lean `verify --zk` refuses the proof that reaches it
     tampered-public   a unit staged on a held row other than the verifier's copy: its proof verifies, its opening fails
-    tampered-root     a registration whose first root is not the statement's: refused before the sample
+    tampered-root     a docket whose first root is not the statement's: refused before the sample
     incorrect-block        a member's session checked against another member's circuit (that stratum's committed pin)
     tampered-registered-root  (members with registered reads) the verifier's --registered file with a root changed
 
@@ -83,9 +83,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import a7  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
@@ -292,9 +292,9 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
     """The verifier's sample as one sample object over global units: its Lean's on a development challenger's coins
-    opened after the registration (``coins == "lean"``, `a0.challenger_draw`), or the caller's."""
+    opened after the docket (``coins == "lean"``, `a0.challenger_sample`), or the caller's."""
     if coins == "lean":
-        p = a0.challenger_draw(lean, ["--program", str(program_file), "--partition", str(partition_file),
+        p = a0.challenger_sample(lean, ["--program", str(program_file), "--partition", str(partition_file),
                                       "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
@@ -366,7 +366,7 @@ def _session(m: Member, s: dict, h: Any, local: list[int], tools: Tools, sdir: P
             env["FC_ZK_SELF_CHECK"] = "skip"
         t = time.time()
         record, live = a0.session(tools.bin, s, s["n"], f"subset:{len(local)}", free_port(), sdir,
-                                  draw_file=sdir / "draw.json", zk=True, env=env)
+                                  sample_file=sdir / "draw.json", zk=True, env=env)
         session_s = round(time.time() - t, 1)
         return record, live, a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True), session_s
     try:
@@ -385,7 +385,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     (``verity/prove-leg/v0``): per member its sampled proof blocks, each unit's verdict, the session's verdicts and timing; the
     audit record; and ``accepted``. ``registered``: the verifier's own ``--registered`` file. ``k``: the stratified rule's
     K (default every unit). ``program``/``query``: the window's, else the members' population program. ``window``: the
-    registration's window (default a stand-in's). ``mutate``: the registration record as the verifier is handed it (a
+    docket's window (default a stand-in's). ``mutate``: the docket as the verifier is handed it (a
     negative's), from the honest one. ``server``: the proof server to prove on (default the run's, `proof_server`, else
     one of the leg's own on the CPU; under FLOCK_CHALLENGER=1 always the leg's own, with challengers)."""
     out = Path(out)
@@ -437,14 +437,14 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         publics[s["name"]] = a0.sha512_file(s["dir"] / f"pub-{s['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
-    law = D.parse_design(f"stratified:{k}")
+    sampling_design = D.parse_design(f"stratified:{k}")
     window = window or {"kind": "stand-in", "of": "the proof leg's members (prove_leg.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}
-    honest = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    honest = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     rec = mutate(copy.deepcopy(honest)) if mutate else honest
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for s in staged:
         checks[f"statement/{s['name']}"] = a7.statement_checks(s, rec, want)
     receipt = R.receipt(rec, "prove-leg verifier (prove_leg.py)")
@@ -796,7 +796,7 @@ def attention_call(shape: str) -> Any:
     ``CUT_TARGETS`` target (`targets.attention_spec`, one query row), cut as `window_circuit.CUTS` cuts it, and its first
     visited block (keys (nb - 1) BN ... T - 1), the full block below it (T > BN) or its epilogue."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import dead_free as DF
+    from verity_vllm.definitions.registry import dead_free as DF
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.predict.window_circuit import CUTS
@@ -841,7 +841,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
     from verity.circuits.defs import bind
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
-    from verity.definitions.registry import b1, dead_free as DF
+    from verity_vllm.definitions.registry import b1, dead_free as DF
 
     fam, model, *arg = shape.split(":")
     L = LLAMA[model]
@@ -984,7 +984,7 @@ def served_member(shape: str, seed: int, n: int = 1, reads: str | None = None) -
     hidden, values seeded by ``seed``, its table reads laid out by ``reads`` (`Member`), by default its template's own
     (`chunk_rows.reads`)."""
     from verity.circuits.codec import descriptor_id
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.pipeline import chunk_rows as CR, serving_rows as SRW
 
     fn, gen = served(shape)

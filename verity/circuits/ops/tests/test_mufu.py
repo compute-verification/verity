@@ -1,6 +1,6 @@
 """The MUFU primitives of `verity.circuits.ops.mufu`: ids, descriptor digests, outputs, and the tables they read.
 
-These primitives were registered by the vLLM integration (`verity.definitions.registry.prims`) under the same ids, and its
+These primitives were registered by the vLLM integration (`verity_vllm.definitions.registry.prims`) under the same ids, and its
 stored Programs cite them. `PINNED` holds, per primitive, the digests recorded from that registration: the Definition's
 descriptor digest, the digest of a program making one call to it, and a fingerprint of its outputs over edge and seeded random
 encodings. A primitive whose digest or outputs change is a new version of it, not an edit.
@@ -178,9 +178,11 @@ def test_each_primitive_declares_the_tables_its_evaluator_reads(monkeypatch):
     assert len(prims) >= 8
     for p in prims:
         read.clear()
+        unmeasured = []
         for ws in itertools.product(_TABLE_WORDS, repeat=len(p.params)):
             try:
                 p.evaluate(*ws)
-            except M.MufuTanhUnmeasured:
-                pass
+            except M.MufuTanhUnmeasured as e:
+                unmeasured.append(e)
+        assert len(unmeasured) < len(_TABLE_WORDS) ** len(p.params), f"{p.id}: every word is in an unmeasured region"
         assert {(n, L.LIBRARY) for n in read} == set(p.tables), p.id

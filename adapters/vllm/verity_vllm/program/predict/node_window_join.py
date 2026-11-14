@@ -1,23 +1,25 @@
 """The W ranks' windows of one request (`node_window.node_window`, each at its own TP rank) joined into one circuit (`join`):
-each rank's units after the rank before's in every template, its registration renamed to its own, its ingress at its
+each rank's units after the rank before's in every template, its registration renamed to its own, its boundary reads at its
 units, and each of its peer inputs (``peers_*``) wired from what the writer rank's own window wires into the same reader
-units and rows. What the joined record states of its ranks and its free rows, by proofs' design for it (PRF-618), is
-`ranks_of` and `free_rows`; `interface.Circuit` holds neither field yet."""
+units and rows. A rank's boundary reads (the prompt's, and at rank 0 the served ids) are the ones `rank_window` is handed
+(``reads``, as `node_window_reads.boundary_reads`); without them the prompt's rows stay free. The joined record's
+``ranks`` and ``free`` (`interface.Ranks`, `interface.Free`), by proofs' design for it (PRF-618), are `ranks_of` and
+`free_rows`."""
 from __future__ import annotations
 
 import bisect
 import hashlib
 import math
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.circuits.codec import canonical_json
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from .build import Unexpressible
-from .node_window import _GRAIN, NAME, Free, Lowering, _ingress_census, _peer, node_window
+from .node_window import _GRAIN, NAME, Free, Lowering, NodeWindow, _peer, node_window
 from .window_builder import WEIGHTS, Grain, inference
 
 
@@ -33,10 +35,19 @@ class Rank:
     census: Mapping[str, Any]
 
 
-def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN) -> Rank:
-    """Rank ``rank``'s Program ``fn`` lowered into its window (`node_window`), the frame dropped."""
-    c, w = node_window(fn, families, grain)
-    return Rank(rank, c, tuple(w.free), {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
+def rank_window(rank: int, fn: Any, families: Mapping[str, Lowering] | None = None, grain: Grain = _GRAIN,
+                reads: Callable[[NodeWindow, int], Sequence[IF.Read]] | None = None) -> Rank:
+    """Rank ``rank``'s Program ``fn`` lowered into its window (`node_window`), the frame dropped. With ``reads`` (as
+    `node_window_reads.boundary_reads`), the window is built with stand-ins and declares ``reads(w, rank)`` as its boundary
+    reads, and the free inputs they fill are no longer free."""
+    c, w = node_window(fn, families, grain, stand_ins=reads is not None)
+    free = tuple(w.free)
+    if reads is not None:
+        rs = tuple(reads(w, rank))
+        c = replace(c, boundary_reads=rs)
+        free = tuple(f for f in free if not any(r.reader == f.tid and r.port == f.port and r.cut == (0, 1) and f.rows == (0, 1, 1)
+                                                and r.at <= f.at and f.at + f.count <= r.at + r.reader_units for r in rs))
+    return Rank(rank, c, free, {t: tuple(s) for t, s in w.b.spans.items()}, w.steps, w.census(c))
 
 
 @dataclass(frozen=True)
@@ -52,8 +63,8 @@ class Joined:
 
     def census(self) -> dict[str, Any]:
         """The circuit's digest, units, templates and wire patterns; its free input ports by kind (ports, unit ports and
-        words, as `NodeWindow.census`), and by template prefix, port and kind; its ingress; the peer inputs wired; the
-        unwired."""
+        words, as `NodeWindow.census`), and by template prefix, port and kind; its boundary reads; the peer inputs wired;
+        the unwired."""
         c = self.circuit
         lay = {tid: dict(lo.rows) for tid, (lo, _n) in c.layouts.items()}
         free: dict[str, Counter[str]] = {}
@@ -67,7 +78,7 @@ class Joined:
                 "free": {k: dict(v) for k, v in sorted(free.items())},
                 "free_ports": dict(sorted(Counter(f"{f.tid.split('{')[0]}/{f.port}: {f.kind} {f.family}"
                                                   for f in self.free).items())),
-                "ingress": _ingress_census(c.ingress, lay),
+                "boundary_reads": len(c.boundary_reads),
                 "wired": {"ports": len(self.wired), "unit_ports": sum(f.count for _r, f in self.wired)},
                 "unwired": len(self.unwired)}
 
@@ -129,7 +140,7 @@ def _renamed(reg: IF.Registered | None, rank: int, first: Mapping[str, int]) -> 
 
 def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
     """The windows of the W ranks of one request (rank r's at ``ranks[r]``) as one circuit. Rank r's units follow rank
-    r - 1's in each template, its registration renamed to its own (`_renamed`), its ingress at its units. Each peer input of rank r (a ``peers_*``
+    r - 1's in each template, its registration renamed to its own (`_renamed`), its boundary reads at its units. Each peer input of rank r (a ``peers_*``
     `Free`: input ``peers_<k(W-1)+j'>`` is rank j's partial at its k-th collective, j' rank j's place among the others) is
     wired from what rank j's own window wires into the same reader units and rows, its own partial there: rank j's wires
     cut to them (`_within`). Where they don't cover the rows, the input stays free, listed in ``unwired``. The circuit's
@@ -210,40 +221,48 @@ def join(ranks: Sequence[Rank], name: str = f"{NAME}/ranks") -> Joined:
             spans.setdefault(tid, []).extend((at + first[x.rank][tid], n, slot, step) for at, n, slot, step in ss)
     starts = {tid: [at for at, *_ in ss] for tid, ss in spans.items()}
     wires += IF.coalesce(added)
-    ingress = tuple(replace(g, at=g.at + first[x.rank][g.reader]) for x in ranks for g in x.circuit.ingress)
+    boundary = tuple(IF.Read(r.reader, r.port, r.param, at=r.at + first[x.rank][r.reader], radix=r.radix, base=r.base,
+                             step=r.step, cut=r.cut) for x in ranks for r in x.circuit.boundary_reads)
     circuit = IF.Circuit(name, tuple((fns[tid], total[tid]) for tid in fns), wires=tuple(wires), cuts=cuts,
-                         registered=registered, ingress=ingress,
+                         registered=registered, boundary_reads=boundary,
                          external=tuple(dict.fromkeys(e for x in ranks for e in x.circuit.external)), blocks=IF.Blocks(1, ranks[0].steps, tuple(inference(spans, 1))),
                          order=IF.ordered(dict(total), wires, starts))
     return Joined(circuit, first, tuple(free), tuple(wired), tuple(unwired))
 
 
 def ranks_of(ranks: Sequence[Rank], joined: Joined, cap: int) -> dict[str, Any]:
-    """The joined record's ``ranks`` (PRF-618): the prefix ``r<rank>/`` once, and per rank in rank order its ``window``
-    (SHA-512 of the canonical JSON of its record less its run fields, `interface.descriptor_record` at ``cap``), its
-    ``units`` per template and ``wires``, how many of the joined circuit's wires are its own. `join` puts each rank's own
-    wires in turn ahead of the ones it adds across ranks."""
+    """The joined record's ``ranks`` (`interface.Ranks`): the prefix ``r<rank>/`` once, and per rank in rank order its
+    ``window``, its H (SHA-512 of the canonical JSON of `interface.circuit_of` of its record, `interface.descriptor_record`
+    at ``cap``, so no run field), its ``units`` per template and ``wires``, how many of the joined circuit's wires are its
+    own. `join` puts each rank's own wires in turn ahead of the ones it adds across ranks."""
     if [x.rank for x in ranks] != list(range(len(ranks))) or sum(len(x.circuit.wires) for x in ranks) > len(joined.circuit.wires):
         raise ValueError(f"ranks {[x.rank for x in ranks]}: not the ranks 0 .. W-1 that `join` joined into {joined.circuit.name}")
     return {"prefix": "r<rank>/",
-            "of": [{"window": hashlib.sha512(canonical_json(IF.descriptor_record(x.circuit, cap))).hexdigest(),
+            "of": [{"window": hashlib.sha512(canonical_json(IF.circuit_of(IF.descriptor_record(x.circuit, cap)))).hexdigest(),
                     "units": dict(x.circuit.units), "wires": len(x.circuit.wires)} for x in ranks]}
 
 
 def free_rows(joined: Joined) -> list[dict[str, Any]]:
-    """The joined record's ``free`` (PRF-618): each reader row no declaration fills (``joined.free``), its reader units,
-    its rows ``[first, first + rows)`` of the port cut ``of`` ways, and its kind: ``peer`` (another rank's partial) or
-    ``weights`` (the weights record, read by no registered read); ``table`` and ``advice`` are kinds no window frees yet.
-    Refused (`Unexpressible`) where a free row is of no such kind: an unlowered node's, or another input's."""
+    """The joined record's ``free`` (`interface.Free`'s ``{reader, port, at, units, kind}``, and ``cut`` ``[c0, C]`` where
+    the entry is rows ``[c0, c0 + C)`` of the port at the record's cut of it, not all of them): each reader row no
+    declaration fills (``joined.free``), of kind ``peer`` (another rank's partial) or ``weights`` (the weights record, read
+    by no registered read); ``table`` and ``advice`` are kinds no window frees yet. Refused (`Unexpressible`) where a free
+    row is of no such kind (an unlowered node's, the prompt's where no boundary read declares it, another input's) or
+    isn't whole rows of the record's cut."""
     out = []
     for f in joined.free:
         kind = "peer" if f.kind == "peer" else "weights" if (f.kind, f.name.split("/", 1)[-1]) == ("param", WEIGHTS) else None
         if kind is None:
             raise Unexpressible(f"{f.tid} {f.port} units [{f.at}, {f.at + f.count}): a free row of {f.kind} {f.name}, which "
-                                "the record's free list has no kind for")
+                                "the record's free list has no kind for (the prompt's is a boundary read: `rank_window`'s reads)")
         first, rows, of = f.rows
-        out.append({"reader": f.tid, "port": f.port, "at": f.at, "units": f.count, "rows": [first, rows], "of": of,
-                    "kind": kind})
+        k = joined.circuit.cuts.get(f.tid, {}).get(f.port, 1)
+        if first * k % of or rows * k % of:
+            raise Unexpressible(f"{f.tid} {f.port} units [{f.at}, {f.at + f.count}): rows [{first}, {first + rows}) of {of} "
+                                f"aren't whole rows of its cut {k} ways")
+        c0, C = first * k // of, rows * k // of
+        out.append({"reader": f.tid, "port": f.port, "at": f.at, "units": f.count, "kind": kind,
+                    **({"cut": [c0, C]} if (c0, C) != (0, k) else {})})
     return out
 
 

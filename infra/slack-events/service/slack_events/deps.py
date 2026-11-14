@@ -1,5 +1,5 @@
 """What the service runs against: the routing code, the registry, the queue, Slack, a best-effort cache and a clock.
-`production()` builds them from the environment; the tests build fakes.  Logs carry ids, decisions and errors, never Slack
+`deployed()` builds them from the environment; the tests build fakes.  Logs carry ids, decisions and errors, never Slack
 text.
 
 Slack is the record: what was routed is the routing lines and doorbells the consumer posted, which it and the crons read
@@ -31,7 +31,7 @@ OLDEST = "oldest-unrouted"                                       # {"ts", "at"}:
 
 
 class Cache(Protocol):
-    """Vercel's Runtime Cache in production: regional and ephemeral, so a value may be missing at any time."""
+    """Vercel's Runtime Cache, as deployed: regional and ephemeral, so a value may be missing at any time."""
 
     def get(self, key: str) -> Any: ...
     def set(self, key: str, value: Any, options: dict | None = None) -> None: ...
@@ -107,7 +107,7 @@ def runtime_cache() -> Cache:
 
 
 @lru_cache(maxsize=1)
-def production() -> Deps:
+def deployed() -> Deps:
     """The deployment's: SLACK_BOT_TOKEN posts directly (never through the broker), the registry bundled at build, Vercel
     Queues and Runtime Cache; routes.d and people.d from the published notes (RESEARCH_ROUTES_URL, RESEARCH_NOTES_TOKEN)."""
     rs, env = vendor.slack(), os.environ

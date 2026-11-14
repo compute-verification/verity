@@ -1,10 +1,10 @@
 """PoUW's MVP end to end on the RTX PRO 6000 (sm_120): Pearl-C (`pearl-c-sm120-v1-h3`) commits every linear call of a vLLM model
 on the device, timed against stock vLLM on the same card at the panel's two shapes, rep by rep.
 
-  python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
+  python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
       --out RUN_DIR/e2e.json [--retain DIR] [--reps 3]
 
-On an H100 or H200 the kernel directory is ``benchmarks/pouw/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
+On an H100 or H200 the kernel directory is ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90`` under ``--scheme pearl-c-h100-v1-h3`` (window.sh's
 ``PEARLC_KERNEL``), and ``--tag`` names another model in the shape names (`SHAPES`).
 
 The run:
@@ -65,7 +65,6 @@ import argparse
 import contextlib
 import json
 import multiprocessing as mp
-import os
 import random
 import statistics
 import subprocess
@@ -80,6 +79,8 @@ from verity_config.settings import of
 settings = of(__file__)
 settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 sys.path.insert(0, str(HERE.parent))
 
 SCHEME = "pearl-c-sm120-v1-h3"
@@ -265,7 +266,7 @@ def install(model, args, coins):
                               whole_tree_sm=getattr(args, "whole_tree_sm", False))
     if getattr(args, "statement", None):
         import importlib.util
-        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
+        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement_torch.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         run.statement = mod.Statement(run, args.statement)
@@ -902,26 +903,10 @@ def split(results: dict) -> dict:
 
 
 def state_entropy(path: str):
-    """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
-    verifier's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
-    and for the challenger process that later samples the execution phase's units (`served_commit.py challenger --state`), so named
-    by the Lean's claim instance (`verifier.CLAIM`)."""
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import COIN_BYTES, HM96, LABELS
-    p = Path(path)
-    if not p.exists():
-        entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
-        p.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(entropy)
-    data, at = p.read_bytes(), [0]
-
-    def take(n: int) -> bytes:
-        at[0] += n
-        return data[at[0] - n:at[0]]
-    take.claim = verifier.CLAIM
-    return take
+    """The challenger's entropy held in the file `path`: served_zk's `served_commit.state_entropy`, which the challenger
+    process reads it with too."""
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk.served_commit import state_entropy as entropy_of
+    return entropy_of(path)
 
 
 def epoch_coins(args, epoch: int) -> Coins:
@@ -1038,7 +1023,7 @@ def perplexity(args) -> int:
     ctx, t0 = mp.get_context("spawn"), time.perf_counter()
     d = args.out.parent
     windows = wikitext_windows(args.model, args.ppl_windows)
-    quality = QUALITY[Path(getattr(args, "kernel", None) or HERE.parent / "pearl_c_sm120").name]
+    quality = QUALITY[Path(getattr(args, "kernel", None) or SM120).name]
     groups = [("fp8", "base", None, ("fp8",)), ("v1", "arm", quality["pearlc-v1"], ("bf16", "pearlc-v1"))]
     if "pearlc-v2" in quality:
         groups.append(("v2", "arm", quality["pearlc-v2"], ("pearlc-v2",)))
@@ -1088,7 +1073,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")
-    ap.add_argument("--kernel", default=str(HERE.parent / "pearl_c_sm120"), help="GPU 1's kernel directory (run.py, fixture.py)")
+    ap.add_argument("--kernel", default=str(SM120), help="GPU 1's kernel directory (run.py, fixture.py)")
     ap.add_argument("--cubin", help="build.sh's pearl_c_sm120.cubin (default: the kernel directory's)")
     ap.add_argument("--out", type=Path, default=Path(settings.RESEARCH_RUN_DIR or ".") / "e2e.json")
     ap.add_argument("--reps", type=int, default=3)

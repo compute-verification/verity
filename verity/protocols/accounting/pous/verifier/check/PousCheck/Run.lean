@@ -7,13 +7,13 @@ public import PousCheck.Merkle
 /-!
 # A PoUS run, composed
 
-`verity/core/protocols/pous/run.py`'s `check`: what setup published and what the memory challenger signed, joined. A run
-is the setup's public outputs (`SetupProtocol.Public`, `root` the root of `C*`'s leaves under `salt`), the memory
-challenger's table of `C*` (every block's `sha512/row/v2` digest in block order, `blockDigest`: the harness's
-`DIGESTS.bin`) and its record of one signed session (`ChallengePhaseRecord`). `check` judges it with two inputs of the
-verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's record
-(whoever writes the record could otherwise list its own key), and the id the auditor designated for the audit's session.
-It accepts the run at P2's deployed point (`DEPLOYED`) under S1's LMS (`SCHEMES`) when, in order:
+`verity/protocols/accounting/pous/verifier/run.py`'s `check`: what setup published and what the memory challenger
+signed, joined. A run is the setup's public outputs (`SetupProtocol.Public`, `root` the root of `C*`'s leaves under
+`salt`), the memory challenger's table of `C*` (every block's `sha512/row/v2` digest in block order, `blockDigest`: the
+harness's `DIGESTS.bin`) and its record of one signed session (`ChallengePhaseRecord`). `check` judges it with two
+inputs of the verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's
+record (whoever writes the record could otherwise list its own key), and the id the auditor designated for the audit's
+session. It accepts the run at P2's deployed point (`DEPLOYED`) under S1's LMS (`SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
 2. the table holds one 64-byte digest a block, and its leaves under that salt (`rowLeaf`, `verifier.row_leaf`) have the
@@ -57,8 +57,8 @@ def SALT : Nat := 24
 /-- One session as the memory challenger records it: what it signed, the commitment it released with it and its coin
 openings. Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`). -/
 structure ChallengePhaseRecord where
-  signed : SignedSession
-  commitment : SessionCommitment
+  signed : SignedChallengePhase
+  commitment : ChallengePhaseCommitment
   openings : Array CoinOpening
 
 /-- `Merkle.packageLeaf` from a block's row digest `R` (`verifier.row_leaf`): `0x00 ‖ tag_s ‖ u16le(v) ‖ R`. -/
@@ -114,8 +114,8 @@ def ChallengePhaseRecord.toJson (r : ChallengePhaseRecord) : Json :=
 
 def ChallengePhaseRecord.ofJson (j : Json) : V ChallengePhaseRecord := do
   let ctx := "session"
-  pure { signed := ← SignedSession.ofJson (← J.get j "signed" ctx),
-         commitment := ← SessionCommitment.ofJson (← J.get j "commitment" ctx),
+  pure { signed := ← SignedChallengePhase.ofJson (← J.get j "signed" ctx),
+         commitment := ← ChallengePhaseCommitment.ofJson (← J.get j "commitment" ctx),
          openings := ← objs j "openings" ctx CoinOpening.ofJson }
 
 def trustedJson (trusted : Array ByteArray) : Json :=
@@ -126,7 +126,7 @@ def decodeTrusted : Json → V (Array ByteArray) := exactly (fun j => hexArr j "
 
 def decodeSetup : Json → V SetupProtocol.Public := exactly SetupProtocol.Public.ofJson SetupProtocol.Public.toJson
 
-def decodeSession : Json → V ChallengePhaseRecord := exactly ChallengePhaseRecord.ofJson ChallengePhaseRecord.toJson
+def decodeRecord : Json → V ChallengePhaseRecord := exactly ChallengePhaseRecord.ofJson ChallengePhaseRecord.toJson
 
 /-- The outcome as the record's verdict: `{"accepted": true}`, or `{"accepted": false, "reason": …}`. -/
 def outcomeJson : Except String Unit → Json
@@ -155,7 +155,7 @@ def runFn (j : Json) : V Json := do
     | .error e => throw s!"{ctx}.session_id: {e}"
   let trusted ← hexArr j "trusted" ctx
   pure (outcomeJson (checkAt schemes pt trusted.toList (← decodeSetup (← J.get j "setup" ctx)) digests
-    (← decodeSession (← J.get j "session" ctx)) sid))
+    (← decodeRecord (← J.get j "session" ctx)) sid))
 
 private def readJson {α : Type} (path : String) (f : Json → V α) : IO (V α) := do
   return (Json.parse (← IO.FS.readFile path)).bind f
@@ -166,7 +166,7 @@ hex, is refused with the decoder's reason. -/
 def run (trustedPath setupPath digestsPath sessionPath sessionId : String) : IO UInt32 := do
   let digests ← IO.FS.readBinFile digestsPath
   let out := match ← readJson trustedPath decodeTrusted, ← readJson setupPath decodeSetup,
-      ← readJson sessionPath decodeSession, unhex sessionId with
+      ← readJson sessionPath decodeRecord, unhex sessionId with
     | .ok trusted, .ok pub, .ok r, .ok sid => check trusted.toList pub digests r sid
     | .error e, _, _, _ => .error s!"trusted: {e}"
     | _, .error e, _, _ => .error s!"setup: {e}"

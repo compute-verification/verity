@@ -9,9 +9,9 @@ import all Lean.Data.Json.Basic
 /-!
 # A sample's window is one the device's own ledger opens, or a break
 
-`drawCoins` reads its session from the auditor's ledger: `pinnedChallengePhase` takes the v2 open whose root is the window's
+`sampleCoins` reads its session from the auditor's ledger: `pinnedChallengePhase` takes the v2 open whose root is the window's
 (`Ledger.auditedOpen_ok`), `challengePhaseNamed` reads the session that open names (`challengePhaseNamed_sid`), and `withheldOn`
-requires every open of the window's root to be withheld (`drawCoins_withheld`, `withheld_of`). `verifyLedger` checked
+requires every open of the window's root to be withheld (`sampleCoins_withheld`, `withheld_of`). `verifyLedger` checked
 every ledger entry's LMS signature over its message under the window's key (`verifyLedger_sig`), and that pair is one the
 finder checks (`ledger_mem_signatures`). So the device signed the open's message, or the finder outputs a forgery
 (`signed_or_break`). What the device signs that hashes a ledger role is one of its own ledger lines' messages, since a
@@ -21,7 +21,7 @@ messages hash equal tagged digests, and equal digests are equal strings, or a co
 canonical text (`taggedBytes_inj2`). Every entry holds its keys in order (`ledgerEntry?`'s `sortedKeys` guard), so two
 entries whose unsigned canonical texts agree have equivalent fields other than `sig` (`entry_fields_equiv`, by
 `CanonRead.canon_inj`). The device's line is then an open of the same session, under v2, of the window's root, withheld
-(`run_opens`), and `drawCoins_opens` adds it to `ChallengePhase.challengePhaseOf_bound`'s run.
+(`run_opens`), and `sampleCoins_opens` adds it to `ChallengePhase.challengePhaseOf_bound`'s run.
 -/
 
 @[expose] public section
@@ -103,7 +103,7 @@ theorem open_root {body : Json} (h : isBodyOf "open" true body = true) :
   simp only [isBodyOf, isRun, ite_true, Bool.and_eq_true] at h
   exact digest_str h.1.1.1.1.2
 
-/-! ## What `verifyLedger` and `drawCoins` check -/
+/-! ## What `verifyLedger` and `sampleCoins` check -/
 
 /-- Every entry of `pre` is signed under `key`: its message reads, and its signature verifies over it. -/
 def SigInv (key : ChallengerKey) (pre : List LedgerEntry) : Prop :=
@@ -123,7 +123,7 @@ theorem ledgerMessage_eq_spec (I : ByteArray) (j : Json) :
 -- `mvcgen` splits `verifyLedger`'s loop body into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
 /-- **`verifyLedger` checked every entry's signature** over its message under the key. -/
-theorem verifyLedger_sig {es : Array LedgerEntry} {r : Array Win × Array MonitoringPeriod}
+theorem verifyLedger_sig {es : Array LedgerEntry} {r : Array Win × Array PeriodRecord}
     (h : verifyLedger es key = .ok r) : SigInv key es.toList := by
   unfold verifyLedger at h
   rw [bind_ok] at h
@@ -159,14 +159,14 @@ theorem challengePhaseNamed_sid {a : Audited} {session : Json} {r : LiveCommitme
   mvcgen [challengePhaseNamed, -Spec.throw_Except, throw_spec, ChallengePhase.challengePhaseOf_ok_spec, recordOfJson_spec, mapM_spec]
   all_goals exact ⟨_, ‹_›, rfl, rfl, beq_iff_eq.1 ‹_›⟩
 
--- `mvcgen` splits `drawCoins` into one goal per check it makes of the record's form, the window and the family
+-- `mvcgen` splits `sampleCoins` into one goal per check it makes of the record's form, the window and the family
 set_option maxHeartbeats 1000000 in
-/-- **`drawCoins` accepts only a sample whose window the ledger opens withheld.** -/
-theorem drawCoins_withheld {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
+/-- **`sampleCoins` accepts only a sample whose window the ledger opens withheld.** -/
+theorem sampleCoins_withheld {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) :
     withheldOn (getD coins "ledger") w = true := by
   refine of_triple (Q := fun _ => withheldOn (getD coins "ledger") w = true) ?_ h
   clear h
-  mvcgen [drawCoins, -Spec.throw_Except, throw_spec, ChallengePhase.trustedChallengePhaseOf_ok_spec, ChallengePhase.challengerStream_ok_spec]
+  mvcgen [sampleCoins, -Spec.throw_Except, throw_spec, ChallengePhase.trustedChallengePhaseOf_ok_spec, ChallengePhase.challengerStream_ok_spec]
 
 /-- **Every open of the window's root is withheld** in a ledger `withheldOn` accepts. -/
 theorem withheld_of {ledger : Json} {w : String} (h : withheldOn ledger w = true) {ls : Array Json} {l : Json}
@@ -412,10 +412,10 @@ theorem run_opens {w : String} {pins main : Json} {a : Audited}
     exact .inl ⟨line, hline, e', he', hke, hse, hsess.trans hsid.symm, hre, hwe⟩
   · exact .inr b
 
-/-- **A sample `drawCoins` accepts reads its coins against a run the device closed, a run the device's own ledger opens on
-the sample's window**, withheld, under v2, or the finder outputs a break: `ChallengePhase.drawCoins_challengePhase`'s run, with
+/-- **A sample `sampleCoins` accepts reads its coins against a run the device closed, a run the device's own ledger opens on
+the sample's window**, withheld, under v2, or the finder outputs a break: `ChallengePhase.sampleCoins_challengePhase`'s run, with
 `OpensOn`. -/
-theorem drawCoins_opens {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
+theorem sampleCoins_opens {w : String} {after ξ : ByteArray} (h : sampleCoins key w label after coins = .ok ξ) :
     ∃ c roots, challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ ∧
       ((∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ s.commitment = some c ∧ s.ended = none ∧
@@ -424,7 +424,7 @@ theorem drawCoins_opens {w : String} {after ξ : ByteArray} (h : drawCoins key w
   refine ⟨c, roots, hs, ?_⟩
   obtain ⟨a, hp, hn⟩ := ChallengePhase.trustedChallengePhaseOf_ok ht
   obtain ⟨⟨c', roots', sid⟩, ho, rfl, rfl, rfl⟩ := challengePhaseNamed_sid hn
-  rcases run_opens (dev := dev) (label := label) hp (drawCoins_withheld h) with hopen | b
+  rcases run_opens (dev := dev) (label := label) hp (sampleCoins_withheld h) with hopen | b
   · rcases ChallengePhase.challengePhaseOf_bound (dev := dev) (label := label) ho with ⟨s, hs', hc, hid, he, hr⟩ | b
     · exact .inl ⟨s, hs', hid ▸ hopen, hc, he, hr⟩
     · exact .inr b

@@ -14,7 +14,7 @@ public import PouwWindow.Rounds
   opening is that coin opened after the salt epoch's open root (`salt.epoch_open_root` of the fixed operands' root and the
   manifest's ``pass_index``, `challenger.live_reason`); the salt is `audit.salt_of`'s over the fixed operands' root.
 * **The verifier's sample** is the coin record's ``draw``: a challenger sample session's coin ``pouw/draw`` 0, or the node's
-  coins. `drawReason` holds a challenger sample as a reader of the record does (`served_verdicts.pearlplus_live_draw`, less
+  coins. `drawReason` holds a challenger sample as a reader of the record does (`served_verdicts.pearlplus_live_sample`, less
   the auditor's ledger, key and period, which the compose checks): its opening is coin ``pouw/draw`` 0 of its commitment
   opened after the run's commitment C (`challenger.live_reason`), its coin is the record's source S, and its commitment is
   of a sample session's layout (`window.draw_epoch_reason`).

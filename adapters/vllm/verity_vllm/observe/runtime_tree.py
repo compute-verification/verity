@@ -2,13 +2,13 @@
 the built model's module paths with their class MRO names + buffers + the runner's facts,
 taken from a live engine (`runtime_tree_of`) or from a model instantiated on the META device as Build does (`meta_runtime_tree`, pod
 only: needs vLLM).  Module-tree facts are NOT correspondence: they say which modules the runtime HAS, not which module a Program Call was
-lowered from (that is `verity_vllm.correspondence.runtime`, read through `correspondence.reader_for_acquire`).  Serialisable so the CPU gate runs off-pod.
+lowered from (that is `verity_torch.correspondence.runtime`, read through `correspondence.reader_for_acquire`).  Serialisable so the CPU gate runs off-pod.
 
     verity-vllm runtime-tree --model <hf repo> --revision <rev> [--dtype bfloat16] [--max-model-len N] [--tp W] --out tree.json
 
 The runner is not built on the meta path; its facts are declared (`runner.source`) -- the two facts `NativeHostCommitter.install` /
 `_select_modules` read from a live engine: the runner exposes `sample()` (True) and whether its `sampler` attribute is an nn.Module
-(`--sampler-module`; default False: the pinned vLLM's live engine shows no such module -- m1_capture's runtime_tree.json on the l40s
+(`--sampler-module`; default False: the pinned vLLM's live engine shows no such module -- match_capture's runtime_tree.json on the l40s
 b64 reference row -- so the class tables' `runner.sampler` forward hook is not registered there either).
 A live engine's tree carries the observed facts; `--runner-facts <live runtime_tree.json>` copies them.
 """

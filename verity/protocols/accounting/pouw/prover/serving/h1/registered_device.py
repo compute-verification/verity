@@ -17,8 +17,8 @@ holds them (64-byte nodes, 128-byte strings, as bytes). `device_hash` launches t
 hashes from, and rows written there (under `hashing`) it reads with no wait. `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
-(`row_tables_device._build`, keyed by sources, the shared headers, flags and compiler) and its per-device state
-(`row_tables_device.DeviceLibrary`); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
+(`row_table_kernels._build`, keyed by sources, the shared headers, flags and compiler) and its per-device state
+(`row_table_kernels.DeviceLibrary`); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
 """
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ from typing import Any
 
 import numpy as np
 from verity.commitments import hm96
+from verity.commitments.cuda import ROW_COMMIT, SHA512
 from verity.commitments.rowleaf import (
     ROW_SEG_BYTES,
     sha512_row_seg_prefix,
@@ -40,9 +41,8 @@ from verity.commitments.rowleaf import (
     sha512_row_seg_segments,
     sha512_row_v2_prefix,
 )
-from verity.commitments.cuda import ROW_COMMIT, SHA512
 
-from verity_vllm.commit import row_tables_device as RTD
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
 from verity.protocols.accounting.pouw.prover.serving.h1.nodes import Nodes
 
 __all__ = ["CHUNK_BYTES", "Hashing", "Pub", "Table", "ZyArgs", "available", "device_commit", "device_hash", "device_lib",
@@ -56,7 +56,7 @@ ZY_DEVICE_SOURCES, ZY_HOST_SOURCES = (*_ZY, "zy_commit.cu"), (*_ZY, "zy_commit_h
 ZY_FLAGS = (f"-I{ROW_COMMIT.resolve().parent}",)
 #: a record's segments `zy_commit.cuh` takes: rows of 1 to `ZY_SEGS` whole 1024-byte segments
 ZY_SEGS = 8
-#: the hm96 key both tables' leaves are under (`row_tables_device._hm`'s)
+#: the hm96 key both tables' leaves are under (`row_table_kernels.hm_tables`'s)
 HM_KEY = hm96.SHA512.default_key
 #: bytes of rows a chunk copies to the device
 CHUNK_BYTES = 1 << 28
@@ -279,7 +279,7 @@ def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | No
     salts = None if row_salts is None else _salts(row_salts, n)
     t.rows, t.salts = rows.ctypes.data, 0 if salts is None else salts.ctypes.data
     bcs, levels = np.empty(16 * n, np.uint64), np.empty(8 * (2 * t.W - 1), np.uint64)
-    rc = host_lib().rr_commit_host(ctypes.byref(t), RTD._hm(), RTD._prefixes(), bcs, levels)
+    rc = host_lib().rr_commit_host(ctypes.byref(t), RTD.hm_tables(), RTD.leaf_prefixes(), bcs, levels)
     if rc:
         raise ValueError(f"rr_commit_host refused the value's layout ({rc})")
     return _out(bcs, levels, t.W)

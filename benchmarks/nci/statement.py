@@ -1,10 +1,10 @@
 """Every number the Notion page "The compute dampener: claims, model and tiers" quotes from ``tiers.py``, ``exposure.py``,
 ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
-cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``rho.theorem.multiple_bound`` in Lean's
-form (``Nci.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
+cheating share. D is the slowdown calculator's hardware multiple at MFU_0, ``slowdown.theorem.multiple_bound`` in Lean's
+form (``InferenceOnly.Slowdown.remoteSlowdown``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
 the reference-efficiency assumption; every scenario is a set of overrides on
-``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
+``tiers.DEFAULTS``. D by the fit bound (``fit_slowdown``) is the same with the fit bound in place of the
 closed-form memory cap, which the page's memory rungs cite.
 
     python benchmarks/nci/statement.py           # Markdown
@@ -24,13 +24,13 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "slowdown"))
 
 import exposure as X  # noqa: E402
 import fit as F  # noqa: E402
 import kappa as K  # noqa: E402
 import tiers as T  # noqa: E402
-from rho.theorem import multiple_bound  # noqa: E402
+from slowdown.theorem import multiple_bound  # noqa: E402
 
 MB = 8e6
 TODAY = {"residual": 1.0}
@@ -123,7 +123,7 @@ def num(x: float, digits: int = 3) -> str:
     return f"{mantissa.rstrip('0').rstrip('.')}e{int(exponent)}"
 
 
-def dampener(p: dict, tier: str) -> float:
+def slowdown(p: dict, tier: str) -> float:
     return multiple_bound(p["mfu"], *T.remote_terms(p, T.evaluate(p, T.TIERS[tier], p["mfu"])), reference_efficiency=False)
 
 
@@ -152,7 +152,7 @@ def capped(p: dict, tier: str, mu: float) -> float:
                           reference_efficiency=False)
 
 
-def fit_dampener(p: dict, tier: str) -> float:
+def fit_slowdown(p: dict, tier: str) -> float:
     """D at ``tier`` by the fit bound at ``p``'s wipe residual, from T3 on."""
     return capped(p, tier, fit_mu(X.wipe_residual(p) / T.GB) if T.TIERS[tier]["wipes"] else math.inf)
 
@@ -183,9 +183,9 @@ def slide() -> list[dict]:
     """The slide's hardest questions: SDCs forgiven fleet-wide, as identities a detection doesn't end, or per server."""
     p = T.DEFAULTS
     return rows([
-        ("D at the best plausible PoUW design, T1", dampener(p | BEST, "T1")),
+        ("D at the best plausible PoUW design, T1", slowdown(p | BEST, "T1")),
         (f"the same with {num(SDC)} SDCs forgiven fleet-wide (J = {num(SDC)})",
-         dampener(p | BEST | {"identities": SDC}, "T1")),
+         slowdown(p | BEST | {"identities": SDC}, "T1")),
         (f"r̂ added by forgiving each SDC on its own server for one verdict lag, {num(SDC)} Δ / (N H)",
          SDC * p["lag_s"] / (p["years"] * T.YEAR) / p["nodes"]),
     ])
@@ -219,7 +219,7 @@ def symbols() -> list[dict]:
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
         ("ε′", "aggregation slack (δ_win / ε′: 2.7e-8 if δ_win were 3·2^-40, which has no value yet)", p["eps_agg"]),
-        ("r = r̂ + ε_W W_cert/C + ε′", "the residual DampenerRemote bounds, under the floor credit",
+        ("r = r̂ + ε_W W_cert/C + ε′", "the residual SlowdownRemote bounds, under the floor credit",
          T.residual_share(p)),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
@@ -272,8 +272,8 @@ def terms() -> list[dict]:
     return rows(out)
 
 
-def years(D: dict) -> dict:
-    return {t: math.log(d) / math.log(GROWTH) for t, d in D.items()}
+def years(slowdowns: dict) -> dict:
+    return {t: math.log(d) / math.log(GROWTH) for t, d in slowdowns.items()}
 
 
 def ladder() -> list[dict]:
@@ -282,19 +282,19 @@ def ladder() -> list[dict]:
     out = []
     for name, over in RUNGS.items():
         p = T.DEFAULTS | over
-        D = {t: dampener(p, t) for t in LADDER_TIERS}
-        D_fit = {t: fit_dampener(p, t) for t in FIT_TIERS}
+        closed = {t: slowdown(p, t) for t in LADDER_TIERS}
+        by_fit = {t: fit_slowdown(p, t) for t in FIT_TIERS}
         out.append({"rung": name, "overrides": over, "r_hat": T.audited_residual(p),
                     "R_wipe_gb": X.wipe_residual(p) / T.GB, "window_min": X.wipe_residual(p) / X.intake(p) / 60,
-                    "D": D, "D_fit": D_fit, "years": years(D), "years_fit": years(D_fit)})
+                    "slowdown": closed, "slowdown_fit": by_fit, "years": years(closed), "years_fit": years(by_fit)})
     return out
 
 
 def substitutes() -> list[dict]:
     """Section 5's substitutes: memory with no PoUW credit at all."""
     p = T.DEFAULTS | streamed(6.0, TODAY)
-    return rows([("D with no PoUW credit (r̂ = 1) and 6 GB streamed-label wipes, T3, closed form", dampener(p, "T3")),
-                 ("the same by the fit bound", fit_dampener(p, "T3"))])
+    return rows([("D with no PoUW credit (r̂ = 1) and 6 GB streamed-label wipes, T3, closed form", slowdown(p, "T3")),
+                 ("the same by the fit bound", fit_slowdown(p, "T3"))])
 
 
 def floor() -> list[dict]:
@@ -320,9 +320,11 @@ def fit_bound() -> dict:
         r = F.row(gb, N, L)
         p = F.params(gb)
         t5 = T.evaluate(p, T.TIERS["T5"], p["mfu"])
-        out.append({"R_wipe_gb": gb, "periods": r["periods"], "D_closed": r["D_closed"], "D_fit": r["D_fit"],
-                    "D_fit_T5": F.dampener(p, r["mu_fit"], t5["declared"], t5["cheat"]),
-                    "D_fit_low": r["D_fit_low"], "D_fit_high": r["D_fit_high"], "D_fit_train": r["D_fit_train"]})
+        out.append({"R_wipe_gb": gb, "periods": r["periods"], "slowdown_closed": r["slowdown_closed"],
+                    "slowdown_fit": r["slowdown_fit"],
+                    "slowdown_fit_T5": F.slowdown(p, r["mu_fit"], t5["declared"], t5["cheat"]),
+                    "slowdown_fit_low": r["slowdown_fit_low"], "slowdown_fit_high": r["slowdown_fit_high"],
+                    "slowdown_fit_train": r["slowdown_fit_train"]})
     s = F.summary(law)
     bite = s["bite_gb"]
     holds = bite[f"{target}/floor/none"]
@@ -348,17 +350,17 @@ def regimes() -> dict:
     caps nothing) and with 6 GB streamed-label wipes; and the s above which s sets D, 1/D at s = 0."""
     wipes = {"today's wipes": BEST, "6 GB streamed-label wipes": streamed(6.0, BEST)}
     out = [{"regime": name, "case": case, "s": s,
-            "D": {w: {t: fit_dampener(T.DEFAULTS | over | {"unmonitored": s}, t) for t in REGIME_TIERS}
+            "slowdown": {w: {t: fit_slowdown(T.DEFAULTS | over | {"unmonitored": s}, t) for t in REGIME_TIERS}
                   for w, over in wipes.items()}}
            for name, shares in REGIMES.items() for case, s in zip(("central", "adversarial"), shares)]
-    return {"rows": out, "s_sets_D": {w: {t: 1 / fit_dampener(T.DEFAULTS | over, t) for t in REGIME_TIERS}
+    return {"rows": out, "s_sets_slowdown": {w: {t: 1 / fit_slowdown(T.DEFAULTS | over, t) for t in REGIME_TIERS}
                                       for w, over in wipes.items()}}
 
 
 def search(job: tuple[str, str, int]) -> dict[float, list[list[float]]]:
     scenario, tier, row = job
     key, over, _ = THRESHOLD_ROWS[row]
-    return X.thresholds(T.DEFAULTS | X.SCENARIOS[scenario] | over, key, tier, levels=LEVELS, size=dampener)
+    return X.thresholds(T.DEFAULTS | X.SCENARIOS[scenario] | over, key, tier, levels=LEVELS, size=slowdown)
 
 
 def thresholds(pool: ProcessPoolExecutor | None = None) -> dict:
@@ -444,8 +446,8 @@ def holes() -> dict:
         r = T.evaluate(q, T.TIERS["T5"])
         cases.append({"cost": cost, "overhead": overhead, "bits": r["cheat_bits"],
                       "chord": T.chord(q, r["cheat_bits"]), "chi": r["cheat"], "pool": r["cheat"] * C})
-    t5 = [{"rung": name, "D": [dampener(p | over | {"overhead": c["overhead"]}, "T5") for c in cases],
-           "D_fit": [fit_dampener(p | over | {"overhead": c["overhead"]}, "T5") for c in cases]}
+    t5 = [{"rung": name, "slowdown": [slowdown(p | over | {"overhead": c["overhead"]}, "T5") for c in cases],
+           "slowdown_fit": [fit_slowdown(p | over | {"overhead": c["overhead"]}, "T5") for c in cases]}
           for name, over in RUNGS.items()]
     other = [
         ("χ at today's sparse draws over χ at 512 draws", cases[0]["chi"] / cases[1]["chi"]),
@@ -483,12 +485,12 @@ def bullets(items: list[dict]) -> list[str]:
 
 def render(s: dict) -> str:
     dirty = " (with uncommitted changes in benchmarks/nci)" if s["uncommitted"] else ""
-    out = ["# The compute dampener: the page's numbers", "",
+    out = ["# The slowdown: the page's numbers", "",
            f"Rendered by `benchmarks/nci/statement.py` at commit `{s['commit']}`{dirty}. D is "
-           "`rho.theorem.multiple_bound` in Lean's form (`remoteDampener`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
+           "`slowdown.theorem.multiple_bound` in Lean's form (`remoteSlowdown`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
            "terms, the residual training at MFU_0 (the reference-efficiency assumption), the hardware multiple at MFU_0 = "
            f"{num(T.DEFAULTS['mfu'])}; every case is a set of overrides on `tiers.DEFAULTS`. D by the fit bound "
-           "(`fit_dampener`) puts the fit bound at central w_e in place of the closed-form memory cap.", "",
+           "(`fit_slowdown`) puts the fit bound at central w_e in place of the closed-form memory cap.", "",
            "## Slide forms: the hardest questions", "", *bullets(s["slide"]),
            "## 0. Symbols", ""]
     out += table(["Symbol", "Meaning", "Value"], [[r["symbol"], r["meaning"], num(r["value"])] for r in s["symbols"]])
@@ -497,7 +499,7 @@ def render(s: dict) -> str:
     out += table(["Rung", "r̂", "R_wipe, GB", "R_wipe / λ_in, min", *(f"D at {t}" for t in LADDER_TIERS),
                   *(f"D at {t}, fit bound" for t in FIT_TIERS)],
                  [[r["rung"], num(r["r_hat"]), num(r["R_wipe_gb"]), num(r["window_min"]),
-                   *(num(r["D"][t]) for t in LADDER_TIERS), *(num(r["D_fit"][t]) for t in FIT_TIERS)]
+                   *(num(r["slowdown"][t]) for t in LADDER_TIERS), *(num(r["slowdown_fit"][t]) for t in FIT_TIERS)]
                   for r in s["ladder"]])
     out += bullets(s["floor"]) + bullets(s["substitutes"])
     law, target = FIT_TARGET
@@ -508,7 +510,7 @@ def render(s: dict) -> str:
     out += table(["R_wipe, GB", "L", "D, closed form", "D, fit", "D, fit at T5", "D, fit at low w_e",
                   "D, fit at high w_e", "D, fit at 16 bits"],
                  [[num(r["R_wipe_gb"]), str(r["periods"]), *(num(r[k]) for k in (
-                     "D_closed", "D_fit", "D_fit_T5", "D_fit_low", "D_fit_high", "D_fit_train"))]
+                     "slowdown_closed", "slowdown_fit", "slowdown_fit_T5", "slowdown_fit_low", "slowdown_fit_high", "slowdown_fit_train"))]
                   for r in s["fit"]["rows"]])
     out += bullets(s["fit"]["other"])
     out += [f"## Years of growth, ln D / ln {num(GROWTH)}", ""]
@@ -516,15 +518,15 @@ def render(s: dict) -> str:
                  [[r["rung"], *(num(r["years"][t], 2) for t in LADDER_TIERS),
                    *(num(r["years_fit"][t], 2) for t in FIT_TIERS)] for r in s["ladder"]])
     reg = s["regimes"]
-    wipes = list(reg["s_sets_D"])
+    wipes = list(reg["s_sets_slowdown"])
     cols = [(w, t) for w in wipes for t in REGIME_TIERS]
     out += ["## The unmonitored share by regime: best plausible PoUW design, by the fit bound", ""]
     out += table(["Regime", "Case", "s", *(f"D at {t}, {w}" for w, t in cols),
                   *(f"1/D at T5, {w}" for w in wipes)],
-                 [[r["regime"], r["case"], num(r["s"]), *(num(r["D"][w][t]) for w, t in cols),
-                   *(num(100 / r["D"][w]["T5"], 2) + "%" for w in wipes)] for r in reg["rows"]])
+                 [[r["regime"], r["case"], num(r["s"]), *(num(r["slowdown"][w][t]) for w, t in cols),
+                   *(num(100 / r["slowdown"][w]["T5"], 2) + "%" for w in wipes)] for r in reg["rows"]])
     out += ["s sets D once it exceeds 1/D at s = 0: "
-            + "; ".join(f"{num(100 * reg['s_sets_D'][w][t], 2)}% at {t} with {w}" for w, t in cols) + ".", ""]
+            + "; ".join(f"{num(100 * reg['s_sets_slowdown'][w][t], 2)}% at {t} with {w}" for w, t in cols) + ".", ""]
     out += ["## 6. Thresholds on D", "",
             "Where on its slider range each parameter puts D below each level, the others as in the scenario "
             "(`exposure.SCENARIOS`).", ""]
@@ -555,7 +557,7 @@ def render(s: dict) -> str:
                  [[c["cost"], *(num(c[k]) for k in ("overhead", "bits", "chord", "chi", "pool"))] for c in h["cases"]])
     out += ["D at T5, by the closed form and by the fit bound:", ""]
     out += table(["Rung", *(c["cost"] for c in h["cases"]), *(f"{c['cost']}, fit bound" for c in h["cases"])],
-                 [[r["rung"], *(num(d) for d in r["D"] + r["D_fit"])] for r in h["t5"]])
+                 [[r["rung"], *(num(d) for d in r["slowdown"] + r["slowdown_fit"])] for r in h["t5"]])
     out += bullets(h["other"])
     return "\n".join(out).rstrip()
 

@@ -31,7 +31,7 @@ such result (`accZ_lig`).
   rounds along `repShapeZ`, with `fin`'s messages as the tail, and the compiled table accepts at the two runs' ends.
 * `decodesZK_of_runsZC`: `RunsZC` gives `DecodesZK` at the compiled table.
 * `RunsOnZC`, `decodes_of_runsOnZC`: the same at the sampling design's samples only, for a decoder that is right only where the
-  challenger's samples are (`DrawOkZK` at `L.draw ω`).
+  challenger's samples are (`SampleOkZK` at `L.draw ω`).
 * `zk_headline_exec_zc_runs`: `zk_headline_exec_zc_execOS` with `RunsZC` in place of `hdec`.
 -/
 
@@ -94,7 +94,7 @@ theorem decodesZK_of_runsZC (h : RunsZC A Hs T I wr opn dec fin capOf) :
 
 /-- **`RunsZC` at the sampling design's samples**: `RunsZC`'s conclusion at the samples `L.draw ω` only, on every live outcome whose
 session directory verity-verify-proof `--zk` accepts there. -/
-def RunsOnZC (L : Law n) : Prop :=
+def RunsOnZC (L : SamplingDesign n) : Prop :=
   ∀ ω R (o : LiveOut mPts), AcceptsZK I (wr (L.draw ω) R o) →
     ∃ pend : ZkLink.PendZ 𝔽 D Sl × ZkLink.PendZ 𝔽 D Sl,
       PlaysCoin.RepRun (repZ A Hs T (L.draw ω) R o.pts 0) (shapeZ (K := K) (D := D) T (L.draw ω) R o.pts)
@@ -107,7 +107,7 @@ def RunsOnZC (L : Law n) : Prop :=
 omit [Fintype K] in
 /-- **`Decodes` at the sampling design's samples from `RunsOnZC`** (`decodesZK_of_runsZC` at `L.draw ω`), with
 `one := fun _ _ _ => true`. -/
-theorem decodes_of_runsOnZC {L : Law n} (h : RunsOnZC A Hs T I wr opn dec fin capOf L) (ω : L.Ω) (R : Reg) :
+theorem decodes_of_runsOnZC {L : SamplingDesign n} (h : RunsOnZC A Hs T I wr opn dec fin capOf L) (ω : L.Ω) (R : Reg) :
     Decodes (outZ Hs T (L.draw ω) R) (fun o => AcceptsZK I (wr (L.draw ω) R o))
       (fun x => accZ T (L.draw ω) R x = true) (opn (L.draw ω) R) (dec (L.draw ω) R) (fun _ => true)
       (fin (L.draw ω) R) (capOf (L.draw ω) R) (repZ A Hs T (L.draw ω) R) := by
@@ -125,8 +125,8 @@ variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fi
 /-- **The `--zk` headline at verity-verify-proof's acceptance, at the live sample under A3, from the message half**:
 `zk_headline_exec_zc_execOS` with `hrun : RunsZC …` in place of `hdec`, through `decodesZK_of_runsZC`. -/
 theorem zk_headline_exec_zc_runs (hlow : LoweringSoundZK A P (planOne T) tab decode)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, ZkLink.rateZ (planOne T S R) j k ≤ ρ)
@@ -134,14 +134,14 @@ theorem zk_headline_exec_zc_runs (hlow : LoweringSoundZK A P (planOne T) tab dec
       Fin (planOne T S R).length → ℝ}
     (hj : ZkLink.JointZC A Hs (planOne T) k a) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
     (hrun : RunsZC A Hs T I wr opn dec fin capOf)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (liveOf dg mPts N wr))) :
     let σ := simAuditZC A Hs T I wr opn dg dec (fun _ _ _ => true) fin capOf N
       (decodesZK_of_runsZC A Hs T I wr opn dec fin capOf hrun) τ
     prob (fun o => LiveAcceptsZK I o ∧
-        K ≤ (P.wrong (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K + ZkLink.ksAvgZC A Hs (planOne T) k a (reg σ) (cont σ) +
+        K ≤ (P.incorrect (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K + ZkLink.ksAvgZC A Hs (planOne T) k a (reg σ) (cont σ) +
         ZkLink.linkBoundZC A Hs P (planOne T) tab vb k Rw M ρ t' (reg σ) (cont σ) :=
   zk_headline_exec_zc_execOS A Hs T I wr opn dg dec _ fin capOf N P tab vb hlow σs ks hks St hS Kd pop Lb src hA3 hRw
     hM hρ hr hj ht K (decodesZK_of_runsZC A Hs T I wr opn dec fin capOf hrun) τ

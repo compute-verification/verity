@@ -128,7 +128,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
   `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
 * **A sampled sample** (``--draw K``): Lean ``draw --stratified K`` on a development challenger's coins opened after
-  the round's registration (`a0.challenger_draw`: the verifier has none of its own), each template's stratum its share
+  the round's registration (`a0.challenger_sample`: the verifier has none of its own), each template's stratum its share
   and at least one unit; only the sampled proof blocks are proved and opened, and an accepted audit carries ε at δ
   (``wrong_units``: at most ``bound`` of ``of`` units wrong, except with probability δ), its charge terms
   (`charge_terms`) and each member's cost per sampled proof block (`per_unit`). The chain and tampered rounds sample
@@ -206,7 +206,7 @@ from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as RG  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, docket as RG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k  # noqa: E402
 
 _TRAFFIC = HERE.parents[1] / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py"
@@ -763,7 +763,7 @@ def v3c_entries(window: Path, rec: dict, win: dict, cls: IS.Class, entries: list
     """Each lane j's ``prog<j>``: chunk j's o0 of V3c's `SELECT_ENTRY` template, cut into one member a lane of nb
     proof blocks (``<descriptor id>/c<j>``, block b slot j·nb + b's entry, the window's slots lane-major), its rows and
     salts that member's prover body ``m<k>-private.bin`` (each instance's rows of its ports but the wired ones, then
-    their salts, `verity.commitments.windows.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
+    their salts, `verity.commitments.periods.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
     its registration's ``roots`` name and to the scan's lane j ``entries``."""
     nb, NE = len(entries[0]), IS.entry_bits(cls)
     ms = [m for m in win.get("members") or () if str(m.get("template", "")).startswith(SELECT_ENTRY + "{")]
@@ -1288,7 +1288,7 @@ def challenger(a, at: SimpleNamespace, out: Path):
     if not a.challenger:
         yield None
         return
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     root = window_root(at)
     manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
@@ -1304,7 +1304,7 @@ def challenger(a, at: SimpleNamespace, out: Path):
 
 
 def rule_of(k: int, n: int) -> str:
-    """The round's stream rule over its ``n`` proof blocks: the stratified rate of ``k`` in ``n`` (`service.Law`), at least
+    """The round's stream rule over its ``n`` proof blocks: the stratified rate of ``k`` in ``n`` (`service.SamplingDesign`), at least
     ceil(k n_s / n) of each template's n_s, so each proof block is sampled with probability at least k/n however many the prover
     registers."""
     return f"stratified-rate:{min(k, n)}/{n}"
@@ -1320,8 +1320,8 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     blocks, over its members)."""
     units = [pg.stagers[tp].defn for tp in pg.templates]
     n = sum(m["n"] for m in members)
-    law = S.Law(rule_of(k, n))
-    named = S.selection_law(law, n, S.selection_sizes(law, pg.program, pg.query))
+    law = S.SamplingDesign(rule_of(k, n))
+    named = S.selection_sampling_design(law, n, S.selection_sizes(law, pg.program, pg.query))
     strata = [s["template"] for s in DR.derive(pg.program, pg.query, named,
                                                S.selection_table(law, pg.program, pg.query, None)).get("strata") or ()]
     public = [("population", "N, the round's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
@@ -1439,7 +1439,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
     instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
     warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
-    on a development challenger's coins, `a0.challenger_draw`; every unit when `k` is None) or, given the challenger's
+    on a development challenger's coins, `a0.challenger_sample`; every unit when `k` is None) or, given the challenger's
     ``coins``, by the round's `service.Stream` on them (`stream_of`; `a5_coins.RankCoins`, rank 0), each member's
     sampled proof blocks proved --zk behind the ZK server and held by Lean with the verifier's own registered reads;
     then each held unit's public ``o0`` (none of the slot entries', `ROWS_O0`) opened under the salt the prover sends. A
@@ -1473,7 +1473,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     n = sum(m["n"] for m in members)
     k = n if k is None else k
     rule = f"stratified:{k}" if coins is None else rule_of(k, n)
-    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_law(rule, pg.program, pg.query, None)
+    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_sampling_design(rule, pg.program, pg.query, None)
     win = {"kind": "stand-in", "of": f"round {name}: link-windows {at.windows} of {at.source}, their ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
@@ -1497,7 +1497,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                 "opened": {}, "failed": {c: v.get("codes") for c, v in checks.items() if not v["ok"]}}
     stream = None
     if coins is None:
-        p = a0.challenger_draw(a.lean, ["--program", str(pg.program_file), "--partition", str(pg.partition_file),
+        p = a0.challenger_sample(a.lean, ["--program", str(pg.program_file), "--partition", str(pg.partition_file),
                                         "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
@@ -1608,7 +1608,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                 os.link(f, vdir / f"{m['name']}-session-{f.parent.name}-{f.name}")
     got = [w for col in opened.values() for w in col if w is not None]
     window_ok = bool(result.get("accepted")) and len(got) == len(held & public) and all(w == 1 for w in got)
-    source = "a development challenger's (verity-verify-proof draw, a0.challenger_draw)" if stream is None else \
+    source = "a development challenger's (verity-verify-proof draw, a0.challenger_sample)" if stream is None else \
         f"the auditor's challenger's ({coins.challenger}: a5_coins, the round's service.Stream)"
     return {**res, "accepted": bool(result.get("accepted")), "window_accepted": window_ok, "opened": opened,
             "draw": {"law": rule, "coins": source, "units": lean_draw["units"], "of": rec["population"]},

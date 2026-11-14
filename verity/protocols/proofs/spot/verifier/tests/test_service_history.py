@@ -1,4 +1,4 @@
-"""A stream's registrations as its history grows: each one's check reads the same few records of the log whatever the
+"""A stream's dockets as its history grows: each one's check reads the same few records of the log whatever the
 stream's length, no round reads the log or the stream's entries whole, and the verdicts, the log and the records are the
 ones the whole log gives (a stream that hands its whole log to every check, `_Whole`)."""
 
@@ -7,9 +7,9 @@ from __future__ import annotations
 from typing import Any
 
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
 
-from test_registered import (BINDING, BOUND, LAW, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
+from test_registered import (BINDING, BOUND, SAMPLING_DESIGN, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
                              _record as _registered_record, _seeded_case)
 from test_service import DELTA, PAIR, RUN, SESSION, Clock, _lean, _ports, _record, _spec
 
@@ -45,10 +45,10 @@ def _refusal(e: S.Refused) -> tuple:
 
 
 def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch):
-    """Over 30 rounds, accepted and rejected, every registration's check gets one record of the log (the last, which R6's
+    """Over 30 rounds, accepted and rejected, every docket's check gets one record of the log (the last, which R6's
     `previous` names), and no round iterates the log or the stream's entries, the failure count included; the stream's
     rules decide each op on the one entry it names, or none. The whole-log stream, counted the same way, hands its checks
-    a log as long as its history and walks it at every registration."""
+    a log as long as its history and walks it at every docket."""
     check, given, rules, held = V.check, [], V.stream, []
 
     def spy(*a: Any, **kw: Any) -> V.Verdict:
@@ -82,11 +82,11 @@ def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch)
 
 
 def _one_stage(cls) -> tuple[list, tuple, tuple, tuple, S.Stream]:
-    """A fixed stream of 40 rounds: accepted, rejected and late outcomes, and registrations refused for a window logged
+    """A fixed stream of 40 rounds: accepted, rejected and late outcomes, and dockets refused for a window logged
     before, a wrong previous, and windows that one verifier finds equal to an earlier one and the other doesn't, so they
     disagree: a boolean against its integer (Python's `==` finds them equal, the Lean's `jeq` doesn't), and a list
     against a tuple, which the Lean reads as a list. Windows that aren't plain JSON are logged: those tuples, and in the
-    second to last round a float, after which the Lean refuses every registration."""
+    second to last round a float, after which the Lean refuses every docket."""
     rounds, clock = 40, Clock()
     stream = _stream(cls, clock=clock)
     calls, prev = [], None
@@ -165,19 +165,19 @@ def test_r8_lets_a_tied_value_through_on_both_verifiers():
     is never a registered value."""
     prog = _program()
     first, ports = _registered_record(prog, _registered(prog))
-    v1 = R.record(prog, Q, LAW, SCHEME, first["roots"], SERVED)
+    v1 = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], SERVED)
     for rec, registered, tied, codes, through in (
             (v1, None, ["W"], (), ("W",)), (v1, None, None, ("R8-shared-input",), ()),
             (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()), (first, {"W": 2}, ["W"], ("R8-tied",), ()),
             (first, {"W": 2}, None, (), ())):
-        v = V.check(rec, prog, Q, LAW, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
+        v = V.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
         assert v.codes == codes and v.rests_on_period_check == through, (tied, v)
         assert v.verifiers["lean"]["codes"] == list(codes), (tied, v)
 
 
 def test_r7_reads_each_values_first_registration():
     """Registered values: a log of 24 records, two in three registering `W` under its first root and the rest v1. A
-    candidate's check gets the last record and the first registration, and the verifier gives it the verdict the
+    candidate's check gets the last record and the first docket, and the verifier gives it the verdict the
     whole log gives: the held root, a fresh root (R7-held), a window logged before, a wrong previous, a v1 record. The
     program's members all read `W`, so a v1 record, whose `W` no verifier holds, is refused for it (R8-shared-input)."""
     prog = _program()
@@ -186,7 +186,7 @@ def test_r7_reads_each_values_first_registration():
     stream = _stream()
 
     def at(row: int, previous: Any, entry: Any, **change: Any) -> dict:
-        return {**R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": row}, previous=previous,
+        return {**R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": row}, previous=previous,
                            registered=[entry] if entry else ()), **change}
 
     stream._append(stream._registration(first, 0))
@@ -205,8 +205,8 @@ def test_r7_reads_each_values_first_registration():
         earlier = stream._earlier(cand)
         assert earlier == [first, stream._log[-1]] or (cand["window"]["row"] != row and len(earlier) == 3)
         held = ["W"] if registered else None
-        part = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), earlier, None, None, registered, held=held)
-        whole = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), stream.log, None, None, registered, held=held)
+        part = V.check(cand, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), earlier, None, None, registered, held=held)
+        whole = V.check(cand, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), stream.log, None, None, registered, held=held)
         assert part == whole and part.codes == codes and part.verifiers["lean"]["codes"] == list(codes)
 
 
@@ -222,7 +222,7 @@ def test_a_supplied_position_reads_the_whole_log():
         log.append(rec)
     cand, check, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + 6})
     assert stream._earlier(cand, MIXED) is stream._log and len(few := stream._earlier(cand)) == 2
-    args = (cand, check["program"], check["query"], LAW, SCHEME, check["ports"], None, ())
+    args = (cand, check["program"], check["query"], SAMPLING_DESIGN, SCHEME, check["ports"], None, ())
     assert V.check(*args, stream.log, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).ok
     assert V.check(*args, few, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).codes == ("R7-supplied",)
 

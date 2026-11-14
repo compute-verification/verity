@@ -166,7 +166,7 @@ def manyStrata (nm : String) (i : Nat) (ks : List Nat) : String :=
 a circuit that is not an H1 window, a template over per-unit noise, a J10-R unit over a tile other than
 `COVERED_TILE`, or units at more than one K. `none` for a covered window, and for evidence too malformed to read,
 which `Credit.periodCredit` refuses. -/
-def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
+def executionPhaseForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
   if keys w == some PASS_KEYS then return some (passForm nm i)
   let some d := (match get w "descriptor" with
       | .str s => if Credit.isHexBytes s then hex? (.str s) else none
@@ -191,11 +191,11 @@ def windowForm (nm : String) (i : Nat) (w : Json) : Option String := Id.run do
   if 1 < ks.length then return some (manyStrata nm i ks)
   return none
 
-/-- The first window of `windows` in a form `GUARANTEE` doesn't cover (`windowForm`), else `none`. -/
+/-- The first window of `windows` in a form `GUARANTEE` doesn't cover (`executionPhaseForm`), else `none`. -/
 def form (nm : String) (windows : Json) : Option String := Id.run do
   let .arr ws := windows | return none
   for (w, i) in ws.toList.zipIdx do
-    if let some why := windowForm nm i w then return some why
+    if let some why := executionPhaseForm nm i w then return some why
   return none
 
 /-- The ledger's entries, each line read (`Spot.Challenger.ledgerEntry?`); `none` when a line isn't one. -/
@@ -295,7 +295,7 @@ challenger key's ledger (`series`), which carry no clock reading, so the span or
 names no registration head and no place: the accounting layer binds the challenger key to a registered device, so
 until it does no registered account counts the answer. -/
 def account : Core.Account :=
-  { protocol := protocolId, head := none
+  { protocol := protocolId, witness := none
     amounts := [{ metric := "work", part := .compute, key := .published "work",
                   unit := Core.Account.macs, side := .verified,
                   time := .steps (.run (.published "start") (.published "length")) ⟨0, 1⟩,
@@ -365,7 +365,7 @@ private def accepted : Core.Answer :=
     profile := none }
 #guard ["registration_head", "place", "part"].all fun k => (published.getObjVal? k).toOption.isNone
 #guard account.Formed
-#guard account.head.isNone && account.amounts.all (·.place.isNone)
+#guard account.witness.isNone
 #guard (account.amounts.map fun m => (m.key.read accepted, m.series.bind (·.read accepted))) ==
   [(some (Lean.toJson [10, 20]), some (.str "k"))]
 #guard (account.amounts.map fun m => match m.time with

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from verity.circuits.codec import descriptor_id
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.weights_of_record import weight_param
@@ -277,7 +277,7 @@ class _Builder:
             except ValueError as e:
                 why.append(str(e))
         if why:
-            raise Unexpressible(f"{len(why)} templates C-Flock's composer wouldn't prove: " + "; ".join(why))
+            raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
         for f in self.feeds:
             self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
 

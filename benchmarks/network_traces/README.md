@@ -14,7 +14,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
 - Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
-- The tests: `uv run tools/verity/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
+- The tests: `uv run tools/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
 
 ## Entry points
 
@@ -96,7 +96,7 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/v
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`demos/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+`adapters/vllm/tools/served_run/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
 endpoint step runs there: `io` writes the kept network certifier run's certified I/O to a 0600 file in the kept fetch's
@@ -478,7 +478,7 @@ The two forms:
 The scale:
 - A week, a month and a year of one link, and of as many links as the census's reference datacenter
   (`benchmarks/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
-  machines: the world is rho's world fleet (`benchmarks/rho/data/reference.toml`, `fleet.world-h200`), the census's
+  machines: the world is the slowdown calculator's world fleet (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`), the census's
   inference (`benchmarks/census/adversary.json`) at the fleet's serving MFU, one link a machine
   (`leak_bounds.world_links`).
 - Every link has one network certifier in front of all its machine's compute, serving at the run's rate

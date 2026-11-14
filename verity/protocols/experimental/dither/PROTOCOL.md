@@ -41,8 +41,8 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
   is the block's value roots, and a check run, whose commitment they are.
 - **The ACCEL model 𝓜**: a period's devices as the Lean's `Accel` reads them: their resources (tensor cores, issue
   slots, shared-memory and register ports, device memory, links), each at its rate on the card, and each run's use of
-  each. On the H200 and the RTX PRO 6000 it is read at each card's table (`Accel.H200.card`, `Accel.Sm120.card`: each
-  resource's rate at its clock's ceiling). A price μ ≥ 0 is per unit of each resource; a run's cost at μ is Σ_r μ_r u_r.
+  each. On the H200 and the RTX PRO 6000 it is read at each card's table (`hardware/cards/<sku>.toml`: each resource's
+  rate at its clock's ceiling). A price μ ≥ 0 is per unit of each resource; a run's cost at μ is Σ_r μ_r u_r.
 - **pub_μ(b)**: the least cost at μ of execution phase b's credited work (see "What is credited") over D5 v2.1's menu
   of public methods, which holds the named matmul
   programs (with route (iii) on the RTX PRO 6000) and the pinned SHA-512 schedules (the Lean's `PubBest`).
@@ -117,7 +117,7 @@ segment S's rows:
   - row t·P + 2(s − 1) + r, for r = 0, 1, is bytes [16,384 r, 16,384 (r + 1)) of tile t's segment-s words;
   - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's output cells 4,096 h to 4,096 h + 4,095.
 - A row's leaf is hm96's leaf over the row's `sha512/row/v2` digest (131,072 bits), salted with `prf_salt(Ks, off + pos)`:
-  192 bytes of commit_gpu's PRF (`benchmarks/pouw/commit_gpu/reference.py`), keyed by the prover's private Ks, at the
+  192 bytes of commit_gpu's PRF (`verity/commitments/cuda/commit_gpu/reference.py`), keyed by the prover's private Ks, at the
   call's salt offset off plus the row's position pos. No coin feeds a salt. frame-v3-sha512's leaf prefix (the domain id
   and the position) is `row_leaf`'s, around the hm96 digest.
 - The tree is binary, one a call (`merkle.tree_levels`). Its domain is `CommitmentDomain(identity_digest_sha512(TAG,
@@ -624,7 +624,7 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
     discharges) and `IndependentCoins`.
   - There is no `SharedNoiseLucks` and no `UnitFixed` (NOFOLD-OPT): a segment word's 2^-16 guess sits in SAK-LB's λ,
     and O's constant guess bounds only the check of O, in a block that earns no credit.
-  - `PeriodInventory` is held open: whether host CPUs and DPUs are devices of the period.
+  - `MonitoringPeriodInventory` is held open: whether host CPUs and DPUs are devices of the period.
 - **The RTX PRO 6000's output cells at x > 0 are upper bounds.** 𝓜's sm_120 joint issue rows are closed rows (A36), and they
   stay bounds until a calibration moves them to a current vector.
 - **Perplexity** isn't run for V4, or for 70B at 8K.

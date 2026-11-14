@@ -47,7 +47,9 @@ Lean checks each two-stage point too (`figure1.lean_two`, unless `lean` is off):
 finds from the planner's, with the planner's bits (`planner`) and Lean's θ beside them, and a refused point is an
 error.
 
-Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
+A request's served bits, S, are Figure 1's (`figure1.cards`): its tokens at most the network certifier's registered
+response cap where the model's `certifier` card registers one, else every one of them.  Each configuration's two
+panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
 two-stage line's first stage is the one the verifier runs: a verification phase (`REGISTRATIONS`) samples a whole count
 K of its requests, at least one (`optimize.two_stage_design`'s `registration`), so each point is priced and bounded
@@ -64,7 +66,10 @@ sessions it refuses: each point carries the count, and at β = `RATIO_BUDGET` th
 (`session_designs`): the two with one session a block type, and those with sessions of at most 1, 16, 64 and 200
 tables (`TABLES`; a session of the proof system holds at most `SESSION_TABLES`).  A design that meets a limit of the
 code that runs a second stage today (`limits`: a session's tables, the challenger's release log, the second sample's
-live coins) is printed as out of reach, with the first limit it meets.  `breakeven` gives each patterns'-form
+live coins) is printed as out of reach, with the first limit it meets.  Each two-stage point with a design carries
+the coins its second stage reads first and Lean's bound on the chance it refuses an honest run on them
+(`second_stage`): the bound a point plots is for a deployment whose second stage has those coins, and on fewer it
+refuses every run.  `breakeven` gives each patterns'-form
 line's marginal overhead and β at which its bound reaches the weights, at FP8 and FP4, each certified by Lean unless
 `lean` is off (`certify`: at the β it gives, the bits Lean certifies for the planner's design are at most the weights).
 Only that side is Lean's: Lean bounds a design's bits from above, so nothing certifies that a smaller β can't reach the
@@ -90,6 +95,7 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
+import second_stage
 from verity.protocols.proofs.spot.prover import plancheck
 from verity.protocols.proofs.spot.device import challenger
 from verity.protocols.proofs.spot.prover.optimize import (Cell, leak_count, two_stage_counts, two_stage_design, two_stage_exfil,
@@ -105,7 +111,7 @@ PANELS = ("exfiltration", "infiltration", "skipped_work")
 TICKS = (0.984, 0.960)
 #: a request's lifetime over the 600 s window, the share of its K/V alive at an edge: the central, least and most
 LIVE = (0.15, 0.05, 0.5)
-#: SHA-512 at 3.1 and 4.79 G compressions a second, 44 a 4 KiB row (`benchmarks/prove_path/window_cost.py`'s `RATES`)
+#: SHA-512 at 3.1 and 4.79 G compressions a second, 44 a 4 KiB row (`verity/protocols/proofs/spot/prover/cost/window_cost.py`'s `RATES`)
 HASH_RATES = (4096 / 44 * 4.79e9, 4096 / 44 * 3.1e9)
 #: the pause at a replay block's edge, seconds, measured on GLM-5.3 at TP8 over 21 edges (rank 0's copy of its 37.26 GB
 #: KV pool to pinned host memory, each rank's SHA-512 rows of its own, the runner rows and the scheduler state): the
@@ -182,6 +188,8 @@ class Configuration:
 #: sampled layer of one token its engine step's whole batch at that layer, the requests in flight ("step"); with them, a
 #: request replays alone ("request")
 REPLAYS = ("block", "step", "request")
+#: what the patterns' form reads each request as serving: `D.S` bits exactly
+PATTERNS_SERVED = "RequestsCover"
 
 
 #: a 64-machine pod: one committer gathering its machines' boundary rows into one committed trace
@@ -547,11 +555,12 @@ def _plan(row: dict | None) -> dict | None:
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
     exfiltration, which of the count and the served bits binds, the requests a verification phase samples and what one
-    costs (`REG`), and the computed share of its design's proving.  A two-stage line's `form` and its verification
-    phase's replay blocks (`span`) come with it; with `lean`, Lean's check of each line's designs
+    costs (`REG`), the computed share of its design's proving, and the coins its second stage reads with Lean's
+    bound on the chance it refuses an honest run (`second_stage.at_design`).  A two-stage line's `form` and its
+    verification phase's replay blocks (`span`) come with it; with `lean`, Lean's check of each line's designs
     (`figure1.lean_check`, `figure1.lean_two`).  Where the budget pays for no sampled replay block of a verification
     phase there is no design: the point is the trivial one, every replay block charged whole, with nothing for Lean to
-    check."""
+    check and no second stage."""
     name, m, g, budget, computed, form, span, lean, *rest = job
     beside = bool(rest and rest[0])
     served = f1.served_total(m)
@@ -586,7 +595,8 @@ def _point(job: tuple) -> dict:
         return {"exfiltration": {"y": min(count, served), "count": count, "binds": "served", "plan": None,
                                  **({"lean": None, "planner": None, "theta": None} if lean else {}),
                                  "registration_sample": 0, "shared": 0.0, "padding": 0.0, "sessions": 0.0,
-                                 "sample_budgets": one / phase, "limit": None, "computed_proving": None, **forms},
+                                 "sample_budgets": one / phase, "limit": None, "computed_proving": None,
+                                 "second_stage": None, **forms},
                 "infiltration": {"y": g.replay_blocks * top, "plan": None}}
     count, checked = (f1.lean_two(cells, g.replay_blocks, row, m.delta, m.served, form == "patterns") if lean
                       else (row["bound"], {}))
@@ -595,7 +605,8 @@ def _point(job: tuple) -> dict:
                              "binds": "served" if served <= count else "count", "plan": _plan(row), **checked,
                              **{k: row[k] for k in REG if k in row}, "sample_budgets": one / phase,
                              "limit": limits(cells, row)["limit"] if span else None,
-                             "computed_proving": computed_proving(cells, row, computed), **forms},
+                             "computed_proving": computed_proving(cells, row, computed),
+                             "second_stage": second_stage.at_design(cells, row), **forms},
             "infiltration": {"y": write_form(cells, row, g.replay_blocks, m.delta, g.footprint),
                              "plan": _plan(row)}}
 
@@ -628,7 +639,7 @@ LOG_LINES, TABLE_LINES = challenger.MAX_TREE_LINES, 2 * 86
 DRAW_BYTES = challenger.MAX_COINS * challenger.COIN_BYTES
 
 
-def draw_width(n: int) -> int:
+def sample_width(n: int) -> int:
     """The bytes of one uniform sample below `n` (`Flock.Draw.width`)."""
     return (n.bit_length() + 71) // 8
 
@@ -639,7 +650,7 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     tables against `TABLE_LIMITS`; the lines of session coins its sessions write, at least 2 a session and
     `TABLE_LINES` a table, against one challenger session's `LOG_LINES` (`lines`); and the bytes of live coins its
     second sample reads, a stream of 2 k width(n) + 64 bytes for each block type in each sampled replay block
-    (`Flock.Draw.Stratum.need`, one stratum a cell of `Spot.Select.secondLaw`), against one layout's `DRAW_BYTES`
+    (`Flock.Draw.Stratum.need`, one stratum a cell of `Spot.Select.secondSamplingDesign`), against one layout's `DRAW_BYTES`
     (`draw_bytes`).  A block type of fewer than one proof block a replay block counts at the chance a replay block
     has it.  A design that meets one is one no deployment runs today, whatever its bound.  The verifier's refusal of
     several sessions a template is not among them: it is the form, said beside the line."""
@@ -651,7 +662,7 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     sizes: dict = {}
     for c in split:
         sizes[c.stratum] = sizes.get(c.stratum, 0.0) + c.n
-    draw = count * fsum(min(1.0, n) * (2 * min(k[t], ceil(n)) * draw_width(ceil(n)) + 64) for t, n in sizes.items())
+    draw = count * fsum(min(1.0, n) * (2 * min(k[t], ceil(n)) * sample_width(ceil(n)) + 64) for t, n in sizes.items())
     tables = ceil(row["tables"] - 1e-9)
     past = [f"{what} {n:,}" for n, what in TABLE_LIMITS if tables > n]
     limit = None
@@ -882,12 +893,19 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                      f"{f1.CAP_STATUS['sets']}, at most the scope's served bits ({f1.SERVED_STATUS}):{binds(n)}")
         return text
 
+    cap = (out["inputs"].get("max_tokens_cap") or {}).get("value")
+    conditions = (f"It takes two modeling conditions: each request serves exactly S = {served:,.0f} bits "
+                  f"({PATTERNS_SERVED}), and no proof block is shared across requests" if cap is None else
+                  f"Each request serves at most S = {served:,.0f} bits, {cap:,} tokens, the network certifier's "
+                  f"registered response cap ({f1.CAP_RULE}; the tie of the statement's served outputs to the tokens "
+                  f"it releases is pending), but the form reads each as serving exactly S ({PATTERNS_SERVED}), and "
+                  "that its bound holds for a request serving fewer is a modeling condition, no lemma yet; so is the "
+                  "other: no proof block is shared across requests")
     patterns = (f"the patterns' form ({f1.CAP_STATUS['patterns']}): a request's incorrect proof "
                 f"blocks are charged their committed bits up to the {served:,.0f} bits it serves, so a wholly incorrect "
                 f"request costs {served:,.0f} bits, and the bound is at most the {sc['served_bits']:.2g} bits the "
-                f"scope serves ({f1.OUTS_STATUS}). It takes two modeling conditions: each request serves at most "
-                f"S = {served:,.0f} bits, and no proof block is shared across requests, so a request's served outputs "
-                "read only its own proof blocks.")
+                f"scope serves ({f1.OUTS_STATUS}). {conditions}, so a request's served outputs read only its own proof "
+                "blocks.")
     cuts = {n: k["cut"] for n, k in conf.items() if "cut" in k and not k["variant_of"]}
     exfil_cuts = "".join(family(n, "dash-dot", f"{short}'s serving and serve tax on the partition card {k['name']}'s "
                                 f"cut ({k['label']}), its marginal proof overhead {conf[n]['overhead']:.3g}×, "
@@ -935,22 +953,23 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
 
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-        workers: int = 1, lean: bool = True, serving: str = "assumed") -> dict:
+        workers: int = 1, lean: bool = True, serving: str = "assumed", served: str | None = None) -> dict:
     """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes
     (`figure1.processes`), with Lean checking every line's designs unless `lean` is off.  `serving` is where serving's
     rate comes from (`figure1.SERVING`): the measured reading's JSON says which rate it read (`serving`), and its serve
     taxes are still the `serve_tax` card's, priced at the assumed reading until `priced_card` prices one at the
     measured."""
     with f1.processes(workers, lean) as each:
-        return _run(model_name, scope_names, request, each, lean, serving)
+        return _run(model_name, scope_names, request, each, lean, serving, served)
 
 
-def _lines(model_name: str, request: str, verify: bool = True, serving: str = "assumed") -> tuple:
+def _lines(model_name: str, request: str, verify: bool = True, serving: str = "assumed",
+           served: str | None = None) -> tuple:
     """The model's cards and, for each configuration it has the cut of, its priced inputs (with each statement's
     verify where `verify` and the model has a `verifier_cost` card), its line (proof blocks a token, fill and marginal
     overhead) and which of its cells' types are computed."""
     sc = f1.slot_cards(model_name, serving)
-    c = f1.cards(model_name, request, serving)
+    c = f1.cards(model_name, request, serving, served)
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
     inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
@@ -971,8 +990,8 @@ def _lines(model_name: str, request: str, verify: bool = True, serving: str = "a
 
 
 def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool,
-         serving: str = "assumed") -> dict:
-    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request, serving=serving)
+         serving: str = "assumed", served: str | None = None) -> dict:
+    sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request, serving=serving, served=served)
     tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
     part, fill, h = lines["tokens"]
     betas = sorted(set(BETAS) | set(c["budgets"].value))
@@ -1006,8 +1025,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             series[panel].append({"scope": s.name, "config": name, "beta": betas,
                                   "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
                                   **{k: [r[k] for r in rows]
-                                     for k in ("binds", "count", *REG, "limit", "computed_proving", "lean", "planner",
-                                               "theta")
+                                     for k in ("binds", "count", *REG, "limit", "computed_proving", "second_stage",
+                                               "lean", "planner", "theta")
                                      if k in rows[0]},
                                   **({"forms": [r.get("forms") for r in rows]}
                                      if any("forms" in r for r in rows) else {}),
@@ -1024,7 +1043,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                          "gpu_seconds": registration_gpu_seconds(r, c),
                          "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
     out = ({"serving": f1.reading(sc, c, part)} if serving == "measured" else {}) | {
-           "schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
+           "schema": SCHEMA, "model": model_name, "request": request,
+           "served": "cap" if "max_tokens_cap" in c else "request", "overhead": h, "registrations": registrations,
            "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
                     "precision": plancheck.TWO_P} if lean else None,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
@@ -1180,7 +1200,8 @@ def _breakeven(job: tuple) -> tuple[float | None, dict | None]:
 
 
 def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-              workers: int = 1, rel: float = 0.01, lean: bool = True, serving: str = "assumed") -> dict:
+              workers: int = 1, rel: float = 0.01, lean: bool = True, serving: str = "assumed",
+              served: str | None = None) -> dict:
     """Each patterns'-form line's break-even on each scope: the marginal overhead at which its bound at β =
     `RATIO_BUDGET` reaches each of the weights (`weights`), the β at which it does at the line's own overhead, and its
     floor, the bound at the least overhead `SPANS` searches.  With `lean`, each has Lean's certificate (`certify`): a
@@ -1188,7 +1209,7 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
     bits it certifies there and which of them and the served bits binds, so its β is an upper bound on the β at which
     the line's bound reaches the weights, and its overhead a lower bound on the overhead at which it does.  `serving`
     is where serving's rate comes from (`figure1.SERVING`)."""
-    sc, c, _, confs, inputs, lines, computed = _lines(model_name, request, serving=serving)
+    sc, c, _, confs, inputs, lines, computed = _lines(model_name, request, serving=serving, served=served)
     targets = weights(c)
     chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
     keys = [(n, s) for s in chosen for n, conf in confs.items() if conf.form == "patterns"]
@@ -1422,7 +1443,7 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
 
 
 #: `--serving`'s help, here and in figures.py
-SERVING_HELP = ("where serving's rate comes from: rho's fleet utilization (assumed, the default), or the model's "
+SERVING_HELP = ("where serving's rate comes from: the slowdown calculator's fleet utilization (assumed, the default), or the model's "
                 "serving_rate card (measured)")
 
 

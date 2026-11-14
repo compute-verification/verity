@@ -22,7 +22,6 @@ inputs = [
     "verity/circuits",
     "verity/claims",
     "verity/commitments",
-    "verity/hardware",
     # the record entry (`Record`): SPOT's challenger imports it, and the certifier's `active` imports SPOT's verifier
     "verity/channel.py",
     "verity/protocols/__init__.py",
@@ -46,6 +45,8 @@ inputs = [
     "adapters/vllm/verity_vllm/engine/__init__.py",
     "adapters/vllm/verity_vllm/engine/handle.py",
     "adapters/vllm/verity_vllm/engine/hooks.py",
+    "adapters/vllm/verity_vllm/engine/runner_step.py",
+    "adapters/vllm/verity_vllm/engine/scheduler_step.py",
     "adapters/vllm/verity_vllm/engine/step_trace.py",
     "adapters/vllm/verity_vllm/pipeline/__init__.py",
     "adapters/vllm/verity_vllm/pipeline/serve_admit.py",

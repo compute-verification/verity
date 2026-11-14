@@ -26,7 +26,7 @@ from the registry, path by path: `research msg owners PATH`.
 | `Core/` | The evaluator's primitives and the Site's fold and check are `Definitions.Core`'s |
 | `Flock/` | The circuit a registered Flock circuit file describes; the verifier's two fixed nets build |
 | `Hash/` | Core's identity hash is Flock's SHA-512 |
-| `Nci/`, `Nci.lean` | What the inference-only check's verdicts mean (`NciCheck`) |
+| `InferenceOnly/`, `InferenceOnly.lean` | What the inference-only check's verdicts mean (`InferenceOnlyCheck`) |
 | `NetworkCertifier/` | The certificate and records checks (`NetworkCheck`), the certifier device |
 | `Pous/`, `Pous.lean` | PoUS's setup, timed audit, period and wipe (`PousCheck`, `MemoryChallenger`) |
 | `Pouw/`, `Pouw.lean` | PoUW's window, its check, commitments, credit and period (`PouwWindow`, `PouwCheck`) |
@@ -36,7 +36,7 @@ from the registry, path by path: `research msg owners PATH`.
 | `Attest.lean` | A party's signed period roots and liveness records (`Attest.Period`) |
 | `Challenger.lean` | Coins from the device's log: what a sample's coins are (`Spot.OneStageZk`) |
 | `Composition.lean` | The composition of core protocols (`CoreComposition`) |
-| `Firewall.lean` | The ZK server's record (`Firewall.Record`, `Firewall.Release`) |
+| `ZkServer.lean` | The ZK server's record (`ZkServer.Record`, `ZkServer.Release`) |
 | `NetworkPeriod.lean` | The network period check's bound (`NetworkCheck.Period`) |
 | `NetworkScan.lean` | The rows form's scan fits its layout (`NetworkCheck.Period.scanOf`) |
 | `Remote.lean` | Remote's acceptance and the inference-only policy (`CoreRemote`) |

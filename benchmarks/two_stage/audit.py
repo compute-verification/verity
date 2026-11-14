@@ -36,15 +36,15 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 
 Exit 0 when the run is as expected: every session's circuit file the one its template's params name, and every Lean
 verdict accepted with every negative refused, round 2 accepting the statements, a5's record accepted or refusing only
-the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes an own port's read only at
-that port's root), and the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
+the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
+alone), and the outcome accepted or refused by round 2's two-stage form alone (`second_stage.FORM`), its records taking
 those reads (the interior's at the interior record and the links' boundary ports at the boundary record); or
 (``--altered``) refused at both link members by Lean's registered reads and nowhere else, and the outcome refused.
 ``--out`` holds the params
 (``proofs.json``, and each template's reference statement under ``references/m<k>/``), both windows (``boundary/``,
 ``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
 ``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
-(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, laws
+(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, sampling designs
 and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
 copies it reads them against (``guard/``, `guard.export`).
 
@@ -66,10 +66,10 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
-import two_stage as TS  # noqa: E402
+from verity.protocols.proofs.spot.device import two_stage as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
@@ -160,10 +160,10 @@ def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
 
 def own_reads_only(record: dict | None, ports: list[str]) -> bool:
     """Whether a5's audit record refuses only the sessions' reads of its registration's own ``ports``: its one failed
-    check is one-stage's ``registered``, which takes an own port's read only at that port's root, naming no registered
-    value and exactly those ports. `SpotFlock.FrameIs` asks for those reads (an interior port's at the interior record, a
-    link port's at the boundary record's leaf S[i]), and every audit record takes them at their own roots
-    (`audit.less_own_reads`)."""
+    check is one-stage's ``registered``, which takes reads of earlier values alone, naming no registered value and
+    exactly those ports. `SpotFlock.FrameIs` asks for those reads (an interior port's at the interior record, a link
+    port's at the boundary record's leaf S[i]), and the stream's two-stage records take them (`verifier.audit_record`'s
+    ``own_reads``)."""
     bad = {k: v for k, v in ((record or {}).get("checks") or {}).items() if not v.get("ok")}
     d = (bad.get("registered") or {}).get("detail") or {}
     return set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong") and d.get("opened") == ports

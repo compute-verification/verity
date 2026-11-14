@@ -55,7 +55,7 @@ local notation "𝔽" => FlockLevel3.GF128
 section One
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
+  (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
   (hrf : Hidden.Any.RowsFitS c)
 
@@ -89,7 +89,7 @@ theorem sitesShHI_bcSite :
   intro S R u h M hM
   show BcSiteH ((tableShH dj y₀ S).acc (zkTyped ht) hc hrf) pub ((tableShH dj y₀ S).o u h)
     ((tableShH dj y₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupZKH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupZKH I mPts S (dj S))
   · have e : tableShH dj y₀ S = (Classical.choice hS).x.table := by
       unfold tableShH
       rw [dite_eq_left_of_eq_true (eq_true hS)]
@@ -163,30 +163,30 @@ theorem rsZHI_computes : (rsZHI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).C
 `zk_flock_countC_execOS_crH` with `place := placeZHI` and `vb := rsZHI.bindingZ rsZHI_computes`. Its circuit
 conditions are `hrf`, `hpr` and `hw`; the public file may carry shared-row tables. -/
 theorem zk_flock_countC_execOS_atHI (Hs : Hashes 𝔽 Dig (List UInt8))
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC execArith Hs (planAtZKH dj y₀))))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith Hs
-      (planAtZKH dj y₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
+      (planAtZKH dj y₀ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ))
       j (zcStrat execArith Hs (planAtZKH dj y₀) (cont σ ω)) qF qS)
     {execAccept : Bool × Finset (Fin n) → Prop}
-    (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (tr : StrictCR.TreeRewind Hs.H (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC execArith Hs (planAtZKH dj y₀))) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (((instProg c n).partition (outsOfI c n)).wrong
+    prob (fun o => execAccept o ∧ K ≤ (((instProg c n).partition (outsOfI c n)).incorrect
         (XplurZC execArith Hs ((instProg c n).partition (outsOfI c n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
           ((rsZHI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           (reg σ) (cont σ) k Rw)).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
           (batchedSessionZC execArith Hs (planAtZKH dj y₀))) σ ≤
-      (Law.stratified σs ks hks).miss K +
-        ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+      (SamplingDesign.stratified σs ks hks).miss K +
+        ksAvgStrictZ (planAtZKH dj y₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg σ) +
         linkBoundZC execArith Hs ((instProg c n).partition (outsOfI c n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
           ((rsZHI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHI_computes dj y₀ ht hc hrf hpub hU hpr hw))
@@ -204,7 +204,7 @@ end One
 section J
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+  {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
   (hrf : Hidden.Any.RowsFitS c)
 
@@ -239,7 +239,7 @@ include hpub in
 /-- `BcSiteH` at a table set up at table `j`'s inputs (`tableH_bcSiteI` at `inputsJ I j`). -/
 theorem tableShHJ_bcSiteI {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
-    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : DrawSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
+    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
     {u : Fin n} (h : u ∈ S') :
     BcSiteH (Tb.2.acc p₁ p₂ hrf) pub (Tb.2.o u h) (Tb.2.vu u h) u.val := by
   obtain ⟨j, d, x, rfl⟩ := hX
@@ -257,7 +257,7 @@ theorem sitesShHJI_bcSite :
   intro S R u h M hM
   refine bcSiteH_recast _ (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm _ _
     (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJ_eq dj y₀ S R u)).symm _ _ ?_
-  by_cases hS : Nonempty (DrawSetupZHJ (inputsJ I (partOf I (dj S) u.val)) mPts
+  by_cases hS : Nonempty (SampleSetupZHJ (inputsJ I (partOf I (dj S) u.val)) mPts
     (partS I (dj S) S (partOf I (dj S) u.val)) (drawJ I (dj S) (partOf I (dj S) u.val)))
   · exact tableShHJ_bcSiteI hrf hpub _ _ _
       ⟨_, _, (Classical.choice hS).x, tableShHJ_set dj y₀ hS⟩ (mem_partS h)

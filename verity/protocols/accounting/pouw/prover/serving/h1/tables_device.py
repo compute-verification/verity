@@ -1,6 +1,6 @@
 """`pouw_h1.H1Run`'s call tables hashed on the GPU: a call's A table and z table, each
 `pouw_h1_requests.hiding_rows` of its leaves, computed by the Commit's row-table kernels
-(`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu`, `commit.row_tables_device`) as a step of one table.
+(`verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu`, `row_table_kernels`) as a step of one table.
 
 The kernels hash rows of K 8-bit codes then a 4-byte word, so a table's leaf value is that row followed by its 192-byte salt,
 and its root is `hiding_rows`' when the table's layout says so (`layout`): the domain id is ``audit.rows_domain``'s (the
@@ -13,8 +13,8 @@ f32 scale; a z table's leaf is a ``ZY_BYTES`` record, its first ``ZY_BYTES - 4``
 stream has enqueued, nothing waiting on the host, and hands back a `Pending` whose `roots` waits for them: `H1Run` reads a
 step's roots at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
 `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
-machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`) and its per-device state
-(`row_tables_device.DeviceLibrary`); nvcc is `pouw_device`'s.
+machines without a GPU. Builds share the Commit's row-table builds (`row_table_kernels._build`) and its per-device state
+(`row_table_kernels.DeviceLibrary`); nvcc is `pouw_device`'s.
 
 `commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
 says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
@@ -38,7 +38,7 @@ import numpy as np
 from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
 
-from verity_vllm.commit import row_tables_device as RTD
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
@@ -71,7 +71,7 @@ def layout(domain_id: bytes, key: bytes, nonce: int, n: int, k: int) -> tuple[np
         raise ValueError(f"{n} rows of {k} codes under a {len(domain_id)}-byte domain id, a {len(key)}-byte key and nonce "
                          f"{nonce}: not 1 to 2^32 / 3 rows of an even K >= 2, a 64-byte id, a 32-byte key and a u64 nonce")
     s = -(-(k + 4) // RTD.SEG_BYTES)
-    tab = np.concatenate([np.asarray([0, 0, k | n << 32, s << 32, 0, RTD._width(n)], np.uint64), RTD._words(domain_id)])
+    tab = np.concatenate([np.asarray([0, 0, k | n << 32, s << 32, 0, RTD.table_width(n)], np.uint64), RTD.u64_words(domain_id)])
     args = RTD.Args()
     args.key[:] = np.frombuffer(key, "<u4").tolist()
     args.nonce[:] = [0, nonce & _M32, nonce >> 32]
@@ -112,7 +112,7 @@ def host_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> lis
         tab[0], tab[1] = codes.ctypes.data, words.ctypes.data
         roots = np.zeros(16, np.uint64)
         rc = RTD.host_lib().rt_step_host(tab.reshape(1, -1), np.arange(n, dtype=np.uint32), n * (int(tab[3]) >> 32), n,
-                                         RTD._hm(), RTD._prefixes(), ctypes.byref(args), roots)
+                                         RTD.hm_tables(), RTD.leaf_prefixes(), ctypes.byref(args), roots)
         if rc:
             raise ValueError(f"rt_step_host refused the table's layout ({rc})")
         out.append(_root(roots[8:]))
@@ -212,7 +212,7 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes, names
     for i, (_did, _nonce, c, w) in enumerate(tables):
         tabs[i, 0], tabs[i, 1] = c.data_ptr(), w.data_ptr()
     # each table's scratch, in 64-byte units: its segment digests, leaves, tree and step tree; then every table's output
-    units = [(n * s, n, RTD._width(n), 2) for n, s in ((int(t[2]) >> 32, int(t[3]) >> 32) for t, _args in laid)]
+    units = [(n * s, n, RTD.table_width(n), 2) for n, s in ((int(t[2]) >> 32, int(t[3]) >> 32) for t, _args in laid)]
     staged = torch.from_numpy(tabs.view(np.int64)).pin_memory()
     meta = staged.to(dev, non_blocking=True)
     perm = d.ranks(torch, max(int(c.shape[0]) for _did, _nonce, c, _w in tables))

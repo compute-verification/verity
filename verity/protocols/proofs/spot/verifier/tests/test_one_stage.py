@@ -1,4 +1,4 @@
-"""One-stage audit: the demo partition query, the registration record, the sample and proved-block checks, the profile."""
+"""One-stage audit: the demo partition query, the docket, the sample and proved-block checks, the profile."""
 
 from __future__ import annotations
 
@@ -18,14 +18,21 @@ from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinit
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import array_of, tuple_of
 from verity.circuits.types import Array, Tuple, Value
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registered as G, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    partition as P,
+    registered as G,
+    docket as R,
+    caller as C,
+)
 
 XOR8 = PrimitiveDefinition("OneStageTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
                            register=False)
 PAIR = bind(CompositeDefinition("OneStageTestPair", 0, (), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                 lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False))
 SCHEME = "frame-v3-sha512/hm96-sha512"
-LAW = {"law": "subset", "k": 2}
+SAMPLING_DESIGN = {"law": "subset", "k": 2}
 ROOTS = {"x": "ab" * 64, "out": "cd" * 64}
 SERVED = {"kind": "served", "row": 101, "run": "r-test"}
 
@@ -41,13 +48,19 @@ def _registration(n: int = 6, window=SERVED, version: int = 1):
     q = P.template_instance_query(PAIR.id)
     ports = _ports(prog, q, n)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
-    return prog, q, R.record(prog, q, LAW, SCHEME, roots, window, leaf_layer="ee" * 64)
+    return prog, q, R.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, window, leaf_layer="ee" * 64)
 
 
 def _check(rec, prog, q, **kw):
     n = P.units(prog, q)
-    args = {"law": LAW, "scheme": SCHEME, "ports": _ports(prog, q, n), "leaf_layer": "ee" * 64, **kw}
+    args = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": _ports(prog, q, n), "leaf_layer": "ee" * 64, **kw}
     return R.check(rec, prog, q, **args)
+
+
+def _check_both(rec, prog, q, **kw):
+    n = P.units(prog, q)
+    args = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": _ports(prog, q, n), "leaf_layer": "ee" * 64, **kw}
+    return C.both(rec, prog, q, **args)
 
 
 def test_the_query_makes_each_instance_one_unit():
@@ -131,7 +144,7 @@ def test_several_templates_one_population():
 
 EPS = bind(CompositeDefinition("OneStageTestEps", 0, ("EPS", "NAME"), lambda S: ((("x", Array(2, Value(8))),), Value(8)),
                                lambda B, S, x: B.call(XOR8, x[0], x[1]), register=False), EPS=1e-5, NAME='a"b')
-#: the program and registration record digests of `_registration(6, version=0)`: what an old record holds
+#: the program and docket digests of `_registration(6, version=0)`: what an old record holds
 V0_PAIR_6 = ("179416c1470fbf1c1d679826635d18b475dcf5584b94a9249397c22c7c70f986"
              "23f87f33d710c1b58fe2f55824d85af4af52df20fe3f64231046f23549e84355")
 V0_RECORD_6 = ("677e6e684f82c37bb8610bbbfb5732805fc2678b96140443b1f048cb6c35e3b5"
@@ -197,7 +210,7 @@ def test_v1_names_a_template_by_its_descriptor_id_and_decodes_from_its_descripto
 
 
 def test_an_old_v0_record_still_decodes_and_verifies():
-    """A registration made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
+    """A docket made with v0's program, at the digests an old record holds, passes R1-R6 against the verifier's v0
     copy, built or decoded from its descriptor; v1's program of the same population is another program, which it refuses."""
     old, q, rec = _registration(6, version=0)
     assert (rec["program"], R.digest(rec)) == (V0_PAIR_6, V0_RECORD_6)
@@ -261,17 +274,17 @@ def test_the_window_runs_its_days_declared_circuit():
     prog, q, rec = _registration(6)
     bodies = [G.Declaration(0, rec["program"], (PAIR.id,)), G.Declaration(1, "0" * 128, (PAIR.id,))]
     declared = G.check(G.Auditor(), "remote", G.chain("remote", bodies)).view().to_json()["declarations"]
-    assert _check(rec, prog, q).ok and _check(rec, prog, q, day=0, declarations=declared).ok
-    assert _check(rec, prog, q, day=1, declarations=declared).codes == ("R2-declared",)
-    assert _check(rec, prog, q, day=2, declarations=declared).codes == ("R2-undeclared",)
+    assert _check_both(rec, prog, q).ok and _check_both(rec, prog, q, day=0, declarations=declared).ok
+    assert _check_both(rec, prog, q, day=1, declarations=declared).codes == ("R2-declared",)
+    assert _check_both(rec, prog, q, day=2, declarations=declared).codes == ("R2-undeclared",)
     with pytest.raises(G.Refused, match="entry 2: duplicate-declaration"):
         G.check(G.Auditor(), "remote", G.chain("remote", [*bodies, G.Declaration(0, "0" * 128)]))
     twice = [*declared, {"blocks": [], "day": 0, "program": "0" * 128}]
-    assert _check(rec, prog, q, day=0, declarations=twice).codes == ("R2-declared-twice",)
+    assert _check_both(rec, prog, q, day=0, declarations=twice).codes == ("R2-declared-twice",)
     for day, given in ((0, None), (None, declared), (-1, declared), (True, declared),
                        (0, [{"day": 0, "program": rec["program"]}])):
         with pytest.raises(ValueError, match="declar"):
-            _check(rec, prog, q, day=day, declarations=given)
+            _check_both(rec, prog, q, day=day, declarations=given)
 
 
 def test_window_domains_bind_program_partition_port_schema_leaves_and_run():
@@ -308,18 +321,18 @@ def test_the_window_says_served_or_stand_in():
     assert rec["window"]["kind"] == "stand-in" and _check(rec, prog, q).ok
 
 
-def test_draw_checks():
+def test_sample_checks():
     _, _, rec = _registration(6)
-    law = D.parse_design("subset:2")
-    assert law == LAW
+    sampling_design = D.parse_design("subset:2")
+    assert sampling_design == SAMPLING_DESIGN
     good = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
-    assert D.check_draw(good, rec, law).ok
-    assert D.check_draw({**good, "units": [4, 1]}, rec, law).codes == ("units-order",)
-    assert D.check_draw({**good, "units": [1, 6]}, rec, law).codes == ("units-range",)
-    assert D.check_draw({**good, "units": [1]}, rec, law).codes == ("units-count",)
-    assert D.check_draw({**good, "population": 5}, rec, law).codes == ("population",)
+    assert D.check_draw(good, rec, sampling_design).ok
+    assert D.check_draw({**good, "units": [4, 1]}, rec, sampling_design).codes == ("units-order",)
+    assert D.check_draw({**good, "units": [1, 6]}, rec, sampling_design).codes == ("units-range",)
+    assert D.check_draw({**good, "units": [1]}, rec, sampling_design).codes == ("units-count",)
+    assert D.check_draw({**good, "population": 5}, rec, sampling_design).codes == ("population",)
     assert D.check_draw(good, rec, D.parse_design("subset:3")).codes == ("law",)
-    assert D.check_draw(None, rec, law).codes == ("not-a-draw",)
+    assert D.check_draw(None, rec, sampling_design).codes == ("not-a-draw",)
     assert D.check_draw({"law": "bernoulli", "population": 6, "p": "1/2", "units": [0, 5]}, rec, D.parse_design("bernoulli:1/2")).ok
     for bad in ("subset", "subset:x", "subset:0", "subset:00", "bernoulli:3/2", "bernoulli:1/0", "beta:1", "subset:\u0663",
                 "work:\u00b2", "bernoulli:1/\u0662"):
@@ -330,7 +343,7 @@ def test_draw_checks():
         assert D.check_draw(drawn, rec, {"law": "bernoulli", "p": p}).codes == ("p",)
 
 
-def test_the_rate_law_is_its_rate_rounded_up_to_its_tables():
+def test_the_rate_sampling_design_is_its_rate_rounded_up_to_its_tables():
     """`parse_rate` reads `rate:NUM/DEN[:T]` at 0 < NUM <= DEN and T >= 1 in ASCII digits, and `rate_count` is ⌈q·n⌉ for
     q = NUM/DEN rounded up to the next multiple of T and no further: q·n <= K < q·n + T (the Lean's `Rate.count_ge`)."""
     assert [D.parse_rate(t) for t in ("rate:1/3", "rate:1/3:4", "rate:01/02:003", "rate:5/5")] == [
@@ -345,7 +358,7 @@ def test_the_rate_law_is_its_rate_rounded_up_to_its_tables():
     assert (D.rate_count(1, 3, 4, 20), D.rate_count(1, 5, 4, 12), D.rate_count(1, 3, 2, 60)) == (8, 4, 20)
 
 
-def test_proved_units_are_the_draw():
+def test_proved_units_are_the_sample():
     good = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     assert D.check_proved(good, [1, 4], 2).ok
     assert D.check_proved(good, [1, 5], 2).codes == ("units",)
@@ -367,10 +380,10 @@ def _v0(registration, draw, delta):
     relaxation (`worst_case`), now the exact one the Lean computes (`Bernoulli.count_bound`, `Bound.bernoulliBound`)."""
     from verity.circuits.partition import Level
     from verity.protocols.proofs.spot.verifier.profile import Bernoulli, IntegrityProfile, Stratified, Stratum, Subset
-    n, law = registration["population"], D.law_of(draw)
-    core = (Stratified.uniform(n, law["k"]) if law["law"] == "subset" else Stratified(tuple(
-        Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in law["strata"]))
-        if law["law"] == "stratified" else None)
+    n, sampling_design = registration["population"], D.sampling_design_of(draw)
+    core = (Stratified.uniform(n, sampling_design["k"]) if sampling_design["law"] == "subset" else Stratified(tuple(
+        Stratum(s["template"], sum(hi - lo for lo, hi in s["units"]), s["k"]) for s in sampling_design["strata"]))
+        if sampling_design["law"] == "stratified" else None)
     if draw["law"] == "stratified":
         drawn = {s["template"]: sum(1 for u in draw["units"] if any(lo <= u < hi for lo, hi in s["units"]))
                  for s in draw["strata"]}
@@ -398,9 +411,9 @@ def test_the_record_states_the_one_profile_in_its_recorded_bytes():
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
-    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, LAW, [1, 4], 2, {}, {"lean": lean}, 0.25)
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, SAMPLING_DESIGN, [1, 4], 2, {}, {"lean": lean}, 0.25)
     assert json.dumps([r["profile"], r["wrong_units"]]) == json.dumps(list(_v0(rec, d, 0.25)))
-    prog, q, rule, srec = _stratified_registration()
+    prog, q, rule, srec = _stratified_docket()
     design = D.derive(prog, q, rule)
     sd = {"law": "stratified", "population": 6, "k": 4, "strata": design["strata"], "units": [1, 3, 4, 5]}
     r = audit.audit_record(srec, R.receipt(srec, "verifier-test"), sd, design, [1, 3, 4, 5], 4, {}, {"lean": lean}, 0.25)
@@ -437,7 +450,7 @@ def test_audit_record_needs_every_check_and_verdict():
 
 
 def _accepted(verdicts: dict) -> dict:
-    """An accepted audit record of the six-block registration over the sample [1, 4], on `verdicts`."""
+    """An accepted audit record of the six-block docket over the sample [1, 4], on `verdicts`."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, D.parse_design("subset:2"), [1, 4], 2, {}, verdicts,
@@ -447,7 +460,7 @@ def _accepted(verdicts: dict) -> dict:
 
 
 def test_the_answer_of_an_accepted_record_says_whether_every_verdict_ran():
-    """`audit.answer` is one-stage's accept of the record's registration, its public outputs the sample, the proved
+    """`audit.answer` is one-stage's accept of the record's docket, its public outputs the sample, the proved
     proof blocks, the bound and the record's own ``complete``: true when every verdict ran, false beside one not of
     record that did not run, on which the record accepts all the same. A record that did not accept has no such answer."""
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
@@ -488,7 +501,7 @@ def test_an_answer_is_complete_only_as_an_accept_that_says_so():
         assert not audit.answer_complete(no_answer), no_answer
 
 
-def test_audit_record_holds_the_served_draw_and_the_sessions_roots():
+def test_audit_record_holds_the_served_sample_and_the_sessions_roots():
     """The sessions must have been served exactly the verifier's sample, and each session's root must be the registered one."""
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
@@ -511,11 +524,11 @@ def test_a_record_over_an_explicit_partition_object():
     old = {"program": P.program_digest(prog), "query": {"name": q["name"], "version": 0, "template": PAIR.id, "width_rule": None}}
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
-    rec = R.record(prog, q, LAW, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=old)
+    rec = R.record(prog, q, SAMPLING_DESIGN, SCHEME, roots, SERVED, leaf_layer="ee" * 64, partition=old)
     assert rec["partition"] == P.digest(old) != P.digest(P.partition(prog, q))
     assert "R2-partition" in _check(rec, prog, q).codes
-    assert R.check(rec, prog, q, LAW, SCHEME, ports, leaf_layer="ee" * 64, partition=old).ok
-    assert "R2-program" in R.check(rec, prog, q, LAW, SCHEME, ports, leaf_layer="ee" * 64, partition={**old, "program": "0" * 128}).codes
+    assert R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition=old).ok
+    assert "R2-program" in R.check(rec, prog, q, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64, partition={**old, "program": "0" * 128}).codes
 
 
 def test_the_wrong_unit_bound_matches_worst_case_and_scales():
@@ -555,20 +568,20 @@ def test_the_stratified_rule_rounds_half_up_with_a_floor_of_one():
 def test_derive_expands_the_rule_over_the_verifiers_program():
     prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
     q = P.template_instances_query([PAIR.id, XOR3.id])
-    law = D.derive(prog, q, D.parse_design("stratified:4"))
-    assert law == {"law": "stratified", "k": 4, "strata": [{"template": XOR3.id, "units": [[0, 2], [5, 6]], "k": 2},
+    sampling_design = D.derive(prog, q, D.parse_design("stratified:4"))
+    assert sampling_design == {"law": "stratified", "k": 4, "strata": [{"template": XOR3.id, "units": [[0, 2], [5, 6]], "k": 2},
                                                           {"template": PAIR.id, "units": [[2, 5]], "k": 2}]}
-    assert D.derive(prog, q, law) == law and D.derive(prog, q, LAW) == LAW and D.strata_problem(law, 6) is None
+    assert D.derive(prog, q, sampling_design) == sampling_design and D.derive(prog, q, SAMPLING_DESIGN) == SAMPLING_DESIGN and D.strata_problem(sampling_design, 6) is None
     for bad in ("stratified:0", "stratified:x"):
         with pytest.raises(ValueError):
             D.parse_design(bad)
     with pytest.raises(ValueError):
         D.derive(prog, q, {"law": "stratified", "k": 7})
     with pytest.raises(P.QueryRefused):
-        D.derive(prog, P.template_instance_query(PAIR.id), law)
+        D.derive(prog, P.template_instance_query(PAIR.id), sampling_design)
 
 
-def _stratified_registration():
+def _stratified_docket():
     prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
     q = P.template_instances_query([PAIR.id, XOR3.id])
     ports = _ports(prog, q, 6)
@@ -578,82 +591,82 @@ def _stratified_registration():
 
 
 def test_r1_holds_the_registered_strata_to_the_verifiers_own():
-    prog, q, rule, rec = _stratified_registration()
+    prog, q, rule, rec = _stratified_docket()
     assert rec["law"]["law"] == "stratified" and [s["k"] for s in rec["law"]["strata"]] == [2, 2]
-    assert _check(rec, prog, q, law=rule).ok and _check(rec, prog, q, law=rec["law"]).ok
+    assert _check(rec, prog, q, sampling_design=rule).ok and _check(rec, prog, q, sampling_design=rec["law"]).ok
     strata = rec["law"]["strata"]
     tampered = [dict(rec["law"], strata=[{**strata[0], "k": 1}, strata[1]]),                          # a stratum's k
                 dict(rec["law"], strata=[{**strata[0], "units": [[0, 3]]}, {**strata[1], "units": [[3, 6]]}]),  # its proof blocks
                 dict(rec["law"], strata=list(reversed(strata))),                                       # their order
                 dict(rec["law"], k=5), {"law": "subset", "k": 4}]
-    for law in tampered:
-        assert _check({**rec, "law": law}, prog, q, law=rule).codes == ("R1-law",), law
-    assert _check(rec, prog, q, law=D.parse_design("stratified:3")).codes == ("R1-law",)
-    assert _check({**rec, "law": {**rec["law"], "k": 4.0}}, prog, q, law=rule).codes == ("R1-law",)   # 4.0 is not 4
+    for sampling_design in tampered:
+        assert _check({**rec, "law": sampling_design}, prog, q, sampling_design=rule).codes == ("R1-law",), sampling_design
+    assert _check(rec, prog, q, sampling_design=D.parse_design("stratified:3")).codes == ("R1-law",)
+    assert _check({**rec, "law": {**rec["law"], "k": 4.0}}, prog, q, sampling_design=rule).codes == ("R1-law",)   # 4.0 is not 4
     two = D.derive(prog, q, D.parse_design("stratified:2"))                  # k_s = 1, 1
     rec2 = {**rec, "law": two}
-    assert [s["k"] for s in two["strata"]] == [1, 1] and _check(rec2, prog, q, law=D.parse_design("stratified:2")).ok
+    assert [s["k"] for s in two["strata"]] == [1, 1] and _check(rec2, prog, q, sampling_design=D.parse_design("stratified:2")).ok
     as_bool = dict(two, strata=[{**two["strata"][0], "k": True}, two["strata"][1]])   # `true` is not 1, as Lean reads it
-    assert _check({**rec, "law": as_bool}, prog, q, law=D.parse_design("stratified:2")).codes == ("R1-law",)
-    assert _check(rec, prog, q, law=LAW).codes == ("R1-law",)
+    assert _check({**rec, "law": as_bool}, prog, q, sampling_design=D.parse_design("stratified:2")).codes == ("R1-law",)
+    assert _check(rec, prog, q, sampling_design=SAMPLING_DESIGN).codes == ("R1-law",)
 
 
-def test_stratified_draw_checks():
-    prog, q, rule, rec = _stratified_registration()
-    law = D.derive(prog, q, rule)
-    good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
-    assert D.check_draw(good, rec, law).ok and D.law_of(good) == law
-    assert D.check_draw({**good, "units": [0, 1, 3, 4]}, rec, law).ok         # 2 and 2: another valid sample
-    assert D.check_draw({**good, "units": [0, 1, 3, 5]}, rec, law).codes == ("strata-count",)
-    assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, law).codes == ("units-range", "strata-count")
-    assert D.check_draw({**good, "k": 5}, rec, law).codes == ("law", "strata")
+def test_stratified_sample_checks():
+    prog, q, rule, rec = _stratified_docket()
+    sampling_design = D.derive(prog, q, rule)
+    good = {"law": "stratified", "population": 6, "k": 4, "strata": sampling_design["strata"], "units": [1, 3, 4, 5]}
+    assert D.check_draw(good, rec, sampling_design).ok and D.sampling_design_of(good) == sampling_design
+    assert D.check_draw({**good, "units": [0, 1, 3, 4]}, rec, sampling_design).ok         # 2 and 2: another valid sample
+    assert D.check_draw({**good, "units": [0, 1, 3, 5]}, rec, sampling_design).codes == ("strata-count",)
+    assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, sampling_design).codes == ("units-range", "strata-count")
+    assert D.check_draw({**good, "k": 5}, rec, sampling_design).codes == ("law", "strata")
     assert D.check_draw(good, rec, rule).codes == ("law",)            # the rule unexpanded is not the verifier's sampling design
     two = D.derive(prog, q, D.parse_design("stratified:2"))                  # k_s = 1, 1
     ones = [{**two["strata"][0], "k": True}, two["strata"][1]]           # `true` is not 1, as the Lean verifier reads it
     assert D.strata_problem(two, 6) is None and D.strata_problem({"k": 2, "strata": ones}, 6) is not None
     d2 = {"law": "stratified", "population": 6, "k": 2, "strata": ones, "units": [0, 2]}
     assert D.check_draw(d2, rec, two).codes == ("law", "strata")
-    assert D.check_draw({**good, "strata": [{**s, "k": s["k"] * 1.0} for s in law["strata"]]}, rec, law).codes[0] == "law"
-    assert D.check_draw({k: v for k, v in good.items() if k != "strata"}, rec, law).codes == ("keys",)
-    bad_strata = [{**law["strata"][0], "units": [[0, 2], [2, 3]]}, law["strata"][1]]   # adjacent ranges not merged
-    assert "strata" in D.check_draw({**good, "strata": bad_strata}, rec, law).codes
-    for problem in ([law["strata"][0]], [law["strata"][0], {**law["strata"][1], "template": XOR3.id}],
-                    [{**law["strata"][0], "extra": 1}, law["strata"][1]]):
+    assert D.check_draw({**good, "strata": [{**s, "k": s["k"] * 1.0} for s in sampling_design["strata"]]}, rec, sampling_design).codes[0] == "law"
+    assert D.check_draw({k: v for k, v in good.items() if k != "strata"}, rec, sampling_design).codes == ("keys",)
+    bad_strata = [{**sampling_design["strata"][0], "units": [[0, 2], [2, 3]]}, sampling_design["strata"][1]]   # adjacent ranges not merged
+    assert "strata" in D.check_draw({**good, "strata": bad_strata}, rec, sampling_design).codes
+    for problem in ([sampling_design["strata"][0]], [sampling_design["strata"][0], {**sampling_design["strata"][1], "template": XOR3.id}],
+                    [{**sampling_design["strata"][0], "extra": 1}, sampling_design["strata"][1]]):
         assert D.strata_problem({"k": 4, "strata": problem}, 6) is not None
 
 
-def test_one_stratified_draw_splits_over_several_tables():
+def test_one_stratified_sample_splits_over_several_tables():
     """A session of J tables splits one sample (Lean `Draw.tablesWhy`): a stratified sample whose sum of k_s is a positive
     multiple of J, as a subset sample's k must be; a Bernoulli or work sampling design never, whatever its count."""
-    prog, q, rule, rec = _stratified_registration()
-    law = D.derive(prog, q, rule)                                          # k_s = 2, 2
-    good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
-    assert D.fixed_count(law) == 4
+    prog, q, rule, rec = _stratified_docket()
+    sampling_design = D.derive(prog, q, rule)                                          # k_s = 2, 2
+    good = {"law": "stratified", "population": 6, "k": 4, "strata": sampling_design["strata"], "units": [1, 3, 4, 5]}
+    assert D.fixed_count(sampling_design) == 4
     for tables in (1, 2, 4):
-        assert D.tables_problem(law, tables) is None and D.check_draw(good, rec, law, tables=tables).ok
-    assert D.tables_problem(law, 3) == "tables: 4 units do not split into 3 equal tables"
-    assert D.check_draw(good, rec, law, tables=3).codes == ("tables",)
+        assert D.tables_problem(sampling_design, tables) is None and D.check_draw(good, rec, sampling_design, tables=tables).ok
+    assert D.tables_problem(sampling_design, 3) == "tables: 4 units do not split into 3 equal tables"
+    assert D.check_draw(good, rec, sampling_design, tables=3).codes == ("tables",)
     assert D.tables_problem({"law": "subset", "k": 4}, 2) is None and D.tables_problem({"law": "subset", "k": 3}, 2)
-    assert D.tables_problem({"law": "bernoulli", "p": "1/1"}, 2) == D.TABLES_LAW
-    assert D.tables_problem({"law": "work", "k": 4, "strata": law["strata"]}, 2) == D.TABLES_LAW
+    assert D.tables_problem({"law": "bernoulli", "p": "1/1"}, 2) == D.TABLES_SAMPLING_DESIGN
+    assert D.tables_problem({"law": "work", "k": 4, "strata": sampling_design["strata"]}, 2) == D.TABLES_SAMPLING_DESIGN
     assert D.tables_problem({"law": "bernoulli", "p": "1/2"}, 1) is None
 
 
-def test_audit_record_under_the_stratified_law():
+def test_audit_record_under_the_stratified_sampling_design():
     """The bound is core's exact count_bound over the strata, each template's own bound is reported, and the integrity
     profile carries the whole sampling design."""
     from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
-    prog, q, rule, rec = _stratified_registration()
-    law = D.derive(prog, q, rule)
-    d = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
+    prog, q, rule, rec = _stratified_docket()
+    sampling_design = D.derive(prog, q, rule)
+    d = {"law": "stratified", "population": 6, "k": 4, "strata": sampling_design["strata"], "units": [1, 3, 4, 5]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
-    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, law, [1, 3, 4, 5], 4, {}, {"lean": lean}, 0.25)
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, sampling_design, [1, 3, 4, 5], 4, {}, {"lean": lean}, 0.25)
     core = Stratified((Stratum(XOR3.id, 3, 2), Stratum(PAIR.id, 3, 2)))
-    assert r["accepted"] and r["law"] == law and r["integrity_profile"]["law"] == law
+    assert r["accepted"] and r["law"] == sampling_design and r["integrity_profile"]["law"] == sampling_design
     assert r["profile"] == {**core.to_json(), "delta": 0.25, "drawn": {XOR3.id: 2, PAIR.id: 2}}
     assert r["wrong_units"]["bound"] == core.count_bound(0.25) and r["wrong_units"]["of"] == 6
     assert r["wrong_units"]["per_template"] == {XOR3.id: core.stratum_bound(XOR3.id, 0.25), PAIR.id: core.stratum_bound(PAIR.id, 0.25)}
-    wrong = audit.audit_record(rec, R.receipt(rec, "verifier-test"), {**d, "units": [0, 1, 3, 5]}, law, [0, 1, 3, 5], 4, {},
+    wrong = audit.audit_record(rec, R.receipt(rec, "verifier-test"), {**d, "units": [0, 1, 3, 5]}, sampling_design, [0, 1, 3, 5], 4, {},
                                {"lean": lean}, 0.25)
     assert not wrong["accepted"] and wrong["checks"]["draw"]["codes"] == ["strata-count"] and wrong["profile"] is None
 
@@ -662,7 +675,7 @@ def test_the_subset_bound_is_now_the_exact_count():
     _, _, rec = _registration(6)
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
-    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, LAW, [1, 4], 2, {}, {"lean": lean}, 0.25)
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, SAMPLING_DESIGN, [1, 4], 2, {}, {"lean": lean}, 0.25)
     assert r["wrong_units"]["bound"] == max(K for K in range(7) if Fraction(comb(6 - K, 2), comb(6, 2)) >= Fraction(0.25))
     assert "per_template" not in r["wrong_units"]
 
@@ -674,16 +687,16 @@ def test_a4_under_the_stratified_rule():
     temps = [_template(i) for i in range(6)]
     prog = P.mixed_population_program(list(zip(temps, sizes)))
     q = P.template_instances_query([t.id for t in temps])
-    law = D.derive(prog, q, D.parse_design("stratified:1024"))
-    assert [s["k"] for s in law["strata"]] == [1, 933, 2, 1, 1, 89]
-    assert [s["units"] for s in law["strata"]][:2] == [[[0, 287]], [[287, 6_171_935]]]
-    assert D.strata_problem(law, sum(sizes)) is None
-    core = audit.core_law(law, sum(sizes))
+    sampling_design = D.derive(prog, q, D.parse_design("stratified:1024"))
+    assert [s["k"] for s in sampling_design["strata"]] == [1, 933, 2, 1, 1, 89]
+    assert [s["units"] for s in sampling_design["strata"]][:2] == [[[0, 287]], [[287, 6_171_935]]]
+    assert D.strata_problem(sampling_design, sum(sizes)) is None
+    core = audit.core_sampling_design(sampling_design, sum(sizes))
     assert core.count_bound(2.0 ** -20) == 91_063 and core.stratum_bound(temps[0].id, 2.0 ** -20) == 286
     assert core.escape({temps[0].id: 287}) == 0
     reg = {"population": sum(sizes), "partition": "00" * 64, "program": "11" * 64}
-    units = sorted(u for s in law["strata"] for u in islice((u for lo, hi in s["units"] for u in range(lo, hi)), s["k"]))
-    d = {**law, "population": sum(sizes), "units": units}
+    units = sorted(u for s in sampling_design["strata"] for u in islice((u for lo, hi in s["units"] for u in range(lo, hi)), s["k"]))
+    d = {**sampling_design, "population": sum(sizes), "units": units}
     p = audit.profile(reg, d, 2.0 ** -20)
     assert p.strata() == core and p.drawn == {"unit": 1027}
     got = audit.wrong_units(reg, d, 2.0 ** -20)
@@ -809,7 +822,7 @@ def test_r8_publishes_the_fan_out_and_refuses_a_run_input_two_proof_blocks_read(
         inputs = [k for k, node in enumerate(shared.root.body.nodes) if is_input(node.fn)]
         assert P.fanout(shared, q) == 1 and P.shared_inputs(shared, q) == inputs
         ports = _ports(shared, q, n)
-        rec = R.record(shared, q, LAW, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+        rec = R.record(shared, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
                        leaf_layer="ee" * 64)
         v = _check(rec, shared, q)
         assert v.codes == ("R8-shared-input",) and v.detail["R8-shared-input"]["inputs"] == inputs and v.fanout == 1
@@ -832,7 +845,7 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
     for shared in _two_programs():
         n = P.units(shared, q)
         ports = _ports(shared, q, n)
-        rec = R.record(shared, q, LAW, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
+        rec = R.record(shared, q, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports], SERVED,
                        leaf_layer="ee" * 64)
         v = _check(rec, shared, q, tied=["t"])
         assert v.ok and v.rests_on_period_check == ("t",) and v.fanout == 1
@@ -857,7 +870,7 @@ def test_r8_lets_a_tied_run_input_through_and_publishes_it():
 
 def test_registration_check_refuses_a_query_core_does_not_digest():
     prog, q, rec = _registration(6)
-    v = R.check(rec, prog, {**q, "width_rule": None}, LAW, SCHEME, _ports(prog, q, 6), leaf_layer="ee" * 64)
+    v = R.check(rec, prog, {**q, "width_rule": None}, SAMPLING_DESIGN, SCHEME, _ports(prog, q, 6), leaf_layer="ee" * 64)
     assert {"R2-partition", "R2-query"} <= set(v.codes) and "query-keys" in v.detail["R2-partition"]["verifier"]
 
 
@@ -869,7 +882,7 @@ def test_a_pre_canonical_object_keeps_its_digest():
     assert P.digest(old) == hashlib.sha512(b"verity/partition/v1\x00" + codec.canonical_json(old)).hexdigest()
 
 
-# --- the work sampling design (the sample sampling design's second version; Lean `Flock.Draw.Law.work`) -------------------------------------------------
+# --- the work sampling design (the sample sampling design's second version; Lean `Flock.Draw.SamplingDesign.work`) -------------------------------------------------
 
 def test_the_work_rule_sizes_by_work_above_the_floor():
     """`work_k` is Lean's `workK`: ceil(K w n_s / W), at least the floor and at most n_s; so every non-empty stratum samples at
@@ -900,21 +913,21 @@ def test_derive_expands_the_work_rule_over_the_verifiers_table():
     or declared uncredited), which sample their floor for integrity and add nothing to W."""
     prog, q = _work_program()
     table = {PAIR.id: 10, XOR3.id: 0}
-    law = D.derive(prog, q, D.parse_design("work:4"), table)
-    assert law == {"law": "work", "k": 4, "strata": [
+    sampling_design = D.derive(prog, q, D.parse_design("work:4"), table)
+    assert sampling_design == {"law": "work", "k": 4, "strata": [
         {"template": XOR3.id, "units": [[0, 2], [5, 6]], "work": 0, "floor": 1, "k": 1},
         {"template": PAIR.id, "units": [[2, 5]], "work": 10, "floor": 1, "k": 3}]}
-    assert D.total_work(law["strata"]) == 30 and D.strata_problem(law, 6) is None
-    assert D.derive(prog, q, law, table) == law
+    assert D.total_work(sampling_design["strata"]) == 30 and D.strata_problem(sampling_design, 6) is None
+    assert D.derive(prog, q, sampling_design, table) == sampling_design
     floors = D.derive(prog, q, {"law": "work", "k": 2}, {PAIR.id: {"work": 10, "floor": 2}, XOR3.id: {"work": 0, "floor": 3}})
     assert [s["k"] for s in floors["strata"]] == [3, 2]            # the floors bind: 3 of XOR3's 3, 2 of PAIR's 3
     assert D.parse_design("work:5") == {"law": "work", "k": 5}
     with pytest.raises(ValueError, match="work table"):
-        D.derive(prog, q, law)
+        D.derive(prog, q, sampling_design)
     with pytest.raises(ValueError, match="names no work"):
-        D.derive(prog, q, law, {PAIR.id: 10})
+        D.derive(prog, q, sampling_design, {PAIR.id: 10})
     with pytest.raises(ValueError, match="does some work"):
-        D.derive(prog, q, law, {PAIR.id: 0, XOR3.id: 0})
+        D.derive(prog, q, sampling_design, {PAIR.id: 0, XOR3.id: 0})
     for bad in ({PAIR.id: -1, XOR3.id: 0}, {PAIR.id: True, XOR3.id: 0}, {PAIR.id: {"work": 1, "floor": 0}, XOR3.id: 0},
                 {PAIR.id: {"work": 1, "extra": 1}, XOR3.id: 0}, {PAIR.id: 1.5, XOR3.id: 0}, [PAIR.id]):
         with pytest.raises(ValueError):
@@ -924,7 +937,7 @@ def test_derive_expands_the_work_rule_over_the_verifiers_table():
             D.parse_design(bad)
 
 
-def _work_registration():
+def _work_docket():
     prog, q = _work_program()
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
@@ -932,57 +945,57 @@ def _work_registration():
     return prog, q, rule, table, R.record(prog, q, rule, SCHEME, roots, SERVED, leaf_layer="ee" * 64, work_table=table)
 
 
-def test_r1_holds_a_work_law_to_the_verifiers_own_table():
-    prog, q, rule, table, rec = _work_registration()
+def test_r1_holds_a_work_sampling_design_to_the_verifiers_own_table():
+    prog, q, rule, table, rec = _work_docket()
     assert rec["law"]["law"] == "work" and [s["k"] for s in rec["law"]["strata"]] == [1, 3]
-    assert _check(rec, prog, q, law=rule, work_table=table).ok
-    assert _check(rec, prog, q, law=rule, work_table={PAIR.id: 10, XOR3.id: 5}).codes == ("R1-law",)
-    assert _check(rec, prog, q, law=rule).codes == ("R1-law",)                           # no table: the sampling design doesn't apply
-    assert _check(rec, prog, q, law=D.parse_design("stratified:4")).codes == ("R1-law",)
+    assert _check(rec, prog, q, sampling_design=rule, work_table=table).ok
+    assert _check(rec, prog, q, sampling_design=rule, work_table={PAIR.id: 10, XOR3.id: 5}).codes == ("R1-law",)
+    assert _check(rec, prog, q, sampling_design=rule).codes == ("R1-law",)                           # no table: the sampling design doesn't apply
+    assert _check(rec, prog, q, sampling_design=D.parse_design("stratified:4")).codes == ("R1-law",)
 
 
-def test_work_draw_checks_and_closures():
-    prog, q, rule, table, rec = _work_registration()
-    law = D.derive(prog, q, rule, table)
-    good = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [2, 3, 4, 5]}
-    assert D.check_draw(good, rec, law).ok and D.law_of(good) == law and D.proved(good) == [2, 3, 4, 5]
-    assert D.check_draw({**good, "units": [0, 2, 3, 4]}, rec, law).ok
-    assert D.check_draw({**good, "units": [0, 2, 3, 5]}, rec, law).codes == ("strata-count",)
+def test_work_sample_checks_and_closures():
+    prog, q, rule, table, rec = _work_docket()
+    sampling_design = D.derive(prog, q, rule, table)
+    good = {"law": "work", "population": 6, "k": 4, "strata": sampling_design["strata"], "units": [2, 3, 4, 5]}
+    assert D.check_draw(good, rec, sampling_design).ok and D.sampling_design_of(good) == sampling_design and D.proved(good) == [2, 3, 4, 5]
+    assert D.check_draw({**good, "units": [0, 2, 3, 4]}, rec, sampling_design).ok
+    assert D.check_draw({**good, "units": [0, 2, 3, 5]}, rec, sampling_design).codes == ("strata-count",)
     closed = {**good, "units": [0, 2, 3, 4], "closure": [1, 5]}
-    assert D.check_draw(closed, rec, law).ok and D.proved(closed) == [0, 1, 2, 3, 4, 5]
+    assert D.check_draw(closed, rec, sampling_design).ok and D.proved(closed) == [0, 1, 2, 3, 4, 5]
     assert D.check_proved(closed, [0, 1, 2, 3, 4, 5], 6).ok and D.check_proved(closed, [0, 2, 3, 4], 4).codes == ("instances", "units")
-    assert D.check_draw({**closed, "closure": [1, 2]}, rec, law).codes == ("closure-drawn",)
-    assert D.check_draw({**closed, "closure": []}, rec, law).codes == ("closure",)
-    assert D.check_draw({**closed, "closure": [5, 1]}, rec, law).codes == ("closure",)
+    assert D.check_draw({**closed, "closure": [1, 2]}, rec, sampling_design).codes == ("closure-drawn",)
+    assert D.check_draw({**closed, "closure": []}, rec, sampling_design).codes == ("closure",)
+    assert D.check_draw({**closed, "closure": [5, 1]}, rec, sampling_design).codes == ("closure",)
     stratified = D.derive(prog, q, D.parse_design("stratified:4"))
     assert D.check_draw({"law": "stratified", "population": 6, "k": 4, "strata": stratified["strata"], "units": [0, 2, 3, 5],
                          "closure": [1]}, rec, stratified).codes == ("keys",)           # a closure only on a work sample
-    wrong_k = [law["strata"][0], {**law["strata"][1], "k": 2}]
+    wrong_k = [sampling_design["strata"][0], {**sampling_design["strata"][1], "k": 2}]
     assert D.strata_problem({"law": "work", "k": 4, "strata": wrong_k}, 6) == f"stratum {PAIR.id!r}: k is not the work rule's"
-    no_work = [{**s, "work": 0} for s in law["strata"]]
+    no_work = [{**s, "work": 0} for s in sampling_design["strata"]]
     assert D.strata_problem({"law": "work", "k": 4, "strata": no_work}, 6) == "a work law's population does no work"
-    floor0 = [{**law["strata"][0], "floor": 0}, law["strata"][1]]
+    floor0 = [{**sampling_design["strata"][0], "floor": 0}, sampling_design["strata"][1]]
     assert D.strata_problem({"law": "work", "k": 4, "strata": floor0}, 6) == f"stratum {XOR3.id!r}: a floor is at least one"
     assert D.strata_problem({"law": "work", "k": 4, "strata": [dict(s, k=s["k"]) for s in stratified["strata"]]}, 6) is not None
 
 
-def test_audit_record_under_the_work_law():
+def test_audit_record_under_the_work_sampling_design():
     """The work sampling design is the stratified sampling design at its sizes, so the profile is core's `Stratified` over the same strata at the
     work sizes; the zero-work stratum is bounded by its floor sample."""
     from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
-    prog, q, rule, table, rec = _work_registration()
-    law = D.derive(prog, q, rule, table)
-    d = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [0, 2, 3, 4]}
+    prog, q, rule, table, rec = _work_docket()
+    sampling_design = D.derive(prog, q, rule, table)
+    d = {"law": "work", "population": 6, "k": 4, "strata": sampling_design["strata"], "units": [0, 2, 3, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
-    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, law, [0, 2, 3, 4], 4, {}, {"lean": lean}, 0.25)
+    r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, sampling_design, [0, 2, 3, 4], 4, {}, {"lean": lean}, 0.25)
     core = Stratified((Stratum(XOR3.id, 3, 1), Stratum(PAIR.id, 3, 3)))
-    assert r["accepted"] and r["law"] == law and r["integrity_profile"]["law"] == law
+    assert r["accepted"] and r["law"] == sampling_design and r["integrity_profile"]["law"] == sampling_design
     assert r["profile"] == {**core.to_json(), "delta": 0.25, "drawn": {XOR3.id: 1, PAIR.id: 3}}
     assert r["wrong_units"]["per_template"] == {XOR3.id: core.stratum_bound(XOR3.id, 0.25), PAIR.id: 0}
 
 
 def test_work_sizes_are_the_lean_verifiers():
-    """The sizes `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py::test_work_draw_from_the_verifiers_own_program` pins for
+    """The sizes `verity/protocols/proofs/flock/prover/tests/test_lean_verifier.py::test_work_sample_from_the_verifiers_own_program` pins for
     `verity-verify-proof draw --work K`: strata of 3, 3 and 4 proof blocks doing 3, 1 and 0 (W = 12), and its floor cases."""
     sizes, works = (3, 3, 4), (3, 1, 0)
     total = sum(w * n for w, n in zip(works, sizes))

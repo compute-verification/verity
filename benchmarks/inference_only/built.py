@@ -35,6 +35,7 @@ from typing import Any
 import numpy as np
 from verity.device import load_card
 
+import adapter as A
 import policy as P
 
 # a served step's pricing, `block_work`'s
@@ -47,7 +48,7 @@ H200 = {"compute_capability": (9, 0), "num_sms": load_card("h200-sxm-141gb")["sm
         "int8_exact": "linears"}
 DIVISIONS = ("session", "position", "proof block")
 #: the inference-only policy's check, a Lake package
-PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
+PACKAGE = P.ROOT / "verity/protocols/policy/inference_only/verifier/lean"
 
 
 def _declared() -> tuple[tuple[str, ...], str]:
@@ -73,23 +74,19 @@ def registered(model: str = MODEL) -> Any:
     integration's default seed and execution."""
     from verity_vllm import TargetProfile
     from verity_vllm.engine.served_seed import DEFAULT_SEED
-    from verity_vllm.program.predict.phi import Phi
-    from verity_vllm.program.predict.steps import Registered
 
     revision, config = P.pinned(model)
     target = TargetProfile.default().with_overrides(**H200).to_json()
-    phi = Phi(model={"repo": model, "revision": revision, "hf_config": json.loads(config.read_text())},
+    phi = A.Phi(model={"repo": model, "revision": revision, "hf_config": json.loads(config.read_text())},
               target=dict(target), execution="bi-eager")
-    return Registered.of(phi, DEFAULT_SEED)
+    return A.registered_of(phi, DEFAULT_SEED)
 
 
 def record(circuit: Any) -> tuple[dict[str, Any], dict[str, str]]:
     """A circuit's record, as its description and its blocks, and θ as the pins that hold every registered weight."""
-    from verity_vllm.check.weights_of_record import PARAM
-
     doc = {**circuit.description(), "name": circuit.name, "partition": "",
            "blocks": circuit.blocks.doc(sum(circuit.units.values()), "")}
-    return doc, {p: "00" for p in circuit.registered.params if p.split("/", 1)[0] == PARAM}
+    return doc, {p: "00" for p in circuit.registered.params if p.split("/", 1)[0] == A.PARAM}
 
 
 def block_work(cls: tuple[int, int, int], model: str) -> dict[str, int]:
@@ -115,10 +112,8 @@ def policy(doc: Mapping[str, Any], pins: Mapping[str, str]) -> dict[str, Any]:
     gate table and each template's gates a unit."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity.definitions.boolean import gate_table
-
     fn, m, steps = BC.session(doc)
-    table, unpriced = gate_table([fn])
+    table, unpriced = A.gate_table([fn])
     memo: dict = {}
     c, missing = BC.gates(fn, table, memo)
     if unpriced or missing:
@@ -138,7 +133,7 @@ def divisions(doc: Mapping[str, Any], pins: Mapping[str, str], gates: Mapping[st
     the largest block's fresh bits, and what that block's fresh bits are."""
     from verity_vllm.program.predict import block_counts as BC
 
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     units = {t: int(n) for t, n in doc["templates"]}
     lays = {t: IF.layout(BC.resolve(t)) for t in units}
@@ -226,35 +221,48 @@ def instance(pol: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
             "k": k, "n": n}
 
 
-def lean_count(inst: Mapping[str, Any], clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
-    """The count (`EXECUTABLE`) on ``inst``, built first with `lake`: its verdict as it printed it, and
-    what the run cost (wall and CPU seconds, peak memory, the instance's bytes)."""
+def lake_built(exe: str) -> Path:
+    """The package's executable ``exe``, built first with `lake`."""
     try:
-        build = subprocess.run(["lake", "build", EXECUTABLE[0]], cwd=PACKAGE, capture_output=True, text=True)
+        build = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
     except FileNotFoundError:
         raise RuntimeError("`lake` isn't on PATH, so the Lean check can't be built: install the toolchain "
                            f"{(PACKAGE / 'lean-toolchain').read_text().strip()} (elan) and run again") from None
     if build.returncode:
-        raise RuntimeError(f"`lake build {EXECUTABLE[0]}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
+        raise RuntimeError(f"`lake build {exe}` in {PACKAGE.relative_to(P.ROOT)} failed:\n"
                            + (build.stdout + build.stderr)[-2000:])
+    return PACKAGE / ".lake/build/bin" / exe
+
+
+def timed(argv: list[str], stdout: Path, clock: Callable[[], float] = time.perf_counter,
+          private: bool = False) -> dict[str, Any]:
+    """Run ``argv`` with its standard output to ``stdout``: what it cost (wall and CPU seconds, peak memory), or a
+    RuntimeError where it exits nonzero, with its exit code and, unless what it reads is ``private``, its standard
+    error."""
+    with stdout.open("wb") as fh:
+        start = clock()
+        child = subprocess.Popen(argv, stdout=fh, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
+        with child.stderr:
+            err = child.stderr.read()
+        # the child's own resources, which `wait` doesn't give
+        _, status, used = os.wait4(child.pid, 0)
+        wall = clock() - start
+        child.returncode = os.waitstatus_to_exitcode(status)
+    if child.returncode:
+        said = "" if private else f": {err.decode(errors='replace')[-2000:]}"
+        raise RuntimeError(f"{Path(argv[0]).name} exited {child.returncode}{said}")
+    return {"wall_s": wall, "cpu_s": used.ru_utime + used.ru_stime, "peak_mib": used.ru_maxrss / 1024}
+
+
+def lean_count(inst: Mapping[str, Any], clock: Callable[[], float] = time.perf_counter) -> dict[str, Any]:
+    """The count (`EXECUTABLE`) on ``inst``, built first with `lake`: its verdict as it printed it, and
+    what the run cost (wall and CPU seconds, peak memory, the instance's bytes)."""
+    exe = lake_built(EXECUTABLE[0])
     with tempfile.TemporaryDirectory() as d:
         path, out = Path(d) / "instance.json", Path(d) / "verdict.json"
         path.write_text(json.dumps(inst))
-        with out.open("wb") as fh:
-            start = clock()
-            child = subprocess.Popen([str(PACKAGE / ".lake/build/bin" / EXECUTABLE[0]), *EXECUTABLE[1:], str(path)],
-                                     stdout=fh, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL)
-            with child.stderr:
-                err = child.stderr.read()
-            # the child's own resources, which `wait` doesn't give
-            _, status, used = os.wait4(child.pid, 0)
-            wall = clock() - start
-            child.returncode = os.waitstatus_to_exitcode(status)
-        if child.returncode:
-            raise RuntimeError(f"{' '.join(EXECUTABLE)} exited {child.returncode}: {err.decode(errors='replace')[-2000:]}")
-        return {"verdict": json.loads(out.read_text()),
-                "cost": {"wall_s": wall, "cpu_s": used.ru_utime + used.ru_stime, "peak_mib": used.ru_maxrss / 1024,
-                         "instance_bytes": path.stat().st_size}}
+        cost = timed([str(exe), *EXECUTABLE[1:], str(path)], out, clock)
+        return {"verdict": json.loads(out.read_text()), "cost": {**cost, "instance_bytes": path.stat().st_size}}
 
 
 def judged(got: Mapping[str, Any], c: int, k: int, n: int) -> dict[str, Any]:
@@ -278,14 +286,11 @@ def build(model: str, cls: tuple[int, int, int], n: int, check: Callable[[Mappin
     """The built class's session policy, checked by ``check``, and its divisions. ``n`` is the blocks the policy
     declares, which nothing here derives. ``say`` gets a line as each step starts; ``circuit`` is the class's where the
     caller lowered it (default: `class_circuit` of what a serve of ``model`` registers)."""
-    from verity_vllm.program.predict.common import Unexpressible
-    from verity_vllm.program.predict.window_circuit import class_circuit
-
     work = block_work(cls, model)
     say(f"lowering class {','.join(map(str, cls))} of {model}")
     try:
-        circuit = class_circuit(registered(model), P.class_of(cls)) if circuit is None else circuit
-    except Unexpressible as e:
+        circuit = A.class_circuit(registered(model), P.class_of(cls)) if circuit is None else circuit
+    except A.Unexpressible as e:
         raise Refused(f"the integration lowers no circuit of class {','.join(map(str, cls))} of {model}, so there is "
                       f"nothing to count: {e}") from e
     doc, pins = record(circuit)

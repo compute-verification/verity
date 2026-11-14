@@ -12,27 +12,26 @@ module comes from `load`, under a name of its own. ``test_script_imports.py`` ho
 """
 from __future__ import annotations
 
-import asyncio
 import importlib.abc
 import importlib.util
 import sys
-import threading
 from collections import defaultdict
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from types import ModuleType
 
 import pytest
-from verity.protocols.accounting.certifier.verifier import active
 
 POUW = Path(__file__).resolve().parents[1]
-#: what under ``benchmarks/pouw/`` this suite takes no script from: the tests, the package the environment installs,
-#: and ``edited_gemm``, a suite of its own whose files this suite's inputs do not hold
-NOT_SCRIPTS = frozenset({"tests", "exact_kit", "edited_gemm"})
+#: what under ``benchmarks/pouw/`` this suite takes no script from: the tests and the package the environment installs
+NOT_SCRIPTS = frozenset({"tests", "exact_kit"})
 #: PoUW's prover's kernels, where the directories `MOVED` of ``benchmarks/pouw/`` went: this suite still takes their
 #: scripts, by the same names (``gpu_kit/sass_gate.py``)
 KERNELS = POUW.parents[1] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels"
-MOVED = ("floored_gemm", "gpu_kit", "masked_gemm")
+MOVED = ("floored_gemm", "gpu_kit", "masked_gemm", "pearl_c")
+#: the directories of ``benchmarks/pouw/`` whose kernels went to `KERNELS` and whose checks, ships and model drivers
+#: stayed: `load` reads a file from where it is
+SPLIT = ("filler", "pearl_c_sm120", "pearl_c_sm90", "served_zk")
 #: the directories whose own scripts import by name a module whose name another directory holds too (``harness``:
 #: derive and report)
 AHEAD = ("harness",)
@@ -41,7 +40,7 @@ AHEAD = ("harness",)
 def scripts() -> list[Path]:
     """Every script under ``benchmarks/pouw/``."""
     here = [p for p in POUW.rglob("*.py") if not NOT_SCRIPTS.intersection(p.relative_to(POUW).parts[:-1])]
-    return sorted(here + [p for d in MOVED for p in (KERNELS / d).rglob("*.py") if p.name != "__init__.py"])
+    return sorted(here + [p for d in MOVED + SPLIT for p in (KERNELS / d).rglob("*.py") if p.name != "__init__.py"])
 
 
 def rel(path: Path) -> Path:
@@ -50,8 +49,10 @@ def rel(path: Path) -> Path:
 
 
 def place(file: str | Path) -> Path:
-    """The file `load` reads for ``FILE``: ``benchmarks/pouw/FILE``, or under `KERNELS` for a directory of `MOVED`."""
-    return (KERNELS if Path(file).parts[0] in MOVED else POUW) / file
+    """The file `load` reads for ``FILE``: ``benchmarks/pouw/FILE``, or under `KERNELS` for a directory of `MOVED` and
+    for a kernel's file of a directory of `SPLIT`."""
+    d = Path(file).parts[0]
+    return (KERNELS if d in MOVED or d in SPLIT and not (POUW / file).exists() else POUW) / file
 
 
 def script_dirs() -> list[Path]:
@@ -113,30 +114,3 @@ def _outside_any_run(monkeypatch):
     run's own result.json, which a test's verdict must never replace."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
 
-
-@pytest.fixture
-def reveals():
-    """The network certifier's reveal endpoint for the test's proxies: `reveals(proxy)` serves it (`serve_reveals`) on
-    localhost, on a loop of its own thread, and returns its (host, port), so a synchronous challenger asks it through a
-    `CertifierClient`. Every server closes, and the loop stops, when the test ends."""
-    loop = asyncio.new_event_loop()
-    thread = threading.Thread(target=loop.run_forever)
-    thread.start()
-    servers: list[asyncio.Server] = []
-
-    def serve(proxy: active.Proxy) -> tuple[str, int]:
-        servers.append(asyncio.run_coroutine_threadsafe(active.serve_reveals(proxy, "127.0.0.1", 0), loop).result())
-        return servers[-1].sockets[0].getsockname()[:2]
-
-    async def close() -> None:
-        for s in servers:
-            s.close()
-            await s.wait_closed()
-
-    try:
-        yield serve
-    finally:
-        asyncio.run_coroutine_threadsafe(close(), loop).result()
-        loop.call_soon_threadsafe(loop.stop)
-        thread.join()
-        loop.close()

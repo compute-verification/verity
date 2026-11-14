@@ -36,7 +36,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SoundAtBridge
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -56,13 +56,13 @@ a token, so `Proofs/Accounting.lean` imports it.
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 /-- **A `subset` live sample that runs is `Flock.Draw.subset` on its stream.** -/
-theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitDraw}
+theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitSample}
     (hd : runOS f (.subset k) n = some d) : Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by
   unfold runOS at hd
-  rw [drawWith_subset_run] at hd
+  rw [sampleWith_subset_run] at hd
   cases ho : (Flock.Draw.onWith (tapeGet (tapesOf f) 0) (2 * k * Flock.Draw.width n + 64)
       (Flock.Draw.subset k n)).run (fun _ => 0) with
   | none => rw [ho] at hd; exact absurd hd (by simp)
@@ -79,7 +79,7 @@ theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 
       rw [h2] at h1
       rw [← hD]; exact h1
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign
 
 namespace Accounting.TS.Checked
 
@@ -122,7 +122,7 @@ theorem perm_onto_range (π : Equiv.Perm ℕ) {n : ℕ} (hπ : ∀ t < n, π t <
 
 /-- **The live audit's event of probability `0`** (`auditLive`, unfolded): an event whose probability is `0` in the
 live session at every registration `R` and sampling coin `ω` has probability `0` at every strategy. -/
-theorem prob_audit_eq_zero {n : ℕ} (L : Law n) (Reg : Type)
+theorem prob_audit_eq_zero {n : ℕ} (L : SamplingDesign n) (Reg : Type)
     (live : Finset (Fin n) → Reg → Game Discharge.Exec.Transcript)
     (p : Reg × Finset (Fin n) × Discharge.Exec.Transcript → Prop)
     (h : ∀ R ω (s' : Strategy (live (L.draw ω) R)), prob (fun t => p (R, L.draw ω, t)) (live (L.draw ω) R) s' = 0)
@@ -142,12 +142,12 @@ variable (s : RowsSession)
 /-- **Under full checking the sample is every unit**: at `kd = n` the subset sample, when it runs, is `n` distinct units
 below `n` (`subset_spec`), and when it doesn't the sampling design samples every unit. -/
 theorem sample_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ := by
-  show (match Law.runOS (s.src ω) (.subset s.kd) s.n with
+  show (match SamplingDesign.runOS (s.src ω) (.subset s.kd) s.n with
     | some d => Finset.univ.filter fun u : Fin s.n => u.val ∈ d.units
     | none => Finset.univ) = Finset.univ
   split
   · rename_i d hd
-    obtain ⟨π, -, hπ, hmem⟩ := subset_spec (Law.runOS_subset hd)
+    obtain ⟨π, -, hπ, hmem⟩ := subset_spec (SamplingDesign.runOS_subset hd)
     refine Finset.filter_true_of_mem fun u _ => (hmem u.val).2 ?_
     rw [hk]
     exact perm_onto_range π hπ u.val u.isLt
@@ -156,7 +156,7 @@ theorem sample_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ 
 /-- **`ServedRootsLinked`'s event at a session**: verity-verify-proof accepts, every sampled proof block is right at its owned reads,
 and the value layer's registered reads aren't the committed rows. -/
 def ServedEv (o : s.Out) : Prop :=
-  LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s
+  LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s
 
 /-- **No outcome of the audit meets `ServedEv`** under full checking, at every unit's served roots registered: every unit is sampled, so `Flock.SecurityProofs.ServedRowsLinked` puts the
 committed row at each of its registered reads. -/
@@ -188,7 +188,7 @@ served roots: where `P` holds it is `ServedEv` (`prob_servedEv`), and where it f
 committed rows. -/
 theorem prob_servedOn (P : RowsSession → Prop)
     (hN : P s → s.kd = s.n ∧ ∀ u, s.ServedRegistered u) :
-    prob (fun o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧
+    prob (fun o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s) s.G s.τ = 0 := by
   by_cases hp : P s
   · have e : rowsOn P s s.Xv = rowsReg s s.Xv := if_pos hp
@@ -258,7 +258,7 @@ theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths �
     exact ⟨(hP _ hp).1, (sess x w i).Xv, rfl, fun u hu g hg => ((hD u hu).2 g hg).2.symm⟩
   have hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 := by
     intro w i
-    refine (hLaw w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧
+    refine (hLaw w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
     exact (congrArg ENNReal.toReal (RowsSession.prob_servedOn (sess x w i) P
       (fun hp => ⟨(hP _ hp).2.1, (hP _ hp).2.2⟩))).trans ENNReal.toReal_zero

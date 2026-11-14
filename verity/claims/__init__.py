@@ -116,7 +116,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # the salts the prover's workers committed R's level-0 top rows under, at which the guarantee is applied
     Entry("registrant-holds-openings", "model",
           "Registrant holds its openings: the prover holds a row and salt under every leaf it registered at a row the "
-          "verifier's reads file names, and its own workers behind the firewall hold the salts they committed R's level-0 "
+          "verifier's reads file names, and its own workers behind the ZK server hold the salts they committed R's level-0 "
           "top rows under; a prover that registers a hash it can't open is outside the guarantee",
           "Registrant holds openings"),
     Entry("fiat-shamir", "model", "Fiat–Shamir (non-interactive) in the random-oracle model", "Fiat–Shamir"),
@@ -172,7 +172,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # costs more than the claim at 512 bits, as does the reduction's operation-count floor, an estimate from operation
     # counts, unmeasured. At k = 1 with the payload known, F27 is such a completion, at a floor of half a GMP extended
     # GCD. In partial-completion form it is `Accounting.Assumptions.WorkHardness`
-    # (security/Definitions/Accounting/Assumptions/RateAudit.lean)
+    # (security/Definitions/Assumptions/Accounting.lean)
     Entry("rate-codec-work", "assumption",
           "Rate codec work: on the stated device, for a codec with k >= 2 rounds, rebuilding x bits of a word of E that it "
           "neither holds nor reads, from setup and the weights they encode, costs at least x * c_enc / b units of compute "
@@ -198,7 +198,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # what lets the stacking guarantees treat the blocks a pass reads as uniform when every appended block is keyed by
     # a live coin flipped after its root commits its digest, the writers' choices for each append fixed before its coin
     # and the pass's layout fixed apart from the encodings: `Accounting.Assumptions.KeyBinding`
-    # (security/Definitions/Accounting/Assumptions/Stacking.lean); the seed's key alone lets a writer choose a block's
+    # (security/Definitions/Assumptions/Accounting.lean); the seed's key alone lets a writer choose a block's
     # encoding, and each coin keys a block apart (verity/protocols/accounting/poub/verifier/tests/test_key_binding.py)
     Entry("key-binding", "assumption",
           "Key binding (append-coin form): for the protocol's codec, whatever the writers choose for each append from "
@@ -260,7 +260,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
-    # the transport's other premises (security/Definitions/Core/Assumptions/Transport.lean), beside `witness-path-private`
+    # the transport's other premises, beside `witness-path-private`: `ImprintPathPrivate` and `ChannelAuthentic` in
+    # security/Definitions/Assumptions/Transport.lean, `ChannelHides` in
+    # security/Definitions/Core/Assumptions/Transport.lean
     Entry("imprint-path-private", "assumption",
           "Imprint path private: every node that can read the bytes of the channel's one imprint exchange, over the "
           "cable between an onsite auditor device and its server, is its auditor end, one of the prover's own machines, "
@@ -305,8 +307,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "P2 with the identity labeling, SHA-512-CTR keys and its published Merkle root of C* is no easier to answer "
           "than p2ring with a uniformly random odd labeling and uniformly random keys", "PoUS ring instantiation",
           "conjectured"),
-    # `Pouw.PearlC.GGapPerCoin (W1.w1Priced dv salt)` (security/Definitions/Pouw/PearlC/W1Stop.lean): the one open
-    # hypothesis of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced);
+    # `Pouw.PearlC.GGapPerCoin (W1.w1Priced dv salt)` (security/Definitions/Assumptions/Pouw.lean): the one named
+    # conjecture of the compute audit's per-run bound at W1 priced (Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced);
     # it implies the gap property GGap itself (Pouw.PearlC.W1Stop.gGap_of_withStop)
     Entry("pouw-gamma-per-coin", "assumption",
           "Pearl-C's gap property with the budget per coin, at W1 priced (its arithmetic at W1's instruction prices and "
@@ -345,7 +347,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "salt is drawn, at a cost below (1 − g₀) of the tile's credit except with probability δ; refuted by such a "
           "program for a tile in the domain", "TT_OUT tile (H100, rev1)", "conjectured"),
     # the min-cut bound's cut conjectures (security/Definitions/Assumptions.lean): (H) is
-    # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
+    # `InferenceOnly.Cut.Assumptions.Hardness`, (E) `InferenceOnly.Cut.Assumptions.Exports`
     Entry("training-cut-hardness", "assumption",
           "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
           "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S), κ(S) the least number of gates meeting every path from the unregistered "
@@ -487,7 +489,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
           "soundness at "
           "δ_ZK (ProofSoundAt: a proof is accepted with an opening that fails its relation with probability at most "
-          "δ_ZK), which Flock's EndToEndHiddenDrawn gives only for a cheater whose hash calls over the window are "
+          "δ_ZK), which Flock's EndToEndHiddenSampled gives only for a cheater whose hash calls over the window are "
           "capped, and only against its committed transcript: that the relation's rows are the leaves' committed rows "
           "is not stated there", "TS proofs sound", "standard"),
     Entry("accounting-ts-proofs-pin", "assumption",
@@ -579,7 +581,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # `Claims.ZKServer.Relay.RelayServes` and `Claims.ZKServer.Relay.WorkerDeterministic`
     # (security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
     Entry("flock-relay-serves", "assumption",
-          "The firewall's relay serves each session's requests as its IO code reads: at each request that reaches a "
+          "The ZK server's relay serves each session's requests as its IO code reads: at each request that reaches a "
           "slot of the session's schedule, the loop's references (the rep frames, the level 0s, the link, the loop's "
           "own proofs, the inner proof's rounds and the salts the finish keeps) change as the IO function the relay "
           "calls there changes them, stated with the pure functions it calls, and each answer the relay reads on the "
@@ -591,17 +593,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "standard"),
     # `Claims.ZKServer.Loop.Src` (security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
-    Entry("flock-firewall-os-src", "assumption",
-          "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
+    Entry("flock-zk-server-os-src", "assumption",
+          "Every input the ZK server's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, at the sizes it draws: the witness's packed table at the tape's mask words and the "
           "tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
-          "since zero knowledge protects the developer", "Firewall OS source", "standard"),
+          "since zero knowledge protects the developer", "ZkServer OS source", "standard"),
     # the training formalism v2's assumptions (security/Definitions/Assumptions.lean): A1 is
-    # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
-    # `Nci.Formalism.Assumptions.EfficiencyFloor`
+    # `InferenceOnly.Formalism.Assumptions.CutCost`, the token-work bound `InferenceOnly.Formalism.Assumptions.TokenWork`, A2
+    # `InferenceOnly.Formalism.Assumptions.EfficiencyFloor`
     Entry("training-cut-cost", "assumption",
           "A1, cut cost: no inference block I of the trained circuit (at most c gates, at most k bits beyond θ) reads "
           "fewer bits |in(I) \\ θ| than u_I + Σ_T a_T(e_T(I)), over the tokens T it works on, at the values a finite "

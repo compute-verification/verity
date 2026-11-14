@@ -74,7 +74,7 @@ PRESCRIBED_ENABLEMENT = frozenset({"padding", "inactive"})
 def analytic_table_of_buffer(name: str) -> str | None:
     """The analytic table (`cos_sin`, checked by `analytic.check_cos_sin`, or `normalizer`, by `analytic.check_normalizer`) a runtime
     BUFFER (`named_buffers()` path) is the observation of, or None: the one place the two derived tables are recognised by name
-    (`m1_capture.dump_cos_sin` / `dump_normalizer` dump them; `sites_of` and `residuals_of` name them).  vLLM naming facts: the rotary table lives on every layer's `rotary_emb.cos_sin_cache` (one shared table), Gemma-2's normalizer on
+    (`match_capture.dump_cos_sin` / `dump_normalizer` dump them; `sites_of` and `residuals_of` name them).  vLLM naming facts: the rotary table lives on every layer's `rotary_emb.cos_sin_cache` (one shared table), Gemma-2's normalizer on
     `model.normalizer`."""
     if name.endswith("rotary_emb.cos_sin_cache"):
         return "cos_sin"
@@ -516,6 +516,9 @@ def confirm_modules(values: Iterable[ValuePlan], corr: AcquireCorrespondence) ->
 
 def acquisition_plan(manifest: Mapping[str, Any], correspondence: AcquireCorrespondence, *,
                      tables: Mapping[str, Any] | None = None) -> AcquisitionPlan:
+    """The plan of `manifest`'s required Values over `correspondence`: each Value's legal sites and the one the policy chooses,
+    with the residuals.  `tables` is a test seam: lifetime tables to read in place of the committer's own (`_lifetime_tables`).
+    No library call passes it."""
     values = value_classes(manifest)
     for v in values:
         legal, refused = sites_of(v, correspondence)

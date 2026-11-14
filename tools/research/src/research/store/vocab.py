@@ -353,7 +353,7 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "checked again at a new commit, bit for bit) or re-run (our code's timed result run again); one label per area that cites it "
        "(`research data select --label replay_set=network-certifier/re-verify`, `research replay`)", pattern=r"[a-z0-9][a-z0-9-]*/(re-verify|re-run)"),
     _k(REPLAY_EXPECT, GROUP_RESULT, TEXT, "the change a replay at current main should show instead of the recorded verdict, with --ref "
-       "naming the ruling: `refused: FORM` (the verifier of record now refuses that form) or `blocked: GATE` (fail-closed refuses the "
+       "naming the ruling: `refused: FORM` (the verifier now refuses that form) or `blocked: GATE` (fail-closed refuses the "
        "session kind until GATE, e.g. V3)", pattern=r"(refused|blocked): \S.*"),
     _k(ABANDONED, GROUP_RESULT, TEXT, "the line of work this evidence belongs to was given up, in a few words; --ref names the note that says why "
                                       "(note:<lane>/<file name without .md>), so nobody builds on it unawares"),
@@ -472,13 +472,13 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
     _k(MODEL_STATUS, GROUP_EVIDENCE, TEXT, "the model's standing after the capture, e.g. hypothesis"),
     _k(MODEL_REJECTED, GROUP_EVIDENCE, TEXT, "model(s) the capture rules out"),
     _k(EVIDENCE, GROUP_EVIDENCE, TEXT, "what the capture consists of: sweep, sass, descriptor, golden_replay, fp8_families (+-joined)"),
-    _k(FAMILY, GROUP_EVIDENCE, TEXT, "the numerical family the capture or instance set exercises"),
-    _k(INSTANCES_DATASET, GROUP_EVIDENCE, TEXT, "the instance dataset a run or set draws from, e.g. bench-instances/v1"),
+    _k(FAMILY, GROUP_EVIDENCE, TEXT, "the numerical family the capture or input set exercises"),
+    _k(INSTANCES_DATASET, GROUP_EVIDENCE, TEXT, "the instance dataset a run or set reads from, e.g. bench-instances/v1"),
     _k(INSTANCES_TIER, GROUP_EVIDENCE, TEXT, "the tier within the dataset, e.g. vu-k1536"),
     _k(MISMATCHES, GROUP_EVIDENCE, INT, "tiles or instances that disagreed with the reference"),
     _k(TARGET, GROUP_EVIDENCE, TEXT, "the verification target the evidence is for (a verity.circuits.targets.target name)"),
     _k(DEVICE, GROUP_EVIDENCE, TEXT, "the physical GPU the capture ran on, as its UUID (nvidia-smi --query-gpu=uuid: GPU-...); the trust framework's device identity"),
-    _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the instance set's manifest (or its contract-pinned recipe digest) a replay checked"),
+    _k(INSTANCES_MANIFEST_SHA256, GROUP_EVIDENCE, TEXT, "sha256 of the input set's manifest (or its contract-pinned recipe digest) a replay checked"),
     _k(COMPONENT, GROUP_EVIDENCE, TEXT, "the component a measurement isolates (encoder, hash, lookup, ...)"),
     _k(JOBS, GROUP_EVIDENCE, INT, "the number of jobs a battery or sweep ran"),
     _k(DTYPE, GROUP_EVIDENCE, TEXT, "the operand format a measurement is for (bf16, e4m3, e2m1)"),
@@ -583,7 +583,7 @@ def render() -> str:
     """The vocabulary as `research data vocab` prints it: one block per group, one line per key: name, form, doc, enum values, status."""
     heads = {GROUP_RESULT: "result labels -- the producing lane, about its own result",
              GROUP_VERIFICATION: "verification labels -- an independent verifier, never the producer",
-             GROUP_EVIDENCE: "evidence labels -- probe captures and instance sets",
+             GROUP_EVIDENCE: "evidence labels -- probe captures and input sets",
              GROUP_APPROACH: "approach labels -- the registry: the owning lane or its coordinator, about an approach/v1 record"}
     lines: list[str] = []
     for g, keys_ in by_group().items():

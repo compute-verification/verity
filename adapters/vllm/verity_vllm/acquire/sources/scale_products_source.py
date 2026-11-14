@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
-from verity.definitions.numerics import fp8_twins
+from verity_vllm.definitions.numerics import fp8_twins
 
 from verity_vllm.engine import hooks
 from verity_vllm.log import init_logger

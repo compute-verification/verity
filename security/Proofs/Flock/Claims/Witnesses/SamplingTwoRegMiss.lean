@@ -15,7 +15,7 @@ nothing and opens nothing, with the two-stage design `toyTwo`), its silent prove
 (`FlockDeploy.sha512`) the nontrivial lemma of `CompilerMissTwo`.
 
 * `sksLTwo`'s committed boundary trace opens nothing (`sksL_regVal`), so its one replay block holds an incorrect proof
-  block at every interior (`toy_wrongInAt`) and is wrong at the boundary (`toy_wrongAtBoundaryAt`): the bound
+  block at every interior (`toy_incorrectInAt`) and is wrong at the boundary (`toy_incorrectAtBoundaryAt`): the bound
   `(1 − 1·1)^{|W|}` is `0`.
 * It samples nothing, so its sample holds no proof block of the committed incorrect set at any coins: the miss is `1`
   (`compiledTwoMiss_fails`).
@@ -32,7 +32,7 @@ The compilers' premises hold together at two sessions, at `twoLTwo`, which meets
 namespace Claims.Witness.SamplingGeneric
 
 open Claims.SamplingGeneric
-open Claims.Sampling (cell window wrongAtBoundaryAt)
+open Claims.Sampling (cell window incorrectAtBoundaryAt)
 open Claims.Witness.Sampling (toyStmt toyPart)
 
 /-- The two-session toy's first stage `all` catches each of its two replay blocks at rate `1`. -/
@@ -70,11 +70,11 @@ theorem twoTwo_secondRate : twoTwo.SecondRate twoPart 1 := by
   norm_num [twoTwo]
 
 /-- At boundary values that commit nothing at the input, the toy's one replay block is wrong at its boundary. -/
-theorem toy_wrongAtBoundaryAt {val : ℕ → Option Bool} (hv : val 0 = none) :
-    0 ∈ wrongAtBoundaryAt toyStmt toyPart toyPart val := by
+theorem toy_incorrectAtBoundaryAt {val : ℕ → Option Bool} (hv : val 0 = none) :
+    0 ∈ incorrectAtBoundaryAt toyStmt toyPart toyPart val := by
   classical
-  unfold wrongAtBoundaryAt
-  exact Finset.mem_filter.2 ⟨Finset.mem_range.2 (by decide), fun ι => ⟨0, by decide, ⟨0, toy_wrongInAt hv ι⟩⟩⟩
+  unfold incorrectAtBoundaryAt
+  exact Finset.mem_filter.2 ⟨Finset.mem_range.2 (by decide), fun ι => ⟨0, by decide, ⟨0, toy_incorrectInAt hv ι⟩⟩⟩
 
 /-- **`CompiledTwo.MissTwo` fails** at `sksLTwo`'s silent prover, at both rates `1`: its sample misses the committed
 incorrect set always, while its replay block is wrong at the committed boundary trace, so the bound is `0`. -/
@@ -83,15 +83,15 @@ theorem compiledTwoMiss_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inha
   intro h
   have h1 := h [] toyStmt toyPart toyTwo (sksLTwo_scope []) rfl rfl rfl toyTwo_firstRate toyTwo_secondRate Unit
     silentP ()
-  have hW : 0 < (wrongAtBoundaryAt toyStmt toyPart toyTwo.part ((sksLTwo Coin).regVal H silentP [] ())).card :=
-    Finset.card_pos.2 ⟨0, toy_wrongAtBoundaryAt (val := (sksLTwo Coin).regVal H silentP [] ())
+  have hW : 0 < (incorrectAtBoundaryAt toyStmt toyPart toyTwo.part ((sksLTwo Coin).regVal H silentP [] ())).card :=
+    Finset.card_pos.2 ⟨0, toy_incorrectAtBoundaryAt (val := (sksLTwo Coin).regVal H silentP [] ())
       (sksL_regVal H silentP [] () 0)⟩
   have hp : Pr (fun r : Fin ((sksLTwo Coin).V.k []) → Coin =>
       ∀ u ∈ (sksLTwo Coin).checked [] r, u ∉ (sksLTwo Coin).FregTwo H silentP [] () r) = 1 :=
     Eq.trans (Pr_congr fun _ => iff_true_intro fun u hu => absurd (show u ∈ ([] : List ℕ) from hu) (by simp))
       Claims.ZKMal.Pr_true
   have h2 : (1 : ℝ) ≤ (1 - 1 * 1) ^
-      (wrongAtBoundaryAt toyStmt toyPart toyTwo.part ((sksLTwo Coin).regVal H silentP [] ())).card :=
+      (incorrectAtBoundaryAt toyStmt toyPart toyTwo.part ((sksLTwo Coin).regVal H silentP [] ())).card :=
     hp.symm.trans_le h1
   rw [show (1 : ℝ) - 1 * 1 = 0 by norm_num, zero_pow hW.ne'] at h2
   norm_num at h2

@@ -750,7 +750,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
     step's input ids, u32be, in the forward's token order (the advice step's rows in batch order, row r's n_r tokens
     at offset Σ_{r' < r} n_{r'}), zero past to a fixed width P (the engine's `max_num_batched_tokens`), in a dense
     `frame-v3-sha512` tree of the session's steps. Its root and domain are registered before the sample and bound to
-    the run root and to the compiled circuits' `c00.input/ids` values, which the sampled proofs prove from, as the
+    the run root and to the compiled circuits' `c00.input/ids` values, which SPOT proves from, as the
     port's sampled rows are (one tree may hold both). The prover keeps each step's salt and path until the tie's
     outcome of record. The verifier also needs each prefix-cache hit's source (the derived fields' `sources`), which advice
     v0's `cache_hit` count doesn't name.
@@ -987,7 +987,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
 | Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | `Properties.Certifier.EncardAcceptedObservationsLe`, the reference's constant-rate Program as one execution block of the W windows |
-| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `Properties.Certifier.EncardProgramRunsLeWindows`, at the Program an accepted run is a run of (`Properties.Certifier.AcceptedRunsAreProgramRuns`); for the check's accepted runs, `Proofs.Certifier.encard_acceptedObservations_take_le` |
+| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `Properties.Certifier.EncardProgramRunsLeExecutionPhases`, at the Program an accepted run is a run of (`Properties.Certifier.AcceptedRunsAreProgramRuns`); for the check's accepted runs, `Proofs.Certifier.encard_acceptedObservations_take_le` |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The reference schedule, per execution block | `k + g·T·log2 D` bits per execution block over any m whole execution blocks from block e₀ ((e₀ + m)·g·T ≤ E·g·T), given everything the run showed before block e₀: k bits under J | `SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase` |
@@ -1056,7 +1056,7 @@ monitoring period (the K charge, `k_charge.share_of_k_by_span` from each link's 
 `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). Its egress per window
 (`clock_sync.bits_per_window`, `log2 #Σ_sync`, held by `test_network_certifier_calibration.py`) is the check's charge
 for each window opened, counted from the run's first window
-(`Properties.Certifier.EncardProgramRunsLeWindows`, a guarantee in `security/Properties/lean-audit.json` stated
+(`Properties.Certifier.EncardProgramRunsLeExecutionPhases`, a guarantee in `security/Properties/lean-audit.json` stated
 over the network check's code, as the table's two rows of the check's accepted runs are). The steps of their proofs are lemmas
 (`security/Proofs/Certifier/Lemmas.lean`): proved and audited, with no record.
 
@@ -1074,7 +1074,7 @@ window at 16 × 8 sync values. At one execution block the reference's forms over
 nothing finer, so the check's bound over its first m windows comes from the program instead: a window's sync moves no
 hand tick before the window's start (`Properties.Certifier.ExpectedGridCausal`), so the first m windows' rows
 read only the content advice and those windows' syncs, and the Program's sequences over them number at most
-`#Ac · #Σ_sync^min(W, m) · D^(m·T)` (`Properties.Certifier.EncardProgramRunsLeWindows`); the check's accepted
+`#Ac · #Σ_sync^min(W, m) · D^(m·T)` (`Properties.Certifier.EncardProgramRunsLeExecutionPhases`); the check's accepted
 runs' first m ≤ W windows are among them (`Proofs.Certifier.encard_acceptedObservations_take_le`). The per-block
 form, a window's bits given everything the run showed before it, has no Lean statement for the check and need not hold
 of it: the queue and the hand ticks carry from one window into the next, so the run shown before a window need not fix
@@ -1111,7 +1111,7 @@ The goal is network accounting for arbitrary vLLM usage: no FIXLEN, no fixed req
 real EOS. The registered thing is a precommitted ahead-of-time compiler. After serving, the prover hands it an
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
-certifier certifies the I/O. Sampled proofs check two things: that the committed values pass the compiled circuits (the
+certifier certifies the I/O. SPOT checks two things: that the committed values pass the compiled circuits (the
 step units), and that they agree with the certified I/O (the tie units). N2 is to hold each window's egress counts to
 the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the
 accepted-runs bound.
@@ -1162,7 +1162,7 @@ of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ
    - A wrong tie proof block lets through the frame it was to hold, not its one-bit verdict. That is 8·B bits, or about
      log2 V for the token alone if an exhaustive check holds every frame to the canonical form (attack 8).
 4. **Count.** `SecurityProofs.EncardAccSeqsLeConstantRate` with this Ac gives `#Ac · #Σ_sync^W · D^n`, so no new
-   counting guarantee is needed. What is new is the bridge from steps 1 to 3: that an audit accepted by sampled proofs
+   counting guarantee is needed. What is new is the bridge from steps 1 to 3: that an audit accepted by SPOT
    is, except with probability δ_audit, `Accepted` for some (a, φ). `Accepted` is the exact binding, in which every
    recorded row is the Program's. An audit that recomputes the grid gets it, and a sampled audit does not.
    For the circuit's Program, `SampledAuditAccepted` (proved) is that bridge with φ the incorrect proof blocks' committed
@@ -1813,7 +1813,7 @@ them.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof system returned for p (`Registration`, from
     `spot.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
-    registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
+    registration receipt (`one_stage.docket.RECEIPT`) whose digest is the record's own and the registration's,
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
     `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also
     refuses while p's last ingress record, window p·k + k − 1's, is unpublished (t_d); once the certifier's own clock
@@ -2012,7 +2012,7 @@ sealed under an AEAD built from SHA-512 alone.
   - **What it changes:** A1's units are then the facility, not each block.
 ## Tests
 
-`uv run tools/verity/check/suites.py verity/protocols/accounting/certifier`. The tests enumerate small monitoring periods, so they
+`uv run tools/check/suites.py verity/protocols/accounting/certifier`. The tests enumerate small monitoring periods, so they
 check the Lean statements on examples and prove nothing. A test that mirrors a statement of the analysis carries its
 name, and each test module's docstring says what it holds.
 

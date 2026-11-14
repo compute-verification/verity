@@ -141,7 +141,7 @@ namespace Loop
 
 variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-  (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+  (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 /-- **The link points at the opened coins are the auditor's**: at a statement in the masked scope with a witness, where

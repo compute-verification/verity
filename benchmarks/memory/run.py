@@ -1,6 +1,7 @@
 """`verity bench memory`: the share of a node's memory read rate that one accepted PoUB session leaves uncertified, at
 the data sheet's read bandwidth: the session's γ in its verifier's ledger at the specification's rate, as text and as
-one line of JSON (`value`, `unit`, `commit`, `run`). A session that wasn't accepted prints no number and exits 1.
+one line of JSON (`value`, `unit`, `commit`, `run`). A session that the Lean verifier didn't accept (its record's
+`verdict` is not `lean`) prints no number and exits 1.
 The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for that γ, and the term no δ holds.
 
     verity bench memory PERIOD [--dry-run]        the node run: a gate run under the challenger's period PERIOD
@@ -10,9 +11,8 @@ The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for t
 The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session: the prover on the whole GPU
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
 engine's weights arena the store, the verifier on the auditor's verifier host, the coins from the challenger host.
-BIND (default 0) is whether the verifier binds the store to the role's pinned checkpoint: with 0 it holds no
-checkpoint and the store is the developer's choice, which the text and the JSON (`bound`) say; with 1 it binds it, as
-`gate_run.sh`'s BIND. PACED is the session (default seven credited stretches of a second, each pass
+The verifier holds no checkpoint, so the store is the developer's choice, which the text and the JSON (`bound`) say.
+PACED is the session (default seven credited stretches of a second, each pass
 under a live coin of its own); UNPACED asks for a session of one coin a window in its place, as
 WINDOWS:WINDOW_MS:SAMPLES (`7:60000:33273` is seven windows of a minute with 33,273 openings each). `gate_run.sh`'s
 own variables (COMMIT, ARENA_GIB, UTIL, HOST_GIB, LEAF_CTAS, LEASE_BY, FETCH, ...) pass through: with HOST_GIB the
@@ -70,7 +70,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RS = ROOT / "benchmarks" / "remote_session"
 
-#: this directory's registry: PACED, UNPACED, BIND, and the variables a research run sets
+#: this directory's registry: PACED, UNPACED, and the variables a research run sets
 SETTINGS = of(__file__)
 #: UNPACED's word: the windows, a window's milliseconds (to three places, as the verifier host takes them) and the
 #: openings a window
@@ -177,7 +177,8 @@ def commit_of(attempt: dict) -> str | None:
 
 def session(record: Path, k: int | None) -> dict:
     """Session `k` (the only one when `k` is None) of the verifier's record at `record`, as the printer reads it:
-    `NoNumber` unless the verifier accepted it and its ledger holds γ at the specification's rate, which is
+    `NoNumber` unless the Lean verifier accepted it (`accepted`, with `verdict` `lean`) and its ledger holds γ at the
+    specification's rate, which is
     `remote_session/summary.py`'s `gamma_spec` of the session."""
     try:
         v = json.loads(record.read_text())
@@ -197,7 +198,12 @@ def session(record: Path, k: int | None) -> dict:
     if vs.get("accepted") is not True:
         why = (vs.get("failure") or {}).get("failure") or "no reason recorded"
         raise NoNumber(f"session {vs['k']} was not accepted ({why})")
+    if vs.get("verdict") != "lean":
+        raise NoNumber(f"session {vs['k']} is recorded accepted, but its record names no Lean verdict "
+                       f"({vs.get('verdict')!r}): only the Lean verifier's accept has a number")
     ledger = vs.get("ledger") or {}
+    if (undecided := (ledger.get("spec") or {}).get("undecided")) is not None:
+        raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
     gamma = (ledger.get("spec") or {}).get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")
@@ -297,14 +303,6 @@ def loopback(run: Callable = subprocess.run) -> dict:
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
 
 
-def form() -> dict[str, str]:
-    """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
-    set, else PACED's paced one, and BIND, whether its verifier binds the store."""
-    if (bind := SETTINGS.BIND) not in ("0", "1"):
-        raise Unreadable(f"BIND is {bind!r}: 0 binds the node's store to no model, 1 to {ROLE}'s pinned checkpoint")
-    return {"BIND": bind, **session_form()}
-
-
 def session_form() -> dict[str, str]:
     """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
     set, else PACED's paced one."""
@@ -327,7 +325,7 @@ def node(store, period: str, dry: bool, k: int | None, run: Callable = subproces
          wait: Callable[[float], None] = time.sleep) -> dict | int:
     """The gate run of one honest session under `period`, then its printed document from the store; `gate_run.sh`'s
     exit status when it launched nothing or ran dry."""
-    env = {"ROLE": ROLE, **SETTINGS.environ(), "PLAN": "honest", **form()}
+    env = {"ROLE": ROLE, **SETTINGS.environ(), "PLAN": "honest", **session_form()}
     rc = run(["bash", str(RS / "gate_run.sh"), *(["--dry-run"] if dry else []), period], cwd=ROOT, env=env,
              stdout=sys.stderr).returncode
     if dry:
@@ -495,12 +493,10 @@ def text(doc: dict) -> str:
         lines.append(f"  {LOOPBACK}")
     elif doc["value"] >= 1:
         lines.append(f"  {NOTHING}")
-    verdict = ("accepted by the Lean verifier" if doc.get("verdict") == "lean"
-               else "accepted (its record names no Lean verdict)")
     where = ("" if doc["loopback"] else f", on the auditor's verifier host (its run {doc['host_run']})" if doc.get("host_run")
              else ", its verifier not on the auditor's verifier host")
     lines.append(f"  session {doc['session']} of {doc['run'] or 'no recorded run'}, commit {doc['commit'] or 'unknown'}: "
-                 f"{verdict}{where}")
+                 f"accepted by the Lean verifier{where}")
     whole = None if doc["loopback"] else doc.get("node_gpu_bytes")
     lines.append("  store: " + (f"{doc['store_bytes']:,} bytes, a test store" if doc["loopback"] else _gb(doc["store_bytes"]))
                  + (f", {doc['store_bytes'] / whole:.3f} of the node's {_gb(whole)} of GPU memory" if whole else "")

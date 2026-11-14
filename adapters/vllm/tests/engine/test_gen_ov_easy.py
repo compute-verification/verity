@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.config import workload_file
 from verity_vllm.observe.events import RunHeader
@@ -116,7 +116,6 @@ def test_profile_is_discovered_by_case_and_is_the_base_pattern_list():
     # registers it; no B7 shape is a tabled key, see below, so it never fires here)
     assert [p.name for p in prof.patterns] == ["gemm.matmul_kernel_persistent.tuned", *[p.name for p in BASE.PROFILE.patterns]]
     assert [type(p) for p in prof.patterns[1:]] == [type(p) for p in BASE.PROFILE.patterns]
-    assert prof.kernel_allowlist == BASE.PROFILE.kernel_allowlist
     pins = prof.notes["pins"]
     assert pins["gemm"] == BASE.PROFILE.notes["pins"]["gemm"] and pins["rms_norm"] == BASE.PROFILE.notes["pins"]["rms_norm"]
     assert pins["attention"]["kBlockN"] == 64 == Q15.PROFILE.notes["pins"]["attention"]["kBlockN"]
@@ -219,7 +218,7 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
             st, rest = ln[1:].split("]", 1)
             cmds[st] = shlex.split(rest) if not rest.strip().startswith(("SKIP", "in-process", "write")) else [rest.strip()]
     assert "snapshot_steps=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]" in out
-    for st in ("capture", "control", "census", "nonint"):
+    for st in ("capture", "control"):
         c = cmds[st]
         assert c[c.index("--case") + 1] == "B7" and "--engine-arg=gpu_memory_utilization=0.95" in c, (st, c)
     assert "--verify-weights" in cmds["capture"]

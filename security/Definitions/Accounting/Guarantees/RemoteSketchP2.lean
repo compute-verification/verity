@@ -5,7 +5,7 @@ public import Definitions.Accounting.Guarantees.RemoteSketch
 /-!
 # The receipts' sketch bound over PoUS's P2 store (trusted; drafted)
 
-The remote audit's P2 mode (`remote_bandwidth.p2`, its `PROTOCOL.md` §11) receipts a unit of four of `C*`'s 2,056-byte
+PoUB's P2 mode (`remote_bandwidth.p2`, its `PROTOCOL.md` §11) receipts a unit of four of `C*`'s 2,056-byte
 blocks, 8,224 bytes, `m = 257` sectors of 32 bytes: the trace's block (`Accounting.Remote.Held.Trace`) is a unit, and
 `N` counts units (`⌊blocks/4⌋`; a store's last `blocks mod 4` blocks are not audited). A block's own receipt would not
 do: 2,056 bytes is not a whole number of 32-byte sectors, and the sketch's guess term is per sector, `2^-(8r)` at rank
@@ -15,18 +15,18 @@ do: 2,056 bytes is not a whole number of 32-byte sectors, and the sketch's guess
 is the four partials' sum, so the bound is on the unit.
 
 * `SketchBoundP2`: `SketchBoundRun` at P2's receipts (`m = 257`, 16 sign rows, SHA-512 tags, `h = 512`) and rank
-  `r = 12`, with `Q` the prover's SHA-512 compressions over the session (the node's `C` times the outside-compute factor
-  `F`), as `SketchBoundDeployed` is at 4096-byte blocks:
+  `r = 12`, with `Q` the prover's SHA-512 compressions over the session (its budget, `2^80` in `audit.QUERIES_LOG2`, on
+  any hardware it reaches), as `SketchBoundDeployed` is at 4096-byte blocks and 64 rows:
 
     `δs = Q/2^96 + (Q + P)·(ε + N/2^512) + (Q + P)²/2^257`,
 
   with `ε = 257 · timing.sign_rank_at_most(16, 11) = 2^-95.2491`, the bound on a 16 × 32 sign block's rank falling
-  below 12 over the unit's sectors (evaluated outside Lean, as at `m = 128`), above `SketchBoundDeployed`'s
-  `2^-96.2548` by the sectors' count.
+  below 12 over the unit's sectors (evaluated outside Lean, as at `m = 128`), above 4096-byte blocks' `2^-96.2548`
+  at 16 rows by the sectors' count.
 
 `SketchBoundLine` is at every `m`, so the memory line's `SketchBoundAt T O δs` at P2's units is `SketchBoundLine` at
 `X = Outcome β Hs N 257` under `SketchBoundP2`: no new assumption. What stays assumed is `SketchBoundDeployed`'s, at
-`m = 257`: `SketchHashRandom` (claim `random-oracle`), the devices obtaining sectors whole and verbatim
+`m = 257` and 16 rows: `SketchHashRandom` (claim `random-oracle`), the devices obtaining sectors whole and verbatim
 (`RateSketch.Prover`, claim `rate-sketch-verbatim`, here a sector of a decoded block's bytes), the signs' rank tail at 257
 sectors (`SketchRank 16 257 12`), the hash budget (`KeyBudget`), and `Receipted`, `Present`, and the store uniform (the
 outcome's coins). P2's `C*` is the encode of the public `W`, so a uniform store is the ideal encoding model: a sector the

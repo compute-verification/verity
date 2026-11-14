@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.SpecTie
 /-!
 # Each session of the per-member form in what the prover sent
 
-A window's sessions (`Verity.Sampled.WindowSessions`) name, for the `u`-th session of a play, the record sent for it
+A window's sessions (`Verity.Sampled.ExecutionPhaseSessions`) name, for the `u`-th session of a play, the record sent for it
 (`sentRecordAt`), the bytes its closing round is opened after the SHA-512 of, and what the verifier's read holds the
 device's log to at it. This module reads those off what the per-member form's check names its sessions
 (`NamedAt`, `NamedOf`), one statement at a time:

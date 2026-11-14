@@ -93,7 +93,7 @@ def test_G4c_no_capability_or_sm_literal_outside_target_profile():
 def test_G6_program_digest_carries_input_shape_and_dtype():
     torch = pytest.importorskip("torch")
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
     torch.manual_seed(0)
     m = ex.MLP2(8, 16, 8)
     r3 = derive_report(m, (torch.empty(3, 8),), mode="reference", name="MLP2")
@@ -132,7 +132,8 @@ def test_G5_live_constructions_differing_in_M_are_distinct_but_not_distinguishab
             r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "build", "--out", d, "--wrapper", "step", "--M", str(M), "--pos0", "8"],
                                cwd=INTEGRATION, env=env, capture_output=True, text=True)
             assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-1500:]
-        arts[M] = json.load(open(os.path.join(d, "artifact.json")))
+        with open(os.path.join(d, "artifact.json")) as artifact:
+            arts[M] = json.load(artifact)
     a1, a2 = arts[1], arts[2]
     assert a1["program_digest"] != a2["program_digest"] and a1["identity"] != a2["identity"]
     assert a1["target_profile"] == a2["target_profile"] and a1["applicability"] == a2["applicability"]

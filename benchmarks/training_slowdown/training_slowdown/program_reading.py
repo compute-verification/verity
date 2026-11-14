@@ -1,4 +1,4 @@
-"""A training step's work read off its Program: the lf model's step (`adapters/vllm/tests/program/train_step_lf.py`,
+"""A training step's work read off its Program: the lf model's step (`adapters/torch/tests/frontend/train_step_lf.py`,
 loaded by its path) under AdamW, as the training-step frontend writes it (`step_program`), looped `--iterations` times
 (`loop`) and read by `circuit_properties.work.read` at `--k`, its point's test (`points.check`) among it.
 
@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-LF_PATH = ROOT / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
+LF_PATH = ROOT / "adapters" / "torch" / "tests" / "frontend" / "train_step_lf.py"
 sys.path.append(str(ROOT / "benchmarks" / "circuit_properties"))
 from circuit_properties import points as PT  # noqa: E402
 from circuit_properties import work as WK  # noqa: E402
@@ -33,7 +33,7 @@ from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import Coll, concat, tuple_of  # noqa: E402
 from verity.circuits.types import Array, Tuple  # noqa: E402
-from verity_vllm.program.frontend.train_step import AdamW, step_program  # noqa: E402
+from verity_torch.frontend.train_step import AdamW, step_program  # noqa: E402
 
 #: a Program's nesting is not bounded by Python's default recursion limit, so the reading runs in a thread of this
 #: stack, at this limit

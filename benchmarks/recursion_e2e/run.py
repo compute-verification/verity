@@ -55,7 +55,7 @@ RELEASE_LEAD_MIN = 25
 SETUP_MIN = 5  # the job's start, its retention record and its result
 OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "oreplay": 2, "lean": 12, "forge-after": 15,
              "negative": 30}
-#: the forgeries the ZK server stops before release (FIREWALL-REFUSED, no release for Lean), which forge-after makes on the
+#: the forgeries the ZK server stops before release (ZK-SERVER-REFUSED, no release for Lean), which forge-after makes on the
 #: honest releases after proving instead (forge_after.CASES)
 FORGE_AFTER = ("coef", "dirs", "message")
 #: rec_vstage.FORGERIES, each with the V* statements it stages under forged-<kind>/ and oprove proves one release each, named
@@ -77,7 +77,7 @@ CPU_WORK = "/workspace/cache/rec-bench"
 STAGES = {
     "build": "the CUDA prover (60-circuit.sh), the Lean verifier (lake build), the inner statement staged with plain and hm96 leaves",
     "inner": "M0 (ZK off) against the rec_live proxy, WARM + RUNS runs; the non-recursive M0 and --zk on loopback beside it",
-    "icheck": "upstream's replay of the inner run and V*'s hashing reference (rec_vstar)",
+    "icheck": "upstream's replay of the inner run",
     "vstage": "V*'s fold points, InnerFold.lean, and each statement staged (RecOpen per level, InnerRepCheck parts)",
     "vcap": "RecCap over each level's committed tops",
     "oprove": "each V* statement proved with --zk on loopback serve, one at a time, per mode "

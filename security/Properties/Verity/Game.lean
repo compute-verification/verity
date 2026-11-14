@@ -10,14 +10,14 @@ public import Definitions.Core.Game
 public import Definitions.Core.Site
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.RowLeaf
-public import Definitions.Nci
+public import Definitions.InferenceOnly
 public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
 public import Lms.Verify
 public import Properties.Remote
 public import Properties.Verity.Sha512
-public import Properties.Verity.WindowFiles
+public import Properties.Verity.ExecutionPhaseFiles
 
 /-!
 # Soundness as a causal game at a composite's compiled verifier, and each subprotocol's target
@@ -40,7 +40,7 @@ period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 | SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | |
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes |
-| the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
+| the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | |
@@ -69,10 +69,10 @@ The statement's form is the causal game, the committed files, one fixed extracto
   circuit, its units and its constants are what the verifier reads from the two (`Flock.Bridge.circuitOfFile`,
   `unitsOfFile`, `partsOfFile` at v2's reading of the files, `read`), so the units are the public file's population,
   and the positions are the files' and the commitment's (`place`), never the prover's world. The reading is a
-  window's (`WindowFiles`): one statement's files are a window of one member, and at a window of several members the
+  window's (`ExecutionPhaseFiles`): one statement's files are a window of one member, and at a window of several members the
   circuit is the members' side by side, their units in the members' order. Committed files without a
   file of each digest are refused (`Registered`, conjoined beside the composite's acceptance).
-* **Sampled proofs' claim reads one fixed extractor's transcript.** The extractor (`extract`, the one
+* **SPOT's claim reads one fixed extractor's transcript.** The extractor (`extract`, the one
   `SampledKSLive*` is stated with, `XplurZC`) is a construction applied to the strategy, never chosen per strategy.
   The claim is that at most an `ε` share of the file's units are unbound in its transcript (`Accounting.unbound`): wrong
   in it, or with a committed input or output the commitment doesn't open to its value there (`Opens`: a registered
@@ -149,7 +149,7 @@ open scoped ENNReal
 
 /-- The subprotocols a composite is made of. -/
 inductive Subprotocol
-  /-- sampled proofs: the integrity of the circuit's committed transcript -/
+  /-- SPOT: the integrity of the circuit's committed transcript -/
   | sampled
   /-- PoUW: work -/
   | pouw
@@ -157,7 +157,7 @@ inductive Subprotocol
   | inferenceOnly
   /-- PoUS: space -/
   | pous
-  /-- PoUB-P2, the remote bandwidth audit's P2 session on PoUS's store: bits read from device memory -/
+  /-- PoUB-P2, PoUB's P2 session on PoUS's store: bits read from device memory -/
   | poub
   /-- the network certifier: communication through the network certifiers -/
   | network
@@ -185,7 +185,7 @@ def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → B
   | .pouw, k =>
     if PouwCheck.PearlPlus.Protocol.protocolId ∈ k then PouwCheck.PearlPlus.Protocol.protocol
     else PouwCheck.Period.protocol
-  | .inferenceOnly, _ => NciCheck.Protocol.protocol
+  | .inferenceOnly, _ => InferenceOnlyCheck.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
   | .poub, _ => RemoteAudit.P2Protocol.protocol
   | .network, _ => NetworkCheck.Period.protocol
@@ -205,7 +205,7 @@ def componentsOf (k : Verity.Registration.Composite) : List BlobProtocol :=
 /-- The subprotocols of composite `k` that must commit to one record: the inference-only policy and SPOT,
 each where `k` lists it. -/
 def tied (k : Verity.Registration.Composite) : List String :=
-  [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
+  [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
 
 /-- **The ties between subprotocols**: every window of PoUW's period on the policy's record (`Core.Remote.windows`),
 PoUS and PoUB-P2 on one store (`Core.Onsite.store`), Pearl+'s run on the policy's record (`Core.Remote.V1.run`), and
@@ -272,16 +272,16 @@ def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
 /-- **The inference-only policy's case in what the prover sent composite `k`**, decoded: the three byte strings decode
-under the composition's formats, one of the subprotocols' cases is the policy's (`NciCheck.Protocol.protocol`, which
+under the composition's formats, one of the subprotocols' cases is the policy's (`InferenceOnlyCheck.Protocol.protocol`, which
 reads no blobs, as one of `k`'s subprotocols), and under the parameters `k` names for it that case decodes to the
-policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k NciCheck.Protocol.protocol s`
+policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k InferenceOnlyCheck.Protocol.protocol s`
 without the check's acceptance. -/
-def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : NciCheck.Protocol.Params)
-    (c : NciCheck.Protocol.Commitment) (e : NciCheck.Protocol.Evidence) : Prop :=
+def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnlyCheck.Protocol.Params)
+    (c : InferenceOnlyCheck.Protocol.Commitment) (e : InferenceOnlyCheck.Protocol.Evidence) : Prop :=
   ∃ ps cm ev, Decoded s ps cm ev ∧
-    ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = NciCheck.Protocol.protocol ∧
-      (canonicalJson x.2.1.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
-      NciCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
+    ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = InferenceOnlyCheck.Protocol.protocol ∧
+      (canonicalJson x.2.1.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p ∧
+      InferenceOnlyCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ InferenceOnlyCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
 
 /-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
@@ -687,8 +687,8 @@ composite publishes, from the parameters and the strategy's SHA-512 calls alone.
 strategies, so it is declared, as `Claims.Finder.cost` is. -/
 structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   /-- v2's reading of the committed files at the parameters: each member's circuit file and public file, the ones their
-  digests name; one statement's files are a window of one member (`WindowFiles.one`) -/
-  read : ByteArray → Array ByteArray → WindowFiles
+  digests name; one statement's files are a window of one member (`ExecutionPhaseFiles.one`) -/
+  read : ByteArray → Array ByteArray → ExecutionPhaseFiles
   /-- the circuit file's digest the parameters hold -/
   programDigest : ByteArray → Option Hash.Digest
   /-- the public file's digest the parameters hold -/
@@ -839,7 +839,7 @@ noncomputable def live (k : Verity.Registration.Composite) (θ : ByteArray) (F :
   accepts a := V.Verdict k (.ofAudit a)
 
 /-- **The claim subprotocol `a` certifies** in the play of `σ` that ended with `o`. The five period claims are
-`Accounting.PeriodLive.Holds` at the period and the published certificates: sampled proofs' on the extractor's
+`Accounting.PeriodLive.Holds` at the period and the published certificates: SPOT's on the extractor's
 transcript at `σ` (at most an `ε` share of the units unbound in it under the commitment's openings), PoUW's where `k`
 doesn't list Pearl+'s id (onsite) in gates (at least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
@@ -977,7 +977,7 @@ def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
-/-- **Sampled proofs' target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
+/-- **SPOT's target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
 def SpotSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 
 /-- **PoUW's target**: at onsite, at least `W` gates of the committed circuit computed after their window's coin; at

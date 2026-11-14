@@ -60,11 +60,12 @@ Match imports from it), `match_fold` (`INSTANCES_FORM_ENV`, `INSTANCES_SCHEMA`, 
 (`run_stage`), `match_workload` (`fold_construction_args`), `program_cache` (`key`, `lookup`, `publish`,
 `restore`), `served_match` (`ServedCommit`), `vu_store` (`after_replay`) and `workload_file` (`workload_file`,
 which the benchmarks import). One module states no `__all__`: `vu_export`, which only `program_graph` and
-`vu_store` read. `match` imports private names of the two modules it reads,
+`vu_store` read. `match` imports private names of two of the modules it reads,
 `match_workload`'s `_workload_doc`, `_workload_enforce_eager`, `_workload_engine_args`, `_workload_execution` and
 `_workload_expected_steps` and `match_fold`'s `_jsonable`. It binds no name of another module that its own text does
-not read; tests still read three that it does read through it: `fold_summary_result`, `persist_program` and
-`run_stage`.
+not read; tests still read six that it does read through it: `fold_summary_result`, `persist_program`, `run_stage`
+and `match_workload`'s `_workload_doc`, `_workload_enforce_eager` and `_workload_execution`. Tests also reach three
+modules under the names it gives them: `EXP` (`experiment`), `G` (`check.gates`) and `GL` (`gpu_lease`).
 
 ## The Commit and its replay
 
@@ -76,7 +77,7 @@ challenger, one challenge phase a Commit; `gpu_lease` runs a leased Commit, whos
 `c2_replay` is the C2 of record of one instrumented run, the sampled replay and the boundary linkage over its
 committed store, in the Commit's process or on CPU. A Commit with `--replay-deferred` leaves a sealed bundle instead
 (`replay_bundle`; `replay_plan` is the slim bundle's planner process), which `cpu_replay` opens against the Commit's
-record and replays without the engine (`verity-vllm commit-replay`). Beside them are `m1_capture`, the observation log
+record and replays without the engine (`verity-vllm commit-replay`). Beside them are `match_capture`, the observation log
 of a workload under the observer; `admission_bound`, the bound on what a `--retain host` Commit retains on the host,
 and `telemetry.admission`, the row planner's reservation model; `compiled_merge`, a compiled row's two arms merged
 into one summary; `source_identity`, the precheck that a job runs the tree it names; and `spans`, the commitment's
@@ -84,24 +85,26 @@ wall clock, part by part. `verity_vllm.gc_tuning`, the collector thresholds of t
 package.
 
 What code outside these modules takes from one of them is what its `__all__` lists, beside `Options` and `main` where
-the module is a command, with the one exception named below: `admission_bound` (`admission`, `committer_resident`),
-`commit_attach` (`attach_of_record`, `classes_of_record`), `commit_coins` (the challenger
+the module is a command, with the two exceptions named below: `admission_bound` (`admission`, `committer_resident`),
+`c2_replay` (the replay's sources, plan and run, the arrivals, labels, seeds and Programs of record, the live checks and
+the VU export's hook), `commit_attach` (`attach_of_record`, `classes_of_record`), `commit_coins` (the challenger
 gate, the challenge phase, the coins' families, positions and identities, and what samples by them; two benchmarks
 import `ChallengerGate`), `commit_plan` (`key`, `keyed`, `write`), `cpu_replay` (`OnRead`, `Refused`, `WORDS`,
 `manifest_of`, `of_record`, `open_weights`, `opener`, `provider`, `registered_roles`, `replay_args`, `tensor_root_of`,
-`tree_refusal`, `weights_attest`, `worker_peak`), `m1_capture` (`dump_cos_sin`), `replay_bundle` (`ARGS`, `HASHED`,
+`tree_refusal`, `weights_attest`, `worker_peak`), `match_capture` (`dump_cos_sin`), `replay_bundle` (`ARGS`, `HASHED`,
 `MANIFEST`, `NOT_RETAINED`, `PENDING`, `deferred_records`, `discard`, `open_bundle`, `partial`, `path`, `seal`,
-`seal_all`, `weights_extra`, `write_store`, `write_store_files`), `replay_plan` (its command alone), `spans`
-(`Spans`) and `telemetry.admission` (`CALIBRATION`, `predict`, `request_prompt_len`, `row_config_from_workload`). The
-exception is `spans`: `serve_commit` also takes `commit_s_of`, `end_lap`, `gc_of` and `phases_of` from it, which its
-`__all__` does not list. The benchmarks import `cpu_replay` and `replay_bundle` as modules. Six modules state no
-`__all__`: `commit`, `commit_arb`, `c2_replay`, `gpu_lease`, `compiled_merge` and `source_identity`. Others
+`seal_all`, `weights_extra`, `write_store`, `write_store_files`), `replay_plan` (its command alone), `source_identity`
+(`TREE`, `code_identity`, `code_identity_of`, `precheck`), `spans` (`Spans`) and `telemetry.admission` (`predict`,
+`request_prompt_len`, `row_config_from_workload`). The first exception is `spans`: `serve_commit` also takes
+`commit_s_of`, `end_lap`, `gc_of` and `phases_of` from it, which its `__all__` does not list. The second is
+`source_identity`: `commit` takes `SourceIdentityError` and `research` takes `tree_identity` from it, the generic half's
+names, which it loads on first read (`REEXPORTS`). The benchmarks import `cpu_replay` and `replay_bundle` as modules.
+Four modules state no `__all__`: `commit`, `commit_arb`, `gpu_lease` and `compiled_merge`. Others
 import `commit` for `assert_pristine`, `baseline_state`, `class_coverage`, `git_head`, `make_committer` and
-`run_workload` (the benchmarks for three of them), `c2_replay` for `arrivals`, `programs_of_record`, `request_labels`,
-`rss_kb` and `seed_of`, `gpu_lease` for the lease (`acquire`, `give_back`, `leased`, `run`, `run_main`,
+`run_workload` (the benchmarks for three of them), and `gpu_lease` for the lease (`acquire`, `give_back`, `leased`, `run`, `run_main`,
 `hide_devices`, `use_environ`, `cuda_initialised`), its record's names (`DRIVER`, `RECORD`, `WEIGHTS_HASH`) and the
-reason a Match stage keeps its GPUs, and `source_identity` for `TREE`, `code_identity_of` and `tree_identity`.
+reason a Match stage keeps its GPUs.
 `commit_arb` is a command and nothing else, and so is `compiled_merge` but for its `_bootstrap_ci`, which `commit`
-imports; only `commit` reads `admission_bound`, and only `admission_bound` and `cpu_replay` read
+imports; only `commit` reads `admission_bound`, and only `admission_bound` reads
 `telemetry.admission`. Four more private names are imported from another module, all of `gpu_lease` by `tp.lease`:
 `_HELD`, `_kept_by`, `_no_device` and `_watch`; and `cpu_replay` calls `replay_bundle`'s `_sha256`.

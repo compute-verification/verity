@@ -400,7 +400,7 @@ def test_chronology_follows_arrivals_not_manifest_order_and_programs_every_step_
     assert len(seen) == len(set(seen)) == sum(r.cap for r in wl.requests)
     for r in wl.requests:
         assert sorted(s for rid, s in seen if rid == r.request_id) == list(range(r.cap))
-    # every member names its component segment (the step's instance set) and a global gate range inside the request's interval
+    # every member names its component segment (the step's input set) and a global gate range inside the request's interval
     am = {r["request_id"]: r for r in wl.address_map()["requests"]}
     for e in ch["engine_steps"]:
         for m in e["members"]:
@@ -592,7 +592,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
 # GM-01's own e2e fixtures (test_global_match: toy fold + batched record with declared arrivals / caps / an EOS stop) are the record of
 # reference here; `memory` is their fold fixture.  R1_EOS: cap 4, stops on the declared EOS 11 after 2 events -> a_r = n_r = 2.
 
-from verity.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
+from verity_vllm.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
 
 from tests.check import test_global_match as TGM  # noqa: E402
 from tests.check.test_global_match import memory  # noqa: E402,F401 - the fold fixture

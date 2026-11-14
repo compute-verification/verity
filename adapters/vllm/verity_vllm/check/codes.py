@@ -1,4 +1,4 @@
-"""Verdict codes: why a verifier accepted or rejected (promoted from veritor ``protocol/messages.py``).
+"""Verdict codes: why a verifier accepted or rejected.
 
 The code strings are wire constants, kept whole as veritor's enum spelled them.
 """

@@ -2,6 +2,7 @@ module
 
 public import Properties.Certifier.Check
 public import Proofs.Flock.Bytes
+public import Proofs.Flock.Be64
 public import Proofs.Properties.Hash.Identity
 public import Mathlib.Data.Set.Card
 import all Init.Data.String.Defs

@@ -24,9 +24,9 @@ read: the accepted wipe is the game's accepted session at the run's labels and r
 wipe's guarantees (`Pous.Guarantees.StreamedWipe` and its instances at 2152 reads) bound it, with nothing between the
 code and the game but the game's shape (C5, C6 and every tier declared), which the challenger's deployment makes true.
 
-## The memory challenger, as `wipe_party` runs a wipe
+## The memory challenger, as `wipe_challenger` runs a wipe
 
-`streamed_wipe.Challenger`, as `wipe_party.serve` drives it (their module docstrings): it claims the session id and
+`wipe_challenger.WipeMemoryChallenger`, as `wipe_challenger.serve` drives it (their module docstrings): it claims the session id and
 publishes the commitment (`__init__`); it takes its start mark, the SHA-512 of the start certificate its mark source
 returns for the commitment's start message, empty with no source; it reads its clock, streams the labels
 `L_i = SHA-512(LABEL_TAG ‖ K ‖ u64 i)` of its key `K` (`fill`, or `fill_by` through the native streamer) and reads its
@@ -44,8 +44,8 @@ The wipe party reveals one index a batch (`wipe_party.params_of`): a wipe at ano
 the model. The model takes the challenger's clock readings and the answers it receives as they came, and assumes
 nothing of them. It takes the start mark as the bytes the challenger held, and does not model the certificate or who
 made it. It does not model what refuses a session before it starts. The challenger may run any number of wipes
-under a key, each signed once, and the key signs PoUS's sessions too: `wipe_party.main` signs with
-`period.challenger`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
+under a key, each signed once, and the key signs PoUS's sessions too: `wipe_challenger.main` signs with
+`onsite.device_key`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
 `SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
 is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Challengers`).
 -/
@@ -153,7 +153,7 @@ def wipeTreeStrings (d : FV3.Sha512.Domain) (values : Array ByteArray) : List By
 
 /-- What SHA-512 hashes for a wipe `(c, ended, the start mark, the fill's readings, batches)` signed under the
 key `pk`: its records tree, the input of its `message`, and that of `memoryChallengerMessage`. -/
-def wipeSessionStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : String) (startMark : ByteArray)
+def signedWipeStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : String) (startMark : ByteArray)
     (fillStartNs fillEndNs : Int) (batches : Array StreamedWipe.Batch) : List ByteArray :=
   let head := (StreamedWipe.header c ended startMark fillStartNs fillEndNs batches.size).toUTF8
   (match batches.mapM StreamedWipe.Batch.value with
@@ -170,15 +170,15 @@ def wipeSessionStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : S
     | .error _ => []
 
 /-- The strings the run hashes: the signed wipe's, those of each wipe the challenger ends under its key, and those of
-each PoUS session it ends under the key (`sessionStrings`). -/
+each PoUS session it ends under the key (`challengePhaseStrings`). -/
 def wipeRunStrings (s : StreamedWipe.Signed) (dev : SignedWipeParty) : List ByteArray :=
-  wipeSessionStrings s.publicKey s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches ++
+  signedWipeStrings s.publicKey s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches ++
     (dev.wipes s.publicKey).flatMap (fun r => match r.recorded.ended with
       | some e =>
-        wipeSessionStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
+        signedWipeStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
       | none => []) ++
     (dev.device.sessions s.publicKey).flatMap fun r => match r.recorded.ended with
-      | some e => sessionStrings s.publicKey r.commitment e r.recorded.rounds
+      | some e => challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds
       | none => []
 
 /-! ### The break's two adversaries -/
@@ -313,7 +313,7 @@ def measuredBatch (digest : Nat → ByteArray) (i : Nat) : StreamedWipe.Batch :=
 
 /-- The honest session: the commitment, ended `complete` after its `k` batches, an empty start mark (a challenger with
 no mark source) and the fill's readings, signed under S1's scheme with the key `pk` and the signature `sig`. -/
-def measuredSession (digest : Nat → ByteArray) (pk sig : ByteArray) : StreamedWipe.Signed :=
+def measuredWipe (digest : Nat → ByteArray) (pk sig : ByteArray) : StreamedWipe.Signed :=
   ⟨measuredCommitment, StreamedWipe.COMPLETE, .empty, MEASURED_FILL_START_NS, MEASURED_FILL_END_NS,
     (Array.range measuredParams.k).map (measuredBatch digest), LMS, pk, sig⟩
 
