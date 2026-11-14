@@ -6,7 +6,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_interface.py"]
-inputs = ["verity", "verity/circuits", "verity/commitments", "verity/definitions/kernels"]
+inputs = ["verity", "verity/circuits", "verity/commitments", "verity/circuits/kernels"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -14,4 +14,4 @@ parallel = true
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_blocks.py", "tests/test_interface.py"]
-paths = ["verity/definitions/ops"]
+paths = ["verity/circuits/ops"]
