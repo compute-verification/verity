@@ -21,11 +21,11 @@ fused AdamW step's (`Unary`, `SiluBackward`, `Lerp`, `Addcdiv`, `ForeachAdd`, `F
 embedding's gradient is its kernels' (`EmbeddingDenseBackward`); and the conversions to bf16, to and from f16 and from f32 to
 int64 and uint8, a clamp and a `kthvalue` are its own (`rules.training_masks`), and `log` is CUDA's `logf` (`Log`).
 
-    training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
+    training_rules(min_view_leaves, cc, tf32, deterministic, structure) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, softmax and log-softmax
 `rules.training_softmax`'s, sums and means over axes, the loss and the embedding's gradient `rules.training_loss`'s, torch's flash
-attention forward at a compute capability `rules.training_attention`'s, comparisons,
+attention forward and backward at a compute capability `rules.training_attention`'s, comparisons,
 masks, integer sums, adds, shifts and ands, conversions, functionalized copies, table lookups, `amax` and `kthvalue`
 `rules.training_masks`'s and the helpers the rules emit with `rules.training_emit`'s; a survey of what the rules refuse is
 `rules.training_survey`'s.
@@ -47,7 +47,10 @@ from verity.definitions.registry import ref_prims as R
 from verity.definitions.registry import sampling as SM
 
 from verity_vllm.program.frontend.rules.base import RuleSet
-from verity_vllm.program.frontend.rules.training_attention import FlashSdpa
+from verity_vllm.program.frontend.rules.training_attention import (
+    FlashSdpa,
+    FlashSdpaBackward,
+)
 from verity_vllm.program.frontend.rules.training_emit import (
     _DT,
     F32,
@@ -575,7 +578,8 @@ class FusedAdamW(_TrainRule):
                    emitted=f"F32Fma_v2 x{(5 if wd != 0 else 4) * n} + F32Mul_v2/F32Div_v2/F32Add_v2/F32Sub_v2/F32Sqrt_v1 per element")
 
 
-def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
+def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False,
+                   deterministic: bool = False, structure: bool = False) -> RuleSet:
     """The default rules that target ATen ops (`rules.TORCH_RULES`) and the default families, with the training rules: views of
     static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, optimizer-count, reduction, softmax, loss, embedding,
@@ -587,21 +591,33 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     to and from f16 and from f32 to int64 and uint8 as its kernels do (`Cast`), both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
     (`FullReduce`, before `Reduce`), an f32 embedding's gradient as its kernels do (`EmbeddingDenseBackward`), a fused AdamW step
     and a clamp as their kernels do (`FusedAdamW`, `Clamp`), `kthvalue` as its radix select does (`KthValue`) and torch's flash
-    attention forward as its kernels do (`FlashSdpa`, placed first), in the rule set
+    attention forward and backward as its kernels do (`FlashSdpa`, `FlashSdpaBackward`, placed first), in the rule set
     ``training-cc<major>.<minor>``.  `tf32`, at a `cc`: the step sets cuda.matmul.allow_tf32, which the traced graph doesn't
     show, so its f32 `mm`s and `bmm`s are cuBLAS's TF32 GEMMs: `Matmul` lowers an `mm` at a shape the TF32 capture covers
     (`cublas_bf16.TRAIN_TF32`) as cuBLAS's unsplit TF32 GEMM (`GemmTf32_v1`) and refuses the rest
-    (``training-cc<major>.<minor>-tf32``)."""
+    (``training-cc<major>.<minor>-tf32``).  `deterministic`, at a `cc`: the step runs under deterministic algorithms, which the
+    traced graph doesn't show either, so the flash attention backward is its deterministic kernels' and `FlashSdpaBackward` lowers
+    it; without it the rule refuses every call (the suffix ``-deterministic``).  `structure`, at a `cc`: the rules of a structure
+    derivation (`train_step.structure_program`), the same step at another batch shape, of which only the occurrences and their
+    views are read and no cell: the GPU's graph lowered without its captures' tables, the matrix products as without a `cc`
+    (`Matmul()`) and each flash attention op its head Definition at a stand-in block size (`training_attention.STAND_IN`), with
+    neither setting read (``training-cc<major>.<minor>-structure``)."""
     from verity_vllm.program.frontend.rules import DEFAULT_FAMILIES, TORCH_RULES
 
-    first = [StaticFloats(cc), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
+    if structure and (cc is None or tf32 or deterministic):
+        raise ValueError("training_rules: a structure derivation is of a step at a cc, and reads no setting of its kernels")
+    first = [StaticFloats(cc), BoxPermute(min_view_leaves), Matmul(None if structure else cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
     last = ([] if cc else [Binary()]) + [Unary(cc), Lerp(cc), Addcmul(), Addcdiv(cc), SiluBackward(cc), ForeachAdd(cc),
                                          FusedAdamW(cc), FullReduce(cc), Reduce(), IntSum(), AMax(), SafeSoftmax(),
                                          SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(), NllLossBackward(),
                                          EmbeddingDenseBackward(cc), Log(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
                                          KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
-    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
-    return RuleSet(name, first + ([FlashSdpa(cc)] if cc else []) + list(TORCH_RULES) + last, list(DEFAULT_FAMILIES))
+    if deterministic and cc is None:
+        raise ValueError("training_rules: deterministic is a GPU's (its flash attention backward); without a cc no rule reads it")
+    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "") + (
+        "-deterministic" if deterministic else "") + ("-structure" if structure else "")
+    attention = [FlashSdpa(cc, structure), FlashSdpaBackward(cc, deterministic, structure)] if cc else []
+    return RuleSet(name, first + attention + list(TORCH_RULES) + last, list(DEFAULT_FAMILIES))
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",
