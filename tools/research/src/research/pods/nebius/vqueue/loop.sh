@@ -20,7 +20,9 @@
 # keeps its log in shadow/: it builds candidates (pushing queue/* to origin) and launches their checks on its args' --on
 # machines, and only logs each advance, eject and message, so `main` never moves; it costs those machines. live is the loop.
 # It is refused while live/decisions.jsonl is missing or empty: a loop with no log rebuilds every candidate in flight. While
-# <the mode's directory>/stopped exists no tick starts.
+# <the mode's directory>/stopped exists no tick starts. mode() alone decides the mode, and with it RESEARCH_DRIVE=1, without
+# which the loop never moves `main` (merge.on_drive): live's tick gets it, and dry-run's and shadow's never, whatever the unit's
+# environment or a credential file says.
 #
 # The node's paths follow ci's args on the command line, so a flag of args naming another host's log or lock never wins.
 #
@@ -53,14 +55,14 @@ export HOME=$H PATH="$(dirname "$SELF")/bin:/usr/local/bin:/usr/bin:/bin" GIT_TE
 
 say() { echo "vy-vqueue: $*" >&2; }
 
-# Sets mode, dir (the mode's directory) and flag.
+# Sets mode, dir (the mode's directory), flag and drive (1: the tick may move `main`).
 mode() {
-  mode=dry-run
+  mode=dry-run drive=
   [ ! -s "$H/mode" ] || read -r mode _ < "$H/mode"
   case $mode in
     dry-run) dir=$H/live flag=--dry-run ;;
     shadow)  dir=$H/shadow flag=--shadow ;;
-    live)    dir=$H/live flag= ;;
+    live)    dir=$H/live flag= drive=1 ;;
     *) say "$H/mode says '$mode': write dry-run, shadow or live"; return $CONFIG ;;
   esac
 }
@@ -92,6 +94,7 @@ tick() {
       [ ! -f "$f" ] || . "$f" || exit $CONFIG
     done
     set +a
+    if [ "$drive" = 1 ]; then export RESEARCH_DRIVE=1; else unset RESEARCH_DRIVE; fi
     [ ! -s "$H/live/agent-url" ] || { read -r RESEARCH_AGENT_URL _ < "$H/live/agent-url"; export RESEARCH_AGENT_URL; }
     GH_TOKEN=$(cat "$TOKEN") || exit $SKIP
     export GH_TOKEN

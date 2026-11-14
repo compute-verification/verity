@@ -12,6 +12,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 
 import pytest
+from research import merge
 
 from verity_ops import deploy
 
@@ -20,7 +21,7 @@ LOOP = VQ / "loop.sh"
 HELPER = "infra/control/gh_app_token.sh"          # the control pod's own, which token.sh runs on the node
 CONFIG, SKIP = 78, 75
 KEYS = ("HOME", "PATH", "PYTHONPATH", "TMPDIR", "TRAIN_TREES", "GH_TOKEN", "AWS_ACCESS_KEY_ID", "SLACK_BOT_TOKEN",
-        "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT")
+        "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT", merge.DRIVE_ENV)
 # The stand-in tick: one JSON line a call. With VQ_TEST_TERM its first call tells the loop to stop and then goes on, as a tick
 # under `systemctl stop` does; a second call, which a loop that stopped never makes, ends the loop so the test can't hang.
 STUB = """#!{py}
@@ -62,7 +63,8 @@ class Node:
         self.token.write_text("dummy-app\n")
         # ci's args as the control pod holds them: its own paths among them, and a comment
         (self.home / "live" / "args").write_text("# depth 2\n--gate check\n--on m1,m2\n--log /data/vqueue/live/decisions.jsonl\n")
-        self.env = {**os.environ, "VQ_HOME": str(self.home), "VQ_CRED": str(self.cred), "VQ_TOKEN": str(self.token),
+        self.env = {**{k: v for k, v in os.environ.items() if k != merge.DRIVE_ENV},
+                    "VQ_HOME": str(self.home), "VQ_CRED": str(self.cred), "VQ_TOKEN": str(self.token),
                     "VQ_PYTHON": str(script(tmp / "stub" / "python", STUB.format(py=sys.executable, keys=KEYS))),
                     "VQ_INTERVAL": "0", "VQ_TEST_OUT": str(self.out)}
 
@@ -143,6 +145,31 @@ def test_a_shadow_keeps_its_log_lock_and_args_apart_from_the_live_loop_s(node):
     assert (flag(argv, "--log"), flag(argv, "--lock"), flag(argv, "--state")) \
         == (str(shadow / "decisions.jsonl"), str(shadow / "vqueue.lock"), str(shadow / "state.json"))
     assert flag(argv, "--priority-file") == str(node.home / "live" / "priority")
+
+
+def test_live_alone_may_move_main_whatever_the_environment_says(node, monkeypatch):
+    """The loop moves `main` only with RESEARCH_DRIVE=1 (`merge.on_drive`).  live's tick has it from mode() though nothing
+    around the loop sets it; dry-run's and shadow's never do, though the unit's environment, a credential file and a shell
+    variable of mode()'s own name all say 1."""
+    def on_drive(value: str | None) -> bool:
+        if value is None:
+            monkeypatch.delenv(merge.DRIVE_ENV, raising=False)
+        else:
+            monkeypatch.setenv(merge.DRIVE_ENV, value)
+        return merge.on_drive()
+
+    (node.home / "live" / "decisions.jsonl").write_text('{"action": "build"}\n')
+    (node.home / "shadow" / "args").write_text("--gate check\n")
+    (node.home / "mode").write_text("live\n")
+    assert node.loop("once").returncode == 0
+    envfile(node.cred / "drive.env", {merge.DRIVE_ENV: "1"})
+    for mode in ("dry-run", "shadow"):
+        (node.home / "mode").write_text(f"{mode}\n")
+        assert node.loop("once", **{merge.DRIVE_ENV: "1", "drive": "1"}).returncode == 0
+    live, dry, shadow = node.ticks()
+    assert "--dry-run" in dry["argv"] and "--shadow" in shadow["argv"] and not {"--dry-run", "--shadow"} & set(live["argv"])
+    assert on_drive(live["env"][merge.DRIVE_ENV])
+    assert not on_drive(dry["env"][merge.DRIVE_ENV]) and not on_drive(shadow["env"][merge.DRIVE_ENV])
 
 
 def test_a_node_missing_the_clone_the_pin_or_the_args_says_which_and_runs_nothing(node):
