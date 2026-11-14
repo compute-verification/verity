@@ -72,14 +72,14 @@ LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provis
 #: the period statement whose terms a remote row's unregistered pool and uncertified routes are, each a share of the
 #: fleet's capacity over the period, and the premises it takes in place of `DampenerRemote`'s per-window ones, each
 #: with the terms it is on; no statement sums a server block's bound over servers, so the scaled part cites none
-PERIOD_BOUND = "Nci.Guarantees.DampenerRemotePeriod"
+PERIOD_BOUND = "InferenceOnly.Guarantees.DampenerRemotePeriod"
 #: the per-block statement the remote cuts cite (`Remote.CITES`), whose premises the period statement's others are
 PER_BLOCK_BOUND = Remote.CITES[0]
-PERIOD_PREMISES = {"Nci.Assumptions.PouwPerWindow": "`ε'` and `p/ε'`",
-                   "Nci.Assumptions.SampledPerWindow": "the escape share and its tail",
-                   "Nci.Assumptions.IdentitySchedule": "same",
-                   "Nci.Assumptions.UnmonitoredAtMost": "`s`",
-                   "Nci.Assumptions.CheatingAtMost": "`χ`"}
+PERIOD_PREMISES = {"InferenceOnly.Assumptions.PouwPerWindow": "`ε'` and `p/ε'`",
+                   "InferenceOnly.Assumptions.SampledPerWindow": "the escape share and its tail",
+                   "InferenceOnly.Assumptions.IdentitySchedule": "same",
+                   "InferenceOnly.Assumptions.UnmonitoredAtMost": "`s`",
+                   "InferenceOnly.Assumptions.CheatingAtMost": "`χ`"}
 
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:

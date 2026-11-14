@@ -674,7 +674,7 @@ def test_a_remote_period_row_refuses_a_premise_neither_its_list_nor_the_per_bloc
     p = periods.pooled(r)
     record, shared = lean.premises(periods.PERIOD_BOUND), lean.premises(periods.PER_BLOCK_BOUND)
     assert (p["recorded"], p["shared"]) == (len(record), len(set(record) & set(shared)))
-    grown = dict(record) | {"Nci.Assumptions.Unnamed": "open"}
+    grown = dict(record) | {"InferenceOnly.Assumptions.Unnamed": "open"}
     monkeypatch.setattr(lean, "premises", lambda name: grown if name == periods.PERIOD_BOUND else shared)
-    with pytest.raises(ValueError, match=r"\['Nci.Assumptions.Unnamed'\].*add each to PERIOD_PREMISES"):
+    with pytest.raises(ValueError, match=r"\['InferenceOnly.Assumptions.Unnamed'\].*add each to PERIOD_PREMISES"):
         periods.pooled(r)

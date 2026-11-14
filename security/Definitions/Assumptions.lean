@@ -4,8 +4,8 @@ public import Definitions.Assumptions.Flock
 public import Definitions.Hash
 public import Definitions.Core
 public import Definitions.Accounting
-public import Definitions.Nci.Cut
-public import Definitions.Nci.Formalism
+public import Definitions.InferenceOnly.Cut
+public import Definitions.InferenceOnly.Formalism
 public import Definitions.Assumptions.Pouw
 public import Definitions.Assumptions.WeightSecurity
 
@@ -18,7 +18,7 @@ auditor's devices), each taken as a hypothesis, never an `axiom`. Every other pr
 hypothesis, part of what the guarantee says, which the lock lists under `domain` with a one-line `why`, or open: the
 lock lists it under `open` with the issue that discharges it and its due date. An area moves an assumption of its own
 here once it is one of the real ones, into a module under this one that reads nothing private when the area's readers
-mustn't import the rest, since this one reads Nci: Flock's are `Definitions.Assumptions.Flock`, PoUW's hashless cost
+mustn't import the rest, since this one reads InferenceOnly: Flock's are `Definitions.Assumptions.Flock`, PoUW's hashless cost
 models `Definitions.Assumptions.Pouw` and weight security's model claim under faults
 `Definitions.Assumptions.WeightSecurity`, all of which this module re-exports.
 -/
@@ -28,7 +28,7 @@ models `Definitions.Assumptions.Pouw` and weight security's model claim under fa
 /-!
 ## The min-cut bound's cut conjectures, (H) and (E)
 
-`Nci.Cut.Guarantees.Bound` holds for every circuit; `HE` and `HEShared` bound its `Π(k)` and `α` under two premises
+`InferenceOnly.Cut.Guarantees.Bound` holds for every circuit; `HE` and `HEShared` bound its `Π(k)` and `α` under two premises
 on cuts, each a `Prop` about the circuit, its charged work and the parameters. Neither is decided by a check of the
 circuit: each is a cut conjecture, refuted by one set of gates that beats it.
 
@@ -38,13 +38,13 @@ circuit: each is a cut conjecture, refuted by one set of gates that beats it.
   since `θ`, a copy of another value under a name `val` doesn't identify, an activation recomputed from a narrower cut.
 * **(E), exports** (`Exports`): the outputs a set of computed gates finishes cost cut gates to send on. Every set `B` of
   computed gates has `κ(B → E(B)) ≥ b |E(B)|`, `E(B)` the outputs fed by a MAC inside `B` with no wire in `B`. At
-  `b = b_y` (`Nci.Cut.Work.bY`) it holds by definition; at a given `b` it says `b_y ≥ b`, which no check computes, and
+  `b = b_y` (`InferenceOnly.Cut.Work.bY`) it holds by definition; at a given `b` it says `b_y ≥ b`, which no check computes, and
   it fails for outputs a few gates determine, such as a low-rank product's.
 
 Both count gates of the circuit and its values, never a value's width.
 -/
 
-namespace Nci.Cut.Assumptions
+namespace InferenceOnly.Cut.Assumptions
 
 open Verity Finset
 
@@ -60,7 +60,7 @@ def Hardness {ρ V : Type} [Fintype ρ] [DecidableEq V] (d : RegisteredCircuit) 
 def Exports {C : Circuit} {ι : Type} [Fintype ι] [DecidableEq ι] (W : Work C ι) (b : ℝ) : Prop :=
   ∀ B ⊆ C.computed, b * (W.clear B).card ≤ kappa C B ((W.clear B).biUnion W.y)
 
-end Nci.Cut.Assumptions
+end InferenceOnly.Cut.Assumptions
 
 /-!
 ## The training formalism v2, §4: the assumptions A1, the token-work bound and A2
@@ -70,9 +70,9 @@ end Nci.Cut.Assumptions
   own state where its work on it begins, and, once, the rest of what that work reads and `I` doesn't compute:
   `|in(I) \ θ| ≥ u_I + Σ_T a_T(e_T(I))`. `e_T(I)` is where `I`'s work on token `T` begins, `a_T(x)` the least bits of
   `T`'s own state, the gates of its block it reads and doesn't compute, any witness block entering `T` at `x` reads
-  (`Nci.Formalism.Annotation.stateAt`), and `u_I` the shared bits: what the witness blocks entering `I`'s tokens where
+  (`InferenceOnly.Formalism.Annotation.stateAt`), and `u_I` the shared bits: what the witness blocks entering `I`'s tokens where
   `I`'s work on them begins all read beyond the tokens' own state, counted once and net of what `I` computes
-  (`Nci.Formalism.Annotation.readsAt`, `Nci.Formalism.Annotation.blockShared`). The shared bits are the update's reads,
+  (`InferenceOnly.Formalism.Annotation.readsAt`, `InferenceOnly.Formalism.Annotation.blockShared`). The shared bits are the update's reads,
   `θ'` or the encoding it is decoded from (LoRA factors, a seed log, a code), and the shared context and the earlier
   tokens' keys and values, so two tokens of a block that read the same context pay for it once, and a block that
   computes a token's keys and values pays nothing for a later token's reads of them. A witness's reads are `in(W) \ θ`,
@@ -84,24 +84,24 @@ end Nci.Cut.Assumptions
   it reads among them.
 * **The token-work bound** (`TokenWork`): a cap `cap` bounds the token work within A1's budget. At every set of tokens
   `S`, entry profile `f` and shared bits `ν` with `ν + Σ_{T ∈ S} a_T(f_T) ≤ k`, the token work from those entries,
-  `Σ_{T ∈ S} W_T(f_T, ν)` (`Nci.Formalism.Annotation.entryWork`: the most gates of a set `X` of token gates in `T` that
+  `Σ_{T ∈ S} W_T(f_T, ν)` (`InferenceOnly.Formalism.Annotation.entryWork`: the most gates of a set `X` of token gates in `T` that
   an inference block holds whose work on `T` begins at `f_T` and whose shared bits are at most `ν`), is at most `cap`.
   It is not a consequence of A1, which prices a block's reads at the witnesses' values and says nothing of how much
   token work those reads reach: it is assumed, refuted by inference blocks within those shared bits that, entering their
-  tokens at those entries, hold more of `X`. The token kind's cap (`Nci.Formalism.Guarantees.TokenCap`) reads it, and
+  tokens at those entries, hold more of `X`. The token kind's cap (`InferenceOnly.Formalism.Guarantees.TokenCap`) reads it, and
   its clean form gives it at `max_ν (k - ν) r(ν)` from a bound `r(ν)` on the work a bit of state
-  (`Nci.Formalism.Guarantees.TokenCapClean`).
+  (`InferenceOnly.Formalism.Guarantees.TokenCapClean`).
 * **A2, efficiency floor** (`EfficiencyFloor`): no run of the methods considered whose update stays within `D` bits
   reaches `ℓ*` for less than `p · H(ℓ*)`. It is empirical. It is stated over a class of runs, not over every circuit: a
   circuit that outputs a run's `θ'` as constants reaches the same loss at about `|θ'|` gates, so over every circuit the
-  floor fails at any `p · H(ℓ*)` above that (`Definitions.Nci.Formalism.Runs`).
+  floor fails at any `p · H(ℓ*)` above that (`Definitions.InferenceOnly.Formalism.Runs`).
 -/
 
-namespace Nci.Formalism.Assumptions
+namespace InferenceOnly.Formalism.Assumptions
 
 open Finset
 open Verity (RegisteredCircuit)
-open Nci.Formalism
+open InferenceOnly.Formalism
 open scoped NNReal ENNReal
 
 /-- `training-cut-cost` (conjectured; its values are the reads of the witness blocks `𝒲`, and it is refuted by an
@@ -133,4 +133,4 @@ def EfficiencyFloor (methods : Set Run) (M : Verity.Decoder (List Bool)) (c : �
   ∀ r ∈ methods, r.A.Valid → r.Within M c D → r.Reaches ℓ ℓstar →
     ENNReal.ofReal p * honestCost methods ℓ ℓstar ≤ (r.d.D.computed.card : ℝ≥0∞)
 
-end Nci.Formalism.Assumptions
+end InferenceOnly.Formalism.Assumptions

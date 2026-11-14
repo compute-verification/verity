@@ -30,7 +30,7 @@ ROOT = HERE.parents[1]
 #: requires Flock's package by path). A main goes in the first that holds every library it imports, so a main that reads
 #: Flock alone builds neither of the others.
 PACKAGES = (("verity/protocols/proofs/flock/verifier", {"Flock"}),
-            ("verity/protocols/policy/inference_only/verifier/nci/lean", {"NciCheck", "Flock"}),
+            ("verity/protocols/policy/inference_only/verifier/inference_only/lean", {"InferenceOnlyCheck", "Flock"}),
             ("verity/protocols/proofs/spot/verifier/lean", {"Spot", "Flock"}))
 MAINS = sorted(p.parent.name for p in HERE.glob("*/Main.lean"))
 assert MAINS, f"no <name>/Main.lean under {HERE}: this suite would hold nothing"

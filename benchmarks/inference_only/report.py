@@ -8,7 +8,7 @@ its number, and the record's three divisions. Then both over monitoring periods.
 tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
 no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
 rests on no PoUW verdict. With `--served OUT`, after the stated policy, a served run's record (`record.py`): the
-check's verdicts in their public form (`NciCheck.Record.check`, `NciCheck.RecordCount.check`) and its cost, PoUW's
+check's verdicts in their public form (`InferenceOnlyCheck.Record.check`, `InferenceOnlyCheck.RecordCount.check`) and its cost, PoUW's
 share and tie, and the value at the record's share. Then one JSON object, printed last and written to `--out`, where
 the served policy's number is also written into the run's result under the metric's id (`METRIC`), unless a record
 was read.
