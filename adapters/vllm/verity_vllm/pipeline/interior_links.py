@@ -202,8 +202,8 @@ def link_schemas(members: CS.Member | Sequence[CS.Member], links: Sequence[Link]
     return out
 
 
-Members = CS.Member | Sequence[CS.Member]
-Cells = int | Sequence[int]
+type Members = CS.Member | Sequence[CS.Member]
+type Cells = int | Sequence[int]
 
 
 def cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple[int, ...]]:
@@ -217,7 +217,7 @@ def cells(members: Members, n_rho: Cells) -> tuple[tuple[CS.Member, ...], tuple[
 
 
 def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n_rho: Cells,
-          supplied: Mapping[str, Sequence[int] | None] | None = None) -> tuple[Link, ...]:
+          supplied: Mapping[str, tuple[int, ...] | None] | None = None) -> tuple[Link, ...]:
     """The links of the replay block ``program`` defines under descriptor id ``key``, as the interior registers their
     values: each parameter of the block a template's port reads, under the name round 2 gives it where round 1's record
     ``record`` names its ports (`second_stage.replay_links`), with its rows a block and the row each of the template's n_t
@@ -232,6 +232,7 @@ def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n
     if bare is None or named is None:
         raise ValueError(f"replay block {key} makes no links round 2 derives (`second_stage.replay_links`)")
     rows = {(r.template, r.port): r for r in SS.replay_rows(program, key)}
+    sup = supplied or {}
     out: list[Link] = []
     for b, x in zip(bare, named, strict=True):
         if x.template not in by:
@@ -243,8 +244,8 @@ def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n
         at = tuple(SS.row_at(r.runs, j) for j in range(n))
         if any(a is None for a in at):
             raise ValueError(f"{x.template}: its {x.port!r} rows place other than its {n} units a span")
-        if b.value in (supplied or {}):
-            out.append(Supply(x.template, x.port, x.value, r.per, at, supplied[b.value]))
+        if b.value in sup:
+            out.append(Supply(x.template, x.port, x.value, r.per, at, sup[b.value]))
         else:
             out.append(Operand(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port]))
     return tuple(out)
