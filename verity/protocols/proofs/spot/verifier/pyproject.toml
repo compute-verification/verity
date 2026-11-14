@@ -50,9 +50,10 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "tools/research/src/research/store/tools_registry.py", "tools/research/src/research/store/vocab.py",
           "tools/research/src/research/telemetry/__init__.py", "tools/research/src/research/telemetry/cgroup.py",
           "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py",
-          # the scripts under `benchmarks/` that tests here put on `sys.path`
+          # the scripts under `benchmarks/` the window's audit from its records (`prover/audit/records_audit.py`), which
+          # two tests here load, still loads off `sys.path`
           "benchmarks/one_stage", "benchmarks/prove_path", "benchmarks/network_traces",
-          # the vLLM adapter and the PyTorch adapter it loads
+          # the vLLM adapter, which test_pearltie and test_remotetie load, and the PyTorch adapter it loads
           "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
           "verity/protocols/proofs/flock/prover/agreement/zk_mutants.py"]
 
