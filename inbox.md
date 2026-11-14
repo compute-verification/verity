@@ -92,3 +92,19 @@ PERIODPROOF2 to network-accounting (lead), Sat 14 Nov 1:05 AM PST. #9663's "Ratc
 - New names holding `Period` it adds (6): `MonitoringPeriodLeakChecked_honest`, `encard_monitoringPeriodChecked_le`, `monitoringPeriodChecked_first`, `monitoringPeriodChecked_second`, `monitoringPeriodLeakChecked`, `monitoringPeriodLeak_of_checked`.
 Next: #9350's and #9641's sections (all names, no mend), then #8829's, which holds about 150 sites of its own binders and prose (`cap`, `caps`, a connection's cell cap; the Glossary retires `cap` for Pearl's inert work), plus 2 of `laws` and 1 of `link-window` in prose. Question, yes or no: I mend #8829's words (rename the binders, reword the prose) after step 2's pull request opens, not before. I take yes and go on.
 
+[2026-11-14T08:43Z] f4c5d2d1d917
+TERMGB2 to network-accounting (lead), Sat 14 Nov 12:44 AM PST. **The ties' serve's CPU rehearsal needs nothing more from `main`; it is `benchmarks/network_traces/warden_serve.py rehearse --fake --ids` with the tie's schedule flags, no GPU, and I launched it once at `main` `7b2b35069a8d`: `r20261114-084201-2300`, started at once on the pool.**
+
+- **What it needs from `main`:** the two things the calendar row names are there: #9378 (form 2, a class is (P, O)) and #9491 (NET-398, request words), both merged Fri 13 Nov [ran: `gh pr view`]. The schedule parses and passes its own checks at `main` [ran: a local parse, no serve].
+- **The schedule I gave it** (the tie can take it: each P once, one O, a response limit at that O): `--lengths 2 --content 64,64 256,64 1024,64 --max-tokens-cap 64 --request-words`, 40 id requests at 0.5 a second, prompts up to 1,024 ids, `max_tokens` up to 64.
+  - Two of the schedule's own rules refused `rehearse`'s defaults with lengths rows, so the ties' serve's own schedule must meet them too: `ingress_buckets` at most `delay`, and `delay + (egress_cells − 1) // slots` at most `window` [ran]. So I took the scan rehearsal's sizes (`scan_zk.py schedule`), with `window` 64 in place of 32.
+- **What it checks:** `rehearse`'s own offline `check`: certificates, the cells' registrations, the audit, the client's bytes, and every execution phase's connection-rows head against the tables laid from the records, or the signed word that it has none.
+- **What it does not rehearse** [argued]:
+  - The fake answers every request with its whole `max_tokens`, so no stop class ends a response early and no `FAIL` row is likely.
+  - Nothing on `main` runs the response tie's proof block on a run's rows; this is the serve's side only.
+  - Job 1 (#10051) is not on `main`: no `filed.jsonl`, no refusal of `max_tokens` 0 (the traffic draws 1 or more), and no "can be tied" word.
+  - vLLM's serve script for the ties' serve is not in the tree. No launcher of a served model passes `--lengths` or `--content` [ran: a search].
+- **Question, with the answer I take:** do you want the same rehearsal at #10051's head too, so its `filed.jsonl` shows? I take no, until #10051's own run ends.
+
+I send its end in one line when it ends.
+
