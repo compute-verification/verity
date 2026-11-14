@@ -8,10 +8,10 @@ proved: Flock's composer needs a row past 111 bytes in every template, which tak
 (`TokenFeed_v1`) and a vocabulary of at least 448 (the token select). H1's window Program is a stand-in digest, since the tie
 reads only its digest, its open root and its tables' names.
 
-* **W**, H1's window registration (`pouw_h1_commit.registration`): each round's A table of K and input-ids table, made H1's
+* **W**, H1's window docket (`pouw_h1_commit.registration`): each round's A table of K and input-ids table, made H1's
   way from the served values (`chunk_words` of each call's int8 codes and scale over M slots, call after call; `ids_words`
   of the step's input ids), committed under H1's run key at H1's nonces and domains (round 0's ids bound to the session).
-* **R**, the audited window's registration, as `prove_path.py window-commit --window-registration W --h1-key` makes it:
+* **R**, the audited window's docket, as `prove_path.py window-commit --window-registration W --h1-key` makes it:
   the window circuit with H1's tables (`window_circuit.lower` with `Tables`), its units filled from the same values
   (`window_rows.Rows`), its tables W's rebuilt from the rows its proof blocks make (`pouw_h1_commit.reuse`), recorded,
   committed and written through `interface.Window` as a v2 record chained right after W.
@@ -78,11 +78,11 @@ from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import records_audit as RA  # noqa: E402
 
 K, M, CALLS, ROUNDS = 2048, 32, 3, 2
 CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": K, "intermediate_size": 256,
@@ -171,7 +171,7 @@ class _Served(SV.Served):
 
 
 def _window(a_words: dict[int, np.ndarray], id_words: dict[int, np.ndarray]) -> SimpleNamespace:
-    """H1's window with these tables committed as `pouw_h1_served.Served` commits them, and its registration W."""
+    """H1's window with these tables committed as `pouw_h1_served.Served` commits them, and its docket W."""
     a = {s: NR.commit(H1, f"{SV.PREFIX}a/{K}@{s}", w, H1_KEY, SV.nonce(s * CALLS, "a"), keep_rows=True, window=OPEN)
          for s, w in a_words.items()}
     ids = {s: NR.commit(H1, f"{SV.PREFIX}ids@{s}", w, H1_KEY, SV.IDS_NONCE + s, keep_rows=True,
@@ -257,7 +257,7 @@ def test_each_table_row_a_proof_block_holds_is_w_s_row_there_and_each_served_row
 
 
 @pytest.mark.slow
-def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_drawn_and_off_its_definition(toy):
+def test_a_flipped_table_row_opens_against_no_reader_and_its_reader_is_always_sampled_and_off_its_definition(toy):
     """W' (round 1's o-projection row flipped in one bit) differs from W at that leaf alone, so the honest reader's row,
     committed under that leaf's salt, opens against no root W' registers, and `reuse` refuses W'. Its reader is the one
     proof block of its template (`Int8RowQuant_v5` at round 1 and the o-projection's R), a stratum of its own whose sample
@@ -516,7 +516,7 @@ def test_a_period_naming_w_is_refused_before_any_composite(toy, written, lean, t
 @RECORDS
 def test_one_stage_s_lean_accepts_a_flipped_w_s_record_only_on_its_own_log(toy, written, lean, tmp_path):
     """The R' written by hand after W' (the flipped row's) is accepted by one-stage's Lean on the log [W'], as R1-R7 accept
-    it: no record holds a row. On the log [W] its registration is refused."""
+    it: no record holds a row. On the log [W] its docket is refused."""
     SC, W2 = lean.one.SC, _flipped(toy.h1).W
     R2 = _by_hand(toy, written, W2)
     got, _ = SC.lean_answer(lean.exes.v1, _v1_case(lean.one, toy, written, W2, R2), tmp_path)

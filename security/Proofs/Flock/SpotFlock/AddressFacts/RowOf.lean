@@ -58,13 +58,13 @@ variable {h : Held}
 /-! ## The premises -/
 
 /-- **Where the second stage puts a checked inner block**: at an accepted run, the inner block's instance is one of
-its session's (`Counted`), the session's instances are labelled by their slots (`LabelledAt` at `drawSlot`), and the
+its session's (`Counted`), the session's instances are labelled by their slots (`LabelledAt` at `sampleSlot`), and the
 instance's place `v` in its template's part is inside the part, in the cell of the inner block's outer block (the
 block's place among the first stage's record's blocks, and the sample's block there the inner block's own), at the
 inner block's place in that cell. -/
 def Sits (h : Held) : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h →
-    r.Counted h ∧ LabelledAt (drawSlot (partOf h r) r.ins.read.draw) r.sts ∧
+    r.Counted h ∧ LabelledAt (sampleSlot (partOf h r) r.ins.read.draw) r.sts ∧
       unitOf r.ins.read.draw (r.n h) < (sampleOf h r).size * (partOf h r).n ∧
       unitOf r.ins.read.draw (r.n h) / (partOf h r).n = placeOf (iroots r.x r.seen r.ρ) ∧
       (sampleOf h r)[unitOf r.ins.read.draw (r.n h) / (partOf h r).n]? = some (cellBlock h r.u) ∧
@@ -360,7 +360,7 @@ theorem blocks_of_ok (hr : r.Ok h) {st : Roots} {rec draw : Json} (hR : r.Reads 
   exact blocksOf_of_interiorOrderOk hord
 
 /-- **The header's position for the checked inner block's instance is the registered read's at the instance's
-slot** (`positionFact` at `drawSlot`), where the second stage puts the inner block there (`Sits`). -/
+slot** (`positionFact` at `sampleSlot`), where the second stage puts the inner block there (`Sits`). -/
 theorem readAt_of_ok (hS : Sits h) (hr : r.Ok h) {own : Array _root_.Flock.Registered.Port}
     {reg : _root_.Flock.Registered.Port} (hown : r.ins.registered = some own) (hmem : reg ∈ own) {q : ℕ}
     (hfind : (List.range r.sts[0]!.c.ports.size).find? (fun p => r.sts[0]!.c.ports[p]!.name == reg.name) = some q)
@@ -372,7 +372,7 @@ theorem readAt_of_ok (hS : Sits h) (hr : r.Ok h) {own : Array _root_.Flock.Regis
   have hpos := sts_pos hr
   obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
   have hsc := sessionScoped h r.x r.m₁ (unitStmt h r.m₂ r.u) r.c₀ r.c₁ _ (stmtOkAt_unit h hx hok hu)
-  exact positionFact (drawSlot (partOf h r) r.ins.read.draw) hset hown hsc hck hpos hlab reg hmem q tb positions
+  exact positionFact (sampleSlot (partOf h r) r.ins.read.draw) hset hown hsc hck hpos hlab reg hmem q tb positions
     paths hfind htb hent (r.n h) hcnt
 
 /-- **The row at a needed gate at a port a link names**, a gate the wiring leaves alone. A registered read is named

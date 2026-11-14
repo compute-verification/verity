@@ -49,7 +49,7 @@ def _digest_words(d: bytes) -> list[int]:
 
 
 def _interior(stream: S.Stream, previous: str, first, flat: bool = False) -> tuple[dict, dict]:
-    """The interior registration of `first`'s replay sample, a v2 record registering ``hist``: as the verifier fills it
+    """The interior docket of `first`'s replay sample, a v2 record registering ``hist``: as the verifier fills it
     from `SUPPLIED` (`registered.supplied_value`), or, `flat`, committed as the flat form's rows, 32 u16 words a span."""
     program = stream.interior_program(len(first.units))
     bare, ports = _window_interior(program, previous, first)

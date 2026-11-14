@@ -31,7 +31,7 @@ the `Hello`'s proved:
   `Hello`'s nonce the relay drew, the model's `Hello` round passing and the session's entry on the setup (`SessOn`);
   the `Commit`'s roots `commitRead` reads off
   the slots, the level 0s it binds kept, the coin tree's streams the session's, the ZK server's own link at the
-  level 0s the loop drew for the session, each `Level0.ofDraws` on the host's and the operating system's bytes, and
+  level 0s the loop drew for the session, each `Level0.ofSamples` on the host's and the operating system's bytes, and
   the session's entry linked to the words of the coins the prover receives (`Frame.words`); a
   frame round as the loop ran it (`RoundRun`) on the worker's value at the model's history, the rep's frame
   at the model's configuration there, its rounds of the inner proof `InnerSrc`, its start `StartOk` and the loop's
@@ -225,7 +225,7 @@ slot leaves passed, `liveBefore`), and where the relay's setup is `spec` and `st
 `commitRead` reads off the loop's level-0 slots at the session's tables (the setup's, each with its statement's `m`),
 the session's tables' level 0 at its next request those `commitRead` left, the coin tree's streams the session's
 (`streamsOk`), and the ZK server's own message the link at the roots of the level 0s `ls` the loop drew for the session
-(`AfterDraw`), table `j`'s being `Level0.ofDraws` at its statement's `m` on what the host and the operating system
+(`AfterSample`), table `j`'s being `Level0.ofSamples` at its statement's `m` on what the host and the operating system
 handed the loop for rep stream `2j` (`LoopModel.src`, as `Session.level0` samples it), and where the auditor answered
 coins the session goes on past, the session's entry at its next request linked to the words of what the prover
 receives (`Frame.words` after its tag and count, as the loop links them); at a frame round a `RoundRun` from
@@ -251,9 +251,9 @@ def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
         ∀ name, _root_.Flock.ZkServer.Level0.ofSession σ'.L0 sid name =
           _root_.Flock.ZkServer.Level0.ofSession (commitRead σ.L0 sid (spec.tables.zip (sts.map (·.m))) f).2 sid name) ∧
       (∃ ct, _root_.Flock.ZkServer.Session.streamsOk spec sts ct = true) ∧
-      (∃ (ls : Array _root_.Flock.ZkServer.Level0.Level0) (publics : List ByteArray), AfterDraw sid ls σ.L0 ∧
+      (∃ (ls : Array _root_.Flock.ZkServer.Level0.Level0) (publics : List ByteArray), AfterSample sid ls σ.L0 ∧
         (∀ j (hj : j < ls.size), ∃ g d hi, M.src (2 * j) = .ok (g, d, hi) ∧
-          _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) ∧
+          _root_.Flock.ZkServer.Level0.ofSamples sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) ∧
         M.L.ownMsg M.x M.w M.ρ (M.hist σ.c) = 0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics ∧
         ls.size < 2 ^ 64 ∧ publics.length < 2 ^ 64 ∧ (∀ l ∈ ls, l.root.size < 2 ^ 64) ∧
         ∀ b ∈ publics, b.size < 2 ^ 64) ∧

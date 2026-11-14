@@ -30,7 +30,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import (
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
-from verity.commitments.windows import flock_inputs as FI, wiring as WI
+from verity.commitments.periods import flock_inputs as FI, wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import toy as T

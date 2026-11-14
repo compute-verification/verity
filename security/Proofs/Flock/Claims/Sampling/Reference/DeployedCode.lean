@@ -44,7 +44,7 @@ verifier (`Spot`) computes taken from it, and the rest `c`'s:
 * `checked`: the sample of record. `Spot.Slots.select` runs on the registration the statement names (`reg x`, a
   `Reg`: the selection rule, the verifier's own program, query and work table, and the challenger's closure map, as
   `Spot.Run.run` reads them) over `L x` bytes of the coins (`bytes`), and every slot of the layout is
-  checked where the sample is refused (`drawChecked`). Nothing is checked where the statement names no registration.
+  checked where the sample is refused (`sampleChecked`). Nothing is checked where the statement names no registration.
 * `sessions`, `session`, `rounds`: one proof session per registration proves every sampled proof block
   (`Stream.session`, where each covered registration's sample is its own tables of the session's statement). So every
   checked unit's session is the run's one session (`sess`) on its rounds (`sr`), and `sessions = 1`.
@@ -59,10 +59,10 @@ At this code:
 * `sessionSlots_code`: `SessionSlots` holds (`sessionSlots_of_one`).
 * `δc_code`: the record's completeness error is the largest `ZkTables.δc` over its one session's statements, with no
   union bound factor.
-* `drawSlots_code`: `DrawSlots` from `RegMatches` (the registration's program is the statement's descriptor, its layout
+* `sampleSlots_code`: `DrawSlots` from `RegMatches` (the registration's program is the statement's descriptor, its layout
   the statement's partition and its design the statement's design) and `BytesUniform` (the bytes are uniform when the
   coins are).
-* `drawFixed_code`: `DrawFixed` from `BytesFixed` (the session's rounds are second-stage, and the sample's bytes don't
+* `sampleFixed_code`: `SampleFixed` from `BytesFixed` (the session's rounds are second-stage, and the sample's bytes don't
   read them).
 * `framed_code_iff`, `acceptsFramed_code_iff`, `sessionsScope_code_iff`, `sessionWit_code_iff`, `sessionsIn_code_iff`:
   `Framed`, `AcceptsFramed`, `SessionsScope`, `SessionWit` and `SessionsIn` are exactly their one-session forms
@@ -150,7 +150,7 @@ def BytesUniform : Prop :=
 def BytesFixed : Prop :=
   ∀ x, sr x ⊆ c.stage2 x ∧ ∀ r d, bytes x (forkOn (sr x) r d) = bytes x r
 
-theorem drawSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes) :
+theorem sampleSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes) :
     DrawSlots (deploy rel (code c reg L bytes sr sess)) := by
   intro x s Pt hx hP
   obtain ⟨g, l, hg, hd, hl, hPt, hds⟩ := hreg x s Pt hx hP
@@ -160,7 +160,7 @@ theorem drawSlots_code (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes
   rw [hg]
   simp only [Option.map_some, Option.getD_some, Reg.checked, Reg.layout, hl]
 
-theorem drawFixed_code (h : BytesFixed c L bytes sr) : DrawFixed (deploy rel (code c reg L bytes sr sess)) := by
+theorem sampleFixed_code (h : BytesFixed c L bytes sr) : SampleFixed (deploy rel (code c reg L bytes sr sess)) := by
   intro x r u _
   refine ⟨(h x).1, fun d => ?_⟩
   show ((reg x).map fun g => g.checked (bytesOf (bytes x (forkOn (sr x) r d)))).getD [] =
@@ -339,15 +339,15 @@ theorem sessIn_checked (shape : Msg → List (Bool × ℕ))
     (fun x v xS vS hv => hin x v xS vS (shapeChecked_some sess shape hv).1) (shapesFixed_checked sess shape) hN
 
 set_option synthInstance.maxSize 1024 in
-/-- **Sampling completeness at the code**: `complete_deploy` with `SessionSlots` proved, `DrawSlots` and `DrawFixed`
+/-- **Sampling completeness at the code**: `complete_deploy` with `SessionSlots` proved, `DrawSlots` and `SampleFixed`
 from the sample's facts, and the other premises in their one-session form. -/
 theorem complete_code (H : Msg → Msg) (hF : Claims.Flock.Complete H (FlockDeploy.deployZk rel))
     (hfixed : BytesFixed c L bytes sr) (hreg : RegMatches c reg) (hunif : BytesUniform c L bytes)
     (hframe : FramedOne c reg L bytes sr sess H) (haccept : AcceptsOne c reg L bytes sr sess H)
     (hscope : SessScope c reg L bytes sr sess H) (hwit : SessWit rel c reg L bytes sr sess H) :
     Complete H (deploy rel (code c reg L bytes sr sess)) :=
-  complete_deploy rel _ H hF (drawFixed_code rel c reg L bytes sr sess hfixed)
-    (drawSlots_code rel c reg L bytes sr sess hreg hunif) ((framed_code_iff c reg L bytes sr sess H).2 hframe)
+  complete_deploy rel _ H hF (sampleFixed_code rel c reg L bytes sr sess hfixed)
+    (sampleSlots_code rel c reg L bytes sr sess hreg hunif) ((framed_code_iff c reg L bytes sr sess H).2 hframe)
     ((acceptsFramed_code_iff c reg L bytes sr sess H).2 haccept)
     ((sessionsScope_code_iff c reg L bytes sr sess H).2 hscope)
     ((sessionWit_code_iff rel c reg L bytes sr sess H).2 hwit) (sessionSlots_code c reg L bytes sr sess H)

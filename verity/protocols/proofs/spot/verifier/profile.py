@@ -105,7 +105,7 @@ class IntegrityProfile:
 
     `accept(m)` reads m at a member's footprint.  When the checked level is committed before the first sample (as
     serving commits every value, at serve time), m is the member's incorrect checked members.  Under a two-stage design
-    the checked level is committed after the sample it follows (the interior registration), so the prover picks a
+    the checked level is committed after the sample it follows (the interior docket), so the prover picks a
     sampled member's interior after seeing that sample; m is then its footprint, the fewest incorrect checked members
     of any interior consistent with its boundary commitment, which is fixed before any coin, and an interior with more
     only lowers `accept`.
@@ -425,7 +425,7 @@ def _key_lt(a: Stratum, ma: int, b: Stratum, mb: int) -> bool:
 class Stratified:
     """The verifier's sampling design as independent uniform samples inside disjoint strata of the partition's units (the
     `stratified` sampling design): the uniform k-subset is one stratum, and a template floor is a stratum with
-    k >= 1.  The strata are fixed by the agreement before registration, like every sampling design.
+    k >= 1.  The strata are fixed by the agreement before docket, like every sampling design.
 
     An incorrect set with m_s units in stratum s escapes the sample with prod_s C(n_s - m_s, k_s) / C(n_s, k_s), which
     depends only on the counts.  Its risk rho = -ln(escape) is convex in each m_s, the increment from m to m + 1 being

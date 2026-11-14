@@ -15,7 +15,7 @@ The import order is one listing, ``tests/import_order.toml``, and the checks at 
     by name;  ``infra/`` is the last row, which no file of another row loads, a test included, but the ties it lists.
 
 The listing's tables (``against`` and each place's lists) are generated from the tree by
-``tools/verity/check/import_order.py``, and the listing is byte for byte what it writes.
+``tools/check/import_order.py``, and the listing is byte for byte what it writes.
 
 Beside the order:
 
@@ -126,13 +126,6 @@ BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
-    # the served path: verity_vllm runs benchmarks' code
-    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store and its load "
-                                                       "(`benchmarks/pous/p2_v1`), through its `P2_V1`",
-    "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
-                                                                          "(`benchmarks/remote_session`, "
-                                                                          "its `REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/proofs/flock/prover/pod/gemm_hill.py", "verity/protocols/proofs/flock/prover/pod/read_gadget.py",
@@ -149,26 +142,28 @@ BENCHMARKS_IMPORTERS = {
     # tests and vector scripts that check against a benchmark's reference
     "verity/protocols/accounting/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
-    **dict.fromkeys(("verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py",
-                     "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py"),
-                    "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
-                    "responder (`benchmarks/pous/band_gpu/harness.py`)"),
+    "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py": "memory-accounting: the harness's control "
+                                                                      "responder (`benchmarks/pous/band_gpu/harness.py`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `verity/protocols/compose/device/live_challenger`)"),
     "adapters/vllm/tests/engine/ppl_oracle.py": "circuits (vllm): the int8 step's oracle (`benchmarks/ppl/steps.py`)",
+    "adapters/vllm/tests/engine/fattn_oracle.py": "circuits (vllm): the int8 attention's oracle "
+                                                  "(`verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn_ref.py`)",
+    "adapters/vllm/tests/engine/int8_kscale_gpu.py": "circuits (vllm): the K scales' calibration windows "
+                                                     "(`benchmarks/ppl/methodology.py`, `windows.py`)",
     # brought out of benchmarks/ by the layout move, each with a load of benchmarks/ by path
     "verity/protocols/compose/device/live_challenger/auditor.py":
         "proofs: the relay's load (`benchmarks/network_traces/load_relay.py`), "
         "loaded by path since before the move; goes when the session's code moves under `verity/`",
     "verity/protocols/accounting/poub/device/live_verifier/tests/stub_verifier.py":
-        "memory-accounting: the remote session (`benchmarks/remote_session`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+        "memory-accounting: the remote session's in-process harness "
+        "(`benchmarks/remote_session/tests/test_session.py`), loaded by path",
     "verity/protocols/accounting/poub/device/live_verifier/tests/test_host.py":
-        "memory-accounting: the remote session (`benchmarks/remote_session`), "
-        "loaded by path since before the move; goes when the session's code moves under `verity/`",
+        "memory-accounting: the remote session's store layout and line of record "
+        "(`benchmarks/remote_session/store_layout.py`, `auditor_line.py`), loaded by path",
 }
 #: circuit-check's own code, a developer tool of ``verity``: it imports ``verity`` and itself, and no other distribution of
 #: the workspace.  What a check needs of one, that distribution hands it in a sidecar it owns (`circuit_check.sidecars`).
@@ -803,7 +798,7 @@ def test_a_benchmarks_import_is_found() -> None:
                         "    def named(n):\n        return n\n"
                         "    return importlib.util.spec_from_file_location(named(name), directory / f'{name}.py')\n"),
         "x/caller.py": "from x import config, loader\nloader.load('paged', config.SESSION.parent / 'vllm_encoded')\n",
-        "x/clean.py": ("import sys\nsys.path.insert(0, 'tools/verity/check')\nimport suites\n"
+        "x/clean.py": ("import sys\nsys.path.insert(0, 'tools/check')\nimport suites\n"
                        "NOTE = 'the numbers come from benchmarks/ppl'\nimport verity_vllm\n"),
         "benchmarks/y/run.py": "import verity_bench\nimport sys\nsys.path.insert(0, '../benchmarks/z')\n",
     }
@@ -926,7 +921,7 @@ def test_core_never_reads_the_census() -> None:
 ORDER = ROOT / "tests" / "import_order.toml"
 #: The command that writes the listing's generated tables from the tree, and the line of the listing they start at: what
 #: is above it (the order, the distributions) is kept by hand, as are each place's ``paths`` and its ``trusted`` mark.
-REGENERATE = "`uv run tools/verity/check/import_order.py`"
+REGENERATE = "`uv run tools/check/import_order.py`"
 GENERATED = "# The ties against the order"
 #: The files the order reads as loaders: Python, Lean, and a Lake package's requirements.
 LOADERS = (".py", ".lean", "lakefile.toml")
@@ -1049,15 +1044,15 @@ def _source(path: str, listing: Listing) -> bool:
 
 @functools.cache
 def _tracked_tree() -> Any:
-    """``tools/verity/check/tracked_tree.py``, whose ``Tree`` resolves a Python import and a Lake package among the tracked
+    """``tools/check/tracked_tree.py``, whose ``Tree`` resolves a Python import and a Lake package among the tracked
     files.  Loaded on first use."""
-    return _load_tool("tracked_tree_of_the_order", ROOT / "tools/verity/check/tracked_tree.py")
+    return _load_tool("tracked_tree_of_the_order", ROOT / "tools/check/tracked_tree.py")
 
 
 def _path_roots(tree: Any, f: str, parsed: ast.AST, text: str) -> tuple[str, ...]:
     """Where a bare import of ``f`` resolves beyond its package's and its suite's roots: its own directory (a script's), and,
     when it changes ``sys.path``, each tracked directory a path anchored on ``__file__`` reaches in it
-    (``tools/verity/check/anchors.py``), whether or not that path is the one put there."""
+    (``tools/check/anchors.py``), whether or not that path is the one put there."""
     roots = {posixpath.dirname(f)}
     if "sys.path" in text and "__file__" in text:
         anchors = _tracked_tree().ANCHORS
@@ -1680,8 +1675,8 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     hold_distributions = functools.partial(_hold_distributions, neither=(check,))
     hold_distributions(tree.dirs, [x for x in loads if "package_above" not in x.loader], held)
     pair = ("verity/circuits", "verity/definitions")
-    with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/windows -> tools'\]"):
-        _hold_order(loads, held._replace(against=held.against | {("verity/commitments/windows", "tools"): {"verity/commitments/windows/rows.py"}}))
+    with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/periods -> tools'\]"):
+        _hold_order(loads, held._replace(against=held.against | {("verity/commitments/periods", "tools"): {"verity/commitments/periods/rows.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.toy loads"):
         _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):
@@ -1728,7 +1723,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     stub = ORDER.read_text(encoding="utf-8")
     stub = stub[:stub.index(GENERATED)] + GENERATED + "".join(
         f"\n[[place]]\npaths = {list(e['paths'])!r}\n".replace("'", '"') for e in split.values())
-    tool = _load_tool("import_order", ROOT / "tools/verity/check/import_order.py")
+    tool = _load_tool("import_order", ROOT / "tools/check/import_order.py")
     text, back = tool.tables(sys.modules[__name__], stub, loads, grow=True)
     assert not back and _generated(text, loads) == text and tool.tables(sys.modules[__name__], text, loads) == (text, [])
     bare, back = tool.tables(sys.modules[__name__], stub, loads)

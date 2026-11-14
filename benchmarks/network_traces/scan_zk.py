@@ -128,7 +128,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
   `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
 * **A sampled sample** (``--draw K``): Lean ``draw --stratified K`` on a development challenger's coins opened after
-  the round's registration (`a0.challenger_draw`: the verifier has none of its own), each template's stratum its share
+  the round's registration (`a0.challenger_sample`: the verifier has none of its own), each template's stratum its share
   and at least one unit; only the sampled proof blocks are proved and opened, and an accepted audit carries ε at δ
   (``wrong_units``: at most ``bound`` of ``of`` units wrong, except with probability δ), its charge terms
   (`charge_terms`) and each member's cost per sampled proof block (`per_unit`). The chain and tampered rounds sample
@@ -763,7 +763,7 @@ def v3c_entries(window: Path, rec: dict, win: dict, cls: IS.Class, entries: list
     """Each lane j's ``prog<j>``: chunk j's o0 of V3c's `SELECT_ENTRY` template, cut into one member a lane of nb
     proof blocks (``<descriptor id>/c<j>``, block b slot j·nb + b's entry, the window's slots lane-major), its rows and
     salts that member's prover body ``m<k>-private.bin`` (each instance's rows of its ports but the wired ones, then
-    their salts, `verity.commitments.windows.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
+    their salts, `verity.commitments.periods.rows.write`), under its o0 frame domain, held to the root its ``window.json`` and
     its registration's ``roots`` name and to the scan's lane j ``entries``."""
     nb, NE = len(entries[0]), IS.entry_bits(cls)
     ms = [m for m in win.get("members") or () if str(m.get("template", "")).startswith(SELECT_ENTRY + "{")]
@@ -1439,7 +1439,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
     instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
     warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
-    on a development challenger's coins, `a0.challenger_draw`; every unit when `k` is None) or, given the challenger's
+    on a development challenger's coins, `a0.challenger_sample`; every unit when `k` is None) or, given the challenger's
     ``coins``, by the round's `service.Stream` on them (`stream_of`; `a5_coins.RankCoins`, rank 0), each member's
     sampled proof blocks proved --zk behind the ZK server and held by Lean with the verifier's own registered reads;
     then each held unit's public ``o0`` (none of the slot entries', `ROWS_O0`) opened under the salt the prover sends. A
@@ -1497,7 +1497,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                 "opened": {}, "failed": {c: v.get("codes") for c, v in checks.items() if not v["ok"]}}
     stream = None
     if coins is None:
-        p = a0.challenger_draw(a.lean, ["--program", str(pg.program_file), "--partition", str(pg.partition_file),
+        p = a0.challenger_sample(a.lean, ["--program", str(pg.program_file), "--partition", str(pg.partition_file),
                                         "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
                                out / "draw.log")
         line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
@@ -1608,7 +1608,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                 os.link(f, vdir / f"{m['name']}-session-{f.parent.name}-{f.name}")
     got = [w for col in opened.values() for w in col if w is not None]
     window_ok = bool(result.get("accepted")) and len(got) == len(held & public) and all(w == 1 for w in got)
-    source = "a development challenger's (verity-verify-proof draw, a0.challenger_draw)" if stream is None else \
+    source = "a development challenger's (verity-verify-proof draw, a0.challenger_sample)" if stream is None else \
         f"the auditor's challenger's ({coins.challenger}: a5_coins, the round's service.Stream)"
     return {**res, "accepted": bool(result.get("accepted")), "window_accepted": window_ok, "opened": opened,
             "draw": {"law": rule, "coins": source, "units": lean_draw["units"], "of": rec["population"]},

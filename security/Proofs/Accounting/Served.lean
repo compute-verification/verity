@@ -11,7 +11,7 @@ public import Proofs.Accounting.Lemmas.Compose
 `Properties.Served.SampleMissesSubset` from two bounds that meet at `C(N − |B|, K)/C(N, K)`, `B` the tiles of `U` below
 `N`:
 
-* **the code** (`Properties.Spot.SecurityProofs.one_bound`): `drawUnits (.subset K) N` from `L` uniform bytes
+* **the code** (`Properties.Spot.SecurityProofs.one_bound`): `sampleUnits (.subset K) N` from `L` uniform bytes
   misses `B`'s numbers, and so `U`, with probability at most that ratio;
 * **the model** (`miss_ge`): a uniform permutation's `K`-subset misses `B` with probability at least that ratio (it is
   exactly it), by induction on `K` through `Equiv.Perm.decomposeFin`, as `Budget.miss_le` bounds it from above: the

@@ -1,5 +1,5 @@
 """A5's sample from the auditor's challenger (`a5.py --challenger`): one challenger session for the TP step, opened on its TP run root
-of record, from whose coins each rank's registration samples once (`spot.coins.ChallengerCoins` over a
+of record, from whose coins each rank's docket samples once (`spot.coins.ChallengerCoins` over a
 `remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
 * **The session.** ``local``: a development session on this machine, run by the auditor device's own service
@@ -22,15 +22,15 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
   raw bytes, and at the close the challenger releases its commitment and every coin's full opening, which the client
   checks (`remote.RemoteChallenger.close`) and settles each sample's segment to (`ChallengerCoins.settle`), and which must
   be the commitment the session's record signs once it has ended (`start`). The layout is `SCHEME` with one family a
-  rank (`family`), since a family's coins follow one registration (`coins.FAMILY_ROOT`), each sized from its sample
+  rank (`family`), since a family's coins follow one docket (`coins.FAMILY_ROOT`), each sized from its sample
   before anything opens (`families`: the rank's `need`, at least `COINS_PER_RANK` coins), and a family of its own
   (`WINDOW_FAMILY`) for the one coin after the window's root. The session opens once every rank has passed its checks before the sample and planned it
   (`Draws.plan`) and the layout covers every need (`reserve_reason`). Otherwise nothing opens and every rank's sample is
   refused, so a refusal before the sample never spends the root's one session.
 * **The samples** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
-  coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
+  coin after the window's root itself, before any docket (`pre`: the negatives' coin opened before the docket),
   then each rank's sample once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the
-  rank's family's coins commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
+  rank's family's coins commit to the docket's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
   on the one client until `drawn` returns its segment, which is settled once the session has closed (`Draws.released`).
   Once every rank has sampled or won't (`skip`), the client closes the
   session. `Replay` reads an honest sample's bytes again, for the negatives' streams.
@@ -44,7 +44,7 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
   (`service.Stream`'s ``key`` and ``main``), which hold the evidence to them.
 * **The verifier's own coins** (`a5.py --coins verifier`): no session. Each rank's `service.Stream` samples on `VerifierCoins`, the
   service's default coins (`verifier.coins`: the Lean verifier's `IO.getRandomBytes`, assumption A3), read by its
-  `select` once the stream has received the rank's registration and written its receipt. The stream's coin source is then
+  `select` once the stream has received the rank's docket and written its receipt. The stream's coin source is then
   the verifier, its samples carry no evidence, and the Lean's run takes none (`coin_source` verifier). No auditor's device
   samples them: they show the record path, not an auditor's coins. `verifier_negatives` are the refusals that apply to them.
 """
@@ -128,7 +128,7 @@ def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
 
 
 def family(rank: int, stage: str = "") -> str:
-    """Rank `rank`'s family of the session: its registration's alone, since a family's coins follow one registration
+    """Rank `rank`'s family of the session: its registration's alone, since a family's coins follow one docket
     (`coins.FAMILY_ROOT`), and the one its verifier holds its sample's evidence to. A `stage` tag (`SECOND`) names a
     stage's families apart from another stage's."""
     return f"{FAMILY}/{stage}/{rank}" if stage else f"{FAMILY}/{rank}"
@@ -262,7 +262,7 @@ class Draws:
         self._closed.set()
 
     def commit(self, rank: int, after: str) -> None:
-        """Rank `rank`'s turn, once: its own family's coins (`family`) after its registration's digest `after` (hex),
+        """Rank `rank`'s turn, once: its own family's coins (`family`) after its docket's digest `after` (hex),
         which its reads take until its `drawn`."""
         if self._refused is not None:
             raise Ch.CoinError(self._refused)
@@ -549,8 +549,8 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
                        window: str) -> dict[str, dict]:
     """The refusals that apply to a sample `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
     final. `stream_of(coins)` is a fresh stream of the same Spec on `coins`, `register(stream)` receives the honest
-    registration on it, and `outcome(stream, draw, coins)` delivers the honest sessions and decides (the outcome, its
-    audit record); `window` is the registration's window root.
+    docket on it, and `outcome(stream, draw, coins)` delivers the honest sessions and decides (the outcome, its
+    audit record); `window` is the docket's window root.
 
     * ``verifier-coins-claimed-as-challenger``: the honest sample's bytes passed off as the auditor's challenger's coins
       (`Replay`) with no evidence: `coins.coins_reason` refuses under any key, and the Lean's run refuses at its select
@@ -558,9 +558,9 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
     * ``verifier-coins-with-evidence``: the honest sample's bytes as the verifier's own with evidence of the challenger's
       form attached: a sample from the verifier's own coins carries none, and the Lean's run refuses at its select
       (`coins`).
-    * ``verifier-coins-redraw``: a second select on the honest registration: the stream refuses it (`drawn`), and reads
+    * ``verifier-coins-redraw``: a second select on the honest docket: the stream refuses it (`drawn`), and reads
       no coin; nothing resamples.
-    * ``verifier-coins-before-the-registration``: a select on a registration the stream never received: refused
+    * ``verifier-coins-before-the-registration``: a select on a docket the stream never received: refused
       (`unknown`) before any coin is read, so the verifier's coins are read only after the stream's receipt.
 
     -> {name: {refused, ...}}, refused only where both the stream (or the Lean's run) and, for the evidence, Python
@@ -922,8 +922,8 @@ def evidence(published: dict, segment: dict) -> dict | None:
 def negatives(ev: dict, pre: dict, key: Ch.ChallengerKey, main: list[str]) -> dict[str, tuple[dict | None, dict[str, Any]]]:
     """`ev` altered as a prover would alter it, each with what its stream is made with (`held`'s ``key`` and ``main``,
     here `key` and `main` unless the negative is about them): a tampered opening, the coin opened before the
-    registration (`pre`'s, the window family's, its `after` rewritten to the registration's) added in front, a segment
-    that skips a coin released after the registration, no pins log, no evidence at all, the evidence naming the key
+    docket (`pre`'s, the window family's, its `after` rewritten to the docket's) added in front, a segment
+    that skips a coin released after the docket, no pins log, no evidence at all, the evidence naming the key
     itself, the form a verifier took before it held one, and the evidence carrying another copy of main's history
     than the verifier's, one with a commit more; then the honest evidence held to another key than the session's, and
     evidence and verifier both on a copy of main without any commit the pins log pins (the session's pin off main's

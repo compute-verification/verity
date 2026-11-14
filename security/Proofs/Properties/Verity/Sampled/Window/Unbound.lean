@@ -110,12 +110,12 @@ noncomputable def wrongAt (R : Reg) (Xv : Fin m.Cc.N → Bool) : Finset (Fin m.n
 
 /-- **The trace the member's session fixes at registration** at `τ`, played alone at `L`: `XplurZC` at the simulator's
 registration and continuation. -/
-noncomputable def Xr (L : Law m.n) (hL : m.OneClass L) (τ : Strategy (m.game L)) : Fin m.Cc.N → Bool :=
+noncomputable def Xr (L : SamplingDesign m.n) (hL : m.OneClass L) (τ : Strategy (m.game L)) : Fin m.Cc.N → Bool :=
   XplurZC execArith hs512 m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb (reg (m.sim L hL τ))
     (cont (m.sim L hL τ)) m.k m.Rw
 
 /-- **The member's incorrect proof blocks at `τ` are those at its registration and the trace fixed there.** -/
-theorem wrongSet_eq (L : Law m.n) (hL : m.OneClass L) (τ : Strategy (m.game L)) :
+theorem wrongSet_eq (L : SamplingDesign m.n) (hL : m.OneClass L) (τ : Strategy (m.game L)) :
     m.wrongSet L hL τ = m.wrongAt (reg (m.sim L hL τ)) (m.Xr L hL τ) :=
   rfl
 
@@ -214,7 +214,7 @@ variable (w : JointAuditV5) [Nonempty w.EndΩ]
 
 /-- **The trace member `k`'s session fixes at the joint registration** at `τ`, the one `memberWrong` reads. -/
 noncomputable def memberX (τ : Strategy w.game) (k : Fin w.ms.length) : Fin (w.ms.get k).Cc.N → Bool :=
-  (w.ms.get k).Xr (w.memberLaw τ k) (w.oneClass_memberLaw τ k) (w.memberStrat τ k)
+  (w.ms.get k).Xr (w.memberSamplingDesign τ k) (w.oneClass_memberSamplingDesign τ k) (w.memberStrat τ k)
 
 /-- **Member `k`'s incorrect proof blocks at `τ` are those at the joint registration and the trace fixed there.** -/
 theorem memberWrong_eq (τ : Strategy w.game) (k : Fin w.ms.length) :

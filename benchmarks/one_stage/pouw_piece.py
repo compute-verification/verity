@@ -8,7 +8,7 @@
 
 ``v1`` is PoUW's window check (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`), which neither product
 composes since remote's PoUW became its period: its params the verifier's `Params` (``--params``), its commitment the
-window's registration, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
+window's docket, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
 system's answer cites), its evidence the service's answer for it (``--answer``). ``period`` is onsite's and remote's
 (`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name, sessions}`` (the
 challenger key it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its

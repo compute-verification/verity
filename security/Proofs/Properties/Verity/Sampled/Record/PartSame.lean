@@ -371,26 +371,26 @@ theorem qword_same {a b : Json} (h : Same a b) (c : Circuit) (pub : Public) (pro
   unfold HmRow.qwordFinding
   simp only [asStr_same hq "name", asNat_same hq "version", qwordUnits_same h, qcallUnits_same h]
 
-theorem strata_same {a b : Json} (h : Same a b) (law : String) (program : ByteArray) :
-    HmRow.templateStrataWith With.std law a program = HmRow.templateStrataWith With.std law b program := by
+theorem strata_same {a b : Json} (h : Same a b) (samplingDesign : String) (program : ByteArray) :
+    HmRow.templateStrataWith With.std samplingDesign a program = HmRow.templateStrataWith With.std samplingDesign b program := by
   have hp := same_sub (same_sub h "query") "params"
   unfold HmRow.templateStrataWith
   simp only [chkObj_same h, tm_same hp, asStr_same h "program"]
 
 theorem strat_same {a b : Json} (h : Same a b) (program : ByteArray) (k : Nat) :
-    HmRow.stratifiedLaw a program k = HmRow.stratifiedLaw b program k := by
-  rw [← With.stratifiedLawWith_std a program k, ← With.stratifiedLawWith_std b program k]
-  unfold HmRow.stratifiedLawWith
+    HmRow.stratifiedSamplingDesign a program k = HmRow.stratifiedSamplingDesign b program k := by
+  rw [← With.stratifiedSamplingDesignWith_std a program k, ← With.stratifiedSamplingDesignWith_std b program k]
+  unfold HmRow.stratifiedSamplingDesignWith
   rw [strata_same h]
 
 theorem work_same {a b : Json} (h : Same a b) (program : ByteArray) (k : Nat) (table : Array (String × Nat × Nat)) :
-    HmRow.workLaw a program k table = HmRow.workLaw b program k table := by
-  rw [← With.workLawWith_std a program k table, ← With.workLawWith_std b program k table]
-  unfold HmRow.workLawWith
+    HmRow.workSamplingDesign a program k table = HmRow.workSamplingDesign b program k table := by
+  rw [← With.workSamplingDesignWith_std a program k table, ← With.workSamplingDesignWith_std b program k table]
+  unfold HmRow.workSamplingDesignWith
   rw [strata_same h]
 
-private theorem mk_congr {c c' : Circuit → V HmRow.PartitionFinding} {s s' : ByteArray → Nat → V (Draw.Law × Nat)}
-    {w w' : ByteArray → Nat → Array (String × Nat × Nat) → V (Draw.Law × Nat)} {t t' : Bool}
+private theorem mk_congr {c c' : Circuit → V HmRow.PartitionFinding} {s s' : ByteArray → Nat → V (Draw.SamplingDesign × Nat)}
+    {w w' : ByteArray → Nat → Array (String × Nat × Nat) → V (Draw.SamplingDesign × Nat)} {t t' : Bool}
     {d d' : Circuit → ByteArray → Array Nat → V String}
     {q q' : Circuit → Public → ByteArray → HmRow.PartitionFinding → V (Option HmRow.PartitionFinding)}
     (h1 : c = c') (h2 : s = s') (h3 : w = w') (h4 : t = t') (h5 : d = d') (h6 : q = q') :
@@ -403,8 +403,8 @@ theorem view_same {a b : Json} (h : Same a b) : view a = view b := by
   have hq := same_sub h "query"
   have e1 : (fun c => HmRow.checkPartition c (some a)) = fun c => HmRow.checkPartition c (some b) :=
     funext fun c => chkPart_same h c
-  have e2 : HmRow.stratifiedLaw a = HmRow.stratifiedLaw b := funext fun p => funext fun k => strat_same h p k
-  have e3 : HmRow.workLaw a = HmRow.workLaw b :=
+  have e2 : HmRow.stratifiedSamplingDesign a = HmRow.stratifiedSamplingDesign b := funext fun p => funext fun k => strat_same h p k
+  have e3 : HmRow.workSamplingDesign a = HmRow.workSamplingDesign b :=
     funext fun p => funext fun k => funext fun t => work_same h p k t
   have e4 : (TemplateQuery.templatesOf (((sub a "query").getObjValAs? String "name").toOption.getD "")
         (((sub a "query").getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome =
