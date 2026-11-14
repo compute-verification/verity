@@ -45,6 +45,8 @@ public import Spot.ChallengerCoins
 public import Spot.ChallengerDraw
 public import Spot.ChallengerTrees
 public import Spot.ChallengerInnerTrees
+public import Spot.MonitoringPeriod
+public import Spot.MonitoringPeriodAudit
 public import Spot.Wires
 public import Spot.HistoryTable
 public import Spot.WiresSpan

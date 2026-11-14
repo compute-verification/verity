@@ -1,4 +1,8 @@
-/-
+module
+
+public import Flock.PortRoots
+
+/-!
 The forms `verify --zk` refuses so that the sampled audit's knowledge soundness (`Flock.Guarantees.SampledKSLiveV3`)
 takes none of `Flock.Bridge.SampledKSLiveRoots`' file preconditions as a hypothesis: no form goes ahead of its proof.
 Under `--zk` every session of a statement outside them is refused, beside `ProvedScope.check` and `PortRoots.check`:
@@ -32,9 +36,6 @@ flat circuit `HmOut.unrolled` gives, is then in `scopeOkH`. `checkOf_ok` says wh
 statement's files alone, so a statement no session samples can be held to it. `checkOf` passes exactly where `filesOf`
 does and the sample passes `drawWhy` (`checkOf_iff`), and `filesOf_ok` says what passing establishes of the files.
 -/
-module
-
-public import Flock.PortRoots
 
 @[expose] public section
 

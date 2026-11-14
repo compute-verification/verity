@@ -6,10 +6,10 @@ j's ``j.<field>``. A slot's Program reads its ``occ`` (a 0/1 word: 1 when the sl
 at b), its prompt's length ``fields``, its ``max_tokens`` and its ``ids`` (prompt position p at `io_shell.position`'s
 index), through `boolean_io_shell.ScanSlots_v2` (`bridge`), which also gives each lane its first position's token and the
 slot it carries on. The window's registered `SCAN_STATE` is the rows
-`ingress_scan.window_state` gives for its link-window: for the window of ``buckets`` buckets from scan bucket t0, the
+`ingress_scan.window_state` gives for its window: for the window of ``buckets`` buckets from scan bucket t0, the
 scan's rows t0 − 1 … t0 + buckets − 2, its row a S_{t0 + a − 1}, the one the Programs anchored at the window's bucket a
-read, and window 0's row 0 the empty state's, a constant rather than a scan unit's. The scan's prompt cap ``KI`` changes
-no field: a slot's ``ids`` are its C cells' whatever the cap. `scan_state` gives a window those rows off the scan of the
+read, and window 0's row 0 the empty state's, a constant rather than a scan unit's. The scan's prompt bound ``KI`` changes
+no field: a slot's ``ids`` are its C cells' whatever the bound. `scan_state` gives a window those rows off the scan of the
 network certifier's ingress rows, with the request each slot's Program starts.
 """
 from __future__ import annotations

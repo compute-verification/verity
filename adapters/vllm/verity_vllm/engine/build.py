@@ -10,7 +10,6 @@ from the engine's `vllm_config` and checked against the declaration.
 from __future__ import annotations
 
 import json
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,8 +17,15 @@ from typing import Any
 
 import torch
 
-from verity_vllm.engine import env as engine_env, handle, served
+from verity_vllm import settings
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import handle, served
+from verity_vllm.log import init_logger
 
+__all__ = ["Engine", "build_engine", "flash_attn_versions", "register_int8_parts", "resolved_async_scheduling",
+           "target_mismatches"]
+
+logger = init_logger(__name__)
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); `build_engine(case="B1")` serves Qwen2.5-1.5B
 
@@ -73,20 +79,20 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
     except Exception as e:  # noqa: BLE001
         doc["compilation_error"] = repr(e)[:200]
     try:
-        vc = llm.llm_engine.vllm_config
+        vc = handle.engine_of(llm).vllm_config
         cc, sc, mc = vc.cache_config, vc.scheduler_config, vc.model_config
         doc["enable_prefix_caching"] = bool(getattr(cc, "enable_prefix_caching", None)) if getattr(cc, "enable_prefix_caching", None) is not None else None
         doc["enable_chunked_prefill"] = bool(getattr(sc, "enable_chunked_prefill", None)) if getattr(sc, "enable_chunked_prefill", None) is not None else None
-        doc["max_num_batched_tokens"] = int(getattr(sc, "max_num_batched_tokens")) if getattr(sc, "max_num_batched_tokens", None) is not None else None
-        doc["long_prefill_token_threshold"] = (int(getattr(sc, "long_prefill_token_threshold"))
+        doc["max_num_batched_tokens"] = int(sc.max_num_batched_tokens) if getattr(sc, "max_num_batched_tokens", None) is not None else None
+        doc["long_prefill_token_threshold"] = (int(sc.long_prefill_token_threshold)
                                                if getattr(sc, "long_prefill_token_threshold", None) is not None else None)
         tp = getattr(getattr(vc, "parallel_config", None), "tensor_parallel_size", None)
         doc["tensor_parallel_size"] = int(tp) if tp is not None else None
-        doc["max_num_seqs"] = int(getattr(sc, "max_num_seqs")) if getattr(sc, "max_num_seqs", None) is not None else None
-        doc["max_model_len"] = int(getattr(mc, "max_model_len")) if getattr(mc, "max_model_len", None) is not None else None
+        doc["max_num_seqs"] = int(sc.max_num_seqs) if getattr(sc, "max_num_seqs", None) is not None else None
+        doc["max_model_len"] = int(mc.max_model_len) if getattr(mc, "max_model_len", None) is not None else None
         doc["dtype"] = str(getattr(mc, "dtype", None))
-        doc["block_size"] = int(getattr(cc, "block_size")) if getattr(cc, "block_size", None) is not None else None
-        doc["gpu_memory_utilization"] = float(getattr(cc, "gpu_memory_utilization")) if getattr(cc, "gpu_memory_utilization", None) is not None else None
+        doc["block_size"] = int(cc.block_size) if getattr(cc, "block_size", None) is not None else None
+        doc["gpu_memory_utilization"] = float(cc.gpu_memory_utilization) if getattr(cc, "gpu_memory_utilization", None) is not None else None
         doc["async_scheduling"] = resolved_async_scheduling(llm)      # resolved, not the CLI default
         import vllm.envs as envs
         doc["batch_invariant"] = bool(envs.VLLM_BATCH_INVARIANT)
@@ -188,7 +194,8 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     kw["max_num_seqs"] = int(max_num_seqs)
     if target is not None:
         kw.update(target.engine_args())
-    kc = dict(kw.get("kernel_config") or {})
+    held = kw.get("kernel_config")
+    kc = dict(held) if held else {}
     kc.setdefault("enable_flashinfer_autotune", False)
     kw["kernel_config"] = kc
     kw.update(engine_args or {})
@@ -251,12 +258,12 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
         from verity_vllm.engine import rope_cache
         eng.rope_cache = rope_cache.install(model)
         if eng.rope_cache is not None:
-            print(f"[engine] {rope_cache.ENV}: {json.dumps(eng.rope_cache)}", flush=True)
+            logger.info("%s: %s", rope_cache.ENV, json.dumps(eng.rope_cache))
     if model is not None:  # as the fused rope: the producers are patched on the in-process model's layers
         from verity_vllm.engine import int8_producers
         eng.fused_producers = int8_producers.install(model)
         if eng.fused_producers is not None:
-            print(f"[engine] {int8_producers.ENV}: {json.dumps(eng.fused_producers)}", flush=True)
+            logger.info("%s: %s", int8_producers.ENV, json.dumps(eng.fused_producers))
     return eng
 
 
@@ -266,7 +273,8 @@ def vllm_has_flashinfer() -> bool | None:
     try:
         from vllm.utils.flashinfer import has_flashinfer
         return bool(has_flashinfer())
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.debug("vLLM's has_flashinfer gave no verdict: %r", e)
         return None
 
 
@@ -277,7 +285,7 @@ def flash_attn_versions(model: Any) -> set:
     for _, mod in model.named_modules():
         impl = getattr(mod, "impl", None)
         if impl is not None and hasattr(impl, "vllm_flash_attn_version"):
-            vs.add(getattr(impl, "vllm_flash_attn_version"))
+            vs.add(impl.vllm_flash_attn_version)
     return vs
 
 
@@ -353,7 +361,7 @@ def resolved_async_scheduling(llm: Any) -> bool | None:
     value the harness passed -- usually nothing -- says nothing about execution.  Read back from `llm.llm_engine.vllm_config.scheduler_config`
     after the build; None means the engine did not expose a resolved bool (unattested), never "off"."""
     try:
-        v = llm.llm_engine.vllm_config.scheduler_config.async_scheduling
+        v = handle.engine_of(llm).vllm_config.scheduler_config.async_scheduling
     except AttributeError:
         return None
     return None if v is None else bool(v)
@@ -367,7 +375,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
     from verity_vllm.engine import engine_profile as prof
     out: dict[str, Any] = {}
     try:
-        vc = llm.llm_engine.vllm_config
+        vc = handle.engine_of(llm).vllm_config
         cc = vc.compilation_config
         mode = getattr(cc, "mode", getattr(cc, "level", None))
         out["mode"] = getattr(mode, "name", None) or str(mode)
@@ -381,7 +389,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
         out["backend"] = str(getattr(cc, "backend", None) or ("inductor" if out["mode_value"] == 3 else None))
         out["enforce_eager"] = bool(vc.model_config.enforce_eager)
         out["breakable_cudagraph"] = prof.breakable_cudagraph()
-        out["compile_cache"] = "disabled" if os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
+        out["compile_cache"] = "disabled" if settings.raw("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
         # the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
         # perform the bf16 roundings the Program specifies at every module/op boundary (Inductor otherwise carries fp32 through fused
         # regions) -- the fact that decides whether a materialised boundary value can change the computation

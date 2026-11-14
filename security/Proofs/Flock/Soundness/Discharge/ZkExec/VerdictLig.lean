@@ -55,6 +55,8 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
+variable {wideLeaf : Bool}
+
 /-- **A `--zk` rep's Ligerito verdict accepts** (live PROTOCOL.md §7, `Flock.Ligerito`). Under `ZkRepAccepts`'s
 hypotheses, every result of the compiled rep, played with the rep's messages and the rounds' coins, has a Ligerito
 verdict that accepts the openings whose rep-`r` rows are the proof's. -/
@@ -63,7 +65,7 @@ def ZkLigAccepts : Prop :=
     (sch : Flock.Schedule) (tPad : ℕ) (extras : Array Flock.Claim) (bytes : ByteArray) (zp : Zk.ZkProof)
     (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript) (cap₀ : Cap Dig)
     (os : ZkLink.OpensZ 𝔽 Dig (List UInt8)),
-    Zk.schedule st.m = .ok (sch, tPad) → st.merkle = MerkleScheme.hm96Sha512 → ZkTabSeam T st sch tPad →
+    Zk.schedule st.wideLeaf st.m = .ok (sch, tPad) → st.merkle = MerkleScheme.hm96Sha512 → ZkTabSeam T st sch tPad →
     ZkTabLay T st sch → FoldRealizes st.fold T.S →
     extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length →
     (∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
@@ -80,20 +82,20 @@ def ZkLigAccepts : Prop :=
 
 /-- The `--zk` schedule's level 0 has rate 1 and room for the pads: `t_pad ≤ 2^cols₀`. The kernel checks every `m < 40`;
 `zk_schedule_seams` bounds `m` by 35. -/
-theorem zk_schedule_pad (m : ℕ) (sch : Flock.Schedule) (tPad : ℕ) (h : Zk.schedule m = .ok (sch, tPad)) :
+theorem zk_schedule_pad (m : ℕ) (sch : Flock.Schedule) (tPad : ℕ) (h : Zk.schedule wideLeaf m = .ok (sch, tPad)) :
     (sch.levels.getD 0 default).rate = 1 ∧ tPad ≤ 2 ^ (sch.levels.getD 0 default).cols := by
-  obtain ⟨-, h35, -⟩ := zk_schedule_seams _ _ _ h
-  have key : ∀ m : Fin 40, ∀ x ∈ (Zk.schedule m.val).toOption,
+  obtain ⟨-, h35, -⟩ := zk_schedule_seams _ _ _ _ h
+  have key : ∀ (w : Bool) (m : Fin 40), ∀ x ∈ (Zk.schedule w m.val).toOption,
       decide ((x.1.levels.getD 0 default).rate = 1 ∧ x.2 ≤ 2 ^ (x.1.levels.getD 0 default).cols) = true := by
     decide +kernel
-  exact of_decide_eq_true (key ⟨m, by omega⟩ (sch, tPad) (by rw [h]; rfl))
+  exact of_decide_eq_true (key wideLeaf ⟨m, by omega⟩ (sch, tPad) (by rw [h]; rfl))
 
 /-- **`repProg`'s run accepts the proof's rows** (`zk_rep_plays` with its Ligerito verdict): the run of the compiled rep
 that `zk_rep_plays` builds has a Ligerito verdict that accepts openings whose rep-`r` rows are the proof's. -/
 theorem zk_rep_lig {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T : ZkSession.TabZK 𝔽 mPts)
     (pts : Fin 2 → Fin mPts → 𝔽) (r : Fin 2) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ)
     (extras : Array Flock.Claim) (zp : Zk.ZkProof) (rounds : Array Round) (dom : ByteArray) (tr : Flock.Transcript)
-    (o : Opens 𝔽 Dig) (hsch : Zk.schedule st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
+    (o : Opens 𝔽 Dig) (hsch : Zk.schedule st.wideLeaf st.m = .ok (sch, tPad)) (hseam : ZkTabSeam T st sch tPad)
     (hlay : ZkTabLay T st sch)
     (hlen : extras.size = (Model.extraClaims T.S T.ptLocal mPts pts).length)
     (hext : ∀ (j : ℕ) (hj : j < (Model.extraClaims T.S T.ptLocal mPts pts).length),
@@ -105,7 +107,7 @@ theorem zk_rep_lig {mPts : ℕ} {Sl : Type} (Hs : ZkLink.Hashes 𝔽 Dig Sl) (T 
       Plays fOf (ZkLink.repZCAt execArith Hs T pts r) (repMsgsZ st sch (2 + extras.size) tPad zp)
         (rounds.toList.map (·.coins)) pend ∧
       pend.lig.verdict o = true := by
-  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ hsch
+  obtain ⟨h25, -, hsm, hk0, -, hdim, hlv, hα1, -⟩ := zk_schedule_seams _ _ _ _ hsch
   obtain ⟨hrate, hpad⟩ := zk_schedule_pad _ _ _ hsch
   have hTm : T.S.m = st.m := hseam.hm
   have h7 : 7 ≤ T.S.m := by omega

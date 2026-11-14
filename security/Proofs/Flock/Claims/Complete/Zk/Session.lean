@@ -114,7 +114,7 @@ link, the rep streams; the record and the proof files (`spec.repStreams` order).
 mask slot's `words`, and its rep 1's covers rep 0's points too (read from rep 0's rounds, the stream before it). -/
 def sessionPZk (io : Asks M) (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (words : Array (List Nat))
     (trs : Array Trace) (tape : TapeZk) : M (String × Array ByteArray) := do
-  let schs ← tabs.mapM fun st => (monadLift (Zk.schedule st.m) : M (Schedule × Nat))
+  let schs ← tabs.mapM fun st => (monadLift (Zk.schedule st.wideLeaf st.m) : M (Schedule × Nat))
   let tbls := (Array.range tabs.size).map fun i => packed trs[i]! tabs[i]!.m
   let cms ← (Array.range tabs.size).mapM fun i =>
     commitPZk hs tabs[i]!.merkle (schs[i]!.1.levels.getD 0 default) schs[i]!.2 tbls[i]! (tape.extra i)

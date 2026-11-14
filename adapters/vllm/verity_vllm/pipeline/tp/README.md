@@ -17,7 +17,7 @@ and `request_program_dirs` of `rank_replay` (`program.predict`); and `load` of `
 `rank_worker`, the path the engine loads each rank's extension by; `engine` and `warmups` of `phases`; `apply`,
 `as_json` and `require_ranks` of `target`; `cpu_delta` and `thread_cpu` of `trace`; `run` of `warmup`; `load` and
 `manifest_of_rank` of `rank_replay`; and `BINDING`, `ROWS_SCHEME`, `record`, `source` and `window_of_record` of
-`serving_rows`. Each of these modules declares its names in `__all__`, except `serving_rows`, which declares none yet.
+`serving_rows`. Each of these modules declares its names in `__all__`.
 Two reads go around the declared names: a driver calls the extension's methods by name over the engine's
 `collective_rpc`, as `benchmarks/served_commit/tp_decode.py` does for `tp2_commit_install`, and
 `benchmarks/one_stage/a10.py` reads `commit_replay`'s private `_of_record`. The package's other modules are read only

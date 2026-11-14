@@ -1,7 +1,8 @@
-/- The `flock-witness` executable: `Flock.Witness.cmd`. -/
 module
 
 public import Flock.Witness
+
+/-! The `flock-witness` executable: `Flock.Witness.cmd`. -/
 
 @[expose] public section
 
