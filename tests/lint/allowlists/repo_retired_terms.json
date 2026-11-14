@@ -2227,7 +2227,7 @@
     {"file": "tools/verity/cli/tests/lifecycle/onsite.py", "count": 6},
     {"file": "tools/verity/cli/tests/lifecycle/remote.py", "count": 4},
     {"file": "tools/verity/cli/tests/lifecycle/test_lifecycle.py", "count": 12},
-    {"file": "tools/verity/cli/verity_cli/served_table.py", "count": 41},
+    {"file": "tools/verity/cli/verity_cli/served_table.py", "count": 40},
     {"file": "adapters/vllm/tools/served_run/README.md", "count": 6},
     {"file": "adapters/vllm/tools/served_run/placement.toml", "count": 2},
     {"file": "adapters/vllm/tools/served_run/run.sh", "count": 1},
