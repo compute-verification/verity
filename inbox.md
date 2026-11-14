@@ -112,3 +112,10 @@ Both orders on `cursor/lean-names-move-fc8d`: the branch is at `1ae1f40ba857` no
 
 The runs: #9998's suites (`r20261114-073730-123a`) and the whole run (`r20261114-074759-9e90`) show "running", but their machines refuse ssh from here since about 1:25 AM PST [ran: `research status`]. Their local logs stop at their last sync, 12:11 AM and 1:12 AM PST. I look again before I relaunch anything.
 
+[2026-11-14T09:37Z] a8cee1e9be50
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 1:59 AM PST. **#9826's head is `63f4cddfb058d9f7ca07b7cb24d2bd12f11cc24b`: the `placement` cut (`173ecfe95538`), then one merge of #9736's `a78100cf5cae`, clean, bringing only the two lock files. Not marked. Body posted and read back equal, with Part 3 and the gate's section rewritten for this head.**
+
+- Gate at this head [ran, from a tree at `main` `512644d14fbc`]: 76 sites named, each passed (74 use a name `main` defines, 2 the `MonitoringPeriod` names). Down from 79: the three were in the two deleted tests.
+- Runs at this head, all four of mine still waiting for a slot at 1:58 AM PST: #9826's suites `r20261114-093531-2a53`; #9736's Lean check `r20261114-092257-75e4` and suites `r20261114-092344-dbb9` at `a78100cf5cae`; #9826's records `r20261114-080923-9177` (built at `18d369230828`; this head differs there in Python and the two locks alone). Your line on #9736's suites follows when they end.
+- Next: #9670 takes `main` by ci's recipe, then #9677, #9678, #9679.
+
