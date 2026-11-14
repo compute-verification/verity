@@ -91,7 +91,7 @@ private theorem form_members_spec (j : Json) :
 private theorem form_values_spec (j : Json) (w : String) :
     ⦃⌜True⌝⦄ VStar.Recursive.SampledTwo.valuesOf j w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
 
-open private exactly from Spot.OneStageZk
+open Spot.OneStageZk (exactly)
 
 private theorem members_exactly_spec (j : Json) (ks : Array String) (w : String) :
     ⦃⌜True⌝⦄ exactly j ks w ⦃⇓? _ => ⌜True⌝⦄ := except_spec _
