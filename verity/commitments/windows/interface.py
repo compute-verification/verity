@@ -86,6 +86,17 @@ Definition's fields, and the coverage of each, are round 1's to check, from the 
 declares them only where the circuit has some, so a record without them keeps its bytes, and only a stated record
 declares them.
 
+A circuit joined from the ranks of a node (one record, one digest, while serving commits one window a rank) states its
+ranks (`Ranks`, the record's ``ranks``): in rank order, each rank's window by its circuit's digest (`circuit_of`'s canonical
+JSON's SHA-512), its units of each template and the count of the circuit's wires that are its own. Rank ``r``'s units of a
+template follow rank ``r - 1``'s, its own wires follow the earlier ranks' in ``wires`` and the wires after all the ranks'
+are the join's, each from another rank than its reader's, and each registered name is a rank's, ``r<rank>/`` before the
+rank's own name. So the rank window that committed a unit, and its place there, follow from the record by rule, and
+round 2 reads each rank's member cut from that rank's registration, never from this record. A circuit that states its
+ranks, or names any free rows (`Free`, the record's ``free``), names every input row no declaration fills, with its kind:
+each input row is then filled by exactly one declaration or named free (`check_inputs`), and round 1 refuses a record
+that names any. Both are declared only where the circuit has some, so a record without them keeps its bytes.
+
 The circuit's blocks (`Blocks`, ``verity/blocks/v1``, the record's ``blocks``) are stated per template and step, never per
 unit: ``proof``, the partition into proof blocks (its units and partition digest, which the verifier holds to the record's,
 and the planner's ``plan`` digest, carried and never read); ``inference``, the slot and step of every unit (`InferenceEntry`:
@@ -110,6 +121,7 @@ import math
 import pkgutil
 import re
 import subprocess
+from collections import Counter
 from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -851,6 +863,159 @@ class Ingress:
         return {"reader": self.reader, "port": self.port, "at": self.at, "units": self.units, "step": self.step}
 
 
+#: what a free row is: a peer rank's partial no wire fills, weights or a table no registered read or table read reads, or a
+#: value the served hardware decides that no block computes (advice)
+FREE_KINDS = ("peer", "weights", "table", "advice")
+
+
+@dataclass(frozen=True)
+class Free:
+    """Template ``reader``'s units ``[at, at + units)`` read rows ``[c0, c0 + C)`` of their ``port`` (``cut``, its every row
+    by default) that no declaration fills, named by their ``kind`` (`FREE_KINDS`)."""
+    reader: str
+    port: str
+    at: int
+    units: int
+    kind: str
+    cut: tuple[int, int] | None = None
+
+    def doc(self) -> dict[str, Any]:
+        return {"reader": self.reader, "port": self.port, "at": self.at, "units": self.units, "kind": self.kind,
+                **({"cut": list(self.cut)} if self.cut is not None else {})}
+
+    @classmethod
+    def of(cls, d: Any) -> Free:
+        keys = {"reader", "port", "at", "units", "kind"}
+        if (not isinstance(d, Mapping) or not keys <= set(d) <= {*keys, "cut"}
+                or not all(isinstance(d[k], str) for k in ("reader", "port", "kind")) or not _ints(d["at"], d["units"])
+                or ("cut" in d and not (isinstance(d["cut"], list) and len(d["cut"]) == 2 and _ints(*d["cut"])))):
+            raise ValueError(f"free rows are {{reader, port, at, units, kind}} and optionally their cut [c0, C], not {d!r}")
+        return cls(d["reader"], d["port"], d["at"], d["units"], d["kind"], tuple(d["cut"]) if "cut" in d else None)
+
+
+def free_of(doc: Mapping[str, Any]) -> tuple[Free, ...]:
+    """A stated record's named free rows (`Circuit.free`), none where it names none, refused (ValueError) unless a list of at
+    least one, so a circuit without them has one record."""
+    if "free" not in doc:
+        return ()
+    got = doc["free"]
+    if not isinstance(got, list) or not got:
+        raise ValueError(f"a circuit's free rows are a list of at least one, named only when it has some, not {got!r}")
+    return tuple(Free.of(x) for x in got)
+
+
+#: how a rank's registered names are its own: ``r<rank>/`` before the name the rank's window registers
+RANK_PREFIX = "r<rank>/"
+_RANK_NAME = re.compile(r"r(0|[1-9][0-9]*)/.")
+_HEX512 = re.compile(r"[0-9a-f]{128}")
+
+
+@dataclass(frozen=True)
+class Rank:
+    """One rank of a joined circuit: its window's circuit digest (``window``, the SHA-512 of `circuit_of` of its record in
+    canonical JSON), its units of each template (``units``) and the count of the joined wires that are its own (``wires``)."""
+    window: str
+    units: Mapping[str, int]
+    wires: int
+
+    def doc(self) -> dict[str, Any]:
+        return {"units": dict(sorted(self.units.items())), "window": self.window, "wires": self.wires}
+
+
+@dataclass(frozen=True)
+class Ranks:
+    """A joined circuit's ranks in rank order (``of``), its registered names each ``r<rank>/`` before the rank's own
+    (``prefix``, `RANK_PREFIX`). Refused (ValueError, ``ranks-shape``) unless at least one rank, each a digest of 128
+    lowercase hex digits, a natural count of units by template and of wires."""
+    of: tuple[Rank, ...]
+    prefix: str = RANK_PREFIX
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "of", tuple(self.of))
+        for r in self.of:
+            if (not isinstance(r, Rank) or not isinstance(r.window, str) or not _HEX512.fullmatch(r.window)
+                    or not isinstance(r.units, Mapping) or not all(isinstance(t, str) for t in r.units)
+                    or not _ints(r.wires, *r.units.values()) or r.wires < 0 or min(r.units.values(), default=0) < 0):
+                raise ValueError(f"ranks-shape: a rank is {{window: 128 lowercase hex digits, units: {{template: n}}, wires: n}}"
+                                 f", each n a natural, not {r!r}")
+            object.__setattr__(r, "units", {str(t): int(n) for t, n in r.units.items()})
+        if not self.of or self.prefix != RANK_PREFIX:
+            raise ValueError(f"ranks-shape: at least one rank, and the prefix {RANK_PREFIX!r}, not {len(self.of)} ranks and "
+                             f"{self.prefix!r}")
+
+    def doc(self) -> dict[str, Any]:
+        return {"of": [r.doc() for r in self.of], "prefix": self.prefix}
+
+    @classmethod
+    def of_doc(cls, d: Any) -> Ranks:
+        if (not isinstance(d, Mapping) or set(d) != {"of", "prefix"} or not isinstance(d["of"], list)
+                or not all(isinstance(r, Mapping) and set(r) == {"units", "wires", "window"} for r in d["of"])):
+            raise ValueError(f"ranks-shape: ranks are {{of: [{{window, units, wires}}, ...], prefix}}, not {d!r}")
+        return cls(tuple(Rank(r["window"], r["units"], r["wires"]) for r in d["of"]), d["prefix"])
+
+    def rank_of_name(self, name: str) -> int | None:
+        """The rank whose registered name ``name`` is (``r<rank>/…``), None for a name of no rank's."""
+        m = _RANK_NAME.match(name)
+        return int(m[1]) if m and int(m[1]) < len(self.of) else None
+
+    def segment(self, tid: str, r: int) -> tuple[int, int]:
+        """Rank ``r``'s units of template ``tid`` in the joined circuit, ``[lo, hi)``: the earlier ranks' come first."""
+        lo = sum(q.units.get(tid, 0) for q in self.of[:r])
+        return lo, lo + self.of[r].units.get(tid, 0)
+
+    def rank_of(self, tid: str, lo: int, hi: int) -> int | None:
+        """The rank whose units of template ``tid`` hold units ``lo`` to ``hi`` (both included), None for none."""
+        return next((r for r in range(len(self.of)) if self.segment(tid, r)[0] <= lo <= hi < self.segment(tid, r)[1]), None)
+
+
+def ranks_of(doc: Mapping[str, Any]) -> Ranks | None:
+    """A stated record's ranks (`Circuit.ranks`), None where it states none."""
+    return Ranks.of_doc(doc["ranks"]) if "ranks" in doc else None
+
+
+def check_ranks(templates: Mapping[str, tuple[RowLayout, int]], ranks: Ranks, wires: Sequence[Wire],
+                registered: Registered | None) -> None:
+    """Refuse (ValueError) ranks that don't fit the circuit, from its record alone, per rank, template, wire and declaration,
+    never per unit: ``ranks-units``, a template the circuit has not, or one whose units over the ranks are not the circuit's;
+    ``ranks-wires``, more wires the ranks' own than the circuit's, a rank's own wire with its reader or writer units outside
+    that rank's, or a wire of the join's whose reader units are not one rank's or whose writers are all its reader's rank's;
+    ``ranks-reads``, a registered parameter, table or history whose name is no rank's (``r<rank>/…``), a table over another
+    rank's parameter, or a registered read, table read or opening whose reader units are outside its name's rank's. That a
+    rank's wires and reads are its window's, shifted, is checked against the rank's record, which this record names by
+    digest alone."""
+    if bad := sorted({t for r in ranks.of for t in r.units} - set(templates)):
+        raise ValueError(f"ranks-units: templates {bad} are no template of the circuit")
+    for tid, (_lay, n) in templates.items():
+        if (got := sum(r.units.get(tid, 0) for r in ranks.of)) != n:
+            raise ValueError(f"ranks-units: {tid}'s units over the ranks are {got}, not the circuit's {n}")
+    own = [r for r, q in enumerate(ranks.of) for _ in range(q.wires)]
+    if len(own) > len(wires):
+        raise ValueError(f"ranks-wires: the ranks' own wires are {len(own)}, more than the circuit's {len(wires)}")
+    for i, w in enumerate(wires):
+        reader = ranks.rank_of(w.reader, w.at, w.at + w.reader_units - 1)
+        lo, hi = w.span()
+        if i < len(own):
+            if reader != own[i] or ranks.rank_of(w.writer, lo, hi) != own[i]:
+                raise ValueError(f"ranks-wires: wire {i} {w.doc()} is rank {own[i]}'s own, and its reader or its writer "
+                                 "units are not that rank's")
+        elif reader is None or ranks.rank_of(w.writer, lo, hi) == reader:
+            raise ValueError(f"ranks-wires: wire {i} {w.doc()} is the join's, and its reader units are not one rank's or its "
+                             "writers are all its reader's rank's")
+    reg = registered or Registered({})
+    for name in (*reg.params, *(t.name for t in reg.tables), *(h.name for h in reg.histories)):
+        if ranks.rank_of_name(name) is None:
+            raise ValueError(f"ranks-reads: the registered name {name!r} is no rank's ({RANK_PREFIX}…)")
+    for t in reg.tables:
+        if ranks.rank_of_name(t.param) != ranks.rank_of_name(t.name):
+            raise ValueError(f"ranks-reads: table {t.name!r} is over another rank's parameter {t.param!r}")
+    spans = [(r.param, r.reader, r.at, r.reader_units, r.doc()) for r in reg.reads]
+    spans += [(r.table, r.reader, r.at, r.units, r.doc()) for r in reg.roots]
+    spans += [(o.table, o.reader, o.at, o.units, o.doc()) for o in reg.openings]
+    for name, tid, at, n, d in spans:
+        if ranks.rank_of(tid, at, at + n - 1) != ranks.rank_of_name(name):
+            raise ValueError(f"ranks-reads: {d} reads {name!r}, and its reader units are not that name's rank's")
+
+
 def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[Wire],
                 cuts: Mapping[str, Mapping[str, int]] | None = None,
                 order: Sequence[tuple[str, int, int]] | None = None) -> None:
@@ -1004,13 +1169,16 @@ def _disjoint(rects: Sequence[tuple[str, str, int, int, int, int, Any]], what: s
 
 
 def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[str, Mapping[str, int]], wires: Sequence[Wire],
-                 registered: Registered | None, ingress: Sequence[Ingress], boundary: Sequence[Read] = ()) -> None:
-    """Refuse (ValueError) a registered read, table read, opening, ingress or boundary read that names no port of its
-    template, reads outside its units, its parameter or its table, or whose rows are another's: every input row is wired,
-    registered, ingress, read at the boundary or free, at most one of them, and every output row is read by at most one
-    registered or boundary read. A boundary read's field and its leaves are round 1's to check, against the replay
-    Definition (`Circuit.boundary_reads`); here its leaves are only from 0 on. The work is per declaration, never per
-    unit."""
+                 registered: Registered | None, ingress: Sequence[Ingress], boundary: Sequence[Read] = (),
+                 free: Sequence[Free] = (), ranks: Ranks | None = None) -> None:
+    """Refuse (ValueError) a registered read, table read, opening, ingress, boundary read or named free row that names no
+    port of its template, reads outside its units, its parameter or its table, or whose rows are another's: every input
+    row is wired, registered, ingress, read at the boundary or free, at most one of them, and every output row is read by
+    at most one registered or boundary read. A boundary read's field and its leaves are round 1's to check, against the
+    replay Definition (`Circuit.boundary_reads`); here its leaves are only from 0 on. A circuit that states its ranks or
+    names free rows names every free row (``window-free``: each input row is filled by exactly one declaration or named
+    free, by area over rows that no two meet), and its ranks fit it (`check_ranks`). The work is per declaration, never
+    per unit."""
     def port(tid: str, p: str, what: Any, outs: bool = False) -> tuple[int, int]:
         lay = templates[tid][0] if tid in templates else None
         ports = {} if lay is None else dict(lay.rows + (lay.outs if outs else ()))
@@ -1073,7 +1241,25 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
         if r.span()[0] < 0:
             raise ValueError(f"boundary read {r.doc()}: leaves of its field from {r.span()[0]}, not from 0 on")
         rects.append((r.reader, r.port, r.at, r.at + r.reader_units, r.cut[0], r.cut[0] + r.cut[1], r.doc()))
+    for f in free:
+        _words, k = port(f.reader, f.port, f.doc())
+        units(f.reader, f.at, f.units, f.doc())
+        c0, c = f.cut if f.cut is not None else (0, k)
+        if f.kind not in FREE_KINDS or c0 < 0 or c < 1 or c0 + c > k:
+            raise ValueError(f"free rows {f.doc()}: of a kind of {FREE_KINDS}, rows [c0, c0 + C) of its port's {k}")
+        rects.append((f.reader, f.port, f.at, f.at + f.units, c0, c0 + c, f.doc()))
     _disjoint(rects, "inputs")
+    if free or ranks is not None:
+        held: Counter[tuple[str, str]] = Counter()
+        for tid, p, a, b, r0, r1, _d in rects:
+            held[(tid, p)] += (b - a) * (r1 - r0)
+        for tid, (lay, n) in templates.items():
+            for p, _w in lay.rows:
+                if (left := n * int(cuts.get(tid, {}).get(p, 1)) - held[(tid, p)]) != 0:
+                    raise ValueError(f"window-free: {tid} {p}: {left} of its rows (units times rows) are filled by no "
+                                     "declaration and named in no free rows")
+    if ranks is not None:
+        check_ranks(templates, ranks, wires, registered)
 
 
 def _history_ok(h: History, outs: Mapping[str, int] | None, units: int, names: Collection[str],
@@ -1375,12 +1561,15 @@ class Circuit:
     blocks: Blocks | None = None
     order: tuple[tuple[str, int, int], ...] | None = None
     boundary_reads: tuple[Read, ...] = ()
+    ranks: Ranks | None = None
+    free: tuple[Free, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "templates", tuple((fn, int(n)) for fn, n in self.templates))
         object.__setattr__(self, "external", tuple(self.external))
         object.__setattr__(self, "wires", tuple(self.wires))
         object.__setattr__(self, "boundary_reads", tuple(self.boundary_reads))
+        object.__setattr__(self, "free", tuple(self.free))
         object.__setattr__(self, "cuts", _cuts(self.cuts))
         object.__setattr__(self, "ingress", tuple(self.ingress))
         object.__setattr__(self, "order", order_of({"order": self.order} if self.order is not None else {}))
@@ -1399,8 +1588,11 @@ class Circuit:
             raise ValueError(f"{self.name}: its wires are `Wire`s")
         if not all(isinstance(r, Read) for r in self.boundary_reads):
             raise ValueError(f"{self.name}: its boundary reads are `Read`s")
+        if not all(isinstance(f, Free) for f in self.free) or not (self.ranks is None or isinstance(self.ranks, Ranks)):
+            raise ValueError(f"{self.name}: its free rows are `Free`s and its ranks `Ranks`")
         check_wires(self.layouts, self.wires, self.cuts, self.order)
-        check_inputs(self.layouts, self.cuts, self.wires, self.registered, self.ingress, self.boundary_reads)
+        check_inputs(self.layouts, self.cuts, self.wires, self.registered, self.ingress, self.boundary_reads, self.free,
+                     self.ranks)
         program_values(self.registered)
         if self.boundary is not None:
             if not isinstance(self.boundary, Mapping):
@@ -1446,13 +1638,15 @@ class Circuit:
         return self.registered.reads if self.registered is not None else ()
 
     def declared(self) -> dict[str, Any]:
-        """The record's fields for its cuts, registered reads, ingress, order and boundary reads, each only when the circuit
-        has one, so a circuit without them records as before."""
+        """The record's fields for its cuts, registered reads, ingress, order, boundary reads, ranks and named free rows, each
+        only when the circuit has one, so a circuit without them records as before."""
         return {**({"cuts": self.cuts} if self.cuts else {}),
                 **({"registered": self.registered.doc()} if self.registered is not None else {}),
                 **({"ingress": [g.doc() for g in self.ingress]} if self.ingress else {}),
                 **({"order": [list(b) for b in self.order]} if self.order is not None else {}),
-                **({"boundary_reads": [r.doc() for r in self.boundary_reads]} if self.boundary_reads else {})}
+                **({"boundary_reads": [r.doc() for r in self.boundary_reads]} if self.boundary_reads else {}),
+                **({"ranks": self.ranks.doc()} if self.ranks is not None else {}),
+                **({"free": [f.doc() for f in self.free]} if self.free else {})}
 
     def description(self) -> dict[str, Any]:
         """The record's fields `input_count` reads: its templates, wires and declarations, none of its program."""
@@ -1994,7 +2188,7 @@ def circuit_bytes(doc: Mapping[str, Any]) -> bytes:
 
 #: a stated record's optional fields beside its cap and wires (`Circuit.declared`), of which a listed record declares only
 #: its registered reads, tables, table reads and openings (`listed_reads`)
-DECLARED = ("cuts", "registered", "ingress", "order", "boundary_reads")
+DECLARED = ("cuts", "registered", "ingress", "order", "boundary_reads", "ranks", "free")
 #: a listed record's optional field beside its members for its window's ingress (`listed_ingress`)
 WINDOW_INGRESS = "window_ingress"
 
@@ -2106,7 +2300,7 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     wires, cuts, reg, ingress = declarations(doc)
     boundary = boundary_reads_of(doc)
     check_wires(lays, wires, cuts, order_of(doc))
-    check_inputs(lays, cuts, wires, reg, ingress, boundary)
+    check_inputs(lays, cuts, wires, reg, ingress, boundary, free_of(doc), ranks_of(doc))
 
     def row_bits(tid: str, port: str) -> int:
         return 16 * dict(lays[tid][0].rows)[port] // int(cuts.get(tid, {}).get(port, 1))
@@ -2218,7 +2412,7 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         lays = {descriptor_id(fn): (layout(fn), n) for fn, n in defs}
         order = order_of(doc)
         check_wires(lays, wires, cuts, order)
-        check_inputs(lays, cuts, wires, registered, ingress, boundary_reads_of(doc))
+        check_inputs(lays, cuts, wires, registered, ingress, boundary_reads_of(doc), free_of(doc), ranks_of(doc))
         if "blocks" in doc:
             Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])
         ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered),
@@ -2287,6 +2481,8 @@ class Window:
     _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
+        if self.circuit.ranks is not None:
+            raise ValueError(f"{self.circuit.name}: a circuit joined from ranks is no window: each rank commits its own")
         _committable(self.circuit.registered, self.circuit.ingress, self.circuit.name)
         self.forms = tuple(self.forms)
         if not all(isinstance(f, str) for f in self.forms):
