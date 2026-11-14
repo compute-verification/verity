@@ -34,7 +34,7 @@ from verity_vllm.program.frontend.derive import DERIVE_VERSION, derive_report
 
 transformers = pytest.importorskip("transformers")
 
-H, NL, NH, KVH, V, I, MAXPOS, EPS = RH.H, RH.NL, RH.NH, RH.KVH, RH.V, RH.I, RH.MAXPOS, RH.EPS
+H, NL, NH, KVH, V, INTER, MAXPOS, EPS = RH.H, RH.NL, RH.NH, RH.KVH, RH.V, RH.I, RH.MAXPOS, RH.EPS
 HEAD_DIM = H // NH
 GROUP = os.environ.get("REALHF_GROUP", "")
 
@@ -49,28 +49,28 @@ def make_config(arch: str, impl: str = "sdpa", tie: bool = True, **over):
     common = dict(tie_word_embeddings=tie, attn_implementation=impl, use_cache=False)
     if arch == "phi3":
         from transformers import Phi3Config
-        return Phi3Config(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return Phi3Config(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                           num_key_value_heads=KVH, max_position_embeddings=MAXPOS, original_max_position_embeddings=MAXPOS,
                           rms_norm_eps=EPS, pad_token_id=0, **common, **over)
     if arch == "gpt_neox":
         from transformers import GPTNeoXConfig
-        return GPTNeoXConfig(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return GPTNeoXConfig(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                              max_position_embeddings=MAXPOS, layer_norm_eps=EPS, **common, **over)
     if arch == "stablelm":
         from transformers import StableLmConfig
-        return StableLmConfig(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return StableLmConfig(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                               num_key_value_heads=KVH, max_position_embeddings=MAXPOS, layer_norm_eps=EPS, **common, **over)
     if arch == "starcoder2":
         from transformers import Starcoder2Config
-        return Starcoder2Config(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return Starcoder2Config(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                                 num_key_value_heads=KVH, max_position_embeddings=MAXPOS, norm_epsilon=EPS, **common, **over)
     if arch == "granite":
         from transformers import GraniteConfig
-        return GraniteConfig(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return GraniteConfig(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                              num_key_value_heads=KVH, max_position_embeddings=MAXPOS, rms_norm_eps=EPS, pad_token_id=0, **common, **over)
     if arch == "cohere":
         from transformers import CohereConfig
-        return CohereConfig(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return CohereConfig(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                             num_key_value_heads=KVH, max_position_embeddings=MAXPOS, layer_norm_eps=EPS, **common, **over)
     raise ValueError(arch)
 
@@ -155,7 +155,7 @@ def test_hf5b_case(case_id: str, group: str, arch: str, impl: str, dtype: str, w
                            "tie": True, "what": what, "variant": f"{'DERIVE-4' if group in ('heldout4', 'grh14') else 'DERIVE-3'} {group}",
                            "cfg_over": over, "importer_head": RH.GIT_HEAD,
                            "derive_version": DERIVE_VERSION, "torch": torch.__version__, "transformers": transformers.__version__,
-                           "mode": "reference", "dims": dict(H=H, NL=NL, NH=NH, KVH=KVH, V=V, I=I, MAXPOS=MAXPOS, head_dim=HEAD_DIM),
+                           "mode": "reference", "dims": dict(H=H, NL=NL, NH=NH, KVH=KVH, V=V, I=INTER, MAXPOS=MAXPOS, head_dim=HEAD_DIM),
                            "LP": RH.LP, "STEPS": RH.STEPS if what == "greedy" else None, "prompt": RH.PROMPT.tolist(), "probe": 0, "probe_patches": []}
     model = make_model(arch, dtype, impl, True, **over)
     module = RH.Logits(model) if what == "forward" else RH.Greedy(model, RH.STEPS)
