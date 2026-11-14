@@ -2,6 +2,7 @@ module
 
 public import Properties.Accounting.Remote
 public import Definitions.Core.InProofs
+public import Mathlib.Probability.ProbabilityMassFunction.Monad
 
 /-!
 # PoUB's read session inside proofs: an accepted run gives openings `checkWindow` accepts
@@ -53,5 +54,28 @@ def SpanGives : Prop :=
     right ≤ (fun k v => OpeningOk reg digest appends w drawn k (decode v)) →
     prPMF μ (fun ω => r.accepts ω ∧
         checkWindow reg digest appends w drawn (Array.ofFn fun k => decode (r.ports k ω)) ≠ Verdict.accept) ≤ ε
+
+/-- The run of one draw, `(0, 0)`, that always accepts and whose proof block holds the opening `o`. -/
+def oneDraw (o : Opening) : Run Unit (#[((0 : Nat), (0 : Nat))].size) fun _ => Opening :=
+  ⟨fun _ => True, fun _ _ => o, fun _ => []⟩
+
+/-- **`SpanGives`' hypotheses hold where the check accepts**: a registration `Registration.make?` accepts at the
+deployed shape (130023424 blocks, p1024/k3/masked, sketch-sha512 receipts of 16 rows), a window of one pass over the
+whole store and an opening of position 0, where the run of that one draw, with `OpeningOk` its relation and `decode` the
+identity, meets `Gives` at `ε = 0`, and `checkWindow` accepts its opening. -/
+def SpanGivesHonest : Prop :=
+  ∃ (reg : Registration) (w : WindowRecord) (o : Opening),
+    Registration.make? (zeros 1) 130023424 reg.payloadRoot (zeros Codec.SEED_BYTES) ⟨Codec.P1024, 3, true⟩ .sketch
+        false LAYOUT 16 = .ok reg ∧
+      Gives (PMF.pure ()) (oneDraw o) (fun k v => OpeningOk reg reg.digest #[] w #[(0, 0)] k v) 1 0 ∧
+      checkWindow reg reg.digest #[] w #[(0, 0)] (Array.ofFn fun k => (oneDraw o).ports k ()) = .accept
+
+/-- **`SpanGives`' conclusion fails without its hypotheses**: at the same registration and window, a run of the one
+draw that always accepts and holds an opening `checkWindow` refuses gives the event probability `1`, so the bound fails
+at `ε = 0`. -/
+def SpanGivesNontrivial : Prop :=
+  ∃ (reg : Registration) (w : WindowRecord) (o : Opening),
+    ¬ prPMF (PMF.pure ()) (fun ω => (oneDraw o).accepts ω ∧
+        checkWindow reg reg.digest #[] w #[(0, 0)] (Array.ofFn fun k => (oneDraw o).ports k ω) ≠ Verdict.accept) ≤ 0
 
 end Properties.RemoteAudit.InProofs
