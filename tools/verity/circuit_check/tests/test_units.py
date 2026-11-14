@@ -77,10 +77,7 @@ def _fresh(root: Path, harness: str = HARNESS) -> dict:
 
 def _records(root: Path, units: tuple[str, ...] | None = None) -> list[Path]:
     def target(p: Path) -> list:
-        try:
-            return json.loads(p.read_text())["key"]["request"]["target"]
-        except ValueError:
-            return []
+        return json.loads(p.read_text())["key"]["request"]["target"]
     return [p for p in (root / "cache").glob("*/*/*.json")
             if (t := target(p))[:1] == ["catalog-unit"] and (units is None or tuple(t[1]) == units)]
 
