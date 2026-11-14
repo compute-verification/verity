@@ -1,4 +1,4 @@
-"""lean-unit-cut: `verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py` as check's lean-unit-cut step runs it, on the flock-verify the task
+"""lean-unit-cut: `verity/protocols/proofs/flock/prover/agreement/unit_cut_agree.py` as check's lean-unit-cut step runs it, on the verity-verify-proof the task
 reads (at its var `verify`): the Lean partition check's codes against `verity.circuits.partition`'s on the script's random
 cuts, its result.json at the task's output.
 

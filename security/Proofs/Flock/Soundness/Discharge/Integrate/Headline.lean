@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 `Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
 honest transcript fails its openings check, so the headline the executable instantiates is the salted, one-table
-form at flock-verify's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
+form at verity-verify-proof's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
 `hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with the refinement discharged up to the decoder (`hdec`, the
 decoder right at the sampling design's samples, `DecodesOn`).
 
@@ -22,7 +22,7 @@ session's inputs (`planAt`, `Sites.lean`), with:
   rows' salt columns `Discharge.Hm.saltCol`, with `hsite` from `sitesAt_bcSite`;
 * `hHm := Discharge.Hm.keyedRowsOuts_computes` (`rsAt_computes`).
 
-Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones flock-verify refuses a statement
+Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones verity-verify-proof refuses a statement
 failing (`Flock.ProvedScope`), and `FailClosed.flock_headline_exec` takes none of them.
 -/
 
@@ -76,7 +76,7 @@ to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub` with
 the circuit prover's per-instance public files load, under `@967b8d06` too, whose tag allows them), and let the
 challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up). Let the units be sampled with
 `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a byte source A3 makes uniform, and let each sample's
-session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify
+session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, verity-verify-proof
 accepts with at least `K` incorrect proof blocks of the production program `Placed.keyProg c hU n`, at the simulated prover's
 committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
 at most `miss(K) + ε_ks + δ_link`.
@@ -87,7 +87,7 @@ Its hypotheses, past the session's inputs:
   has only `sha512/row/v1` rows (`v1Ports`: each port `v2 = false`, unsegmented, `bits = 16 · words`, `0 < chunks`).
   `Layout.scopeOk_spec` gives `rs`'s `h1`, `ho` and `PortReads`, `Layout.scopeOk_ports` gives `hHm`'s v1 rows;
 * `hdec` (`DecodesOn`, at the sampling design's samples only), open (the framing decoder, `wr` as the server's
-  record, `opn`, `fin`, `capOf`). At a sample flock-verify accepts whose record carries the challenger's sample `dj S`,
+  record, `opn`, `fin`, `capOf`). At a sample verity-verify-proof accepts whose record carries the challenger's sample `dj S`,
   proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
   `model_eq_stmtOf`), the statement the executable's acceptance plays. At an accepted sample whose link points are not `mPts`
   the table is unsatisfiable and `hdec` fails there, so `hdec` also needs every accepted sample of the sampling design to set up at
@@ -103,7 +103,7 @@ that fail at their own committed values, and a template instance reading its pro
 constraints and the region pins, not by an edge of the program. The proof coins are the challenger's, on its keyed coin
 tree (A6, tree coins): `verify` refuses a session on a committed seed's coins (`ProvedScope.servedForm`), so a session
 counts only under `--coins tree`. The tag is whatever the verifier passes as `--statement`: a session counts when
-`flock-verify verify --statement verity/flock-circuit@967b8d06 --coins tree` accepts it with one table, so the headline
+`verity-verify-proof verify --statement verity/flock-circuit@967b8d06 --coins tree` accepts it with one table, so the headline
 covers only public-output `@967b8d06` sessions, from older builds. Main's prover now always writes the
 hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which
 `setupTables` calls `setupHidden`, which this headline does not cover: `HiddenExec.flock_headline_exec_hidden`

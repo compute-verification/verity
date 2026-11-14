@@ -285,7 +285,7 @@ def Stmt.ofJson? (j : Json) : Option Stmt :=
   | .str t, .obj h, .obj d, .obj r => some ⟨t, .obj h, .obj d, .obj r⟩
   | _, _, _, _ => none
 
-/-- What an accepted verdict of record names of the session it checked (`flock-verify verify`'s verdict): the digests
+/-- What an accepted verdict of record names of the session it checked (`verity-verify-proof verify`'s verdict): the digests
 of the public file's header and of the `--registered` file it checked the session against (`public_header_sha512`,
 `registered_sha512`, null for none), the sample it checked it at (`unit_draw`) and the number of tables it set the
 session up as (`session_tables`). -/

@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Accounting.Numbers
 most `2^{−205}` per table, at every statement in scope:
 
 * without `--zk`, at every `fast100` schedule (`22 ≤ m ≤ 35`) and every shape in `Stmt.InRangeWide`, the shapes of every
-  table flock-verify plans (`εtable_plain`, `tableError_le_205_wide`); the rational bound's worst case is `2^{−205.011}`,
+  table verity-verify-proof plans (`εtable_plain`, `tableError_le_205_wide`); the rational bound's worst case is `2^{−205.011}`,
   at `m = 34`;
 * with `--zk`, at Flock ZK's parameters (`TabZK.M1`: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, and the
   inner proof with 168 queries, `N ≤ 2^13` and `δ ≥ 7/16`), `padLinkError + (padRepError + εInner)² ≤ 2^{−205}`

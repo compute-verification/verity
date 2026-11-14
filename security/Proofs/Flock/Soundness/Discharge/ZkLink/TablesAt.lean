@@ -31,10 +31,10 @@ import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
-# The `--zk` table at each sample, from flock-verify's setup (statements)
+# The `--zk` table at each sample, from verity-verify-proof's setup (statements)
 
 `tablesAt` is the plain headline's table at sample `S`: `stmtOf` of the statement setupH sets up at the challenger's
-live-coin part's sample `dj S`, wherever flock-verify accepts. Here is its `--zk` counterpart, `tablesAtZK`, a `TabZK` built from
+live-coin part's sample `dj S`, wherever verity-verify-proof accepts. Here is its `--zk` counterpart, `tablesAtZK`, a `TabZK` built from
 what `verify --zk` sets up at the sample (`zkInputs I`):
 
 * the statement `stmtOf st` at setupH's statement `st` and its regions, link layout at `PT_LOCAL`;
@@ -48,7 +48,7 @@ needs of it; at a sample with none the table is a reference setup's statement wi
 witness satisfies (as `tableAt`'s `refusedC`).
 
 * `RecordsLiveZK`, `DrawOkZK`: DecodeZL's `RecordsLive` and `DrawOk` at `--zk` (`AcceptsZK`, `zkInputs I`).
-* `TablesAtZKLive`: wherever flock-verify accepts what `wr` writes, the sample's `--zk` table is the executable's: its
+* `TablesAtZKLive`: wherever verity-verify-proof accepts what `wr` writes, the sample's `--zk` table is the executable's: its
   statement is `stmtOf` of setupH's, its dimensions and inner code are `Zk.verify`'s, and its extra claims at the
   record's link points are the executable's (`ExtraRealizes`, as `ofCircuit_extra`).
 * `tablesAtZK_live`: its proof, with `0 < g` from setupH (`setupH_g_pos`, D9), the schedule's shape and padding from
@@ -334,7 +334,7 @@ noncomputable abbrev tablesAtZK : Finset (Fin n) → Reg → TabZK 𝔽 mPts := 
 /-! ## The live session's record -/
 
 /-- **`wr` is the challenger's record of the live `--zk` session** (DecodeZL's `RecordsLive` at `--zk`): whenever
-flock-verify accepts what `wr` writes for the outcome `o` at sample `S`, the record carries the sample `dj S`, the proof
+verity-verify-proof accepts what `wr` writes for the outcome `o` at sample `S`, the record carries the sample `dj S`, the proof
 files are `o`'s, and the record decodes to a session whose table's `root_B`, link points and rep streams' rounds are
 `o`'s. -/
 def RecordsLiveZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
@@ -357,7 +357,7 @@ def DrawOkZK (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : 
 
 /-! ## The statement -/
 
-/-- **Wherever flock-verify accepts, the `--zk` table is the executable's.** On public-output one-table inputs whose
+/-- **Wherever verity-verify-proof accepts, the `--zk` table is the executable's.** On public-output one-table inputs whose
 `--statement` tags are untyped, with `wr` the challenger's record (`RecordsLiveZK`): whenever the sample `S` is `DrawOkZK`
 (pointwise: link points depend on `|S|`, so no `mPts` holds at every sample) and `verify --zk` accepts what `wr` writes
 for `o` at it, setupH's statement `st` at `dj S` under the `--zk` tags is

@@ -1,4 +1,4 @@
-"""A statement's proof files, verified by Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
+"""A statement's proof files, verified by Flock's Lean verifier (`verity-verify-proof verify --zk`, the Lake package
 `verity/protocols/proofs/flock/verifier`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
@@ -9,7 +9,7 @@ registered values, the `--registered` file. It refuses
 a circuit file that doesn't hash to the committed digest before anything runs, so each verdict is over the circuit the
 auditor's own lowering built. The circuit file's tie to the program's Definitions rests on that lowering: the verifier
 holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor.
-Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
+Then one `verity-verify-proof verify --zk` over every session (`--registered` when the statement reads registered
 values), and one `Finding` a session, in order:
 whether it was accepted and why not, the program its verdict names (`program_sha512`, the digest of the canonical
 descriptor without annotations, which an accepted verdict must give as the partition object's `program`),
@@ -18,7 +18,7 @@ indices of the instances its session sampled (`unit_draw`), read only off a sess
 
 `ks_form_why` mirrors `verify --zk`'s refusal of a circuit outside the unit's form the sampled audit's knowledge
 soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
-(`Flock.KsScope.filesWhy`, which `flock-verify ks-form` runs alone). A session Lean accepts whose files it refuses is a
+(`Flock.KsScope.filesWhy`, which `verity-verify-proof ks-form` runs alone). A session Lean accepts whose files it refuses is a
 ``form`` refusal, so the mirror can only refuse more.
 
 `fits_why` and `draw_fits_why` mirror v2's refusal of a length a session's statement can't hold, since it writes each in
@@ -71,7 +71,7 @@ from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
 
 PACKAGE = ROOT / "verity/protocols/proofs/flock/verifier"
-EXE = "flock-verify"
+EXE = "verity-verify-proof"
 #: what the Lean verifier's `verify` runs under where its caller's environment sets no value of its own. The Lean runtime's
 #: allocator (mimalloc) returns freed pages to the kernel after a delay and faults them in again when it reuses them; -1
 #: keeps them, trading peak memory for the faults. No byte the verifier reads or prints depends on it.
@@ -137,7 +137,7 @@ def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
 
 @functools.cache
 def executable() -> Path:
-    """`lake build flock-verify`, once per process, under `BUILD_LOCK`; the executable's path."""
+    """`lake build verity-verify-proof`, once per process, under `BUILD_LOCK`; the executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -191,7 +191,7 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
     unit); None when it applies or the circuit file's head is not in that form. A shared-row public file (header
     ``shared_rows``) is Lean's alone to refuse (`KsScope.sharedWhy`, outside the form `SampledKSLiveV5` covers), since
     its check loads the whole file and computes every port's root. `verify` refuses a session Lean accepts that it
-    refuses, so it can only refuse more; `flock-verify ks-form` is the Lean it mirrors."""
+    refuses, so it can only refuse more; `verity-verify-proof ks-form` is the Lean it mirrors."""
     del public
     head = _unit_head(circuit)
     if head is not None:

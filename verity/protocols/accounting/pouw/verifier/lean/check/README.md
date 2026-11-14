@@ -56,7 +56,7 @@ execution phase of the credit period's close is credited.
 `opening` holds a tile proof's public file to the registered execution phase: the unit sampled (or opened unsampled, the filler's),
 the entries root's domain one-stage's served domain of the registered program and partition, the opening's entry under
 its salt that root's leaf, the unit one of the entry's tiles, the proof one instance over the circuit `PouwCheck.tiles`
-pins for the check's template (its header's `circuit_sha512`, which `flock-verify verify --zk` binds to the circuit it
+pins for the check's template (its header's `circuit_sha512`, which `verity-verify-proof verify --zk` binds to the circuit it
 verifies against), and each opened row's b ‖ c its side tree's leaf at the unit's row. An unsalted template's proof's
 first two ports, `a0` and `b0` (`PC8_PORTS`), are an A row and a B row of the fp8-p schemas. A salted template's
 (`Salted`: today the H1 tile unit at K = 64, R = 4, C = 8) are its R A rows, its C B rows and its public row `pub`, each

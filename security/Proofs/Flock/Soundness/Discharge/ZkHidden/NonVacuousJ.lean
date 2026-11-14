@@ -161,7 +161,7 @@ theorem zk_session_soundHJ_custody_nonvacuous (I : Inputs) (ht : I.tags.typed = 
   exact ⟨⟨y₀⟩, hy, hok⟩
 
 /-- **`zk_session_soundHJ_custody_json`'s `y₀` and `hdj` hold together.** As `zk_session_soundHJ_custody_nonvacuous`,
-with each sample file the JSON value `flock-verify draw` printed for the verifier's `subset kd` sample (`hdj`). The proof
+with each sample file the JSON value `verity-verify-proof draw` printed for the verifier's `subset kd` sample (`hdj`). The proof
 applies `zk_session_soundHJ_custody_json` to the `y₀` it builds and to `hdj`. Not covered: the session's existence,
 `hRec`, `hpub`, `hpt`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`. -/
 theorem zk_session_soundHJ_custody_json_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)

@@ -56,7 +56,7 @@ def archiveGet (archive hex : String) : IO (Except String ByteArray) :=
   return (← archiveGetSha archive hex).map (·.1)
 
 /-- The statement's inputs: with `--archive DIR`, the circuit, public and compression files are the verifier's own objects
-named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (`flock-verify --archive`);
+named by `--circuit`, `--public`, `--comp` SHA-512 digests, and the lookup tables are those `MUFU_TABLES` pins (`verity-verify-proof --archive`);
 without it, the files at those paths. With the circuit, its SHA-512 as the archive holds it (its key) and, unless `await`,
 the archive's check that the circuit hashes to it, still hashing, for the caller to wait on (`awaitArchive`). -/
 def statementInputs (args : List String) (await : Bool := true) :
@@ -625,7 +625,7 @@ statement's units and rows give the table's shape (`RecVStar.linkShapeOf`, `RecV
 (`RecVStar.Inner.stacked`) is the inner circuit's META's (`RecVStar.stackedShapeOf`), the shape staging committed R at; a
 META naming one with no `--sparse` is refused, since R opens the sparse phase's claims. -/
 def recInnerCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG] [--rec-links ROOT:N]"
+  let usage := "usage: verity-verify-proof rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG] [--rec-links ROOT:N]"
   let (some circuit, some pub) := (argOf args "--circuit", argOf args "--public")
     | IO.eprintln usage; return 2
   let links ← match RecLinkTree.linksArg args with
@@ -683,7 +683,7 @@ rounds before the last as it shows them (`Record.msgs`: each message and its coi
 the file's bytes up to the link points (`writes`); `null` where it doesn't read. Exit 1 where the file is not in the
 record's format. -/
 def recRecordCmd (args : List String) : IO UInt32 := do
-  let [f] := args | IO.eprintln "usage: flock-verify rec-record FILE"; return 2
+  let [f] := args | IO.eprintln "usage: verity-verify-proof rec-record FILE"; return 2
   let bs := (← IO.FS.readBinFile f).data.toList
   let some xs := RecRecord.readRecord bs | IO.eprintln "rec-record: not the coin server's record format"; return 1
   let hex := fun (b : List UInt8) =>
@@ -702,7 +702,7 @@ def recRecordCmd (args : List String) : IO UInt32 := do
 
 def recTranscriptCmd (args : List String) : IO UInt32 := do
   let some _ := argOf args "--rec-inner-session"
-    | IO.eprintln "usage: flock-verify rec-transcript --rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner F]"; return 2
+    | IO.eprintln "usage: verity-verify-proof rec-transcript --rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner F]"; return 2
   let inner ← match ← recInnerInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
@@ -732,7 +732,7 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
       ("streams", .arr (ic.streams.map fun s => Lean.Json.mkObj [("stream", .str s.name), ("commits", n s.commits),
         ("tops", .arr (s.tops.map fun t => Lean.toJson t.size))]))]).compress}"
     return 0
-  | .ok none => IO.eprintln "usage: flock-verify rec-transcript --rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner F]"; return 2
+  | .ok none => IO.eprintln "usage: verity-verify-proof rec-transcript --rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner F]"; return 2
   | .error e => IO.eprintln e; return 1
 
 /-- `rec-statements --rec-inner F [--unit NAME | --circuit F --rec-bindings F] [--instances N] [--rec-part J]
@@ -742,7 +742,7 @@ hm96 calls they record at most (`RecBudget.recordedCalls`), as one `RECVSTAR` li
 statement `J` under those bindings, and then with `--registered`, `RecVStar.checkOwn` on those reads, with the statement's
 own message-round ports (`RecVStar.ownPorts`). -/
 def recStatementsCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-statements --rec-inner F [--unit NAME | --circuit F --rec-bindings F] [--instances N] [--rec-part J] [--registered F]"
+  let usage := "usage: verity-verify-proof rec-statements --rec-inner F [--unit NAME | --circuit F --rec-bindings F] [--instances N] [--rec-part J] [--registered F]"
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2
@@ -841,7 +841,7 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 /-- `verify`'s refusal of upstream's plain proof files (`--upstream-plain`), which `agree` reports for a session no other
 refusal meets. -/
 def UPSTREAM_PLAIN : String :=
-  "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; flock-verify agree compares the verifier's checks on them with upstream's verdicts"
+  "refused: upstream's plain proof files (--upstream-plain): a form the soundness proof does not cover; verity-verify-proof agree compares the verifier's checks on them with upstream's verdicts"
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins tree] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`), and every session of a legacy
@@ -953,7 +953,7 @@ call takes besides its arguments: `verify` reads its own program once (`verifyCm
 reads through the kept program's readers (`verifyMember`), which are the same functions (`verifyMember_eq`). -/
 def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List String) (upstream : Option Lean.Json := none) :
     IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
+  let usage := "usage: verity-verify-proof verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins tree | --zk [--ks-form]] [--session-tables J] [--plain-tables] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   -- a session's line: the checks' outcome, then that of the refusals after them. `verify` prints its verdict; `agree`
   -- whether the checks pass exactly when upstream accepted, and never an acceptance
@@ -1271,7 +1271,7 @@ directory, as given to `--session`, to upstream's verdict, `true` for accepted; 
 whether the checks pass exactly when upstream accepted. Exit 0 iff every session agrees. Not with `--zk`: a `--zk`
 session's verdict is `verify --zk`'s, on the deployed form. -/
 def agreeCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify agree --upstream-plain --upstream-verdicts F [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--tables DIR] [--partition F] [--program F] [--registered F] [--stratified K] [--coins tree] [--session-tables J] [--plain-tables] --session DIR..."
+  let usage := "usage: verity-verify-proof agree --upstream-plain --upstream-verdicts F [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--tables DIR] [--partition F] [--program F] [--registered F] [--stratified K] [--coins tree] [--session-tables J] [--plain-tables] --session DIR..."
   let some path := argOf args "--upstream-verdicts" | IO.eprintln usage; return 2
   if !args.contains "--upstream-plain" then
     IO.eprintln "agree: it reads upstream's plain proof files alone, so --upstream-plain is required"; return 2
@@ -1289,7 +1289,7 @@ line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statemen
 `KsScope.checkOf_ok`'s. It accepts no session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held
 to. -/
 def ksFormCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
+  let usage := "usage: verity-verify-proof ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let some tags := Tags.byName? stmtName
@@ -1324,7 +1324,7 @@ statement to the table, to the roots of the inner statement's input and output r
 (`RecLinkPart.check`, which needs the inner statement's files; `Flock.Guarantees.LinksBindDeployed`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins tree]"; return 2
+    | IO.eprintln "usage: verity-verify-proof statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F [--interface F]] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins tree]"; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let some tags := Tags.byName? stmtName
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
@@ -1938,7 +1938,7 @@ none may name one (`Shared.Complete`, `RecCompose.checkForm`), so each part was 
 holding its rows to the inner statement's (`RecLinkPart.check`; the links' binding,
 `Flock.Guarantees.LinksBindDeployed`). One `REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG..."
+  let usage := "usage: verity-verify-proof rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG..."
   let links : Option (ByteArray × Nat) ← match RecLinkTree.linksArg args with
     | .ok l => pure l
     | .error e => IO.eprintln e; return 2
@@ -2014,4 +2014,4 @@ def main (args : List String) : IO UInt32 := do
   | "typed-rows" :: rest => typedRowsCmd rest
   | "circuit-type" :: paths => CircuitType.cmd paths
   | "layout" :: paths => BlockLayout.cmd paths
-  | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2
+  | _ => IO.eprintln "usage: verity-verify-proof field-test FILE"; return 2

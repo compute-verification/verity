@@ -375,7 +375,7 @@ def hiddenOf (xS : Msg) : Bool :=
   | none => false
 
 /-- **Template `t`'s session statement is in scope**: in Flock's masked scope, with template `t`'s reference statement's
-table shapes, in the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any
+table shapes, in the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `verity-verify-proof` refuses any
 other), and with hidden outputs (`hiddenOf`), as the deployed session circuit has. -/
 def sessionOk (t : ℕ) (xS : Msg) : Bool :=
   zkOk xS && shapeOf xS == shapeOf (h.xS₀ t) && FlockDeploy.scopeCheck true xS && hiddenOf xS

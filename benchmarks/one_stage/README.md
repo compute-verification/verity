@@ -336,7 +336,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 
 Flock's circuit prover (`verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of the circuit prover's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
-inputs sent with the run; it builds `flock-circuit` and `flock-verify` once per pod, then runs the driver, whose
+inputs sent with the run; it builds `flock-circuit` and `verity-verify-proof` once per pod, then runs the driver, whose
 `--m0-pythonpath` names that tree. The drivers' checks go through the verifier
 (`one_stage.verifier`), which builds the sampled-proofs Lean in the run's tree on its first check, hence `--cwd clone`:
 

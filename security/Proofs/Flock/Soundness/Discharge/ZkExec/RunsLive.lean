@@ -28,7 +28,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive`
 
-`runsZC_live`: at each of the sampling design's samples, on an outcome flock-verify `--zk` accepts, `TablesAtZKLive` puts the sample's
+`runsZC_live`: at each of the sampling design's samples, on an outcome verity-verify-proof `--zk` accepts, `TablesAtZKLive` puts the sample's
 table at `tablesAtZK` (`DrawSetupZK.table`, at the executable's dimensions, pads and inner code: `table_seam`,
 `table_lay`), the acceptance peels to the one table's two `verifyRep` successes (`setupTables_ok`, `zk_verify_ok`) and
 each rep's run (`zk_verifyRep_ok`), `zk_rep_run_plays` makes each run a `RepRun` for `decAtZ` at the result it plays on

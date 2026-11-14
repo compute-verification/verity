@@ -44,7 +44,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 /-!
 # The plain verdict at the statement's sample
 
-`plainVerdict` reads flock-verify's acceptance of what `wrP` writes, and `wrP` asks for a record whose sample is the
+`plainVerdict` reads verity-verify-proof's acceptance of what `wrP` writes, and `wrP` asks for a record whose sample is the
 statement's as the same term (`RecordsLiveAtP`), since `Exec.Accepts` sets the session up at the record's own sample.
 `Deploy.V false` sets the session up at the statement's sample and runs `verify` on the record against that setup; its
 checks compare the two samples only up to key order (`drawEq_ne`). So the verdict here reads the setup at the statement's
@@ -81,7 +81,7 @@ def setupAtD (I : Exec.Inputs) (dr : Option Json) : _root_.Flock.V (SessionSpec 
 theorem setupOf_eq_setupAtD (I : Exec.Inputs) (record : String) :
     Exec.setupOf I record = setupAtD I (Exec.recordDraw record) := rfl
 
-/-- **flock-verify accepts at the session it sets up at the sample `dr`**: `Exec.Accepts` with the setup at `dr` for the
+/-- **verity-verify-proof accepts at the session it sets up at the sample `dr`**: `Exec.Accepts` with the setup at `dr` for the
 setup at the record's sample. -/
 def AcceptsAtD (I : Exec.Inputs) (dr : Option Json) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupAtD I dr = .ok (spec, sts) ∧

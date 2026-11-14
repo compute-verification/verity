@@ -44,7 +44,7 @@ import VCVio.Prelude.Core
 /-!
 # Flock's deployed verifier in public-coin form (`Deploy.V`)
 
-The shipped verifier (`flock-verify verify`, plain or `--zk`) as a `Claims.Verifier`: the prover's messages are the
+The shipped verifier (`verity-verify-proof verify`, plain or `--zk`) as a `Claims.Verifier`: the prover's messages are the
 live session's, each answered by that round's live coin, and the last is decided by the shipped verdict, with every
 SHA-512 call an oracle query.
 

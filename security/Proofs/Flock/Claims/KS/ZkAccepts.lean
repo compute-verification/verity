@@ -36,16 +36,16 @@ import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.Width
 
 /-!
-# An accepted run of the deployed `--zk` verifier is flock-verify `--zk`'s acceptance
+# An accepted run of the deployed `--zk` verifier is verity-verify-proof `--zk`'s acceptance
 
 The claims form's Flock verifier is `V true` (`deployZk`'s and `deployZkTrim`'s `V`, and so the sessions' verifier of
 the sampling record `SamplingDeploy.deploy`). Where its run accepts against SHA-512 (`zkAccepts_of_run`), it decided
-at the statement's inputs `s` (`insOf true x = some s`, what flock-verify reads of the statement), on the last message's
+at the statement's inputs `s` (`insOf true x = some s`, what verity-verify-proof reads of the statement), on the last message's
 record and proof files `f`, and:
 
 * the record's sample is the statement's as a value (`Custody.recordDraw_of_checks`: the verifier rebuilds both,
   `Flock.norm`);
-* flock-verify `--zk` accepts that transcript at the statement's inputs (`AcceptsZK s.read.I ⟨f.record, f.proofs⟩`, and
+* verity-verify-proof `--zk` accepts that transcript at the statement's inputs (`AcceptsZK s.read.I ⟨f.record, f.proofs⟩`, and
   so `LiveAcceptsZK` at every outcome carrying it).
 
 This is the `--zk` side of `plainVerdict_of_run`. Equality of the sample as a value is what the setup reads: `Exec.setupOf`
@@ -65,7 +65,7 @@ theorem deployZkTrim_V (rel : Readable.Parsed → Readable.Relation) : (FlockDep
 theorem deploy_flock_V (rel : Readable.Parsed → Readable.Relation) (c : SamplingDeploy.Code) :
     (SamplingDeploy.deploy rel c).flock.V = V true := rfl
 
-/-- **An accepted run of `V true` is flock-verify `--zk`'s acceptance**: against SHA-512, the run decided at the
+/-- **An accepted run of `V true` is verity-verify-proof `--zk`'s acceptance**: against SHA-512, the run decided at the
 statement's inputs `s` on its last message's record and proof files `f`; the record's sample is the statement's, and
 `verify --zk` accepts `⟨f.record, f.proofs⟩` at `s.read.I`. -/
 theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
