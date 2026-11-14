@@ -13,9 +13,8 @@ was rejected.
 
 A spatial unit has one clock. The audit keeps each window's sync (`Audit.syncs`), set by the first egress link checked
 for that window, and a link that declares a different sync for the window is an `advice` violation there. The bound on
-accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows (Lean
-`Properties.NetworkCertifier.EncardProgramRunsLeWindows`, whose timing advice is `Fin W → Σ_sync`): 7 bits per window
-at 16 × 8. A sync per link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
+accepted runs charges one sync per window for all links, `#Σ_sync^W` values over W windows
+(`capacity.accepted_bound_bits`, whose timing advice is one sync a window): 7 bits per window at 16 × 8. A sync per link would be advice of `#Σ_sync^(L·W)`, which that bound doesn't cover.
 
 The Program's grids are computed from the syncs as declared, out-of-set values included, so a declared sync outside the
 set, or other than the unit's, is an `advice` violation in its own window only. A window's grid reads only the syncs of

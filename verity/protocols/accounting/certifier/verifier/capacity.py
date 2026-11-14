@@ -43,9 +43,9 @@ def unbound_bits(buckets: int, allocation: int, frame_bits: int) -> float:
 
 def accepted_bound_bits(content_bits: float, sync_bits: float, windows: int, jitter_classes: int = 1,
                         steps: int = 0) -> float:
-    """Lean `Properties.NetworkCertifier.EncardProgramRunsLeWindows`, at `steps = W·T`: the Program's accepted
-    sequences number at most `#Ac · #Σ_sync^W · D^n`, which is `A_c + W·log2 #Σ_sync + n·log2 D` bits. With one sync
-    value under J it is the content advice's `A_c` alone."""
+    """The check's accepted sequences, at `steps = W·T`, number at most `#Ac · #Σ_sync^W · D^n`, which is
+    `A_c + W·log2 #Σ_sync + n·log2 D` bits; no Lean states it. With one sync value under J it is the content advice's
+    `A_c` alone."""
     return content_bits + windows * sync_bits + steps * math.log2(jitter_classes)
 
 

@@ -28,7 +28,6 @@
   "Properties.Pous",
   "Properties.NetworkCertifier.Check",
   "Properties.NetworkCertifier.Check.TransferBlocks",
-  "Properties.NetworkCertifier.Syncs",
   "Properties.Hash.Identity",
   "Properties.Annot",
   "Properties.Core.Evaluate",
@@ -1012,7 +1011,6 @@
   "Properties.Hash.Identity",
   "Properties.NetworkCertifier.Check",
   "Definitions.NetworkCertifier",
-  "Properties.NetworkCertifier.Syncs",
   "Properties.Pous",
   "PousCheck.P2",
   "PousCheck.Params",
@@ -1208,10 +1206,6 @@
   "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": {
    "honest": ["Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest"],
    "nontrivial": "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial"
-  },
-  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
-   "honest": ["Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest"],
-   "nontrivial": "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial"
   },
   "Pous.Period.SecurityProofs.periodHeldCoins": {
    "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
@@ -2426,11 +2420,6 @@
     "Properties.Spot.HistoryTable"
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
-  },
-  "Properties.NetworkCertifier.Syncs": {
-   "imports": ["Properties.NetworkCertifier.Check", "Definitions.NetworkCertifier", "Mathlib.Data.Set.Card"],
-   "except": [],
-   "why": "the two statements are read against the check's own grid and the reference Program: stated over their definitions, never a proof"
   },
   "Properties.Accounting.Remote": {
    "imports": ["RemoteAudit", "Properties.Accounting.Remote"],
@@ -4323,81 +4312,6 @@
    },
    "type_hash": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
    "unfolded_hash": "d16e8f3e2a6ff3d2bdabdc2709488831ff94bcef0fb55bbf9dd6fdfd9e1c7837"
-  },
-  "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Proofs.NetworkCertifier.encardProgramRunsLeWindows : Properties.NetworkCertifier.EncardProgramRunsLeWindows"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "f25374afe9cdc911a9205f529c3c530f0c48b25d63452845a40f9e22081cf4d1",
-   "unfolded_hash": "322207565cc534b35c1c4da37e6e862c996bd853147b1470ff324d2c8d15b359"
-  },
-  "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_honest :",
-    "  Set.instMembership.mem",
-    "    (NetTiming.AccSeqs",
-    "      (NetTiming.constantRate Properties.CertifierNetwork.Instance.config.egress.buckets",
-    "        Properties.CertifierNetwork.Instance.config.windows 1",
-    "        (Properties.NetworkCertifier.programFrames Properties.CertifierNetwork.Instance.config",
-    "          Properties.CertifierNetwork.Instance.oneFrame))",
-    "      (fun x x_1 => Unit.unit) (instHMul.hMul 1 Properties.CertifierNetwork.Instance.config.egress.buckets) 1)",
-    "    Properties.CertifierNetwork.Instance.honestObs"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "8519e9ad29c1be343f31772ce1761dbb4df902d51ccce158d5c910865f279937"
-  },
-  "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Proofs.NetworkCertifier.encardProgramRunsLeWindows_nontrivial :",
-    "  Not",
-    "    (instLEENat.le",
-    "      (NetTiming.AccSeqs { rows := fun t x a => a t } (fun x x_1 => Unit.unit)",
-    "          (instHMul.hMul 1 Properties.CertifierNetwork.Instance.config.egress.buckets) 1).encard",
-    "      (instHMul.hMul",
-    "          (instHMul.hMul (Fintype.card Unit)",
-    "            (instHPow.hPow",
-    "              (instHMul.hMul Properties.CertifierNetwork.Instance.config.syncSet.deltas.length",
-    "                Properties.CertifierNetwork.Instance.config.syncSet.rhos.length)",
-    "              (instMinNat.min Properties.CertifierNetwork.Instance.config.windows 1)))",
-    "          (instHPow.hPow 1 (instHMul.hMul 1 Properties.CertifierNetwork.Instance.config.egress.buckets))).cast)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "77efdb18ce8d571ff975b1a925800cd1d135385ba892e38ecfc8e8aae857af89"
-  },
-  "Proofs.NetworkCertifier.expectedGridCausal": {
-   "owner": "@network-accounting",
-   "signature": ["Proofs.NetworkCertifier.expectedGridCausal : Properties.NetworkCertifier.ExpectedGridCausal"],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "86eacbbf1d2f91104f28931042647964046cbf759679941baaec4516e865a31e",
-   "unfolded_hash": "7e155b78bbb944db2c87593be628aea390ffc6b1955a87779ec653d44fb7833f"
   },
   "Properties.Challenger.Drawn.familyOneCommitment": {
    "owner": "@proofs",
@@ -11625,7 +11539,6 @@
  },
  "shape": {
   "premises": [
-   "Definitions.NetworkCertifier.Premises",
    "Definitions.Accounting.Assumptions",
    "Properties.Accounting.Remote.Line.Premises",
    "Properties.Accounting.Remote.Schedule"
@@ -12829,14 +12742,6 @@
    "Properties.RemoteAudit.Subprotocol.publishedEps": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
-   },
-   "Proofs.NetworkCertifier.expectedGridCausal": {
-    "function": "NetworkCheck.Check.expectedGrid",
-    "outcome": "none"
-   },
-   "Proofs.NetworkCertifier.encardProgramRunsLeWindows": {
-    "function": "NetworkCertifier.handingBuckets",
-    "outcome": "none"
    },
    "Properties.Pouw.PearlPlus.openingBinds": {
     "function": ["PouwCommit.rowsDomain", "PouwCheck.PearlPlus.opens"],

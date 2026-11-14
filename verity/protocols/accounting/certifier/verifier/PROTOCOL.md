@@ -942,9 +942,8 @@ halt, and later windows are still checked.
 **One clock per spatial unit.** Every egress link of the unit reads the same sync in a window. The audit keeps each
 window's sync (`Audit.syncs`), set by the first egress link checked for that window. A link that declares a different
 sync for the window is an `advice` violation in that window, even if its sync is in Σ_sync. The reason is the bound:
-the accepted-runs bound charges one sync per window for all links. The count of the Program's runs
-(`Properties.NetworkCertifier.EncardProgramRunsLeWindows`, at m = W) takes the advice `Ac × (Fin W → Σ_sync)`, so its 7 bits per
-window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
+the accepted-runs bound charges one sync per window for all links. Its advice is `Ac × (Fin W → Σ_sync)`, so its 7 bits
+per window at 16 × 8 are `#Σ_sync^W` values over W windows. A sync per link
 would be advice of `#Σ_sync^(L·W)` over L egress links, L times the bits, and an audit that took each link's syncs on
 their own would accept it.
 
@@ -954,10 +953,7 @@ a schedule), and every other window is checked against them. A window's grid rea
 earlier windows: a frame is eligible no earlier than its anchor, hand times only rise in canonical order, and the queue
 carries forward, for any clock-sync values, in the set or not (`expected_grids`, held to it by
 `test_network_certifier_capacity.py`). So a window before the violating one gets the same verdict whatever sync that window
-gave, and a later one is checked against the grid its advice gives it. Lean states it of the check's grid
-(`Properties.NetworkCertifier.ExpectedGridCausal`): the grid `expectedGrid` gives a link's window `w` is the same under
-any two lists of syncs that agree on windows `0 … w`, whatever either declares after them, and the rest of the window's
-verdict reads only that window's records and syncs.
+gave, and a later one is checked against the grid its advice gives it. No Lean states it of the check's grid.
 
 **Ingress links are audited on their statuses** (`Audit.check_ingress_link(link, records, windows)`). Lean's acceptance
 needs every boundary link's status to be complete, ingress links included, since an ingress status is itself an egress
@@ -986,8 +982,8 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | Exactly M released | at most `binom(T + M − 1, M)` | `SecurityProofs.CardCountsEqLe` |
 | At most M available | at most `binom(T + M, M)` grids | `SecurityProofs.EncardFifoGridsLeOfAvailable` |
 | Envelope, with no clock | `T·log2(r + 1)` bits per execution phase | Proposition 2 |
-| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | `Properties.NetworkCertifier.EncardProgramRunsLeWindows` at m = W, the count of the reference's constant-rate Program as one execution block of the W windows; no Lean states that the check's accepted runs are that Program's |
-| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `Properties.NetworkCertifier.EncardProgramRunsLeWindows`, the same Program's count; no Lean states that the check's accepted runs are that Program's |
+| Accepted runs of the check, with clock-sync advice | `A_c + W·log2 #Σ_sync + W·T·log2 D` bits: 7 bits per window at 16 × 8 sync values under J | `capacity.accepted_bound_bits`; no Lean statement |
+| Accepted runs of the check, over its first m windows | `A_c + m·log2 #Σ_sync + m·T·log2 D` bits for m ≤ W: 7 bits per window opened at 16 × 8 sync values under J, counted from the run's first window | `test_network_certifier_capacity.py`; no Lean statement |
 | The reference schedule, k advice bits per execution block | `E·k + n·log2 D` bits over E execution blocks of g·T buckets, for n ≤ E·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRate` |
 | The reference schedule, over the first m execution blocks | `min(E, m)·k + n·log2 D` bits, for n ≤ m·g·T steps | `SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRate` |
 | The reference schedule, per execution block | `k + g·T·log2 D` bits per execution block over any m whole execution blocks from block e₀ ((e₀ + m)·g·T ≤ E·g·T), given everything the run showed before block e₀: k bits under J | `SecurityProofs.EncardAccSeqsLeConstantRatePerExecutionPhase`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerExecutionPhase` |
@@ -1055,9 +1051,8 @@ monitoring period (the K charge, `k_charge.share_of_k_by_span` from each link's 
 `SecurityProofs.EncardIngressObsDecodableLe`) and per execution phase (`envelope_bits_per_window`,
 `SecurityProofs.EncardIngressObsDecodableLePerExecutionPhase`, whose interaction is any link's). Its egress per window
 (`clock_sync.bits_per_window`, `log2 #Σ_sync`, held by `test_network_certifier_calibration.py`) is the check's charge
-for each window opened, counted from the run's first window
-(`Properties.NetworkCertifier.EncardProgramRunsLeWindows`, a guarantee in `security/Properties/lean-audit.json` stated
-over the network check's code, as the table's two rows of the check's accepted runs are). The steps of their proofs are lemmas
+for each window opened, counted from the run's first window, which no Lean states, as no Lean states the table's two
+rows of the check's accepted runs. The steps of their proofs are lemmas
 (`security/Proofs/NetworkCertifier/Lemmas.lean`): proved and audited, with no record.
 
 The egress bounds are proved in Lean for `constantRate`, the reference Program of `schedule`: E
@@ -1068,16 +1063,15 @@ the audit checks. The bound is k bits per execution block, summed from the run's
 (`SecurityProofs.EncardAccSeqsLeConstantRate`). A monitoring period within the first m execution blocks is charged only
 those m (`SecurityProofs.EncardAccSeqsLeConstantRateExecutionPhases`), and a decoder of the wire recovers no more
 (`SecurityProofs.EncardDecodableLeConstantRate`). The check, which reads one clock sync per window, is that Program as
-one execution block of its W windows, with the send ticks the program computes from the syncs: that Program's runs
-number at most `#Ac · #Σ_sync^W · D^(W·T)` (`Properties.NetworkCertifier.EncardProgramRunsLeWindows` at m = W), 7 bits per
-window at 16 × 8 sync values, and no Lean states that the check's accepted runs are among them. At one execution block the reference's forms over the first m blocks and per block give
-nothing finer, so the check's bound over its first m windows comes from the program instead: a window's sync moves no
-hand tick before the window's start (`Properties.NetworkCertifier.ExpectedGridCausal`), so the first m windows' rows
-read only the content advice and those windows' syncs, and the Program's sequences over them number at most
-`#Ac · #Σ_sync^min(W, m) · D^(m·T)` (`Properties.NetworkCertifier.EncardProgramRunsLeWindows`). The per-block
-form, a window's bits given everything the run showed before it, has no Lean statement for the check and need not hold
-of it: the queue and the hand ticks carry from one window into the next, so the run shown before a window need not fix
-the rows the window's sync gives.
+one execution block of its W windows, with the send ticks the program computes from the syncs: its accepted runs
+number at most `#Ac · #Σ_sync^W · D^(W·T)`, 7 bits per window at 16 × 8 sync values. At one execution block the
+reference's forms over the first m blocks and per block give nothing finer, so the check's bound over its first m
+windows comes from the program instead: a window's sync moves no hand tick before the window's start, so the first m
+windows' rows read only the content advice and those windows' syncs, and their sequences number at most
+`#Ac · #Σ_sync^min(W, m) · D^(m·T)`. No Lean states either count of the check; `test_network_certifier_capacity.py`
+holds both on small grids. The per-block form, a window's bits given everything the run showed before it, need not hold
+of the check: the queue and the hand ticks carry from one window into the next, so the run shown before a window need
+not fix the rows the window's sync gives.
 
 The ingress bound is proved in Lean, for a decoder in X that reads the wire (`SecurityProofs.EncardIngressDecodableLe`)
 or the records (`SecurityProofs.EncardIngressObsDecodableLe`). It counts `(r_in + 1)^T` occupancies per ingress
@@ -1228,7 +1222,7 @@ Each assumption, and what breaks without it:
   - Each window's part is self-delimiting, and the windows' charges sum to the whole encoding.
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
     windows' charges bound the first m windows, which the per-window form needs, as `expected_grids` gives it for the
-    syncs (`Properties.NetworkCertifier.ExpectedGridCausal`). A prefill step that releases nothing is still charged.
+    syncs. A prefill step that releases nothing is still charged.
 - **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (D = 1
   is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within

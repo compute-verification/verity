@@ -95,7 +95,6 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pous.Pooled", "Properties.Pous.PeriodGame", "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Pous.Component",
   "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.Check.TransferBlocks",
-  "Properties.NetworkCertifier.Syncs",
   "Properties.Hash.Identity", "Properties.Attest", "Properties.Annot", "Properties.Nci.Desc",
   "Properties.Nci.Desc.Verdict", "Properties.Nci.Desc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count",
   "Properties.Spot", "Properties.Spot.Draw", "Properties.Spot.Bits", "Properties.Spot.Interval",
