@@ -35,7 +35,10 @@ row's history is the row before's plus one part in the descriptor.  In class G's
 blocks (`vllm_dsa.long_row_blocks`), each row read at its block's keys and selecting among its own (DsaTopKMaskCounted), each
 op over a block's rows in turn, and a token's latent row is one DsaLatentRow, as the rule writes them; under table reads
 (`Registered.dsa_table_reads`) a long row's selection is DsaTopKIndex's positions and both kinds of layer read their rows at
-them by DsaHistoryReads (`program.dsa_table`).  A fact outside it raises
+them by DsaHistoryReads (`program.dsa_table`).  Over an fp8_ds_mla KV cache (φ's engine `kv_cache_dtype`, `phi.STATED_KV_LAYOUT`)
+a token's latent row is one DsaLatentRowDsMla, which also writes its 656-byte cache row; the sparse rows of a launch take FlashMLA's
+fp8 decode (FlashMlaV32Decode) over INDEX_TOPK rows each, and a dense-MHA prefill's context is each row's Fp8DsMlaUpconvertRow; a
+history read as Inputs and a row past INDEX_TOPK are refused there.  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
 chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
@@ -56,6 +59,12 @@ from .phi import Phi
 
 def _refuse(fact: str):
     raise Unexpressible(f"vocabulary cannot express: {fact}")
+
+
+# vLLM d9105ea80's FlashMLA sparse backend (flashmla_sparse.py): below this many heads a rank an fp8_ds_mla cache takes one mixed
+# batch of every sparse row, its query padded to FP8_PADDED_HEADS heads, the planner's h_q.
+MIN_HEADS_FOR_BF16_PREFILL = 32
+FP8_PADDED_HEADS = 64
 
 
 def run_field(layer: int, pos: int) -> str:
@@ -103,7 +112,7 @@ class Net:
     """One rank's decoder: the configuration, the weights record (`leaves`), the peers a pass reads (`peer_shapes`) and the target's
     selections the forward (`model`) reads."""
 
-    DOMAIN = ((8,), ("eager", "compiled"), ("float8_e4m3fn",))
+    DOMAIN = ((8,), ("eager", "compiled"), ("float8_e4m3fn",), ("fp8_ds_mla",))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         from verity_vllm.engine.profiles import family_facts as FF
@@ -155,6 +164,9 @@ class Net:
             self.dot = TG.tensor_core_dot(self.tp)
         except (ValueError, TG.UnregisteredTarget) as e:
             facts.append(str(e))
+        self.kv_layout = (phi.engine or {}).get("kv_cache_dtype")
+        if self.kv_layout is not None:
+            facts += self._kv_layout_facts()
         if facts:
             _refuse("; ".join(facts))
         self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), phi.engine.get("env") or {})
@@ -186,6 +198,26 @@ class Net:
             for rest in ff["params"]["buffers"]:
                 add(f"model.layers.{L}.{rest}")
 
+    def _kv_layout_facts(self) -> list[str]:
+        """What of an `fp8_ds_mla` cache (`phi.STATED_KV_LAYOUT`) the calls `_Model.attention` writes over it do not hold: its rows
+        are the DsaLatentRowDsMla split of a latent of 512 and a rope of 64 (`DsaLatentRowDsMla_v1`, `Fp8DsMlaUpconvertRow_v1`), and
+        FlashMLA's sparse fp8 kernel takes every sparse row of a step in one mixed batch below MIN_HEADS_FOR_BF16_PREFILL heads a
+        rank, over whole BN-row blocks of INDEX_TOPK rows (`FlashMlaV32Decode_v1`)."""
+        from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+        C, G = self.C, FLASHMLA_GLM53
+        if self.kv_layout != "fp8_ds_mla":
+            return [f"a KV cache in layout {self.kv_layout!r} (the decoder writes fp8_ds_mla's)"]
+        facts = []
+        if (int(C["KV_LORA"]), int(C["QK_ROPE"])) != (G["DN"], G["DR"]):
+            facts.append(f"an fp8_ds_mla cache at latent {C['KV_LORA']} and rope {C['QK_ROPE']} (its row is {G['DN']} e4m3, "
+                         f"{G['DN'] // G['QT']} f32 scales and {G['DR']} bf16)")
+        if int(C["NH"]) >= MIN_HEADS_FOR_BF16_PREFILL:
+            facts.append(f"an fp8_ds_mla cache at {C['NH']} heads a rank (FlashMLA's mixed batch serves fewer than "
+                         f"{MIN_HEADS_FOR_BF16_PREFILL}; from it on, prefills upconvert to bf16)")
+        if int(C["INDEX_TOPK"]) % G["BN"]:
+            facts.append(f"an fp8_ds_mla cache at INDEX_TOPK {C['INDEX_TOPK']} (FlashMLA reads whole {G['BN']}-row blocks)")
+        return facts
+
     def leaves(self) -> list[tuple[str, Type]]:
         return [(name, t) for name, t, _ in self._leaves]
 
@@ -207,7 +239,11 @@ class Net:
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
         layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
-        layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and their scales `prefix_iks` (f32 [NI, C])."""
+        layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and their scales `prefix_iks` (f32 [NI, C]).
+        Over an fp8_ds_mla cache no history is read as Inputs yet."""
+        if self.kv_layout is not None:
+            _refuse(f"a history of {C} positions over an {self.kv_layout} cache read as Inputs (a prefix-cache hit or a Commit window's "
+                    f"edge: a request's Program computes every cache row it reads)")
         NI, row = len(self.indexers), int(self.C["KV_LORA"]) + int(self.C["QK_ROPE"])
         return [("prefix", _arr((self.NL, C, row), 16)), ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)),
                 ("prefix_iks", _arr((NI, C), 32))]
@@ -295,7 +331,9 @@ class _Model:
     (`build.build_program`'s `batched`), whose latent rows are one Definition each and whose rows past INDEX_TOPK go in blocks
     (`vllm_dsa.long_row_blocks`), each op over a block's rows in turn, so that `prune.batched_form` batches them.  `table_reads`:
     in that form, those rows by table reads (`build.build_program`'s `table_reads`): `topk` holds a long row's `DsaTopKIndex`
-    positions, and each layer reads its rows at them (`DsaHistoryReads`) in place of the rows network."""
+    positions, and each layer reads its rows at them (`DsaHistoryReads`) in place of the rows network.  Over an fp8_ds_mla cache
+    (`Net.kv_layout`) a layer's history is its cache rows, three logs: `latent` the e4m3 NoPE bytes, `scale` their f32 scales and
+    `rope` the bf16 k_pe."""
 
     reads_launch = True
     batched = False
@@ -476,14 +514,23 @@ class _Model:
         w = lambda f: self.w[(L, f)]  # noqa: E731
         prefills = self.launch.prefills((E, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
         dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
-        logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+        logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog(), "scale": PartLog(), "rope": PartLog()})
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
+        fp8 = self.net.kv_layout is not None
+        if fp8 and keys[-1] > TOPK:
+            _refuse(f"a row of {keys[-1]} keys, past INDEX_TOPK ({TOPK}), over an {self.net.kv_layout} cache (FlashMLA's sparse fp8 "
+                    f"decode over the rows its top-k selects)")
         cs = [self.w["cos_sin"].refs.slice((pos0 + i) * R, (pos0 + i + 1) * R) for i in range(M)]
         qkv = self.fp8_linear(x, w("qkv_a_w"), w("qkv_a_ws"))
         wkp = self.cublas(x, w("wk_w")) if indexer else None
         qn = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS)
         qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
-        if self.batched:
+        if fp8:
+            from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+            lr = self.k("dsa_latent_row_ds_mla", KVL=KVL, R=R, TILE=FLASHMLA_GLM53["QT"], EPS=self.EPS)
+            cache = [self.call(lr, q.slice(QL, QL + KVL + R), w("kv_a_ln").refs, c) for q, c in zip(qkv, cs)]
+            kvc, kpe = [o[0].refs.slice(0, KVL) for o in cache], [o[0].refs.slice(KVL, KVL + R) for o in cache]
+        elif self.batched:
             lr = self.k("dsa_latent_row", KVL=KVL, R=R, EPS=self.EPS)
             lat = [self.call(lr, q.slice(QL, QL + KVL + R), w("kv_a_ln").refs, c).refs for q, c in zip(qkv, cs)]
             kvc, kpe = [r.slice(0, KVL) for r in lat], [r.slice(KVL, KVL + R) for r in lat]
@@ -501,7 +548,12 @@ class _Model:
         qpe = [concat([self.call(qr, q.slice(h * D + NOPE, (h + 1) * D), c).refs for h in range(NH)]) for q, c in zip(qb, cs)]
         context = len(logs["latent"])
         for i in range(M):
-            logs["latent"].append(concat([kvc[i], kpe[i]]))
+            if fp8:
+                logs["latent"].append(cache[i][1].refs)
+                logs["scale"].append(cache[i][2].refs)
+                logs["rope"].append(kpe[i])
+            else:
+                logs["latent"].append(concat([kvc[i], kpe[i]]))
         own = (E, pos0) in dense
         mqa = self.launch.keys([] if own else keys, without=dense)
         if indexer:
@@ -542,6 +594,9 @@ class _Model:
                     self.topk[pos0 + i] = self.call(fs, m)
         if own:
             return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense, E), w("o_w"), w("o_ws"))
+        if fp8:
+            return self.fp8_linear(self.absorb(self._flashmla_fp8(logs, ql, qpe, keys, len(mqa)), w("w_uv"), NH, KVL, VH),
+                                   w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
         batch = [min(n, TOPK) for n in mqa]
         by_keys = dict(zip(batch, launch_num_splits(batch, int(self.net.tp.num_sms), TOPK, 0)))
@@ -567,6 +622,37 @@ class _Model:
             att.append(self.call(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
                                         DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], kv).refs)
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))
+
+    def _flashmla_fp8(self, logs: dict[str, PartLog], ql: list[Refs], qpe: list[Refs], keys: list[int], tokens: int) -> list[Refs]:
+        """The rows' attention over an fp8_ds_mla cache (`FlashMLASparseImpl._forward_fp8_kv_mixed_batch`) -> rows [NH * KV_LORA]: one
+        FlashMLA call over the launch's `tokens` sparse rows, which the planner takes as one request of that many query rows at
+        FP8_PADDED_HEADS heads over INDEX_TOPK cache rows (`flashmla_twin.sched_meta`), so every row shares its SPLITS.  Row i's
+        query is per head [ql | q_pe]; its INDEX_TOPK cache rows are its keys' (nope, scale, rope) in index order, then row 0's
+        under index -1 (`FlashMlaV32KvRow_v1` zeroes them)."""
+        from verity.definitions.numerics import flashmla_twin as FT
+        from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53 as G
+        C = self.C
+        KVL, R, NH, TOPK = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "NH", "INDEX_TOPK"))
+        metas, ns = FT.sched_meta([TOPK], topk=TOPK, parts=FT.num_sm_parts(FP8_PADDED_HEADS, s_q=tokens,
+                                                                          num_sms=int(self.net.tp.num_sms)), block_size_n=G["BN"])
+        fn = self.k("flashmla_v32_decode", NH=NH, SPLITS=FT.request_splits(metas, ns, 0, TOPK // G["BN"]), DN=KVL, DR=R, QT=G["QT"],
+                    BN=G["BN"], DOT=G["DOT"], SCALE=float(C["ATTN_SCALE"]))
+        valid, pad = (self.call(self.k("const", W=32, BITS=v)).refs for v in (0, 0xFFFFFFFF))
+        out = []
+        for i, n in enumerate(keys):
+            q = concat([p for h in range(NH) for p in (ql[i].slice(h * KVL, (h + 1) * KVL), qpe[i].slice(h * R, (h + 1) * R))])
+            rows = [log.cut(n, [log.parts[0]] * (TOPK - n)) for log in (logs["latent"], logs["scale"], logs["rope"])]
+            out.append(self.call(fn, q, *rows, concat([valid] * n + [pad] * (TOPK - n))).refs)
+        return out
+
+    def _context_rows(self, L: int, context: int) -> list[Refs]:
+        """Layer L's first `context` history rows as bf16 [kv_c | k_pe], what a dense-MHA prefill gathers for its context: the latent
+        rows, or over an fp8_ds_mla cache each row's `Fp8DsMlaUpconvertRow_v1` (`cp_gather_and_upconvert_fp8_kv_cache`)."""
+        logs = self.logs[L]
+        if self.net.kv_layout is None:
+            return logs["latent"].parts[:context]
+        fn = self.k("fp8_ds_mla_upconvert_row", DN=int(self.C["KV_LORA"]), DR=int(self.C["QK_ROPE"]))
+        return [self.call(fn, logs["latent"].parts[j], logs["scale"].parts[j], logs["rope"].parts[j]).refs for j in range(context)]
 
     def _dense_prefill(self, L: int, qb: list[Refs], qpe: list[Refs], kvc: list[Refs], kpe: list[Refs], context: int, pos0: int,
                        dense: list[tuple[int, int]], entry: int) -> list[Refs]:
@@ -613,7 +699,7 @@ class _Model:
         if plan.merge is None:
             return [concat([o.refs for o in heads(fn, qs[i], i + 1, sfx)]) for i, fn in enumerate(plan.heads)]
         if context:
-            hist = self.logs[L]["latent"].parts[:context]
+            hist = self._context_rows(L, context)
             ckvb = self.fp8_linear([r.slice(0, KVL) for r in hist], w("kv_b_w"), w("kv_b_ws"), rows=plan.held)
             pre = head_logs(ckvb, [r.slice(KVL, KVL + R) for r in hist])
         else:
