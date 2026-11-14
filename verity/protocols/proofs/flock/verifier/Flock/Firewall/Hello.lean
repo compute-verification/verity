@@ -16,6 +16,7 @@ module
 
 public import Flock.Firewall
 public import Flock.WitnessZk
+public import Flock.ProgramRead
 public import Flock.Firewall.Coins
 
 @[expose] public section
@@ -84,12 +85,15 @@ def lawOf (args : List String) :
     pure (work, ← nat "--stratified", ← closure)
 
 /-- A firewalled statement's `Hello` inputs, read once: `flock-verify verify --zk`'s statement of its files
-(`Witness.Inputs`) and the sampling design's inputs (`lawOf`). -/
+(`Witness.Inputs`), the sampling design's inputs (`lawOf`), and the readers its setups read the program through, which
+read it once for all of them and are the readers anew (`readers_eq`). -/
 structure Setup where
   I : Witness.Inputs
   work : Option (Nat × Array (String × Nat × Nat))
   stratified : Option Nat
   closure : Option (Std.HashMap Nat (Array Nat))
+  readers : ProgramRead.Readers
+  readers_eq : readers = ProgramRead.Readers.anew
 
 /-- The statement flags a `Setup` reads. -/
 def FLAGS : String :=
@@ -113,18 +117,23 @@ def Setup.ofArgs (usage : String) (args : List String) : IO (Except String Setup
   let circuitFile ← IO.FS.readBinFile cf
   let publicFile ← IO.FS.readBinFile pf
   let tables ← Witness.readTables args
-  return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure }
+  let read := ProgramRead.kept (program.getD .empty)
+  return .ok { I := { tags, circuitFile, publicFile, count, tables, partition, program }, work, stratified, closure,
+               readers := read.readers, readers_eq := ProgramRead.readers_kept _ }
 
 /-- The session's spec and its tables' statements at the verifier's sample `draw` (`Stmt.setupTables`, `setup_eq`; the public
-file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseCommitFast`). -/
+file the verifier's own, without rows), its circuit parsed with each net's rows in tasks (`HmOut.parseCommitFast`) and its
+program read through `S`'s readers (`Stmt.setupTablesBy`). -/
 def Setup.setup (S : Setup) (draw : Option Json) : V (SessionSpec × Array Stmt) :=
-  Stmt.setupTablesOf (HmOut.parseCommitFast (Witness.zkTags S.I) S.I.circuitFile S.I.tables) (Witness.zkTags S.I) S.I.circuitFile
-    S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure
+  Stmt.setupTablesBy S.readers.desc S.readers.prog (HmOut.parseCommitFast (Witness.zkTags S.I) S.I.circuitFile S.I.tables)
+    (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count S.I.tables draw S.I.partition
+    S.I.program S.work S.stratified S.closure
 
 theorem Setup.setup_eq (S : Setup) (draw : Option Json) :
     S.setup draw = Stmt.setupTables (Witness.zkTags S.I) S.I.circuitFile S.I.publicFile (Witness.zkCoins S.I) S.I.count
       S.I.tables draw S.I.partition S.I.program S.work S.stratified S.closure := by
-  rw [Setup.setup, Stmt.setupTables_eq, HmOut.parseCommit_eq_fast]
+  rw [Setup.setup, S.readers_eq, ProgramRead.Readers.anew, Stmt.setupTables_eq, HmOut.parseCommit_eq_fast,
+    Stmt.setupTablesOf_eq_by]
 
 /-- The session's spec at `draw`. -/
 def Setup.spec (S : Setup) (draw : Option Json) : V SessionSpec := (S.setup draw).map (·.1)
