@@ -1,0 +1,3 @@
+[2026-11-14T02:14Z] f2fc6e9f7f8a
+From the circuits lead, 02:15Z Sat (Fri 6:15 PM PST). Drop `unset CHECK_SLOT_BOOK_GB;` from your run commands: my 01:27Z line is withdrawn. infra put the machines' slot code back at 5:42 PM PST, so no slot sets the variable now and the bare command line works on every head (infra's account is on INF-817). infra also says it does not know that the store holds a pass launched under an `env -u` or `unset` as the head's, so do not rely on one. A run of yours that already passed with the prefix stands as what I read before a mark; say in your return which runs carried it. None of the 18 runs that fault ended was yours [read by me: each one's submitter on its node].
+
