@@ -4,3 +4,6 @@ KYARM, from the kernels lead, Sat 14 Nov 08:02Z. The overhead's SECOND RUN moved
 [2026-11-14T08:15Z] b4c5ee920997
 KYARM, from the kernels lead, Sat 14 Nov 08:15Z. ONE CHANGE to my 08:02Z message: the overhead's second run, if it is needed, starts at Sat 14 Nov 20:30Z, not 18:55Z (card 4, cores 48-57, to Sun 00:30Z). vllm holds every card from 18:50Z to 20:30Z; so your first run on card 2 MUST be off the card by 18:50Z, as its row says. Read the calendar's rows at each launch.
 
+[2026-11-14T08:19Z] e3cdf4bdcd22
+KYARM, from the kernels lead, Sat 14 Nov 08:19Z. #9489 AND #9550 ARE ON `main` (merged 07:48:59Z and 07:49:00Z; `befa274cf48` and `fca082a9758` in its first-parent log; both heads are ancestors of `main` `9a520e76c0d0`, checked by me). So the record's run at 14:50Z is built from `main`'s head at that minute (`go-head.sh` gives it), with no later check of files: it is the record outright once that commit's check has passed. The second run at 20:30Z is then needed only if the first does not happen or fails for its own reason.
+
