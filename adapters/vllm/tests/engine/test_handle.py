@@ -112,9 +112,10 @@ def test_a_core_with_no_client_around_it_still_gives_its_parts():
     assert handle.core_in_process(llm) is False
 
 
-def _by_hand_in_remote(llm):
-    """`CommitSession.check`'s own read (PoUB's session, `remote.py`): true where it refuses."""
-    return getattr(getattr(llm.llm_engine, "engine_core", None), "engine_core", None) is None
+def _in_remote(llm):
+    """`CommitSession.check`'s own read (PoUB's session, `remote.py`), which takes the core from `core_or_none`: true where
+    it refuses."""
+    return getattr(handle.core_or_none(llm), "engine_core", None) is None
 
 
 def _by_hand_in_gpu_lease(eng):
@@ -126,9 +127,9 @@ def _by_hand_in_gpu_lease(eng):
 
 @pytest.mark.parametrize("engine", [NS(engine_core=NS(engine_core=NS())), *NOT_HERE.values()],
                          ids=["a client that holds the core", *NOT_HERE.keys()])
-def test_it_answers_as_the_two_reads_by_hand_outside_this_package_do(engine):
+def test_it_answers_as_the_two_reads_outside_this_package_do(engine):
     llm = NS(llm_engine=engine)
-    assert handle.core_in_process(llm) is not _by_hand_in_remote(llm)
+    assert handle.core_in_process(llm) is not _in_remote(llm)
     assert handle.core_in_process(llm) is not _by_hand_in_gpu_lease(NS(llm=llm))
     assert _by_hand_in_gpu_lease(NS(llm=None)) and _by_hand_in_gpu_lease(NS())      # a record with no engine: None above
 
