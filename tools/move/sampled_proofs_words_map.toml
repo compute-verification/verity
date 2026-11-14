@@ -104,12 +104,19 @@
 # lint, whose docstrings and examples name the older name as the older name, files whose bytes a digest pins (`rename.py`
 # repins a `TRUSTED.sha256` line itself), lock files, move_check's own tests and the Lean tools' fixtures.
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
-           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/uv.lock",
-           "**/*.lock", "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+           "tests/test_retired_terms.py", "fixtures/**", "**/fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py", "benchmarks/census/schemas/**"]
 
 [keep]
-# The Glossary's row of the older name, which names it; and the two-stage vectors' exporter's docstring, which keeps its
-# text as it moves: `exfiltration_two_lean.json` pins its digest, which only `generate.sh` rewrites.
+# The Glossary's row of the older name, which names it; the two-stage vectors' exporter's docstring, which keeps its text
+# as it moves (`exfiltration_two_lean.json` pins its digest, which only `generate.sh` rewrites); and every string literal
+# that holds the words, whose bytes a record, a reason, a seed or a published line may hold: the served record's
+# subprotocol name `"sampled proofs"` (its `by`, its `answers` keys and its reasons' `sampled proofs: accept`), its
+# `answer_from` texts, the `COINS` and `PREFLIGHT` lines `served_verdicts.sh` writes into `verdicts.txt`, an answer's
+# reason, a key's seed, a Definition's `doc`, a parameter's `source` and the Lean verifiers' refusals. An executable's
+# name in a string is a name, not the words, and moves with its executable.
 patterns = ['(?m)^\| "sampled proofs", the sampled proof system.*$',
-            'Vectors for `verity\.core\.protocols\.sampled_proofs\.consumers\.exfiltration_bound` on a design with a replay stage']
+            'Vectors for `verity\.core\.protocols\.sampled_proofs\.consumers\.exfiltration_bound` on a design with a replay stage',
+            '"[^"\n]*\b[Ss]ampled[ -]proofs(?![-\w])[^"\n]*"',
+            "\\b[Ss]ampled [\"']\\n[ \\t]*[rbfRBF]{0,2}[\"']proofs\\b"]
 strings = []
