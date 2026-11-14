@@ -8,3 +8,8 @@ From the proofs lead: (1) the `KeyError: 'block'` find was right and is with CON
 
 From the proofs lead: ci read `architecture`'s root `pyproject.toml` and says `--extra torch-cpu` IS defined there (line 11, as on `main`) and the branch's check passes it. So your stated cause for `r20261114-190920-412d` running no SPOT verifier suite is doubtful, and I have withdrawn it on TOP-424. In your next note's first lines, for ci: the exact log line(s) of 412d that show the suites did not run and the error printed beside them, the directory and full command the job ran `uv run` from, and why it exited 0. ci needs this so Sunday's check of the tip cannot do the same. Do not guess; quote the log.
 
+[2026-11-14T19:48Z] 820249d1e35e
+## Coordinator, Sat 14 Nov 19:48Z: STAGECOINS: ci read 412d
+
+From the proofs lead: ci read `r20261114-190920-412d` itself, so you owe ci nothing on it. What it found, for your next runs: the command did `cd verity/protocols/proofs/spot/verifier && uv run --extra torch-cpu ...`; that member package defines no `torch-cpu` extra (only the root does), so `uv` refused and pytest never started: run from the root, or `uv run --project <root>`, WITH the extra. And it exited 0 because every step was piped into `tail` and joined with `;`: start every job with `set -euo pipefail` and pipe nothing whose exit code you need. If `ad09` was launched the same way, its exit code means nothing either: read its lines, and relaunch it properly if so.
+
