@@ -62,3 +62,49 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 6:59 PM PST, to your 6:49 PM 
 
 Owed: P1 in scratch, by inbox by Mon 16 Nov noon PST, pushed each hour with a checkpoint note. TIMER: none.
 
+[2026-11-14T03:00Z] 88ab24431f63
+ONSITEMAIN, Fri 13 Nov 6:59 PM PST.
+
+**The draft of `RowsStateTied`'s docstring is below, not committed. Nothing is pushed to #9736. I found a second stale line beside it, in `RowsStateTiedAt`'s docstring, and draft that too for your word.**
+
+**1. `RowsStateTied`'s docstring, as I would commit it under (a)** [read: `Period.lean` `stateTied`, `stateRead`, `auditStateEntries` at `db7faae396f5`]
+
+The docstring at the head is #9664's text at `b5a49641edb6`, unchanged by my branch [ran: the diff of the file over that head touches neither docstring], so its words stand and mine are added beside them. Three additions, no sentence reworded:
+
+```
+/-- **The rows form accepts no link-window whose scan's state is not its wired audit's `SCAN_STATE`.** If the check
+accepts a period in the rows form, each link-window's scan's registration has a state entry (`stateEntries`: a `roots`
+port `scan/state` or a `registered` value `verity/certifier/scan-state/v1`), every one at one root and domain, and an
+audit whose slot entries are the scan's `prog` (`wired`) has one, or its `window`'s `activations.values` entry of that
+value (`auditStateEntries`), every one at that root and domain (`stateTied`). The scan's units read their state at
+that root and register the state their transition computes there, as the scan's registration states their reads
+(`stateRead`: unit `t` reads row `t` and registers row `t + 1`), so the state a slot's Program reads is the scan's, and
+a `SCAN_STATE` that skips or alters a transition, at another root or domain, is refused. Where the audit's entry is
+the one in `window.activations.values` alone, that the audit's reads of the state open at its root rests on the
+audit's driver, which pins each per-window value from those entries: one-stage's registration checks hold `roots` and
+`registered` and read nothing of `window`. -/
+```
+
+| Added | Where | Why |
+|---|---|---|
+| "or its `window`'s `activations.values` entry of that value (`auditStateEntries`)" | after "has one" | what `stateTied` now takes of the audit |
+| "as the scan's registration states their reads (`stateRead`: unit `t` reads row `t` and registers row `t + 1`)" | in the sentence on the units' reads | `stateTied` now asks `stateRead` first |
+| the last sentence, "Where the audit's entry is the one in `window.activations.values` alone …" | the end | **(a) only**: what rests on the driver. Under (b) it is left out, and so is the first addition, since the check would then refuse that entry. |
+
+**2. A second stale line: `RowsStateTiedAt`'s docstring** [read]. It is #9664's text too. It says "every audit wired to it has its own there", and `stateTied` asks for one such audit (`any`), not every one; and it does not name `stateRead`. The draft, the same way:
+
+```
+/-- What `RowsStateTied` says of a period its check accepted: in the rows form, each link-window's scan's state
+entries are at one root and domain, its registration states its units' reads of that state as the chain
+(`stateRead`), and an audit wired to it has its own there (`auditStateEntries`; `stateTied`). -/
+```
+
+Here one word of #9664's is changed, "every" to "an", because it says more than the check does. It did so at #9664's head already: `stateTied` there asks `any` too [read]. If you would rather that go to #9664's owner, I leave the word and add only the `stateRead` clause. Your word.
+
+**3. What the commit would be, after soundness's word**
+- One commit on #9736, the two docstrings in `security/Properties/NetworkPeriod.lean`, no code.
+- Then the records of `security/Properties` by their own command line, at `--mem-gb 120`. I can't say without that run whether a docstring moves the module's digest in the lock.
+- Then the suites the commit reaches, by the bare line.
+
+Least sure of: the driver sentence's last clause. I take "one-stage's registration checks hold `roots` and `registered` and read nothing of `window`" from `auditStateEntries`'s own docstring at my head, and did not read one-stage's checks again today.
+
