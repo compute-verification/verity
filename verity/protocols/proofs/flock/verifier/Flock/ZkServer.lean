@@ -627,7 +627,7 @@ def run (s : Schedule) (reqs : List ByteArray) (salts : List ByteArray) : Array 
     | .error _ => stopped := true
   return (st.sent, st.finished && !stopped)
 
-/-! ## The challenger's live-coin part's record (`rec_live.CoinServer.record`, without the coins it drew) -/
+/-! ## The challenger's live-coin part's record (`rec_live.LiveCoinPart.record`, without the coins it drew) -/
 
 def hexs (l : List ByteArray) : Json := .arr (l.map (Json.str ∘ hexOf)).toArray
 
@@ -658,7 +658,7 @@ def record (sent : Array Sent) (ok : Bool) : Json := Id.run do
     ("link", link), ("streams", Json.mkObj named), ("rounds", .arr rounds), ("message_rows", jnat rows),
     ("row_words", jnat ROW_WORDS), ("end", .str (if ok then "finish" else "stop"))]
 
-/-- The challenger's live-coin part's calls, in order, as `rec_live.CoinServer`'s methods: `start`, `commit`, `y`, `open` with its stream,
+/-- The challenger's live-coin part's calls, in order, as `rec_live.LiveCoinPart`'s methods: `start`, `commit`, `y`, `open` with its stream,
 parent and position, `round` with its stream and coin count. -/
 def calls (sent : Array Sent) : Json :=
   .arr (sent.filterMap fun
@@ -733,7 +733,7 @@ def cmd (_ : List String) : IO UInt32 := do
 /-- A salt's bytes, `hm96-sha512/v1`'s. -/
 def SALT_BYTES : Nat := 192
 
-/-- A message to the challenger's live-coin part, as `rec_live` relays it to `CoinServer`'s methods. -/
+/-- A message to the challenger's live-coin part, as `rec_live` relays it to `LiveCoinPart`'s methods. -/
 def sentJson : Sent → Json
   | .hello h => Json.mkObj [("hello", h)]
   | .commit roots => Json.mkObj [("commit", .arr (roots.map fun (n, t) => Json.arr #[.str n, hexs t]).toArray)]
