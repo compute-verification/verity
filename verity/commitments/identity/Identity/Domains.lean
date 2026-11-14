@@ -170,6 +170,7 @@ abbrev REMOTE_BANDWIDTH_REGISTRY : String := "verity/remote-bandwidth/registry/v
 abbrev REMOTE_BANDWIDTH_SEED : String := "verity/remote-bandwidth/seed/v0"
 abbrev REMOTE_BANDWIDTH_SKETCH_RECEIPT : String := "verity/remote-bandwidth/sketch-receipt/v0"
 abbrev REMOTE_BANDWIDTH_SKETCH_SIGNS : String := "verity/remote-bandwidth/sketch-signs/v0"
+abbrev REMOTE_BANDWIDTH_SKETCH_SIGNS_WIDE : String := "verity/remote-bandwidth/sketch-signs/v1"
 abbrev REMOTE_BANDWIDTH_STUB_TILE : String := "verity/remote-bandwidth/stub-tile/v0"
 abbrev REMOTE_BANDWIDTH_TIMING_JITTER : String := "verity/remote-bandwidth/timing-jitter/v0"
 abbrev REMOTE_BANDWIDTH_PROTOCOL : String := "verity/remote-bandwidth/v0"

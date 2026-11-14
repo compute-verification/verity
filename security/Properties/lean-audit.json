@@ -25884,7 +25884,7 @@
    }
   },
   "RemoteAudit.P2": {
-   "digest": "647bbed1323a883f3ef9d7c5f7c92ee48c9575ea0b85911ce0a699c84dbb0df2",
+   "digest": "52b758e6c2a1ca1ba30f243601cf53ef6a59332c2cd42473a046b654e2126123",
    "definitions": {
     "RemoteAudit.P2.BLOCK_BYTES": "1d7ade01be47941fd47c086b050eb3fd04847b57ce957191600ae6c181d7a1d9",
     "RemoteAudit.P2.C0": "497c7dfdf407666f5cba2eb6231c53ff1aaf1a5db29be8db747796a81fbaddcc",
@@ -25922,7 +25922,7 @@
     "RemoteAudit.P2.instInhabitedOpening.default": "01ee575a47bda438bbd3f3b08ca3a0c6bc2252f0e4acb0068916c060062ad9c8",
     "RemoteAudit.P2.int32s": "289ef88eeac9a64602b699f0b60917ac40ed114bc139be8c104948f050369f13",
     "RemoteAudit.P2.unitReceipt": "3e301fb86c0f6e2779a0781a8548a5c3f8ad16ca90d1dec06757ea8955fa5c70",
-    "RemoteAudit.P2.unitSigns": "82cbb1ae51faec3da61330789293c2d1a7c0439d71780a53b5e54a46fe0da765",
+    "RemoteAudit.P2.unitSigns": "8530e07f5fe41448a70c5b78aa30f138f52220aae32f7c871003ff2f10fa7544",
     "RemoteAudit.P2.unitSketch": "5d96ab6f5037cd0bb358ca297175616d7900615ba3a99411f0a4344cba4560c6",
     "_private.RemoteAudit.P2.0.RemoteAudit.P2.int8": "a6b7564df0f15c7f0c5d4d3fe55faae184b031782c4c38de9208cffb9e1173ef"
    }
@@ -26097,7 +26097,7 @@
    }
   },
   "RemoteAudit.Receipts": {
-   "digest": "c61ffe7a9f87c9b91d51863312d91de40643191886416b32157de17c72270ad1",
+   "digest": "055557d9610978b0bb150bdcd027746cd9b1d86e82c49939685ff9ec0bb824cc",
    "definitions": {
     "RemoteAudit.APPENDS_DOMAIN": "2b166138902859bc94cc8e9e904e194f5b309ec600d0c099da1ef655f5e74c08",
     "RemoteAudit.CHAINED_DOMAIN": "25494f754865049cbc11e58b7f9ca62fd1d50eb9942d66846f5b0caac5889948",
@@ -26121,8 +26121,10 @@
     "RemoteAudit.SCHEMA": "e0f1ad1147cf2cd07a16d707d5965ec24e6d88c9cacc5a84b96306794794d5ff",
     "RemoteAudit.SEED_DOMAIN": "c3fdd1df265a57d07b995eb75f237e9ceec19ce28aa0a40eb5a59c9fc3439be6",
     "RemoteAudit.SIGN_DOMAIN": "2b8ac7608980fbeac5a2842edec42583d21fc499fb6e3d52e8aefc7fdd1603ed",
+    "RemoteAudit.SIGN_DOMAIN_WIDE": "80ea5ef7a589d4ac8d4b7cf0791301a10cee1cbd6107469411b942eed7339d3c",
     "RemoteAudit.SKETCH_RECEIPT_DOMAIN": "0655a9411c63208c628a8326bdd0e0dbe66f746af7de259425f00215c12a1e3f",
     "RemoteAudit.TREE_DOMAIN": "058c56725cee3289def1d54ea27655391411c53ef18d6c1d81245adce918d946",
+    "RemoteAudit.WIDE_ROWS": "f5dcb6d739175fac77a9afddc7491b7e86fc894f7407c43fbc8a540d578567b4",
     "RemoteAudit.appendHead": "801cd5bcbb1bba9aa7f72f8c89117f533461a161e507307ac665e735dfd71ac0",
     "RemoteAudit.chained": "35a48c157314caf1b01e9b0ffbe1b34808d866e63f3f1c4a73160368cd3508a5",
     "RemoteAudit.hidden": "553e2f94e5b9dfeaa1a483fb015adfa2bd432086963f6d86100e9044d300f9df",
@@ -26132,7 +26134,8 @@
     "RemoteAudit.receiptPrefix": "5e2a5df80c24780436a943ec3d56902f723851eb1c7fb247c7a0c643ef517717",
     "RemoteAudit.receipter": "60484da0bfde77a300d57088a27066be3a58bdd3bdd7b3c554c1ef982fed0b81",
     "RemoteAudit.seed": "7df340f6163af393af2e3dcd6659c47863451d594e3c6f8be3b1c8ebbef01b92",
-    "RemoteAudit.signBits": "aa2c9c434d06c7e0af0eb033c348c5f6950cf1052053a29c90b1e905374bbd7e",
+    "RemoteAudit.signBits": "47134edfd2075af703b0b454a7bcfd3d19f5bec30f7224130b11ca1691dd9744",
+    "RemoteAudit.signKey": "831b9d042d9153939f373055cb3c1ad81a2a7dfbaf23ad62b2ec450af8a3e57c",
     "RemoteAudit.sketch": "1ad8b9d7cc0b52ce3fc74ceb114b516aabc9529efa5053500cd456a829be80c8",
     "RemoteAudit.treeDomain": "d8654cadfde3f08fd0a6ddd5b6ea1d2db17e2492aca8f66d1141d5c65aa2161b",
     "RemoteAudit.verifyLeaf": "3bd052db5fc4a9c9a1d1c4da8998e9d806689cacdf7e86943c5ff2c7231082e8",

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.commitments.randomness import Key, derive, frame, uniform_from_words
+from verity.commitments.randomness import Key, WideKey, derive, derive_wide, frame, uniform_from_words
 
 VECTORS = json.loads((Path(__file__).with_name("vectors.json")).read_text())
 
@@ -64,6 +64,23 @@ def test_the_vectors_follow_the_documented_construction():
     words = [int.from_bytes(u_stream[j:j + width], "big") for j in range(0, len(u_stream) - width + 1, width)]
     limit = 2 ** (8 * width) - 2 ** (8 * width) % n
     assert next(w % n for w in words if w < limit) == want
+
+
+@pytest.mark.parametrize("case", VECTORS["cases"], ids=lambda c: c["domain"])
+def test_derive_wide_keeps_the_whole_sha512(case):
+    """`derive_wide` is `derive`'s SHA-512 uncut, so its first half is the pinned key, and a `WideKey` streams as the
+    module docstring says with its 64 bytes in the key's place."""
+    wide = derive_wide(bytes.fromhex(case["source"]), case["domain"], _context(case["context"]))
+    assert isinstance(wide, WideKey) and len(wide.value) == 64 and wide.value[:32].hex() == case["key"]
+    index = frame(frame("s") + frame(3))
+    stream = b"".join(hashlib.sha512(b"verity/randomness/stream/v2\0" + wide.value + index + c.to_bytes(8, "big")).digest()
+                      for c in range(2))
+    assert wide.stream(("s", 3), 80) == stream[:80] and wide.stream(("s", 3), 80) != Key(wide.value[:32]).stream(("s", 3), 80)
+    assert wide.value.hex() not in repr(wide)
+    with pytest.raises(ValueError):
+        WideKey(wide.value[:32])
+    with pytest.raises(TypeError):
+        derive_wide(b"", case["domain"], {})
 
 
 def test_the_vectors_are_the_generators():

@@ -14,8 +14,9 @@ chained       root itself without appends (head none), else SHA512(CHAINED_DOMAI
 head          SHA512(APPENDS_DOMAIN ‖ head_before (64 zero bytes for none) ‖ u64be first ‖ u64be count ‖ root)
 y_(i,p)       sketch-sha512: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed)) ‖ u64be j ‖ σ_(i,j));
               block-sha512: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed)) ‖ u64be j ‖ E_j)
-S_i           k_s rows of 4096 signs: K = derive(seed, SIGN_DOMAIN, {"tag": "sketch-sha512", "k": k_s, "n": 4096}), row c
-              the first 512 bytes of K.stream(("row", c)), bit u (byte u / 8, LSB first) 1 → −1
+S_i           k_s rows of 4096 signs: K = derive(seed, SIGN_DOMAIN, ctx) at 16 rows, deriveWide(seed, SIGN_DOMAIN_WIDE,
+              ctx) at 64, ctx = {"tag": "sketch-sha512", "k": k_s, "n": 4096}; row c the first 512 bytes of
+              K.stream(("row", c)), bit u (byte u / 8, LSB first) 1 → −1
 σ_(i,j)       S_i · E_j over the block's bytes as int8, k_s int32 little-endian
 leaf c        y_(16c) ‖ … ‖ y_(16c+15) (the last leaf short), committed as hm96-sha512/row/v2:
               hm96 tree_leaf(key, commit_string(key, sha512/row/v2(leaf), salt))
@@ -36,6 +37,9 @@ def SEED_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/seed/v0"
 def RECEIPT_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/receipt/v0"
 def SKETCH_RECEIPT_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/sketch-receipt/v0"
 def SIGN_DOMAIN : String := "verity/remote-bandwidth/sketch-signs/v0"
+def SIGN_DOMAIN_WIDE : String := "verity/remote-bandwidth/sketch-signs/v1"
+/-- The rows whose signs are `SIGN_DOMAIN_WIDE`'s under a 64-byte key (`receipts.WIDE_ROWS`). -/
+def WIDE_ROWS : Nat := 64
 def TREE_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/receipt-tree/v0"
 def APPENDS_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/appends/v0"
 def CHAINED_DOMAIN : ByteArray := tag0 "verity/remote-bandwidth/chained/v0"
@@ -82,10 +86,17 @@ def Kind.rowsOk (k : Kind) (rows : Nat) : Bool :=
 /-- `receipts.prefix` and `receipts.sketch_prefix`: one SHA-512 block. -/
 def receiptPrefix (domain seed : ByteArray) : ByteArray := pad128 (domain ++ frameBytes seed)
 
+/-- `receipts.sign_key(seed, rows, width)`: at `WIDE_ROWS` the 64-byte key under `SIGN_DOMAIN_WIDE`, else the 32-byte
+key under `SIGN_DOMAIN`. -/
+def signKey (seed : ByteArray) (rows width : Nat) : ByteArray :=
+  let ctx : List (String × FlockSoundness.Randomness.Part) :=
+    [("tag", .str "sketch-sha512"), ("k", .int rows), ("n", .int width)]
+  if rows = WIDE_ROWS then FlockSoundness.Randomness.deriveWide seed SIGN_DOMAIN_WIDE ctx
+  else FlockSoundness.Randomness.derive seed SIGN_DOMAIN ctx
+
 /-- `sign_bits(seed, rows)`: `rows` rows of 512 bytes. -/
 def signBits (seed : ByteArray) (rows : Nat) : Array ByteArray :=
-  let key := FlockSoundness.Randomness.derive seed SIGN_DOMAIN
-    [("tag", .str "sketch-sha512"), ("k", .int rows), ("n", .int Codec.BLOCK_BYTES)]
+  let key := signKey seed rows Codec.BLOCK_BYTES
   (Array.range rows).map fun c => FlockSoundness.Randomness.stream key [.str "row", .int c] (Codec.BLOCK_BYTES / 8)
 
 private def int8 (x : UInt8) : Int := if x.toNat ≥ 128 then (x.toNat : Int) - 256 else x.toNat

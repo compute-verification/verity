@@ -1,6 +1,7 @@
 """verity.commitments.randomness: the one challenge derivation every protocol samples through (decision 42).
 
     derive(source, domain, context) -> Key
+    derive_wide(source, domain, context) -> WideKey
 
 `source` is a key holder's secret (an auditor key, a device's challenger key, a seed derived earlier).  It is never a prover's own commitment: Fiat-Shamir over a prover's root lets the prover re-commit until the
 sample misses its incorrect proof blocks, so outer challenges must not use it (Fiat-Shamir stays inside proofs).  `domain`
@@ -23,6 +24,8 @@ Byte formats (pinned by ``verity/commitments/randomness/tests/vectors.json``):
 * ``shard(index)`` = the first 32 bytes of SHA-512(``verity/randomness/shard/v2\\0`` || key || frame(frames(index))).
 * A `Key` is 32 bytes: SHA-512 truncated to 256 bits is SHA-512 (one hash, SP 800-107 §5.1), and a 256-bit key keeps
   128-bit security against a quantum search.
+* ``derive_wide`` = all 64 bytes of ``derive``'s SHA-512, a `WideKey`, whose ``stream`` is ``stream``'s with its 64
+  bytes in the key's place.  It streams only: no sampler reads it.
 * ``uniform(n, index)`` reads w-byte big-endian words from ``stream(("u", *index))``, w = ceil((bitlen(n) + 64) / 8),
   and returns the first word below the largest multiple of n that fits, reduced mod n (exact, no modulo bias).
 * ``bernoulli(p, index)`` = uniform(denominator) on ``("b", *index)`` < numerator; p = 0 and p = 1 sample nothing.
@@ -151,7 +154,22 @@ class Key:
         return tuple(sorted(swapped.get(i, i) for i in range(k)))
 
 
-def derive(source: bytes, domain: str, context: Mapping[str, Part]) -> Key:
+@dataclass(frozen=True, slots=True)
+class WideKey:
+    """A derived 64-byte key, `derive_wide`'s: SHA-512's whole output.  It streams as a `Key` does, its 64 bytes in
+    the key's place.  Its value is secret when its source is, so it is kept out of `repr`."""
+
+    value: bytes = field(repr=False)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, bytes) or len(self.value) != 64:
+            raise ValueError("a WideKey is 64 bytes")
+
+    blocks = Key.blocks
+    stream = Key.stream
+
+
+def _derived(source: bytes, domain: str, context: Mapping[str, Part]) -> bytes:
     if not isinstance(source, bytes) or not source:
         raise TypeError("source must be nonempty bytes: a key holder's secret")
     if not DOMAIN.fullmatch(domain):
@@ -159,7 +177,18 @@ def derive(source: bytes, domain: str, context: Mapping[str, Part]) -> Key:
     if not all(isinstance(key, str) for key in context):
         raise TypeError("context keys are str")
     ctx = b"".join(frame(key) + frame(context[key]) for key in sorted(context))
-    return Key(hashlib.sha512(_DERIVE + frame(source) + frame(domain) + frame(ctx)).digest()[:32])
+    return hashlib.sha512(_DERIVE + frame(source) + frame(domain) + frame(ctx)).digest()
 
 
-__all__ = ["DOMAIN", "Index", "Key", "Part", "derive", "frame", "uniform_from_words"]
+def derive(source: bytes, domain: str, context: Mapping[str, Part]) -> Key:
+    return Key(_derived(source, domain, context)[:32])
+
+
+def derive_wide(source: bytes, domain: str, context: Mapping[str, Part]) -> WideKey:
+    """`derive`'s SHA-512 with none of it cut: the key for a sampler whose bound reads the key's width (two keys of
+    `n` bits collide at `q²/2^(n+1)` over `q` derivations).  A domain is derived at one width only: `derive`'s key under
+    a domain is the first half of `derive_wide`'s."""
+    return WideKey(_derived(source, domain, context))
+
+
+__all__ = ["DOMAIN", "Index", "Key", "Part", "WideKey", "derive", "derive_wide", "frame", "uniform_from_words"]

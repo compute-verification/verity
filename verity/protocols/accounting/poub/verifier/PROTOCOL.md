@@ -89,15 +89,16 @@ sample's third term, which nothing prices and no guarantee assumes: named with t
 `ledger.PRF_CLAIM`) beside every δ, with no value and in none. The memory line's \(\delta\) carries the
 binding term and, while `LineHeld` reads the prover's records through the commitment, the commitment's hiding terms
 (\(n \cdot 2^{-191}\) over \(n\) windows, `ledger.hiding`), beside its \(2^{-\text{slack}}\) a pass. Under the default
-receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
-derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
-at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
-outside-compute factor (\(2^{20}\), provisional), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its
-hash, and \((Q + P)^2 \cdot 2^{-257}\) for the keys' distance from uniform (two seeds whose 256-bit sign keys collide
-share their signs; `timing.sketch_failure`, §4): no more than \(2^{-40}\) up to \(Q = 2^{55.12}\), and
-\(2^{-30.19}\) for one node's 10-minute session at \(F = 2^{20}\). At 64 rows, a registration's other row count, it
-is \(Q \cdot 2^{-215.85} + (Q + P)^2 \cdot 2^{-257}\). block-sha512, kept for comparison, adds nothing. Neither adds
-to γ.
+receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`), which adds at most
+\(Q \cdot 2^{-95.12}\) a session at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the
+node's own over the span and \(F\) the outside-compute factor (\(2^{20}\), provisional), and
+\((Q + P) N \cdot 2^{-512}\) for a receipt right without its hash, and \((Q + P)^2 \cdot 2^{-257}\) for the keys'
+distance from uniform (two seeds whose 256-bit sign keys collide share their signs; `timing.sketch_failure`, §4): no
+more than \(2^{-40}\) up to \(Q = 2^{55.12}\), and \(2^{-30.19}\) for one node's 10-minute session at
+\(F = 2^{20}\) (`Accounting.Guarantees.Remote.SketchBoundRun` at \(r = 12\)). At 64 rows, under 512-bit sign keys,
+it is \(Q \cdot 2^{-215.85} + (Q + P)^2 \cdot 2^{-513}\) beside the receipt-right term, the deployed statement
+(`Accounting.Guarantees.Remote.SketchBoundDeployed`, at \(r = 27\)): \(2^{-135.85}\) at \(Q = 2^{80}\).
+block-sha512, kept for comparison, adds nothing. Neither adds to γ.
 
 **Each window alone.** The same terms over window \(t\)'s own span \(\Sigma_t = D_t - b_{t-1}\) (`WindowRecord.span_ns`),
 with its \(U_t\), \(P_t\) and \(m^*_t\) (or the pooled bound's \(f_t U_t\)) in place of the session's sums, give
@@ -420,9 +421,11 @@ y_(i,p)     sketch-sha512, the default: SHA512(Z("verity/remote-bandwidth/sketch
             u64be j ‖ σ_(i,j)),  j = plan_(t,i)[p]
             block-sha512, for comparison: SHA512(Z("verity/remote-bandwidth/receipt/v0\0" ‖ frame(seed_(t,i))) ‖ u64be j ‖
             e_(i,j))
-S_(t,i)     sketch-sha512's k_s × 4096 signs, k_s the registration's rows (16 or 64): K = derive(seed_(t,i),
-            "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 4096}), row c the first
-            512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first) 1 → −1 and 0 → +1
+S_(t,i)     sketch-sha512's k_s × 4096 signs, k_s the registration's rows (16 or 64), ctx = {"tag": "sketch-sha512",
+            "k": k_s, "n": 4096}: at 16, K = derive(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v0", ctx), 32
+            bytes; at 64, K = derive_wide(seed_(t,i), "verity/remote-bandwidth/sketch-signs/v1", ctx), all 64 of
+            SHA-512's; row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB first) 1 → −1 and
+            0 → +1
 σ_(i,j)     S_(t,i) · e, e the 4096 bytes of e_(i,j) as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32
             little-endian, 64 bytes at 16 rows and 256 at 64
 spread(z)   z over 4096 bytes: byte u of z XORed into byte u mod 4096 (folded), or a shorter z repeated
@@ -642,24 +645,26 @@ and \(3 \times 5\). At 16 rows it is loose at full rank: \(2^{-16}\), where two 
 about \(\binom{16}{2} 2^{-31} = 2^{-24.1}\). Where it is read, it costs under one bit (next).
 
 **Grinding, and \(r^*\).** Every key is a fresh oracle output, the derive of a fresh seed, so its signs are uniform
-whatever the prover did to reach it, unless two seeds' 256-bit sign keys collide, which shares their signs. A prover of
+whatever the prover did to reach it, unless two seeds' sign keys collide, which shares their signs: \(b\) = 256 bits
+at 16 rows, 512 at 64 (`receipts.sign_key_bits`). A prover of
 \(Q\) SHA-512 compressions over a session sees at most \(Q + P\) keys, \(P\) the session's passes, and makes at most
 \(Q\) guesses. Read at rank \(r\), by the union bound over keys, guesses and the block's 128 sectors, and the keys'
 birthday (`SketchHashRandom`'s ε), the session's failure is
 
 \[
-\delta_s(r) \;\le\; Q \cdot 2^{-8r} + (Q + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] + (Q + P)^2 \cdot 2^{-257} ,
+\delta_s(r) \;\le\; Q \cdot 2^{-8r} + (Q + P) \cdot 128 \cdot \Pr[\text{rank} \le r - 1] + (Q + P)^2 \cdot 2^{-(b + 1)} ,
 \]
 
 (the receipt guessed without its hash, \((Q + P) N \cdot 2^{-512}\), aside), so its cost a compression is \(\rho(r) = 2^{-8r} + 128 \Pr[\text{rank} \le r - 1]\), and \(r^*\) minimizes it. At 16
 rows \(r^* = 12\): the guess's \(2^{-96}\) beside \(128 \cdot 2^{-103.25} = 2^{-96.25}\), so \(\rho(r^*) =
 2^{-95.12}\). At \(r = 11\), \(\rho = 2^{-88}\); at 13, \(2^{-71.30}\). At 64 rows \(r^* = 27\) and \(\rho(r^*) =
-2^{-215.85}\). The birthday term doesn't move 16 rows' thresholds; at 64 rows it is what binds them.
+2^{-215.85}\). The birthday term doesn't move 16 rows' thresholds, and at 64 rows, under 512-bit keys, it moves
+them by under \(2^{-100}\) of their value.
 
 | rows | \(r^*\) | \(\rho(r^*)\) | \(Q\) at \(\delta_s = 2^{-40}\) | \(Q\) at \(\delta_s = 2^{-64}\) |
 | --- | --- | --- | --- | --- |
 | 16 | 12 | \(2^{-95.12}\) | \(2^{55.12}\): 8.1 days of 8 GPUs | \(2^{31.12}\): 42 ms of 8 GPUs |
-| 64 | 27 | \(2^{-215.85}\) | \(2^{108.5}\) | \(2^{96.5}\) |
+| 64 | 27 | \(2^{-215.85}\) | \(2^{175.85}\) | \(2^{151.85}\) |
 
 The GPUs are RTX PRO 6000s at \(7.0 \cdot 10^9\) SHA-512 compressions a second each, block-sha512's measured rate
 (below). \(Q\) counts every compression the prover makes, on any hardware: the grinding needs no access to the
@@ -1599,7 +1604,8 @@ Per pass \(i\), after root \(i-1\):
 ~~~text
 seed_i     the audit's (receipts.seed): SHA512(SEED_DOMAIN ‖ chal_t ‖ u32be i ‖ root_(t,i−1)), 64 bytes
 S_i        k_s rows (16) of 1,028 bytes, from seed_i on the host: K = derive(seed_i,
-           "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}), row c =
+           "verity/remote-bandwidth/sketch-signs/v0", {"tag": "sketch-sha512", "k": k_s, "n": 8224}) (at 64 rows,
+           derive_wide under ".../sketch-signs/v1", as S_(t,i)'s; receipts.sign_key), row c =
            K.stream(("row", c), 1028) (verity.commitments.randomness); bit x of a row (byte x // 8, bit x % 8, LSB first) is
            the sign of the unit's byte x: 1 → −1, 0 → +1
 ~~~
