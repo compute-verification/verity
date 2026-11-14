@@ -31,7 +31,7 @@
 # (RESEARCH_LEAN_PUBLISH; a credential file may set it empty to turn the publish off).
 #
 # Credentials, none in this file or its unit: VQ_CRED/*.env (root's, readable by the group: the store's key, the Slack token)
-# are sourced for each tick, and GH_TOKEN is the token vy-vqueue-token.timer keeps in VQ_TOKEN, which root mints from the App's
+# are read for each tick as data, never run as shell (creds), and GH_TOKEN is the token vy-vqueue-token.timer keeps in VQ_TOKEN, which root mints from the App's
 # key: this user can't read the key. gh on PATH is bin/gh, which reads that file for each call, and the clone's credential
 # helper is this script. A token file older than 50 min means the timer failed: the tick is skipped rather than run on a token
 # about to expire.
@@ -48,6 +48,9 @@ CONFIG=78     # what the node holds can't run a tick: the unit stays failed unti
 SKIP=75       # this tick can't run, the next may: the loop goes on
 # each list's flag and its file under live/
 LISTS="--deselect=deselect --keep-runs=keep-runs --wide-file=wide --heavy-file=heavy --pins-file=pins"
+# what a credential file may set: the store's remote, the Slack token, and the names graph2.sh and lean_publish.sh read
+KEYS="AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY R2_ACCOUNT_ID R2_BUCKET R2_ENDPOINT SLACK_BOT_TOKEN VQ_GRAPH2_NODE VQ_LEAN_NODE \
+RESEARCH_LEAN_PUBLISH"
 
 if [ "${1:-}" = git ]; then
   cat > /dev/null
@@ -85,6 +88,34 @@ lists() {
   [ -z "$missing" ] || say "no$missing in $H/live: the loop reads each as empty; copy ci's from the host the loop ran on"
 }
 
+# Exports what VQ_CRED/*.env set, one KEY=VALUE a line (blank and `#` lines, `export ` before a key and one pair of quotes
+# round a value allowed), as data: no line runs, and none can set what this script decides, since a key not in KEYS refuses
+# the tick, naming the file, the line and the key, never a value.
+creds() {
+  local f n line k v
+  for f in "$CRED"/*.env; do
+    [ -f "$f" ] || continue
+    n=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      n=$((n + 1))
+      line=${line#"${line%%[![:space:]]*}"}
+      case $line in ''|'#'*) continue ;; esac
+      line=${line#export }
+      k=${line%%=*} v=${line#*=}
+      if [ "$k" = "$line" ] || ! [[ $k =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        say "$f line $n is not KEY=VALUE: write one key the loop reads a line ($KEYS)"
+        return $CONFIG
+      fi
+      case " $KEYS " in
+        *" $k "*) ;;
+        *) say "$f line $n sets $k, which the loop doesn't read: remove it (the keys it reads: $KEYS)"; return $CONFIG ;;
+      esac
+      case $v in \"*\"|\'*\') v=${v:1:${#v}-2} ;; esac
+      export "$k=$v"
+    done < "$f"
+  done
+}
+
 now() { date +%s; }
 
 # The App's token, written within the last 50 min.
@@ -107,11 +138,7 @@ tick() {
   [ "$(git -C "$CLONE" config --local --get credential.helper)" = "!$SELF git" ] \
     || git -C "$CLONE" config --local credential.helper "!$SELF git" || return $CONFIG
   (
-    set -a
-    for f in "$CRED"/*.env; do
-      [ ! -f "$f" ] || . "$f" || exit $CONFIG
-    done
-    set +a
+    creds || exit $CONFIG
     if [ "$drive" = 1 ]; then export RESEARCH_DRIVE=1; else unset RESEARCH_DRIVE; fi
     [ ! -s "$H/live/agent-url" ] || { read -r RESEARCH_AGENT_URL _ < "$H/live/agent-url"; export RESEARCH_AGENT_URL; }
     GH_TOKEN=$(cat "$TOKEN") || exit $SKIP

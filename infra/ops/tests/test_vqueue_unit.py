@@ -23,7 +23,8 @@ LOOP = VQ / "loop.sh"
 HELPER = "infra/control/gh_app_token.sh"          # the control pod's own, which token.sh runs on the node
 CONFIG, SKIP = 78, 75
 KEYS = ("HOME", "PATH", "PYTHONPATH", "TMPDIR", "TRAIN_TREES", "GH_TOKEN", "AWS_ACCESS_KEY_ID", "SLACK_BOT_TOKEN",
-        "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT", merge.DRIVE_ENV, merge.LEAN_PUBLISH_ENV)
+        "RESEARCH_AGENT_URL", "RESEARCH_LANE", "GIT_TERMINAL_PROMPT", merge.DRIVE_ENV, merge.LEAN_PUBLISH_ENV, "R2_BUCKET",
+        "R2_ENDPOINT")
 #: each list's flag, which the loop otherwise reads at the control pod's path, and the node's file under live/
 LISTS = {"--deselect": "deselect", "--keep-runs": "keep-runs", "--wide-file": "wide", "--heavy-file": "heavy", "--pins-file": "pins"}
 # The stand-in tick: one JSON line a call. With VQ_TEST_TERM its first call tells the loop to stop and then goes on, as a tick
@@ -61,7 +62,7 @@ class Node:
         self.clone = self.home / "verity"
         subprocess.run(["git", "init", "-q", str(self.clone)], check=True)
         self.cred.mkdir()
-        envfile(self.cred / "r2.env", {"AWS_ACCESS_KEY_ID": "dummy-r2", "GH_TOKEN": "dummy-env"})
+        envfile(self.cred / "r2.env", {"AWS_ACCESS_KEY_ID": "dummy-r2"})
         envfile(self.cred / "slack.env", {"SLACK_BOT_TOKEN": "dummy-slack"})
         self.token.parent.mkdir()
         self.token.write_text("dummy-app\n")
@@ -92,7 +93,7 @@ def flag(argv: list[str], name: str) -> str:
 def test_with_no_mode_file_a_tick_is_a_dry_run_in_the_node_s_own_paths_as_the_app(node):
     """What a node runs before anyone switches it: --dry-run, which writes nothing, on live/'s copy of the log; the node's
     paths after ci's args, so the pod's --log in args loses; the clone as cwd and ci's pinned tree as the code; the store's
-    key and the Slack token from the credential files, and GH_TOKEN the App's token even when a file sets another."""
+    key and the Slack token from the credential files, and GH_TOKEN the App's token."""
     r = node.loop("once")
     assert r.returncode == 0, r.stderr
     [t] = node.ticks()
@@ -154,8 +155,8 @@ def test_a_shadow_keeps_its_log_lock_and_args_apart_from_the_live_loop_s(node):
 
 def test_live_alone_may_move_main_whatever_the_environment_says(node, monkeypatch):
     """The loop moves `main` only with RESEARCH_DRIVE=1 (`merge.on_drive`).  live's tick has it from mode() though nothing
-    around the loop sets it; dry-run's and shadow's never do, though the unit's environment, a credential file and a shell
-    variable of mode()'s own name all say 1."""
+    around the loop sets it; dry-run's and shadow's never do, though the unit's environment and a shell variable of mode()'s
+    own name both say 1 (a credential file can say neither: the next test)."""
     def on_drive(value: str | None) -> bool:
         if value is None:
             monkeypatch.delenv(merge.DRIVE_ENV, raising=False)
@@ -167,7 +168,6 @@ def test_live_alone_may_move_main_whatever_the_environment_says(node, monkeypatc
     (node.home / "shadow" / "args").write_text("--gate check\n")
     (node.home / "mode").write_text("live\n")
     assert node.loop("once").returncode == 0
-    envfile(node.cred / "drive.env", {merge.DRIVE_ENV: "1"})
     for mode in ("dry-run", "shadow"):
         (node.home / "mode").write_text(f"{mode}\n")
         assert node.loop("once", **{merge.DRIVE_ENV: "1", "drive": "1"}).returncode == 0
@@ -175,6 +175,32 @@ def test_live_alone_may_move_main_whatever_the_environment_says(node, monkeypatc
     assert "--dry-run" in dry["argv"] and "--shadow" in shadow["argv"] and not {"--dry-run", "--shadow"} & set(live["argv"])
     assert on_drive(live["env"][merge.DRIVE_ENV])
     assert not on_drive(dry["env"][merge.DRIVE_ENV]) and not on_drive(shadow["env"][merge.DRIVE_ENV])
+
+
+#: names a credential file might set to change what a tick runs: the form's own variables, the paths it runs from, what moves
+#: `main` and whose code runs, and the token the App mints
+FORM = ("drive", "flag", "mode", "dir", "H", "CODE", "CLONE", "PY", "LIB", "LISTS", "PATH", "PYTHONPATH", "HOME", "BASH_ENV",
+        merge.DRIVE_ENV, "GH_TOKEN", "RESEARCH_AT_CHECKOUT")
+
+
+def test_a_credential_file_is_data_naming_only_the_keys_the_loop_reads(node):
+    """root's files in /etc/vy/vqueue are read as KEY=VALUE lines, never run: a key the loop doesn't read (`drive=1`, `flag=`,
+    which once turned a dry-run tick into a live one, or anything else of FORM) refuses the tick with 78, naming the file and
+    the key and never the value, in dry-run and shadow alike; a value is taken as written, its quotes aside, and never run."""
+    (node.home / "shadow" / "args").write_text("--gate check\n")
+    zz, secret = node.cred / "zz.env", "not-to-be-printed"
+    for mode in ("dry-run", "shadow"):
+        (node.home / "mode").write_text(f"{mode}\n")
+        for lines in ([f"{k}={secret}" for k in FORM] + ["drive=1\nflag=", "export drive=1", "flag=", f"{secret}"]):
+            zz.write_text(f"# set by hand\n\n{lines}\n")
+            r = node.loop("once")
+            assert r.returncode == CONFIG and not node.ticks() and f"{zz}" in r.stderr and secret not in r.stderr, (mode, lines)
+    ran = node.home / "ran"
+    zz.write_text(f"R2_BUCKET=\"dummy-bucket\"\nexport R2_ENDPOINT='dummy $(touch {ran})'\nSLACK_BOT_TOKEN=a=b\n")
+    assert node.loop("once").returncode == 0 and not ran.exists()
+    [t] = node.ticks()
+    assert "--shadow" in t["argv"] and t["env"]["SLACK_BOT_TOKEN"] == "a=b"
+    assert (t["env"]["R2_BUCKET"], t["env"]["R2_ENDPOINT"]) == ("dummy-bucket", f"dummy $(touch {ran})")
 
 
 def test_every_tick_reads_the_five_lists_at_the_node_s_paths_and_names_the_missing_in_one_line(node):
