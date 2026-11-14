@@ -2,7 +2,8 @@
 a transcript directory that is no string; `refusals`' of a tensor-parallel world, of a forward anchor under an executor
 that counts its own, and of a schedule Pearl-C's path can't run; `_layers`' of a model with no linear layer and of two
 layers that share a quant method; and H1's install's of a layout without its rows or its steps.  Under the option,
-`circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's."""
+`circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, and the
+quantizer's of a value that is not finite."""
 from __future__ import annotations
 
 import random
@@ -10,6 +11,7 @@ import re
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
 from verity.protocols.accounting.pouw.prover.circuit.ncp2 import Shape
@@ -20,6 +22,7 @@ from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.operands import quantize
 from verity_vllm.protocols.pouw.pearl_c.lanes import schedule_of
 
 HOST = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
@@ -166,3 +169,15 @@ def test_a_program_is_evaluated_whole_on_input_groups_of_its_lengths():
         trace = PC._transcript(prog, [[0] * size for size in _groups(prog)])
         assert len(trace) == prog.circuit.size
         assert all(trace[gate] == 0 for group in prog.root.input_colls for (_space, _zero, gate) in group.refs)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_the_quantizer_refuses_rows_with_a_value_that_is_not_finite_and_takes_them_without_it(bad):
+    rows = np.array([[63.0, -31.0], [0.0, 0.0], [0.5, bad]], dtype=np.float32)
+    with pytest.raises(ValueError, match="^pouw: the quantizer refuses NaN and infinity$"):
+        quantize(rows)
+    rows[2, 1] = -0.125
+    q, scale = quantize(rows)
+    assert (q.dtype, scale.dtype) == (np.int8, np.float32)
+    assert q.tolist() == [[63, -31], [0, 0], [63, -16]]
+    assert scale.tolist() == [1.0, 1.0, float(np.float32(0.5) * (np.float32(1.0) / np.float32(63.0)))]
