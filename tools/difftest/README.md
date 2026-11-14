@@ -1,4 +1,4 @@
-# verity/difftest: the Lean against the Python that mirrors it
+# tools/difftest: the Lean against the Python that mirrors it
 
 Lean is the definition and the verifier (root `AGENTS.md`, "Design rules"), and Python mirrors it for the
 prover's speed. Each piece of executable Lean (a Lake package of its own, beside the code it defines under `verity/`) and its
