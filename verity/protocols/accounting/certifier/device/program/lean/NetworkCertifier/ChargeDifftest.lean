@@ -81,7 +81,7 @@ def steps (bk : Book) (N : Nat) : Carry → List (List Bool) → List Json
 /-- What the program's definitions give on an instance, in the shape of `reference_charge`'s results. -/
 def evaluate (r : Raw) : Except String Json := do
   unless r.windows.all fun w => w.1.length = r.N ∧ w.2.length = r.N do
-    throw "a executionPhase has N slots"
+    throw "a window has N slots"
   unless r.book.arrived.length = bitlen r.N + 1 do
     throw "the book's arrived bins are 0 … bitlen N"
   let ds := r.windows.map stream

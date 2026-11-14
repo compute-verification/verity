@@ -167,7 +167,7 @@ private def recordsOf (policy period sampled : String) : Answer :=
 private def executionPhaseOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
 private def monitoringPeriodOn (rs : List String) : Case :=
   { refused PouwCheck.Period.protocol with
-    evidence := ("{\"pins\":[],\"executionPhases\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
+    evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
 private def strayOf (policy : String) (rs : List String) : Option String :=
   executionPhases.strays [committing NciCheck.Protocol.protocol policy, monitoringPeriodOn rs]
 #guard (executionPhaseRecords (monitoringPeriodOn [record 0, record 0])).map (·.length) == some 2
@@ -527,7 +527,7 @@ private def digestOf (r : String) : ByteArray :=
 private def pearlIn (r w : String) : Case :=
   { refused PouwCheck.PearlPlus.Protocol.protocol with
     commitment := ("{\"manifests\":[{}],\"record\":\"" ++ Flock.hexOf (digestOf r) ++
-      "\",\"executionPhase\":{\"dropped\":[],\"record\":" ++ w ++ ",\"rounds\":null}}").toUTF8 }
+      "\",\"window\":{\"dropped\":[],\"record\":" ++ w ++ ",\"rounds\":null}}").toUTF8 }
 private def pearlOn (r : String) : Case := pearlIn r (record 9)
 private def runStray (policy run : String) : Option String :=
   V1.run.strays [committing NciCheck.Protocol.protocol policy, pearlOn run]
@@ -551,7 +551,7 @@ private def executionPhaseStray (policy : String) (w : String) : Option String :
 #guard policyPrevious (committing NciCheck.Protocol.protocol (chainedAfter 0 (record 9))) == some [digestOf (record 9)]
 #guard executionPhaseStray (chainedAfter 0 (record 9)) (record 9) == none
 #guard (executionPhaseStray (chainedAfter 0 (record 8)) (record 9)).map
-  (·.startsWith "executionPhase: verity/inference-only/v0 committed ") == some true
+  (·.startsWith "window: verity/inference-only/v0 committed ") == some true
 #guard (executionPhaseStray (chainedAfter 0 (record 8)) (record 9)).map (contains · ", verity/pouw/pearl-plus/v1 committed ") ==
   some true
 #guard (executionPhaseStray (record 0) (record 9)).isSome

@@ -128,9 +128,9 @@ def evaluate (r : Raw) : Except String Json := do
   unless r.windows.all fun s => s.en.length = r.N ∧ s.bit.length = r.N ∧ s.hen.length = r.H ∧ s.short.length = r.H ∧
       s.oen.length = r.O ∧ s.p.length = r.O ∧ s.r.length = r.O ∧ s.qen.length = r.L ∧ s.mt.length = r.L ∧
       s.olen.length = r.L do
-    throw "a executionPhase has N, H, O and L slots"
+    throw "a window has N, H, O and L slots"
   unless r.tables.map (·.freqs.length) = bins r.N r.H r.O do
-    throw "the book's tables are at the bins a executionPhase reaches"
+    throw "the book's tables are at the bins a window reaches"
   let ws := r.windows.map advice
   pure <| Json.mkObj [
     ("steps", .arr (steps r.book r.N r.H r.O r.L r.carry ws).toArray),
@@ -160,12 +160,12 @@ def main (args : List String) : IO UInt32 := do
   let a ← lines insts
   let b ← lines py
   if n.toNat? != some a.size ∨ a.size != b.size then
-    IO.eprintln s!"executionPhase difftest: {a.size} instances and {b.size} results, not {n}"
+    IO.eprintln s!"window difftest: {a.size} instances and {b.size} results, not {n}"
     return 1
   let tasks := (a.zip b).toList.zipIdx.map fun ((x, y), i) => Task.spawn fun _ => differences i x y
   let found := tasks.flatMap Task.get
   for d in found.take 50 do IO.eprintln d
-  IO.println s!"executionPhase difftest: {a.size} instances compared, {found.length} differences"
+  IO.println s!"window difftest: {a.size} instances compared, {found.length} differences"
   return if found.isEmpty then 0 else 1
 
 end NetworkCertifier.WindowCharge.WindowDifftest

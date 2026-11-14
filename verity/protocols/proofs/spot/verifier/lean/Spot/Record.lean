@@ -418,7 +418,7 @@ def record (i : Input) : V Json := do
         ("sessions", Json.arr i.sessions),
         ("verdict", if digests.size == 1 then digests[0]! else Json.arr digests)])]
     let strata := Bound.strataOf population draw
-    let rule := "except with probability delta, an accepted transcript has at most `bound` incorrect units"
+    let rule := "except with probability delta, an accepted transcript has at most `bound` wrong units"
     wrongUnits := obj ([("delta", delta), ("of", get "population"),
         ("bound", Lean.toJson (Bound.boundOf population draw i.delta)),
         ("rule", Json.str (if stratified then rule ++ ", and at most `per_template[t]` of them in template t" else rule))] ++

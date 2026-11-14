@@ -99,8 +99,8 @@ structure ExecutionPhase where
 
 def executionPhase (j : Json) : Flock.V ExecutionPhase := do
   return {
-    devices := ← nats (← Flock.J.get j "devices" "window") "executionPhase.devices"
-    marked := ← nats (← Flock.J.get j "marked" "window") "executionPhase.marked"
+    devices := ← nats (← Flock.J.get j "devices" "window") "window.devices"
+    marked := ← nats (← Flock.J.get j "marked" "window") "window.marked"
     lo := ← Flock.J.nat j "lo" "window"
     hi := ← Flock.J.nat j "hi" "window"
     start := ← Flock.J.nat j "start" "window"
