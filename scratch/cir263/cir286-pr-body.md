@@ -62,7 +62,8 @@ At `9badaf0ec718cc1f3414ec94b182d25607e27aae`.
 
 - **The capture's CPU tests**, `r20261114-081152-3b4c`: the new test with its three end-to-end cases, `test_record`, the MTP captures' test, and the P05 and typed-records lints: 28 passed, 0 failed [run].
 - **Suites.** The suites the commit over #9993 touches (`suites.py --changed 8ab720de29ac`): `r20261114-164148-d38b`, waiting for a slot when this opened. Everything else this head shares with #9993's head, whose suites are #9993's [read].
-- **The adapter's ratchet gate** against `d260e6bb9cb3`, **pins** `--stale` and **retired terms**: `r20261114-164228-3413`, waiting for a slot when this opened.
+- **The adapter's ratchet gate**, `python3 adapters/vllm/tools/ratchet_gate.py d260e6bb9cb3 HEAD --json`: verdict failed, exit 1. It prints "adds 4 `# noqa` line(s) under adapters/vllm/ and removes 0", naming the capture's four `except Exception as e:  # noqa: BLE001` (lines 176, 228, 263, 269) [run: `r20261114-164228-3413`]. Each is a catch-all step that records its error in the record and goes on, as in the sibling captures, which hold ten such lines between them [read]. The gate holds nothing now; the mend comes in my next change. Mending it here would change the capture's code after its capture of record ran.
+- **Pins** `--stale`: exit 0. **Retired terms**: 43 passed, 5 bookkeeping warnings, none from a file this changes [run: `r20261114-164228-3413`].
 - **Size.** `records/property_record.py` is 334 lines; the new files are tests, outside the P10 size rule [read].
 
 ## Not stated
