@@ -66,7 +66,7 @@ _OPERANDS = ("a_ptr", "b_ptr", "c_ptr", "a_scale_ptr", "b_scale_ptr")
 
 def _tile_pins(meta, sc, profile) -> str | None:
     """None when the launch's tile is the one vLLM picks on the declared target and its dot is modelled (the module doc)."""
-    geom = meta.get("geometry") or {}
+    geom = meta["geometry"]
     warps, stages = geom.get("num_warps", sc.get("num_warps")), geom.get("num_stages", sc.get("num_stages"))
     if profile.batch_invariant:
         if sc.get("SWAP_AB") is not False:
@@ -135,7 +135,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         profile = active_target_profile()
         if (r := _fp8_launch_pins(node, meta, sc, profile)):
             return r
-        geom = meta.get("geometry") or {}
+        geom = meta["geometry"]
         try:
             T.moe_expert_fp8_launch_dot(profile, sc.get("BLOCK_SIZE_M"), sc.get("BLOCK_SIZE_N"),
                                         geom.get("num_warps", sc.get("num_warps")), sc.get("SWAP_AB"))
@@ -187,7 +187,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         a, b, c, a_s, b_s = (launch_tensor(node, meta, n) for n in _OPERANDS)
         mrw, top_k, nv, G, KB, SWAP = sc["MUL_ROUTED_WEIGHT"], sc["top_k"], sc["num_valid_tokens"], sc["group_k"], sc["BLOCK_SIZE_K"], sc["SWAP_AB"]
         BM, BN = sc["BLOCK_SIZE_M"], sc["BLOCK_SIZE_N"]
-        WARPS = (meta.get("geometry") or {}).get("num_warps", sc.get("num_warps"))
+        WARPS = meta["geometry"].get("num_warps", sc.get("num_warps"))
         E, N, K = known(shape(ctx, b))
         a_rows, _ = rows_of(ctx.coll(a))
         s_rows, _ = rows_of(ctx.coll(a_s))
@@ -211,7 +211,7 @@ class FusedMoeKernelFp8Rule(FusedMoeKernelRule):
         ctx.record(self, node, {"E": E, "K": K, "N": N, "G": G, "KB": KB, "SWAP": SWAP, "DOT": dot["DOT"].id, "pairs": nv, "top_k": top_k,
                                 "MUL_ROUTED_WEIGHT": mrw, "schedule": "naive" if naive else "sorted",
                                 "tiles": {k: sc.get(k) for k in ("BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M")},
-                                "num_warps": (meta.get("geometry") or {}).get("num_warps"), "src_sha256": meta.get("src_sha256"),
+                                "num_warps": meta["geometry"].get("num_warps"), "src_sha256": meta.get("src_sha256"),
                                 "W_is_parameter": wl.name if wl else None, "Ws_is_parameter": sl.name if sl else None}, emitted=f"{fn.id} x{nv}")
 
 

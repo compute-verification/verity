@@ -549,7 +549,8 @@ class DsaIndexerAttnRule(StateRule):
         layer, topk, scale = a["layer_name"], a["topk"], a["scale"]
         if not isinstance(layer, str) or not isinstance(topk, int) or topk < 1 or not _static_float(scale):
             return "layer_name, topk, scale are not static"
-        obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
+        impls = _OBSERVED["attention_impls"]    # none before an instantiation observes them, nor for a layer it did not
+        obs = impls[layer] if impls and layer in impls else {}
         sparse_role = "sparse_mla" if obs.get("num_splits") == 1 else "sparse_mla_split"
         if (r := _missing(ctx, [sparse_role] + (["dsa_mqa_logits", "dsa_topk_short_row", "const"] if has else []))):
             return r
@@ -566,7 +567,8 @@ class DsaIndexerAttnRule(StateRule):
         T = len(pos)
         if (r := _prefill_by_dense_mha(layer, T)):
             return r
-        hist = (ctx.state.get("dsa_history") or {}).get(layer)
+        seen = ctx.state.get("dsa_history")    # none before the first layer opens its history
+        hist = seen.get(layer) if seen else None
         table = batched_form() and dsa_table_reads()
         long_roles = (["dsa_history_reads"] + (["dsa_topk_mask_counted", "dsa_topk_index"] if has else [])) if table else (
             ["dsa_butterfly_rows", "dsa_butterfly_rows_pad"]
@@ -612,7 +614,8 @@ class DsaIndexerAttnRule(StateRule):
         _append_rows(ctx, hist, a, has)
         latent = _log(ctx, (layer, "latent"), hist["latent"])
         G = FA3_SPARSE_GEOMETRY[(R, L)]
-        obs = (_OBSERVED["attention_impls"] or {}).get(layer) or {}
+        impls = _OBSERVED["attention_impls"]    # none before an instantiation observes them, nor for a layer it did not
+        obs = impls[layer] if impls and layer in impls else {}
         pinned_one = obs.get("num_splits") == 1
         if pinned_one:
             splits = [1] * T
