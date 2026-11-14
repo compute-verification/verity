@@ -1,0 +1,48 @@
+# What an integration hands Verity, out of the retired word's directory: what `tools/move/layout.py --map
+# tools/move/commitments_periods_map.toml` moves and rewrites.
+#
+# `verity/commitments/windows/` (an integration's hand-over: the circuit, the values it commits and the records it writes
+# over a span of time) becomes `verity/commitments/periods/` in the same place. The Glossary retires "window" for a span
+# of time, and `verity.commitments.windows` by name, for "period". The one directory row moves every file, the suite with
+# it, and rewrites each path and module name that names it. Only paths and module names change: the word in the files'
+# names, docstrings and messages is a word map's, and record keys, file formats and Lean names keep it until a format
+# version. No file is added, edited beyond its paths or deleted. The format is `layout_map.toml`'s.
+#
+# What stays: the layout of record (`tests/tree.toml`, whose open question on the directory its owner closes by hand),
+# `verity/commitments/window.py` (the served domain's tag, a format constant), every Lean file's bytes and every kernel
+# source's ([rewrite] exclude). No root moves ([roots] old == new).
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"verity/commitments/windows/" = "verity/commitments/periods/"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = ["verity/commitments/windows/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: the layout of record (`tests/tree.toml`), records of what was (the earlier moves and their maps,
+# changelogs, research's recorded moves, the archive), files whose bytes a digest pins, and Lean sources.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[split]
+# the map splits no directory
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.commitments.windows" = "verity.commitments.periods"
