@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from verity.circuits.refs import Coll
 from verity.circuits.types import Array, Value
-from verity.definitions.registry.dsv4_moe import limit_bits
+from verity_vllm.definitions.registry.dsv4_moe import limit_bits
 
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (

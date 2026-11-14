@@ -9,8 +9,8 @@ import torch
 from verity.circuits.defs import FunctionDefinition
 from verity.circuits.refs import Coll, PartLog, array_of
 from verity.circuits.types import Array
-from verity.definitions.registry import b1
-from verity.definitions.registry.dense import reciprocal_bits
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.dense import reciprocal_bits
 
 from verity_vllm.program.frontend.outcomes import refuse
 from verity_vllm.program.frontend.strided_views import _tensor_type
@@ -72,7 +72,7 @@ def attention_scale(ctx, D: int, node, cap: float | None = None) -> tuple[Coll, 
     if not ctx.registered_values:
         return ()
     if cap is not None:
-        from verity.definitions.registry.dense import (
+        from verity_vllm.definitions.registry.dense import (
             softcap_mul_bits,
             softcap_scale_log2_bits,
         )

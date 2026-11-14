@@ -1536,15 +1536,15 @@ BY_PATH = "verity/protocols/proofs/spot/by_path.py"
 ORDER_TREE = {
     "verity/__init__.py": "",
     "verity/circuits/__init__.py": "",
-    "verity/circuits/at_load.py": "from verity.definitions import toy\n",
-    "verity/circuits/in_function.py": "def f():\n    import verity.definitions.toy\n",
-    "verity/circuits/in_string.py": "TOOL = 'verity.definitions.toy:run'\n",
-    "verity/circuits/tests/test_a.py": "import verity.definitions.toy\n",
-    "verity/circuits/at_load.circuit-check.py": "import verity.definitions.toy\n",
+    "verity/circuits/at_load.py": "from verity_vllm.definitions import toy\n",
+    "verity/circuits/in_function.py": "def f():\n    import verity_vllm.definitions.toy\n",
+    "verity/circuits/in_string.py": "TOOL = 'verity_vllm.definitions.toy:run'\n",
+    "verity/circuits/tests/test_a.py": "import verity_vllm.definitions.toy\n",
+    "verity/circuits/at_load.circuit-check.py": "import verity_vllm.definitions.toy\n",
     "verity/commitments/__init__.py": "",
     "verity/commitments/crypto/__init__.py": "",
     "verity/commitments/crypto/lms.py": "",
-    "verity/definitions/__init__.py": "",
+    "adapters/vllm/verity_vllm/definitions/__init__.py": "",
     "verity/definitions/toy.py": "import verity.circuits.at_load\n",
     "verity/protocols/proofs/flock/__init__.py": "",
     "verity/protocols/proofs/flock/prover/stage.py": "import verity.protocols.accounting.pouw.verifier.check\n",
@@ -1686,7 +1686,7 @@ def test_the_listing_checks_find_what_they_refuse(tmp_path: Path) -> None:
     pair = ("verity/circuits", "verity/definitions")
     with pytest.raises(AssertionError, match=r"no file needs any more; delete them: \['verity/commitments/windows -> tools'\]"):
         _hold_order(loads, held._replace(against=held.against | {("verity/commitments/windows", "tools"): {"verity/commitments/windows/rows.py"}}))
-    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity.definitions.toy loads"):
+    with pytest.raises(AssertionError, match="only shrinks.*\n.*in_string.py:1: python string verity_vllm.definitions.toy loads"):
         _hold_order(loads, held._replace(against=held.against | {pair: held.against[pair] - {"verity/circuits/in_string.py"}}))
     with pytest.raises(AssertionError, match="only shrinks.*\n.*test_run.py:1: python import infra.cluster.usage loads"):
         _hold_order(loads, held._replace(against={p: files for p, files in held.against.items() if p[1] != "infra"}))

@@ -19,9 +19,9 @@ from typing import Any
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple, Value
-from verity.definitions.registry import stop_check as SC
-from verity.definitions.registry import stop_rule as X
-from verity.definitions.registry.prims import I32
+from verity_vllm.definitions.registry import stop_check as SC
+from verity_vllm.definitions.registry import stop_rule as X
+from verity_vllm.definitions.registry.prims import I32
 
 #: the rule's Call's name in a request Program's body
 NAME = "stop_rule"

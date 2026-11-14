@@ -19,9 +19,9 @@ from typing import Any
 
 import pytest
 from verity.circuits import Program, bind
-from verity.definitions.registry import b1
-from verity.definitions.registry import hopper as H
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import hopper as H
+from verity_vllm.definitions.registry import prims as P
 
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound
 

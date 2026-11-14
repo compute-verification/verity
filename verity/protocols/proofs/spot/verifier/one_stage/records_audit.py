@@ -207,7 +207,7 @@ REFUSED = 2
 def catalog_resolve(tid: str) -> Any:
     """`interface.resolve` over every catalog's Definitions, the registry's loaded too (a window's io shell and
     its blocks, which `interface`'s own walk can't import); a refusal names the registry modules that failed to import."""
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
 
     _, errors = load()
     try:

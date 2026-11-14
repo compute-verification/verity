@@ -188,7 +188,7 @@ def _ands(t) -> int:
 def test_the_h200s_small_and_counts_are_bs_compiles():
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
-    from verity.definitions.registry import boolean_attention as BA
+    from verity_vllm.definitions.registry import boolean_attention as BA
     assert _ands(bind(BG.ScaledMmS8Coordinate, K=2048, **BG.GEMM_SM90_S8)) == W.S8_COORD[2048]
     assert _ands(bind(BG.GemmCoordinate, K=2048, DOT=BG.HopperBF16WgmmaDot16)) == W.BF16_COORD[2048]
     for nvis in (1, 17):
@@ -203,8 +203,8 @@ def test_the_h200s_large_and_counts_are_bs_compiles():
     block, the quantizer's row max), which the quick test can't see."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
-    from verity.definitions.registry import boolean_attention as BA
-    from verity.definitions.registry import boolean_int8 as X
+    from verity_vllm.definitions.registry import boolean_attention as BA
+    from verity_vllm.definitions.registry import boolean_int8 as X
     assert _ands(bind(X.Int8RowQuantV2, K=2048)) == W.ROW_QUANT[2048]
     for bn, check in ((128, False), (192, True)):
         assert _ands(bind(BA.AttnBlockV9, D=64, NVIS=bn, FIRST=False, BN=bn, DOT=BG.HopperBF16WgmmaDot16,
