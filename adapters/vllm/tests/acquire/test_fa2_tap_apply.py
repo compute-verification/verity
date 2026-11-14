@@ -1,8 +1,8 @@
 """`verity_vllm/acquire/fa2_tap_src/apply_v8.py`, the script a pod runs to turn the v7-tapped FlashAttention tree into the
 v8 one, without that tree.
 
-The script is run whole, as `ops/pod_fa2_tap.sh` starts it: from the tree's root, with the source directory relative and
-this directory as its second argument. The tree is a stand-in made from the directory's own `verity_tap_v7.patch`: each
+The script is run whole, as `ops/pod_fa2_tap.sh` starts it: `verity-vllm fa2-tap-apply` from the tree's root, with the
+source directory relative (`--src`) and this directory as `--src-dir`. The tree is a stand-in made from the directory's own `verity_tap_v7.patch`: each
 file the patch touches holds the lines of the patch's hunks as they stand after it. So the script reads five of the seven
 lines it looks for, and one of the two calls of a sixth, from the patch's text, and a script that asked for a line the
 patch does not make is refused here. `softmax.h` gets three lines more, which the patch does not show and which stand in
@@ -14,19 +14,17 @@ from __future__ import annotations
 
 import difflib
 import hashlib
-import runpy
 import subprocess
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 import verity_vllm.acquire.fa2_tap_src.build_ext as BUILD
+from verity_vllm.pipeline import cli
 
 #: the tap's directory: the script's second argument on a pod, and the build's own `--src-dir`
 MINE = Path(BUILD.__file__).parent
-SCRIPT = MINE / "apply_v8.py"
 SRC = Path("csrc", "flash_attn", "src")
 FILES = ("flash.h", "flash_fwd_kernel.h", "flash_fwd_launch_template.h", "softmax.h", "verity_tap.h")
 MS_ON = "#if defined(VERITY_MAT_SRC) && (VERITY_MAT_SRC & 64)"
@@ -100,8 +98,7 @@ def _read(root: Path) -> dict[str, str]:
 
 def _apply(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(root)
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), str(SRC), str(MINE)])
-    runpy.run_path(str(SCRIPT), run_name="__main__")
+    cli.main(["fa2-tap-apply", "--src", str(SRC), "--src-dir", str(MINE)])
 
 
 def _changed(before: str, after: str) -> tuple[list[str], list[str]]:

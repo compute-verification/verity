@@ -1,8 +1,8 @@
 """`verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py`, the script a pod runs to turn the `hopper` directory of the pinned
 FlashAttention tree into the FA3-tapped one, without that tree.
 
-The script is run whole, as `ops/pod_fa3_tap.sh` starts it: with the directory to edit and this directory as its two
-arguments. The directory is a stand-in. Each of the four files the script reads holds lines of the pinned tree's file, in
+The script is run whole, as `ops/pod_fa3_tap.sh` starts it: `verity-vllm fa3-tap-apply` with the directory to edit
+(`--hopper`) and this directory (`--src-dir`). The directory is a stand-in. Each of the four files the script reads holds lines of the pinned tree's file, in
 that file's order: the lines the script looks for, and at three places what an edit must leave as it is. Those are the
 pinned `scale_apply_exp2`, whose arithmetic the script writes a second time; `finalize_aux`, which ends as `finalize`
 does and gets no tap; and the branch without `IntraWGOverlap`. So a script that asked for a line these lack is refused
@@ -13,17 +13,15 @@ from __future__ import annotations
 
 import difflib
 import hashlib
-import runpy
-import sys
 from pathlib import Path
 
 import pytest
 
 import verity_vllm.acquire.fa3_tap_src.build_fa3_ext as BUILD
+from verity_vllm.pipeline import cli
 
 #: the tap's directory: the script's second argument on a pod, and the build's own `--src-dir`
 MINE = Path(BUILD.__file__).parent
-SCRIPT = MINE / "apply_fa3_tap.py"
 HEADERS = ("verity_tap_fa3.h", "verity_tap_params.h")
 SOFTMAX_H = "softmax.h"
 MAINLOOP_HPP = "mainloop_fwd_sm90_tma_gmma_ws.hpp"
@@ -283,8 +281,7 @@ def _read(root: Path) -> dict[str, str]:
 
 
 def _apply(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys, "argv", [str(SCRIPT), str(root), str(MINE)])
-    runpy.run_path(str(SCRIPT), run_name="__main__")
+    cli.main(["fa3-tap-apply", "--hopper", str(root), "--src-dir", str(MINE)])
 
 
 def _changed(before: str, after: str) -> tuple[list[str], list[str]]:
