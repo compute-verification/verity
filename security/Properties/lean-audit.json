@@ -3042,9 +3042,6 @@
   "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives": {
    "owner": "@memory-accounting"
   },
-  "PousCheck.Properties.InProofs.SecurityProofs.setupGives": {
-   "owner": "@memory-accounting"
-  },
   "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_honest": {
    "owner": "@memory-accounting"
   },
@@ -3055,9 +3052,6 @@
    "owner": "@memory-accounting"
   },
   "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_nontrivial": {
-   "owner": "@memory-accounting"
-  },
-  "PousCheck.Properties.InProofs.SecurityProofs.setupGives_nontrivial": {
    "owner": "@memory-accounting"
   },
   "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
@@ -13318,10 +13312,6 @@
    },
    "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives": {
     "function": "MemoryChallenger.verdict",
-    "outcome": "accept"
-   },
-   "PousCheck.Properties.InProofs.SecurityProofs.setupGives": {
-    "function": "PousCheck.SetupProtocol.protocol.check",
     "outcome": "accept"
    }
   },
