@@ -44,7 +44,7 @@ from verity.definitions.registry.b1 import weights_type
 
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 
-I32, BF16, F32 = Value(32), Value(16), Value(32)
+I32, BF16 = Value(32), Value(16)
 N_EVENTS = D_MAX + 1  # prefill event + D_MAX decode events (the Serve_v2 skeleton; SPEC R3 maps this to Workload_v1's T = cap−1)
 BOT32, BOT16, INV32, INV16 = L.enc_bot(32), L.enc_bot(16), L.inv(32), L.inv(16)
 RNG = np.random.default_rng(1601)

@@ -101,7 +101,7 @@ def check (rec : Json) (v : Verifier) : Array String :=
   let c := kept (jeq (getD w "seed_salt") (optStr v.seedSalt)) c "R6-seed-salt"
   let c := poolMarks w v.pool v.log c
   let c := compilerMarks w v.compiler c
-  kept (v.registered.isEmpty || poolChained rec v) c "R7-pool-chain"
+  kept (!v.v2 || poolChained rec v) c "R7-pool-chain"
 
 /-- SPOT's outcome `o` held to the caller's check: an acceptance stands only when `check` finds nothing, and is refused
 by its codes otherwise; any other outcome is SPOT's own. -/
