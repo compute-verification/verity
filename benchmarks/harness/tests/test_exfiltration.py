@@ -1329,12 +1329,67 @@ def complete() -> list[dict]:
             made_up_verdict("request_tie", "max_tokens")]
 
 
-def with_verdicts(tmp: Path, verdicts: list[dict] | str, run: str = HOLDER) -> Store:
-    """The fixture's rows of record, and ``run`` labelled the stop class's record holding ``verdicts`` (or that text)."""
+def with_verdicts(tmp: Path, verdicts: list[dict] | str, run: str = HOLDER,
+                  held: Mapping[str, list[dict]] | None = None) -> Store:
+    """The fixture's rows of record, and ``run`` labelled the stop class's record holding ``verdicts`` (or that text)
+    and, with ``held``, those files beside them (`held_phase`)."""
 
     s = recorded(tmp, planned=False)
-    s.label(s.ran(run, {E.VERDICTS_FILE: verdicts}), value=E.VERDICTS)
+    s.label(s.ran(run, {E.VERDICTS_FILE: verdicts, **(held or {})}), value=E.VERDICTS)
     return s
+
+
+def reader():
+    """The stop verdicts' reader, as the command loads it."""
+
+    return E._load(REPO, "network_traces", E.READER)
+
+
+@pytest.fixture
+def listed(monkeypatch) -> dict[str, str]:
+    """The reader with a format listed for each of its four verdicts, as its own tests list them: it lists none, so
+    without this no run's files hold an execution phase. The formats, by verdict."""
+
+    sv = reader()
+    formats = {kind: f"a format of the {kind}" for kind in sv.CC.VERDICTS}
+    monkeypatch.setattr(sv, "FORMATS", {form: kind for kind, form in formats.items()})
+    return formats
+
+
+def held_phase(formats: Mapping[str, str]) -> dict[str, list[dict]]:
+    """A run's files, in the stop verdicts' reader's own format and by the names it reads, that hold one execution
+    phase of a link: the registration of a head whose one class holds 4 rows; the four verdicts on that class and
+    head, each accepted and complete, the stop record's and the response tie's at the registered rate; each
+    verifier's negative control, refused for its word; and the serve's registration with those two verdicts'
+    streams, each registering every block of 4. ``formats`` is each verdict's format (`listed`). Nothing here is
+    read by the command: the reader reads it and answers."""
+
+    sv = reader()
+    CC, C = sv.CC, sv.C
+    tables = [("lengths", 4, 8), ("fails", 4, 8), *((name, 4, 16) for name in sv.CT.names(0))]
+    head = C.Head("responses", 3, bytes(64), tuple(C.Entry(name, rows, size, bytes(64), bytes(64))
+                                                   for name, rows, size in tables))
+    registration = {"format": C.REGISTRATION, "link": head.link, "window": head.window,
+                    "parameters": head.parameters.hex(), "word_bits": C.WORD_BITS, "row_schema": C.SCHEMA,
+                    "tables": [{"name": e.name, "rows": e.rows, "words": e.row_bytes * 8 // C.WORD_BITS,
+                                "domain": e.domain.hex(), "root": e.root.hex()} for e in head.tables],
+                    "certificate": {"key": "", "digest": head.digest().hex(), "signature": ""}}
+    serve = {"format": "a serve's registration"}
+    streams = {kind: {"format": "a stream's registration", "window": f"the {kind}'s stream", sv.POPULATION: 4,
+                      sv.DESIGN: {sv.DESIGN: sv.SUBSET, "k": 4}, sv.PREVIOUS: sv.digest_of(serve)} for kind in sv.RATED}
+    by = {kind: {"module": f"the {kind}'s verifier", "commit": "a commit"} for kind in CC.VERDICTS}
+    verdicts = [{CC.RUN: f"run of the {kind}", CC.SERVE: "the serve", CC.REGISTRATION: sv.digest_of(serve),
+                 CC.VERIFIER: by[kind],
+                 CC.VERDICT: {sv.FORMAT: formats[kind], CC.LINK: head.link, CC.WINDOW: head.window, CC.CLASS: 0,
+                              CC.HEAD: head.digest().hex(), "registration": "a digest", CC.ACCEPTED: True,
+                              CC.COMPLETE: True, "withheld": None, "codes": []},
+                 CC.PROVED_BY: None} | ({sv.RATE: "1/1", sv.STREAM: sv.digest_of(streams[kind])} if kind in sv.RATED else {})
+                for kind in CC.VERDICTS]
+    controls = [{CC.RUN: f"control run of the {kind}", CC.VERIFIER: by[kind], sv.CONTROL: sv.CONTROLS[kind][0],
+                 CC.VERDICT: {sv.FORMAT: formats[kind], CC.ACCEPTED: False, "withheld": None, "codes": ["a refusal"]},
+                 sv.REASON: sv.REASONS[kind]} for kind in CC.VERDICTS]
+    return {sv.REGISTRATIONS_FILE: [registration], "out/the-verdicts.jsonl": verdicts,
+            "out/the-controls.jsonl": controls, sv.SERVES_FILE: [serve, *streams.values()]}
 
 
 def digests(doc: dict) -> dict:
