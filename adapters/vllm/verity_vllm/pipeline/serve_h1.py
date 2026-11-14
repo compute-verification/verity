@@ -475,6 +475,7 @@ class H1Windows:
         """Window ``window``'s prover state once written (`pouw_h1_prover.Writer.wait`, which closes its directory, so it is
         waited for once, by its tie's command or else its release): its calls, bytes and waits. OSError as the writer's."""
         if window not in self._kept:
+            assert self.writer is not None, "a window's prover state is kept only with a prover directory"
             try:
                 self._kept[window] = self.writer.wait(self.prover_of(window))
             except OSError as e:
@@ -548,6 +549,7 @@ class H1Windows:
                 if self.draws is not None and not unserved:
                     drawn = self.drawn(window, run, held, error)
                 if held:
+                    assert self.sessions is not None, "a held session is a gate session"
                     end = self.sessions.ended(held["session"])
                     if isinstance(held.get("draw"), dict):
                         held["draw"]["end"] = self.sessions.ended(held["draw"]["session"])
@@ -616,6 +618,7 @@ class H1Windows:
 
         if held is None:
             return draw_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
+        assert self.sessions is not None, "a held session is a gate session"
         period = held.get("period")
         if period is None:
             raise ValueError(f"session {held.get('session')} joined no period, so no period-open committed the K its "
@@ -640,9 +643,9 @@ class H1Windows:
 
         d, c = run.details, run.commits
         live_dump = None
-        if self.prover is not None and run.served is not None and run.served.live and d.get("steps_served"):
+        if (prover := self.prover_of(window)) is not None and run.served is not None and run.served.live and d.get("steps_served"):
             try:
-                live_dump = dump_live(run, self.prover_of(window) / "live")
+                live_dump = dump_live(run, prover / "live")
             except (KeyError, ValueError, OSError) as e:
                 live_dump = {"error": f"{type(e).__name__}: {e}"[:300]}
         roots1, gate, rc = d.get("roots1"), d.get("gate", {}), getattr(run.served, "receipts", None) if self.receipts else None
