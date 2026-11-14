@@ -93,8 +93,8 @@ NO_SSH = "its ssh doesn't answer"
 HOLD_FILE = "/etc/vy/auto-hold"
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: a machine out of inodes with half
 #: its bytes free fails every job placed there, shipping its source or mid-build, with ENOSPC. One run of
-#: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
-DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
+#: a large suite (tools/research's) holds some 250k pytest temp files at once: the floor is two of those
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 500_000, 50
 #: what a launch needs of a machine whatever the job, which the probe tries (its `no_start`): the null device, which the
 #: runner's start opens to read and write and git opens before it does anything, and git, which ships a tree as a checkout
 NULL_DEVICE, GIT = "/dev/null", "git"

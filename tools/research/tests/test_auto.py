@@ -574,6 +574,29 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert failing == {m: "exit 1: no python here" for m in (N2, *NODES)}
 
 
+def test_a_pool_takes_runs_down_to_500000_free_inodes_and_none_under_it(tmp_path, monkeypatch):
+    """The pools' inode floor is 500,000 free inodes: one inode fewer and the pool takes no run, and the refusal names the floor. The probe is the launcher's own payload, run on a machine whose disk reports the free inodes set
+    here."""
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    src = tmp_path / "src"
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'slots': [], 'waiters': []}\n")
+    machine = ("import os, sys\nreal = os.statvfs\n"
+               "def statvfs(p):\n    s = real(p)\n    if p != {disk!r}:\n        return s\n"
+               "    return os.statvfs_result((s.f_bsize, 4096, 10**9, 10**9, 10**9, 10**7, {free}, {free}, s.f_flag, s.f_namemax))\n"
+               "os.statvfs = statvfs\nexec(sys.stdin.read())\n")
+
+    def research_pool(free: int) -> dict:
+        probe = auto.payload(src, 4, None, ["research"])
+        r = subprocess.run([sys.executable, "-c", machine.format(disk=str(tmp_path), free=free)], input=probe,
+                           capture_output=True, check=True)
+        return json.loads(r.stdout)["research"]
+
+    assert research_pool(499_999) == {"error": f"disk: {tmp_path} has 499999 inodes free, under 500000"}
+    assert research_pool(500_000) == {"slots": [], "waiters": []}
+
+
 def test_the_probe_reads_a_pool_by_the_machines_own_slot_py_where_it_has_one(tmp_path, monkeypatch):
     """A pool's runs wait by the machine's own slot.py, so its line is read by that copy: a launcher's tree older or newer
     than the machine's copy would count the line by other rules than the ones that admit its waiters. A machine without a
