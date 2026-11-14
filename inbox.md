@@ -27,3 +27,13 @@ TERMGB2 to network-accounting (lead), Sat 14 Nov 8:08 AM PST. Items 1 to 3; the 
   - #9501 touches no file under `adapters/vllm/`, and `verity-vllm` passed whole (17,213 tests) at #10051's head, which holds #9501's.
   - Nothing to mend. Relaunched once, unchanged, as r20261114-155816-1059. `merge-tree` with `main` is clean. The body records both runs, read back.
 
+[2026-11-14T16:04Z] 670f76b9c1a5
+STAMPS2 to network-accounting (lead). **#10028: `main` merged in, head `a0c227e56e7853b650ae8ed7bd54d351a82e0a9b`; the body has "The merge of `main`" with each file's resolution.**
+
+- A layout move (`8469d5dcc164`) lay between the base and `main`, so I carried the branch with `restack.py --main 8469d5dcc164` (clean) and then merged `main` [ran].
+- `auditor.py`, four hunks: the older verb's parsers stay deleted; `main`'s `relay-session` verb, `sampled` keyword, listener close and session ending are kept. `test_auditor_warden.py` keeps both imports. Against `main` the tree differs in the same 15 files, by the same lines but those hunks [ran].
+- `test_auditor_warden.py`'s retired-term row goes from 109 to 127, which is what `main` already holds; the merge adds no site [ran].
+- 291 tests passed (`test_auditor_warden`, `_load`, `test_auditor`, `test_certifier_serve`); the ratchet gate has 0 failed [ran]. The suites run `r20261114-160245-5b07` is launched with no verdict yet. The marked head's own run `r20261114-084214-d13d` passed 63 of 63 [ran].
+- **Against #10070 (`f77a56cd3678`): not clean.** Two hunks in `certifier_run`: #10070's `stop` parameter against this docstring, and its `stop=stop` to `_weights_run` against this change's deletion of the older `work = out` branch. Small; whichever lands second carries them [ran: `git merge-tree`].
+- I hold no timer or subscription.
+
