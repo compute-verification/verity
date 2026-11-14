@@ -35,7 +35,7 @@ inductive Role where
 /-- **An auditor device's pin**: its role, its registered public key, the LMS parameters `(N, W, H)` it is under; for
 a memory challenger the key of the network certifier whose marks it reads and the servers whose memory it is pinned to
 challenge; and for a network certifier the link it is pinned for, its key's session and the start of the stretch of
-that link's link-windows its key signs in that session, which runs up to the next pin's start for the link. A link's
+that link's execution phases its key signs in that session, which runs up to the next pin's start for the link. A link's
 entries, one pin each, are its certifier pins in their order. -/
 structure AuditorPin where
   role : Role

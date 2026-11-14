@@ -336,7 +336,7 @@ def WipePinned (P : AuditorPins) (θ : ByteArray) : Prop :=
 
 /-- **The network certifier's parameters list exactly the entries pinned for the period's link**: the period's
 entries, each a key under its LMS parameters, a session and a start, are the certifier pins for its link one for one,
-in order (`List.Forall₂`). Each link-window's entry, the one its check holds the certificates to, is then a pinned
+in order (`List.Forall₂`). Each execution phase's entry, the one its check holds the certificates to, is then a pinned
 entry, and a link with no pinned entry is refused, since a period lists at least one. -/
 def NetworkPinned (P : AuditorPins) (θ : ByteArray) : Prop :=
   ∀ p ∈ componentsAt Core.Composites.networkAt θ,

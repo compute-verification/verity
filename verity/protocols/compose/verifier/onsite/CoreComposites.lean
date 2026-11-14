@@ -57,7 +57,7 @@ open Lean (Json)
 open Flock (V)
 
 /-- A network certifier's entry as the auditor pins it: the link it is pinned for, its LMS key, its session and the
-start of the stretch of the link's link-windows it signs, as a period's parameters list an entry
+start of the stretch of the link's execution phases it signs, as a period's parameters list an entry
 (`NetworkCheck.Period.Entry`). A link's pinned entries, in their order, are the list its periods list. -/
 structure CertifierPin where
   link : String
