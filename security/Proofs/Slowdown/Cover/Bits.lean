@@ -29,7 +29,7 @@ is handed at least `f` of the region's bits, since all bits of one gate read the
 
 @[expose] public section
 
-namespace InferenceOnly.Cover.SecurityProofs
+namespace Slowdown.Cover.SecurityProofs
 
 open Finset BitView
 
@@ -250,4 +250,4 @@ theorem width_aligned (X Aw : Finset (Fin d.D.N)) (f : ℕ) (hf : ∀ a ∈ Aw, 
 
 end Blocks
 
-end InferenceOnly.Cover.SecurityProofs
+end Slowdown.Cover.SecurityProofs

@@ -8,7 +8,7 @@ public import Definitions.Core.Guarantees.Formalism
 
 A block's view is short: `k` fresh bits, and an index among `B` blocks. Each statement here combines that with an
 information premise into a **budget** on what every block holds, the form the structural caps consume
-(`InferenceOnly.Capability.HeldPriceAtMost`):
+(`Slowdown.Capability.HeldPriceAtMost`):
 
 * `HeldBudget`: computational, through Lemma 1 (`Verity.Guarantees.BlockDescription`): `k + ⌈log₂ B⌉ + a_blk + Λ`.
 * `StatHeldBudget`: statistical, by counting views: `k + Λ`, with no decoder and no time budget.
@@ -17,9 +17,9 @@ information premise into a **budget** on what every block holds, the form the st
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+namespace Slowdown.Guarantees
 
-open Verity Finset InferenceOnly.Capability
+open Verity Finset Slowdown.Capability
 open scoped ENNReal
 
 /-- **The held budget** (Lemma 1 with description hardness). In a `(c, k)`-partition where, for each selection of
@@ -58,4 +58,4 @@ def RecoveredBudget : Prop :=
       Assumptions.SourceHard R M r τ z ℓz δ → Assumptions.Recovers R M r τ e z ℓz βv amb J →
       ∀ u, βv * J u ≤ (k + Nat.clog 2 R.d.n + aBlk : ℕ) + δ + amb
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

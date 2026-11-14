@@ -17,7 +17,7 @@ most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its comp
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
 open Verity Accounting Finset
 
@@ -100,4 +100,4 @@ theorem FitRate : Guarantees.FitRate := by
     _ ≤ t * (n * T.reuse * Nstar * (R + r * ω) ^ 2) := mul_le_mul_of_nonneg_right hJ hY
     _ = n * t * T.reuse * Nstar * (R + r * ω) ^ 2 := by ring
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

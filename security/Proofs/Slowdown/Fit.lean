@@ -21,7 +21,7 @@ multiplications in a window number at most `reuse` per slot it uses there (`card
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.Fit
+namespace Slowdown.SecurityProofs.Fit
 
 open Verity Finset
 
@@ -327,11 +327,11 @@ theorem fitBoundSlots_start {c : RegisteredCircuit} {T : Threading c} (σ : T.Sl
       _ = k * S ^ 2 := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
   exact fit_ineq hwe.le hbw.le hN0 hr0 hgap0 hMr htok hB hwin
 
-end InferenceOnly.SecurityProofs.Fit
+end Slowdown.SecurityProofs.Fit
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity Finset InferenceOnly.SecurityProofs.Fit
+open Verity Finset Slowdown.SecurityProofs.Fit
 
 /-- **The fit bound over parameter slots**: `fitBoundSlots_start`, whose premise `ReachSlots` gives. -/
 theorem FitBoundSlots : Guarantees.FitBoundSlots := by
@@ -349,4 +349,4 @@ theorem fitBound_of_slots (h : Guarantees.FitBoundSlots) : Guarantees.FitBound :
 /-- **The fit bound**, as `FitBoundSlots` at one slot per weight gate. -/
 theorem FitBound : Guarantees.FitBound := fitBound_of_slots FitBoundSlots
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

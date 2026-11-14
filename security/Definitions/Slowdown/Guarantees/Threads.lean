@@ -25,7 +25,7 @@ for it once.
 
 @[expose] public section
 
-namespace InferenceOnly.Guarantees
+namespace Slowdown.Guarantees
 
 open Verity
 
@@ -130,4 +130,4 @@ def ThreadedThrottledDarkSlots : Prop :=
     T.Threaded Γ (α * Γ) dd e → Assumptions.WeightsIncompressibleSlots r T σ Γ (α * Γ) b_w b_a →
       (T.M.card : ℝ) ≤ M.dark.card + α * T.bound (α * Γ) b_w dd e * d.D.size d.D.computed / b_a
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

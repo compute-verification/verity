@@ -54,7 +54,7 @@ input gates outside `θ`, which both readings only add to, so (H) at `d` gives (
 as inputs, at the same budget (`hardness_untie`, `hardness_asInputs`), and `Π` untied is at most `Π` at `d`
 (`piMax_untie_le`). (H) at `d` is not what a bound asks: a word inside `θ`, or one `d` computes from `θ` alone, has
 `κ = 0` at `d`, so (H) at `d` fails at every positive cost for a work that multiplies by such a word
-(`InferenceOnly.Cut.SecurityProofs.untie_hH_false`, `asInputs_hH_false`), which is the work an untied word is for. (E) with
+(`Slowdown.Cut.SecurityProofs.untie_hH_false`, `asInputs_hH_false`), which is the work an untied word is for. (E) with
 gates as inputs is a premise at that circuit: it does not follow from (E) at `d`.
 
 `HE` quantifies over a `Partition` of every computed gate of the circuit, each block within the budget, so it takes no
@@ -203,7 +203,7 @@ noncomputable def Partition.keep {C : Circuit} {n n' : ℕ} (P : Partition C n) 
       rw [(P.input_iff g).1 hu, Bool.true_or]
       exact ⟨fun _ => rfl, fun _ => rfl⟩
     | some u =>
-      have hi : C.isInput g = false := InferenceOnly.Cut.SecurityProofs.gate_computed P (P.mem_gates.2 hu)
+      have hi : C.isInput g = false := Slowdown.Cut.SecurityProofs.gate_computed P (P.mem_gates.2 hu)
       have hd : g ∈ P.dropped ι ↔ ∀ v, ι v ≠ u := by
         constructor
         · intro hg
@@ -234,7 +234,7 @@ theorem Partition.keep_gates {C : Circuit} {n n' : ℕ} (P : Partition C n) (ι 
 theorem Partition.isInput_of_mem_dropped {C : Circuit} {n n' : ℕ} (P : Partition C n) (ι : Fin n' → Fin n)
     {g : Fin C.N} (hg : g ∈ P.dropped ι) : C.isInput g = false := by
   obtain ⟨u, hu, -⟩ := (mem_filter.1 hg).2
-  exact InferenceOnly.Cut.SecurityProofs.gate_computed P (P.mem_gates.2 hu)
+  exact Slowdown.Cut.SecurityProofs.gate_computed P (P.mem_gates.2 hu)
 
 theorem Partition.notMem_dropped {C : Circuit} {n n' : ℕ} (P : Partition C n) (ι : Fin n' → Fin n) {v : Fin n'}
     {g : Fin C.N} (hg : g ∈ P.gates (ι v)) : g ∉ P.dropped ι := by
@@ -328,7 +328,7 @@ theorem RegisteredCircuit.unregistered_asInputs_of_disjoint (d : RegisteredCircu
 
 end Verity
 
-namespace InferenceOnly.Cut.SecurityProofs.Untied
+namespace Slowdown.Cut.SecurityProofs.Untied
 
 open Verity Finset
 
@@ -517,10 +517,10 @@ at any `E`, and with any gates as inputs, at the same arrays, costs and budget. 
 
 /-- `κ` grows with the set the paths start from. -/
 theorem kappa_mono_left {C : Circuit} {X X' Y : Finset (Fin C.N)} (h : X ⊆ X') : kappa C X Y ≤ kappa C X' Y := by
-  obtain ⟨Z, hZ, hsep⟩ := InferenceOnly.Cut.SecurityProofs.exists_separator X' Y
+  obtain ⟨Z, hZ, hsep⟩ := Slowdown.Cut.SecurityProofs.exists_separator X' Y
   rw [← hZ]
   have hsep' : Separates C Z X Y := fun x hx y hy => hsep x (h hx) y hy
-  exact InferenceOnly.Cut.SecurityProofs.kappa_le hsep'
+  exact Slowdown.Cut.SecurityProofs.kappa_le hsep'
 
 /-- An input gate outside `θ` stays one when gates leave `θ`. -/
 theorem unregisteredInputs_subset_untie (d : RegisteredCircuit) (E : Finset (Fin d.D.N)) :
@@ -551,8 +551,8 @@ theorem piMax_untie_le {ι : Type} [Fintype ι] (d : RegisteredCircuit) (E : Fin
 
 /-- A path of `C` is a path of `C` with `T` as inputs, or its end is reached from a gate of `T` there. -/
 theorem feedsWithin_asInputs {C : Circuit} (T R : Finset (Fin C.N)) {x y : Fin C.N}
-    (hp : InferenceOnly.Covering.FeedsWithin C R x y) :
-    InferenceOnly.Covering.FeedsWithin (C.asInputs T) R x y ∨ ∃ g ∈ T, InferenceOnly.Covering.FeedsWithin (C.asInputs T) R g y := by
+    (hp : Slowdown.Covering.FeedsWithin C R x y) :
+    Slowdown.Covering.FeedsWithin (C.asInputs T) R x y ∨ ∃ g ∈ T, Slowdown.Covering.FeedsWithin (C.asInputs T) R g y := by
   induction hp with
   | refl ht => exact Or.inl (.refl ht)
   | @step g h t hg hgh _ ih =>
@@ -584,7 +584,7 @@ theorem mem_unregisteredInputs_asInputs (d : RegisteredCircuit) (T : Finset (Fin
 /-- `κ(S)` only grows when gates become inputs outside `θ`. -/
 theorem kappaWords_le_asInputs (d : RegisteredCircuit) (T : Finset (Fin d.D.N))
     (S : Finset (Finset (Fin d.D.N))) : kappaWords d S ≤ kappaWords (d.asInputs T) S := by
-  obtain ⟨Z, hZ, hsep⟩ := InferenceOnly.Cut.SecurityProofs.exists_separator (C := (d.asInputs T).D)
+  obtain ⟨Z, hZ, hsep⟩ := Slowdown.Cut.SecurityProofs.exists_separator (C := (d.asInputs T).D)
     (unregisteredInputs (d.asInputs T)) (S.biUnion id)
   have hZ' : kappaWords (d.asInputs T) S = Z.card := hZ.symm
   rw [hZ']
@@ -593,7 +593,7 @@ theorem kappaWords_le_asInputs (d : RegisteredCircuit) (T : Finset (Fin d.D.N))
     rcases feedsWithin_asInputs T (univ \ Z) hp with h | ⟨g, hg, h⟩
     · exact hsep x (unregisteredInputs_subset_asInputs d T hx) y hy h
     · exact hsep g (mem_unregisteredInputs_asInputs d T hg) y hy h
-  exact InferenceOnly.Cut.SecurityProofs.kappa_le hsep'
+  exact Slowdown.Cut.SecurityProofs.kappa_le hsep'
 
 /-- **(H) at `d` gives (H) at `d` with any gates `T` as inputs**, at the same arrays, costs and budget. -/
 theorem hardness_asInputs {ρ V : Type} [Fintype ρ] [DecidableEq V] (d : RegisteredCircuit) (T : Finset (Fin d.D.N))
@@ -609,7 +609,7 @@ theorem hardness_asInputs {ρ V : Type} [Fintype ρ] [DecidableEq V] (d : Regist
 most `b` gates each, read by at most one block, on the circuit itself with every block kept. For any set `G` of
 blocks: a block of `G` is under its own budget, `k` and `b` for each word it reads, with `Π` at the untied circuit,
 `d.untie (𝒲.biUnion id)`; all the blocks together read at most `m k + b |𝒲|` gates outside `θ`; and the MACs a block
-outside `G` holds are counted apart (`InferenceOnly.Cut.SecurityProofs.counts_on`). `Π` at `d` is at least `Π` untied
+outside `G` holds are counted apart (`Slowdown.Cut.SecurityProofs.counts_on`). `Π` at `d` is at least `Π` untied
 (`piMax_untie_le`), so the count holds with it too. It is not the one stated: a word of `θ` has `κ = 0` at `d`, so `Π`
 at `d` counts a work that multiplies by an untied word as if that word cost nothing. -/
 theorem counts_untie {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m)
@@ -628,9 +628,9 @@ with (H) at the untied circuit, `d.untie (𝒲.biUnion id)`, at each block of `G
 the block reads, and (E) at `e > 0`. For any set `G` of blocks, with `T = m k + b |𝒲|`, `Q` the sum of the squared
 budgets over `G`, and `O_G` the pairs of a block of `G` and an output with a wire in it: `N` is at most the MACs the
 other blocks hold, plus `T + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T / (β_w β_x e))`
-(`InferenceOnly.Cut.SecurityProofs.bound_on_budgets_he`). (H) at `d` gives the premise, at the same budgets (`hardness_untie`). It
+(`Slowdown.Cut.SecurityProofs.bound_on_budgets_he`). (H) at `d` gives the premise, at the same budgets (`hardness_untie`). It
 is not what is asked: a word of `θ` has `κ = 0` at `d`, so (H) at `d` fails at every budget and every positive cost for
-a work that multiplies by an untied word (`InferenceOnly.Cut.SecurityProofs.untie_hH_false`). -/
+a work that multiplies by an untied word (`Slowdown.Cut.SecurityProofs.untie_hH_false`). -/
 theorem bound_untie_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) (W : Work d.D ι) (val : Finset (Fin d.D.N) → V) {k b : ℕ} {βw βx e : ℝ}
     (𝒲 : Finset (Finset (Fin d.D.N))) (h𝒲 : ∀ S ∈ 𝒲, S.card ≤ b) (hk : ReadsAtMost d P k) (hone : OneReader P 𝒲)
@@ -763,7 +763,7 @@ theorem sum_card_unregistered_asInputs_held_le {m : ℕ} (d : RegisteredCircuit)
         (card_unregistered_asInputs_held_le d P T hT u).trans (Nat.add_le_add_right (hk u) _)
     _ = m * k + ∑ u : Fin m, (T ∩ P.gates u).card := by
         rw [sum_add_distrib, sum_const, card_univ, Fintype.card_fin, smul_eq_mul]
-    _ ≤ m * k + T.card := Nat.add_le_add_left (InferenceOnly.Cut.SecurityProofs.sum_card_inter_gates_le P T) _
+    _ ≤ m * k + T.card := Nat.add_le_add_left (Slowdown.Cut.SecurityProofs.sum_card_inter_gates_le P T) _
 
 /-- A gate that reads nothing is fed by no other gate. -/
 theorem eq_of_feeds_of_reads_eq_empty {C : Circuit} {g t : Fin C.N} (hf : C.Feeds g t) (ht : C.reads t = ∅) :
@@ -792,7 +792,7 @@ theorem y_not_subset_asInputs {C : Circuit} {ι : Type} {T : Finset (Fin C.N)} (
 `T` as inputs outside `θ`, with any charged work `W` of that circuit and any set `G` of blocks: a block of `G` is
 under its own budget, `k` and the gates of `T` it held; all the blocks together read at most `m k + |T|` gates outside
 `θ`, whoever reads them; and the MACs a block outside `G` holds are counted apart
-(`InferenceOnly.Cut.SecurityProofs.counts_on`). -/
+(`Slowdown.Cut.SecurityProofs.counts_on`). -/
 theorem counts_asInputs {ι : Type} [Fintype ι] [DecidableEq ι] {m : ℕ} (d : RegisteredCircuit) (P : Partition d.D m)
     {k : ℕ} (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false) (W : Work (d.D.asInputs T) ι)
     (hk : ReadsAtMost d P k) (G : Finset (Fin m)) :
@@ -809,10 +809,10 @@ values, with (H) and (E) at the circuit with `T` as inputs, `d.asInputs T`: (H) 
 and the gates of `T` the block held, and (E) at `e > 0`. For any set `G` of blocks, with `T' = m k + |T|`, `Q` the sum
 of the squared budgets over `G`, and `O_G` the pairs of a block of `G` and an output with a wire in it: `N` is at most
 the MACs the other blocks hold, plus `T' + ½ √(Q O_G / (β_w β_x)) + ½ √(Q T' / (β_w β_x e))`
-(`InferenceOnly.Cut.SecurityProofs.bound_on_budgets_he`). (H) at `d` gives the premise, at the same budgets (`hardness_asInputs`).
+(`Slowdown.Cut.SecurityProofs.bound_on_budgets_he`). (H) at `d` gives the premise, at the same budgets (`hardness_asInputs`).
 It is not what is asked: a word that `d` computes from `θ` alone has `κ = 0` at `d`, so (H) at `d` fails at every budget
 and every positive cost for a work that multiplies by such a word of `T`
-(`InferenceOnly.Cut.SecurityProofs.asInputs_hH_false`). -/
+(`Slowdown.Cut.SecurityProofs.asInputs_hH_false`). -/
 theorem bound_asInputs_he {ι V : Type} [Fintype ι] [DecidableEq ι] [DecidableEq V] {m : ℕ} (d : RegisteredCircuit)
     (P : Partition d.D m) {k : ℕ} {βw βx e : ℝ} (T : Finset (Fin d.D.N)) (hT : ∀ g ∈ T, d.D.isInput g = false)
     (W : Work (d.D.asInputs T) ι) (val : Finset (Fin d.D.N) → V) (hk : ReadsAtMost d P k) (G : Finset (Fin m))
@@ -858,4 +858,4 @@ theorem readsAtMost_untie_without {m : ℕ} (d : RegisteredCircuit) (P : Partiti
   exact ⟨ι, hι, hS, readsAtMost_keep (d.untie (𝒲.biUnion id)) P ι hι fun v =>
     card_unregistered_untie_of_notMem_readersOver d P 𝒲 h𝒲 hk (hS v)⟩
 
-end InferenceOnly.Cut.SecurityProofs.Untied
+end Slowdown.Cut.SecurityProofs.Untied

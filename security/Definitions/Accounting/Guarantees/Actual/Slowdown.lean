@@ -6,14 +6,14 @@ public import Definitions.Slowdown.Slowdown
 /-!
 # The slowdown's windows from the memory cap over threads (trusted)
 
-`InferenceOnly.Guarantees.SlowdownExecutionPhases` takes the monitored servers' windows as one hypothesis over real numbers: `n` servers
+`Slowdown.Guarantees.SlowdownExecutionPhases` takes the monitored servers' windows as one hypothesis over real numbers: `n` servers
 over a horizon of `H` ticks cut into `⌈H/L⌉` windows of `L` ticks, each starting from at most `R` bits of state and taking
 in at most `αF` bits a tick, hold `b_a (M_r + M_d) ≤ n ⌈H/L⌉ K Λ(K)` counted multiplications of the residual and the
 declared computation, `K = R + αF L`. `SlowdownServerBlocksCap` derives that hypothesis on the actual circuit from the memory
 cap over threads (`ThreadedRuntime`): at a whole-tick window `ω = L` over the horizon `t = H`, with each location's link
 capacity at most `αF` (`r = αF`), when one threading `T` of a reference circuit that the developer's declaration over
 `[0, t)` contains counts the residual and the declared computation together (`M_r + M_d ≤ |T.M|`), with `Λ` at `T`'s
-reuse (`InferenceOnly.Threading.bound`, which is `InferenceOnly.Slowdown.Lambda`). `ThreadedRuntime` counts the windows as
+reuse (`Slowdown.Threading.bound`, which is `Slowdown.Slowdown.Lambda`). `ThreadedRuntime` counts the windows as
 `n ((t + ω − 1)/ω)`, which is `n ⌈t/ω⌉₊`.
 -/
 
@@ -21,12 +21,12 @@ reuse (`InferenceOnly.Threading.bound`, which is `InferenceOnly.Slowdown.Lambda`
 
 namespace Accounting.Guarantees.Actual
 
-open Verity InferenceOnly Finset InferenceOnly.Slowdown
+open Verity InferenceOnly Finset Slowdown.Slowdown
 
 /-- **The slowdown's windows from the memory cap over threads.** In `ThreadedRuntime`'s setting, with each
 location's link capacity at most `α F` bits a tick, a whole-tick window `ω > 0`, the horizon `t` and `K = R + α F ω`:
 when the residual's `M_r` and the declared computation's `M_d` counted multiplications number together at most those of
-one threading `T` of the reference circuit `c` (`M_r + M_d ≤ |T.M|`), they meet `InferenceOnly.Guarantees.SlowdownExecutionPhases`' bound
+one threading `T` of the reference circuit `c` (`M_r + M_d ≤ |T.M|`), they meet `Slowdown.Guarantees.SlowdownExecutionPhases`' bound
 on the servers' windows at `H = t`, `L = ω` and `T`'s reuse: `b_a (M_r + M_d) ≤ n ⌈t/ω⌉₊ K Λ(K)`.
 
 Reads are counted by width, as in `ThreadedRuntime`. -/
@@ -41,13 +41,13 @@ def SlowdownServerBlocksCap : Prop :=
     (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ α * F) →
     (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
     c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
-    T.Threaded Γ (R + α * F * ω) d e → InferenceOnly.Assumptions.WeightsIncompressible c T Γ (R + α * F * ω) b_w b_a →
+    T.Threaded Γ (R + α * F * ω) d e → Slowdown.Assumptions.WeightsIncompressible c T Γ (R + α * F * ω) b_w b_a →
     Mr + Md ≤ T.M.card →
       b_a * ((Mr : ℝ) + Md) ≤ n * ⌈(t : ℝ) / ω⌉₊ * ((R + α * F * ω) * Lambda T.reuse e d b_w (R + α * F * ω))
 
 /-- **The slowdown's windows from the memory cap over threads, per parameter slot.** `SlowdownServerBlocksCap` from
 `ThreadedRuntimeSlots`, with the reference circuit's weights incompressible per parameter slot of a slot map `σ`
-(`InferenceOnly.Assumptions.WeightsIncompressibleSlots`): `b_a (M_r + M_d) ≤ n ⌈t/ω⌉₊ K Λ(K)`.
+(`Slowdown.Assumptions.WeightsIncompressibleSlots`): `b_a (M_r + M_d) ≤ n ⌈t/ω⌉₊ K Λ(K)`.
 
 Reads are counted by width, as in `ThreadedRuntime`. -/
 def SlowdownServerBlocksCapSlots : Prop :=
@@ -61,7 +61,7 @@ def SlowdownServerBlocksCapSlots : Prop :=
     (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ α * F) →
     (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
     c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
-    T.Threaded Γ (R + α * F * ω) d e → InferenceOnly.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + α * F * ω) b_w b_a →
+    T.Threaded Γ (R + α * F * ω) d e → Slowdown.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + α * F * ω) b_w b_a →
     Mr + Md ≤ T.M.card →
       b_a * ((Mr : ℝ) + Md) ≤ n * ⌈(t : ℝ) / ω⌉₊ * ((R + α * F * ω) * Lambda T.reuse e d b_w (R + α * F * ω))
 

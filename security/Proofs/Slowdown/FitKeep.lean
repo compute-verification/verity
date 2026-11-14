@@ -22,7 +22,7 @@ the bound: a citation that leaves work out charges it.
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.Fit
+namespace Slowdown.SecurityProofs.Fit
 
 open Verity Finset
 
@@ -167,4 +167,4 @@ theorem fitBoundSlots_threads (T : Threading c) (σ : T.Slots) (K : Finset (Fin 
   fitBoundSlots_keep T σ _ P start Nstar S b_w w_e hgap hS
     (fun t h => hR t (h.mono (threadMults_mono (keep T (threadGates T K)) (subset_univ _) t))) hF
 
-end InferenceOnly.SecurityProofs.Fit
+end Slowdown.SecurityProofs.Fit

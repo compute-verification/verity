@@ -20,7 +20,7 @@ and the two that SPOT and PoUW's deficit add:
   detected incorrect proof block and its halt `Δ` later is at most `(JΔ/H) C`, so all faulty blocks skip at most that plus
   what the blocks accepted before their identity's first detection (`escaped`) skip;
 * `SlowdownRemote` composes them with the declared computation's bound on its count verdict
-  (`InferenceOnly.Cut.Guarantees.CountHE`: `CompliesAtMost c k n`, with (H) and (E) on its charged work), charging the escaped
+  (`Slowdown.Cut.Guarantees.CountHE`: `CompliesAtMost c k n`, with (H) and (E) on its charged work), charging the escaped
   blocks by Markov's inequality on their expected work, at most `((1 − q)/q) B` per identity when each faulty block is
   caught with probability at least `q` whatever came before (`SampledDetection`), and PoUW's deficit `ε_W` through the
   certified work: with probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)`,
@@ -35,9 +35,9 @@ and the two that SPOT and PoUW's deficit add:
 
 open Verity.Game renaming prPMFReal → prob
 
-namespace InferenceOnly.Guarantees
+namespace Slowdown.Guarantees
 
-open Verity InferenceOnly.Slowdown
+open Verity Slowdown.Slowdown
 
 /-- **The certificate slack** ([CERTIFICATE-SLACK]). PoUW certifies each of `N` windows, window `i` of capacity
 `c_i ≥ 0`, `∑ c_i ≤ C`, and each window's certificate is incorrect with probability at most `p ≥ 0` under the outcomes'
@@ -111,4 +111,4 @@ def SlowdownRemote : Prop :=
               efficiency κ (Cut.workHE n k (βw * βx) b Wd.O) C U + χ) ≤
           hardwareMultiple mfu κ (M ω) C U)
 
-end InferenceOnly.Guarantees
+end Slowdown.Guarantees

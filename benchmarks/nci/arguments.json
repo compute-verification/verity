@@ -127,8 +127,8 @@
    "statement": "Under threading, weight incompressibility and containment, slowdown >= kappa b_a / (2 alpha Lambda).",
    "refs": {
     "lean": [
-     "InferenceOnly.SecurityProofs.ThreadedReads",
-     "InferenceOnly.SecurityProofs.ThreadedTraining"
+     "Slowdown.SecurityProofs.ThreadedReads",
+     "Slowdown.SecurityProofs.ThreadedTraining"
     ]
    }
   },
@@ -139,7 +139,7 @@
    "statement": "A small subcircuit of the reference circuit reads b_w bits per updated weight it uses and b_a per thread value. Stated over wiring; proofs recommends the support form. False at step 0 and for small-batch reference circuits.",
    "refs": {
     "lean": [
-     "InferenceOnly.Assumptions.WeightsIncompressible"
+     "Slowdown.Assumptions.WeightsIncompressible"
     ],
     "estimates": [
      "b_w.pretrained/frontier-lossy",
@@ -154,7 +154,7 @@
    "statement": "The reference circuit is (d, e)-threaded with d the entry fee and e the fan-out. Lean derives only (1, 0)-threading from structure; with a committed corpus layer 1 needs no thread reads, and the unembedding needs e >= vocabulary.",
    "refs": {
     "lean": [
-     "InferenceOnly.SecurityProofs.ThreadedReads"
+     "Slowdown.SecurityProofs.ThreadedReads"
     ]
    }
   },
@@ -165,7 +165,7 @@
    "statement": "The declared circuit contains the reference circuit gate for gate (Declaration.Contains).",
    "refs": {
     "lean": [
-     "InferenceOnly.SecurityProofs.ThreadedThrottled"
+     "Slowdown.SecurityProofs.ThreadedThrottled"
     ]
    }
   },

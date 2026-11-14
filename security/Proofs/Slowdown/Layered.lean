@@ -17,7 +17,7 @@ or to a lookup (at most `eLk` each), with a lookup costing a read of its token (
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
 open Verity Finset
 
@@ -268,4 +268,4 @@ theorem ReferenceThreaded : Guarantees.ReferenceThreaded := by
   obtain ⟨L⟩ := hL
   exact threaded_of_layered L Γ S 7 (hS.trans_lt (by norm_num))
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

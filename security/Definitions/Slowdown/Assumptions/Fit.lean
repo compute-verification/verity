@@ -16,7 +16,7 @@ for a token-routed mixture of experts, the per-sequence form at sequence threads
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
 open Verity
 
@@ -81,4 +81,4 @@ def FitsSlots (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) {k : ℕ}
     (start : Fin T.m → Fin k) (b_w w_e : ℝ) : Prop :=
   ∀ j, b_w * (σ.slotsUsed (P.gates j)).card + w_e * (T.entered P start j).card ≤ freshInput c (P.gates j)
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

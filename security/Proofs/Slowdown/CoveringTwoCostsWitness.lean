@@ -9,7 +9,7 @@ public import Mathlib.Tactic.NormNum
 /-!
 # The two-cost covering bound is not vacuous, at `c_w ≠ c_a`
 
-One circuit where every hypothesis of `InferenceOnly.Guarantees.CoveringBoundTwoCosts` holds with `c_w = 1/2 < c_a = 1` and `𝓜*` is
+One circuit where every hypothesis of `Slowdown.Guarantees.CoveringBoundTwoCosts` holds with `c_w = 1/2 < c_a = 1` and `𝓜*` is
 nonempty (`coveringBoundTwoCosts_nonvacuous`), at `D = 5`, `k = 2` and `s = 3`: the regime two costs are for, weights
 cheaper than activations. Six weights share three weight gates `u₀ u₁ u₂` (gates 0–2), two weights a gate, and a token
 input `x` (gate 3); nothing is registered (`θ = ∅`). The products `pᵢ = uᵢ/₂ · x` of weights 0–4 (gates 4–8) feed the
@@ -24,9 +24,9 @@ of three gates, each with two inputs, cover it.
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs.CoveringTwoCosts
+namespace Slowdown.SecurityProofs.CoveringTwoCosts
 
-open Verity Finset InferenceOnly.Covering
+open Verity Finset Slowdown.Covering
 
 /-- The gates each gate reads. -/
 def tcReads : Fin 14 → Finset (Fin 14) :=
@@ -158,7 +158,7 @@ theorem coveringBoundTwoCosts_nonvacuous :
   ⟨tcDecl, tcBlocks, 3, 2, 5, 1 / 2, 1, 10, tcCover, by norm_num, by norm_num, by norm_num, tc_parameterHard 3,
     tc_covers, ⟨(5, 0), tc_mem⟩⟩
 
-open InferenceOnly.SecurityProofs.Covering in
+open Slowdown.SecurityProofs.Covering in
 /-- **`c_a > 0` is needed**: at `c_a = -1`, `CoveringBound`'s witness meets the other hypotheses (`c_w = 1`, `D = 3`,
 `k = 2`, `s = 3`, six blocks), and the count's bound `n · ((k / c_w)(k / c_a) + k) = -12` is below every count. -/
 theorem coveringBoundTwoCosts_needs_ca_pos :
@@ -172,4 +172,4 @@ theorem coveringBoundTwoCosts_needs_ca_pos :
   norm_num
   linarith
 
-end InferenceOnly.SecurityProofs.CoveringTwoCosts
+end Slowdown.SecurityProofs.CoveringTwoCosts

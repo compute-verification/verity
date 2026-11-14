@@ -228,24 +228,24 @@ theorem policyMet_old_clauses {d : RegisteredCircuit} {n : ℕ} {U : Partition d
     exact hP.reads u
 
 /-- **Honest witness of the policy's existence clause**: a declaration and a division into nonempty inference blocks
-that meet the policy, `InferenceOnly.SecurityProofs.FitWitness`'s five-gate circuit in its two one-gate windows, at `Γ = 1` and
+that meet the policy, `Slowdown.SecurityProofs.FitWitness`'s five-gate circuit in its two one-gate windows, at `Γ = 1` and
 `α = 3`. -/
 theorem policyMet_honest : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
     0 < n ∧ (∀ u, (U.gates u).Nonempty) ∧ PolicyMet d U Γ α := by
-  have hs : ∀ u, InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.serverBlocks.gates u) = 1 := by
+  have hs : ∀ u, Slowdown.SecurityProofs.FitWitness.decl.D.size (Slowdown.SecurityProofs.FitWitness.serverBlocks.gates u) = 1 := by
     decide +kernel
-  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.serverBlocks, 1, 3, by norm_num,
+  refine ⟨Slowdown.SecurityProofs.FitWitness.decl, 2, Slowdown.SecurityProofs.FitWitness.serverBlocks, 1, 3, by norm_num,
     by decide +kernel, policyMet_of_meets fun u => ⟨(hs u).le, ?_⟩⟩
   rw [hs u, Nat.cast_one, mul_one]
-  exact InferenceOnly.SecurityProofs.FitWitness.reads_le u
+  exact Slowdown.SecurityProofs.FitWitness.reads_le u
 
 /-- **Nontrivial witness of the policy's existence clause**: the policy refuses a declaration and a division into
 nonempty inference blocks, the same windows at `Γ = 0`, at every `α`: each block is a gate of width 1. -/
 theorem policyMet_nontrivial : ∃ (d : RegisteredCircuit) (n : ℕ) (U : Partition d.D n),
     (∀ u, (U.gates u).Nonempty) ∧ ∀ α : ℝ, ¬ PolicyMet d U 0 α := by
-  refine ⟨InferenceOnly.SecurityProofs.FitWitness.decl, 2, InferenceOnly.SecurityProofs.FitWitness.serverBlocks, by decide +kernel,
+  refine ⟨Slowdown.SecurityProofs.FitWitness.decl, 2, Slowdown.SecurityProofs.FitWitness.serverBlocks, by decide +kernel,
     fun α h => ?_⟩
-  have hs : InferenceOnly.SecurityProofs.FitWitness.decl.D.size (InferenceOnly.SecurityProofs.FitWitness.serverBlocks.gates 0) = 1 := by
+  have hs : Slowdown.SecurityProofs.FitWitness.decl.D.size (Slowdown.SecurityProofs.FitWitness.serverBlocks.gates 0) = 1 := by
     decide +kernel
   have h0 := (h.1 0).1
   omega

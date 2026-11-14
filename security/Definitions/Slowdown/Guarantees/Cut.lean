@@ -17,14 +17,14 @@ on the circuit is the verdict itself, `CompliesAtMost c k n`, at most `n` proof 
 both bounds are at `n`. `HECharged` is `HE`'s count over a set of the blocks, each of them within the cap and the rest
 charged whole, with what all the blocks read as a total and what the set's blocks read squared and summed.
 
-The witnesses that each says something are at the toy (`InferenceOnly.Cut.Toy`): `Cut_honest`, `CountHE_honest` and
+The witnesses that each says something are at the toy (`Slowdown.Cut.Toy`): `Cut_honest`, `CountHE_honest` and
 `HECharged_honest`, their premises holding together, and each statement's `_nontrivial`, the toy beating its bound
 once the block cap `ReadsAtMost`, the verdict, or the total is dropped.
 -/
 
 @[expose] public section
 
-namespace InferenceOnly.Cut.Guarantees
+namespace Slowdown.Cut.Guarantees
 
 open Verity Finset
 
@@ -199,4 +199,4 @@ def HECharged_nontrivial : Prop :=
     ¬ ((Toy.W.N : ℝ) ≤ ((∑ u ∈ (univ : Finset (Fin 1))ᶜ, (Toy.W.inside (Toy.P1.gates u)).card : ℕ) : ℝ) +
         workHEOn 0 0 (1 * 1) 1 Toy.W.O)
 
-end InferenceOnly.Cut.Guarantees
+end Slowdown.Cut.Guarantees

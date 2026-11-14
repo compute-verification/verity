@@ -20,7 +20,7 @@ bound of the same form, which the whole-word variant (`Aligned`) reuses.
 
 @[expose] public section
 
-namespace InferenceOnly.Cover.SecurityProofs
+namespace Slowdown.Cover.SecurityProofs
 
 open Finset
 
@@ -51,7 +51,7 @@ counted products, then `α₀ e size(c) ≤ (α² Γ + e α) size(d)`. `CoverTra
 theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.RegisteredCircuit} (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L) {s D w₀ : ℕ}
     (he : 0 ≤ e) (hα : 0 ≤ α) (hC : InferenceOnly.CompliesRate Γ α d)
-    (hB : InferenceOnly.Assumptions.ThetaRegistered c d (InferenceOnly.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
+    (hB : InferenceOnly.Assumptions.ThetaRegistered c d (Slowdown.PartialContainment.ofContainment M)) (hk : α * Γ < b * D)
     (hw : ∀ g, c.D.w g ≤ w₀) (hs : w₀ * Γ + α * Γ + c.D.width c.θ ≤ s)
     (hα₀ : α₀ * c.D.size c.D.computed ≤ Mb.P.card)
     (hblk : ∀ R : Finset (Fin c.D.N), (block c R).card ≤ s →
@@ -106,7 +106,7 @@ theorem CoverTraining_rate :
       {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
       (A : J → Finset (Fin (Circuit.ofDecl c).N)) (s D w₀ : ℕ),
       0 < b → 0 ≤ α → InferenceOnly.CompliesRate Γ α d →
-      InferenceOnly.Assumptions.ThetaRegistered c d (InferenceOnly.PartialContainment.ofContainment M) →
+      InferenceOnly.Assumptions.ThetaRegistered c d (Slowdown.PartialContainment.ofContainment M) →
       Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → α * Γ < b * D →
       (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
       α₀ * c.D.size c.D.computed ≤ Mb.P.card →
@@ -120,4 +120,4 @@ theorem CoverTraining : Guarantees.CoverTraining := by
   intro Γ α b α₀ r d M J L _ _ Mb A s D w₀ hb hα hC hB hH hU hk hw hα₀
   exact CoverTraining_rate Γ α b α₀ r d M Mb A s D w₀ hb hα hC hB hH hU hk hw.1 hw.2 hα₀
 
-end InferenceOnly.Cover.SecurityProofs
+end Slowdown.Cover.SecurityProofs

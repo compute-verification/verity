@@ -24,7 +24,7 @@ every other two-bit string in three. The run distribution `μ` samples the token
 
 @[expose] public section
 
-namespace InferenceOnly.Capability.Toy
+namespace Slowdown.Capability.Toy
 
 open Verity Finset
 
@@ -71,7 +71,7 @@ def P2 : Partition C 2 where
   val := fun _ => (1 : BitVec 1)
 
 /-- The one counted product: weight `0` times token `0`, at gate `2`, the token's computation being gate `2`. -/
-@[reducible] def B : InferenceOnly.Covering.MulBlocks D where
+@[reducible] def B : Slowdown.Covering.MulBlocks D where
   nw := 1
   nt := 1
   P := {(0, 0)}
@@ -166,4 +166,4 @@ noncomputable def μ : PMF C.Trace := (PMF.uniformOfFintype Bool).map tok
 /-- The product's value at both gates computing it, the source the toy recovers. -/
 def z (T : C.Trace) : List Bool := [(T 2).getLsbD 0, (T 3).getLsbD 0]
 
-end InferenceOnly.Capability.Toy
+end Slowdown.Capability.Toy
