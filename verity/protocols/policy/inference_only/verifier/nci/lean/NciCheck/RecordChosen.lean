@@ -7,8 +7,8 @@ public import NciCheck.Record
 
 `Record.summarize` counts a block: of each kind of input bits, the most one slot holds. This module counts the
 **whole execution phase**: of each kind, the bits of every unit of every slot (`executionPhaseBits`), and of them
-the bits the prover chose (`chosen`). It is a library with a difftest (`RecordDifftest`): no executable, protocol or
-verdict reads it.
+the bits the prover chose (`chosen`). It has a difftest (`RecordDifftest`), and the rows protocol (`RowsProtocol`)
+reports `chosen` in its profile, which no verdict reads.
 
 ## What it counts
 
