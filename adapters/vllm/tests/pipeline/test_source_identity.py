@@ -229,7 +229,7 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
     shipped = tmp_path / "shipped"
     (shipped / "adapters" / "vllm" / "verity_vllm" / "ops").mkdir(parents=True)
     (shipped / "EXPORT.json").write_text(json.dumps({"commit": "a" * 40, "dirty_patch_sha256": "b" * 64, "branch": "x"}))
-    assert gsid.repo_root_of(shipped / "integrations" / "vllm" / "verity_vllm" / "ops" / "f.py") == str(shipped.resolve())
+    assert gsid.repo_root_of(shipped / "adapters" / "vllm" / "verity_vllm" / "ops" / "f.py") == str(shipped.resolve())
     ident = gsid.tree_identity(str(shipped))
     assert ident == {"git_sha": "a" * 40, "git_sha_source": "EXPORT.json", "dirty_patch_sha256": "b" * 64, "branch": "x"}
     assert gsid.repo_root_of(Path(sid.__file__)) == os.path.realpath(REPO)   # .git (worktree file or dir) at the REPO root, not adapters/vllm

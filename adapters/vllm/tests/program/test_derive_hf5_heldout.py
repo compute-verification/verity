@@ -21,7 +21,7 @@ from verity_vllm.program.frontend.derive import DERIVE_VERSION, derive_report
 
 transformers = pytest.importorskip("transformers")
 
-H, NL, NH, KVH, V, I, MAXPOS, EPS = RH.H, RH.NL, RH.NH, RH.KVH, RH.V, RH.I, RH.MAXPOS, RH.EPS
+H, NL, NH, KVH, V, INTER, MAXPOS, EPS = RH.H, RH.NL, RH.NH, RH.KVH, RH.V, RH.I, RH.MAXPOS, RH.EPS
 HEAD_DIM = H // NH
 
 HELDOUT_CLASS = {"qwen3": "Qwen3ForCausalLM", "olmo": "OlmoForCausalLM", "gemma": "GemmaForCausalLM"}
@@ -31,16 +31,16 @@ def make_config(arch: str, impl: str = "sdpa", tie: bool = True):
     common = dict(tie_word_embeddings=tie, attn_implementation=impl, use_cache=False)
     if arch == "qwen3":
         from transformers import Qwen3Config
-        return Qwen3Config(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return Qwen3Config(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                            num_key_value_heads=KVH, max_position_embeddings=MAXPOS, rms_norm_eps=EPS, head_dim=HEAD_DIM,
                            use_sliding_window=False, **common)
     if arch == "olmo":
         from transformers import OlmoConfig
-        return OlmoConfig(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return OlmoConfig(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                           num_key_value_heads=KVH, max_position_embeddings=MAXPOS, **common)
     if arch == "gemma":
         from transformers import GemmaConfig
-        return GemmaConfig(vocab_size=V, hidden_size=H, intermediate_size=I, num_hidden_layers=NL, num_attention_heads=NH,
+        return GemmaConfig(vocab_size=V, hidden_size=H, intermediate_size=INTER, num_hidden_layers=NL, num_attention_heads=NH,
                            num_key_value_heads=KVH, max_position_embeddings=MAXPOS, rms_norm_eps=EPS, head_dim=HEAD_DIM, **common)
     raise ValueError(arch)
 
@@ -73,7 +73,7 @@ def test_heldout_case(case_id: str, arch: str, what: str):
     rec: dict[str, Any] = {"case": case_id, "arch": arch, "class": f"transformers.{HELDOUT_CLASS[arch]}", "attn_impl": "sdpa", "dtype": "f32",
                            "tie": True, "what": what, "variant": "held-out (DERIVE-2)", "importer_head": RH.GIT_HEAD,
                            "derive_version": DERIVE_VERSION, "torch": torch.__version__, "transformers": transformers.__version__,
-                           "mode": "reference", "dims": dict(H=H, NL=NL, NH=NH, KVH=KVH, V=V, I=I, MAXPOS=MAXPOS, head_dim=HEAD_DIM),
+                           "mode": "reference", "dims": dict(H=H, NL=NL, NH=NH, KVH=KVH, V=V, I=INTER, MAXPOS=MAXPOS, head_dim=HEAD_DIM),
                            "LP": RH.LP, "STEPS": RH.STEPS if what == "greedy" else None, "prompt": RH.PROMPT.tolist(), "probe": 0, "probe_patches": []}
     model = make_model(arch)
     module = RH.Logits(model) if what == "forward" else RH.Greedy(model, RH.STEPS)

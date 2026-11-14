@@ -48,7 +48,7 @@ naming another layout over the same nodes (``alt-layout``), a template's A or B 
 input words (``reinterpret``, the decoder's ``E_REINTERPRET``), or an H1 execution phase's whole descriptor with a linear, so a
 tile, at a K the tile's proof doesn't cover (``tile-k``: 2^17 or past, or no multiple of 32). Its mutations of the
 composed check present a round log the challenger never received (``never-received``, its coins carried as if opened
-after its roots and its sample root over it, so only `core_check.rounds` refuses it), a round coin opened after another
+after its roots and its sample root over it, so only `core_check.rounds_twin` refuses it), a round coin opened after another
 root, an A tree the round roots didn't commit, and no A value. Its mutations of the registration (`REGISTRATION_NAMES`) register the A values under another
 execution phase's open root or another circuit, their trees under those domains so `_a_link` accepts them
 (``other-registration``), give one proof's session another registration's root for a value it opened
@@ -417,7 +417,7 @@ def honest_credit(rng: random.Random, name: str = "honest", rows: int | None = N
     round's root is the one the
     challenger received and its coin the one opened after it; under ``never-received`` the challenger received other
     roots, and the log carries their coins as if opened after its own, its sample root over it (the composed check's
-    counterexample: `_credited` and `_a_link` accept it, `core_check.rounds` doesn't)."""
+    counterexample: `_credited` and `_a_link` accept it, `core_check.rounds_twin` doesn't)."""
     if rounds is None:
         rounds = rng.choice([s for s in (1, 2, 3) if calls is None or len(calls) % s == 0])
     ch = Wd.live_challenger(rng.randrange(4), rounds, rng.randbytes)
