@@ -23,5 +23,5 @@ Value acquisition: how a served run's values reach the Commit. The package's doc
 - **Loaded by:** the integration's `pipeline`, `commit`, `program.predict`, `properties` and `protocols` packages,
   `benchmarks/served_commit` and `benchmarks/harness`.
 - **Loads:** torch, and vLLM inside functions; the integration's `engine`, `query`, `commit`, `config`,
-  `settings`, `program`, `protocols`, `correspondence`, `observe`, `records` and `log`; and `verity.definitions`,
+  `settings`, `program`, `protocols`, `correspondence`, `records` and `log`; and `verity.definitions`,
   `verity.circuits` and `verity.hardware`.

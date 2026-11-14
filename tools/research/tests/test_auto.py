@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from research import auto, cores, remote
+from research import asker, auto, cores, remote
 from research.cli import main
 from research.pods.nebius import slot_only
 
@@ -1435,7 +1435,8 @@ def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on
     launched, asked = _on_auto(monkeypatch, tmp_path, docs, {CPU1: refusal, CPU5: None})
     assert main(RUN) == 0
     assert [kw["machine_name"] for kw in launched] == [CPU1, CPU5] and len(asked) == 1, "no machine is asked a second time"
-    assert launched[0]["run_id"] != launched[1]["run_id"] and launched[0]["command"] == launched[1]["command"]
+    refused, started = ([a for a in kw["command"] if a != kw["run_id"]] for kw in launched)
+    assert launched[0]["run_id"] != launched[1]["run_id"] and refused == started, "the same job, each run with its own pair"
     why = refusal[1]
     said = [line for line in capsys.readouterr().err.splitlines() if "--on auto: " in line or " launched on " in line]
     assert [line.split(", from ")[0].split(" (")[0] for line in said] == [
@@ -1560,3 +1561,103 @@ def test_a_launch_that_names_its_run_is_refused_once_and_says_what_places_it_aga
     assert main([*RUN[:3], "--id", rid, "--", "pytest", "-q"]) == 3 and [kw["run_id"] for kw in launched] == [rid]
     assert (f"research run --on auto: {CPU1} can start no run, and --id {rid} names the run it refused: without --id the job is "
             f"placed on another machine") in capsys.readouterr().err
+
+
+def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_asker_and_no_other_run_does(
+        tmp_path, monkeypatch, capsys, _no_asker_left):
+    """A run `--on auto` sent to a pool waits there however soon another machine's pool would start it, unless a twin of it
+    can take it from the line: so it carries a pair from the start, its own id, and its launch leaves an asker that holds
+    what it shipped. A run `--on auto` queues on node 2, and a run named to a machine, carry none and leave none."""
+    docs = {N2: share(waiters=56), CPU1: pool(slot("r0"))}
+    launched, _ = _on_auto(monkeypatch, tmp_path, docs, {CPU1: None, N2: None, "m": None})
+    assert main(["run", "--on", "auto", "--mem-gb", "24", "--mem-limit-gb", "300", "--as", "infra", "--env", "K=V", "--", "pytest", "-q"]) == 0
+    (kw,) = launched
+    opts = kw["command"][:kw["command"].index("--")]
+    assert opts[opts.index("--twin") + 1] == kw["run_id"], "its pair is its own run id"
+    (m,) = _no_asker_left
+    assert (m["run"], m["home"], m["pool"], m["wait_s"]) == (kw["run_id"], CPU1, "research", slot_only.POOL_WAIT_S)
+    assert (m["cpus"], m["mem_gb"], m["lean"]) == (4, 24, None), "what `auto` was asked, to ask it again"
+    assert m["root"] == str(tmp_path / "runs") and m["sends"] == {}
+    assert Path(m["git"]) == tmp_path / "repo" / ".git", "the repository the commit is checked out from again, not the checkout"
+    same = {k: m["launch"][k] for k in ("project", "command", "harness_args", "env", "mem_gb", "custody_ttl", "mem_limit")}
+    assert same == {k: kw[k] for k in same} and kw["env"]["K"] == "V", "the request as the first launch sent it"
+    assert kw["mem_limit"] == {"gb": 300.0, "by": "infra"}, "the memory limit the launch stated, which a late twin's record marks too"
+    err = capsys.readouterr().err
+    assert "an asker of this launch stays on this VM (pid 4242)" in err and "only while this VM is up" in err
+    del launched[:], _no_asker_left[:]
+    docs[CPU1] = pool(slot("r0", held=True), waiters=9)
+    docs[N2] = share(free=48)
+    assert main(["run", "--on", "auto", "--", "pytest", "-q"]) == 0
+    assert launched[0]["machine_name"] == N2 and "--twin" not in launched[0]["command"] and _no_asker_left == []
+    del launched[:]
+    assert main(["run", "--on", "m", "--project", "p", "--source", ".", "--pool", "research", "--as", "infra", "--timeout", "40m",
+                 "--", "pytest", "-q"]) == 0
+    assert "--twin" not in launched[0]["command"] and _no_asker_left == [], "a run named to a machine never moves"
+    assert "asker" not in capsys.readouterr().err
+
+
+def test_a_launch_that_finds_its_vm_holding_all_the_askers_it_may_goes_through_and_leaves_none(tmp_path, monkeypatch, capsys, _no_asker_left):
+    """Nothing else bounds what a lane's sweep of launches leaves on the VM every agent on it shares. The launch past the
+    bound is the same launch, pair and all, and says in its own line that its run will not move by itself."""
+    launched, _ = _on_auto(monkeypatch, tmp_path, {N2: share(waiters=56), CPU1: pool(slot("r0"))}, {CPU1: None})
+    (tmp_path / "runs" / asker.DIR).mkdir(parents=True)
+    for i in range(asker.MAX_ASKERS):
+        (tmp_path / "runs" / asker.DIR / f"r20300101-00000{i}-aaaa.json").write_text(json.dumps({"pid": os.getpid(), "next": "2999-01-01T00:00:00Z"}))
+    assert main(RUN) == 0
+    (kw,) = launched
+    assert kw["machine_name"] == CPU1 and "--twin" in kw["command"] and _no_asker_left == []
+    assert (f"research: {asker.MAX_ASKERS} askers are alive on this VM already, and it holds at most {asker.MAX_ASKERS} (their runs: "
+            "r20300101-000000-aaaa, r20300101-000001-aaaa, r20300101-000002-aaaa and 5 more), so this run will not move by itself: it "
+            f"waits in {CPU1}'s line; ") in capsys.readouterr().err
+
+
+def test_a_waiter_asks_only_the_other_machines_pools_and_moves_only_where_it_would_start_now():
+    """A late twin is worth its launch only on a pool that starts the run now, and it can run only where its machine reaches
+    the first's: it claims the pair there. So the first's own machine and node 2's queue are never the answer, a pool with
+    a line or no memory for the run isn't either, and a machine whose peers don't name the first's is left out."""
+    waits = pool(slot("r0", blocked=f"12{auto.MEMORY_BLOCK}"), waiters=1, free_gb=12)
+    docs = {N2: share(free=48), CPU1: waits, "vy-nebius-cpu-3": {**pool(slot("r0")), "peers": [CPU1, CPU5]},
+            CPU5: {**pool(slot("r0"), slot("r1")), "peers": ["vy-nebius-cpu-3"]}}
+    target, why = auto.elsewhere(docs, CPU1, 4, 16)
+    assert target == ("vy-nebius-cpu-3", "research") and why.endswith("a slot is free there now")
+    assert f"{CPU5}'s research pool skipped: it doesn't name {CPU1} in /etc/vy/peers" in why, "more places, but no way home"
+    assert f"{N2}'s share wasn't read (not asked" in why and f"{CPU1}'s research pool" not in why
+    docs[CPU5]["peers"] = None
+    assert auto.elsewhere(docs, CPU1, 4, 16)[0] == (CPU5, "research"), "peers not read: its twin's own refusal decides"
+    assert auto.elsewhere({N2: share(free=48), CPU1: pool(slot("r0"), slot("r1"))}, CPU1, 4, 16)[0] is None, \
+        "its own machine and node 2 are no move"
+    line = {N2: share(free=48), CPU1: waits, CPU5: pool(slot("r0", held=True), waiters=1)}
+    target, why = auto.elsewhere(line, CPU1, 4, 16)
+    assert target is None and why.startswith("no other machine's pool would start it now (") and "the shortest line" in why
+    short, roomy = ({CPU1: waits, CPU5: pool(slot("r0"), free_gb=gb)} for gb in (12, 400))
+    assert auto.elsewhere(short, CPU1, 4, 16)[0] is None and auto.elsewhere(roomy, CPU1, 4, 16)[0] == (CPU5, "research"), \
+        "a free slot without the memory the run reserves is no place for it"
+    gone = auto.elsewhere({CPU1: waits, CPU5: "no answer in 30 s"}, CPU1, 4, 16)
+    assert gone[0] is None and "no answer in 30 s" in gone[1]
+
+
+def test_the_probe_is_built_from_the_few_files_auto_names_and_no_other_of_the_source_tree(tmp_path):
+    """An asker asks again by `auto.READS` of the commit its launch shipped, not a checkout of it: a file `read` came to read
+    beside them would fail every such ask."""
+    for path in auto.READS:
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_bytes((REPO / path).read_bytes())
+    assert auto.share_cpus(tmp_path) == auto.share_cpus(REPO) is not None
+    assert auto.payload(tmp_path, 4, auto.share_cpus(tmp_path), [auto.SPILL_POOL], lean=True, peers=True) == \
+        auto.payload(REPO, 4, auto.share_cpus(REPO), [auto.SPILL_POOL], lean=True, peers=True)
+    assert sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*") if p.is_file()) == sorted(auto.READS)
+
+
+def test_the_probe_reads_the_machines_a_machine_reaches_only_when_asked(tmp_path, monkeypatch):
+    """`elsewhere` needs each machine's peers; a launch's own placement doesn't, and its documents stay as they were."""
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    monkeypatch.setattr(auto, "PEERS_FILE", str(tmp_path / "peers"))
+    (tmp_path / auto.SLOT_PY).parent.mkdir(parents=True)
+    (tmp_path / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'file': 'f', 'slots': [], 'waiters': []}\n")
+    read = lambda **kw: auto.read(tmp_path, 4, reach=lambda name: [sys.executable, "-"], **kw)[CPU1]  # noqa: E731
+    assert read(peers=True)["peers"] is None, "no peers file: not read, which is not the same as naming no machine"
+    (tmp_path / "peers").write_text(f"# name, ssh options\n{CPU5} -i /k research@10.0.0.5\n\n{CPU1} research@10.0.0.1 # itself\nbare\n")
+    assert read(peers=True)["peers"] == [CPU1, CPU5]
+    assert "peers" not in read()

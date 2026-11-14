@@ -11,11 +11,15 @@ import types
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW
-from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, transcript_domain
+from verity.protocols.accounting.pouw.verifier.audit import (
+    Epoch,
+    Workload,
+    transcript_domain,
+)
 from verity.protocols.accounting.pouw.verifier.core_check import MANIFEST_SCHEMA
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul
 from verity.protocols.accounting.pouw.verifier.serving import Schedule, SchemeId
@@ -40,6 +44,9 @@ from verity_vllm.protocols.pouw.pearl_c.kernel import Kernel
 from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 from verity_vllm.protocols.pouw.pearl_c.screen import excluded, excluded_host
 
+#: a retained whole capture's stages (`whole_calls.WholeCalls._stages`): each (weight, m₁₆)'s A words, A tree and y
+_Stages = dict[tuple[int, int], tuple[Any, Any, Any]]
+
 
 @dataclass
 class _Pass:
@@ -58,15 +65,16 @@ class _Pass:
 
     @property
     def first(self) -> int:
-        """The index of the pass's first call: ``base``, which a pass has from its first call on."""
-        assert self.base is not None
-        return self.base
+        """The index of the pass's first call: ``base`` as it is, which a pass has from its first call on.  Before that it
+        is None, unchecked here: what reads it then fails on its own arithmetic."""
+        return cast(int, self.base)
 
 
 class _RunState:
     """What `PearlCDeviceRun.__init__` sets and its four base classes (`PassEnds`, `passes.EpochCalls`,
-    `graphs.GraphCalls`, `lanes.LaneCalls`) read of each other and of the run, declared once: annotations only, so the
-    class holds no value and ``hasattr`` on a run reads as before.  A tensor, a weight's side and a graph are ``Any``."""
+    `graphs.GraphCalls` with its base `whole_calls.WholeCalls`, `lanes.LaneCalls`) read of each other and of the run,
+    declared once: annotations only, so the class holds no value and ``hasattr`` on a run reads as before.  A tensor, a
+    shape, a weight's side and a graph are ``Any``."""
     scheme: C.PearlC
     entry: str
     kernel: Kernel
@@ -104,11 +112,14 @@ class _RunState:
     omit: frozenset[str]
     commits: dict[str, Any]
     details: dict[str, Any]
+    shapes: dict[tuple[int, int, int], Any]
     cur: _Pass
     _host_keys: Any
     _host_offs: Any
     _predicted: dict[int, tuple]
     _graphs: dict[tuple, Any]
+    _stages: _Stages | None
+    _stages_poisoned: int | None
     _side_turn: int
     _side_cache: dict[tuple, frozenset[str]]
     _lagged: Any
@@ -126,9 +137,12 @@ class _RunState:
     _defers_a: Callable[..., Any]
     _end_aside: Callable[..., Any]
     _ended: Callable[..., Any]
+    _graph_key: Callable[..., Any]
     _graphed: Callable[..., Any]
     _lane_graph: Callable[..., Any]
     _offsets: Callable[..., Any]
+    _retained: Callable[..., Any]
+    _unpoisoned: Callable[..., Any]
     _widen_later: Callable[..., Any]
 
 
@@ -234,23 +248,23 @@ class PassEnds(_RunState):
         its stream, and the rest runs behind it on the run's retain stream (`_retain_stream`): y's tree, the copies to the
         host, and the record and y's root, decided from the bytes the writes land (`screen.excluded_host`)."""
         import torch
-        d = cur.retain / "calls"
+        d = cast(Path, cur.retain) / "calls"
         for name in ("calls",) if y is None else ("calls", "y"):
             if name not in cur.dirs:
-                cur.retain.mkdir(mode=0o700, parents=True, exist_ok=True)
-                (cur.retain / name).mkdir(mode=0o700, exist_ok=True)
+                cast(Path, cur.retain).mkdir(mode=0o700, parents=True, exist_ok=True)
+                (cast(Path, cur.retain) / name).mkdir(mode=0o700, exist_ok=True)
                 cur.dirs.add(name)
         unit, ex, rec = (mm, m, mm.shape.k), self.weights[mm.weight].excluded, len(cur.records)
-        files = {"rows": None, "tree": None} | ({} if y is None else {"y": {"root": None, "rows": None, "tree": None}})
+        files: dict[str, Any] = {"rows": None, "tree": None} | ({} if y is None else {"y": {"root": None, "rows": None, "tree": None}})
         paths = (d / f"{mm.index}.rows.bf16", d / f"{mm.index}.tree",
-                 cur.retain / "y" / f"{mm.index}.rows.bf16", cur.retain / "y" / f"{mm.index}.tree")
+                 cast(Path, cur.retain) / "y" / f"{mm.index}.rows.bf16", cast(Path, cur.retain) / "y" / f"{mm.index}.tree")
 
         def y_root(host: Any) -> None:
             files["y"]["root"] = host[-self.nb:].numpy().tobytes().hex()
 
         if not xa.is_cuda:
             cur.records.append(PW.UnitRecord(*unit, excluded(flags[:, 0].bool(), flags[:, 1].bool(), xa[:m]), ex))
-            out = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True)]
+            out: list[tuple] = [(paths[0], xa.to(torch.bfloat16).view(torch.uint8), False), (paths[1], tree, True)]
             if y is not None:
                 out += [(paths[2], y, False), (paths[3], SY.y_tree(self, y, mm.index), True, y_root)]
             got = write_behind(tuple(out), cur.writes)
@@ -339,7 +353,8 @@ class PassEnds(_RunState):
                 "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
                 "coins": self.coins.to_json(), "salt_opening": self.opening.to_json(), "salt": self.salt.hex(),
                 **session_head(self.commits), "cubin_sha256": self.kernel.cubin_sha256,
-                "kernel_source_sha256": self.kernel.source_sha256, "schedule": copy.deepcopy(self.details["schedule"]),
+                "kernel_source_sha256": self.kernel.source_sha256, "kernel_files": dict(self.kernel.files),
+                "schedule": copy.deepcopy(self.details["schedule"]),
                 "records_root": None, "commitment": {"root": root.hex(), "count": count}, "hm96_salt_key": self.salt_key.hex(),
                 "leaves": last[0], "tree_t": last[1]}
         splits = {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}

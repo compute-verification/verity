@@ -23,7 +23,6 @@ from verity_vllm.check.replay.index import (
     SEED_PARAM,
     ProgramIndex,
     const_word,
-    described,
     file_args,
     plane_copies,
     row_args,
@@ -191,9 +190,9 @@ def _schedule_witness(pi: ProgramIndex, store: WordStore, r: dict, d: dict, rid:
     """The witness keys of a MoeAlignRanks_v1 row (`format.SCHEDULE_PARAM`): its OWN committed rank, so the row reproduces that rank
     exactly when it ranks each expert's pairs."""
     fam = d["family"]
-    own = pi.member_of_port(int(r["i"])).get("0") if fam in RM.SCHEDULE_READERS else None
+    own: Any = pi.member_of_port(int(r["i"])).get("0") if fam in RM.SCHEDULE_READERS else None   # None: the width below then refuses
     width = next((int(m[1]) for m in d["members"] if m[0] == own), None)
-    if own is None or width is None or width != hi - lo:
+    if width is None or width != hi - lo:
         raise _Unresolved(f"{pname} slice [{lo}, {hi}) read by {fam}: only a {sorted(RM.SCHEDULE_READERS)} row's own "
                           f"committed rank (port 0, one key per pair) binds it")
     at = d["row"] * width
@@ -404,13 +403,14 @@ def evaluated(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, i
 def _replay_vu(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
-    d = described(pi, r)
+    d: Any = pi.describe(r)                                                      # None for a row no population holds: its first read below fails
     rid = vu["request_id"]
     fam, st = d["family"], d["statics"]
     rec.update({"i": vu["i"], "spec": r["spec"], "request_id": rid, "step": d["step"], "engine_step": arrive + d["step"], "op_path": d["op_path"],
                 "row": d["row"], "phase": vu["phase"], "inputs": []})
+    got: Any                                                                     # outputs where `why` is None, whatever the evaluator gave
     got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
-    if got is None:
+    if why is not None:
         rec["why"] = why
         return rec | {"result": None}
     if len(got) > 1:

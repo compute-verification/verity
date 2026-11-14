@@ -218,8 +218,8 @@ def ints_of(raw: bytes, dtype: str) -> list[int]:
 
 def committed_raw(committer: Any, step: int, name: str) -> tuple[bytes, str] | None:
     """`committed_ints`' bytes of ``name`` at ``step`` and its dtype. A plan's metas (`plan_cache.PlanMetas`) are read from its
-    columns, so no `TensorMeta` is built for the read. A window whose draw-gated release dropped the bytes answers from what was
-    read just before it (``read_before_release``, `serve_release.Draws.release`), which no bundle holds."""
+    columns, so no `TensorMeta` is built for the read. A window whose release dropped the bytes answers from what was
+    read just before it (``read_before_release``, set by `serve_release` at the release), which no bundle holds."""
     before = getattr(committer, "read_before_release", None)
     if before is not None and (step, name) in before:
         return before[step, name]

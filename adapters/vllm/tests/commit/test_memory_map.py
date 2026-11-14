@@ -11,12 +11,12 @@ import copy
 
 import pytest
 import torch
+from verity.circuits.census import step_of
 from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program, is_input
 from verity.circuits.refs import Affine, Coll, concat
-from verity.circuits.types import Array, RecordType, Value
-from verity.circuits.census import step_of
 from verity.circuits.requirement import from_census
+from verity.circuits.types import Array, RecordType, Value
 from verity.definitions.replay import replayer
 
 from tests.program import test_dsa_derive as DSA

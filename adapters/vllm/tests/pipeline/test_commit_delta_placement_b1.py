@@ -17,9 +17,8 @@ SRC = Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / "commit
 
 def _placement_ifs() -> list[ast.If]:
     tree = ast.parse(SRC.read_text())
-    main = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "main")
     out: list[ast.If] = []
-    for node in ast.walk(main):
+    for node in ast.walk(tree):
         if not isinstance(node, ast.If):
             continue
         calls = [c for c in ast.walk(node) if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute) and c.func.attr == "restrict_manifest_identities"]
