@@ -3,8 +3,8 @@
     python tools/verity/lean/merge.py BASE OURS THEIRS [PATH]   what git runs (`%O %A %B %P`): the merge is written to OURS
     python tools/verity/lean/merge.py --lean BASE OURS THEIRS [PATH]   the same for a `.lean` file (`lean-imports`)
     python tools/verity/lean/merge.py --lakefile BASE OURS THEIRS [PATH]   the same for a `lakefile.toml` (`lakefile-lists`)
-    python tools/verity/lean/merge.py --caps BASE OURS THEIRS [PATH]   the same for `tests/test_lean_packages.py` and
-                                                               `unread-caps.json` (`lean-caps`)
+    python tools/verity/lean/merge.py --limits BASE OURS THEIRS [PATH]   the same for `tests/test_lean_packages.py` and
+                                                               `unread-caps.json` (`lean-limits`; `--caps` is the flag's older name)
     python tools/verity/lean/merge.py --pyproject BASE OURS THEIRS [PATH]   the same for a `pyproject.toml` (`pyproject-test-lists`)
     python tools/verity/lean/merge.py --install [REPO]         register the drivers in the repository's git config, once per clone
     python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions, and drop
@@ -92,7 +92,7 @@ package or add a root to `security/Properties` merge. Any other conflict, and a 
 sides: two branches that each add a file a suite reads merge, each side's comment lines above the item they were above, and
 anything else stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
-other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), each of its ratchet caps
+other side moved can't bring it back. For `tests/test_lean_packages.py` (`--limits`, `lean-limits`), each of its ratchet caps
 (`CAP_NAMES`: `UNWITNESSED = {...}`, `INLINE = {...}`...) merges over the whole files key by key three-way (a key a side
 lacks counting 0): a side that kept the base's count takes the other's, so a lowering survives a merge that also holds
 another edit of the file, two raises or a raise and a lowering add their changes, and two lowerings take the larger. Two
@@ -128,9 +128,13 @@ NAME = "lean-audit"
 LEAN = "lean-imports"
 #: the lakefiles' driver (`--lakefile`)
 LAKEFILE = "lakefile-lists"
-#: `tests/test_lean_packages.py`'s driver (`--caps`)
-CAPS = "lean-caps"
-#: the unread ratchet's caps, which `--caps` merges as counters when git names this file (`%P`), and their schema and
+#: `tests/test_lean_packages.py`'s driver (`--limits`)
+LIMITS = "lean-limits"
+#: its name before the rename, registered with the same command while a branch's `.gitattributes` still names it
+OLD_LIMITS = "lean-caps"
+#: the mode the registered command passes: `driver` runs `origin/main`'s copy, which knows `--limits` only once it holds this one
+LIMITS_FLAG = "--caps "
+#: the unread ratchet's caps, which `--limits` merges as counters when git names this file (`%P`), and their schema and
 #: fields as `unread.py` writes them (its `CAPS_SCHEMA`, `CAP_KEYS`)
 UNREAD_CAPS = "unread-caps.json"
 UNREAD_SCHEMA = "lean-unread-caps/v1"
@@ -1194,7 +1198,7 @@ def load(path: Path) -> dict:
 
 
 def driver(flag: str = "", where: str = DIR) -> str:
-    """The command git runs for a driver whose mode ``flag`` names (`--caps `...): `origin/main`'s copy of ``where`` (this
+    """The command git runs for a driver whose mode ``flag`` names (`--lean `...): `origin/main`'s copy of ``where`` (this
     directory from the top of the worktree, where git runs drivers) when the repository has that ref, else the worktree's.
     `origin/main`'s copy is at least as new as any branch's, and the worktree's is the branch merged into's. A path made
     absolute (`research queue`'s `base_drivers`) runs as it is. The copy is kept per `origin/main` commit, at
@@ -1290,8 +1294,8 @@ def install(repo: Path) -> None:
                              (LEAN, ".lean: each side's imports", driver("--lean ", where)),
                              (LAKEFILE, "lakefile.toml: each side's requires and roots", driver("--lakefile ", where)),
                              (PYPROJECT, "pyproject.toml: each side's [tool.verity.tests] lists", driver("--pyproject ", where)),
-                             (CAPS, "tests/test_lean_packages.py: each side's change to the ratchet caps",
-                              driver("--caps ", where))):
+                             *((n, "tests/test_lean_packages.py: each side's change to the ratchet caps",
+                                driver(LIMITS_FLAG, where)) for n in (LIMITS, OLD_LIMITS))):
         for k, v in (("name", f"{what} (tools/verity/lean/merge.py)"), ("driver", argv)):
             subprocess.run(["git", "config", f"merge.{name}.{k}", v], cwd=repo, check=True)
         print(f"merge.py: merge.{name}.driver = {argv} (in {top})")
@@ -1317,7 +1321,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--lean", action="store_true", help="BASE OURS THEIRS [PATH] are a `.lean` file's: merge its import lists")
     ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
                     "`[[require]]` blocks and string arrays")
-    ap.add_argument("--caps", action="store_true", help="BASE OURS THEIRS [PATH] are `tests/test_lean_packages.py`'s: merge "
+    ap.add_argument("--limits", "--caps", dest="limits", action="store_true", help="BASE OURS THEIRS [PATH] are `tests/test_lean_packages.py`'s: merge "
                     "its ratchet caps (`UNWITNESSED`, `INLINE`) key by key three-way; with PATH "
                     "`unread-caps.json`, its areas' counts as counters")
     ap.add_argument("--pyproject", action="store_true", help="BASE OURS THEIRS [PATH] are a `pyproject.toml`'s: merge its "
@@ -1336,18 +1340,18 @@ def main(argv: list[str]) -> int:
     path = a.files[3] if len(a.files) == 4 else ours
     if why := stale():
         return conflict(base, ours, theirs, path, why)
-    if a.caps and Path(path).name == UNREAD_CAPS:
+    if a.limits and Path(path).name == UNREAD_CAPS:
         try:
             text = unread_caps(base, ours, theirs)
         except ValueError as e:
             return conflict(base, ours, theirs, path, str(e))
         ours.write_text(text)
         return 0
-    if a.lean or a.lakefile or a.caps or a.pyproject:
-        text, left = (lakefile if a.lakefile else caps if a.caps else pyproject if a.pyproject else lean)(base, ours, theirs)
+    if a.lean or a.lakefile or a.limits or a.pyproject:
+        text, left = (lakefile if a.lakefile else caps if a.limits else pyproject if a.pyproject else lean)(base, ours, theirs)
         ours.write_text(text)
         if left:
-            what = ("requires and string arrays" if a.lakefile else "the ratchet caps" if a.caps else
+            what = ("requires and string arrays" if a.lakefile else "the ratchet caps" if a.limits else
                     "[tool.verity.tests] lists" if a.pyproject else "import lists")
             print(f"merge.py: {path}: {left} conflict(s) beyond {what}", file=sys.stderr)
         return 1 if left else 0

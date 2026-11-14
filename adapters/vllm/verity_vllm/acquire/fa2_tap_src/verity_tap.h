@@ -54,7 +54,7 @@ namespace FLASH_NAMESPACE {
 
 using namespace cute;
 
-// P0 plane layout (all fp32), sizes in elements; H/M/N/NB are the caps in Verity_tap.
+// P0 plane layout (all fp32), sizes in elements; H/M/N/NB are the bounds in Verity_tap.
 //   mat  [4][H][M][N]        stages: 0 s_raw (post QK^T MMA), 1 s_masked, 2 P fp32 (post exp2), 3 rP bf16 (widened)
 //   row  [4][H][M][NB]       stages: 0 running row_max after block, 1 rescale factor applied this block,
 //                                    2 processing step index, 3 (unused)
@@ -286,7 +286,7 @@ __device__ __forceinline__ void verity_p1_store(const Params &params, const uint
 //                    memory), 0 = fully inlined at every absorb site (code size x 3 loop sites).
 
 struct Verity_mat_layout {
-    // word offsets into the flat u32/f32 buffer; HB = b*h slabs, M = seqlen_q cap (rows), NB = key-block cap, N = NB*BN.
+    // word offsets into the flat u32/f32 buffer; HB = b*h slabs, M = seqlen_q bound (rows), NB = key-block bound, N = NB*BN.
     // v8: parametric in the kernel's key-block width BN (= Kernel_traits::kBlockN: 128 for hdim 64, 64 for hdim
     // 96/128/256 on the num_splits==1 "align" kernel) and head dim D (= Kernel_traits::kHeadDim: the O plane row width).
     // (BN, D) = (128, 64) reproduces the v7 layout word for word.  Host mirror: hidden_stream.StreamLayout(HB, M, NB, BN, D).

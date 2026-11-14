@@ -28,7 +28,7 @@ control = "none"
 
 [arm_settings."pouw:pearl-c-sm120-v1-h3".protocols_config.pouw]
 device = "cuda"
-kernel = "benchmarks/pouw/pearl_c_sm120"
+kernel = "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120"
 cubin = "$PEARLC_CUBIN"
 schedule = "deferred"
 

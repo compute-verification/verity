@@ -541,7 +541,7 @@ registered finding is not exactly the file's ports at their values and roots (`r
 def judged (a : LeafAsk) (session : String) (accepted : Bool) (why : String) (program registered : Json)
     (units : List Nat) (openings : Json) (held : Held) : R Held := do
   unless accepted do
-    throw ("failed", s!"drawn leaf {a.unit}'s {a.leaf} session {session} was rejected by the verifier of record " ++
+    throw ("failed", s!"drawn leaf {a.unit}'s {a.leaf} session {session} was rejected by the verifier " ++
       s!"({why}): a failed statement refuses the whole window (no partial credit, and no retry)")
   unless units == [0] && program == get a.partition "program" do
     throw ("proof", s!"drawn leaf {a.unit}'s {a.leaf} session {session} proved units {listStr units} of another " ++

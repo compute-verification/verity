@@ -18,4 +18,3 @@ from __future__ import annotations
 from verity_vllm.program.quarantine.collective import allreduce
 
 ALL_DEFINITIONS = [allreduce.AllReduceSumBf16Elem, allreduce.AllReduceSumBf16]
-ALL_PRIMITIVES: list = []

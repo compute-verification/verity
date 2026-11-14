@@ -21,6 +21,7 @@ public import Proofs.Flock.Soundness.Rounds
 public import Proofs.Flock.Soundness.RepSound
 public import Proofs.Flock.Soundness.Soundness
 public import Proofs.Flock.Soundness.Merkle
+public import Proofs.Flock.Soundness.MerklePair
 public import Proofs.Flock.Soundness.Rewinding
 public import Proofs.Flock.Soundness.OpeningPhase
 public import Proofs.Flock.Soundness.ListSize

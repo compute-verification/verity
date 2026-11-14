@@ -40,12 +40,12 @@ then the other rounds (`OneStageZk.orderHeld`). The registered circuit names the
 META's ``lookups``, `lookups_of`), and v2 refuses blobs whose pinned MUFU tables are other than those (`tables_why`,
 `OneStageZk.tablesHeld`); in the per-member form a member's statement holds the blobs' pinned tables its own circuit
 looks up and no other (`own_tables`, `tables_match_why`). `statements_v2` is the evidence's per-member form, one
-statement a sampled member, which v2 refuses at parse: its evidence's ``proofs`` is exactly the sessions
-(`OneStageZk.proofsOf`).
+statement a sampled member (`OneStageZk.membersEvidenceOf`).
 
 A window of several members has v2's per-member form of ``proofs`` (`members_v2`: every `Member` in the parameters, one
-statement for each member with a session in the evidence), which the audit parses and refuses. `members_parsed` is what
-its parsers read of a case's parameters and evidence, with no check and no verdict.
+statement for each member with a session in the evidence), which the audit's check reads beside the one statement's
+and decides by `OneStageZk.checkMembersAt` (`members.check`). `members_parsed` is what its parsers read of a case's
+parameters and evidence, with no check and no verdict.
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -546,7 +546,7 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
 
 
 def statements_v2(statements: Sequence[tuple[str, Proof]], names: Sequence[str]) -> tuple[dict, list[Path]]:
-    """The v2 evidence's ``proofs`` in the per-member form, which v2 refuses at parse (`OneStageZk.proofsOf`): per
+    """The v2 evidence's ``proofs`` in the per-member form (`OneStageZk.membersEvidenceOf`): per
     statement, its member's name and `evidence_v2`'s on its files, its sessions named by the next of `names` (the v1
     evidence's ``sessions``, statement by statement); and the blobs that hold them."""
     names, out, blobs = list(names), [], []
@@ -588,8 +588,8 @@ def members_v2(members: Sequence[Member],
     statements' files, then the circuit and public files of each member with no session, since the form's check reads
     every member's files, sampled or not (`OneStageZk.membersFiles`). The case's blobs hold besides them each pinned
     lookup table a member's circuit looks up, any member's (`own_tables`). Two members of one name, a member of no unit
-    or one with several sessions raise: a statement is exactly one session on live coins. `Spot.OneStageZk` parses this
-    form and refuses it (`MULTI_REFUSED`); `members_parsed` holds these keys to its parsers."""
+    or one with several sessions raise: a statement is exactly one session on live coins. `Spot.OneStageZk` checks a
+    case of this form by `checkMembersAt` (`members.check`); `members_parsed` holds these keys to its parsers."""
     if len({m.name for m in members}) != len(members):
         raise ValueError("two members have one name: a member's name is its own")
     for m in members:

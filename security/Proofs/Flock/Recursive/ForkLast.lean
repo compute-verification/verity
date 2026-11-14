@@ -324,12 +324,6 @@ section Picks
 
 open Model Accounting Exec
 
-/-- **`collOf` reads its condition only up to `↔`.** -/
-theorem collOf_congr {D : Type} {H : List UInt8 → D} {p q : Prop} {h : p → Merkle.Collision H}
-    {h' : q → Merkle.Collision H} (e : p ↔ q) : collOf H p h = collOf H q h' := by
-  cases propext e
-  rfl
-
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
   {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type)
 
@@ -344,7 +338,7 @@ theorem clashPickCL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
     unfold outCL
     rw [h]
   unfold clashPickCL
-  exact collOf_congr (by rw [hout _ _ (schedSteps_lastCoin T CT h₁ c₁), hout _ _ (schedSteps_lastCoin T CT h₂ c₂)])
+  rw [hout _ _ (schedSteps_lastCoin T CT h₁ c₁), hout _ _ (schedSteps_lastCoin T CT h₂ c₂)]
 
 omit [Fintype K] in
 /-- **`clashPickHL` ignores the last round's coin**: `outHL` reads a transcript only through `schedSteps`. -/
@@ -357,7 +351,7 @@ theorem clashPickHL_lastFree (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
     unfold outHL
     rw [h]
   unfold clashPickHL
-  exact collOf_congr (by rw [hout _ _ (schedSteps_lastCoin T CT h₁ c₁), hout _ _ (schedSteps_lastCoin T CT h₂ c₂)])
+  rw [hout _ _ (schedSteps_lastCoin T CT h₁ c₁), hout _ _ (schedSteps_lastCoin T CT h₂ c₂)]
 
 end Picks
 

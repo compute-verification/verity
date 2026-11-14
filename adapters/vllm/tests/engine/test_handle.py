@@ -1,7 +1,7 @@
 """`verity_vllm.engine.handle`: the scheduler, the executor and the model runner of a `verity_vllm.LLM`, a `vllm.LLM` or
 its `LLMEngine`, through vLLM's object graph (stand-ins of it here), a refusal naming the engine core when they live
-in another process, the core and the executor as a recorder reads them (None where there is none), and the output lag
-the engine's architecture implies."""
+in another process, the core and the executor as a recorder reads them (None where there is none), whether the core
+runs in this process, and the output lag the engine's architecture implies."""
 from __future__ import annotations
 
 from types import SimpleNamespace as NS
@@ -75,6 +75,63 @@ def test_an_engine_without_a_core_has_neither_for_the_recorder(engine):
     for llm in (engine, NS(llm_engine=engine), NS(vllm=NS(llm_engine=engine))):
         assert handle.core_or_none(llm) is None
         assert handle.executor_or_none(llm) is None
+
+
+def test_the_core_is_in_this_process_where_each_kind_of_engine_holds_a_client_that_holds_it():
+    for kind, llm in _engines(NS()).items():
+        assert handle.core_in_process(llm) is True, kind
+    for kind, llm in _engines(0).items():           # the client names a core: what the core is isn't asked
+        assert handle.core_in_process(llm) is True, kind
+
+
+NOT_HERE = {
+    "a client of a core in another process": NS(engine_core=MultiprocClient()),
+    "a client that names no core": NS(engine_core=NS(engine_core=None)),
+    "no core": NS(),
+    "a core of None": NS(engine_core=None),
+    "vLLM V0, the engine's own executor": NS(model_executor=object()),
+    "a core with no client around it": NS(engine_core=NS(scheduler=SCHED, model_executor=NS())),
+}
+
+
+@pytest.mark.parametrize("engine", NOT_HERE.values(), ids=NOT_HERE.keys())
+def test_the_core_is_not_in_this_process_for_an_engine_that_holds_no_client_of_a_core_here(engine):
+    for llm in (engine, NS(llm_engine=engine), NS(vllm=NS(llm_engine=engine))):
+        assert handle.core_in_process(llm) is False
+
+
+def test_an_engine_record_without_an_engine_has_no_core_in_this_process():
+    assert handle.core_in_process(None) is False
+    assert handle.core_in_process(NS(llm_engine=None)) is False
+    assert handle.core_in_process(NS(vllm=None)) is False
+
+
+def test_a_core_with_no_client_around_it_still_gives_its_parts():
+    llm = NS(llm_engine=NOT_HERE["a core with no client around it"])
+    assert handle.scheduler(llm) is SCHED and handle.executor_or_none(llm) is not None
+    assert handle.core_in_process(llm) is False
+
+
+def _in_remote(llm):
+    """`CommitSession.check`'s own read (PoUB's session, `remote.py`), which takes the core from `core_or_none`: true where
+    it refuses."""
+    return getattr(handle.core_or_none(llm), "engine_core", None) is None
+
+
+def _by_hand_in_gpu_lease(eng):
+    """`kept_reason`'s own read (pipeline/gpu_lease.py), of a record that holds the engine as ``llm``: true where it keeps
+    the GPU."""
+    core = getattr(getattr(getattr(eng, "llm", None), "llm_engine", None), "engine_core", None)
+    return getattr(core, "engine_core", None) is None
+
+
+@pytest.mark.parametrize("engine", [NS(engine_core=NS(engine_core=NS())), *NOT_HERE.values()],
+                         ids=["a client that holds the core", *NOT_HERE.keys()])
+def test_it_answers_as_the_two_reads_outside_this_package_do(engine):
+    llm = NS(llm_engine=engine)
+    assert handle.core_in_process(llm) is not _in_remote(llm)
+    assert handle.core_in_process(llm) is not _by_hand_in_gpu_lease(NS(llm=llm))
+    assert _by_hand_in_gpu_lease(NS(llm=None)) and _by_hand_in_gpu_lease(NS())      # a record with no engine: None above
 
 
 @pytest.mark.parametrize("found", [None, NS(), NS(collective_rpc="not a call")])

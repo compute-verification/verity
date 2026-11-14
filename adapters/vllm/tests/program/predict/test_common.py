@@ -113,7 +113,8 @@ class _Forwards:
     def __init__(self) -> None:
         self.forwards: list[tuple[list[Coll], int]] = []
         self.samples: list[tuple[int, int, int]] = []
-        self.launch, self.steps = SimpleNamespace(step=None), []
+        self.launch = SimpleNamespace(step=None)
+        self.steps: list[int | None] = []
 
     def forward(self, rows: list[Coll], pos: int) -> list[int]:
         self.forwards.append((list(rows), pos))

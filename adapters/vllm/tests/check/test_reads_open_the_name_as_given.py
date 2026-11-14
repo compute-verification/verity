@@ -61,7 +61,7 @@ def test_a_verdict_opens_a_wrappers_result_by_the_name_the_glob_found(tmp_path, 
     step = "e6" * 32
     (d / "build_step").mkdir()
     (d / "build_step" / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": step}}))
-    v = V.from_record(d, rc=0, stage_ok="PASS")
+    v = V.from_record(d, rc=0)
     assert v.correspondence_digests == {"step": step}
     assert (str(d / "build_step" / "result.json"), "r") in opened
 

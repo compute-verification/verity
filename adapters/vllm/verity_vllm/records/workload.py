@@ -2,8 +2,8 @@
 `workloads/<row>.json` holds it and a run reads it; and the v1 layout (no `engine` block, the flat keys it replaced), which a
 pod's older run directories still hold.
 
-Its writers are `config.RowConfig.to_json` (the row files), `pipeline.workload.workload_doc`, `pipeline.coverage_workloads`
-and `properties.holdout`; each writes every field typed here as required.  `config.RowConfig` parses a
+Its writers are `config.RowConfig.to_json` (the row files), `pipeline.workload.workload_doc` and `pipeline.coverage_workloads`;
+each writes every field typed here as required, and a holdout workload a pod's runs hold lacks three that are optional.  `config.RowConfig` parses a
 row file for running it (v2 only, with the engine's checks); this is the record a check reads.
 
     w = Workload.load(path)                     # MissingField / UnknownField name the file and the field
@@ -55,8 +55,8 @@ def _put(out: dict[str, Any], **kv: Any) -> dict[str, Any]:
 class WorkloadRequest:
     request_id: str                                   # the workload's id of the request (a UUID); the Program's is r<index>
     max_tokens: int                                   # the public cap
-    index: int | None                                 # its position: `properties.holdout` writes none
-    prompt_len: int | None                            # `properties.holdout` writes none: the length of `prompt_token_ids`
+    index: int | None                                 # its position: a holdout workload has none
+    prompt_len: int | None                            # a holdout workload has none: the length of `prompt_token_ids`
     # a lengths-only plan (`pipeline.workload` without the model's tokenizer) has no prompt
     prompt_token_ids: tuple[int, ...] | None
     arrive_step: int | None                           # absent: the sweep's `arrive_steps`, else 0
@@ -148,7 +148,7 @@ class Workload:
     requests: tuple[WorkloadRequest, ...]
     case: str | None                                  # the checkpoint's role; `pipeline.workload` writes null for a row without one
     engine: Mapping[str, Any] | None                  # v2's pinned engine block (`config.RowEngine`); a v1 workload has the flat keys
-    sampling: WorkloadSampling | None                 # `properties.holdout` writes none: the driver's greedy default
+    sampling: WorkloadSampling | None                 # a holdout workload has none: the driver's greedy default
     sweep: Mapping[str, Any] | None                   # the sweep plan the requests were sampled from (`pipeline.workload`), else none
     info: Mapping[str, Any]                           # the `INFO` fields it carries (and `V1_INFO`, for a v1 workload)
     # the document's sha256 as the driver records it (RunHeader.workload.sha256: sort_keys, compact separators), of the JSON as read

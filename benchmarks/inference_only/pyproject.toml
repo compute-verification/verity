@@ -14,8 +14,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # over `verity`. The run's variables are read through `verity_config.settings`, and the count's executable and module
 # are named by its Lake package's `lakefile.toml`. The served number is written into the run's result by the harness
 # kit's writer (`benchmarks/harness/verity_bench`: `kit` and its `settings`). The tests check the count's refusal with its Python reference
-# (`nci_reference.py`), which the count's difftest holds the Lean to, so the suite builds no Lake package. The class's
-# card and the calculator's H200 servers are read from the card files (`verity.device`).
+# (`nci_reference.py`), which the count's difftest holds the Lean to. A served record's check is the package's record
+# check, run through its script (`scripts/served_record_case.py`, under `verity`) and its compiled command, which one
+# test builds with `lake` where it is (`check` runs the suite after its Lean steps). The script reads the difftest
+# harness (`tools/difftest`: `verity_difftest`). The class's card and the calculator's H200 servers are read from the
+# card files (`verity.device`).
 inputs = ["benchmarks/rho",
           "benchmarks/one_stage/served_shares.py", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/one_stage/served_overhead.py",
@@ -28,5 +31,8 @@ inputs = ["benchmarks/rho",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
           "benchmarks/nci/tiers.py", "benchmarks/nci/slowdown.py",
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
-          "benchmarks/nci/calibrations.json", "tools/config/verity_config",
+          "benchmarks/nci/calibrations.json", "tools/config/verity_config", "tools/difftest/python/verity_difftest",
           "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml"]
+# test files that start a program the read guard can't trace (the record check's script, its compiled command, lake):
+# keyed on the suite's whole tree
+untraced = ["tests/test_served_record.py"]

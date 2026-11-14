@@ -359,16 +359,17 @@ theorem split_useful {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem
 /-! ## The debit, row by row -/
 
 open Classical in
-/-- rev1's replayed debit of row `i` of a unit's words in the columns `cols`, from the unit's noisy codes `A`, `B` and
-the row's activations `x`: `tileDebitRev1`'s terms on the one-row tile `{i} × cols`. -/
+/-- rev1's replayed debit of row `i` of a unit's words in the columns `cols`, from the unit's noisy codes `A`, `B`, the
+row's activations `x` and the weight rows `W`: `tileDebitRev1`'s terms on the one-row tile `{i} × cols`. -/
 noncomputable def rowDebit (d : PearlCDevice) (α β : (k : ℕ) → (Fin k → ℚ) → ℚ) {m n k : ℕ}
     (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (cols : Finset ℕ)
-    (x : Fin k → ℚ) : ℚ :=
+    (x : Fin k → ℚ) (W : Matrix (Fin n) (Fin k) ℚ) : ℚ :=
   debitDev d ⟨∑ j ∈ univ.filter (fun j : Fin n => (j : ℕ) ∈ cols),
       ((range (k / 32)).filter fun t => d.flags A B i j t = true).card, 0⟩ +
     (d.prices.costs.fs : ℚ) * (cols.card / n) * (univ.filter fun l : Fin k => d.saltDead α β k x l ∨
       ∀ j : Fin n, (j : ℕ) ∈ cols → d.flags A B i j ((l : ℕ) / 32) = true).card +
-    d.prices.add * ∑ j ∈ univ.filter (fun j : Fin n => (j : ℕ) ∈ cols), (laterZeroPromos d A B i j : ℚ)
+    d.prices.add * ∑ j ∈ univ.filter (fun j : Fin n => (j : ℕ) ∈ cols), (laterZeroPromos d A B i j : ℚ) +
+    ∑ j ∈ univ.filter (fun j : Fin n => (j : ℕ) ∈ cols), (wordMend d α β x (W j) : ℚ)
 
 theorem sum_filter_row {M : Type} [AddCommMonoid M] {m n : ℕ} (g : Fin m × Fin n → M) {i : ℕ} (hi : i < m)
     (P : Fin m → Fin n → Prop) {_ : DecidablePred fun e : Fin m × Fin n => (e.1 : ℕ) ∈ ({i} : Finset ℕ) ∧ P e.1 e.2}
@@ -402,10 +403,12 @@ theorem tileDebitRev1_row (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → 
     (act : Codes) {i : ℕ} (hi : i < (U.layout.shape u).m) (cols : Finset ℕ) :
     sem.tileDebitRev1 d H s U u {i} cols act =
       rowDebit d sem.alpha sem.beta (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2 ⟨i, hi⟩ cols
-        (wordsVal (U.layout.shape u).m (U.layout.shape u).k act ⟨i, hi⟩) := by
+        (wordsVal (U.layout.shape u).m (U.layout.shape u).k act ⟨i, hi⟩)
+        (wordsVal (U.layout.shape u).n (U.layout.shape u).k (U.fixed (U.layout.fixedId u))) := by
   classical
   simp only [PearlCSem.tileDebitRev1, PearlCSem.tileDebitDev, rowDebit]
   rw [sum_filter_row _ hi (fun _ b => (b : ℕ) ∈ cols), sum_filter_row _ hi (fun _ b => (b : ℕ) ∈ cols),
+    sum_filter_row _ hi (fun _ b => (b : ℕ) ∈ cols),
     card_filter_row hi (fun a l => d.saltDead sem.alpha sem.beta (U.layout.shape u).k
       (wordsVal (U.layout.shape u).m (U.layout.shape u).k act a) l ∨ ∀ j : Fin (U.layout.shape u).n,
         (j : ℕ) ∈ cols → d.flags (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2 a j ((l : ℕ) / 32) = true)]
@@ -415,7 +418,8 @@ theorem unitDebitRev1_eq_sum_rows (sem : PearlCSem Q R S) (d : PearlCDevice) (H 
     (u : ℕ) (act : Codes) (hn : 0 < (U.layout.shape u).n) :
     sem.unitDebitRev1 d H s U u act =
       ∑ i, rowDebit d sem.alpha sem.beta (sem.unitChain H s U u act).1 (sem.unitChain H s U u act).2 i
-        (range (U.layout.shape u).n) (wordsVal (U.layout.shape u).m (U.layout.shape u).k act i) := by
+        (range (U.layout.shape u).n) (wordsVal (U.layout.shape u).m (U.layout.shape u).k act i)
+        (wordsVal (U.layout.shape u).n (U.layout.shape u).k (U.fixed (U.layout.fixedId u))) := by
   classical
   have hf : (univ.filter fun j : Fin (U.layout.shape u).n => (j : ℕ) ∈ range (U.layout.shape u).n) = univ :=
     filter_true_of_mem fun j _ => mem_range.mpr j.2
@@ -443,19 +447,20 @@ open Classical in
 /-- A row's debit reads that row of `A` only, at a row-local record. -/
 theorem rowDebit_row {d : PearlCDevice} (hd : d.RowLocal) (α β : (k : ℕ) → (Fin k → ℚ) → ℚ) {m n k : ℕ}
     (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (cols : Finset ℕ)
-    (x : Fin k → ℚ) :
-    rowDebit d α β A B i cols x = rowDebit d α β (fun _ : Fin 1 => A i) B 0 cols x := by
+    (x : Fin k → ℚ) (W : Matrix (Fin n) (Fin k) ℚ) :
+    rowDebit d α β A B i cols x W = rowDebit d α β (fun _ : Fin 1 => A i) B 0 cols x W := by
   have hf : ∀ j t, d.flags A B i j t = d.flags (fun _ : Fin 1 => A i) B 0 j t := fun j t => (hd.1 A B i j).2 t
   simp only [rowDebit, hf, laterZeroPromos_row hd A B i]
 
 theorem rowDebit_congr (d : PearlCDevice) (α β : (k : ℕ) → (Fin k → ℚ) → ℚ) {n k n' k' : ℕ}
     {A : Matrix (Fin 1) (Fin k) Code} {A' : Matrix (Fin 1) (Fin k') Code} {B : Matrix (Fin n) (Fin k) Code}
-    {B' : Matrix (Fin n') (Fin k') Code} (cols : Finset ℕ) {x : Fin k → ℚ} {x' : Fin k' → ℚ} (hA : MatEq A A')
-    (hB : MatEq B B') (hx : VecEq x x') : rowDebit d α β A B 0 cols x = rowDebit d α β A' B' 0 cols x' := by
+    {B' : Matrix (Fin n') (Fin k') Code} (cols : Finset ℕ) {x : Fin k → ℚ} {x' : Fin k' → ℚ}
+    {W : Matrix (Fin n) (Fin k) ℚ} {W' : Matrix (Fin n') (Fin k') ℚ} (hA : MatEq A A') (hB : MatEq B B')
+    (hx : VecEq x x') (hW : MatEq W W') : rowDebit d α β A B 0 cols x W = rowDebit d α β A' B' 0 cols x' W' := by
   have hk := hA.2.1
   have hn := hB.1
   subst hk hn
-  rw [hA.eq, hB.eq, hx.eq]
+  rw [hA.eq, hB.eq, hx.eq, hW.eq]
 
 /-- **Row `i`'s debit** under the row seeds, on any columns, is the split unit's. -/
 theorem split_tileDebit {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') (H : Q → R) (s : S)
@@ -468,7 +473,8 @@ theorem split_tileDebit {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise 
     rowDebit_row hd sem.alpha sem.beta (sem.unitChain H s (splitWorkload U) (rowIdx U.layout u i) (rowCodes act i)).1,
     rowDebit_row hd sem'.alpha sem'.beta (sem'.unitChain H s U u act).1, hN.2.1, hN.2.2.1]
   exact (rowDebit_congr d _ _ cols (matEq_row (splitRow_fst hN H s hu hi act)) (splitRow_snd hN H s hu hi act)
-    ⟨(splitShape_k hu hi).symm, fun _ _ _ => rfl⟩).symm
+    ⟨(splitShape_k hu hi).symm, fun _ _ _ => rfl⟩
+    ⟨(splitShape_n hu hi).symm, (splitShape_k hu hi).symm, fun b l hb hl hb' hl' => splitWeight_row hu hi b l hb hl hb' hl'⟩).symm
 
 /-- A unit's debit is the sum of its one-row tiles' debits. -/
 theorem unitDebitRev1_eq_sum_tiles (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)

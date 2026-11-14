@@ -109,14 +109,15 @@ theorem str_get? {kvs : Std.TreeMap.Raw String Json} {k s : String} (h : Flock.R
 
 /-! ## What v2's check held of its session's record -/
 
-/-- **Where v2's check accepts, it held the evidence's sessions to the challenger's trees.** -/
+/-- **Where v2's check accepts on parameters that name no members, it held the evidence's sessions to the
+challenger's trees.** -/
 theorem checkBlobsAt_trees {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ ts, _root_.Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
       _root_.Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
-  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold _root_.Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
@@ -302,7 +303,7 @@ message parse one way, as `Σ` then `rb`. So the prover fixed that table's `root
 theorem checkBlobsAt_link {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
     {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ record spec tabs rest proofs sess t o rb st, V2Verified p e bs record spec tabs rest proofs ∧
       Flock.Record.decode spec record = .ok sess ∧ sess.rootB = #[rb] ∧
       tabs[0]? = some st ∧ _root_.Spot.OneStageZk.rootBLen st = .ok rb.size ∧
@@ -310,7 +311,7 @@ theorem checkBlobsAt_link {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.O
       t.opening _root_.Spot.Challenger.TREE_SESSION 0 = some o ∧
       linkMsg record spec.tables = some (spec.sigma ++ rb).data.toList ∧
       o.after = Flock.hexOf ⟨(sha512Msg (spec.sigma ++ rb).data.toList).toArray⟩ := by
-  obtain ⟨record, spec, tabs, rest, proofs, hv⟩ := checkBlobsAt_verified h
+  obtain ⟨record, spec, tabs, rest, proofs, hv⟩ := checkBlobsAt_verified hm h
   obtain ⟨rs, tags0, circuitB, pubB, rd, hs, ht, hc, hpb, hrd, hrec, hst, -, hver⟩ := id hv
   obtain ⟨recB, hb, hr⟩ : ∃ recB, bs.get rs.record s!"session {rs.name}'s record" = .ok recB ∧
       String.fromUTF8? recB = some record := by
@@ -320,7 +321,7 @@ theorem checkBlobsAt_link {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.O
     cases hg : bs.get rs.record s!"session {rs.name}'s record" with
     | error _ => rw [hg] at hrec; cases hrec
     | ok recB => rw [hg] at hrec; exact ⟨recB, rfl, hrec⟩
-  obtain ⟨ts, hts, hth⟩ := checkBlobsAt_trees h
+  obtain ⟨ts, hts, hth⟩ := checkBlobsAt_trees hm h
   have htab : _root_.Spot.OneStageZk.sessionTables = #[tags0.table] := by
     simp only [_root_.Spot.OneStageZk.sessionTables, ht, Option.map_some, Option.getD_some]
     rfl

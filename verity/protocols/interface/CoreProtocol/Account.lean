@@ -3,12 +3,12 @@ module
 public import CoreProtocol.Example
 public import CoreProtocol.Protocol
 public import CoreProtocol.Ratio
-public import CoreProtocol.Registration
+public import CoreProtocol.SiteExample
 public import CoreProtocol.Site
 meta import CoreProtocol.Example
 meta import CoreProtocol.Protocol
 meta import CoreProtocol.Ratio
-meta import CoreProtocol.Registration
+meta import CoreProtocol.SiteExample
 meta import CoreProtocol.Site
 
 /-!
@@ -787,7 +787,7 @@ def Row.toJson (r : Row) : Json :=
 
 namespace Example
 
-open Core.Registration.Example (sheet links fig rated)
+open Core.Site.Example (sheet links fig rated)
 
 /-- **The example protocol's account** (`Core.Example.protocol`): the units it reports passed, each counted as one
 tensor-core MAC of the site's devices, verified from below, with the error its profile states, once a period. It
@@ -807,7 +807,7 @@ private def rowsOf (S : Site) (digest : Sheet → String) (A : Site.Registration
 
 /-- The auditor whose registered keys are the keys the locations `xs` of the auditor's state. -/
 private def keysOf (xs : List Site.Loc) : Site.Registration.Auditor :=
-  { Core.Registration.Example.auditor with
+  { Core.Site.Example.auditor with
     key := fun i => (xs.find? (·.id == i)).bind fun x => if x.kind.auditor then some x.key else none }
 
 /-- The keys of the example's certifier and challenger in lower-case hex, the one form `Site.holder` reads. -/
@@ -820,12 +820,12 @@ private def hexed (x : Site.Loc) : Site.Loc :=
   | _ => x
 
 /-- The example's locations, its devices' keys in lower-case hex. -/
-private def base : List Site.Loc := Core.Registration.Example.locs.map hexed
+private def base : List Site.Loc := Core.Site.Example.locs.map hexed
 
 /-- An auditor's device, at the site, whose clock may run `drift` from real time, or states none. -/
 private def vm (id : String) (drift : Option Figure) : Site.Loc :=
   { id, kind := .auditorHost, parent := some "site0", owner := .auditor, key := "a2",
-    scheme := Core.Registration.Example.lms, timebase := some "tb0", drift }
+    scheme := Core.Site.Example.lms, timebase := some "tb0", drift }
 
 /-- The example's auditor, who registers the keys of its devices, `vm0`'s among them. -/
 private def auditor : Site.Registration.Auditor := keysOf (base ++ [vm "vm0" none])
@@ -1310,7 +1310,7 @@ private def host1 : Site.Loc := { id := "node1", kind := .host, parent := some "
 private def dram (id h : String) : Site.Loc :=
   { id, kind := .memory, parent := some h, tier := some .dram, bytes := 1 <<< 31 }
 private def device (id : String) (kind : Site.Kind) (key : String) : Site.Loc :=
-  { id, kind, parent := some "site0", owner := .auditor, key, scheme := Core.Registration.Example.lms }
+  { id, kind, parent := some "site0", owner := .auditor, key, scheme := Core.Site.Example.lms }
 private def link (id a b : String) : Site.Link := { id, ends := (a, b), β := some 10000000000, latency := 1 }
 
 /-- Beside the example: a second host, joined to the challenger and to the first host; a DRAM leaf under each host; a
@@ -1336,7 +1336,7 @@ private def upper (x : Site.Loc) : Site.Loc := if x.id == "cert0" then { x with 
 #guard (site.holder auditor "a2").isNone ∧ (site.holder auditor "ff").isNone
 #guard (site.holder (keysOf []) certKey).isNone
 #guard (Site.holder ⟨[sheet], twice, links⟩ (keysOf twice) certKey).isNone
-#guard (Site.holder ⟨[sheet], Core.Registration.Example.locs, links⟩ Core.Registration.Example.auditor "k0").isNone
+#guard (Site.holder ⟨[sheet], Core.Site.Example.locs, links⟩ Core.Site.Example.auditor "k0").isNone
 #guard (Site.holder ⟨[sheet], locs.map upper, links⟩ (keysOf (locs.map upper)) "C0").isNone
 -- the certifier reaches its uplink's half on its host's side, never the half to the outside, and no host; the
 -- challenger reaches the hosts its links join it to, each once, and no link

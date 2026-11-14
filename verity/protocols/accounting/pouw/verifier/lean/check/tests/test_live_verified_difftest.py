@@ -86,7 +86,7 @@ def test_live_verified(server):
                  "a live statement and the window has", "two live statements and the window has",
                  "live: the window's live circuit is not a live Program", "live: the window registers ",
                  "rows of # words, not the T = #", "could not be verified, so the window stays refused",
-                 "live@#: the statement's public file", "was rejected by the verifier of record", "not unit #"):
+                 "live@#: the statement's public file", "was rejected by the verifier", "not unit #"):
         assert any(part in k for k in VERIFIED), part
 
 

@@ -4,7 +4,7 @@
     {"file": "verity_vllm/ops/canary.sh", "kind": "heredoc", "symbol": "<script>", "detail": "python3 <<", "count": 4},
     {"file": "verity_vllm/ops/canary.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 11},
     {"file": "verity_vllm/ops/cov_pod.sh", "kind": "heredoc", "symbol": "<script>", "detail": "$PY312 <<", "count": 2},
-    {"file": "verity_vllm/ops/cov_pod.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 3},
+    {"file": "verity_vllm/ops/cov_pod.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 2},
     {"file": "verity_vllm/ops/fa3_row_negatives.sh", "kind": "heredoc", "symbol": "<script>", "detail": "python3 <<"},
     {"file": "verity_vllm/ops/fa3_row_negatives.sh", "kind": "python-c", "symbol": "<script>", "detail": "python -c", "count": 6},
     {"file": "verity_vllm/ops/pod_bootstrap.sh", "kind": "heredoc", "symbol": "<script>", "detail": "$PY <<", "count": 2},

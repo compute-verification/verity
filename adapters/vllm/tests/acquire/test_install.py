@@ -129,6 +129,18 @@ def test_installs_exactly_the_sites_and_observes_them():
     assert sink.counts[("logits", "producer_output", "out")] == 2          # nothing fires after remove()
 
 
+def test_a_second_installation_on_the_runner_observes_its_own_sites_alone():
+    model, runner = Tiny(), Runner()
+    plan, _ = make(base_rows(), model, runner)
+    install_from_plan(plan, model, runner, sink=OccurrenceSink()).remove()
+    sink = OccurrenceSink()
+    inst = install_from_plan(plan, model, runner, sink=sink)
+    runner.sample(model(torch.tensor([[1, 2, 3]])))
+    assert sink.counts[("runner.sampler", "runner_return", ".sampled_token_ids")] == 1 and set(sink.counts.values()) == {1}
+    inst.remove()
+    assert isinstance(runner.sample, types.MethodType) and runner.sample.__func__ is Runner.sample
+
+
 def test_a_whole_return_site_of_a_module_returning_several_records_each_tensor():
     model, runner = Tiny(), Runner()
     rows = [r for r in base_rows() if r["op_path"] != "blocks.0.norm"] + [row("instance_outputs", "blocks.0.norm", "out")]

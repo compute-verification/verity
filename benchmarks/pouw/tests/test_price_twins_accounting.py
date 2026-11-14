@@ -106,7 +106,8 @@ def test_credit_and_cap_are_the_pinned_twins(twin):
     rows, cols = 2, 3
     share = Fraction(rows * cols, n * n)
     if s.device.g:
-        debit, cap = CW.tile_cap(s, record, [[0] * n] * rows, [[0] * n] * cols, [(ONE, [0] * n, ONE)] * rows)
+        debit, cap = CW.tile_cap(s, record, [[0] * n] * rows, [[0] * n] * cols, [(ONE, [0] * n, ONE)] * rows,
+                                 [(ONE, [0] * n, ONE)] * cols)
         assert cap == rho * credit * share
         assert debit >= s.prices.fadd * rows * cols * (n // s.device.window - 1)
     else:
@@ -149,8 +150,9 @@ def test_the_zero_word_debits_every_later_promotion():
     record = W.UnitRecord(Matmul(0, Shape(16, k, 16), 0), 16, k)
     atoms, zeros = D.chain_debit([[0] * k], [[0] * k], s.device)
     assert zeros == k // s.device.window - 1
-    assert atoms == k // 32 and D.tile_debit([[0] * k], [[0] * k], [(ONE, [0] * k, ONE)], s.device) == (atoms, zeros, k)
-    assert CW.tile_cap(s, record, [[0] * k], [[0] * k], [(ONE, [0] * k, ONE)])[0] == D.debit_units(
+    zero_row = [(ONE, [0] * k, ONE)]
+    assert atoms == k // 32 and D.tile_debit([[0] * k], [[0] * k], zero_row, zero_row, s.device) == (atoms, zeros, k, 0)
+    assert CW.tile_cap(s, record, [[0] * k], [[0] * k], zero_row, zero_row)[0] == D.debit_units(
         atoms, Fraction(k, 16), s.prices, s.device, zeros=zeros)
 
 

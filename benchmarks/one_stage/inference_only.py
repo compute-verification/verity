@@ -20,6 +20,10 @@ unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and i
   θ every weight parameter the circuit registers held (`weights_of_record.PARAM`), B's k (`inference_blocks.budgets`): what
   the weights registration pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
   than k and is refused. B's own c is the templates' gates, not the table's Boolean gates the count rule reads;
+- k by kind (``k_by_kind``, `KINDS`), from the same count: ``linears``, the bits of the outputs of the linears a PoUW cut
+  leaves outside the circuit (Pearl+'s y), and ``scan_state``, the bits of the scan state row. A kind's bits are what
+  `block_counts.fresh` drops by when its registered parameters are held too (`kinds_of`), and the policy is written
+  only where the kinds sum to k;
 - n, the H200's capacity in sessions over the serve's registered span at the declared utilization (`capacity`):
   ⌈u·θ·T / W⌉ rounded up to the public grid (`partition_v2.grid`), θ the card's dense int8 MAC rate at its tensor clock
   (`served_shares.RHO`), T the GPU lease's limit (``--lease-min``, `served_verdicts.sh`'s LEASE_MIN, which no serve
@@ -42,7 +46,8 @@ by the table, and its fresh bits at the verifier's pins (``--pins``, the weights
 (`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Its rows
 are `NciCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
 class with a block at most c gates and k fresh bits, and the blocks at most n. Anything the rule can't decide refuses
-(`Undecided`): no policy, a serve dir that records no start, a policy written once the serve had begun (unless
+(`Undecided`): no policy, a policy whose ``k_by_kind`` doesn't sum to its k or isn't the run's circuit's (a policy
+written without one is read as before), a serve dir that records no start, a policy written once the serve had begun (unless
 ``--retroactive`` says why it's read anyway), a record with no inference blocks, an unpriced primitive, a closed window
 with no seal, or a sealed window the class doesn't take.
 With ``--lean``, `nci-check --count` runs on one window's session Program (`lean_count`), with ``--detail`` where the
@@ -107,6 +112,9 @@ SPAN_SOURCE = "the serve's GPU lease limit, served_verdicts.sh's LEASE_MIN (gpu-
 WORK_SOURCE = ("one slot of the class's fixed load (window_class.Tables.schedule) priced as served_shares.step_macs prices "
                "a served step: its linears at θ, its attention and LM head at θ/2, so counted twice in θ's MACs")
 BIT_AT = re.compile(r"BitAtx([1-9][0-9]*)_v1")
+#: the kinds of a block's fresh bits (``k_by_kind``): ``linears``, the outputs of the linears a PoUW cut leaves outside
+#: the circuit, and ``scan_state``, the scan state row
+KINDS = ("linears", "scan_state")
 
 
 class Undecided(Exception):
@@ -240,9 +248,37 @@ def weight_pins(params: Sequence[str]) -> dict[str, str]:
     return {p: "00" for p in sorted(params) if p.split("/", 1)[0] == PARAM}
 
 
+def kind_of(param: str) -> str | None:
+    """The kind (`KINDS`) of the fresh bits a registered parameter's reads fill: ``linears`` for Pearl+'s y of a cut
+    linear (`window.y_value`), ``scan_state`` for the scan state row (`scan_state.SCAN_STATE`), else none."""
+    from verity_vllm.program.predict import scan_state
+    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+
+    if param == scan_state.SCAN_STATE:
+        return "scan_state"
+    return "linears" if param.split("/", 1)[0] == PWR.y_value(0, 0).split("/", 1)[0] else None
+
+
+def kinds_of(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roots: Mapping[str, str] | None,
+             fresh: int) -> dict[str, int]:
+    """A block's ``fresh`` bits at ``pins`` and ``roots`` by kind (`KINDS`): what `block_counts.fresh` drops by when the
+    record's registered parameters of that kind are held too, each at a root of its own (`kind_of`)."""
+    from verity.commitments.windows import interface as IF
+    from verity_vllm.program.predict import block_counts as BC
+
+    reg = IF.declarations(doc)[2]
+    pins, roots = dict(pins) if isinstance(pins, Mapping) else {}, dict(roots or {})
+    out = {}
+    for kind in KINDS:
+        mine = {p: "00" for p in (reg.params if reg else ()) if kind_of(p) == kind}
+        out[kind] = fresh - BC.fresh(doc, m, pins | mine, roots | mine) if mine else 0
+    return out
+
+
 def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: Mapping[str, str] | None) -> dict[str, Any]:
     """A circuit record's block class: its session Definition's digest and key, m slots and positions, gates by
-    `table_of`'s table and fresh bits at ``pins`` and ``roots`` (`block_counts`), and the table."""
+    `table_of`'s table, fresh bits at ``pins`` and ``roots`` (`block_counts`) and those by kind (`kinds_of`), and the
+    table."""
     from verity.circuits import codec, partition_v2 as PV2
     from verity_vllm.program.predict import block_counts as BC
 
@@ -258,10 +294,11 @@ def session_row(doc: Mapping[str, Any], pins: Mapping[str, str] | None, roots: M
         raise Undecided(f"gate-table: no gates for {', '.join(sorted(miss))}, which the block computes")
     try:
         k = BC.fresh(doc, m, pins, roots)
+        by_kind = kinds_of(doc, m, pins, roots, k)
     except (KeyError, TypeError, ValueError) as e:
         raise Undecided(f"the record's fresh bits: {e}") from e
     return {"definition": PV2.id_digest(fn), "key": codec.descriptor_id(fn), "slots": m, "positions": positions,
-            "gates": g, "fresh": k, "table": table, "priced": priced}
+            "gates": g, "fresh": k, "k_by_kind": by_kind, "table": table, "priced": priced}
 
 
 def session_work(cls: Any, model: str) -> dict[str, int]:
@@ -310,13 +347,16 @@ def policy(cls_arg: str, model: str, revision: str, lease_min: int, utilization:
     doc, params = class_doc(serve, cls, scheme)
     pins = weight_pins(params)
     row = session_row(doc, pins, pins)
+    if sum(row["k_by_kind"].values()) != row["fresh"]:
+        raise ValueError(f"the class's {row['fresh']} fresh bits a block are not its kinds' {row['k_by_kind']}: a fresh "
+                         f"bit of no kind of {', '.join(KINDS)} has no k_by_kind to state it")
     work = session_work(cls, model)
     cap = capacity(work["theta_macs"], lease_min, utilization)
     return {"format": POLICY_FORMAT, "written_utc": written, "tree": tree,
             "class": {"slots": cls.slots, "prompt": cls.prompt, "outputs": cls.outputs, "positions": cls.positions},
             "serve": serve, "pearl_tables": scheme,
             "session": {k: row[k] for k in ("definition", "key", "slots", "positions")},
-            "c": row["gates"], "k": row["fresh"], "n": cap["n"],
+            "c": row["gates"], "k": row["fresh"], "k_by_kind": row["k_by_kind"], "n": cap["n"],
             "theta": f"every weight parameter the class's circuit registers ({len(pins)}), held",
             "table": {"sha512": digest(row["table"]), "entries": len(row["table"]), "priced": row["priced"]},
             "n_inputs": {**cap, "utilization_source": source, "span_source": SPAN_SOURCE,
@@ -473,6 +513,16 @@ def verdict(pol: Mapping[str, Any] | None, doc: Mapping[str, Any] | None, serve_
         if doc is None:
             raise Undecided("no circuit record of the run's window at the policy's class")
         row = session_row(doc, pins, roots)
+        if "k_by_kind" in pol:
+            split = pol["k_by_kind"]
+            if not (isinstance(split, Mapping) and set(split) <= set(KINDS)
+                    and all(type(bits) is int for bits in split.values())):
+                raise Undecided(f"the policy's k_by_kind {split!r} is not an object of {', '.join(KINDS)}, each an "
+                                "integer of bits")
+            if sum(split.values()) != k:
+                raise Undecided(f"the policy's k_by_kind {split} doesn't sum to its k = {k}")
+            if dict(split) != row["k_by_kind"]:
+                raise Undecided(f"the policy's k_by_kind {dict(split)} is not the run's circuit's {row['k_by_kind']}")
         base["table"] = {"sha512": digest(row["table"]), "entries": len(row["table"]), "priced": row["priced"]}
         base["registered_session"] = row["definition"] == pol["session"]["definition"]
         sealed, out = class_windows(serve_dir, pol["class"])
