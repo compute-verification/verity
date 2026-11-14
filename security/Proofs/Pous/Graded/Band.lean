@@ -13,7 +13,7 @@ import Proofs.Pous.Graded.Theorem
 
 `band_graded_meets_family` proves `Pous.Guarantees.BandGradedMeetsFamily` (pinned as
 `Pous.SecurityProofs.BandGradedMeetsFamily`) over the graded game `GradedMeets`
-(`security/Definitions/Pous/Model/Graded.lean`, `Security/Definitions/Pous/Accounting/GradedMeets.lean`),
+(`security/Definitions/Pous/Model/Graded.lean`, `security/Definitions/Pous/Accounting/GradedMeets.lean`),
 and assumes nothing: `ChainExPostFactoG` is discharged by `chainExPostFactoG_v6`, as for `BandMultiMeetsFamily`.
 
 **The point.** `BandMultiMeetsFamily`'s band: `N` segments (`1 ≤ N ≤ 2^64`) of `2^9` blocks of 64 KiB, in-degree
