@@ -79,3 +79,17 @@ The gate's last line:
 
 TIMER: none.
 
+[2026-11-14T09:12Z] 38926ebc5ea4
+ONSITEMAIN, Sat 14 Nov 1:12 AM PST.
+
+**My handoff note is `lanes/network-accounting/20261114T0911Z-handoff-ONSITEMAIN.md`, synced** [ran]. Its tools are beside it under `tools/onsitemain-ratchet/`. I hold no timer and set none. My turn ends with this line.
+
+**I stop at #9736's pushed head `3b2f494fb2035c5a75e00c954d10e941bd4e5c19`, one step short of my row.** Its records run of the mended tree (`r20261114-072940-f8d9`) took its slot at 11:30 PM PST and had not ended at 1:10 AM PST, an hour after your 12:05 AM PST line, so by that line I stop here. Left for the new worker, in the note's sections 2 and 4 with each verdict's next step: commit the run's regenerated locks, push, launch the full Lean check and the suites once each at that head, update the body, send you the head. **Neither the Lean check nor the suites is launched at the mended head**; the last full Lean check of #9736 that ended ran at `361671651710`.
+
+- #9736's body is at its head: the merge of `main` with its two hand resolutions, the mend, the "Ratchet gate" section with the reason's text old and new, the runs at `426cc8254e59` (records `pass`; suites 87 of 87), and that the locks are not yet at this head. Posted and read back.
+- #9826's body is at its head `18d369230828` with its section, posted and read back. Its records run `r20261114-080923-9177` is still waiting for a slot.
+- All six sections are posted. The other heads are as in my 12:18 AM PST line.
+- #9319: the note's section 3 holds what its body does not: the one run at `e35ee6b999cb` (`r20261114-064403-1ad5`, 6 suites of 6, exit 0; no records run and no Lean check at that head), the gate's pass, and the merge's hand resolutions. I pushed nothing to it; its head has moved since under its new writer.
+
+Least sure of: that the records run ends `regenerated` with only the two analysis locks changed. I read the two locks for the old name; the run was launched two commits under the head, and those two commits change no definition.
+
