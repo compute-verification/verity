@@ -69,7 +69,7 @@ def test_chain_record_publishes_no_rehearsals_request_values(tmp_path):
         "out/honest/out-records.jsonl", "out/honest/check.json", "out/honest/client/certificates.jsonl"))
 
 
-def test_n2_zk_publishes_a_warden_runs_public_files_and_not_its_traffic_or_responses(tmp_path):
+def test_n2_zk_publishes_a_network_certifier_runs_public_files_and_not_its_traffic_or_responses(tmp_path):
     r, out = tmp_path / "run", tmp_path / "OUT"
     public = {"deployment.json": {"windows": 2}, "cells.jsonl": [{"registration": {"root": "ab"}}],
               "certified.jsonl": [{"window": 0, "head": "cd"}], "check.json": {"accepted": True},
