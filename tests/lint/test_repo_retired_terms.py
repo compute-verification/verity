@@ -556,7 +556,7 @@ def test_a_goal_s_id_as_a_toml_goal_key_is_a_name_and_the_title_beside_it_is_not
     """A goal's id is a name, kept as written where a TOML line's ``goal`` key gives it. The word in the title beside
     it, in a comment on the goal's line, in another key's value, and in the same line outside a TOML file still
     counts."""
-    path = "benchmarks/metrics.toml"
+    path = "benchmarks/prod_repro/metrics.toml"
     goal = 'goal = "vllm/production-vllm-reproducible"\n'
     row = '[[metric]]\nid = "vllm/prod-cost"\ntitle = "the production path, reproduced"\n' + goal
     assert said(goal, path) == []

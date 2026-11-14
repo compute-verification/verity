@@ -1,14 +1,19 @@
-"""The Pearl-C device path's kernel (`pouw_pearl_c_device`): GPU 1's pipeline loaded from its directory (``run.py``,
-``fixture.py`` and the cubin), once per process per (sources, cubin), and the digests that name what ran.
+"""The Pearl-C device path's kernel (`pouw_pearl_c_device`): GPU 1's pipeline loaded from its directory (``run.py`` and the
+cubin), once per process per (sources, cubin), and the digests that name what ran.  A unit's keys are the scheme's
+(`pearl_c.keys_of`), so the loader executes no other file of the directory but ``grouped.py``, which `grouped.module` loads.
 """
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+#: the files of a kernel directory the device path executes, when present: ``run.py`` at `Kernel.load`, ``grouped.py`` at
+#: `grouped.module`
+SOURCES = ("run.py", "grouped.py")
 
 
 def _load(name: str, path: Path) -> tuple[Any, str]:
@@ -32,33 +37,35 @@ def _the_cubin(directory: Path) -> Path:
     return found[0]
 
 
-def source_digest(run_sha256: str, fixture_sha256: str) -> str:
-    """The kernel sources' digest: `run.py`'s and `fixture.py`'s, in that order."""
-    return hashlib.sha256(bytes.fromhex(run_sha256) + bytes.fromhex(fixture_sha256)).hexdigest()
+def source_digest(files: dict[str, str]) -> str:
+    """The kernel sources' digest: SHA-256 over each file's name, a zero byte and its SHA-256, in name order."""
+    return hashlib.sha256(b"".join(n.encode() + b"\0" + bytes.fromhex(files[n]) for n in sorted(files))).hexdigest()
 
 
 @dataclass
 class Kernel:
-    """GPU 1's pipeline, loaded once per process per (sources, cubin): ``run.py`` (as `run`), ``fixture.py`` (as `fixture`), the
-    device (`dev`), and the digests that name what ran (the manifest records both)."""
+    """GPU 1's pipeline, loaded once per process per (sources, cubin): ``run.py`` (as `run`), the device (`dev`), and what
+    names what ran, which the manifest records: the cubin's SHA-256, each of `SOURCES` the directory holds by its SHA-256
+    (`files`), and their `source_digest`."""
 
     run: Any
-    fixture: Any
     dev: Any
     cubin_sha256: str
     source_sha256: str | None = None
+    files: dict[str, str] = field(default_factory=dict)
 
     @classmethod
     def load(cls, directory: str, cubin: str | None = None) -> Kernel:
         d = Path(directory)
         run, run_sha = _load("pearl_c_run", d / "run.py")
-        fixture, fixture_sha = _load("pearl_c_fixture", d / "fixture.py")
+        files = {"run.py": run_sha} | {n: hashlib.sha256((d / n).read_bytes()).hexdigest()
+                                       for n in SOURCES[1:] if (d / n).is_file()}
         raw = Path(cubin or _the_cubin(d)).read_bytes()
-        key = (source_digest(run_sha, fixture_sha), hashlib.sha256(raw).hexdigest())
+        key = (source_digest(files), hashlib.sha256(raw).hexdigest())
         if key not in _KERNELS:
             dev = run.Dev(raw)
             dev.open()
-            _KERNELS[key] = cls(run, fixture, dev, key[1], key[0])
+            _KERNELS[key] = cls(run, dev, key[1], key[0], files)
         return _KERNELS[key]
 
 

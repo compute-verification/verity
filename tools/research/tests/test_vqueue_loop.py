@@ -19,7 +19,7 @@ import research.vqueue_loop as L
 from research import carry, vqueue, vqueue_records, vqueue_slim
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.landing import PREFLIGHT
-from research.queue import DRIVE_FLAGS
+from research.queue import DRIVE_FLAGS, merge_main
 from research.store import vocab
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, RecordsRun, Red,
                              Rerun, Retry, Ring, Snapshot, Verdict)
@@ -397,7 +397,7 @@ def test_a_member_that_conflicts_with_one_merged_before_it_is_left_out_naming_it
     assert built["members"] == [1, 3], built
     (post,) = env.posts
     assert "#2 at" in post and "doesn't merge" in post and "conflicts with `main`" not in post, post
-    assert post.endswith("It is left out until it merges: merge `main` into it once #1 is on it"), post
+    assert post.endswith(f"It is left out until it merges: once #1 is on it, {merge_main('it', env.o.gh.prs[2].branch)}"), post
     assert _acts(loop.tick()) == ["drop"]
     again, built = loop.tick()                                      # the same head onto the same base: told once
     assert (again["action"], again["text"], again["done"], built["action"]) == ("skip", None, False, "build")
@@ -460,7 +460,8 @@ def test_a_member_that_conflicts_with_a_candidate_below_names_its_member_and_one
     assert (skip2["number"], skip2["by"], none["action"], none["base"]) == (2, [1], "build", low["sha"]), (skip2, none)
     assert skip2["why"] == "conflicts with #1, merged before it, in a.txt (it merges onto `main`)", skip2
     assert (skip3["number"], skip3["why"], "by" in skip3) == (3, "conflicts with `main` in c.txt", False), skip3
-    assert [p.rsplit(": ", 1)[1] for p in env.posts[1:]] == ["merge `main` into it once #1 is on it", "merge `main` into it"]
+    assert [p.split("It is left out until it merges: ", 1)[1] for p in env.posts[1:]] == [
+        f"once #1 is on it, {merge_main('it', env.o.gh.prs[2].branch)}", merge_main("it", env.o.gh.prs[3].branch)]
 
 
 def test_a_member_whose_head_what_it_merges_onto_holds_is_left_out_untold_and_then_logged_once_as_riding(env):

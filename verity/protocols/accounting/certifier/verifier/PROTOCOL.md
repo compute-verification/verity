@@ -2325,6 +2325,14 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   on a connection of its own, so the server may read line T first. A release named lost may still arrive (a close
   sends what its transport held); the engine skips it. The network certifier never reads that stream and no tick waits
   on it: one holding more than `WRITE_BACKLOG` unwritten is closed.
+- The stream's path is the network certifier's alone, with the watermark or without. Released, a client's request to
+  it would reach the server under the run's id, as the stream does. So a request whose first cell opens as one to
+  that path, read as a server reads it off the request line (`release.to_watermark`), is refused before any cell of
+  it is cut (`malformed`): it has no place in the release order and no byte for the server. A request line that ends
+  past the first cell is read at the request's `END`, with the request whole, before that cell is cut: its earlier
+  cells are in the ingress record, and it too has no `END`, no place in the release order and no byte for the server.
+  Past a request's first line the network certifier reads nothing here: a second request on a connection is the
+  server's to refuse.
 - The headers and the stream are on the server's side only. No cell or record holds them, so the cell counts, the
   prompt lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak
   bound is unchanged. N, a and n are functions of the signed ingress record, which the prover holds as witness, a

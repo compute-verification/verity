@@ -25,18 +25,25 @@ network certifier's `END` cells in record order and the bucket of each (`warden.
 link request s in `active.Requests`' cut, which ends before s + 1 starts, so it is release s − 1
 (`benchmarks/network_traces/active_replay.ReleaseProxy`, which sends no bucket: it forwards a request's head before its
 last frame). A client's own release headers are dropped; bytes that aren't an HTTP/1 request with its whole head pass
-unchanged. A live shim that rebuilds the POST copies the headers onto it (`release_of`, `release_head`)."""
+unchanged. A live shim that rebuilds the POST copies the headers onto it (`release_of`, `release_head`).
+
+The watermark's path is the network certifier's alone: it releases no client's request that opens as one to that path
+(`to_watermark`, read on the request's first cell and on the whole request at its `END`), which would reach the server
+under the run's id as the stream does."""
 
 from __future__ import annotations
 
 import re
 from typing import Sequence
+from urllib.parse import unquote_to_bytes
 
 RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = b"x-verity-release", b"x-verity-release-run", b"x-verity-release-bucket"
 WATERMARK_PATH = b"/verity/watermark"
 WATERMARK_END = b"0\r\n\r\n"
 _REQUEST_LINE = re.compile(rb"[!#$%&'*+.^_`|~0-9A-Za-z-]+ [^\s]+ HTTP/1\.[01]")
 _LINE = re.compile(rb"(0|[1-9][0-9]*) (0|[1-9][0-9]*)((?: (?:0|[1-9][0-9]*))*)\n")
+#: a scheme and authority before a request target's path (`http://server`), which a server reads past
+_ORIGIN = re.compile(rb"[A-Za-z][A-Za-z0-9+.-]*://[^/?#]*")
 
 
 def _count(name: str, value: object) -> int:
@@ -102,6 +109,21 @@ def release_of(head: bytes) -> tuple[int, bytes | None, int | None] | None:
             pass
     bucket = values.get(BUCKET_HEADER)
     return int(raw), run, int(bucket) if bucket is not None and bucket.isdigit() else None
+
+
+def to_watermark(opening: bytes) -> bool:
+    """Whether a request that opens with `opening` is one to the watermark's path as a server reads it: the second word
+    of its first line, past any line breaks before it, is `WATERMARK_PATH` once a scheme and authority before the path
+    and a query string or fragment after it are off and its percent-escapes are decoded. A server routes on that word
+    whatever the method before it and whatever follows it on the line, so this reads no more of the line, and reads
+    one `with_release` doesn't take for a request line. It reads only `opening`: a path that ends past it isn't
+    there."""
+    words = opening.lstrip(b"\r\n").replace(b"\r", b"\n").split(b"\n", 1)[0].split()
+    if len(words) < 2:
+        return False
+    origin = _ORIGIN.match(words[1])
+    path = re.split(rb"[?#]", words[1][origin.end() if origin else 0:], maxsplit=1)[0]
+    return unquote_to_bytes(path) == WATERMARK_PATH
 
 
 def watermark_head(run: bytes) -> bytes:

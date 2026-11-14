@@ -284,7 +284,8 @@ A spec-level reference for network accounting's timing channel:
   one chunked `POST /verity/watermark` carrying one line `t n l…` a tick, meaning bucket t has closed, the releases of
   buckets ≤ t are exactly N < n, and each l is one of bucket t's that its server connection lost. Line t goes out once
   each release of bucket t is written or lost. An engine that admits at a logical time in certifier buckets waits on
-  that line and on each N < n it doesn't name.
+  that line and on each N < n it doesn't name. A client's request that opens as one to that path is refused
+  (`release.to_watermark`, read on its first cell and, whole, at its `END`), unreleased.
   The headers and the stream never appear in a cell or record, so nothing certified changes;
 - the network certifier's cells as rows (`warden_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
   row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network certifier signs with the

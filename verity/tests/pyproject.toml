@@ -4,10 +4,21 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_periods_difftest.py"]
 # What the tests import of `verity`: the Site, the wire whose canonical JSON its digests are taken over, and what the
-# wire's test holds the wire to: the commitments' canonical JSON, and S1's LMS, the handshake's party keys. Each module
-# is named by its file, so it stays an input wherever it sits; the handshake's package is read when it is imported.
+# wire's test holds the wire to: the commitments' canonical JSON, and S1's LMS, the handshake's party keys; and the
+# monitoring periods (`verity/protocol.py`). Each module is named by its file, so it stays an input wherever it sits;
+# the handshake's package is read when it is imported.
+# The periods' difftest drives `core-periods-difftest` through the difftest harness (`verity_difftest`, which the
+# workspace installs), and `lake` reads the core interface's package, the harness's Lean and the base packages it
+# requires (under `verity/circuits` and `verity/commitments`), and these files of Flock's verifier (`Flock.Canon` and
+# what it imports, and the package's configuration).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/device.py",
-          "verity/channel.py", "verity/runtime/handshake.py",
+          "verity/channel.py", "verity/protocol.py", "verity/runtime/handshake.py",
           "verity/circuits", "verity/commitments", "verity/commitments/crypto",
-          "verity/runtime/__init__.py", "verity/hardware/__init__.py"]
+          "verity/runtime/__init__.py", "verity/hardware/__init__.py",
+          "tools/difftest", "verity/protocols/interface", "verity/protocols/proofs/flock/verifier/lakefile.toml",
+          "verity/protocols/proofs/flock/verifier/lake-manifest.json", "verity/protocols/proofs/flock/verifier/lean-toolchain",
+          "verity/protocols/proofs/flock/verifier/Flock/Field.lean", "verity/protocols/proofs/flock/verifier/Flock/Bytes.lean",
+          "verity/protocols/proofs/flock/verifier/Flock/Canon.lean"]

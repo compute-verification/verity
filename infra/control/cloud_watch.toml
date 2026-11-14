@@ -187,7 +187,8 @@ instances_command = ["python3.12", "/data/infra/store-index-src/src/research/pod
 machines_d = ["/workspace/steward/research-notes/machines.d", "~/.research/notes/machines.d"]   # each VM's rate_usd_per_hour
 
 [github]
-token_env = "GH_TOKEN"
+# prints the pod's read-only App token, the one every watcher reads GitHub with; run each pass, so its limit is the one watched
+token_command = ["/data/infra/gh_read_token.sh", "--cached"]
 remaining_share = 0.1
 
 [jobs]

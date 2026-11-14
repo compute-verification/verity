@@ -65,7 +65,7 @@
   research velocity [--since TIME] [--until TIME] [--line|--json] ...    # the velocity score, read from records: goals moved,
                                                  # landing, agents, machines, asks; never a gate (research/velocity.py)
   research metrics show [ID ...] [--owner HANDLE] [--json]   # the console's Metrics tab: each declared metric's latest value
-                                                 # (benchmarks/metrics.toml; research/metrics.py)
+                                                 # (each benchmark's metrics.toml; research/metrics.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the

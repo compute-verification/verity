@@ -225,7 +225,7 @@ from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, W
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
                     label_verifier, lands_on_mark, lean_change, listed, merged_tree, move_of, own_files,
                     priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
-from .queue import Retired, crossed, held_below, held_waits, lacked_moves, lacks_why
+from .queue import Retired, crossed, held_below, held_waits, lacked_moves, lacks_why, merge_main
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, ON_MAIN, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject,
@@ -3078,7 +3078,7 @@ class Loop:
                                         landed=now, done=False))
                 continue
             names = ", ".join(f"#{n}" for n in s.by)
-            fix = f"merge `main` into it once {names} {'is' if len(s.by) == 1 else 'are'} on it" if s.by else "merge `main` into it"
+            fix = (f"once {names} {'is' if len(s.by) == 1 else 'are'} on it, " if s.by else "") + merge_main("it", p.branch)
             text = None if key in t.told else (
                 f"#{p.number} at {p.head[:12]} isn't built on the verified queue's candidate on {base[:12]}: {s.why}. {s.fix}"
                 if s.fix else

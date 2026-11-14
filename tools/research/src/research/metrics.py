@@ -1,7 +1,9 @@
 """`research metrics`: the console's Metrics tab (/console/metrics) as text, from the site's GET /api/metrics.
 
-  research metrics show [ID ...] [--owner HANDLE] [--json]   each metric benchmarks/metrics.toml declares: its latest
-                                                            value, changes over 7 and 30 days, age and standing
+  research metrics show [ID ...] [--owner HANDLE] [--json]   each metric a metrics.toml on main declares (one beside
+                                                            each benchmark's script: benchmarks/README.md's
+                                                            "Metrics"): its latest value, changes over 7 and 30
+                                                            days, age and standing
 
 The page and this command read one door. It answers a site key with events:read (`$JOBS_TOKEN`, else
 ~/.research/jobs/token, as `research jobs` reads it, when it starts with vsk_) or else this agent's Cursor identity
@@ -114,7 +116,8 @@ def main(argv: list[str], route: Route | None = None) -> int:
         report = (route or Route(ns.url, _key())).call()
         missing = [i for i in ns.ids if i not in {m["id"] for m in report["metrics"]}]
         if missing:
-            raise SlackError(f"not declared in benchmarks/metrics.toml: {', '.join(missing)} (research metrics show lists them)")
+            raise SlackError(f"not declared in any metrics.toml on main: {', '.join(missing)} (research metrics show lists "
+                             "them; benchmarks/README.md's \"Metrics\" says where a row goes)")
         report["metrics"] = [m for m in report["metrics"]
                              if (not ns.ids or m["id"] in ns.ids) and (not ns.owner or m["owner"] in ns.owner)]
         print(json.dumps(report, indent=1, ensure_ascii=False) if ns.json else show(report))
