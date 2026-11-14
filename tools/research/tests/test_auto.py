@@ -1586,11 +1586,11 @@ def test_a_launch_that_names_its_run_is_refused_once_and_says_what_places_it_aga
             f"placed on another machine") in capsys.readouterr().err
 
 
-def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_asker_and_no_other_run_does(
+def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_asker_and_one_it_queues_does_not(
         tmp_path, monkeypatch, capsys, _no_asker_left):
     """A run `--on auto` sent to a pool waits there however soon another machine's pool would start it, unless a twin of it
     can take it from the line: so it carries a pair from the start, its own id, and its launch leaves an asker that holds
-    what it shipped. A run `--on auto` queues on node 2, and a run named to a machine, carry none and leave none."""
+    what it shipped. A run `--on auto` queues on node 2 carries none and leaves none."""
     docs = {N2: share(waiters=56), CPU1: pool(slot("r0"))}
     launched, _ = _on_auto(monkeypatch, tmp_path, docs, {CPU1: None, N2: None, "m": None})
     assert main(["run", "--on", "auto", "--mem-gb", "24", "--mem-limit-gb", "300", "--as", "infra", "--env", "K=V", "--", "pytest", "-q"]) == 0
@@ -1612,11 +1612,51 @@ def test_a_pool_run_auto_places_carries_its_own_id_as_its_pair_and_leaves_an_ask
     docs[N2] = share(free=48)
     assert main(["run", "--on", "auto", "--", "pytest", "-q"]) == 0
     assert launched[0]["machine_name"] == N2 and "--twin" not in launched[0]["command"] and _no_asker_left == []
-    del launched[:]
-    assert main(["run", "--on", "m", "--project", "p", "--source", ".", "--pool", "research", "--as", "infra", "--timeout", "40m",
-                 "--", "pytest", "-q"]) == 0
-    assert "--twin" not in launched[0]["command"] and _no_asker_left == [], "a run named to a machine never moves"
+
+
+NAMED = ["run", "--on", "m", "--project", "p", "--source", ".", "--as", "infra", "--timeout", "40m"]
+
+
+def test_a_run_sent_by_name_to_a_research_pool_carries_its_pair_and_leaves_an_asker_unless_its_launch_says_stay(
+        tmp_path, monkeypatch, capsys, _no_asker_left):
+    """A run sent by name to a machine's research pool waits there as long as one `--on auto` placed while another machine's
+    pool has a place: 102 of the 326 runs that did so over two days. Unless its launch says this machine and no other
+    (`--stay`), it carries a pair and leaves an asker, which asks `auto` for a slot of any size, the memory it asked and its
+    Lean pool, as slot.py takes it on its own machine."""
+    launched, _ = _on_auto(monkeypatch, tmp_path, {N2: share(waiters=56), CPU1: pool(slot("r0"))}, {"m": None})
+    assert main([*NAMED, "--pool", "research", "--mem-gb", "24", "--", "pytest", "-q"]) == 0
+    (kw,) = launched
+    opts = kw["command"][:kw["command"].index("--")]
+    assert opts[opts.index("--twin") + 1] == kw["run_id"], "its pair is its own run id"
+    (m,) = _no_asker_left
+    assert (m["run"], m["home"], m["pool"], m["cpus"], m["mem_gb"], m["lean"]) == (kw["run_id"], "m", "research", 1, 24, None)
+    assert kw["auto"] is None, "nothing records it as placed by `--on auto`"
+    assert "an asker of this launch stays on this VM (pid 4242)" in capsys.readouterr().err
+    del launched[:], _no_asker_left[:]
+    lean = ["--", "python3", "tools/verity/lean/lean_changed.py", "--records", "security"]
+    assert main([*NAMED, "--pool", "research", *lean]) == 0
+    assert _no_asker_left[0]["lean"] == "build" and _no_asker_left[0]["mem_gb"] == 0, "a Lean run asks for its Lean pool too"
+
+
+@pytest.mark.parametrize("how", [["--pool", "research", "--stay"], ["--pool", "research", "--gpus", "1"], ["--pool", "proofs"]],
+                         ids=["it-says-stay", "it-asks-gpus", "a-pool-auto-reads-none-of"])
+def test_a_run_sent_by_name_stays_where_its_launch_says_so_asks_gpus_or_waits_in_a_pool_auto_does_not_read(
+        tmp_path, monkeypatch, capsys, _no_asker_left, how):
+    """A run that fills or reads its machine's own caches, or whose caller reads its output there by its id, says `--stay`;
+    one that asks GPUs needs that machine's (`auto` reads none); a lane pool is read by no `auto`, so no place could be seen
+    to stand there. Each carries no pair and leaves no asker."""
+    launched, _ = _on_auto(monkeypatch, tmp_path, {N2: share(waiters=56), CPU1: pool(slot("r0"))}, {"m": None})
+    assert main([*NAMED, *how, "--", "pytest", "-q"]) == 0
+    assert "--twin" not in launched[0]["command"] and _no_asker_left == []
+    assert "--stay" not in [*launched[0]["harness_args"], *launched[0]["command"]], "the launch's word, which no harness reads"
     assert "asker" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("where", [["--on", "auto"], ["--queue", "--source", ".", "--project", "p"], []], ids=["auto", "queue", "here"])
+def test_stay_is_refused_without_a_machine_named_by_its_name(tmp_path, monkeypatch, capsys, where):
+    _on_auto(monkeypatch, tmp_path, {N2: share(waiters=56), CPU1: pool(slot("r0"))}, {})
+    assert main(["run", *where, "--stay", "--", "pytest", "-q"]) == 2
+    assert "--stay is for --on MACHINE, a machine named by its name" in capsys.readouterr().err
 
 
 def test_a_launch_that_finds_its_vm_holding_all_the_askers_it_may_goes_through_and_leaves_none(tmp_path, monkeypatch, capsys, _no_asker_left):

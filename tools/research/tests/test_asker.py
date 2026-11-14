@@ -1,4 +1,4 @@
-"""`research.asker`: a pool run `--on auto` placed that waits behind reserved memory asks again and moves. Its asker's loop
+"""`research.asker`: a pool run that waits, whatever on, asks again and moves where a place stands. Its asker's loop
 runs here on an injected clock over a world of run summaries the test changes by events; the launcher's two commands run
 through the tree's slot.py; and `research status`, `--wait` and `research cancel` follow the run to its twin on machines that
 are directories reached through `sh -c`."""
@@ -25,6 +25,9 @@ RUN, TWIN = "r20261001-090000-aaaa", "r20261001-091000-bbbb"
 T0 = datetime(2026, 10, 1, 9, 0, tzinfo=UTC).timestamp()
 SINCE = "2026-10-01T09:00:00Z"
 MEMORY = f"every check slot is taken (r0: 12{auto.MEMORY_BLOCK}, under the 40 GB a check here may peak at)"
+BUSY = "every check slot is taken (r0: busy; r1: busy)"
+AHEAD = "3 check(s) ahead in line"
+WINDOW = "every check slot is taken (r0: window 2026-10-01T08:50:00Z (480 min) is open or starts within 1 min)"
 STARTS = f"{B}'s research pool has the most places for it (2): a slot is free there now"
 NOWHERE = "no other machine's pool would start it now (the shortest line per run that fits is vy-b's research pool)"
 UNREACHED = f"twin {RUN}@{A} can't be claimed (ssh to {A} (exit 255): timed out), so its twin there runs instead"
@@ -49,13 +52,13 @@ def left(why: str, cls: str | None = None) -> dict:
 
 class World:
     """The run RUN waiting on A and whatever its asker makes of it: `asker.see` reads ``runs``, `asker.ask` gives the next of
-    ``answers`` and `asker.launch` puts the twin in ``runs``, waiting. ``at[minute]`` runs when the clock reaches that minute
-    of the asker's life, before its look."""
+    ``answers`` (and ``seen`` keeps the machine each ask was told the last one found) and `asker.launch` puts the twin in
+    ``runs``, waiting. ``at[minute]`` runs when the clock reaches that minute of the asker's life, before its look."""
 
     def __init__(self, tmp_path: Path, monkeypatch, wait_s: float = 4 * 3600):
         self.root, self.t, self.slept = tmp_path / "runs", T0, []
         self.runs, self.reached, self.at = {RUN: waiting()}, True, {}
-        self.answers, self.asked, self.launched, self.cancelled = [], [], [], []
+        self.answers, self.asked, self.seen, self.launched, self.cancelled = [], [], [], [], []
         self.m = {"run": RUN, "root": str(self.root), "home": A, "pool": "research", "git": "/no/repo", "commit": "c" * 40,
                   "cpus": 4, "mem_gb": 16, "lean": None, "wait_s": wait_s, "sends": {}, "launch": {}}
         monkeypatch.setattr(asker, "see", lambda d: (json.loads(json.dumps(self.runs[d.name])), self.reached))
@@ -76,9 +79,10 @@ class World:
         if (event := self.at.pop(self.minute(), None)):
             event()
 
-    def ask(self, source: tuple, m: dict, tried: dict):
+    def ask(self, source: tuple, m: dict, tried: dict, seen: str | None = None):
         assert source == (self.root.parent / "files", auto.READS), "an ask reads the few files `auto.read` does, in no checkout"
         self.asked.append((self.minute(), dict(tried)))
+        self.seen.append(seen)
         return self.answers.pop(0)
 
     def launch(self, source: Path, m: dict, twin: dict, wait_s: float) -> dict:
@@ -101,12 +105,12 @@ def world(tmp_path, monkeypatch):
 
 # ---- it moves, or stays -------------------------------------------------------------------------------------------------------
 
-def test_a_run_that_waits_on_memory_asks_again_at_minute_one_and_ten_and_moves_to_the_pool_that_would_start_it_now(world):
+def test_a_run_asks_again_at_minute_one_and_ten_and_moves_where_the_place_it_found_still_stands_two_minutes_later(world):
     """A run placed where a slot was free can wait an hour behind memory other runs reserve while another machine's pool
-    stands free. At minute 1 of its wait, and at minute 10, its asker asks `auto` again and launches its late twin where it
-    would start now; the twin takes a slot there, and both records say from where, why and after how long, each naming the
-    other."""
-    world.answers = [(None, NOWHERE), ((B, "research"), STARTS)]
+    stands free. At minute 1 of its wait, and at minute 10, its asker asks `auto` again; the place it finds at minute 10 it
+    asks for again at minute 12, and finding it there still launches its late twin there; the twin takes a slot there, and
+    both records say from where, why, after how long and when the place was seen and seen again, each naming the other."""
+    world.answers = [(None, NOWHERE), ((B, "research"), STARTS), ((B, "research"), STARTS)]
 
     def twin_takes_a_slot():
         world.runs.update({world.launched[0]["run"]: held(), RUN: left(f"its twin took a slot first (run {world.launched[0]['run']})")})
@@ -114,24 +118,58 @@ def test_a_run_that_waits_on_memory_asks_again_at_minute_one_and_ten_and_moves_t
     world.at[20] = twin_takes_a_slot
     why = world.run()
     (tw,) = world.launched
-    assert world.asked == [(1, {}), (10, {})], "an ask at minute 1 of the wait, and one at minute 10"
-    assert (tw["machine"], tw["pool"], tw["from"], tw["of"], tw["why"], tw["after_min"]) == (B, "research", A, RUN, MEMORY, 10)
-    assert tw["said"] == f"moved from {A}'s research pool, where {RUN} waited 10 min ({MEMORY}), to {B}'s, which would start it now ({STARTS})"
+    assert world.asked == [(1, {}), (10, {}), (12, {})], "an ask at minute 1 of the wait, one at minute 10 and its second at 12"
+    assert world.seen == [None, None, B], "the ask at 12 is told which machine's place the one at 10 found"
+    assert (tw["machine"], tw["pool"], tw["from"], tw["of"], tw["why"], tw["after_min"]) == (B, "research", A, RUN, MEMORY, 12)
+    assert tw["stood"] == ["2026-10-01T09:10:00Z", "2026-10-01T09:12:00Z"]
+    assert tw["said"] == (f"moved from {A}'s research pool, where {RUN} waited 12 min ({MEMORY}), to {B}'s, where a place stood from "
+                          f"2026-10-01T09:10:00Z to 2026-10-01T09:12:00Z ({STARTS})")
     assert why == f"it moved: its twin {tw['run']} took a slot on {B}"
     rec = world.record()
     assert (rec["twin"]["run"], rec["twin"]["state"], rec["ended"]) == (tw["run"], "started", {"at": "2026-10-01T09:20:00Z", "why": why})
     assert rec["asks"] == [{"at": "2026-10-01T09:01:00Z", "after_min": 1, "said": NOWHERE},
-                           {"at": "2026-10-01T09:10:00Z", "after_min": 10, "said": STARTS}] and rec["next"] is None
-    assert world.slept == [60, 540, 0, 600], "it looks again as soon as the twin is launched, then at the next ten minutes"
+                           {"at": "2026-10-01T09:10:00Z", "after_min": 10, "said": STARTS,
+                            "stands": f"not yet: {B}'s research pool is asked again in 2 min"},
+                           {"at": "2026-10-01T09:12:00Z", "after_min": 12, "said": STARTS}] and rec["next"] is None
+    assert world.slept == [60, 540, 120, 0, 480], "it looks again as soon as the twin is launched, then at the next ten minutes"
 
 
-def test_a_run_told_it_starts_now_that_found_the_memory_gone_moves_at_minute_one(world):
+def test_a_run_told_it_starts_now_that_found_the_memory_gone_moves_at_minute_three(world):
     """Launches that ask `auto` in the same seconds are each told of the same place, and the last ones in find its memory
     gone: such a run waits on memory from its first minute, beside machines with room, and need not wait ten to ask."""
-    world.answers = [((B, "research"), STARTS)]
+    world.answers = [((B, "research"), STARTS)] * 2
     world.at[10] = lambda: world.runs.update({world.launched[0]["run"]: held()})
     world.run()
-    assert world.asked == [(1, {})] and world.launched[0]["after_min"] == 1 and world.slept == [60, 0, 540]
+    assert world.asked == [(1, {}), (3, {})] and world.launched[0]["after_min"] == 3 and world.slept == [60, 120, 0, 420]
+
+
+@pytest.mark.parametrize("why", [MEMORY, BUSY, AHEAD, WINDOW, None], ids=["memory", "busy-slots", "ahead-in-line", "a-window", "no-reason-yet"])
+def test_a_run_moves_whatever_it_waits_on(world, why):
+    """A run kept in one machine's line while another's pool has a place loses the same minutes whether its slots are held,
+    the line ahead holds it, a window closes its slots or memory does: the asker moves it however it waits."""
+    world.runs[RUN] = waiting(why)
+    world.answers = [((B, "research"), STARTS)] * 2
+    world.at[10] = lambda: world.runs.update({world.launched[0]["run"]: held()})
+    assert world.run() == f"it moved: its twin {world.launched[0]['run']} took a slot on {B}"
+    assert world.asked == [(1, {}), (3, {})] and world.launched[0]["why"] == (why or "no reason recorded yet")
+
+
+@pytest.mark.parametrize(("second", "third", "moved_at", "to"), [
+    ((None, NOWHERE), (None, NOWHERE), None, None),
+    (((C, "research"), "c"), ((C, "research"), "c"), 5, C),
+    (((C, "research"), "c"), (None, NOWHERE), None, None),
+], ids=["gone-by-its-second-ask", "gone-and-another-found-that-stands", "gone-and-another-found-that-goes"])
+def test_a_place_seen_once_moves_nothing_only_one_found_again_two_minutes_later_does(tmp_path, monkeypatch, second, third, moved_at, to):
+    """A place one ask finds may be one that the launches of the same minute each read and one of them takes: a twin sent
+    there waits in a second line. Only a place the ask two minutes later finds there still stands; a second ask that finds
+    another machine's place starts that one's two minutes."""
+    world = World(tmp_path, monkeypatch, wait_s=8 * 60)
+    world.answers = [((B, "research"), STARTS), second, third]
+    world.at[8] = lambda: world.runs.update({RUN: held()})
+    world.run()
+    assert [minute for minute, _ in world.asked] == [1, 3, 5][:2 + (second[0] is not None)]
+    assert world.seen == [None, B, C][:len(world.asked)], "each ask is told the place the last one found"
+    assert [(tw["machine"], world.asked[-1][0]) for tw in world.launched] == ([(to, moved_at)] if to else [])
 
 
 def test_it_asks_every_ten_minutes_and_stays_while_no_other_machines_pool_would_start_it_now(tmp_path, monkeypatch):
@@ -144,43 +182,65 @@ def test_it_asks_every_ten_minutes_and_stays_while_no_other_machines_pool_would_
     assert world.slept == [60, 540, 600, 600, 300], "it never outlives the first's wait for a slot"
 
 
-def test_it_asks_only_while_the_run_waits_and_its_last_reason_is_memory_and_its_machine_answers(world):
-    """A run behind others in line, or one whose machine doesn't answer, is not known to wait on memory: no ask. Nor is one
-    that has just left its line, whose record still names memory while its status still says it runs: a twin launched
-    then would run a job whose wait is over."""
+def test_an_ask_told_the_place_the_last_one_found_answers_with_it_while_it_stands_whatever_else_has_more(tmp_path, monkeypatch):
+    """`auto.elsewhere` answers with the pool with the most places, which at the second ask may be another machine's while
+    the first's place is there still: that place has stood, and it is the one the run moves to. One that is gone leaves the
+    answer to all the machines, from the same reading."""
+    docs = {A: "a", B: "b", C: "c"}
+    reads, calls = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: reads.append(kw) or dict(docs))
+
+    def elsewhere(d, home, cpus, mem_gb, lean_pool=None):
+        calls.append(sorted(d))
+        return ((C, "research"), "c has the most") if C in d else ((B, "research"), "b") if d.get(B) == "b" else (None, "none")
+
+    monkeypatch.setattr(auto, "elsewhere", elsewhere)
+    m = {"cpus": 1, "mem_gb": 0, "lean": None, "home": A}
+    assert asker.ask(tmp_path, m, {}) == ((C, "research"), "c has the most") and calls == [[A, B, C]]
+    del calls[:]
+    assert asker.ask(tmp_path, m, {}, B) == ((B, "research"), "b") and calls == [[B]]
+    del calls[:]
+    docs[B] = "gone"
+    assert asker.ask(tmp_path, m, {}, B) == ((C, "research"), "c has the most") and calls == [[B], [A, B, C]]
+    assert len(reads) == 3, "one reading of the machines an ask"
+
+
+def test_it_asks_only_while_the_run_waits_and_its_machine_answers(world):
+    """A run whose machine doesn't answer is not known to wait: no ask. Nor is one that has just left its line, whose record
+    still names its reason while its status still says it runs: a twin launched then would run a job whose wait is over.
+    A place the last ask found stands only by the next ask's finding it, so a look that can't ask forgets it."""
     over = f"no check slot within --wait-max 14400 s ({MEMORY})"
-    world.runs[RUN] = waiting("3 check(s) ahead in line")
-    world.at[10] = lambda: setattr(world, "reached", False)
-    world.at[20] = lambda: (world.runs.update({RUN: waiting()}))
-    world.at[30] = lambda: setattr(world, "reached", True)
-    world.at[40] = lambda: world.runs.update({RUN: waiting(None)})
-    world.at[50] = lambda: world.runs.update({RUN: {**left(over), "state": "running"}})
-    world.at[60] = lambda: world.runs.update({RUN: left(over)})
-    world.answers = [(None, NOWHERE)]
+    world.runs[RUN] = waiting(AHEAD)
+    world.at[3] = lambda: setattr(world, "reached", False)
+    world.at[10] = lambda: setattr(world, "reached", True)
+    world.at[20] = lambda: world.runs.update({RUN: {**left(over), "state": "running"}})
+    world.at[30] = lambda: world.runs.update({RUN: left(over)})
+    world.answers = [((B, "research"), STARTS), (None, NOWHERE)]
     assert world.run() == f"it ended on {A} without starting (failed: {over})"
-    assert [minute for minute, _ in world.asked] == [30], "in line at 1 and 10, unreachable at 20, no reason yet at 40, gone at 50"
+    assert [minute for minute, _ in world.asked] == [1, 10], "unreachable at 3, gone at 20"
+    assert world.seen == [None, None] and world.launched == [], "the place found at 1 was not asked for again, and moved nothing"
 
 
 def test_one_twin_is_live_at_a_time_and_a_machine_whose_twin_left_unrun_is_asked_for_no_other(world):
     """While a twin waits, a second one would be a third waiter; and a twin that couldn't reach the first's machine to claim
     the pair leaves unrun, as the next one on that machine would."""
-    world.answers = [((B, "research"), STARTS), ((C, "research"), "c")]
+    world.answers = [((B, "research"), STARTS)] * 2 + [((C, "research"), "c")] * 2
     world.at[40] = lambda: world.runs.update({world.launched[0]["run"]: left(UNREACHED)})
     world.at[60] = lambda: world.runs.update({world.launched[1]["run"]: held()})
     why = world.run()
     first, second = world.launched
-    assert [minute for minute, _ in world.asked] == [1, 40], "no ask at 10, 20 or 30, while its twin waited"
-    assert world.asked[1][1] == {B: f"a twin of {RUN} left its line unrun ({UNREACHED})"}, "what the second ask reads of B"
+    assert [minute for minute, _ in world.asked] == [1, 3, 40, 42], "no ask at 10, 20 or 30, while its twin waited"
+    assert world.asked[2][1] == {B: f"a twin of {RUN} left its line unrun ({UNREACHED})"}, "what the third ask reads of B"
     assert (first["machine"], second["machine"]) == (B, C) and why == f"it moved: its twin {second['run']} took a slot on {C}"
     assert world.record()["twin"]["run"] == second["run"] and world.cancelled == []
 
 
-@pytest.mark.parametrize(("wait_min", "twin_s"), [(240, 600), (5, 240)], ids=["ten-minutes", "what-is-left-of-the-firsts-wait"])
+@pytest.mark.parametrize(("wait_min", "twin_s"), [(240, 600), (5, 120)], ids=["ten-minutes", "what-is-left-of-the-firsts-wait"])
 def test_a_twin_waits_in_its_line_no_longer_than_ten_minutes_or_what_is_left_of_the_firsts_wait(tmp_path, monkeypatch, wait_min, twin_s):
     """A twin is sent where the run would start now. One that waits there after all (another run took the place first) is a
     second waiter for the run's whole wait, and while it is live the run asks no more: so it leaves that line by itself."""
     world = World(tmp_path, monkeypatch, wait_s=wait_min * 60)
-    world.answers = [((B, "research"), STARTS)]
+    world.answers = [((B, "research"), STARTS)] * 2
     world.at[10] = lambda: world.runs.update({RUN: held()})
     world.run()
     assert world.launched[0]["wait_s"] == twin_s
@@ -189,7 +249,7 @@ def test_a_twin_waits_in_its_line_no_longer_than_ten_minutes_or_what_is_left_of_
 def test_a_twin_is_recorded_before_it_is_launched_so_an_asker_that_dies_then_leaves_it_named(world, monkeypatch):
     """An asker that died between launching a twin and recording it would leave a run on another machine that no record
     of the first names: `research status` and `research cancel` of the first would not find it."""
-    world.answers = [((B, "research"), STARTS)]
+    world.answers = [((B, "research"), STARTS)] * 2
     real = world.launch
 
     def launch(source, m, twin, wait_s):
@@ -212,7 +272,7 @@ def test_no_twin_is_launched_while_its_record_can_not_be_copied_beside_the_first
     """Another VM follows a run to its twin by the copy of the asker's record beside the first's request, and the launching
     VM may be gone a minute later: a twin launched while that copy can't be written is one no other VM could follow or
     cancel. The asker's log says why, and its next ask is of the same machine, which refused nothing."""
-    world.answers = [((B, "research"), STARTS)] * 2
+    world.answers = [((B, "research"), STARTS)] * 4
     beside = world.root.parent / A / "requests" / RUN / asker.FILE
     monkeypatch.setattr(asker, "_beside", lambda run_dir: (["sh", "-c"], str(beside)))
     copies, launch, ssh_run = [], world.launch, remote.ssh_run
@@ -232,23 +292,24 @@ def test_no_twin_is_launched_while_its_record_can_not_be_copied_beside_the_first
     world.at[20] = lambda: world.runs.update({world.launched[0]["run"]: held()})
     world.run()
     (tw,) = world.launched
-    assert world.asked == [(1, {}), (10, {})] and tw["at"] == "2026-10-01T09:10:00Z"
+    assert world.asked == [(1, {}), (3, {}), (10, {}), (12, {})] and tw["at"] == "2026-10-01T09:12:00Z"
+    assert world.seen == [None, B, None, B], "a launch that failed forgets the place: it stands again only by two asks"
     assert [(c["run"], c["state"]) for c in copies] == [(tw["run"], "launching")], "the copy named the twin when its launch began"
-    unsent, sent = world.record()["asks"]
+    _, unsent, _, sent = world.record()["asks"]
     assert unsent["error"].startswith(f"OSError: its record could not be copied beside its request on {A} ({lost}") and "error" not in sent
     assert f"asker: {RUN}'s record was not copied beside its request on its machine ({lost}" in capsys.readouterr().err
     assert json.loads(beside.read_text()) == world.record()
 
 
 def test_a_twin_whose_launch_fails_is_recorded_and_the_run_keeps_its_place_and_asks_elsewhere(world, monkeypatch):
-    world.answers = [((B, "research"), STARTS), ((C, "research"), "c")]
+    world.answers = [((B, "research"), STARTS)] * 2 + [((C, "research"), "c")] * 2
     real = world.launch
     monkeypatch.setattr(asker, "launch", lambda source, m, twin, wait_s: real(source, m, twin, wait_s) if twin["machine"] == C else
                         (_ for _ in ()).throw(remote.Refused("no ssh")))
     world.at[20] = lambda: world.runs.update({RUN: held()})
     assert world.run().startswith(f"it started on {A}, and its twin ")
-    assert [(minute, list(tried)) for minute, tried in world.asked] == [(1, []), (10, [B])]
-    assert world.record()["asks"][0]["error"] == "Refused: no ssh" and world.slept == [60, 540, 0, 600]
+    assert [(minute, list(tried)) for minute, tried in world.asked] == [(1, []), (3, []), (10, [B]), (12, [B])]
+    assert world.record()["asks"][1]["error"] == "Refused: no ssh" and world.slept == [60, 120, 420, 120, 0, 480]
 
 
 @pytest.mark.parametrize("change", [lambda sent: sent.write_text('{"edited": true}'), Path.unlink], ids=["edited", "removed"])
@@ -287,13 +348,14 @@ def test_the_asker_ends_when_the_run_has_started_ended_or_been_cancelled_and_a_c
     """An asker that outlived its run would ask for, and could move, a run that is over; a cancelled run whose twin still
     waited would run after all. Its record's twin stays the run (``live``) only where it may still run: `research status`
     and `research cancel` follow no twin that can't."""
-    world.answers = [((B, "research"), STARTS) if twin else (None, NOWHERE)]
+    world.answers = [((B, "research"), STARTS)] * 2 if twin else [(None, NOWHERE)]
     world.at[10] = lambda: world.runs.update({RUN: first, **({world.launched[0]["run"]: twin} if twin else {})})
     said = world.run()
     name = world.launched[0]["run"] if twin else "TWIN"
     assert said == why.replace("TWIN", name)
     assert world.cancelled == [(c.replace("TWIN", name), r) for c, r in cancelled]
-    assert world.minute() == 10 and [minute for minute, _ in world.asked] == [1], "it ends at the look that finds it, and asks no more"
+    assert world.minute() == 10 and [minute for minute, _ in world.asked] == [1, 3][:1 + bool(twin)], \
+        "it ends at the look that finds it, and asks no more"
     rec = world.record()
     assert rec["ended"] == {"at": "2026-10-01T09:10:00Z", "why": said} and rec["next"] is None
     assert not asker.alive(rec, world.t)
@@ -303,11 +365,11 @@ def test_the_asker_ends_when_the_run_has_started_ended_or_been_cancelled_and_a_c
 
 
 def test_the_first_starting_while_its_twin_is_launched_ends_the_asker_at_once(world, monkeypatch):
-    world.answers = [((B, "research"), STARTS)]
+    world.answers = [((B, "research"), STARTS)] * 2
     real = world.launch
     monkeypatch.setattr(asker, "launch", lambda *a: (real(*a), world.runs.update({RUN: held()}))[0])
     assert world.run() == f"it started on {A}, and its twin {world.launched[0]['run']} leaves {B}'s line"
-    assert world.slept == [60, 0] and world.cancelled == []
+    assert world.slept == [60, 120, 0] and world.cancelled == []
 
 
 # ---- never both places, never neither: the launcher's commands through slot.py ------------------------------------------------
@@ -412,7 +474,8 @@ def test_the_twin_is_the_same_request_from_the_shipped_commit_on_the_other_machi
             "mem_gb": None, "mem_wait_s": 0.0, "custody_ttl": "6h", "preflight_tool": None, "job_user": None,
             "job_namespaces": [], "gpus": None, "store_read": False}
     m = json.loads(json.dumps({"run": RUN, "root": str(tmp_path / "runs"), "home": A, "launch": what, "sends": {}}))
-    twin = {"run": TWIN, "machine": B, "pool": "research", "from": A, "of": RUN, "why": MEMORY, "after_min": 10, "said": "moved"}
+    twin = {"run": TWIN, "machine": B, "pool": "research", "from": A, "of": RUN, "why": MEMORY, "after_min": 10, "said": "moved",
+            "stood": ["2026-10-01T09:08:00Z", "2026-10-01T09:10:00Z"]}
     seen = []
 
     def launch(**kw):
@@ -432,7 +495,9 @@ def test_the_twin_is_the_same_request_from_the_shipped_commit_on_the_other_machi
     assert (kw["run_id"], kw["machine_name"], kw["local_dir"], kw["queue"]) == (TWIN, B, tmp_path / "runs" / TWIN, None)
     assert kw["command"] == slot_only.late_twin(what["command"], A, 13800) and kw["sends"] == []
     assert kw["auto"] == {"machine": B, "pool": "research", "said": ["moved"],
-                          "moved": {"from": A, "of": RUN, "why": MEMORY, "after_min": 10}}
+                          "moved": {"from": A, "of": RUN, "why": MEMORY, "after_min": 10,
+                                    "stood": ["2026-10-01T09:08:00Z", "2026-10-01T09:10:00Z"]}}, \
+        "where it waited, why, after how long, and when the place it moved to was seen and seen again"
     rest = ("project", "harness_args", "cwd", "env", "exclusive", "mem_gb", "mem_wait_s", "custody_ttl", "preflight_tool",
             "job_user", "gpus", "store_read")
     assert {k: kw[k] for k in rest} == {k: what[k] for k in rest} and kw["job_namespaces"] == ()
@@ -660,8 +725,8 @@ def test_status_says_whether_an_asker_is_alive_for_a_waiting_run_or_that_it_will
     assert auto_lines() == [f"auto waits on memory on {A}; no asker is alive, so it will not move by itself"]
     _record(machines)
     alive = [f"auto an asker is alive on {VM} since {SINCE}; it looked last at 2026-10-01T09:10:00Z and looks next at "
-             "2999-01-01T00:00:00Z: while the run waits on memory it asks `auto` again, and moves the run to a pool that would start "
-             "it now"]
+             "2999-01-01T00:00:00Z: while the run waits it asks `auto` again, and moves the run to a pool where a place has stood "
+             "2 min"]
     assert auto_lines() == alive
     gone = subprocess.Popen(["true"])
     gone.wait()
@@ -688,12 +753,14 @@ def test_status_follows_a_run_that_moved_to_its_twin_and_both_say_from_where_why
     moved = {"from": A, "of": RUN, "why": MEMORY, "after_min": 10}
     _on(machines, B, TWIN, "running", {"state": "held", "since": SINCE, "twin": f"{RUN}@{A}", "slot": "r0"},
         auto={"machine": B, "pool": "research", "said": ["moved"], "moved": moved})
-    _record(machines, twin=_twin("started"), next=None, ended={"at": "2026-10-01T09:20:00Z", "why": "it moved"})
+    _record(machines, twin=_twin("started", stood=["2026-10-01T09:08:00Z", "2026-10-01T09:10:00Z"]), next=None,
+            ended={"at": "2026-10-01T09:20:00Z", "why": "it moved"})
     assert cli.main(["status", RUN, "--runs-dir", str(machines / "here")]) == 0
     out = [ln.strip() for ln in capsys.readouterr().out.splitlines()]
     rows = [ln.split()[:2] for ln in out if ln.startswith("r2026")]
     assert rows == [[RUN, "failed"], [TWIN, "running"]], "the run's row, then its twin's"
-    assert f"auto moved to {B} as {TWIN} after 10 min waiting on {A} ({MEMORY})" in out
+    assert (f"auto moved to {B} as {TWIN} after 10 min waiting on {A} ({MEMORY}), where a place stood from 2026-10-01T09:08:00Z "
+            "to 2026-10-01T09:10:00Z") in out
     assert f"auto the late twin of {RUN}, which waited 10 min on {A} ({MEMORY})" in out
     assert cli.main(["status", RUN, "--runs-dir", str(machines / "here"), "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
@@ -732,7 +799,7 @@ def test_wait_follows_the_run_to_its_twin_and_returns_the_twins_end(machines, ca
                                        clock=lambda: 0.0)
     assert wait(RUN) == 0
     err = capsys.readouterr().err
-    assert f"run {RUN} left its line without starting (failed); its late twin {TWIN} is the run now" in err
+    assert f"run {RUN} left its line without starting (failed); its late twin {TWIN} on {B} is the run now" in err
     assert f"research: run {TWIN} done (rc 0)" in err
     # a first that took its slot and failed is the run: a twin its record still names is not followed
     (machines / A / "runs" / RUN / "slot.json").write_text(json.dumps({**FIRST, "state": "held", "slot": "r0"}))

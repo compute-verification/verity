@@ -5341,11 +5341,12 @@ class LakeBuild:
     def _remote(self, node: str, wt: Path, files: list[str], left: float, wait: bool = True) -> tuple[int | None, str, str]:
         """`LEAN_BUILDER --build` as a `research run` of ``wt``'s HEAD on ``node``, waited for within ``left`` (without ``wait``,
         `--no-wait`: no free `build` slot there builds nothing); its exit status (None: it didn't end), its stdout, and where it
-        ran."""
+        ran. It stays on ``node`` (`--stay`): it builds that node's warm tree, and its output is read there by its run id."""
         from . import runs as R
 
         secs = f"{max(left - 10, 1):.0f}"
-        argv = [sys.executable, "-m", "research", "run", "--on", node, *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
+        argv = [sys.executable, "-m", "research", "run", "--on", node, "--stay",
+                *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
                 *(["--as", self.by] if self.by else []), "--project", "verity", "--source", str(wt), "--cwd", "clone",
                 "--timeout", f"{secs}s", "--wait", "--wait-every", "5", "--wait-max", secs, "--",
                 "python3", LEAN_BUILDER, *([] if wait else ["--no-wait"]), "--build", *files]

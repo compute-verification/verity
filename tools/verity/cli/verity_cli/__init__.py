@@ -58,6 +58,8 @@ USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P]
          "verity lean deployed [--rev REV] [--today YYYY-MM-DD]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
+#: `research run --wait`'s line when the run moved to its late twin on another machine, which is then the run
+MOVED = re.compile(r"^research: run \S+ left its line without starting \S+; its late twin (\S+) on (\S+) is the run now", re.M)
 #: Flock's Lean verifier, which `verity verify proof` runs: its Lake package and the executable `lake build` writes there
 VERIFIER = "verity/protocols/proofs/flock/verifier"
 VERIFY_PROOF = "flock-verify"
@@ -241,7 +243,7 @@ def _lean(args: list[str]) -> int:
     if not (m := LAUNCHED.search("".join(said))):
         print(f"verity lean try: `research run` exited {rc} without starting a run", file=sys.stderr)
         return rc or 1
-    run_id, machine = m.groups()
+    run_id, machine = moved[-1] if (moved := MOVED.findall("".join(said))) else m.groups()
     subprocess.run([*research, "fetch", run_id, "--on", machine, "--all"], cwd=ROOT, stdout=subprocess.DEVNULL)
     d = Path(os.environ.get("RESEARCH_RUNS", Path.home() / ".research" / "runs")).expanduser() / run_id
     for name, to in (("stdout.log", sys.stdout), ("stderr.log", sys.stderr)):

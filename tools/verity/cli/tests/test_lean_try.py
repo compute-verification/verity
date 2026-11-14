@@ -147,9 +147,15 @@ def test_refuses_a_checkout_that_isnt_verity(tmp_path, monkeypatch):
         verity_cli._tree("X.lean")
 
 
-def test_try_on_auto_fetches_the_run_from_the_machine_it_landed_on(checkouts, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize(("moved", "run_id", "machine"), [
+    ([], "r1", "m-7"),
+    (["research: run r1 left its line without starting (failed); its late twin r2 on m-9 is the run now, and this waits for it\n"],
+     "r2", "m-9"),
+], ids=["it-ran-where-it-landed", "it-moved-to-its-late-twin"])
+def test_try_on_auto_fetches_the_run_from_the_machine_it_landed_on(checkouts, tmp_path, monkeypatch, capsys, moved, run_id, machine):
     """`--on auto` names no machine and no pool: `research run --on auto` places the run, and its launch line says where, which
-    is where the run's logs are fetched from."""
+    is where the run's logs are fetched from; a run that moved to its late twin on another machine is fetched from there, as
+    the twin, whose logs are the run's (the first's are of a run that left its line unrun)."""
     _, wt = checkouts
     for k in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"):
         monkeypatch.setenv(k, "t@t")
@@ -159,7 +165,7 @@ def test_try_on_auto_fetches_the_run_from_the_machine_it_landed_on(checkouts, tm
 
     class Launch:
         stderr = iter(["research run --on auto: spilled to m-7's research pool, from . (a free slot)\n",
-                       "research: run r1 launched on m-7 (p) pid=1 -> /r\n"])
+                       "research: run r1 launched on m-7 (p) pid=1 -> /r\n", *moved])
 
         def wait(self):
             return 0
@@ -171,8 +177,8 @@ def test_try_on_auto_fetches_the_run_from_the_machine_it_landed_on(checkouts, tm
         return Launch()
 
     def run(argv, **kw):
-        if argv[3:5] == ["fetch", "r1"]:
-            fetched.append(argv[5:])
+        if argv[3:4] == ["fetch"]:
+            fetched.append(argv[4:])
             return subprocess.CompletedProcess(argv, 0)
         return real_run(argv, **kw)
 
@@ -181,8 +187,8 @@ def test_try_on_auto_fetches_the_run_from_the_machine_it_landed_on(checkouts, tm
     assert verity_cli.main(["lean", "try", "A.lean", "--on", "auto"]) == 0
     argv = launched[0]
     assert argv[argv.index("--on") + 1] == "auto" and "--pool" not in argv
-    assert fetched == [["--on", "m-7", "--all"]]
-    assert "verity lean try: run r1 on m-7: exit 0" in capsys.readouterr().out
+    assert fetched == [[run_id, "--on", machine, "--all"]]
+    assert f"verity lean try: run {run_id} on {machine}: exit 0" in capsys.readouterr().out
 
 
 def test_local_try_elaborates_the_current_worktrees_file(checkouts, tmp_path, monkeypatch):

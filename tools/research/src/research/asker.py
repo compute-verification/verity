@@ -1,14 +1,17 @@
-"""The asker of a run `--on auto` sent to a pool: while the run waits there behind reserved memory it asks `auto` again, and
-when another machine's pool would start the run now it launches the run's late twin there.
+"""The asker of a run in a pool's line: while the run waits there, whatever it waits on, it asks `auto` again, and when a
+place has stood on another machine's pool for STAND_MIN minutes it launches the run's late twin there.
 
-A pool run `--on auto` placed carries a pair (slot.py's `--twin`, the run's own id), and `research run` leaves one asker of
+A run may move unless its launch says this machine and no other: a pool run `--on auto` placed, and a run sent by name to
+the pool `auto` reads (`research run --on MACHINE --pool research`) that asks no GPUs and no `--stay`. Such a run carries
+a pair (slot.py's `--twin`, the run's own id), and `research run` leaves one asker of
 that launch behind (`leave`): a detached process on the launching VM that holds what the launch shipped in its memory alone.
 A launch that finds MAX_ASKERS of them alive under its runs root leaves none and says so: its run waits where it is.
-At minute FIRST_ASK_MIN of its life, then every ASK_EVERY_MIN minutes, it looks at the run (`see`). While the run waits
-and its last reason is memory, it asks (`ask`: `auto.read` and `auto.elsewhere`) by the files of the commit the launch
+At minute FIRST_ASK_MIN of its life, then every ASK_EVERY_MIN minutes, it looks at the run (`see`). While the run waits,
+it asks (`ask`: `auto.read` and `auto.elsewhere`) by the files of the commit the launch
 shipped (`files`: the few `auto.read` reads, no checkout), never by what the launching checkout holds by then. The answer
 is a pool that has a place now for a job of this run's CPUs and memory, as a waiter with its ask finds the line there
-(`auto._pool`), not a count of free slots. There it launches the same request (`launch`) from a checkout of that commit
+(`auto._pool`), not a count of free slots. A place stands when the ask STAND_MIN minutes later, which it then makes, finds
+that pool still has one. There it launches the same request (`launch`) from a checkout of that commit
 (`tree`, made only for a launch) as `--twin PAIR@HOME` (`slot_only.late_twin`). slot.py's claim then lets one of the two
 run: the twin runs only if it claims the pair on the first's machine before the first takes a slot, and the first leaves
 its line once it finds the claim. A twin waits in its line no longer than ASK_EVERY_MIN minutes, or what is left of the
@@ -21,7 +24,8 @@ Its record (`record`) is <runs root>/DIR/<run id>.json on the launching VM, writ
 launched, and copied beside the run's request on its machine (<root>/requests/<run id>/FILE), where another VM's
 `research status` reads it; a twin is launched only once both name it. It says who asks (the launching agent, since
 agent VMs share one host name; pid, since), when it looked last and looks next, each ask and its answer, the twin (its run
-and machine, why the first waited and for how many minutes) and how the asker ended. It is no file of the run dir, which
+and machine, why the first waited and for how many minutes, and when the place it moved to was seen and seen again) and how
+the asker ended. It is no file of the run dir, which
 the run's custody seals. `alive` reads it, and `told` is what `research status RUN` says from it; a copy that can't be
 read is said to be unread, never taken for no asker.
 
@@ -47,11 +51,14 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "research/asker/v1"
-#: a run that waits on memory asks again at this minute of its wait and every so many after
+#: a run that waits asks again at this minute of its wait and every so many after
 ASK_EVERY_MIN = 10
 #: and first at this minute: a run told it starts now, which found the memory gone when it reached the line (launches that
 #: asked `auto` in the same seconds were each told of the same place), asks before it has waited ASK_EVERY_MIN
 FIRST_ASK_MIN = 1
+#: a place an ask finds on another machine's pool stands once the ask this many minutes later finds it there still: one seen
+#: once may be one that the launches of the same minute each read and one of them takes
+STAND_MIN = 2
 #: an asker whose next look is this many seconds overdue is not alive (`alive`)
 LATE_S = 300
 #: the most askers alive under one runs root (`live`): each is a process of the launching VM, and those of launches of one
@@ -137,8 +144,8 @@ def leave(run_dir: Path, asks: dict, source: Path, what: dict, sends: list[Path]
         return (f"no asker of this launch could be left here ({type(e).__name__}: {e}), so the run will not move by itself: "
                 f"it waits in {asks['home']}'s line")
     return (f"an asker of this launch stays on this VM (pid {pid}): at minute {FIRST_ASK_MIN} and each "
-            f"{ASK_EVERY_MIN} min the run waits on memory in {asks['home']}'s line it asks `auto` again and, where another "
-            f"machine's pool would start the run now, launches its late twin there. It lives only while this VM is up: "
+            f"{ASK_EVERY_MIN} min the run waits in {asks['home']}'s line it asks `auto` again and, where a place has stood "
+            f"{STAND_MIN} min on another machine's pool, launches its late twin there. It lives only while this VM is up: "
             f"`research status {run_dir.name}` says whether one is alive")
 
 
@@ -212,19 +219,23 @@ def tree(git: str, commit: str) -> Iterator[Path]:
         shutil.rmtree(top, ignore_errors=True)
 
 
-def ask(source: Path, m: dict, tried: dict[str, str]) -> tuple[tuple[str, str] | None, str]:
+def ask(source: Path, m: dict, tried: dict[str, str], seen: str | None = None) -> tuple[tuple[str, str] | None, str]:
     """Ask `auto` again for launch ``m``, by its tree's files in ``source`` (`files`): the pool of another machine that would
-    start the run now (`auto.elsewhere`), or None, and why. A machine in ``tried`` reads as what it says there."""
+    start the run now (`auto.elsewhere`), or None, and why; the pool of machine ``seen``, the one the last ask found, while
+    it still would. A machine in ``tried`` reads as what it says there."""
     from . import auto
 
-    docs = auto.read(source, m["cpus"], peers=True, **({"lean": True} if m["lean"] else {}))
-    return auto.elsewhere({**docs, **tried}, m["home"], m["cpus"], m["mem_gb"], lean_pool=m["lean"])
+    docs = {**auto.read(source, m["cpus"], peers=True, **({"lean": True} if m["lean"] else {})), **tried}
+    if seen and (still := auto.elsewhere({seen: docs.get(seen, "not read")}, m["home"], m["cpus"], m["mem_gb"], lean_pool=m["lean"]))[0]:
+        return still
+    return auto.elsewhere(docs, m["home"], m["cpus"], m["mem_gb"], lean_pool=m["lean"])
 
 
 def launch(source: Path, m: dict, twin: dict, wait_s: float) -> dict:
     """Launch ``twin`` of launch ``m``'s run from its tree ``source``: the same request on the twin's machine, its command as
     the run's late twin's (`slot_only.late_twin`), which waits in its line no longer than ``wait_s``. `remote.launch`'s record; its
-    `auto` says where it moved from, which run it is the twin of, why that one waited and for how many minutes."""
+    `auto` says where it moved from, which run it is the twin of, why that one waited and for how many minutes, and when the
+    place it moved to was seen and seen again."""
     from . import remote
     from .cli import lean_records_urls
     from .pods.nebius import slot_only
@@ -236,7 +247,7 @@ def launch(source: Path, m: dict, twin: dict, wait_s: float) -> dict:
         return remote.launch(run_id=twin["run"], local_dir=Path(m["root"]) / twin["run"], machine_name=twin["machine"], source=source,
                              sends=[*map(Path, m["sends"]), *([urls] if urls else [])], queue=None,
                              auto={"machine": twin["machine"], "pool": twin["pool"], "said": [twin["said"]],
-                                   "moved": {k: twin[k] for k in ("from", "of", "why", "after_min")}}, **what)
+                                   "moved": {k: twin[k] for k in ("from", "of", "why", "after_min", "stood") if k in twin}}, **what)
     finally:
         if urls:
             shutil.rmtree(urls.parent, ignore_errors=True)
@@ -298,14 +309,17 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
     twin: dict | None = None                                   # the live twin
     tried: dict[str, str] = {}                                 # machines a twin of the run left unrun: asked for no other
     again = False                                              # a twin was just launched: look at once, in case of a cancel
+    place: dict | None = None                                  # the place the last ask found, until an ask finds it stood
 
     def beat(pause: float) -> str | None:
         rec.update(seen=_utc(now()), next=_utc(now() + pause))
         return tell(root, rec)
 
     def due(t: float) -> float:
-        """Its next look after ``t``: minute FIRST_ASK_MIN of its life, then each ASK_EVERY_MIN, and never past the wait."""
-        return min(early if t < early else began + (int((t - began) // every) + 1) * every, over)
+        """Its next look after ``t``: minute FIRST_ASK_MIN of its life, then each ASK_EVERY_MIN, STAND_MIN after an ask that
+        found a place, and never past the wait."""
+        at = early if t < early else began + (int((t - began) // every) + 1) * every
+        return min(at, place["t"] + STAND_MIN * 60 if place else at, over)
 
     while True:
         pause = 0 if again else max(due(now()) - now(), 0)
@@ -345,7 +359,8 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
         if now() >= over:
             why = "its wait for a slot is over"
             break
-        if twin or not reached or first["state"] != "waiting" or auto.MEMORY_BLOCK not in str(slot.get("why")):
+        if twin or not reached or first["state"] != "waiting" or slot.get("state") != "waiting":
+            place = None                                       # a place stands only by the next ask's finding it
             continue
         asked: dict[str, Any] = {"at": _utc(now()), "after_min": round((now() - (_epoch(slot.get("since")) or began)) / 60)}
         rec["asks"].append(asked)
@@ -353,13 +368,23 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
             if changed := [p for p, h in m["sends"].items() if _sha256(p) != h]:
                 raise OSError(f"--send {', '.join(changed)} changed since the launch, and a twin ships the same request")
             with files(m["git"], m["commit"], auto.READS) as source:
-                target, asked["said"] = ask(source, m, tried)
+                target, asked["said"] = ask(source, m, tried, place and place["machine"])
             if target is None:
+                place = None
+                continue
+            if not place or (place["machine"], place["pool"]) != tuple(target):
+                place = {"machine": target[0], "pool": target[1], "t": now(), "at": asked["at"]}
+                asked["stands"] = f"not yet: {target[0]}'s {target[1]} pool is asked again in {STAND_MIN} min"
+                continue
+            if now() - place["t"] < STAND_MIN * 60:
                 continue
             twin = {"run": runs.new_run_id(now()), "machine": target[0], "pool": target[1], "from": m["home"], "of": m["run"],
-                    "why": slot["why"], "after_min": asked["after_min"], "at": asked["at"], "state": "launching"}
+                    "why": slot.get("why") or "no reason recorded yet", "after_min": asked["after_min"], "at": asked["at"],
+                    "stood": [place["at"], asked["at"]], "state": "launching"}
+            place = None
             twin["said"] = (f"moved from {m['home']}'s {m['pool']} pool, where {m['run']} waited {twin['after_min']} min "
-                            f"({twin['why']}), to {twin['machine']}'s, which would start it now ({asked['said']})")
+                            f"({twin['why']}), to {twin['machine']}'s, where a place stood from {twin['stood'][0]} to "
+                            f"{twin['stood'][1]} ({asked['said']})")
             rec["twin"] = twin
             if lost := beat(every):                            # before the launch: no twin is ever launched unrecorded
                 rec["twin"] = twin = None
@@ -370,6 +395,7 @@ def run(root: Path, m: dict, *, now: Callable[[], float] = time.time, sleep: Cal
             twin["state"] = "launched" if sent.get("phase") == "launched" else "refused"
         except Exception as e:  # noqa: BLE001  (an ask or a launch that failed is recorded, and the run keeps its place)
             asked["error"] = f"{type(e).__name__}: {e}"
+            place = None
             if twin:
                 phase = (remote._read_json(root / twin["run"] / "remote.json") or {}).get("phase")
                 twin.update(state="unknown" if phase == "unknown" else "not launched", error=asked["error"])
@@ -429,7 +455,7 @@ def twin(run_dir: Path) -> dict | None:
 
 
 def told(s: dict, now: float) -> list[str]:
-    """What `research status RUN` says of a pool run `--on auto` placed, from its summary ``s`` (`runs.summarize`) and its
+    """What `research status RUN` says of a pool run that may move (module doc), from its summary ``s`` (`runs.summarize`) and its
     asker's record: its late twin, and, while it waits, whether an asker is alive for it (where, since when) or that none
     is, so it will not move by itself; of a record that can't be read, that neither is known. Of a late twin: which run it
     is the twin of. Nothing of any other run."""
@@ -455,13 +481,14 @@ def told(s: dict, now: float) -> list[str]:
                 "and the one that takes a slot first runs:", "launching": f"its asker was launching its late twin {tw['run']} on "
                 f"{tw['machine']} at {tw['at']}:"}.get(tw.get("state"), f"its late twin {tw['run']} on {tw['machine']} did not run "
                                                          f"({tw.get('state')}: {tw.get('left') or tw.get('error') or 'no reason recorded'}):")
-        out.append(f"{head} after {tw['after_min']} min waiting on {tw['from']} ({tw['why']})")
+        stood = f", where a place stood from {tw['stood'][0]} to {tw['stood'][1]}" if tw.get("stood") else ""
+        out.append(f"{head} after {tw['after_min']} min waiting on {tw['from']} ({tw['why']}){stood}")
     if s["state"] != "waiting":
         return out
     if alive(rec, now):
         return [*out, f"an asker is alive on {vm} since {rec['since']}; it looked last at {rec['seen']} and looks next at "
-                      f"{rec['next']}: while the run waits on memory it asks `auto` again, and moves the run to a pool that would "
-                      "start it now"]
+                      f"{rec['next']}: while the run waits it asks `auto` again, and moves the run to a pool where a place has "
+                      f"stood {STAND_MIN} min"]
     gone = "" if rec is None else f" (the one on {vm} ended at {rec['ended']['at']}: {rec['ended']['why']})" if rec.get("ended") \
         else f" (the one on {vm} looked last at {rec.get('seen')} and is gone)"
     return [*out, f"waits{' on memory' if auto.MEMORY_BLOCK in str(slot.get('why')) else ''} on {where}; no asker is alive{gone}, so it "

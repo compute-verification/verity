@@ -4093,7 +4093,7 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
         assert got.failed == {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"} and got.notes == []
         (launch, left), (fetch, _) = argvs
         assert left == 100 and fetch == ["fetch", rid, "--on", node, "--all"]
-        assert launch == ["run", "--on", node, *flags, *tail]
+        assert launch == ["run", "--on", node, "--stay", *flags, *tail], "it builds that node's tree and reads its run there"
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):

@@ -231,9 +231,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "a slot of a CPU node's research pool when it starts sooner there (research/auto.py's `spill`: every CPU node); the "
                          "launch says where it went and when it should start. A machine that can start no run takes none, and one "
                          "that refuses the launch for that is passed over for the next, the launch saying which and why. A run "
-                         "sent to a pool that waits there on memory asks again and moves to a pool that would start it now, "
-                         "while the VM that launched it is up and holds its asker: a VM holds only so many alive at a time "
-                         "(research/asker.py's MAX_ASKERS; the launch and `research status RUN` say)")
+                         "that waits in a pool's line, whatever on, asks again and moves to a pool where a place has stood 2 "
+                         "min, while the VM that launched it is up and holds its asker: a VM holds only so many alive at a time "
+                         "(research/asker.py's MAX_ASKERS; the launch and `research status RUN` say). So does a run sent by "
+                         "name to a machine's research pool (--pool research), unless --stay")
     ap.add_argument("--accept-wait", action="store_true",
                     help="with --on auto: queue the run though it isn't expected to start within 10 minutes "
                          "(research/auto.py's START_WITHIN_MIN). Such a launch is warned in one line, or refused once "
@@ -289,6 +290,11 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "machine's own slot.py, `main`'s as installed there, and by its source's only where the machine has none")
     ap.add_argument("--pool-wait", type=float, default=None, metavar="S",
                     help="with --pool: how long to wait in the pool's line for a slot before exiting 75 unrun (default 4 h)")
+    ap.add_argument("--stay", action="store_true",
+                    help="with --on MACHINE: this machine and no other. Without it, a run in MACHINE's research pool that "
+                         "asks no GPUs carries a pair and leaves an asker, which moves it to another machine's research pool "
+                         "where a place has stood, as it does a run `--on auto` placed (research/asker.py). Say it for a run "
+                         "that fills or reads that machine's own caches, or whose output its caller reads there by its run id")
     ap.add_argument("--as", dest="lane", default=os.environ.get("RESEARCH_LANE"), metavar="LANE",
                     help="with --pool: the lane the slot names; with --mem-limit-gb: who states it (default $RESEARCH_LANE)")
     q = ap.add_argument_group("the queue (--queue): the one queue over the shared nodes (infra/cluster) places and runs the job; "
@@ -408,6 +414,10 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.accept_wait and ns.on != "auto":
         print("research run: --accept-wait is for --on auto, whose launch it lets queue past its 10 minutes", file=sys.stderr)
         return 2
+    if ns.stay and (ns.on in (None, "auto") or ns.queue):
+        print("research run: --stay is for --on MACHINE, a machine named by its name: `--on auto` and the queue choose one",
+              file=sys.stderr)
+        return 2
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
@@ -415,6 +425,18 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         _auto_size(ns, harness_opts, command)
         return _auto_launch(ns, harness_opts, command, clones)
     return _run_placed(ns, harness_opts, command, clones)
+
+
+def _named_asks(ns: argparse.Namespace, command: list[str]) -> dict | None:
+    """What a run sent by name to the pool `--on auto` spills to (`--on MACHINE --pool research`) asks of `auto`, for its
+    launch's asker to ask it again (research.asker): a slot of any size, as slot.py gives it one on MACHINE, its --mem-gb and
+    its Lean pool. None for a run that stays: one whose launch says `--stay`, one that asks GPUs (`auto` reads none), and
+    one in any other pool (`auto` reads none)."""
+    from . import auto
+
+    if ns.stay or ns.pool != auto.SPILL_POOL or ns.gpus:
+        return None
+    return {"cpus": 1, "mem_gb": ns.mem_gb or 0, "lean": auto.lean_pool(command, ns.env)}
 
 
 def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[str], clones: list[Path]) -> int:
@@ -444,9 +466,9 @@ def _run_placed(ns: argparse.Namespace, harness_opts: list[str], command: list[s
         try:
             timeout = remote.timeout_seconds(remote.flag_value(harness_opts, "--timeout"))
             wait_s = ns.pool_wait if ns.pool_wait is not None else slot_only.POOL_WAIT_S
-            if asks := getattr(ns, "asks", None):
-                # a run `--on auto` placed carries a pair, its own id, so its late twin can take it from this line (research.asker)
-                ns.id = ns.id or R.new_run_id()
+            if asks := getattr(ns, "asks", None) or _named_asks(ns, command):
+                # a run that may move carries a pair, its own id, so its late twin can take it from this line (research.asker)
+                ns.id, ns.asks = ns.id or R.new_run_id(), asks
                 asks["wait_s"] = wait_s
             command = slot_only.in_pool(ns.pool, ns.lane, command, timeout, wait_s, twin=ns.id if asks else None)
             if budget := getattr(ns, "budget_gb", None):       # slot.py's own option, before the `--` that ends them
@@ -1571,8 +1593,9 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
         rec = fetch(run_dir)
         s = R.summarize(run_dir)
         if s["state"] in R.ENDED and not asker.started(s) and (twin := moved(run_dir)):
-            print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name} is the run "
-                  "now, and this waits for it", file=sys.stderr)
+            on = (remote._read_json(twin / "remote.json") or {}).get("machine")
+            print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name}"
+                  f"{f' on {on}' if on else ''} is the run now, and this waits for it", file=sys.stderr)
             run_id, run_dir = twin.name, twin
             continue
         if s["state"] in R.ENDED:
@@ -1667,8 +1690,8 @@ def cmd_cancel(argv: list[str]) -> int:
                                                                      "manual cancel; the runner SIGKILLs what is left 20 s later "
                                                                      "(remote.cancel). A run that hasn't started, held on "
                                                                      "its machine (disk-hold, cpu-hold), is withdrawn: its hold "
-                                                                     "ends and refused.json records it Withdrawn. A run `--on "
-                                                                     "auto` that has a late twin on another machine is cancelled "
+                                                                     "ends and refused.json records it Withdrawn. A run that "
+                                                                     "has a late twin on another machine is cancelled "
                                                                      "with it: whichever of the two is left")
     ap.add_argument("ref", help="a run id or prefix under the runs root; a full run id another VM launched is found on its machine")
     ap.add_argument("--reason", required=True)
@@ -1686,7 +1709,7 @@ def cmd_cancel(argv: list[str]) -> int:
 
     dirs = [run_dir]
     if tw := asker.twin(run_dir):
-        # a run `--on auto` moved, or may move, to its late twin: the cancel is of the run, so of whichever of the two is left
+        # a run that moved, or may move, to its late twin: the cancel is of the run, so of whichever of the two is left
         try:
             dirs.append(_run_dir(root, tw["run"], tw["machine"], unique=True))
         except (FileNotFoundError, LookupError, remote.Refused) as e:
