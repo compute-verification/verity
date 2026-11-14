@@ -39,7 +39,7 @@ verity bench exfiltration --help          every parameter and its default
     else the share the table's rows price, else "at the planner's assumed prices" for rows that record no table's
     row. Read with `--row "(i) honest"`, the figure itself carries the label.
 - **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/certifier_term/`): the schedules,
-  the fail cells and the jitter, for the scan and N2 as the monitoring-period check charges them today, for the scan
+  the fail cells and the jitter, for the scan as the monitoring-period check charges them today, for the scan
   under each change to its check, and for the design with no run behind it, before a served audit has sampled a
   stop block and once one has. The design's two rows are also charged the count: how many of a link's releases
   each content class holds in an execution phase. The command reads that command's document (`certifier-term/v2`)
@@ -57,7 +57,7 @@ verity bench exfiltration --help          every parameter and its default
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output bits
 at δ). The first three terms are the network certifier's part and the last term's second branch is the compute
-audit's, so the command also prints their sum under the network certifier's rows: the scan and N2 as charged today,
+audit's, so the command also prints their sum under the network certifier's rows: the scan as charged today,
 the scan with all three changes, and the design, before its stop block and with it. Where a row charges the entries
 and they are fewer than the compute audit's part, they stand in its place. The command prices no advice, and says
 so among its inputs.
@@ -293,7 +293,7 @@ plan of the case, is left out and listed under "Refused".
   1 or more has "no bound at this period" in place of each amount.
 - **Each monitoring period over all compute**: a week, a month and a year of the reference datacenter and of the
   world, with the compute audit's part as a pooled total and in bits a request, the network certifier's term of
-  record under the scan, N2 and the design before its stop block and with it, the two together, and the output
+  record under the scan and the design before its stop block and with it, the two together, and the output
   count. Each part's amounts are followed by its error over that scope and monitoring period: the compute audit's
   δ, the scans' δ and the network certifier's ε, and the error of the two together. A figure whose error is 1 or more
   is "no bound at this period".

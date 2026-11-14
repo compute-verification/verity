@@ -437,9 +437,9 @@ def test_rows_that_hold_their_own_plans_are_read_with_them(tmp_path):
             "block families priced each way is 52.4% computed, 47.17% measured, 0.4277% measured and computed, 0.001791% "
             "modeled: the largest families are SparseMlaSplitPart_v1 (52.33%, computed)") in text
     assert f"| world week | {PLANNED} (rows) | 5.500% | computed | 53.457% | 7 | SparseMlaSplitPart_v1 53.390%, " in text
-    assert ("| world | week | 2.268e+14 | 3.411e+14 | 13,962 | 0.3275 | 0.01 | 973,357 | 35,627 | 506,156 | 37,194 | 8.259e-20 | "
-            "1.829e-08 | 987,319 | 49,589 | 520,117 | 51,155 | 0.01 | 468,962 |") in text
-    assert ("| world | week | 0 | 13,962 | 937,924 | 193.8 | 470,722 | 1,760 | 951,885 | 14,155 | 484,684 | 15,722 | 8.259e-20 | "
+    assert ("| world | week | 2.268e+14 | 3.411e+14 | 13,962 | 0.3275 | 0.01 | 973,357 | 506,156 | 37,194 | 8.259e-20 | "
+            "1.829e-08 | 987,319 | 520,117 | 51,155 | 0.01 | 468,962 |") in text
+    assert ("| world | week | 0 | 13,962 | 937,924 | 470,722 | 1,760 | 951,885 | 484,684 | 15,722 | 8.259e-20 | "
             "1.829e-08 | 0.01 |") in text
     assert "'s plan (" not in text
 
@@ -479,7 +479,7 @@ def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator
     audit, together = year["compute_audit"], year["together"]
     assert audit["GB"] == doc["value"] and audit["bits_a_request"] == pytest.approx(audit["bits"] / year["requests"])
     assert audit["of_weights"] == pytest.approx(doc["value"] / doc["weights"]["GB"]) == pytest.approx(37.805, abs=5e-4)
-    assert list(together) == list(E.TOGETHER) == ["scan", "N2", "all three", "design, no stop block", "design"]
+    assert list(together) == list(E.TOGETHER) == ["scan", "all three", "design, no stop block", "design"]
     rows = {r["row"]: r for r in theirs["rows"]}
     for name, t in together.items():
         card = t["with_set_time_card"]
@@ -493,8 +493,8 @@ def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator
     assert dc["requests"] == pytest.approx(year["requests"] * dc["gpu_seconds"] / year["gpu_seconds"], rel=1e-12)
     # a scope no run of record holds has the network certifier's part alone
     week = doc["periods"][0]
-    assert week["compute_audit"] is None and week["together"]["N2"]["GB"] is None and week["together"]["N2"]["certifier_GB"] > 0
-    assert week["together"]["N2"]["with_set_time_card"]["GB"] is None
+    assert week["compute_audit"] is None and week["together"]["design"]["GB"] is None and week["together"]["design"]["certifier_GB"] > 0
+    assert week["together"]["design"]["with_set_time_card"]["GB"] is None
 
     # the count read is the calculator's: were its plan another, the rows of record would be priced over other requests
     plan = lb.plan()
@@ -534,7 +534,7 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     assert wide["certifier"]["default_class"] == {"response_ids": 4096, "eps": 2 ** -20, "value": theirs["value"], "unit": "GB"}
     text = E.render(wide)
     assert ("- **the network certifier's part: 59,645,644 GB** (modeled, on an assumed class of at most 4,096 ids a response) "
-            "as the scan's check charges it today, 26.83 bits a request, and 1,857,720 GB as N2 charges it today, ") in text
+            "as the scan's check charges it today, 26.83 bits a request, and 30,838,408 GB by the design no run has behind it, ") in text
     assert ("1,939,394 GB by the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, "
             "its term of record, and each failing with at most ε = 9.537e-07 (2^-20) over the world's year, at a scan's δ of "
             "8.259e-20 (2^-63.39).\n") in text
@@ -549,19 +549,18 @@ def test_the_network_certifiers_figures_of_record_are_at_two_release_schedules(t
     assert doc["certifier"]["default_class"] == wide["certifier"]["default_class"]
     text = E.render(doc)
     assert ("- **the network certifier's part: 50,753,639 GB** (modeled, on an assumed class of at most 1,024 ids a response) "
-            "as the scan's check charges it today, 22.83 bits a request, and 1,857,720 GB as N2 charges it today, "
-            "26,392,406 GB by the design no run has behind it, before a served audit has sampled a stop block, 1,939,394 GB by "
+            "as the scan's check charges it today, 22.83 bits a request, and 26,392,406 GB by the design no run has behind it, before a served audit has sampled a stop block, 1,939,394 GB by "
             "the design no run has behind it, once a served audit has sampled a stop block, each at D_j = 2, its term of "
             "record, and each failing with at most ε = 9.537e-07 (2^-20) over the world's year, at a scan's δ of 8.259e-20 "
             "(2^-63.39). On the class of at most 4,096 ids a response that `verity bench certifier_term` assumes by "
             "default, the scan's is 59,645,644 GB.\n") in text
     assert ("at D_j = 2, with no advice priced and with a response's output count taken at 0 under `all three` and `design`: "
-            "50,767,879 GB as the scan's check charges it today; 1,871,959 GB as N2 charges it today; 26,406,646 GB by the "
+            "50,767,879 GB as the scan's check charges it today; 26,406,646 GB by the "
             "design no run has behind it, before a served audit has sampled a stop block; 1,953,634 GB by the design no run "
             "has behind it, once a served audit has sampled a stop block; each failing with at most 0.01, the two parts' "
             "errors summed.\n") in text
-    assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 1,857,720 | 26,392,406 | 1,939,394 | "
-            "8.259e-20 | 9.537e-07 | 50,767,879 | 1,871,959 | 26,406,646 | 1,953,634 | 0.01 | 24,453,012 |") in text
+    assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 26,392,406 | 1,939,394 | "
+            "8.259e-20 | 9.537e-07 | 50,767,879 | 26,406,646 | 1,953,634 | 0.01 | 24,453,012 |") in text
     assert "| scan | 24,453,012 | 24,453,012 | 50,753,639 | 134,745 | 48,906,024 | 4.108e+10 | 8.259e-20 | 9.537e-07 |" in text
 
     document = lb.document
@@ -593,21 +592,21 @@ def test_what_rests_on_the_set_time_card_is_printed_only_under_the_calculators_l
     at_one = [(under, cell) for under, cell in shown if "D_j = 1" in under]
     timed = [(under, cell) for under, cell in shown
              if under.rpartition(" | ")[2].startswith(("timing", "all three")) or ", all three" in under.partition(" | ")[0]]
-    assert (len(at_one), len(timed)) == (60, 30) and all(label in under for under, _ in at_one + timed)
-    # the scan's term and its two sums at D_j = 1, N2's sum there, and the sum under `all three`
-    for figure, least in (("48,906,024", 5), ("48,920,264", 2), ("24,344", 2), ("14,240 GB with the lengths held", 1)):
+    assert (len(at_one), len(timed)) == (47, 30) and all(label in under for under, _ in at_one + timed)
+    # the scan's term and its two sums at D_j = 1, and the sum under `all three`
+    for figure, least in (("48,906,024", 5), ("48,920,264", 2), ("14,240 GB with the lengths held", 1)):
         under = [under for under, cell in shown if figure in cell]
         assert len(under) >= least and all(label in u for u in under), figure
     assert "- the network certifier's part with a simulated set-time card: 0 GB with the lengths held by a stop block" in text
     assert ("- together, with a simulated set-time card: 14,240 GB with the lengths held by a stop block, the timing "
             "taken once and the entries charged through the compute audit; and at D_j = 1, 48,920,264 GB as the scan's "
-            "check charges it today; 24,344 GB as N2 charges it today; 24,559,030 GB by the design no run has behind it, "
+            "check charges it today; 24,559,030 GB by the design no run has behind it, "
             "before a served audit has sampled a stop block; 106,018 GB by the design no run has behind it, once a served "
             "audit has sampled a stop block; error 0.01.\n") in text
     assert ("| all three, with a simulated set-time card | 0 | 0 | 0 | 0 | 0 | the compute side's | 8.259e-20 | "
             "9.537e-07 |") in text
     assert "\n## Each monitoring period over all compute, with a simulated set-time card: in GB\n" in text
-    assert ("| world | year | 0 | 14,240 | 48,906,024 | 10,104 | 24,544,790 | 91,778 | 48,920,264 | 24,344 | 24,559,030 | 106,018 | "
+    assert ("| world | year | 0 | 14,240 | 48,906,024 | 24,544,790 | 91,778 | 48,920,264 | 24,559,030 | 106,018 | "
             "8.259e-20 | 9.537e-07 | 0.01 |") in text
     # no figure of record is under the label: the headline's and the table of record's lines don't carry it
     assert not [line for line in text.splitlines() if label in line and ("its term of record, " in line or "at D_j = 2, with no" in line)]
@@ -708,15 +707,15 @@ def test_every_figure_carries_its_error_at_the_scans_delta_the_term_states(tmp_p
             "block, the timing taken once and the entries charged through the compute audit; and at D_j = 1, ") in text
     assert "once a served audit has sampled a stop block; ε = 9.537e-07 (2^-20).\n" in text
     assert ("| compute | period | GPU-seconds | requests | compute audit | bits a request | compute audit's δ | certifier, scan | "
-            "certifier, N2 | certifier, design, no stop block | certifier, design | scan's δ | certifier's ε | together, scan | "
-            "together, N2 | together, design, no stop block | together, design | together's error | output count (assumed) |\n") in text
-    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,039 | 517.2 | 8.259e-20 | "
-            "2.543e-10 | 27,244 | 14,203 | 20,747 | 14,225 | 0.01 | 6,521 |") in text
-    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 135 | 9.919 | "
-            "8.259e-20 | 4.878e-12 | none | none | none | none | none | 125.1 |") in text
+            "certifier, design, no stop block | certifier, design | scan's δ | certifier's ε | together, scan | "
+            "together, design, no stop block | together, design | together's error | output count (assumed) |\n") in text
+    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 7,039 | 517.2 | 8.259e-20 | "
+            "2.543e-10 | 27,244 | 20,747 | 14,225 | 0.01 | 6,521 |") in text
+    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 135 | 9.919 | "
+            "8.259e-20 | 4.878e-12 | none | none | none | none | 125.1 |") in text
     shown = printed(text)
     assert {cell for under, cell in shown if under.startswith("scan's δ | ")} == {"8.259e-20"}
-    assert len([cell for under, cell in shown if under.startswith("scan's δ | ")]) == 8 + 6 + 6
+    assert len([cell for under, cell in shown if under.startswith("scan's δ | ")]) == 7 + 6 + 6
     assert E.NO_BOUND not in text.replace(f"\"{E.NO_BOUND}\"", "")
 
 
@@ -772,7 +771,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     for p in (none, year):
         assert set(amounts(p)[0]) == set(amounts(p)[1]) == {None}
         assert p["output_count"]["at_zero_in"] == ["all three", "design"] and p["gpu_seconds"] and p["requests"]
-    assert [sorted(r.keys() & set(E.AMOUNTS)) for r in doc["certifier"]["rows"]] == [[]] * 8
+    assert [sorted(r.keys() & set(E.AMOUNTS)) for r in doc["certifier"]["rows"]] == [[]] * 7
     assert {r["eps"] for r in doc["certifier"]["rows"]} == {3.5} and doc["certifier"]["rows"][0]["row"] == "scan"
     assert doc["certifier"]["default_class"] == {"response_ids": 4096, "eps": 3.5, "value": None, "unit": "GB"}
 
@@ -792,30 +791,30 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
                                 if line.startswith(("- **the network certifier's part", "- **together", "- the output count")))
     assert "with a set-time card" not in head and "its term of record" not in head
     # none of the world year's amounts of the network certifier is printed, at either jitter bound or summed
-    for figure in ("50,753,639", "1,857,720", "26,392,406", "1,939,394", "48,906,024", "24,453,012", "50,767,879", "1,953,634",
+    for figure in ("50,753,639", "26,392,406", "1,939,394", "48,906,024", "24,453,012", "50,767,879", "1,953,634",
                    "59,645,644", "22.83 bits a request", "11 bits a request"):
         assert figure not in text, figure
     assert "| scan | " + "no bound at this period | " * 6 + "0.125 | 3.5 |" in text
-    assert text.count("| " + "no bound at this period | " * 6 + "0.125 | 3.5 |\n") == 8
+    assert text.count("| " + "no bound at this period | " * 6 + "0.125 | 3.5 |\n") == 7
     no = "no bound at this period | "
-    assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | " + no * 4 + "0.125 | 3.5 | " + no * 4
+    assert ("| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | " + no * 3 + "0.125 | 3.5 | " + no * 3
             + "3.51 | no bound at this period |") in text
-    assert "| world | year | " + no * 10 + "0.125 | 3.5 | 3.51 |" in text
-    assert ("| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | none | " + no * 4 + "0.125 | 1 | "
-            + "none | " * 4 + "none | no bound at this period |") in text
-    assert "| world | week | no bound at this period | none | " + no * 4 + "none | " * 4 + "0.125 | 1 | none |" in text
-    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 495.4 | 7,039 | 517.2 | 0.125 | 0.995 | "
-            + no * 4 + "1.005 | 6,521 |") in text
-    assert ("| datacenter | year | 0 | no bound at this period | 13,043 | 2.695 | 6,546 | 24.48 | " + no * 4
+    assert "| world | year | " + no * 8 + "0.125 | 3.5 | 3.51 |" in text
+    assert ("| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | none | " + no * 3 + "0.125 | 1 | "
+            + "none | " * 3 + "none | no bound at this period |") in text
+    assert "| world | week | no bound at this period | none | " + no * 3 + "none | " * 3 + "0.125 | 1 | none |" in text
+    assert ("| datacenter | year | 3.154e+12 | 4.743e+12 | 13,708 | 23.12 | 0.01 | 13,536 | 7,039 | 517.2 | 0.125 | 0.995 | "
+            + no * 3 + "1.005 | 6,521 |") in text
+    assert ("| datacenter | year | 0 | no bound at this period | 13,043 | 6,546 | 24.48 | " + no * 3
             + "0.125 | 0.995 | 1.005 |") in text
-    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 9.502 | 135 | 9.919 | 0.125 | "
-            "0.25 | none | none | none | none | none | 125.1 |") in text
+    assert ("| datacenter | week | 6.048e+10 | 9.096e+10 | no rows of record | none | none | 259.6 | 135 | 9.919 | 0.125 | "
+            "0.25 | none | none | none | none | 125.1 |") in text
     # the δ printed is the document's own on every line that carries one, and the one the command gave is nowhere
     shown = printed(text)
     assert {cell for under, cell in shown if under.startswith("scan's δ | ")} == {"0.125"} and "8.259e-20" not in text
     # every cell that is no bound is on a line that carries the error that says so
     lines = [line for line in text.splitlines() if line.startswith("|") and E.NO_BOUND in line]
-    assert len(lines) == 8 + 3 + 3 and all(any(f"| {e} |" in line for e in ("3.5", "1", "1.005")) for line in lines)
+    assert len(lines) == 7 + 3 + 3 and all(any(f"| {e} |" in line for e in ("3.5", "1", "1.005")) for line in lines)
 
     # the network certifier's part is bounded and the sum is not: its amounts are printed and the sum's are not
     monkeypatch.setattr(lb, "document", made_up(document, {("world", "year"): 0.995}))
@@ -825,7 +824,7 @@ def test_a_figure_whose_error_is_one_or_more_prints_no_bound_and_no_amount(tmp_p
     assert "- **together: no bound at this period**. The two parts' errors over the world's year sum to 1.005" in text
     assert "- the output count: 24,453,012 GB (assumed), 11 bits a request." in text and "- together, " not in text
     # one ε a scope and monitoring period: rows of one that carry two are refused by name
-    monkeypatch.setattr(lb, "document", made_up(document, {("world", "year"): 0.5}, N2=2.0))
+    monkeypatch.setattr(lb, "document", made_up(document, {("world", "year"): 0.5}, design=2.0))
     with pytest.raises(ValueError, match="the network certifier's rows over the world year carry 2 different ε \\(0.5, 2\\), and "
                                          "this command prints one a scope and monitoring period"):
         E.build(store=recorded(tmp_path / "two").fresh(), root=REPO)
@@ -872,7 +871,7 @@ def test_every_input_is_marked_measured_modeled_simulated_or_assumed_with_its_so
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
     assert f"of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled, 1 simulated and {marks['assumed']} assumed" in text
     assert "| world year | " + ROWS + " | 5.542% | 13,562 | 14,240 | 37.81 | 1.778e+16 | 4.339% | 2.293% | 5.372% |" in text
-    assert "| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 1,857,720 | " in text
+    assert "| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 0.01 | 50,753,639 | 26,392,406 | " in text
     assert "| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | " in text
     assert "Refused" not in text and text.count("\n| datacenter | ") == 6
 
@@ -1294,8 +1293,8 @@ def test_a_part_on_cpus_alone_adds_no_gpu_seconds_and_says_so_beside_its_0(tmp_p
 
 #: the sha256 of the print and of the `--json` document on the fixtures' runs with no verdicts of record: the command's
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
-NO_VERDICTS = {"text": "5a3d9c680182fef589796a2705628eaf06884194a66fd4274ebc10b7a76a6bdc",
-               "json": "044543b4962a612811a4a86c49a32c1ceac58a0725abad449890e68c9d0c1496"}
+NO_VERDICTS = {"text": "d04645327108778d621f8e1682c4b76e0a93005c2040e26119a4e937247e37c5",
+               "json": "0e5b72435b4ab4bcdddd5ea0edfd6b3275f6b0b51b0d6cfe207ed3801ea2dd27"}
 #: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}

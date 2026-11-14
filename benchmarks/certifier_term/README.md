@@ -113,7 +113,7 @@ the command prints without `--out`, and the calculator's numbers, are held where
 A scope is a node (one machine), the reference datacenter or the world, each machine behind one network certifier.
 Over a week, a month and a year it serves its GPU-seconds × the serving MFU × a GPU's peak FLOP/s / (a request's
 tokens × 2 × the served MACs a token) requests, each on one connection. Which request that is is the row's request
-count, which every row names (Where the scale comes from, below). Each scope and monitoring period has eight rows,
+count, which every row names (Where the scale comes from, below). Each scope and monitoring period has seven rows,
 and each row says where it stands:
 
 - `scan` (on main): the rows form, the scan on the network certifier's own run, as the check charges it today. A
@@ -123,8 +123,6 @@ and each row says where it stands:
   nothing compiled ties them to the sessions' runs. So the row carries the mark `run, not proved`, the exfiltration
   command's mark of that name, in its legend line and in each of its rows of the document (`mark`; no other row
   carries one).
-- `N2` (on main): the clock form. The schedules are counted by link, over its execution phases, whatever it serves.
-  Its parameters list no connection, so it has no fail cell. The jitter is the scan's.
 - `lengths`, `timing`, `entries` (each a change to the scan's check) and `all three`: the scan with a response's
   length held to its Program's output count, with the release times taken once by the compute side's tick, and with
   the entries charged through the compute audit. The schedules' 0 under `lengths` and `all three` rests on a stop
@@ -147,8 +145,7 @@ with none given it moves only as the least lanes that serve them do.
 
 - **schedules**: for the scan, ⌈log2(cells + 1)⌉ bits a connection, where cells is the most cells a response takes,
   one more than the most ids it holds; 0 where the lengths are held with a stop block (`lengths`, `all three`,
-  `design`), and the scan's where they are held without one (`design, no stop block`). For N2, ⌈log2 #Σ_sync^m⌉ over
-  a link's m execution phases (`--syncs`).
+  `design`), and the scan's where they are held without one (`design, no stop block`).
 - **cells**: the fail cells, the same bits again a connection. Where the lengths are held, with a stop block or
   without, it is the failed connections' charge instead, pooled over the period: which connections failed and where
   each one's stream ended, at most F·(log2(e·N / F) + log2(cells + 1)) bits for F failures among N connections, and
@@ -208,8 +205,8 @@ with none given it moves only as the least lanes that serve them do.
   (`a link's phase`) and for one request (`a request`), the term as a share of the compute it covers.
 
 The lines above the tables give the rule for the term of record, that the card is simulated, and the rule for the
-rows that carry the label, each row's rule, one link's execution phase (its requests, a connection's bits, N2's
-schedules, the jitter at each D_j, a slot entry's bits), the count (its rows, its bits a link's execution phase, R
+rows that carry the label, each row's rule, one link's execution phase (its requests, a connection's bits, the jitter
+at each D_j, a slot entry's bits), the count (its rows, its bits a link's execution phase, R
 and the schedule R is of: its lanes, given or the least, and its classes, delay and ingress buckets, the cost
 runner's or as given; and the same rule at the cost runner's own schedule, 16 lanes and an execution phase of 600
 buckets, which is that runner's and not these rows'), and the target as bits a link's execution phase and a request
@@ -241,8 +238,7 @@ Each row holds its own `count`, in bits and GB.
   - `given` (`--world-requests N`): N requests a world-year, of no stated request, in place of either. Every scope
     scales with it.
 - The weights are the workload card's parameters at FP4's 4 bits each.
-- A bucket is the network certifier's default, and N2's #Σ_sync the most a calibration chooses by default
-  (`verity/protocols/accounting/certifier/verifier/calibration.py`).
+- A bucket is the network certifier's default.
 
 The scaling by links (`leak_bounds.at_link_rate`, which `chain_record.py leak` reads on a run) is a different count:
 every link at the rate one run certified, whatever its scope serves.
