@@ -17,9 +17,10 @@ template `reader`'s units read rows of their parameter `port` whole as row `out`
 "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
 form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
 rows) are disjoint, stated pair by pair (`pairwiseDisjoint`) and run as a sweep over the wires sorted by reader, port and
-first unit (`overlapFree`), each wire against the wires of its port that start inside its reader units. Its summary gives
-each reader row's writer (`Summary.writerOf`, by the
-wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
+first unit (`overlapFree`), each wire against the wires of its port that start inside its reader units; and the wires
+are in the order, stated range by range (`orderedWire`) and run on the order indexed once by template and first unit
+(`checkFast`), each wire against the ranges it meets, found by bisection. Its summary gives each reader row's writer
+(`Summary.writerOf`, by the wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
 window's free inputs.
 
 `checkRef` is the reference it is held to, every covered reader row expanded (`Wire.entries`): the difftest (the `wires`
@@ -485,6 +486,366 @@ def check (c : Wiring) : Except Refusal Summary :=
       else match orderCode c orderedWire with
         | some r => .error r
         | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
+
+/-! ## The order check by bisection
+
+`orderedWire` scans the whole order for each wire, and again for each range the wire meets. `Order.index` sorts the
+order's ranges once, by template and then first unit, each with its rank and its `reach`, the greatest end among its
+template's ranges up to it. Template `t`'s ranges meeting units `[lo, hi)` then lie between the first entry past `t`'s
+ranges that end by `lo` and the first past those that start below `hi`, each found by bisection (`Order.allMeeting`,
+`Order.allMeeting_iff`), for any order. `orderedIdx` is `orderedWire` on that index (`orderedIdx_eq`): per wire only the
+ranges it meets, and per such range only the ranges the bounds on its writers meet, as Python's `check_order` does.
+`checkFast` is `check` with the order indexed once, and the compiled code runs it wherever `check` is called
+(`check_eq_checkFast`). -/
+
+namespace Order
+
+/-- A range of the order in its index: template `tid`'s units `[p0, p0 + n)`, its rank, and the greatest end among its
+template's ranges up to it in the index. -/
+structure Ranged where
+  tid : String
+  p0 : Nat
+  n : Nat
+  rank : Nat
+  reach : Nat
+
+/-- The index's order: by template, then first unit. -/
+def keyLe (a b : String × Nat × Nat × Nat) : Bool := a.1 < b.1 || (a.1 == b.1 && a.2.1 ≤ b.2.1)
+
+/-- Each range with its `reach`, `prev` the template and reach of the range before it. -/
+def withReach : Option (String × Nat) → List (String × Nat × Nat × Nat) → List Ranged
+  | _, [] => []
+  | prev, (t, p0, n, k) :: rs =>
+    let r := match prev with
+      | some (s, m) => if s == t then max m (p0 + n) else p0 + n
+      | none => p0 + n
+    ⟨t, p0, n, k, r⟩ :: withReach (some (t, r)) rs
+
+/-- The order's ranges sorted by template and first unit, each with its rank and reach. -/
+def index (o : List UnitRange) : Array Ranged :=
+  (withReach none ((o.zipIdx.map fun ((t, p0, n), k) => (t, p0, n, k)).mergeSort keyLe)).toArray
+
+/-- The least `i` in `[lo, hi]` with `q i`, by bisection, for `q` monotone, false below `lo` and true at `hi`. -/
+def firstTrue (q : Nat → Bool) (lo hi : Nat) : Nat :=
+  if lo < hi then
+    if q ((lo + hi) / 2) then firstTrue q lo ((lo + hi) / 2) else firstTrue q ((lo + hi) / 2 + 1) hi
+  else lo
+termination_by hi - lo
+
+/-- `p` at entry `i` of `a`, true past its end. -/
+def pAt (a : Array Ranged) (p : Ranged → Bool) (i : Nat) : Bool := (a[i]?.map p).getD true
+
+/-- The range is template `t`'s and meets units `[lo, hi)`. -/
+def meets (t : String) (lo hi : Nat) (e : Ranged) : Bool := e.tid == t && decide (max e.p0 lo < min (e.p0 + e.n) hi)
+
+/-- The range is past template `t`'s ranges that end by `lo`. -/
+def pastLo (t : String) (lo : Nat) (e : Ranged) : Bool := decide (t < e.tid) || (e.tid == t && decide (lo < e.reach))
+
+/-- The range is past template `t`'s ranges that start below `hi`. -/
+def pastHi (t : String) (hi : Nat) (e : Ranged) : Bool := decide (t < e.tid) || (e.tid == t && decide (hi ≤ e.p0))
+
+/-- `f` holds at every range of template `t` meeting units `[lo, hi)`: the ranges between the first past those ending
+by `lo` and the first past those starting below `hi`, each found by bisection. -/
+def allMeeting (a : Array Ranged) (t : String) (lo hi : Nat) (f : Ranged → Bool) : Bool :=
+  let i := firstTrue (pAt a (pastLo t lo)) 0 a.size
+  let j := firstTrue (pAt a (pastHi t hi)) 0 a.size
+  (List.range' i (j - i)).all fun k => (a[k]?.map fun e => !meets t lo hi e || f e).getD true
+
+end Order
+
+/-- `orderedWire` on the order's index (`orderedIdx_eq`): for each range meeting the wire's reader units, every range
+meeting the bounds on the writers of its reader indices there ranks below it. -/
+def orderedIdx (a : Array Order.Ranged) (w : Wire) : Bool :=
+  Order.allMeeting a w.reader w.start (w.start + w.readerUnits) fun b =>
+    let s := w.box (w.indicesIn b.p0 b.n).1 (w.indicesIn b.p0 b.n).2
+    Order.allMeeting a w.writer s.1.toNat (s.2.toNat + 1) (·.rank < b.rank)
+
+/-- `orderCode c orderedWire` with the order indexed once (`orderCodeFast_eq`). -/
+def orderCodeFast (c : Wiring) : Option Refusal :=
+  match orderOf c with
+  | .error r => some r
+  | .ok o =>
+    let a := Order.index o
+    firstWire c fun w => if orderedIdx a w then none else some .order
+
+/-- `check` with the order indexed once (`check_eq_checkFast`). -/
+def checkFast (c : Wiring) : Except Refusal Summary :=
+  if !cutsOk c then .error ⟨.cuts, none⟩
+  else match firstWire c (wireCode c) with
+    | some r => .error r
+    | none =>
+      if !pairwiseDisjoint c.wires then .error ⟨.overlap, none⟩
+      else match orderCodeFast c with
+        | some r => .error r
+        | none => .ok ⟨c.wires, c.wires.map (rowWords c)⟩
+
+namespace Order
+
+theorem firstTrue_spec {q : Nat → Bool} (hm : ∀ i j, i ≤ j → q i = true → q j = true) :
+    ∀ lo hi, lo ≤ hi → q hi = true → (∀ i < lo, q i = false) →
+      (∀ i < firstTrue q lo hi, q i = false) ∧ ∀ i, firstTrue q lo hi ≤ i → q i = true := by
+  intro lo hi
+  induction lo, hi using firstTrue.induct q with
+  | case1 lo hi hlt hq ih =>
+    intro hle hhi hlo
+    rw [firstTrue]
+    simp only [hlt, hq, ↓reduceIte]
+    exact ih (by omega) hq hlo
+  | case2 lo hi hlt hq ih =>
+    intro hle hhi hlo
+    rw [firstTrue]
+    simp only [hlt, hq, ↓reduceIte, Bool.false_eq_true]
+    refine ih (by omega) hhi fun i hi' => ?_
+    cases e : q i
+    · rfl
+    · exact absurd (hm _ _ (by omega) e) hq
+  | case3 lo hi hlt =>
+    intro hle hhi hlo
+    rw [firstTrue]
+    simp only [hlt, ↓reduceIte]
+    have : lo = hi := by omega
+    subst this
+    exact ⟨hlo, fun i hi' => hm _ _ hi' hhi⟩
+
+/-- A range as the order's tuple and rank. -/
+def Ranged.key (e : Ranged) : String × Nat × Nat × Nat := (e.tid, e.p0, e.n, e.rank)
+
+theorem withReach_key : ∀ (prev : Option (String × Nat)) (l : List (String × Nat × Nat × Nat)),
+    (withReach prev l).map Ranged.key = l
+  | _, [] => rfl
+  | _, (t, p0, n, k) :: rs => by
+    simp only [withReach, List.map_cons, Ranged.key, withReach_key _ rs]
+
+theorem le_reach : ∀ {prev : Option (String × Nat)} {l : List (String × Nat × Nat × Nat)},
+    ∀ e ∈ withReach prev l, e.p0 + e.n ≤ e.reach
+  | _, [] => by simp [withReach]
+  | prev, (t, p0, n, k) :: rs => by
+    simp only [withReach, List.mem_cons, forall_eq_or_imp]
+    refine ⟨?_, le_reach⟩
+    split <;> (try split) <;> omega
+
+theorem keyLe_iff {a b : String × Nat × Nat × Nat} : keyLe a b = true ↔ a.1 < b.1 ∨ (a.1 = b.1 ∧ a.2.1 ≤ b.2.1) := by
+  simp [keyLe]
+
+theorem string_le_of_keyLe {a b : String × Nat × Nat × Nat} (h : keyLe a b = true) : a.1 ≤ b.1 := by
+  rcases keyLe_iff.1 h with h | ⟨h, _⟩
+  · exact Std.le_of_not_ge fun a => a h
+  · exact h ▸ String.le_refl _
+
+theorem reach_mono_of : ∀ {s : String} {m : Nat} {l : List (String × Nat × Nat × Nat)},
+    l.Pairwise (keyLe · · = true) → (∀ x ∈ l, s ≤ x.1) → ∀ e ∈ withReach (some (s, m)) l, e.tid = s → m ≤ e.reach
+  | _, _, [], _, _ => by simp [withReach]
+  | s, m, (t, p0, n, k) :: rs, hl, hs => by
+    have hrs := List.pairwise_cons.1 hl
+    have ht : ∀ x ∈ rs, t ≤ x.1 := fun x hx => string_le_of_keyLe (hrs.1 x hx)
+    simp only [withReach, List.mem_cons, forall_eq_or_imp]
+    by_cases e : s = t
+    · subst e
+      simp only [beq_self_eq_true, ↓reduceIte]
+      refine ⟨fun _ => Nat.le_max_left _ _, fun e he het => ?_⟩
+      exact Nat.le_trans (Nat.le_max_left _ _) (reach_mono_of hrs.2 ht e he het)
+    · refine ⟨fun h => absurd h.symm e, fun x hx hxs => absurd ?_ e⟩
+      have hx' : x.key ∈ rs := withReach_key (some (t, _)) rs ▸ List.mem_map_of_mem hx
+      have h1 : t ≤ x.tid := ht _ hx'
+      have h2 : s ≤ t := hs (t, p0, n, k) List.mem_cons_self
+      exact String.le_antisymm h2 (hxs ▸ h1)
+
+theorem reach_pairwise : ∀ {prev : Option (String × Nat)} {l : List (String × Nat × Nat × Nat)},
+    l.Pairwise (keyLe · · = true) → (withReach prev l).Pairwise fun x y => x.tid = y.tid → x.reach ≤ y.reach
+  | _, [], _ => by simp [withReach]
+  | prev, (t, p0, n, k) :: rs, hl => by
+    have hrs := List.pairwise_cons.1 hl
+    simp only [withReach, List.pairwise_cons]
+    exact ⟨fun e he het => reach_mono_of hrs.2 (fun x hx => string_le_of_keyLe (hrs.1 x hx)) e he het.symm,
+      reach_pairwise hrs.2⟩
+
+theorem keyLe_trans (a b c : String × Nat × Nat × Nat) (h1 : keyLe a b = true) (h2 : keyLe b c = true) :
+    keyLe a c = true := by
+  rw [keyLe_iff] at *
+  rcases h1 with h1 | ⟨e1, h1⟩ <;> rcases h2 with h2 | ⟨e2, h2⟩
+  · exact .inl (String.lt_trans h1 h2)
+  · exact .inl (e2 ▸ h1)
+  · exact .inl (e1 ▸ h2)
+  · exact .inr ⟨e1.trans e2, Nat.le_trans h1 h2⟩
+
+theorem keyLe_total (a b : String × Nat × Nat × Nat) : (keyLe a b || keyLe b a) = true := by
+  rw [Bool.or_eq_true, keyLe_iff, keyLe_iff]
+  by_cases e : a.1 = b.1
+  · rcases Nat.le_total a.2.1 b.2.1 with k | k
+    · exact .inl (.inr ⟨e, k⟩)
+    · exact .inr (.inr ⟨e.symm, k⟩)
+  · rcases String.le_total a.1 b.1 with g | g
+    · exact .inl (.inl (string_lt_of_le_of_ne g e))
+    · exact .inr (.inl (string_lt_of_le_of_ne g (Ne.symm e)))
+
+/-- The index in order: by template, then first unit, and within a template each range's reach at least the reach of
+those before it. -/
+theorem index_pairwise (o : List UnitRange) : (index o).toList.Pairwise fun x y =>
+    keyLe x.key y.key = true ∧ (x.tid = y.tid → x.reach ≤ y.reach) := by
+  have hs := List.pairwise_mergeSort keyLe_trans keyLe_total (o.zipIdx.map fun ((t, p0, n), k) => (t, p0, n, k))
+  have hk := hs
+  rw [← withReach_key none (List.mergeSort _ keyLe)] at hk
+  rw [index, List.toList_toArray]
+  exact (List.pairwise_map.1 hk).and (reach_pairwise hs)
+
+/-- The index holds the order's ranges, each with its rank. -/
+theorem mem_index {o : List UnitRange} {t : String} {p0 n k : Nat} :
+    (∃ e ∈ (index o).toList, e.key = (t, p0, n, k)) ↔ ((t, p0, n), k) ∈ o.zipIdx := by
+  rw [index, List.toList_toArray, ← List.mem_map, withReach_key, List.mem_mergeSort, List.mem_map]
+  constructor
+  · rintro ⟨⟨⟨t', p0', n'⟩, k'⟩, h, he⟩
+    simp only [Prod.mk.injEq] at he
+    obtain ⟨rfl, rfl, rfl, rfl⟩ := he
+    exact h
+  · exact fun h => ⟨_, h, rfl⟩
+
+theorem le_reach_index (o : List UnitRange) : ∀ e ∈ (index o).toList, e.p0 + e.n ≤ e.reach := by
+  rw [index, List.toList_toArray]
+  exact le_reach
+
+theorem pAt_mono {a : Array Ranged} {p : Ranged → Bool} {R : Ranged → Ranged → Prop} (ha : a.toList.Pairwise R)
+    (hR : ∀ x y, R x y → p x = true → p y = true) : ∀ i j, i ≤ j → pAt a p i = true → pAt a p j = true := by
+  intro i j hij hi
+  unfold pAt at *
+  by_cases hj : j < a.size
+  · have hi' : i < a.size := by omega
+    rw [Array.getElem?_eq_getElem hj]
+    rw [Array.getElem?_eq_getElem hi'] at hi
+    rcases Nat.lt_or_eq_of_le hij with h | rfl
+    · have := List.pairwise_iff_getElem.1 ha i j (by simpa using hi') (by simpa using hj) h
+      simp only [Array.getElem_toList] at this
+      exact hR _ _ this hi
+    · exact hi
+  · rw [Array.getElem?_eq_none (by omega)]
+    rfl
+
+theorem pAt_size (a : Array Ranged) (p : Ranged → Bool) : pAt a p a.size = true := by
+  simp [pAt]
+
+/-- **The bisection finds every range meeting the units**: `allMeeting` is `f` at each of template `t`'s ranges meeting
+`[lo, hi)`, on an index in order whose reaches bound their ends. -/
+theorem allMeeting_iff {a : Array Ranged}
+    (ha : a.toList.Pairwise fun x y => keyLe x.key y.key = true ∧ (x.tid = y.tid → x.reach ≤ y.reach))
+    (hr : ∀ e ∈ a.toList, e.p0 + e.n ≤ e.reach) {t : String} {lo hi : Nat} {f : Ranged → Bool} :
+    allMeeting a t lo hi f = true ↔ ∀ e ∈ a.toList, meets t lo hi e = true → f e = true := by
+  have hlo := firstTrue_spec (pAt_mono ha fun x y hxy (h : pastLo t lo x = true) => by
+      simp only [pastLo, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h ⊢
+      rcases keyLe_iff.1 hxy.1 with k | ⟨k, k'⟩ <;> simp only [Ranged.key] at k
+      · rcases h with h | ⟨rfl, h⟩
+        · exact .inl (String.lt_trans h k)
+        · exact .inl k
+      · rcases h with h | ⟨rfl, h⟩
+        · exact .inl (k ▸ h)
+        · exact .inr ⟨k.symm, Nat.lt_of_lt_of_le h (hxy.2 k)⟩)
+    0 a.size (Nat.zero_le _) (pAt_size _ _) (fun _ h => absurd h (Nat.not_lt_zero _))
+  have hhi := firstTrue_spec (pAt_mono ha fun x y hxy (h : pastHi t hi x = true) => by
+      simp only [pastHi, Bool.or_eq_true, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h ⊢
+      rcases keyLe_iff.1 hxy.1 with k | ⟨k, k'⟩
+      · simp only [Ranged.key] at k
+        rcases h with h | ⟨rfl, h⟩
+        · exact .inl (String.lt_trans h k)
+        · exact .inl k
+      · simp only [Ranged.key] at k k'
+        rcases h with h | ⟨rfl, h⟩
+        · exact .inl (k ▸ h)
+        · exact .inr ⟨k.symm, Nat.le_trans h k'⟩)
+    0 a.size (Nat.zero_le _) (pAt_size _ _) (fun _ h => absurd h (Nat.not_lt_zero _))
+  unfold allMeeting
+  generalize firstTrue (pAt a (pastLo t lo)) 0 a.size = i at hlo
+  generalize firstTrue (pAt a (pastHi t hi)) 0 a.size = j at hhi
+  simp only [List.all_eq_true, List.mem_range'_1]
+  constructor
+  · intro h e he hm
+    obtain ⟨k, hk, rfl⟩ := List.getElem_of_mem he
+    simp only [Array.length_toList] at hk
+    have hrk := hr _ he
+    simp only [Array.getElem_toList] at hm hrk ⊢
+    simp only [meets, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hm
+    have hki : i ≤ k := by
+      refine Nat.le_of_not_lt fun hki => ?_
+      have := hlo.1 k hki
+      simp only [pAt, Array.getElem?_eq_getElem hk, Option.map_some, Option.getD_some, pastLo, Bool.or_eq_false_iff,
+        Bool.and_eq_false_imp, beq_iff_eq, decide_eq_false_iff_not] at this
+      have := this.2 hm.1
+      omega
+    have hkj : k < j := by
+      refine Nat.lt_of_not_le fun hkj => ?_
+      have := hhi.2 k hkj
+      simp only [pAt, Array.getElem?_eq_getElem hk, Option.map_some, Option.getD_some, pastHi, Bool.or_eq_true,
+        Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at this
+      rcases this with h | ⟨_, h⟩
+      · rw [hm.1] at h; exact String.lt_irrefl _ h
+      · omega
+    have := h k ⟨hki, by omega⟩
+    simp only [Array.getElem?_eq_getElem hk, Option.map_some, Option.getD_some, Bool.or_eq_true, Bool.not_eq_true',
+      meets, Bool.and_eq_false_imp, beq_iff_eq, decide_eq_false_iff_not] at this
+    rcases this with h' | h'
+    · exact absurd hm.2 (h' hm.1)
+    · exact h'
+  · intro h k _
+    cases hk : a[k]? with
+    | none => rfl
+    | some e =>
+      simp only [Option.map_some, Option.getD_some, Bool.or_eq_true, Bool.not_eq_true']
+      cases hm : meets t lo hi e
+      · exact .inl rfl
+      · exact .inr (h e (Array.mem_toList_iff.2 (Array.mem_of_getElem? hk)) hm)
+
+end Order
+
+theorem mem_ranksIn' {o : List UnitRange} {t : String} {lo hi k : Nat} :
+    k ∈ ranksIn o t lo hi ↔ ∃ p0 n, ((t, p0, n), k) ∈ o.zipIdx ∧ max p0 lo < min (p0 + n) hi := by
+  simp only [ranksIn, List.mem_map, List.mem_filter, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq]
+  constructor
+  · rintro ⟨⟨⟨s, p0, n⟩, k'⟩, ⟨hm, rfl, h⟩, rfl⟩
+    exact ⟨p0, n, hm, h⟩
+  · rintro ⟨p0, n, hm, h⟩
+    exact ⟨((t, p0, n), k), ⟨hm, rfl, h⟩, rfl⟩
+
+theorem readsIn_eq_meets (w : Wire) (e : Order.Ranged) :
+    w.readsIn (e.tid, e.p0, e.n) = Order.meets w.reader w.start (w.start + w.readerUnits) e := rfl
+
+/-- **The order's index decides `orderedWire`.** -/
+theorem orderedIdx_eq (o : List UnitRange) (w : Wire) : orderedIdx (Order.index o) w = orderedWire o w := by
+  have hall := @Order.allMeeting_iff _ (Order.index_pairwise o) (Order.le_reach_index o)
+  rw [Bool.eq_iff_iff, orderedIdx, hall, orderedWire, List.all_eq_true]
+  simp only [hall]
+  constructor
+  · rintro h ⟨⟨t, p0, n⟩, k⟩ hx
+    obtain ⟨e, he, hek⟩ := Order.mem_index.2 hx
+    simp only [Order.Ranged.key, Prod.mk.injEq] at hek
+    obtain ⟨rfl, rfl, rfl, rfl⟩ := hek
+    simp only [Bool.or_eq_true, Bool.not_eq_true', List.all_eq_true, decide_eq_true_eq]
+    cases hr : w.readsIn (e.tid, e.p0, e.n)
+    · exact .inl rfl
+    refine .inr fun k' hk' => ?_
+    obtain ⟨p0', n', hy, hm'⟩ := mem_ranksIn'.1 hk'
+    obtain ⟨e', he', hek'⟩ := Order.mem_index.2 hy
+    simp only [Order.Ranged.key, Prod.mk.injEq] at hek'
+    obtain ⟨h1, rfl, rfl, rfl⟩ := hek'
+    refine of_decide_eq_true (h e he ((readsIn_eq_meets w e).symm.trans hr) e' he' ?_)
+    simpa [Order.meets, h1] using hm'
+  · intro h e he hm e' he' hm'
+    have hx := Order.mem_index.1 ⟨e, he, rfl⟩
+    have hx' := Order.mem_index.1 ⟨e', he', rfl⟩
+    have := h _ hx
+    simp only [Bool.or_eq_true, Bool.not_eq_true', List.all_eq_true, decide_eq_true_eq] at this
+    rcases this with hr | hr
+    · rw [readsIn_eq_meets] at hr
+      rw [hr] at hm
+      cases hm
+    · simp only [Order.meets, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at hm'
+      exact decide_eq_true (hr _ (mem_ranksIn'.2 ⟨_, _, hm'.1 ▸ hx', hm'.2⟩))
+
+theorem orderCodeFast_eq (c : Wiring) : orderCodeFast c = orderCode c orderedWire := by
+  unfold orderCodeFast orderCode
+  cases orderOf c <;> simp only [orderedIdx_eq]
+
+/-- The compiled code runs `checkFast` for `check` in every module that imports this one. -/
+@[csimp] theorem check_eq_checkFast : @check = @checkFast := by
+  funext c
+  unfold check checkFast
+  rw [orderCodeFast_eq]
 
 /-- Whether wire `w` covers reader row `(tid, u, port, row)`, and if so its index. -/
 def Wire.indexOf (w : Wire) (tid : String) (u : Nat) (port : String) (row : Nat) : Option Nat :=
