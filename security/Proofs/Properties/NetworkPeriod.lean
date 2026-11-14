@@ -936,7 +936,7 @@ theorem rowsStartCharged : RowsStartCharged := by
   split at h
   · cases h
   cases hf : p.form <;> simp only [hf] at h <;> split at h <;> cases h <;>
-    simp [StartCharged, hf, rowsPublic, rowsTerms, terms]
+    simp [StartCharged, hf, rowsPublic, rowsTerms]
 
 /-- **`RowsStartCharged`'s honest lemma**: the period check accepts a period that does not begin the run,
 `chargedPeriod` with nothing registered. -/

@@ -48,7 +48,7 @@ def paramWords (d : Defn) : List (String × ℕ) := d.params.toList.map fun p =>
 /-- **A Definition's output rows with their words**, in order: return field `f` is the row `o<f>`, as a record names
 it, on its packed 16-bit words. -/
 def outWords (d : Defn) : List (String × ℕ) :=
-  (Spot.Bits.fieldsOf d.ret).zipIdx.map fun tf => (s!"o{tf.2}", Spot.Bits.wordsOf tf.1)
+  (Flock.Program.fieldsOf d.ret).zipIdx.map fun tf => (s!"o{tf.2}", Spot.Bits.wordsOf tf.1)
 
 /-- **The gate on bit `b` of parameter `port` of unit `un`**, in the circuit of `n` units of the file `c`, laid out as
 the Definition `d`'s template: the bit's instance, port and bit among the unit's input ports (`Spot.Bits.fieldBit`),
