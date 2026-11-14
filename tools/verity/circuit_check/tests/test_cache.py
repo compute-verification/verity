@@ -1492,14 +1492,14 @@ def test_a_pins_owner_is_what_its_key_names_not_what_the_process_built():
     """`sidecars.pin_owner` asked in a fresh process, then again once the on-demand Definitions are built (an earlier test in the
     process, or another target's check, builds them): the same owner for every pin, so a pin's file is a function of the tree.
     An on-demand primitive is its factory's (`prims`, `sampling`), not its caller's; a level of a gather's tree, which no key
-    makes alone, has none."""
+    makes alone, is the module's whose binding file holds its family (`sidecars.body_family`)."""
     r = subprocess.run([sys.executable, "-c", OWNERS], capture_output=True, text=True, cwd=REPO, check=True)
     got = json.loads(r.stdout)
     assert len(got["built"]) == 4, got["built"]
     assert got["before"] == got["after"], {k: (v, got["after"][k]) for k, v in got["before"].items() if got["after"][k] != v}
     assert got["before"]["pieces GatherBf16x1_v1"] == "verity.definitions.registry.prims"
     assert got["before"]["pieces BitAtx32_v1"] == "verity.definitions.registry.sampling"
-    assert got["before"]["definitions GatherBf16x1024u10_v1"] is None
+    assert got["before"]["definitions GatherBf16x1024u10_v1"] == "verity.definitions.registry.boolean_gather"
 
 
 def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():

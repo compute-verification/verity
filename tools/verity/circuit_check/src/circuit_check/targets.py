@@ -345,15 +345,20 @@ HOOKS = {
     "lift_composite": "the lift of a registered composite Definition",
 }
 _HANDS: dict[str, Any] = {}
+#: the hooks a catalog may hand none of: then the table is empty, and every check that would read it fails or warns by name
+#: (``correspondence/unprobed-table``, ``correspondence/operand-unread``, ``partition/unpartitioned``)
+OPTIONAL = frozenset({"table_probes", "lazy_operands", "operand_probes", "callee_calls"})
 
 
 def _handed(name: str) -> Any:
     """`HOOKS`' ``name`` as the one sidecar that defines it hands it, read without importing any module (`sidecars.handing`);
-    refused by name when none or several do."""
+    refused by name when several do, or none does and it is not `OPTIONAL`."""
     if name not in _HANDS:
         from . import sidecars as SC
 
         found = {f"{mod}{SC.SUFFIX}#": vars(m)[name] for mod, m in SC.handing(name)}
+        if not found and name in OPTIONAL:
+            found = {"": dict}
         if len(found) != 1:
             raise ValueError(f"{HOOKS[name]}: handed by the one sidecar that defines `{name}`, and {len(found)} that "
                              f"`sidecars.discover` finds do: {', '.join(found) or 'none'}")
@@ -988,7 +993,7 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     return hit
 
 
-__all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
+__all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "OPTIONAL", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
            "HOOKS", "ROOT_FUNCTIONS", "ROW_READER", "SPLIT_READER", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
            "boolean_call_families", "boolean_family", "boolean_links", "call_families", "callee_calls", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",

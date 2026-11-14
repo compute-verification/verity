@@ -1797,7 +1797,7 @@ def summarize(entries: Iterable[dict], catalog: bool = False) -> dict:
     (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on; ``by_callees``: each Call partitioned by
     its callees (`by_callees`), with them; ``vectors``: the targets of each `vector_class`, by name, and ``lazy``, those whose
     correspondence read a table or an operand lazily (where kernels decline and no lowering runs); ``block_held``: each
-    Definition past the Flock block that `block_held.HELD` holds, with why, its ``block/past-range`` failure not counted, and
+    Definition past the Flock block that `block_held.held` holds, with why, its ``block/past-range`` failure not counted, and
     over the whole catalog (``catalog``) each held id it no longer has failed (`_held_blocks`)."""
     entries = list(entries)
     fails: dict[str, dict] = {}
