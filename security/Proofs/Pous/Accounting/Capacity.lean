@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Registration.Guarantees.Capacity
+public import Definitions.Pous.Accounting.Guarantees.Capacity
 import Mathlib.Basic.ENNReal.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Registration.Device

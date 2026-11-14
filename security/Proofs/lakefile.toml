@@ -252,4 +252,4 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Projection",
   "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
   "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol",
-  "Proofs.Registration.Capacity", "Proofs.Registration.Device"]
+  "Proofs.Pous.Accounting.Capacity", "Proofs.Registration.Device"]

@@ -2367,9 +2367,9 @@
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premises (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
   },
   "Properties.Pous.Wipe": {
-   "imports": ["Definitions.Pous.Wipe", "MemoryChallenger.WipeProtocol"],
+   "imports": ["Definitions.Pous.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
    "except": [],
-   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Pous.Wipe`), never a proof"
+   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Pous.Accounting.Wipe`), never a proof"
   },
   "Properties.Attest": {
    "imports": [

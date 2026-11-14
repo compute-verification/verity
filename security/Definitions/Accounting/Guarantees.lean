@@ -10,7 +10,7 @@ public import Definitions.Poub.Guarantees.BandwidthAudit
 public import Definitions.Poub.Guarantees.BoundReceipt
 public import Definitions.Poub.Guarantees.BoundSketch
 public import Definitions.Pouw.Guarantees.Bridges
-public import Definitions.Registration.Guarantees.Capacity
+public import Definitions.Pous.Accounting.Guarantees.Capacity
 public import Definitions.Pouw.Guarantees.CoinFlow
 public import Definitions.Compose.Guarantees.Compose
 public import Definitions.Compose.Guarantees.ComposeMonitoringPeriod
@@ -30,7 +30,7 @@ public import Definitions.Certifier.Guarantees.JointBridge.BandwidthOfAuditPerRu
 public import Definitions.Certifier.Guarantees.JointBridge.CommOfMonitoringPeriodLeakAccepted
 public import Definitions.Certifier.Guarantees.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.Guarantees.Localization
-public import Definitions.Pous.Guarantees.Memory
+public import Definitions.Pous.Accounting.Guarantees.Memory
 public import Definitions.Pouw.Guarantees.PerRun
 public import Definitions.Compose.Guarantees.PeriodBinding
 public import Definitions.Pouw.Guarantees.Pouw
@@ -42,7 +42,7 @@ public import Definitions.Poub.Guarantees.RateAuditPartial
 public import Definitions.Poub.Guarantees.RateAuditPooled
 public import Definitions.Poub.Guarantees.RateAuditRemote
 public import Definitions.Poub.Guarantees.RateAuditSketch
-public import Definitions.Pous.Guarantees.Responder
+public import Definitions.Pous.Accounting.Guarantees.Responder
 public import Definitions.Slowdown.Guarantees.ServingBlocks
 public import Definitions.Slowdown.Guarantees.ServingBlocks.Witnesses
 public import Definitions.Poub.Guarantees.RemoteHeld

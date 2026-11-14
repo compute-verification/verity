@@ -1,13 +1,13 @@
 module
 
-public import Definitions.Accounting.Window
-public import Definitions.Pous.Guarantees.Responder
-public import Proofs.Pous.Responder
+public import Definitions.Pous.Accounting.Window
+public import Definitions.Pous.Accounting.Guarantees.Responder
+public import Proofs.Pous.Accounting.Responder
 
 /-!
 # B2's oracle-location form, proved: a window as a ring responder
 
-`B2Period` (`Security/Definitions/Pous/Guarantees/Responder.lean`): a family of `RingResponder`s whose multiplications
+`B2Period` (`Security/Definitions/Pous/Accounting/Guarantees/Responder.lean`): a family of `RingResponder`s whose multiplications
 take at least `ℓ > 0` ticks to answer and whose spans are at most `D·ℓ` ticks is the step of an `(N, D, Q, L)`
 sequential responder. With `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency form of sequential speed) and one challenge every
 `Δ + RTT` ticks (fixed pacing), that is `D = D_p`.

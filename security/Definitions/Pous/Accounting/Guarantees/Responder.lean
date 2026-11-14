@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Pous.Responder
-public import Definitions.Accounting.Window
+public import Definitions.Pous.Accounting.Responder
+public import Definitions.Pous.Accounting.Window
 public import Definitions.Pous.P2.Cost
 public import Definitions.Pous.Model.SampledAudit
 public import Definitions.Pous.Assumptions.P2
@@ -64,8 +64,8 @@ A fixed schedule is the case `t x = t` for every `x`: `ArrivalRule`, `SetupFixed
 fixed-schedule statements at `τ = 0`. The help is whatever the setup fixes that, with the challenge, determines what
 reaches `X`: under isolation nothing, and when the rest of the prover learns nothing that depends on the challenges or
 their ticks (the model's `e = 0` across the audit), what the rest sends `X` during the whole audit, with `H` the log of
-the number of values it takes. The proofs are in `Security/Proofs/Pous/Responder.lean`, `B2Period`'s in
-`Security/Proofs/Pous/Responder/Latency.lean`.
+the number of values it takes. The proofs are in `Security/Proofs/Pous/Accounting/Responder.lean`, `B2Period`'s in
+`Security/Proofs/Pous/Accounting/Responder/Latency.lean`.
 -/
 
 @[expose] public section

@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Pous.Guarantees.Responder
+public import Definitions.Pous.Accounting.Guarantees.Responder
 public import Proofs.Accounting.Actual.Confidence
-public import Proofs.Pous.Memory
+public import Proofs.Pous.Accounting.Memory
 import Proofs.Pous.Prob
 
 /-!
