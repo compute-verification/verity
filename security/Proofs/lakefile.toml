@@ -247,14 +247,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.FormCircuit", "Proofs.Properties.Verity.SampledTwo.FormBytes",
   "Proofs.Properties.Verity.SampledTwo.FirstEarly", "Proofs.Properties.Verity.SampledTwo.FormMember",
   "Proofs.Properties.Verity.SampledTwo.StmtBytes", "Proofs.Properties.Verity.SampledTwo.SessionSent",
-  "Proofs.Compose.Additive", "Proofs.Compose.Compose", "Proofs.Compose.ComposeMonitoringPeriod", "Proofs.Compose.Joint",
-  "Proofs.Compose.JointLive", "Proofs.Poub.Remote", "Proofs.Poub.RemoteHeld", "Proofs.Poub.Stacking",
-  "Proofs.Poub.Bandwidth", "Proofs.Poub.BandwidthAudit", "Proofs.Poub.RateAudit", "Proofs.Accounting.ReadUnit",
   "Proofs.Properties.Verity.SampledTwo.Claim", "Proofs.Properties.Verity.SampledTwo.DevAgrees",
   "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Projection",
   "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
-  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol",
-  "Proofs.Pous.Accounting.Capacity", "Proofs.Registration.Device",
-  "Proofs.Poub.BoundReceipt", "Proofs.Poub.Lemmas.Bandwidth", "Proofs.Poub.Lemmas.RateAudit",
-  "Proofs.Poub.Lemmas.RateAuditSketch", "Proofs.Poub.Lemmas.RemoteBinding", "Proofs.Poub.Tag.Basic",
-  "Proofs.Poub.Tag.LittlewoodOfford", "Proofs.Poub.Tag.Signs", "Proofs.Poub.Tag.SketchExact"]
+  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol"]
