@@ -182,6 +182,7 @@ REFUSED_SPECS = [
     ({"spec": {"ahead": -1}}, "`ahead` is -1"),
     ({"spec": {"driver": "v570"}}, "`driver` 'v570' isn't a version"),
     ({"spec": {"cuda_toolkit": ""}}, "`cuda_toolkit` '' isn't a version"),
+    ({"spec": {"cuda_toolkit": "13.3"}}, r"`cuda_toolkit` '13\.3' isn't the `V` version the node's nvcc gives"),
     ({"spec": {"setup": None}}, "setup"),
     ({"spec": {"setup": "benchmarks/harness/specs/none.sh"}}, "`setup` 'benchmarks/harness/specs/none.sh' is no script of the source tree"),
     ({"spec": {"setup": "../steady-setup.sh"}}, "is no script of the source tree"),
