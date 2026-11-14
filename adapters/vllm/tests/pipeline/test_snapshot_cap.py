@@ -62,9 +62,9 @@ def test_256_32_rows_and_moe_rows_keep_the_32_mib_floor():
 
 def test_rows_and_widths_fall_back_by_name_and_the_cli_engine_arg_wins():
     # no HF config readable: 64 KiB per row (2 x I x bf16 for I <= 16384), the workload's own bound for rows
-    cap, why = RC.snapshot_cap_bytes(_wl([1024, 700, 10]), None)
+    size, why = RC.snapshot_cap_bytes(_wl([1024, 700, 10]), None)
     assert why["rows"] == 1024 + 3 and why["row_bytes"] == RC.SNAPSHOT_ROW_BYTES_FALLBACK and why["row_bytes_source"].startswith("no HF config")
-    assert cap == 1027 * 65536
+    assert size == 1027 * 65536
     # an explicit CLI engine arg overrides the workload's engine.args (run_config's merge order)
     cap2, why2 = RC.snapshot_cap_bytes(_wl([1024], mnbt=2048), LLAMA_1B, {"max_num_batched_tokens": 1025})
     assert why2["rows"] == 1025 and cap2 == 1025 * 32768
@@ -75,23 +75,26 @@ def test_rows_and_widths_fall_back_by_name_and_the_cli_engine_arg_wins():
         assert cap3 == RC.SNAPSHOT_CAP_FLOOR and why3["rows"] == 0 and why3["rows_source"].startswith("longest prompt"), doc
 
 
+def _derivation(doc, hf=None):
+    return RC.snapshot_cap_bytes(doc, hf)[1]
+
+
 def test_a_prompt_is_as_long_as_its_token_ids_else_its_stated_length_and_the_derivation_states_every_term():
     # ids win over a stated length; no ids, or none, read the stated length; a request that states neither is no prompt
     doc = {"requests": [{"prompt_token_ids": [7] * 5, "prompt_len": 99}, {"prompt_len": 7}, {"prompt_token_ids": [], "prompt_len": 9}, {}]}
-    cap, why = RC.snapshot_cap_bytes(doc, None)
-    rows = 9 + 4
-    assert (cap, why) == (RC.SNAPSHOT_CAP_FLOOR, {
+    rows, floor = 9 + 4, 33_554_432
+    assert _derivation(doc) == {
         "rows": rows, "rows_source": "longest prompt + one decode row per request", "row_bytes": RC.SNAPSHOT_ROW_BYTES_FALLBACK,
         "row_bytes_source": "no HF config: 64 KiB per row", "needed_bytes": rows * RC.SNAPSHOT_ROW_BYTES_FALLBACK,
-        "floor_bytes": RC.SNAPSHOT_CAP_FLOOR, "cap_bytes": RC.SNAPSHOT_CAP_FLOOR, "raised": False})
-    assert RC.snapshot_cap_bytes({"requests": [{}]}, None)[1]["rows"] == 1
+        "floor_bytes": floor, "cap_bytes": floor, "raised": False}
+    assert _derivation({"requests": [{}]})["rows"] == 1
 
 
 def test_the_widest_row_is_of_the_widths_that_are_whole_and_positive_and_one_batched_token_is_a_bound():
-    _cap, why = RC.snapshot_cap_bytes({"requests": [{"prompt_len": 50}]}, {"GU": 0, "QKV": "4096", "H": 3000})
+    why = _derivation({"requests": [{"prompt_len": 50}]}, {"GU": 0, "QKV": "4096", "H": 3000})
     assert (why["rows"], why["row_bytes"], why["row_bytes_source"]) == (51, 6000, "hf config H=3000 x bf16")
-    assert RC.snapshot_cap_bytes(None, {"GU": 1})[1]["row_bytes_source"] == "hf config GU=1 x bf16"
-    _cap, why = RC.snapshot_cap_bytes(_wl([50], mnbt=1), None)
+    assert _derivation(None, {"GU": 1})["row_bytes_source"] == "hf config GU=1 x bf16"
+    why = _derivation(_wl([50], mnbt=1))
     assert (why["rows"], why["rows_source"]) == (1, "engine max_num_batched_tokens")
 
 
