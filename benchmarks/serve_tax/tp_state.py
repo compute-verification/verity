@@ -6,8 +6,8 @@ At an edge `tp_edge` drains, each rank holds:
 - its paged KV cache: every layer whose ``kv_cache`` is block-major over the pool (``shape[0]`` the pool's
   ``num_blocks``), GLM-5.3's MLA latent and DSA indexer-key layers alike; one block id names a page in each
   (`kv_layers`);
-- its sampling RNG: numpy's global generator (Model Runner V2 draws a seedless request's seed from it when the request
-  is added), the device's CUDA generator (FlashInfer's top-k/top-p sampler draws from it), torch's CPU generator and
+- its sampling RNG: numpy's global generator (Model Runner V2 samples a seedless request's seed from it when the request
+  is added), the device's CUDA generator (FlashInfer's top-k/top-p sampler samples from it), torch's CPU generator and
   Python's, and under V2 each request's seed (`rng_state`);
 - where it runs: its ranks, its GPU and the all-reduce backends its tensor-parallel group enabled (`rank_record`).
 
@@ -248,7 +248,7 @@ def rng_digest(rng: Mapping[str, Any]) -> str:
 class SeedHook:
     """Wraps a V2 runner's ``sampling_states.add_request`` until every restored request is added again: a request in
     ``seeds`` gets its served seed and leaves numpy's global generator where it was (the fresh worker would otherwise
-    draw it a new seed, and shift every later request's); any other request draws as vLLM draws. Uninstalls itself once
+    sample it a new seed, and shift every later request's); any other request samples as vLLM samples. Uninstalls itself once
     ``seeds`` is empty."""
 
     def __init__(self, runner: Any, seeds: Mapping[str, int]):

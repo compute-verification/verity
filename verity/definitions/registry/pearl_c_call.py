@@ -29,7 +29,7 @@ circuit-check binds a row small; a cell takes its factors sixteen at a time, so 
 caps, its leaf and the unscale are not here either.
 
 Each has a word form (``_v1``) and a Boolean version (``_v2``), the σ of the word form. A row is far over the 65,536 ANDs a
-Boolean Definition is lowered whole at, and is no proof unit: `units` lays a Boolean Definition out in the Definitions
+Boolean Definition is lowered whole at, and is no proof block: `units` lays a Boolean Definition out in the Definitions
 under that size its Calls reach, the units a proof of it takes, and refuses one that has an AND outside them.
 """
 from __future__ import annotations

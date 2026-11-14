@@ -160,7 +160,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     beside it, is printed as out of reach where it meets a limit of the code that runs a second stage today, with
     the first it meets (`total_cost.limits`): a session of more tables than the GPU prover (1), the CPU prover and
     the Lean verifier (64), the challenger's coin commitment (127) or the proved scope (200) takes; more lines of
-    session coins than one challenger session's release log holds; or a second draw of more bytes of live coins
+    session coins than one challenger session's release log holds; or a second sample of more bytes of live coins
     than one layout holds. Its bound is then the cost model's alone, of a deployment no code runs. (A), (A′) and
     (A″) are plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its
     sessions and the shares of its proving in the phase's statements and on padding. No code builds a verification
@@ -205,7 +205,7 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   - Every caption says who the deployment's parties are and what its bounds rest on (`ROLES`, `TRUST`). Its parties
     are SPOT[Flock]'s three roles: the inference server serves and commits its values; the proof server replays each
     sampled replay block and proves it with `flock-circuit prove --zk`, with no ZK server and no recursion (the
-    `proof_overhead` card's `dev` arm); and the verifier draws on the challenger's live coins and decides with the Lean
+    `proof_overhead` card's `dev` arm); and the verifier samples on the challenger's live coins and decides with the Lean
     verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
     its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
     an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its

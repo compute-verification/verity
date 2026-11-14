@@ -231,7 +231,7 @@ def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tm
 
 def test_the_command_pins_only_on_an_accepting_audit(x, tmp_path, capsys):
     """`verity-vllm weights-tie` as `benchmarks/prove_path/run.sh` runs it, under the tie's own design: ``commit`` writes
-    the registration (its key drawn 0600) and the tie window, ``verify`` the verifier's tie of the same circuit, run and
+    the registration (its key sampled 0600) and the tie window, ``verify`` the verifier's tie of the same circuit, run and
     units and no output class, and ``pins`` writes the roots on an accepting audit's summary and nothing (exit 1) on one
     that refused; a forged digest without served words is a usage error."""
     reg, (d, man) = S._registered(), x
@@ -294,7 +294,7 @@ def _rewrite(d: str, man: str, tensors: dict, *, gap: str | None = None, tail: b
 def test_a_shard_the_tie_cant_read_is_refused_by_name(x, change, why):
     """A tensor no registered parameter holds, bytes between two tensors or after the last, a tensor the served model
     casts (a norm stored F32, served bf16: its rows are other bytes than the shard's), a shard the manifest doesn't pin and
-    a parameter of rows of 32 words (no row a unit C-Flock proves) are each refused by name."""
+    a parameter of rows of 32 words (no row a unit Flock proves) are each refused by name."""
     reg, (d, man) = S._registered(), x
     ck = WR.CheckpointIndex(d, verify_shards=False)
     tensors = {n: (ck.dtype(n), ck.array(n)) for n in sorted(ck.tensors, key=lambda n: ck.tensors[n][3])}

@@ -38,7 +38,7 @@ open Pouw.Lead
 /-- **Every step carries the three coin lanes under `-rot`**: the lead's coin tile is 64 rows; at
 every step, row `i`'s lanes are `127 s₀ + s₁ + s₂` on even rows and `s₀ + 127 s₁ + s₂` on odd rows, of its tile's coins
 at the step and column; what the step's coin term adds besides is the same at any two coin values that agree off the
-lanes; each lane's coin is `2u − 127` of its draw `u < 128`; and the data fit 21 lanes on step 0 and 28 on each later
+lanes; each lane's coin is `2u − 127` of its sample `u < 128`; and the data fit 21 lanes on step 0 and 28 on each later
 step. -/
 theorem lead_cells_rot (T m n K : ℕ) :
     (lead T m n K).tile = 64 ∧ K ≤ 21 + 28 * ((lead T m n K).S - 1) ∧
